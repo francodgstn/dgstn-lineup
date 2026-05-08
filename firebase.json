@@ -42,6 +42,9 @@
     "source": "packages/functions"
   },
   "emulators": {
+    "auth": {
+      "port": 9099
+    },
     "firestore": {
       "port": 8080
     },
@@ -49,7 +52,7 @@
       "port": 9000
     },
     "hosting": {
-      "port": 3000
+      "port": 3001
     },
     "functions": {
       "port": 5001
