@@ -44,7 +44,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 
 ---
 
-## What's done (kickstart scaffold)
+## What's done (Phase 1 + Phase 2 start)
 
 - Root workspace: `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`
 - `packages/shared`: all types + Firestore path constants
@@ -53,6 +53,10 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - `apps/web`: Next.js 15 scaffold with `(auth)` route group, `(portal)` route group, login page, AuthContext, TanStack Query
 - `apps/mobile`: full port of `hmd-lineup/student-app/` with Lineup branding
 - CI/CD: `.github/workflows/verify.yml` + `deploy.yml`
+- shadcn/ui component library: all components installed in `apps/web/src/components/ui/`
+- Build + typecheck clean across all packages; dev server runs at port 3000
+- `firebase-auth.ts` split from `firebase.ts` to prevent SSG crash (auth/invalid-api-key)
+- Portal routes tagged `force-dynamic`; `apps/web/.env.local` created with placeholders
 
 ---
 
@@ -64,7 +68,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~12 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Trial booking page** — route exists at `(portal)/portal/[slug]/trial-booking/page.tsx` but needs full form logic (see `hmd-lineup/functions/src/booking/index.js` + `src/routes/TrialBooking/`)
-- **shadcn/ui component library** — components are referenced but not yet generated; run `npx shadcn@latest add button card table form input select dialog sheet badge avatar dropdown-menu separator skeleton` in `apps/web/`
+- **shadcn/ui component library** — ✅ DONE — all components installed in `apps/web/src/components/ui/` (button, card, table, form, input, select, dialog, sheet, badge, avatar, dropdown-menu, separator, skeleton, label, sonner)
 - **Gamification** — stubbed
 - **Outreach/automation engine** — not started
 
