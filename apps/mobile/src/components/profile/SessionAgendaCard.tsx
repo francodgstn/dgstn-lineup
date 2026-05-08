@@ -1,0 +1,376 @@
+import React, { useState } from 'react';
+import { StyleSheet, View, Alert } from 'react-native';
+import { Card, Icon, Text, useTheme, Button, ActivityIndicator, IconButton } from 'react-native-paper';
+import { SessionWithStatus, Contact } from '../../types';
+import { FirestoreService } from '../../services/firestore';
+
+interface SessionAgendaCardProps {
+  sessions: SessionWithStatus[];
+  contact?: Contact | null;
+  onRefresh?: () => void;
+  onViewAll?: () => void;
+}
+
+export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, contact, onRefresh, onViewAll }) => {
+  const theme = useTheme();
+  const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
+
+  const handleBook = async (session: SessionWithStatus) => {
+    if (!contact?.id || !contact?.email || !contact?.firstname || !contact?.lastname) {
+      Alert.alert('Error', 'Missing contact details. Please update your profile.');
+      return;
+    }
+
+    setLoadingSessionId(session.id);
+    try {
+      await FirestoreService.bookSession({
+        teamId: session.teamId,
+        sessionId: session.id,
+        contactId: contact.id,
+        contactDetails: {
+          firstname: contact.firstname,
+          lastname: contact.lastname,
+          email: contact.email,
+        }
+      });
+      Alert.alert('Success', 'Session booked successfully!');
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to book session. Please try again.');
+    } finally {
+      setLoadingSessionId(null);
+    }
+  };
+
+  const handleCancel = async (session: SessionWithStatus) => {
+    console.log('[handleCancel] Called, contact:', contact?.id, 'session:', session.id);
+    if (!contact?.id) {
+      console.warn('[handleCancel] No contact id, aborting');
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Booking',
+      'Are you sure you want to cancel your booking?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            setLoadingSessionId(session.id);
+            try {
+              await FirestoreService.cancelSession({
+                sessionId: session.id,
+                contactId: contact.id
+              });
+              Alert.alert('Success', 'Booking cancelled.');
+              if (onRefresh) onRefresh();
+            } catch (error: any) {
+              console.error('Cancel booking error:', error);
+              const message = error?.message || error?.code || 'Failed to cancel booking.';
+              Alert.alert('Error', message);
+            } finally {
+              setLoadingSessionId(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  if (sessions.length === 0) {
+    return (
+      <Card style={styles.card} elevation={2}>
+        <Card.Content style={styles.emptyState}>
+          <Icon source="calendar-blank-outline" size={48} color={theme.colors.outline} />
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>
+            No upcoming sessions scheduled.
+          </Text>
+        </Card.Content>
+      </Card>
+    );
+  }
+
+  const getStatusConfig = (status: SessionWithStatus['status']) => {
+    const isDark = theme.dark;
+    switch (status) {
+      case 'attended':
+        return {
+          bg: isDark ? 'rgba(34, 197, 94, 0.15)' : '#F0FDF4',
+          text: '#22C55E',
+        };
+      case 'booked':
+        return {
+          bg: isDark ? 'rgba(34, 197, 94, 0.15)' : '#F0FDF4', // Greenish background
+          text: '#22C55E', // Green text
+        };
+      case 'ongoing' as any:
+        return {
+          bg: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
+          text: theme.colors.error,
+        };
+      case 'not attended':
+        return {
+          bg: isDark ? 'rgba(148, 163, 184, 0.15)' : '#F8FAFC',
+          text: '#94A3B8',
+        };
+      default:
+        return {
+          bg: isDark ? 'rgba(100, 116, 139, 0.1)' : '#F1F5F9',
+          text: theme.colors.onSurface,
+        };
+    }
+  };
+
+  const renderSessionItem = (session: SessionWithStatus, isLast: boolean) => {
+    const start = new Date(session.start);
+    const end = new Date(session.end);
+    const startTime = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const endTime = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const month = start.toLocaleString('default', { month: 'short' }).toUpperCase();
+    const day = start.getDate();
+
+    const now = new Date();
+    let currentStatus = session.status;
+
+    // Dynamic 'ongoing' override if currently happening
+    if (now >= start && now <= end) currentStatus = 'ongoing' as any;
+
+    const statusLabels: Record<string, string> = {
+      'attended': 'ATTENDED',
+      'not attended': 'MISSED',
+      'booked': 'BOOKED',
+      'book': 'AVAILABLE',
+      'ongoing': 'ONGOING'
+    };
+
+    const config = getStatusConfig(currentStatus);
+    const isLoading = loadingSessionId === session.id;
+
+    // Determine action button
+    let actionElement = null;
+    if (isLoading) {
+      actionElement = (
+        <View style={styles.actionContainer}>
+           <ActivityIndicator size={16} color={theme.colors.primary} />
+        </View>
+      );
+    } else if (currentStatus === 'book' && session.allowBooking && new Date(session.start) > new Date()) {
+      actionElement = (
+        <Button
+          mode="contained"
+          compact
+          onPress={() => handleBook(session)}
+          style={styles.bookBtn}
+          labelStyle={styles.btnLabel}
+        >
+          Book
+        </Button>
+      );
+    } else if (currentStatus === 'booked' && new Date(session.start) > new Date()) {
+       // Show booked status AND cancel icon
+       actionElement = (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={[styles.statusPill, { backgroundColor: config.bg, marginRight: 4 }]}>
+            <Text variant="labelSmall" style={[styles.statusText, { color: config.text }]}>{statusLabels[currentStatus]}</Text>
+          </View>
+          <IconButton
+            icon="trash-can-outline"
+            size={20}
+            iconColor={theme.colors.error}
+            onPress={() => handleCancel(session)}
+            style={{ margin: 0 }}
+          />
+        </View>
+      );
+    } else {
+       // Default status pill
+       actionElement = (
+        <View style={[styles.statusPill, { backgroundColor: config.bg }]}>
+          <Text variant="labelSmall" style={[styles.statusText, { color: config.text }]}>{statusLabels[currentStatus] || 'AVAILABLE'}</Text>
+        </View>
+       );
+    }
+
+    return (
+      <View key={session.id} style={[styles.sessionItem, !isLast && [styles.sessionSeparator, { borderBottomColor: theme.colors.outlineVariant }]]}>
+        <View style={[styles.dateBox, { backgroundColor: theme.colors.surfaceVariant }]}>
+          <Text variant="labelSmall" style={[styles.monthText, { color: theme.colors.onSurfaceVariant }]}>{month}</Text>
+          <Text variant="headlineSmall" style={[styles.dayText, { color: theme.colors.onSurface }]}>{day}</Text>
+        </View>
+
+        <View style={styles.detailsSection}>
+          <Text variant="titleMedium" style={[styles.className, { color: theme.colors.onSurface }]} numberOfLines={1}>
+            {session.activityName || 'Kickboxing Session'}
+          </Text>
+          <View style={styles.infoRow}>
+            <Icon source="clock-outline" size={14} color={theme.colors.onSurfaceVariant} />
+            <Text variant="bodySmall" style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}>
+              {startTime} - {endTime}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+             <Icon source="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
+             <Text variant="bodySmall" style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
+               {session.locationName || 'Main Dojo'}
+             </Text>
+          </View>
+        </View>
+
+        {actionElement}
+      </View>
+    );
+  };
+
+  // Only show first 3
+  const displaySessions = sessions.slice(0, 3);
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text variant="titleLarge" style={[styles.headerTitle, { color: theme.colors.onSurface }]}>Upcoming Classes</Text>
+        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Next 3 sessions</Text>
+      </View>
+
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={2}>
+        <Card.Content style={styles.cardContent}>
+          {displaySessions.map((session, index) =>
+            renderSessionItem(session, index === displaySessions.length - 1)
+          )}
+        </Card.Content>
+        {onViewAll && (
+          <Card.Actions style={styles.cardFooter}>
+            <Button
+              mode="text"
+              compact
+              onPress={onViewAll}
+              icon="calendar-month-outline"
+              labelStyle={styles.viewAllLabel}
+            >
+              View all classes
+            </Button>
+          </Card.Actions>
+        )}
+      </Card>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    marginVertical: 12,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 12,
+  },
+  headerTitle: {
+    fontWeight: '800',
+  },
+  card: {
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  cardContent: {
+    padding: 16,
+  },
+  dateGroup: {
+    marginBottom: 8,
+  },
+  sessionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  sessionSeparator: {
+    borderBottomWidth: 1,
+  },
+  dateBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  monthText: {
+    fontWeight: '700',
+    fontSize: 9,
+    opacity: 0.6,
+  },
+  dayText: {
+    fontWeight: '800',
+    fontSize: 18,
+    marginTop: -2,
+  },
+  detailsSection: {
+    flex: 1,
+    gap: 1,
+  },
+  className: {
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  infoText: {
+    marginLeft: 6,
+    fontSize: 11,
+  },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginLeft: 8,
+    minWidth: 70, // Slightly reduced to fit buttons if needed
+    alignItems: 'center',
+  },
+  statusText: {
+    fontWeight: '800',
+    fontSize: 9,
+  },
+  emptyState: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bookBtn: {
+     marginLeft: 8,
+     borderRadius: 8,
+  },
+  cancelBtn: {
+    marginLeft: 8,
+    borderRadius: 8,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+  },
+  btnLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginVertical: 4,
+    marginHorizontal: 8,
+  },
+  actionContainer: {
+    width: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  cardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(150,150,150,0.15)',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  viewAllLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+});

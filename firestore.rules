@@ -1,0 +1,670 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+
+    // Auth and Roles functions
+		//-------------------------------------------------------
+
+    // if the .auth property is not set, the user is not signed in
+    function isAuthed() {
+      return request.auth.uid != null
+    }
+
+    function isOwner(res) {
+      return res.data.createdBy == request.auth.uid
+    }
+
+    // DEPRECATED: Use isTeamMember() instead
+    // Kept for backward compatibility during migration
+    function isTeacher(res) {
+      return res.data.teacher == request.auth.uid
+    }
+
+    // return the current users roles
+    function getRoles() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+    }
+
+    // check if the current user has a specific role
+    function hasRole(role) {
+      //superadmin has all roles (not really nice but I need this)
+      return getRoles()["superadmin"] == true
+      ||
+      (isAuthed() && getRoles()[role] == true);
+    }
+
+    // check if the user has any of the given roles (list)
+    function hasAnyRole(roles) {
+      return isAuthed() && getRoles().keys().hasAny(roles);
+    }
+
+
+    // Team Helper functions
+    //-------------------------------------------------------
+
+    // Get the current user's active team ID
+    function getUserCurrentTeam() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentTeam
+    }
+
+    // Check if user is a member of a specific team
+    function isTeamMember(teamId) {
+      return exists(/databases/$(database)/documents/teams/$(teamId)/team_members/$(request.auth.uid))
+    }
+
+    // Check if user is a member of the resource's team (supports both teamId and teacher fields)
+    function isMemberOfResourceTeam(res) {
+      // Try teamId first (new model), fall back to teacher (old model)
+      let teamId = res.data.teamId;
+      return teamId != null && isTeamMember(teamId)
+    }
+
+    // Check if user has a specific role in a team
+    function hasTeamRole(teamId, role) {
+      let membership = get(/databases/$(database)/documents/teams/$(teamId)/team_members/$(request.auth.uid)).data;
+      let userRole = membership.role;
+
+      // Role hierarchy: owner > manager > viewer
+      return userRole == 'owner' ||
+             (role == 'manager' && userRole == 'manager') ||
+             (role == 'viewer' && (userRole == 'owner' || userRole == 'manager' || userRole == 'viewer'));
+    }
+
+    // Check if resource's teamId matches user's current team OR if teacher field matches user (backward compat)
+    function belongsToUserTeam(res) {
+      return (res.data.teamId != null && res.data.teamId == getUserCurrentTeam() && isTeamMember(res.data.teamId))
+             || isTeacher(res);
+    }
+
+    function isSelfContact(contactId) {
+      return request.auth != null
+             && request.auth.token.contactId == contactId
+             && request.auth.token.sessionExpires != null
+             && request.auth.token.sessionExpires >= request.time.toMillis();
+    }
+
+    function sharesContactEmail(res) {
+      return request.auth != null
+             && request.auth.token.email != null
+             && res.data.email != null
+             && request.auth.token.email == res.data.email;
+    }
+
+
+    // Helper functions
+    //-------------------------------------------------------
+    // function notUpdating(field) {
+    //   return !(field in request.resource.data) || resource.data[field] == request.resource.data[field]
+    // }
+
+    // function eventIsClosed(eventId){
+    //    get(/databases/$(database)/documents/events/$(eventId));
+    // }
+
+
+    // DB rules
+    //-------------------------------------------------------
+    //
+    // You'll forget this :)
+    //
+    //	resource.data --> current data in db
+    //	request.resource.data --> data in the request
+
+    // Private user profiles
+    match /users/{userId} {
+      // Only authenticated users can read profiles (protects email/PII)
+      allow read: if isAuthed();
+      allow write: if request.auth.uid == userId;
+
+      // Activity log sub-collection
+      match /activity_log/{activityLogId} {
+        allow read;
+        allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
+      }
+
+      // Reports sub-collection
+      match /user_weekly_reports/{weeklyReportId} {
+        allow read;
+        allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
+      }
+
+      // Public profile sub-collection
+      match /public_profile/{publicProfileUserId} {
+        allow read;
+        allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
+      }
+
+      // DEPRECATED: Sessions Tags sub-collection (moved to teams/{teamId}/sessions_tags)
+      // Kept for backward compatibility during migration
+      match /sessions_tags/{tagId} {
+        allow read;
+        allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
+      }
+
+      // DEPRECATED: Places sub-collection (moved to teams/{teamId}/team_places)
+      // Kept for backward compatibility during migration
+      match /user_places/{tagId} {
+        allow read;
+        allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
+      }
+
+    }
+
+    // Teams collection
+    match /teams/{teamId} {
+      // Anyone authenticated can read teams (needed for team selection, contact transfer, etc.)
+      allow read: if isAuthed();
+
+      // Only team owners can update team details
+      allow update: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
+
+      // Only users with admin role can create teams
+      allow create: if isAuthed() && hasRole('admin');
+
+      // Only team owners can delete teams
+      allow delete: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
+
+      // Public profile subcollection - minimal public data for portal
+      match /public_profile/{publicProfileId} {
+        // Anyone can read (needed for public portal access)
+        allow read;
+        // Only cloud functions can write
+        allow write: if false;
+      }
+
+      // Team members subcollection
+      match /team_members/{memberId} {
+        // Team members can read the member list
+        // Also allow users to read their own membership record (needed for initial team lookup)
+        allow read: if isTeamMember(teamId) || memberId == request.auth.uid;
+
+        // Only owners can add/remove/update team members
+        allow write: if hasTeamRole(teamId, 'owner');
+      }
+
+      // Activity log subcollection (moved from users/{userId}/activity_log)
+      match /activity_log/{activityLogId} {
+        // All team members can read activity log
+        allow read: if isTeamMember(teamId);
+
+        // Cloud functions can write, team members can read
+        allow write: if false; // Only cloud functions should write to activity log
+      }
+
+      // Team weekly reports subcollection (moved from users/{userId}/user_weekly_reports)
+      match /team_weekly_reports/{weeklyReportId} {
+        // All team members can read weekly reports
+        allow read: if isTeamMember(teamId);
+
+        // Cloud functions can write, team members can read
+        allow write: if false; // Only cloud functions should write to weekly reports
+      }
+
+      // Team places subcollection (moved from users/{userId}/user_places)
+      match /team_places/{placeId} {
+        // All team members can read places
+        allow read: if isTeamMember(teamId);
+
+        // Cloud functions can write (counters managed by functions)
+        allow write: if false; // Only cloud functions should write to places
+      }
+
+      // Team sessions tags subcollection (moved from users/{userId}/sessions_tags)
+      match /sessions_tags/{tagId} {
+        // All team members can read tags
+        allow read: if isTeamMember(teamId);
+
+        // Cloud functions can write (counters managed by functions)
+        allow write: if false; // Only cloud functions should write to tags
+      }
+
+      // Team invitations subcollection
+      match /team_invitations/{invitationId} {
+        // Team members can read invitations
+        allow read: if isTeamMember(teamId);
+
+        // Only cloud functions can write (send, accept, cancel invitations)
+        allow write: if false;
+      }
+
+      // Contact requests subcollection (data update requests, etc.)
+      match /contact_requests/{requestId} {
+        // Team members can read requests
+        allow read: if isTeamMember(teamId);
+
+        // Only cloud functions can write (create, approve, discard)
+        allow write: if false;
+      }
+
+      // Team alerts subcollection (non-contact-specific alerts)
+      match /team_alerts/{alertId} {
+        // Team members can read alerts
+        allow read: if isTeamMember(teamId);
+
+        // Managers and owners can create, update, delete alerts
+        allow write: if hasTeamRole(teamId, 'owner') || hasTeamRole(teamId, 'manager');
+      }
+
+      // Alert presets subcollection (reusable alert templates)
+      match /alert_presets/{presetId} {
+        // Team members can read presets
+        allow read: if isTeamMember(teamId);
+
+        // Only owners can manage presets
+        allow write: if hasTeamRole(teamId, 'owner');
+      }
+
+      // Subscription types subcollection (team-defined subscription plans and aggregators)
+      match /subscription_types/{subscriptionTypeId} {
+        // All team members can read all subscription types
+        // Public (unauthenticated) can also read — safe since it's just plan/aggregator names
+        allow read: if true;
+
+        // Managers and owners can create, update, delete subscription types
+        allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+      }
+
+      // Subscription transition log (team-level event log for funnel/pattern analytics)
+      match /subscription_transitions/{transitionId} {
+        allow read: if isTeamMember(teamId) || hasRole('admin');
+        allow write: if false; // written only by Cloud Functions
+      }
+
+      // Outreach email templates (re-engagement campaigns)
+      match /outreach_templates/{templateId} {
+        allow read: if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+      }
+
+      // Automation rules (no-show triggers, future expansion)
+      match /automation_rules/{ruleId} {
+        allow read: if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+      }
+
+      // Rebuild jobs subcollection (background score history rebuild tasks)
+      match /rebuild_jobs/{jobId} {
+        // Owners and managers can read their own job status (for onSnapshot polling)
+        allow read: if hasTeamRole(teamId, 'owner') || hasTeamRole(teamId, 'manager');
+        // Only cloud functions can write (triggerScoresRebuild creates, processScoresRebuildJob updates)
+        allow write: if false;
+      }
+
+      // Leaderboard subcollection (gamification scores for student app)
+      match /leaderboard/{leaderboardId} {
+        // Team members (web app) and students (student app via token) can read
+        allow read: if isTeamMember(teamId)
+                    || (request.auth != null
+                        && request.auth.token.teamId == teamId
+                        && request.auth.token.sessionExpires != null
+                        && request.auth.token.sessionExpires >= request.time.toMillis());
+        // Only cloud functions can write
+        allow write: if false;
+      }
+    }
+
+    // Public user profiles (deprecated - now using users/{userId}/public_profile subcollection)
+    // This rule is kept for backwards compatibility during migration but can be removed
+    // once all data is migrated to the subcollection pattern
+    match /users_public/{userId} {
+      allow read;
+      allow write: if false;
+    }
+
+    // Projects
+    match /projects/{projectId} {
+      // Only projects you own can be viewed
+      allow create: if isOwner(request.resource);
+      allow read, update, delete: if isOwner(resource);
+      // Rules apply to all child collections
+      match /{allChildren=**} {
+        allow read, write: if isOwner(get(/databases/$(database)/documents/projects/$(projectId)));
+      }
+    }
+
+    // Contacts
+    match /contacts/{contactId} {
+      // Create: Must belong to user's current team (new) OR match user ID (old)
+      allow create: if (request.resource.data.teamId == getUserCurrentTeam() && isTeamMember(request.resource.data.teamId))
+                       || isTeacher(request.resource)
+                       || hasRole('admin');
+
+      // Read/Update/Delete: Must be member of contact's team OR old teacher-based access
+      allow read: if belongsToUserTeam(resource)
+                   || hasRole('admin')
+                   || isSelfContact(contactId)
+                   || sharesContactEmail(resource);
+      allow update: if belongsToUserTeam(resource)
+                       || hasRole('admin')
+                       || (isSelfContact(contactId)
+                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at']));
+      allow delete: if belongsToUserTeam(resource) || hasRole('admin');
+
+      // Subscription history subcollection — full CRUD for team members
+      match /subscription_history/{historyId} {
+        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                      || hasRole('admin');
+        allow create, update, delete:
+          if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+          || hasRole('admin');
+      }
+
+      // Goals subcollection
+      // Coaches (team members) have full CRUD.
+      // Students can create goals (created_by must be 'student') and update the status field only.
+      match /goals/{goalId} {
+        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                      || hasRole('admin')
+                      || isSelfContact(contactId);
+        allow create: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                         || hasRole('admin')
+                         || (isSelfContact(contactId) && request.resource.data.created_by == 'student');
+        allow update: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                         || hasRole('admin')
+                         || (isSelfContact(contactId) && resource.data.created_by == 'student');
+        allow delete: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                         || hasRole('admin')
+                         || (isSelfContact(contactId) && resource.data.created_by == 'student');
+
+        // Goal evaluations subcollection
+        // Coaches have full CRUD. Students can create and edit their own evaluations.
+        match /evaluations/{evalId} {
+          allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                        || hasRole('admin')
+                        || isSelfContact(contactId);
+          allow create: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                           || hasRole('admin')
+                           || (isSelfContact(contactId) && request.resource.data.evaluated_by == 'student');
+          allow update: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                           || hasRole('admin')
+                           || (isSelfContact(contactId) && resource.data.evaluated_by == 'student');
+          allow delete: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                           || hasRole('admin');
+        }
+      }
+
+      // Training check-ins subcollection
+      // Coaches have full CRUD. Students can create and update their own check-ins (filled_by must be 'student').
+      match /training_checkins/{checkinId} {
+        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                      || hasRole('admin')
+                      || isSelfContact(contactId);
+        allow create: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                         || hasRole('admin')
+                         || (isSelfContact(contactId) && request.resource.data.filled_by == 'student');
+        allow update: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                         || hasRole('admin')
+                         || (isSelfContact(contactId) && resource.data.filled_by == 'student');
+        allow delete: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                         || hasRole('admin');
+      }
+
+      // Rules apply to all other child collections
+      match /{allChildren=**} {
+        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+                      || hasRole('admin')
+                      || isSelfContact(contactId)
+                      || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
+        allow write: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin');
+      }
+
+    }
+
+    // Checkins
+    // Events are organization-wide, so all authenticated users can create/read checkins
+    match /checkins/{checkin} {
+      allow create: if isAuthed();
+      allow update, delete: if belongsToUserTeam(resource) || hasRole('admin');
+      allow read: if isAuthed();
+    }
+
+    // Events
+    // Events are organization-wide (not team-scoped)
+    // All authenticated users can read, only admins can create/modify
+    match /events/{event} {
+      allow create: if hasRole('admin');
+      allow read: if isAuthed();
+      allow update: if hasRole('admin');
+      allow delete: if hasRole('admin');
+
+      // Invitations subcollection
+      match /invitations/{invitation} {
+        allow read: if isAuthed();
+        allow write: if false; // Only cloud functions can write
+      }
+    }
+
+    // Categories
+    match /categories/{category} {
+      allow read;
+    }
+
+    // Sessions
+    match /sessions/{session} {
+      // Create: Must belong to user's team and cannot directly set location/tags
+    	allow create: if (belongsToUserTeam(request.resource) || hasRole('admin'))
+                       && (!request.resource.data.keys().hasAny(['location', 'tags']));
+
+      // Update: Must be team member and cannot update location/tags directly
+      allow update: if (belongsToUserTeam(resource) || hasRole('admin'))
+                       && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['location', 'tags']));
+
+      // Delete: Must be team member and session must not have location, tags, or participants
+      allow delete: if (belongsToUserTeam(resource) || hasRole('admin')) &&
+      (
+        (!resource.data.keys().hasAll(['location']) || resource.data.location == null) &&
+        (!resource.data.keys().hasAll(['tags']) || resource.data.tags == null) &&
+        (!resource.data.keys().hasAll(['participants_count']) || resource.data.participants_count == 0)
+      );
+
+      // Read: Must be team member
+      allow read: if belongsToUserTeam(resource) || hasRole('admin');
+
+      // participants sub-collection
+      match /participants/{participantId} {
+        allow read, write: if belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session))) || hasRole('admin');
+        // Allow contacts to read their own participant doc (student app)
+        allow read: if isSelfContact(participantId);
+      }
+
+      // bookings sub-collection (portal reservations, separate from confirmed attendance)
+      match /bookings/{bookingId} {
+        allow read, write: if belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session))) || hasRole('admin');
+        // Allow contacts to read their own booking doc (student app)
+        allow read: if isSelfContact(bookingId);
+      }
+
+      // public_profile sub-collection (for trial booking)
+      match /public_profile/{publicProfileId} {
+        allow read;  // Public read access
+        allow write: if false;  // Only cloud functions can write
+      }
+    }
+
+    // Coach Availability Templates (recurring slot patterns defined by managers)
+    match /coach_availability/{templateId} {
+      // GET: resource.data is available
+      allow get: if isAuthed() && isTeamMember(resource.data.teamId);
+      // LIST: resource.data is not reliably available for query rules — use currentTeam
+      allow list: if isAuthed() && isTeamMember(getUserCurrentTeam());
+      allow create: if isAuthed() && hasTeamRole(request.resource.data.teamId, 'manager');
+      allow update: if isAuthed() && hasTeamRole(resource.data.teamId, 'manager');
+      allow delete: if false; // soft delete only
+    }
+
+    // Coach Slots (individual bookable instances generated from templates or created manually)
+    match /coach_slots/{slotId} {
+      // GET: resource.data is available, full check for both admin and student
+      allow get: if (isAuthed() && isTeamMember(resource.data.teamId))
+                 || (request.auth != null
+                     && request.auth.token.teamId == resource.data.teamId
+                     && request.auth.token.sessionExpires != null
+                     && request.auth.token.sessionExpires >= request.time.toMillis());
+
+      // LIST: resource.data is not reliably available for query rules (see referrals note).
+      // Admin: must be a member of their currentTeam. Student: valid session token with teamId claim.
+      allow list: if (isAuthed() && isTeamMember(getUserCurrentTeam()))
+                  || (request.auth != null
+                      && request.auth.token.teamId != null
+                      && request.auth.token.sessionExpires != null
+                      && request.auth.token.sessionExpires >= request.time.toMillis());
+
+      allow create: if isAuthed() && hasTeamRole(request.resource.data.teamId, 'manager');
+      allow update: if isAuthed() && hasTeamRole(resource.data.teamId, 'manager');
+      allow delete: if false;
+
+      // Bookings subcollection — cloud functions write, managers and self-contact read
+      match /bookings/{bookingId} {
+        allow read: if (isAuthed() && isTeamMember(get(/databases/$(database)/documents/coach_slots/$(slotId)).data.teamId))
+                    || isSelfContact(bookingId);
+        allow write: if false; // cloud functions only
+      }
+    }
+
+    // Session Series (recurring sessions)
+    match /session_series/{seriesId} {
+      allow create: if belongsToUserTeam(request.resource) || hasRole('admin');
+      allow read: if belongsToUserTeam(resource) || hasRole('admin');
+      allow update: if belongsToUserTeam(resource) || hasRole('admin');
+      allow delete: if belongsToUserTeam(resource) || hasRole('admin');
+    }
+
+    // Activities (class types)
+    match /activities/{activityId} {
+      allow create: if belongsToUserTeam(request.resource) || hasRole('admin');
+      allow read: if belongsToUserTeam(resource) || hasRole('admin');
+      allow update: if belongsToUserTeam(resource) || hasRole('admin');
+      allow delete: if belongsToUserTeam(resource) || hasRole('admin');
+
+      // public_profile sub-collection (for trial booking)
+      match /public_profile/{publicProfileId} {
+        allow read;  // Public read access
+        allow write: if false;  // Only cloud functions can write
+      }
+    }
+
+    // ----------------------------------------------
+    // Group queries
+    // ----------------------------------------------
+
+    // contact_weekly_reports
+    match /{path=**}/contact_weekly_reports/{contactWeeklyReportId} {
+      allow read: if request.auth != null;
+    }
+
+    // contact_alerts
+    match /{path=**}/contact_alerts/{contactAlertId} {
+      allow read: if request.auth != null && (
+        (resource.data.teamId != null && isTeamMember(resource.data.teamId)) ||
+        isTeacher(get(/databases/$(database)/documents/contacts/$(resource.data.contact))) ||
+        hasRole('admin')
+      );
+    }
+
+    // team_alerts (collection group for team-level alerts)
+    match /{path=**}/team_alerts/{teamAlertId} {
+      allow read: if request.auth != null && (
+        resource.data.teamId != null && isTeamMember(resource.data.teamId)
+      );
+    }
+
+    // bookings (collection group for dashboard heatmap query)
+    match /{path=**}/bookings/{bookingId} {
+      allow read: if request.auth != null && (
+        resource.data.teamId != null && isTeamMember(resource.data.teamId)
+      );
+    }
+
+    // public_profile (collection group for trial booking)
+    match /{path=**}/public_profile/{publicProfileId} {
+      allow read;  // Public read access for trial booking
+      allow write: if false;  // Only cloud functions can write
+    }
+
+    // team_members (collection group for user membership queries)
+    match /{path=**}/team_members/{memberId} {
+      allow read: if request.auth != null;
+      allow write: if false;  // Must go through specific team path
+    }
+
+    // team_invitations (collection group for invitation token queries)
+    match /{path=**}/team_invitations/{invitationId} {
+      allow read: if false;  // Only cloud functions can query by token
+      allow write: if false;  // Only cloud functions can write
+    }
+
+    // ----------------------------------------------
+    // Membership Signup (Public)
+    // ----------------------------------------------
+
+    // Verification codes - no direct client access
+    // All operations handled via cloud functions
+    match /verification_codes/{codeId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // ----------------------------------------------
+    // Authentication Tokens
+    // ----------------------------------------------
+
+    // Scoped auth tokens - generated by student app for booking, membership, etc.
+    // All operations handled via cloud functions
+    match /auth_tokens/{tokenId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Booking verification codes - for email-based authentication in portal
+    // All operations handled via cloud functions
+    match /booking_verification_codes/{codeId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // ----------------------------------------------
+    // Referral System
+    // ----------------------------------------------
+
+    // Referral code lookup table — only cloud functions read/write
+    match /referral_codes/{code} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Referral tracking — team members can read; only cloud functions write
+    match /referrals/{referralId} {
+      // Single document GET: resource.data is available, verify team membership directly
+      allow get: if isAuthed() && (
+        isTeamMember(resource.data.team_id) || hasRole('admin')
+      );
+      // Collection LIST: resource.data is NOT available for query rules.
+      // Security relies on the app always filtering by team_id == user's team.
+      allow list: if isAuthed();
+      allow write: if false;
+    }
+
+    // ----------------------------------------------
+    // SaaS Subscriptions (Lineup-specific)
+    // Billing state managed exclusively by Cloud Functions (Stripe webhook handler)
+    // ----------------------------------------------
+    match /saas_subscriptions/{teamId} {
+      allow read: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
+      allow write: if false; // Stripe webhook Cloud Function only
+    }
+
+    // ----------------------------------------------
+    // Organizations (multi-club tier — Phase 2, not yet implemented)
+    // ----------------------------------------------
+    match /organizations/{orgId} {
+      allow read: if false;  // TODO: org members can read their org
+      allow write: if false; // TODO: cloud functions only
+      match /org_members/{memberId} {
+        allow read: if false;  // TODO
+        allow write: if false; // TODO
+      }
+    }
+
+  }
+}

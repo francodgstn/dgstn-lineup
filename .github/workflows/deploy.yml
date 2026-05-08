@@ -1,0 +1,45 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build functions
+        run: pnpm --filter @lineup/functions run build
+
+      - name: Build web app
+        run: pnpm --filter @lineup/web run build
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.STAGING_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: lineup-staging.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_DATABASE_URL: https://lineup-staging.firebaseio.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: lineup-staging
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: lineup-staging.appspot.com
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.STAGING_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.STAGING_APP_ID }}
+
+      - name: Deploy to Firebase (Staging)
+        run: npx firebase-tools deploy --project staging --only functions,hosting,firestore
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT }}

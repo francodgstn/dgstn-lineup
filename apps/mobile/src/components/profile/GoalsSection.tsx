@@ -1,0 +1,801 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Platform, ScrollView, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Button,
+  Card,
+  Chip,
+  Icon,
+  Modal,
+  Portal,
+  Text,
+  TextInput,
+  TouchableRipple,
+  useTheme,
+} from 'react-native-paper';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { FirestoreService } from '../../services/firestore';
+import { Goal, GoalEvaluation, GoalStatus, TrainingIndicator } from '../../types';
+import { Timestamp } from 'firebase/firestore';
+
+interface Props {
+  contactId: string;
+  teamId: string;
+}
+
+// ─── Status helpers ──────────────────────────────────────────────────────────
+
+const STATUS_LABELS: Record<GoalStatus, string> = {
+  open: 'Open',
+  in_progress: 'In Progress',
+  achieved: 'Achieved',
+  abandoned: 'Abandoned',
+};
+
+const STATUS_COLORS: Record<GoalStatus, string> = {
+  open: '#3B82F6',
+  in_progress: '#F97316',
+  achieved: '#22C55E',
+  abandoned: '#9CA3AF',
+};
+
+const ALL_STATUSES: GoalStatus[] = ['open', 'in_progress', 'achieved', 'abandoned'];
+
+const DEFAULT_CATEGORIES: TrainingIndicator[] = [
+  { key: 'technique', label: 'Technique' },
+  { key: 'attitude', label: 'Attitude' },
+  { key: 'attendance', label: 'Attendance' },
+  { key: 'physical', label: 'Physical' },
+  { key: 'mental', label: 'Mental' },
+];
+
+// ─── Star rating display ─────────────────────────────────────────────────────
+
+const StarDisplay: React.FC<{ score: number; size?: number }> = ({ score, size = 14 }) => {
+  const theme = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', gap: 2 }}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <Icon
+          key={i}
+          source={i <= score ? 'star' : 'star-outline'}
+          size={size}
+          color={i <= score ? '#F59E0B' : theme.colors.onSurfaceVariant}
+        />
+      ))}
+    </View>
+  );
+};
+
+// ─── Touchable stars for input ────────────────────────────────────────────────
+
+const StarInput: React.FC<{ value: number; onChange: (v: number) => void }> = ({ value, onChange }) => (
+  <View style={{ flexDirection: 'row', gap: 8 }}>
+    {[1, 2, 3, 4, 5].map(i => (
+      <TouchableRipple key={i} onPress={() => onChange(i)} borderless style={{ borderRadius: 20 }}>
+        <Icon source={i <= value ? 'star' : 'star-outline'} size={32} color={i <= value ? '#F59E0B' : '#9CA3AF'} />
+      </TouchableRipple>
+    ))}
+  </View>
+);
+
+// ─── Evaluation history item ──────────────────────────────────────────────────
+
+interface EvaluationItemProps {
+  eval_: GoalEvaluation;
+  onEdit?: () => void;
+}
+
+const EvaluationItem: React.FC<EvaluationItemProps> = ({ eval_, onEdit }) => {
+  const theme = useTheme();
+  const date = eval_.evaluated_at?.toDate
+    ? eval_.evaluated_at.toDate()
+    : new Date(eval_.evaluated_at);
+  const dateStr = date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+
+  return (
+    <View
+      style={{
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderLeftWidth: 3,
+        borderLeftColor: STATUS_COLORS[eval_.status_after],
+        marginBottom: 8,
+        backgroundColor: theme.colors.surfaceVariant,
+        borderRadius: 6,
+      }}
+    >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <StarDisplay score={eval_.score} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {eval_.edited && (
+            <Chip compact style={{ backgroundColor: theme.colors.surfaceVariant }} textStyle={{ fontSize: 9, color: theme.colors.onSurfaceVariant }}>
+              edited
+            </Chip>
+          )}
+          <Chip
+            compact
+            style={{ backgroundColor: eval_.evaluated_by === 'coach' ? '#7C3AED20' : '#3B82F620' }}
+            textStyle={{ fontSize: 10 }}
+          >
+            {eval_.evaluated_by === 'coach' ? 'Coach' : 'Self'}
+          </Chip>
+          {onEdit && (
+            <TouchableRipple onPress={onEdit} borderless style={{ borderRadius: 12 }}>
+              <Icon source="pencil-outline" size={16} color={theme.colors.onSurfaceVariant} />
+            </TouchableRipple>
+          )}
+        </View>
+      </View>
+      <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+        {dateStr} · Status: {STATUS_LABELS[eval_.status_after]}
+      </Text>
+      {eval_.notes ? (
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurface, marginTop: 4 }}>
+          {eval_.notes}
+        </Text>
+      ) : null}
+    </View>
+  );
+};
+
+// ─── Add / Edit Evaluation Modal ─────────────────────────────────────────────
+
+interface EvalModalProps {
+  visible: boolean;
+  currentStatus: GoalStatus;
+  initialScore?: number;
+  initialNotes?: string | null;
+  initialStatusAfter?: GoalStatus;
+  onDismiss: () => void;
+  onSubmit: (score: number, notes: string, statusAfter: GoalStatus) => Promise<void>;
+}
+
+const AddEvalModal: React.FC<EvalModalProps> = ({
+  visible,
+  currentStatus,
+  initialScore,
+  initialNotes,
+  initialStatusAfter,
+  onDismiss,
+  onSubmit,
+}) => {
+  const theme = useTheme();
+  const [score, setScore] = useState(initialScore ?? 3);
+  const [notes, setNotes] = useState(initialNotes ?? '');
+  const [statusAfter, setStatusAfter] = useState<GoalStatus>(initialStatusAfter ?? currentStatus);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setScore(initialScore ?? 3);
+      setNotes(initialNotes ?? '');
+      setStatusAfter(initialStatusAfter ?? currentStatus);
+    }
+  }, [visible, currentStatus, initialScore, initialNotes, initialStatusAfter]);
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await onSubmit(score, notes.trim(), statusAfter);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Portal>
+      <Modal
+        visible={visible}
+        onDismiss={onDismiss}
+        contentContainerStyle={{
+          backgroundColor: theme.colors.surface,
+          margin: 20,
+          borderRadius: 16,
+          padding: 20,
+          gap: 16,
+        }}
+      >
+        <Text variant="titleMedium" style={{ fontWeight: '700' }}>
+          {initialScore !== undefined ? 'Edit Evaluation' : 'Add Evaluation'}
+        </Text>
+
+        <View>
+          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+            Score
+          </Text>
+          <StarInput value={score} onChange={setScore} />
+        </View>
+
+        <TextInput
+          label="Notes (optional)"
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          numberOfLines={3}
+          mode="outlined"
+          style={{ backgroundColor: theme.colors.surface }}
+        />
+
+        <View>
+          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+            Status after
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {ALL_STATUSES.map(s => (
+              <Chip
+                key={s}
+                selected={statusAfter === s}
+                onPress={() => setStatusAfter(s)}
+                style={statusAfter === s ? { backgroundColor: STATUS_COLORS[s] + '30' } : undefined}
+                textStyle={statusAfter === s ? { color: STATUS_COLORS[s], fontWeight: '700' } : undefined}
+              >
+                {STATUS_LABELS[s]}
+              </Chip>
+            ))}
+          </View>
+        </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+          <Button onPress={onDismiss} disabled={submitting}>Cancel</Button>
+          <Button mode="contained" onPress={handleSubmit} loading={submitting} disabled={submitting}>
+            Save
+          </Button>
+        </View>
+      </Modal>
+    </Portal>
+  );
+};
+
+// ─── Add Goal Modal ───────────────────────────────────────────────────────────
+
+interface AddGoalModalProps {
+  visible: boolean;
+  categoryOptions: TrainingIndicator[];
+  initialTitle?: string;
+  initialDescription?: string | null;
+  initialCategories?: string[];
+  initialTargetDate?: Date | null;
+  onDismiss: () => void;
+  onSubmit: (title: string, description: string, categories: string[], targetDate: Date | null) => Promise<void>;
+}
+
+const AddGoalModal: React.FC<AddGoalModalProps> = ({
+  visible,
+  categoryOptions,
+  initialTitle,
+  initialDescription,
+  initialCategories,
+  initialTargetDate,
+  onDismiss,
+  onSubmit,
+}) => {
+  const theme = useTheme();
+  const isEditing = initialTitle !== undefined;
+  const [title, setTitle] = useState(initialTitle ?? '');
+  const [description, setDescription] = useState(initialDescription ?? '');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(initialCategories ?? []);
+  const [targetDate, setTargetDate] = useState<Date | null>(initialTargetDate ?? null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setTitle(initialTitle ?? '');
+      setDescription(initialDescription ?? '');
+      setSelectedCategories(initialCategories ?? []);
+      setTargetDate(initialTargetDate ?? null);
+      setShowDatePicker(false);
+    }
+  }, [visible, initialTitle, initialDescription, initialCategories, initialTargetDate]);
+
+  const toggleCategory = (key: string) => {
+    setSelectedCategories(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (!title.trim()) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(title.trim(), description.trim(), selectedCategories, targetDate);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formattedDate = targetDate
+    ? targetDate.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+
+  return (
+    <Portal>
+      <Modal
+        visible={visible}
+        onDismiss={onDismiss}
+        contentContainerStyle={{
+          backgroundColor: theme.colors.surface,
+          margin: 20,
+          borderRadius: 16,
+          padding: 20,
+          gap: 16,
+        }}
+      >
+        <Text variant="titleMedium" style={{ fontWeight: '700' }}>{isEditing ? 'Edit Goal' : 'Add Goal'}</Text>
+
+        <TextInput
+          label="Title"
+          value={title}
+          onChangeText={setTitle}
+          mode="outlined"
+          style={{ backgroundColor: theme.colors.surface }}
+        />
+
+        <TextInput
+          label="Description (optional)"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={3}
+          mode="outlined"
+          style={{ backgroundColor: theme.colors.surface }}
+        />
+
+        <View>
+          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+            Categories
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {categoryOptions.map(cat => (
+              <Chip
+                key={cat.key}
+                selected={selectedCategories.includes(cat.key)}
+                onPress={() => toggleCategory(cat.key)}
+              >
+                {cat.label}
+              </Chip>
+            ))}
+          </View>
+        </View>
+
+        <View>
+          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+            Target date (optional)
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableRipple
+              onPress={() => setShowDatePicker(true)}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: theme.colors.outline,
+                borderRadius: 4,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+              }}
+            >
+              <Text variant="bodyMedium" style={{ color: formattedDate ? theme.colors.onSurface : theme.colors.onSurfaceVariant }}>
+                {formattedDate ?? 'Select a date…'}
+              </Text>
+            </TouchableRipple>
+            {targetDate && (
+              <TouchableRipple onPress={() => setTargetDate(null)} borderless style={{ borderRadius: 16 }}>
+                <Icon source="close-circle-outline" size={22} color={theme.colors.onSurfaceVariant} />
+              </TouchableRipple>
+            )}
+          </View>
+          {showDatePicker && (
+            <DateTimePicker
+              value={targetDate ?? new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              minimumDate={new Date()}
+              onChange={(_, date) => {
+                if (Platform.OS === 'android') setShowDatePicker(false);
+                if (date) setTargetDate(date);
+              }}
+            />
+          )}
+          {Platform.OS === 'ios' && showDatePicker && (
+            <Button compact onPress={() => setShowDatePicker(false)} style={{ alignSelf: 'flex-end' }}>
+              Done
+            </Button>
+          )}
+        </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+          <Button onPress={onDismiss} disabled={submitting}>Cancel</Button>
+          <Button
+            mode="contained"
+            onPress={handleSubmit}
+            loading={submitting}
+            disabled={submitting || !title.trim()}
+          >
+            {isEditing ? 'Save' : 'Add Goal'}
+          </Button>
+        </View>
+      </Modal>
+    </Portal>
+  );
+};
+
+// ─── Goal Card ────────────────────────────────────────────────────────────────
+
+interface GoalCardProps {
+  goal: Goal;
+  contactId: string;
+  categoryOptions: TrainingIndicator[];
+  onEvaluationAdded: () => void;
+  onEditGoal?: () => void;
+  onDeleteGoal?: () => void;
+}
+
+const GoalCard: React.FC<GoalCardProps> = ({ goal, contactId, categoryOptions, onEvaluationAdded, onEditGoal, onDeleteGoal }) => {
+  const theme = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const [evaluations, setEvaluations] = useState<GoalEvaluation[]>([]);
+  const [loadingEvals, setLoadingEvals] = useState(false);
+  const [showEvalModal, setShowEvalModal] = useState(false);
+  const [editingEval, setEditingEval] = useState<GoalEvaluation | null>(null);
+
+  const loadEvaluations = useCallback(async () => {
+    setLoadingEvals(true);
+    try {
+      const evals = await FirestoreService.getGoalEvaluations(contactId, goal.id);
+      setEvaluations(evals);
+    } finally {
+      setLoadingEvals(false);
+    }
+  }, [contactId, goal.id]);
+
+  const handleExpand = () => {
+    if (!expanded) {
+      loadEvaluations();
+    }
+    setExpanded(e => !e);
+  };
+
+  const handleAddEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
+    await FirestoreService.addGoalEvaluation(contactId, goal.id, {
+      evaluated_at: Timestamp.now(),
+      evaluated_by: 'student',
+      score,
+      notes: notes || null,
+      status_after: statusAfter,
+    });
+    setShowEvalModal(false);
+    await loadEvaluations();
+    onEvaluationAdded();
+  };
+
+  const handleEditEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
+    if (!editingEval) return;
+    await FirestoreService.updateGoalEvaluation(contactId, goal.id, editingEval.id, {
+      score,
+      notes: notes || null,
+      status_after: statusAfter,
+    });
+    setEditingEval(null);
+    await loadEvaluations();
+    onEvaluationAdded();
+  };
+
+  const canEvaluate = goal.status === 'open' || goal.status === 'in_progress';
+  const statusColor = STATUS_COLORS[goal.status];
+
+  return (
+    <>
+      <Card
+        style={{ marginBottom: 12, borderRadius: 12, overflow: 'hidden' }}
+        elevation={1}
+      >
+        <View style={{ padding: 14 }}>
+          {/* Header row: title + action icons */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Text variant="titleMedium" style={{ fontWeight: '700', color: theme.colors.onSurface }}>
+                {goal.title}
+              </Text>
+              {goal.description ? (
+                <Text
+                  variant="bodySmall"
+                  style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}
+                  numberOfLines={expanded ? undefined : 2}
+                >
+                  {goal.description}
+                </Text>
+              ) : null}
+            </View>
+            {goal.created_by === 'coach' ? (
+              <TouchableRipple
+                onPress={() => Alert.alert('Coach Goal', 'This goal was set by your coach and cannot be edited or deleted.')}
+                borderless
+                style={{ borderRadius: 16, padding: 4 }}
+              >
+                <Icon source="information-outline" size={22} color="#7C3AED" />
+              </TouchableRipple>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                {onEditGoal && (
+                  <TouchableRipple
+                    onPress={onEditGoal}
+                    borderless
+                    style={{ borderRadius: 16, padding: 4 }}
+                  >
+                    <Icon source="pencil-outline" size={22} color={theme.colors.onSurfaceVariant} />
+                  </TouchableRipple>
+                )}
+                {onDeleteGoal && (
+                  <TouchableRipple
+                    onPress={onDeleteGoal}
+                    borderless
+                    style={{ borderRadius: 16, padding: 4 }}
+                  >
+                    <Icon source="delete-outline" size={22} color={theme.colors.error} />
+                  </TouchableRipple>
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* Badges row */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+            <Chip
+              compact
+              style={{ backgroundColor: statusColor + '20', height: 24 }}
+              textStyle={{ color: statusColor, fontSize: 11, fontWeight: '700', marginVertical: 0 }}
+            >
+              {STATUS_LABELS[goal.status]}
+            </Chip>
+            {(goal.categories ?? []).map(cat => {
+              const found = categoryOptions.find(c => c.key === cat);
+              return (
+                <Chip
+                  key={cat}
+                  compact
+                  style={{ backgroundColor: theme.colors.surfaceVariant, height: 24 }}
+                  textStyle={{ fontSize: 11, marginVertical: 0 }}
+                >
+                  {found ? found.label : cat}
+                </Chip>
+              );
+            })}
+            {goal.target_date ? (
+              <Chip
+                compact
+                style={{ backgroundColor: theme.colors.surfaceVariant, height: 24 }}
+                textStyle={{ fontSize: 11, marginVertical: 0 }}
+              >
+                {(() => {
+                  const d = goal.target_date?.toDate
+                    ? goal.target_date.toDate()
+                    : typeof goal.target_date === 'string'
+                      ? new Date(goal.target_date)
+                      : null;
+                  return `Target: ${d ? d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : ''}`;
+                })()}
+              </Chip>
+            ) : null}
+          </View>
+
+          {/* Expand/collapse footer */}
+          <TouchableRipple onPress={handleExpand} borderless style={{ borderRadius: 8, marginTop: 8, alignSelf: 'flex-end' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 2, paddingHorizontal: 4 }}>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                {expanded ? 'Hide' : 'Evaluations'}
+              </Text>
+              <Icon
+                source={expanded ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={theme.colors.onSurfaceVariant}
+              />
+            </View>
+          </TouchableRipple>
+        </View>
+
+        {/* Expanded section */}
+        {expanded && (
+          <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+            <View
+              style={{
+                height: 1,
+                backgroundColor: theme.colors.outlineVariant,
+                marginBottom: 12,
+              }}
+            />
+
+            {loadingEvals ? (
+              <ActivityIndicator size="small" style={{ marginVertical: 8 }} />
+            ) : evaluations.length === 0 ? (
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+                No evaluations yet.
+              </Text>
+            ) : (
+              evaluations.map(ev => (
+                <EvaluationItem
+                  key={ev.id}
+                  eval_={ev}
+                  onEdit={ev.evaluated_by === 'student' ? () => setEditingEval(ev) : undefined}
+                />
+              ))
+            )}
+
+            {canEvaluate && (
+              <Button
+                mode="outlined"
+                icon="plus"
+                onPress={() => setShowEvalModal(true)}
+                style={{ alignSelf: 'flex-start', marginTop: 4 }}
+                compact
+              >
+                Add Evaluation
+              </Button>
+            )}
+          </View>
+        )}
+      </Card>
+
+      <AddEvalModal
+        visible={showEvalModal}
+        currentStatus={goal.status}
+        onDismiss={() => setShowEvalModal(false)}
+        onSubmit={handleAddEval}
+      />
+
+      <AddEvalModal
+        visible={editingEval !== null}
+        currentStatus={goal.status}
+        initialScore={editingEval?.score}
+        initialNotes={editingEval?.notes}
+        initialStatusAfter={editingEval?.status_after}
+        onDismiss={() => setEditingEval(null)}
+        onSubmit={handleEditEval}
+      />
+    </>
+  );
+};
+
+// ─── GoalsSection ─────────────────────────────────────────────────────────────
+
+export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
+  const theme = useTheme();
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<TrainingIndicator[]>(DEFAULT_CATEGORIES);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+
+  const loadGoals = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [data, teamCats] = await Promise.all([
+        FirestoreService.getGoals(contactId),
+        teamId ? FirestoreService.getTeamGoalCategories(teamId) : Promise.resolve(null),
+      ]);
+      setGoals(data);
+      if (teamCats && teamCats.length > 0) setCategoryOptions(teamCats);
+    } finally {
+      setLoading(false);
+    }
+  }, [contactId, teamId]);
+
+  useEffect(() => {
+    loadGoals();
+  }, [loadGoals]);
+
+  const handleAddGoal = async (
+    title: string,
+    description: string,
+    categories: string[],
+    targetDate: Date | null,
+  ) => {
+    await FirestoreService.createGoal(contactId, {
+      title,
+      description: description || null,
+      status: 'open',
+      categories,
+      created_by: 'student',
+      created_at: Timestamp.now(),
+      target_date: targetDate ? Timestamp.fromDate(targetDate) : null,
+    });
+    setShowAddModal(false);
+    await loadGoals();
+  };
+
+  const handleEditGoal = async (
+    title: string,
+    description: string,
+    categories: string[],
+    targetDate: Date | null,
+  ) => {
+    if (!editingGoal) return;
+    await FirestoreService.updateGoal(contactId, editingGoal.id, {
+      title,
+      description: description || null,
+      categories,
+      target_date: targetDate ? Timestamp.fromDate(targetDate) : null,
+    });
+    setEditingGoal(null);
+    await loadGoals();
+  };
+
+  const handleDeleteGoal = (goal: Goal) => {
+    Alert.alert(
+      'Delete Goal',
+      `Are you sure you want to delete "${goal.title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await FirestoreService.deleteGoal(contactId, goal.id);
+            await loadGoals();
+          },
+        },
+      ],
+    );
+  };
+
+  return (
+    <View style={{ marginBottom: 16 }}>
+      {/* Section heading — outside cards */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingHorizontal: 4 }}>
+        <Text variant="titleLarge" style={{ fontWeight: '800', color: theme.colors.onSurface }}>
+          Goals
+        </Text>
+        <Button mode="contained-tonal" icon="plus" compact onPress={() => setShowAddModal(true)}>
+          Add Goal
+        </Button>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="small" style={{ marginVertical: 24 }} />
+      ) : goals.length === 0 ? (
+        <View style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
+          <Icon source="flag-outline" size={40} color={theme.colors.onSurfaceVariant} />
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
+            No goals yet — your coach will add goals here
+          </Text>
+        </View>
+      ) : (
+        goals.map(goal => (
+          <GoalCard
+            key={goal.id}
+            goal={goal}
+            contactId={contactId}
+            categoryOptions={categoryOptions}
+            onEvaluationAdded={loadGoals}
+            onEditGoal={goal.created_by === 'student' ? () => setEditingGoal(goal) : undefined}
+            onDeleteGoal={goal.created_by === 'student' ? () => handleDeleteGoal(goal) : undefined}
+          />
+        ))
+      )}
+
+      <AddGoalModal
+        visible={showAddModal}
+        categoryOptions={categoryOptions}
+        onDismiss={() => setShowAddModal(false)}
+        onSubmit={handleAddGoal}
+      />
+
+      <AddGoalModal
+        visible={editingGoal !== null}
+        categoryOptions={categoryOptions}
+        initialTitle={editingGoal?.title}
+        initialDescription={editingGoal?.description}
+        initialCategories={editingGoal?.categories}
+        initialTargetDate={
+          editingGoal?.target_date?.toDate
+            ? editingGoal.target_date.toDate()
+            : editingGoal?.target_date
+              ? new Date(editingGoal.target_date)
+              : null
+        }
+        onDismiss={() => setEditingGoal(null)}
+        onSubmit={handleEditGoal}
+      />
+    </View>
+  );
+};

@@ -1,0 +1,82 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "environment": "preview",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote"
+      },
+      "ios": {
+        "credentialsSource": "remote"
+      },
+      "env": {
+        "FIREBASE_PROJECT_ID": "hmdlineupt",
+        "FIREBASE_API_KEY": "${FIREBASE_API_KEY}"
+      }
+    },
+    "production": {
+      "environment": "production",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote"
+      },
+      "ios": {
+        "credentialsSource": "remote"
+      },
+      "env": {
+        "FIREBASE_PROJECT_ID": "hmdlineup",
+        "FIREBASE_API_KEY": "${FIREBASE_API_KEY}"
+      }
+    },
+    "store": {
+      "environment": "production",
+      "distribution": "store",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle",
+        "credentialsSource": "remote"
+      },
+      "ios": {
+        "credentialsSource": "remote"
+      },
+      "env": {
+        "FIREBASE_PROJECT_ID": "hmdlineup",
+        "FIREBASE_API_KEY": "${FIREBASE_API_KEY}"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "production"
+      },
+      "ios": {
+        "ascAppId": "6758545583"
+      }
+    },
+    "store": {
+      "android": {
+        "track": "alpha"
+      },
+      "ios": {
+        "ascAppId": "6758545583"
+      }
+    }
+  }
+}
