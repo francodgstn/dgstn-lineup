@@ -36,7 +36,7 @@ export async function getTeamOwner(teamId: string): Promise<string | null> {
 
 export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
   const snap = await admin.firestore().collection('teams').doc(teamId).collection('team_members').get()
-  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as TeamMember))
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as unknown as TeamMember))
 }
 
 export async function isTeamMember(userId: string, teamId: string): Promise<boolean> {

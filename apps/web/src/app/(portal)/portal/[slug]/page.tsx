@@ -3,6 +3,8 @@ import { db } from '@/lib/firebase'
 import { notFound } from 'next/navigation'
 import type { TeamPublicProfile } from '@lineup/shared'
 
+export const dynamic = 'force-dynamic'
+
 interface Props {
   params: Promise<{ slug: string }>
 }
