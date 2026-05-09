@@ -25,6 +25,9 @@ export { indexUser } from './sync/indexUser'
 // Booking
 export { bookTrialSession, sendBookingVerificationCode, verifyBookingCode } from './booking'
 
+// Gamification
+export { recalculateScores, resetScores } from './gamification'
+
 // --- Stubs (TODO: port from hmd-lineup) ---
 // Booking (remaining)
 // export { cancelBooking, rebookSession, getBookingDetails } from './booking'

@@ -33,6 +33,11 @@ export interface Contact {
   last_session_at?: Timestamp
   // Notes
   notes?: string
+  // Gamification
+  current_month_score?: number
+  current_streak?: number
+  max_streak?: number
+  total_sessions?: number
 }
 
 export interface SubscriptionHistory {
