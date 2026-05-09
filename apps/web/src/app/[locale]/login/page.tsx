@@ -1,21 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { useRouter, Link } from '@/i18n/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { signIn, resetPassword } from '@/lib/auth'
 
 const schema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  email: z.string().email(),
+  password: z.string().min(6),
 })
 
 type FormData = z.infer<typeof schema>
 
 export default function LoginPage() {
   const router = useRouter()
+  const t = useTranslations('Login')
   const [error, setError] = useState<string | null>(null)
   const [resetSent, setResetSent] = useState(false)
 
@@ -32,21 +34,21 @@ export default function LoginPage() {
       await signIn(data.email, data.password)
       router.push('/dashboard')
     } catch {
-      setError('Invalid email or password. Please try again.')
+      setError(t('errorInvalidCredentials'))
     }
   }
 
   async function handleResetPassword() {
     const email = getValues('email')
     if (!email) {
-      setError('Enter your email address first')
+      setError(t('errorEmailRequired'))
       return
     }
     try {
       await resetPassword(email)
       setResetSent(true)
     } catch {
-      setError('Could not send reset email. Check your email address.')
+      setError(t('errorResetFailed'))
     }
   }
 
@@ -55,13 +57,13 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">Lineup</h1>
-          <p className="text-muted-foreground text-sm">Sign in to your account</p>
+          <p className="text-muted-foreground text-sm">{t('subtitle')}</p>
         </div>
 
         <div className="bg-card border rounded-xl shadow-sm p-6 space-y-4">
           {resetSent && (
             <div className="bg-green-50 border border-green-200 text-green-800 text-sm rounded-lg p-3">
-              Password reset email sent. Check your inbox.
+              {t('resetSent')}
             </div>
           )}
 
@@ -74,7 +76,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-1">
               <label htmlFor="email" className="text-sm font-medium">
-                Email
+                {t('email')}
               </label>
               <input
                 id="email"
@@ -88,7 +90,7 @@ export default function LoginPage() {
 
             <div className="space-y-1">
               <label htmlFor="password" className="text-sm font-medium">
-                Password
+                {t('password')}
               </label>
               <input
                 id="password"
@@ -105,7 +107,7 @@ export default function LoginPage() {
               disabled={isSubmitting}
               className="w-full rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
-              {isSubmitting ? 'Signing in…' : 'Sign in'}
+              {isSubmitting ? t('submitting') : t('submit')}
             </button>
           </form>
 
@@ -115,16 +117,16 @@ export default function LoginPage() {
               onClick={handleResetPassword}
               className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
             >
-              Forgot your password?
+              {t('forgotPassword')}
             </button>
           </div>
         </div>
 
         <p className="text-center text-xs text-muted-foreground">
-          New to Lineup?{' '}
-          <a href="/signup" className="text-primary hover:underline">
-            Create an account
-          </a>
+          {t('noAccount')}{' '}
+          <Link href="/signup" className="text-primary hover:underline">
+            {t('createAccount')}
+          </Link>
         </p>
       </div>
     </div>

@@ -16,10 +16,10 @@ or extending any feature, always read the source there first.
 ## Monorepo layout
 
 ```
-apps/web/          Next.js 15 App Router — admin dashboard (replaces CRA/Redux)
-apps/mobile/       Expo 54 + React Native — student app (ported from hmd-lineup/student-app/)
+apps/web/           Next.js 15 App Router — admin dashboard (replaces CRA/Redux)
+apps/mobile/        Expo 54 + React Native — student app (ported from hmd-lineup/student-app/)
 packages/functions/ Firebase Cloud Functions v2 — TypeScript (replaces Babel JS)
-packages/shared/   TypeScript types + Firestore path constants
+packages/shared/    TypeScript types + Firestore path constants
 ```
 
 Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
@@ -53,22 +53,22 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - `apps/web`: Next.js 15 scaffold with `(auth)` route group, `(portal)` route group, login page, AuthContext, TanStack Query
 - `apps/mobile`: full port of `hmd-lineup/student-app/` with Lineup branding
 - CI/CD: `.github/workflows/verify.yml` + `deploy.yml`
-- shadcn/ui component library: all components installed in `apps/web/src/components/ui/`
+- shadcn/ui component library installed in `apps/web/src/components/ui/`
 - Build + typecheck clean across all packages; dev server runs at port 3000
 - `firebase-auth.ts` split from `firebase.ts` to prevent SSG crash (auth/invalid-api-key)
 - Portal routes tagged `force-dynamic`; `apps/web/.env.local` created with placeholders
+- Self-service signup wizard (`app/signup/page.tsx`) — 2-step: account → team → dashboard
+- Firebase emulator wired up for local dev (`demo-lineup` project, no real Firebase project needed)
 
 ---
 
 ## What's NOT done yet (Phase 2+)
 
 - **Stripe billing** — `SaasSubscription` type is stubbed, `saas_subscriptions` rules deny all
-- **Self-service signup** — `app/signup/page.tsx` is a stub
 - **Organisation tier** — multi-club hierarchy, `organizations/` collection stub only
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~12 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Trial booking page** — route exists at `(portal)/portal/[slug]/trial-booking/page.tsx` but needs full form logic (see `hmd-lineup/functions/src/booking/index.js` + `src/routes/TrialBooking/`)
-- **shadcn/ui component library** — ✅ DONE — all components installed in `apps/web/src/components/ui/` (button, card, table, form, input, select, dialog, sheet, badge, avatar, dropdown-menu, separator, skeleton, label, sonner)
 - **Gamification** — stubbed
 - **Outreach/automation engine** — not started
 
@@ -82,7 +82,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 | State: server | TanStack Query v5 | Replaces react-redux-firebase |
 | State: auth | AuthContext (React context) | Simpler than Redux for auth-only state |
 | Firebase SDK | Modular v12 (no compat) | Tree-shakeable, future-proof |
-| Functions | TypeScript, CommonJS target | No Babel, type-safe |
+| Functions | TypeScript, CommonJS target, **firebase-functions v6 (gen2)** | No Babel, type-safe, already on latest |
 | Branding | "Lineup" (one word) | Clean, universal, connects to discipline of aligning |
 | Multi-tenancy | `teamId` as tenant boundary | Matches existing Firestore rules pattern |
 | Functions region | `europe-west6` | Same as hmd-lineup; change only if customer base shifts |
@@ -91,14 +91,23 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 
 ## Key patterns
 
-### Always use `regionalFunctions`
+### Cloud Functions — use v2 imports (NOT `regionalFunctions`)
+
+The old project used `regionalFunctions` (firebase-functions v1 gen1). This project is on **v6 gen2**. When porting any function, update the import at the same time:
 
 ```typescript
-import { regionalFunctions } from '../utils/functions'
+// v2 gen2 — use this
+import { onCall, onRequest } from 'firebase-functions/v2/https'
+import { onDocumentCreated } from 'firebase-functions/v2/firestore'
+import { setGlobalOptions } from 'firebase-functions/v2'
 
-export const myFn = regionalFunctions.firestore
-  .document('teams/{teamId}')
-  .onCreate(async (snap, context) => { … })
+setGlobalOptions({ region: 'europe-west6' })
+
+export const myFn = onCall(async (request) => { … })
+
+// OLD v1 pattern from hmd-lineup — do NOT copy as-is
+import { regionalFunctions } from '../utils/functions'
+export const myFn = regionalFunctions.firestore.document('…').onCreate(…)
 ```
 
 ### Public portal — ONLY read `public_profile` subcollections
@@ -117,6 +126,17 @@ const q = query(
 
 See `hmd-lineup/docs/portal-security.md` for full rules and patterns.
 
+### Firebase client SDK — server/client split
+
+Next.js SSG/SSR crashes if `getAuth()` is called at module level on the server.
+
+| File | Exports | Import from |
+|---|---|---|
+| `src/lib/firebase.ts` | `app`, `db`, `storage` | Anywhere (server + client safe) |
+| `src/lib/firebase-auth.ts` | `auth` | Client components and `src/lib/auth.ts` only |
+
+Never add `getAuth()` back to `firebase.ts`.
+
 ### SaaS plan tiers (Phase 2)
 
 ```typescript
@@ -130,11 +150,80 @@ type SaasPlan = 'coach' | 'club' | 'org' | 'enterprise'
 
 | Alias | Project ID |
 |---|---|
+| default (local) | `demo-lineup` (emulator only — `demo-` prefix bypasses project validation) |
 | staging | `lineup-staging` |
 | production | `lineup-prod` |
 
-Both need to be created in Firebase Console (not done yet — placeholders only).
-Until then, use the hmd-lineup Firebase emulators for local development.
+Staging and production need to be created in Firebase Console (not done yet).
+For local development use the Firebase emulators — no real project needed.
+
+---
+
+## Firebase emulators
+
+Auth: `localhost:9099` | Firestore: `localhost:8080` | UI: `localhost:4000`
+
+`.env.local` sets `NEXT_PUBLIC_USE_EMULATORS=true`. Emulator connections are guarded by this flag + a `globalThis` flag to prevent HMR double-connect.
+
+Start from repo root (Java required — use external terminal if VS Code's integrated terminal can't find Java):
+
+```
+firebase emulators:start --only auth,firestore
+```
+
+---
+
+## Firestore security rules
+
+- **Team creation:** any authenticated user can create a team where `createdBy == request.auth.uid` — enables self-service signup.
+- **Team member self-provision:** a user can write their own `team_members` doc as `owner` on signup (before membership exists).
+- Everything else requires strict team-membership checks (`isTeamMember`, `hasTeamRole`).
+
+---
+
+## Internationalisation (i18n)
+
+**Library:** `next-intl` — installed in `@lineup/web`.
+
+**Locales:** `en` (default), `de`, `fr`, `it` — all four national languages of Switzerland.
+
+**Locale in URL:** `localePrefix: 'as-needed'` — English keeps clean URLs (`/dashboard`); other locales get a prefix (`/de/dashboard`, `/fr/contacts`). Middleware rewrites English paths internally.
+
+**File structure:**
+```
+apps/web/
+├── messages/               ← one JSON per locale
+│   ├── en.json             ← source of truth (always complete)
+│   ├── de.json
+│   ├── fr.json
+│   └── it.json
+└── src/
+    ├── i18n/
+    │   ├── routing.ts      ← defineRouting (locales, defaultLocale, localePrefix)
+    │   ├── request.ts      ← getRequestConfig (loads messages per locale)
+    │   └── navigation.ts   ← createNavigation (locale-aware Link, useRouter, usePathname)
+    ├── middleware.ts        ← createMiddleware(routing)
+    └── app/
+        ├── layout.tsx      ← minimal root: just `return children`
+        └── [locale]/
+            ├── layout.tsx  ← html+body, NextIntlClientProvider, QueryProvider, AuthProvider
+            └── (auth)/     ← all authenticated routes live here
+```
+
+**Rules:**
+- All routes live under `app/[locale]/`. Never add routes directly to `app/` (except `layout.tsx`).
+- Import `Link`, `useRouter`, `usePathname` from `@/i18n/navigation` — NOT from `next/link` or `next/navigation`. The i18n wrappers add locale context automatically.
+- Use `useTranslations('Namespace')` for all visible strings. Never hardcode UI text.
+- Message keys live in `en.json` first. Add the same key to `de.json`, `fr.json`, `it.json` immediately.
+- Sport type names in the signup form are kept in English for now (they're international proper nouns); translate when the need arises.
+- Date formatting uses the browser locale via `toLocaleDateString()`. "Today"/"Tomorrow" labels come from `Common.today` / `Common.tomorrow` in messages.
+- `typedRoutes: true` is still enabled. With `[locale]` in the path, many route literals need `as Route` cast. This is expected — use casts rather than disabling typedRoutes.
+
+## Next.js specifics
+
+- `typedRoutes: true` at root level in `next.config.ts`. Use `Route` from `next` for typed hrefs.
+- Portal routes must export `export const dynamic = 'force-dynamic'` to prevent SSG Firebase calls.
+- `Input` component in `src/components/ui/input.tsx` uses a plain `<input>` (not `@base-ui/react`) — do not revert this; the base-ui wrapper causes SSR hydration mismatches.
 
 ---
 

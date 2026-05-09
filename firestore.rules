@@ -159,8 +159,8 @@ service cloud.firestore {
       // Only team owners can update team details
       allow update: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
 
-      // Only users with admin role can create teams
-      allow create: if isAuthed() && hasRole('admin');
+      // Only users with admin role can create teams, OR the user is provisioning their own first team
+      allow create: if isAuthed() && (hasRole('admin') || request.resource.data.createdBy == request.auth.uid);
 
       // Only team owners can delete teams
       allow delete: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
@@ -179,8 +179,11 @@ service cloud.firestore {
         // Also allow users to read their own membership record (needed for initial team lookup)
         allow read: if isTeamMember(teamId) || memberId == request.auth.uid;
 
-        // Only owners can add/remove/update team members
-        allow write: if hasTeamRole(teamId, 'owner');
+        // Only owners can add/remove/update team members, OR a user self-provisioning as owner on signup
+        allow write: if hasTeamRole(teamId, 'owner') ||
+                       (isAuthed() && memberId == request.auth.uid &&
+                        request.resource.data.role == 'owner' &&
+                        request.resource.data.userId == request.auth.uid);
       }
 
       // Activity log subcollection (moved from users/{userId}/activity_log)

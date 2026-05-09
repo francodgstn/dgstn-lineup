@@ -27,7 +27,8 @@ import {
   ArrowRight,
   Clock,
 } from 'lucide-react'
-import Link from 'next/link'
+import { useTranslations } from 'next-intl'
+import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import type { Contact, Session, Booking } from '@lineup/shared'
 import { CONTACTS_COLLECTION, SESSIONS_COLLECTION } from '@lineup/shared'
@@ -53,15 +54,18 @@ function formatTime(ts: { toDate(): Date } | null | undefined): string {
   return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function formatDate(ts: { toDate(): Date } | null | undefined): string {
+function formatDate(
+  ts: { toDate(): Date } | null | undefined,
+  labels: { today: string; tomorrow: string },
+): string {
   if (!ts) return ''
   const d = ts.toDate()
   const today = new Date()
   const tomorrow = new Date(today)
   tomorrow.setDate(today.getDate() + 1)
 
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
+  if (d.toDateString() === today.toDateString()) return labels.today
+  if (d.toDateString() === tomorrow.toDateString()) return labels.tomorrow
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
@@ -168,6 +172,9 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 
 function TodaysSessions({ teamId }: { teamId: string | null }) {
   const { data: sessions, isLoading } = useUpcomingSessions(teamId)
+  const t = useTranslations('Dashboard')
+  const tCommon = useTranslations('Common')
+  const dateLabels = { today: tCommon('today'), tomorrow: tCommon('tomorrow') }
 
   const todaySessions = sessions?.filter((s) => {
     if (!s.start) return false
@@ -185,9 +192,9 @@ function TodaysSessions({ teamId }: { teamId: string | null }) {
     <Card className="h-full">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Upcoming sessions</CardTitle>
+          <CardTitle className="text-base">{t('upcomingSessions')}</CardTitle>
           <Link href="/sessions" className="text-xs text-primary hover:underline flex items-center gap-0.5">
-            All sessions <ArrowRight className="h-3 w-3" />
+            {t('allSessions')} <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
       </CardHeader>
@@ -206,23 +213,23 @@ function TodaysSessions({ teamId }: { teamId: string | null }) {
           </div>
         ) : sessions?.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            No upcoming sessions scheduled
+            {t('noUpcomingSessions')}
           </div>
         ) : (
           <div className="space-y-1">
             {todaySessions.length > 0 && (
               <>
-                <p className="text-xs font-medium text-muted-foreground px-1 pb-1">Today</p>
+                <p className="text-xs font-medium text-muted-foreground px-1 pb-1">{tCommon('today')}</p>
                 {todaySessions.map((s) => (
-                  <SessionRow key={s.id} session={s} />
+                  <SessionRow key={s.id} session={s} dateLabels={dateLabels} />
                 ))}
               </>
             )}
             {futureSessions.length > 0 && (
               <>
-                <p className="text-xs font-medium text-muted-foreground px-1 pb-1 pt-3">Upcoming</p>
+                <p className="text-xs font-medium text-muted-foreground px-1 pb-1 pt-3">{t('sectionUpcoming')}</p>
                 {futureSessions.map((s) => (
-                  <SessionRow key={s.id} session={s} />
+                  <SessionRow key={s.id} session={s} dateLabels={dateLabels} />
                 ))}
               </>
             )}
@@ -233,7 +240,8 @@ function TodaysSessions({ teamId }: { teamId: string | null }) {
   )
 }
 
-function SessionRow({ session }: { session: Session }) {
+function SessionRow({ session, dateLabels }: { session: Session; dateLabels: { today: string; tomorrow: string } }) {
+  const t = useTranslations('Dashboard')
   const bookings = (session as { portal_bookings_count?: number }).portal_bookings_count ?? 0
   return (
     <Link href="/sessions" className="flex items-center gap-3 rounded-lg px-1 py-2 hover:bg-muted/50 transition-colors group">
@@ -242,10 +250,10 @@ function SessionRow({ session }: { session: Session }) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">
-          {session.activityName ?? 'Session'}
+          {session.activityName ?? t('sessionFallback')}
         </p>
         <p className="text-xs text-muted-foreground">
-          {formatDate(session.start as Parameters<typeof formatDate>[0])}
+          {formatDate(session.start as Parameters<typeof formatDate>[0], dateLabels)}
           {' · '}
           {formatTime(session.start as Parameters<typeof formatTime>[0])}
           {session.location ? ` · ${session.location}` : ''}
@@ -254,11 +262,11 @@ function SessionRow({ session }: { session: Session }) {
       <div className="flex items-center gap-2 flex-shrink-0">
         {bookings > 0 && (
           <Badge variant="secondary" className="text-xs">
-            {bookings} booking{bookings !== 1 ? 's' : ''}
+            {t('bookings', { count: bookings })}
           </Badge>
         )}
         {session.participants_count != null && session.participants_count > 0 && (
-          <span className="text-xs text-muted-foreground">{session.participants_count} attended</span>
+          <span className="text-xs text-muted-foreground">{t('attended', { count: session.participants_count })}</span>
         )}
       </div>
     </Link>
@@ -269,14 +277,15 @@ function SessionRow({ session }: { session: Session }) {
 
 function RecentBookings({ teamId }: { teamId: string | null }) {
   const { data: bookings, isLoading } = useRecentBookings(teamId)
+  const t = useTranslations('Dashboard')
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Recent bookings</CardTitle>
+          <CardTitle className="text-base">{t('recentBookings')}</CardTitle>
           <Link href="/bookings" className="text-xs text-primary hover:underline flex items-center gap-0.5">
-            All <ArrowRight className="h-3 w-3" />
+            {t('allBookings')} <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
       </CardHeader>
@@ -294,7 +303,7 @@ function RecentBookings({ teamId }: { teamId: string | null }) {
             ))}
           </div>
         ) : !bookings?.length ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">No recent bookings</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">{t('noRecentBookings')}</p>
         ) : (
           <div className="space-y-2">
             {bookings.map((b) => (
@@ -311,7 +320,7 @@ function RecentBookings({ teamId }: { teamId: string | null }) {
                   <p className="text-xs text-muted-foreground">{b.email}</p>
                 </div>
                 {b.is_new_contact && (
-                  <Badge variant="outline" className="text-xs flex-shrink-0">Trial</Badge>
+                  <Badge variant="outline" className="text-xs flex-shrink-0">{t('trialBadge')}</Badge>
                 )}
               </div>
             ))}
@@ -325,11 +334,12 @@ function RecentBookings({ teamId }: { teamId: string | null }) {
 // ─── quick actions ────────────────────────────────────────────────────────────
 
 function QuickActions({ teamSlug }: { teamSlug?: string }) {
+  const t = useTranslations('Dashboard')
   const actions: { label: string; icon: React.ElementType; href: Route }[] = [
-    { label: 'New contact', icon: UserPlus, href: '/contacts' },
-    { label: 'New session', icon: Plus, href: '/sessions' },
+    { label: t('actionNewContact'), icon: UserPlus, href: '/contacts' as Route },
+    { label: t('actionNewSession'), icon: Plus, href: '/sessions' as Route },
     {
-      label: 'View portal',
+      label: t('actionViewPortal'),
       icon: BookOpen,
       href: (teamSlug ? `/portal/${teamSlug}` : '/team/portal') as Route,
     },
@@ -338,7 +348,7 @@ function QuickActions({ teamSlug }: { teamSlug?: string }) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Quick actions</CardTitle>
+        <CardTitle className="text-base">{t('quickActions')}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-2">
@@ -362,18 +372,17 @@ function QuickActions({ teamSlug }: { teamSlug?: string }) {
 
 export default function DashboardPage() {
   const { currentTeamId, profile } = useAuth()
+  const t = useTranslations('Dashboard')
 
   const { data: contacts, isLoading: contactsLoading } = useContacts(currentTeamId)
   const { data: sessions, isLoading: sessionsLoading } = useUpcomingSessions(currentTeamId)
 
-  // Derived counts from contacts
   const activeMembers = contacts?.filter((c) => c.membership_status === 'active').length ?? null
   const engagedThisWeek = contacts?.filter((c) => {
     if (!c.last_session_at) return false
     return (c.last_session_at as { toDate(): Date }).toDate() >= weekStart()
   }).length ?? null
 
-  // Upcoming bookings count
   const upcomingBookingsCount = sessions?.reduce(
     (sum, s) => sum + ((s as { portal_bookings_count?: number }).portal_bookings_count ?? 0),
     0,
@@ -388,43 +397,42 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl font-bold">{t('title')}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           {new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
         </p>
       </div>
 
-      {/* ── KPI stats ── */}
-      <SectionHeading>Highlights</SectionHeading>
+      <SectionHeading>{t('sectionHighlights')}</SectionHeading>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Active members"
+          title={t('statActiveMembers')}
           value={activeMembers}
-          subtitle="active membership status"
+          subtitle={t('statActiveMembersSub')}
           icon={Users}
           loading={statsLoading}
           href="/contacts"
         />
         <StatCard
-          title="Engaged this week"
+          title={t('statEngaged')}
           value={engagedThisWeek}
-          subtitle="attended ≥1 session this week"
+          subtitle={t('statEngagedSub')}
           icon={TrendingUp}
           loading={statsLoading}
           href="/contacts"
         />
         <StatCard
-          title="Upcoming bookings"
+          title={t('statBookings')}
           value={upcomingBookingsCount}
-          subtitle="trial bookings ahead"
+          subtitle={t('statBookingsSub')}
           icon={BookOpen}
           loading={sessionsLoading}
           href="/bookings"
         />
         <StatCard
-          title="Sessions scheduled"
+          title={t('statSessions')}
           value={upcomingSessionsCount}
-          subtitle="from today onwards"
+          subtitle={t('statSessionsSub')}
           icon={CalendarDays}
           loading={sessionsLoading}
           href="/sessions"

@@ -1,6 +1,6 @@
 {
   "projects": {
-    "default": "lineup-staging",
+    "default": "demo-lineup",
     "staging": "lineup-staging",
     "production": "lineup-prod"
   }

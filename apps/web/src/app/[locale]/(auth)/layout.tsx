@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { Link, useRouter, usePathname } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import type { Route } from 'next'
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -37,22 +39,23 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
 function Sidebar() {
   const pathname = usePathname()
+  const t = useTranslations('Nav')
 
   const navItems = [
-    { href: '/dashboard', label: 'Dashboard' },
-    { href: '/contacts', label: 'Contacts' },
-    { href: '/sessions', label: 'Sessions' },
-    { href: '/activities', label: 'Activities' },
-    { href: '/events', label: 'Events' },
-    { href: '/bookings', label: 'Bookings' },
-    { href: '/coaching', label: 'Coaching' },
-    { href: '/gamification', label: 'Gamification' },
+    { href: '/dashboard', label: t('dashboard') },
+    { href: '/contacts', label: t('contacts') },
+    { href: '/sessions', label: t('sessions') },
+    { href: '/activities', label: t('activities') },
+    { href: '/events', label: t('events') },
+    { href: '/bookings', label: t('bookings') },
+    { href: '/coaching', label: t('coaching') },
+    { href: '/gamification', label: t('gamification') },
   ]
 
   const teamItems = [
-    { href: '/team/members', label: 'Members' },
-    { href: '/team/portal', label: 'Portal' },
-    { href: '/team/settings', label: 'Settings' },
+    { href: '/team/members', label: t('members') },
+    { href: '/team/portal', label: t('portal') },
+    { href: '/team/settings', label: t('settings') },
   ]
 
   return (
@@ -62,11 +65,13 @@ function Sidebar() {
       </div>
 
       <nav className="flex-1 p-4 space-y-1">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 pb-1">Main</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 pb-1">
+          {t('sectionMain')}
+        </p>
         {navItems.map((item) => (
-          <a
+          <Link
             key={item.href}
-            href={item.href}
+            href={item.href as Route}
             className={`block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               pathname === item.href
                 ? 'bg-primary text-primary-foreground'
@@ -74,14 +79,16 @@ function Sidebar() {
             }`}
           >
             {item.label}
-          </a>
+          </Link>
         ))}
 
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 pb-1 pt-4">Team</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 pb-1 pt-4">
+          {t('sectionTeam')}
+        </p>
         {teamItems.map((item) => (
-          <a
+          <Link
             key={item.href}
-            href={item.href}
+            href={item.href as Route}
             className={`block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               pathname.startsWith(item.href)
                 ? 'bg-primary text-primary-foreground'
@@ -89,7 +96,7 @@ function Sidebar() {
             }`}
           >
             {item.label}
-          </a>
+          </Link>
         ))}
       </nav>
 
@@ -102,6 +109,7 @@ function Sidebar() {
 
 function SignOutButton() {
   const router = useRouter()
+  const t = useTranslations('Nav')
 
   async function handleSignOut() {
     const { signOut } = await import('@/lib/auth')
@@ -114,7 +122,7 @@ function SignOutButton() {
       onClick={handleSignOut}
       className="w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors text-left"
     >
-      Sign out
+      {t('signOut')}
     </button>
   )
 }

@@ -11,7 +11,11 @@
   },
   "hosting": {
     "public": "apps/web/.next",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "rewrites": [
       {
         "source": "**",
@@ -31,7 +35,9 @@
     ]
   },
   "functions": {
-    "predeploy": ["pnpm --filter @lineup/functions run build"],
+    "predeploy": [
+      "pnpm --filter @lineup/functions run build"
+    ],
     "ignore": [
       "**/.*",
       "**/*.test.ts",
@@ -60,6 +66,7 @@
     "ui": {
       "enabled": true,
       "port": 4000
-    }
+    },
+    "singleProjectMode": true
   }
 }
