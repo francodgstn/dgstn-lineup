@@ -22,9 +22,12 @@ export { syncSessionPublicProfile } from './sync/syncSessionPublicProfile'
 export { syncActivityPublicProfile } from './sync/syncActivityPublicProfile'
 export { indexUser } from './sync/indexUser'
 
-// --- Stubs (TODO: port from hmd-lineup) ---
 // Booking
-// export { bookTrialSession, cancelBooking, rebookSession, getBookingDetails, sendBookingVerificationCode, verifyBookingCode } from './booking'
+export { bookTrialSession, sendBookingVerificationCode, verifyBookingCode } from './booking'
+
+// --- Stubs (TODO: port from hmd-lineup) ---
+// Booking (remaining)
+// export { cancelBooking, rebookSession, getBookingDetails } from './booking'
 // Sessions
 // export { generateRecurringSessions, updateRecurringSession, cancelSession, generateCoachSlots } from './sessions'
 // Contacts

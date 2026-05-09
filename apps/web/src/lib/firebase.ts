@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -16,6 +17,7 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
 export const db = getFirestore(app)
 export const storage = getStorage(app)
+export const functions = getFunctions(app, 'europe-west6')
 
 // Connect to local emulators when NEXT_PUBLIC_USE_EMULATORS=true.
 // Guard with a flag stored on globalThis so HMR doesn't call connect() twice.
@@ -25,6 +27,7 @@ if (
   !(globalThis as { _emulatorConnected?: boolean })._emulatorConnected
 ) {
   connectFirestoreEmulator(db, 'localhost', 8080)
+  connectFunctionsEmulator(functions, 'localhost', 5001)
   ;(globalThis as { _emulatorConnected?: boolean })._emulatorConnected = true
 }
 

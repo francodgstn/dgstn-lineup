@@ -1,0 +1,17 @@
+import crypto from 'crypto'
+
+export function hashVerificationCode(code: string, salt: string): string {
+  return crypto.createHash('sha256').update(`${code}:${salt}`).digest('hex')
+}
+
+export function verifyCode(code: string, salt: string, hash: string): boolean {
+  const computedHash = hashVerificationCode(code, salt)
+  return crypto.timingSafeEqual(
+    Buffer.from(computedHash, 'hex'),
+    Buffer.from(hash, 'hex'),
+  )
+}
+
+export function generateSecureToken(bytes = 32): string {
+  return crypto.randomBytes(bytes).toString('hex')
+}

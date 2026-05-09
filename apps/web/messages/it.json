@@ -266,5 +266,21 @@
     "trialBadge": "Prova",
     "empty": "Nessuna prenotazione ancora.",
     "emptySearch": "Nessuna prenotazione corrisponde alla ricerca."
+  },
+  "TeamPortal": {
+    "title": "Portale pubblico",
+    "subtitle": "Il tuo portale è disponibile su /portal/{slug}",
+    "noTeam": "Nessun team trovato.",
+    "noSlugTitle": "Nessun URL pubblico configurato",
+    "noSlugDesc": "Configura un URL pubblico nelle impostazioni del team per attivare il tuo portale.",
+    "goToSettings": "Vai alle impostazioni",
+    "openPortal": "Apri portale",
+    "portalUrl": "URL portale",
+    "portalLinks": "Link del portale",
+    "bookingLink": "Prenotazione di prova",
+    "membershipLink": "Iscrizione",
+    "preview": "Anteprima",
+    "livePreview": "Live",
+    "trial": "Prova"
   }
 }

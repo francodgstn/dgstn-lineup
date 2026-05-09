@@ -266,5 +266,21 @@
     "trialBadge": "Trial",
     "empty": "No bookings yet.",
     "emptySearch": "No bookings match your search."
+  },
+  "TeamPortal": {
+    "title": "Public Portal",
+    "subtitle": "Your portal is live at /portal/{slug}",
+    "noTeam": "No team found.",
+    "noSlugTitle": "No public URL configured",
+    "noSlugDesc": "Set up a public URL in Team Settings to activate your portal.",
+    "goToSettings": "Go to Team Settings",
+    "openPortal": "Open portal",
+    "portalUrl": "Portal URL",
+    "portalLinks": "Portal links",
+    "bookingLink": "Trial booking",
+    "membershipLink": "Membership signup",
+    "preview": "Preview",
+    "livePreview": "Live",
+    "trial": "Trial"
   }
 }

@@ -266,5 +266,21 @@
     "trialBadge": "Schnupper",
     "empty": "Noch keine Buchungen.",
     "emptySearch": "Keine Buchungen gefunden."
+  },
+  "TeamPortal": {
+    "title": "Öffentliches Portal",
+    "subtitle": "Ihr Portal ist erreichbar unter /portal/{slug}",
+    "noTeam": "Kein Team gefunden.",
+    "noSlugTitle": "Keine öffentliche URL konfiguriert",
+    "noSlugDesc": "Richten Sie eine öffentliche URL in den Team-Einstellungen ein, um Ihr Portal zu aktivieren.",
+    "goToSettings": "Zu den Team-Einstellungen",
+    "openPortal": "Portal öffnen",
+    "portalUrl": "Portal-URL",
+    "portalLinks": "Portal-Links",
+    "bookingLink": "Schnupperbuchung",
+    "membershipLink": "Mitgliedschaft",
+    "preview": "Vorschau",
+    "livePreview": "Live",
+    "trial": "Schnupper"
   }
 }

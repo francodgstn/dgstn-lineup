@@ -1,7 +1,9 @@
-// TODO: Port from hmd-lineup/src/routes/Portal/routes/TrialBooking/
-// Key reference: hmd-lineup/src/routes/Portal/routes/TrialBooking/components/TrialBookingPage/TrialBookingPage.hook.js
-// Pattern: resolve team via public_profile, list sessions with allowBooking=true,
-//          call bookTrialSession Cloud Function with sendBookingVerificationCode for email auth
+import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { notFound } from 'next/navigation'
+import TrialBookingForm from './TrialBookingForm'
+
+export const dynamic = 'force-dynamic'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -10,21 +12,22 @@ interface Props {
 export default async function TrialBookingPage({ params }: Props) {
   const { slug } = await params
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Book a Trial Class</h1>
-        <p className="text-muted-foreground">Choose a session and fill in your details to reserve your spot.</p>
-      </div>
-
-      <div className="bg-muted/40 border rounded-xl p-8 text-center">
-        <p className="text-muted-foreground text-sm">
-          Trial booking form — coming soon.
-        </p>
-        <p className="text-xs text-muted-foreground mt-2">
-          Port from <code className="bg-muted px-1 rounded">hmd-lineup/src/routes/Portal/routes/TrialBooking/</code>
-        </p>
-      </div>
-    </div>
+  // Resolve team via public_profile collection group (public read allowed)
+  const q = query(
+    collectionGroup(db, 'public_profile'),
+    where('slug', '==', slug),
+    limit(1),
   )
+  const snap = await getDocs(q)
+  if (snap.empty) notFound()
+
+  const profileDoc = snap.docs[0]
+  // teamId is the parent of the public_profile subcollection
+  const teamId = profileDoc.ref.parent.parent?.id
+  if (!teamId) notFound()
+
+  const data = profileDoc.data()
+  const teamName: string = data.name || 'Team'
+
+  return <TrialBookingForm teamId={teamId} teamName={teamName} />
 }

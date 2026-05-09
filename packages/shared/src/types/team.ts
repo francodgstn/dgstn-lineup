@@ -29,6 +29,7 @@ export interface Team {
   sport_type?: string
   level_system?: LevelDefinition[]
   links?: TeamLink[]
+  language?: 'en' | 'de' | 'fr' | 'it'
   settings?: Record<string, unknown>
   // SaaS plan fields (new in Lineup)
   plan?: SaasPlan

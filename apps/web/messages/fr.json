@@ -266,5 +266,21 @@
     "trialBadge": "Essai",
     "empty": "Aucune réservation pour l'instant.",
     "emptySearch": "Aucune réservation ne correspond à votre recherche."
+  },
+  "TeamPortal": {
+    "title": "Portail public",
+    "subtitle": "Votre portail est accessible à /portal/{slug}",
+    "noTeam": "Aucune équipe trouvée.",
+    "noSlugTitle": "Aucune URL publique configurée",
+    "noSlugDesc": "Configurez une URL publique dans les paramètres de l'équipe pour activer votre portail.",
+    "goToSettings": "Aller aux paramètres",
+    "openPortal": "Ouvrir le portail",
+    "portalUrl": "URL du portail",
+    "portalLinks": "Liens du portail",
+    "bookingLink": "Réservation d'essai",
+    "membershipLink": "Adhésion",
+    "preview": "Aperçu",
+    "livePreview": "Live",
+    "trial": "Essai"
   }
 }
