@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale()
   return (
-    <html lang={locale} className={geist.variable}>
+    <html lang={locale} className={geist.variable} suppressHydrationWarning>
       <body className="font-sans">{children}</body>
     </html>
   )

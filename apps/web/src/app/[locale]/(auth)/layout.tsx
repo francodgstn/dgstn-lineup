@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { Link, useRouter, usePathname } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { useTheme } from 'next-themes'
 import {
   LayoutDashboard,
   Users,
@@ -21,6 +22,8 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import type { Route } from 'next'
 
@@ -82,6 +85,25 @@ function NavLink({
   )
 }
 
+// ─── theme toggle ─────────────────────────────────────────────────────────────
+
+function ThemeToggle({ collapsed }: { collapsed: boolean }) {
+  const { resolvedTheme, setTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
+  return (
+    <button
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ${
+        collapsed ? 'justify-center px-2' : ''
+      }`}
+    >
+      {isDark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
+      {!collapsed && <span>{isDark ? 'Light mode' : 'Dark mode'}</span>}
+    </button>
+  )
+}
+
 // ─── sidebar content ──────────────────────────────────────────────────────────
 
 function SidebarContent({
@@ -140,8 +162,9 @@ function SidebarContent({
         ))}
       </nav>
 
-      {/* Sign out */}
-      <div className={`border-t py-2 px-2 shrink-0`}>
+      {/* Theme toggle + sign out */}
+      <div className="border-t py-2 px-2 shrink-0 space-y-0.5">
+        <ThemeToggle collapsed={collapsed} />
         <button
           onClick={handleSignOut}
           title={collapsed ? t('signOut') : undefined}
