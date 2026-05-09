@@ -426,9 +426,9 @@ service cloud.firestore {
     // Events are organization-wide (not team-scoped)
     // All authenticated users can read, only admins can create/modify
     match /events/{event} {
-      allow create: if hasRole('admin');
-      allow read: if isAuthed();
-      allow update: if hasRole('admin');
+      allow create: if belongsToUserTeam(request.resource) || hasRole('admin');
+      allow read: if belongsToUserTeam(resource) || hasRole('admin');
+      allow update: if belongsToUserTeam(resource) || hasRole('admin');
       allow delete: if hasRole('admin');
 
       // Invitations subcollection
