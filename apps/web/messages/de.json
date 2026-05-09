@@ -123,7 +123,16 @@
     "status_expired": "Abgelaufen",
     "type_lead": "Lead",
     "type_prospect": "Interessent",
-    "type_customer": "Mitglied"
+    "type_customer": "Mitglied",
+    "tabAll": "Alle",
+    "tabActive": "Aktiv",
+    "tabRequests": "Anfragen",
+    "notFound": "Kontakt nicht gefunden.",
+    "noNotes": "Noch keine Notizen.",
+    "tabProfile": "Profil",
+    "tabActivity": "Aktivität",
+    "tabNotes": "Notizen",
+    "memberSince": "Mitglied seit"
   },
   "Sessions": {
     "title": "Einheiten",
@@ -135,6 +144,7 @@
     "cancel": "Abbrechen",
     "tabUpcoming": "Bevorstehend",
     "tabPast": "Vergangen",
+    "tabCalendar": "Kalender",
     "colDate": "Datum",
     "colTime": "Uhrzeit",
     "colActivity": "Aktivität",

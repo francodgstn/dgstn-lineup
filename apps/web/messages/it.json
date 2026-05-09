@@ -123,7 +123,16 @@
     "status_expired": "Scaduto",
     "type_lead": "Lead",
     "type_prospect": "Interessato",
-    "type_customer": "Membro"
+    "type_customer": "Membro",
+    "tabAll": "Tutti",
+    "tabActive": "Attivi",
+    "tabRequests": "Richieste",
+    "notFound": "Contatto non trovato.",
+    "noNotes": "Nessuna nota ancora.",
+    "tabProfile": "Profilo",
+    "tabActivity": "Attività",
+    "tabNotes": "Note",
+    "memberSince": "Membro da"
   },
   "Sessions": {
     "title": "Sessioni",
@@ -135,6 +144,7 @@
     "cancel": "Annulla",
     "tabUpcoming": "In arrivo",
     "tabPast": "Passate",
+    "tabCalendar": "Calendario",
     "colDate": "Data",
     "colTime": "Ora",
     "colActivity": "Attività",

@@ -123,7 +123,16 @@
     "status_expired": "Expired",
     "type_lead": "Lead",
     "type_prospect": "Prospect",
-    "type_customer": "Customer"
+    "type_customer": "Customer",
+    "tabAll": "All",
+    "tabActive": "Active",
+    "tabRequests": "Requests",
+    "notFound": "Contact not found.",
+    "noNotes": "No notes yet.",
+    "tabProfile": "Profile",
+    "tabActivity": "Activity",
+    "tabNotes": "Notes",
+    "memberSince": "Member since"
   },
   "Sessions": {
     "title": "Sessions",
@@ -135,6 +144,7 @@
     "cancel": "Cancel",
     "tabUpcoming": "Upcoming",
     "tabPast": "Past",
+    "tabCalendar": "Calendar",
     "colDate": "Date",
     "colTime": "Time",
     "colActivity": "Activity",

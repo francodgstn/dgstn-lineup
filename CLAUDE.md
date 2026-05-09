@@ -64,13 +64,20 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 
 ## What's NOT done yet (Phase 2+)
 
+### UI / UX gaps (priority)
+- **Auth layout + nav** — no icons, no mobile drawer, no collapse mode (see UI/UX porting principles above)
+- **Contact detail page** — `/contacts/[id]` route with tabbed view (profile, notes, activity, subscriptions)
+- **Session calendar view** — calendar tab alongside list (react-big-calendar)
+- **Mobile-first list layouts** — current list pages use desktop tables; need card/list patterns that work on mobile
+- **Gamification** — stubbed page, no implementation
+
+### Features not yet started
 - **Stripe billing** — `SaasSubscription` type is stubbed, `saas_subscriptions` rules deny all
 - **Organisation tier** — multi-club hierarchy, `organizations/` collection stub only
 - **SaaS operator console** — no admin panel for managing tenants
-- **Full function port** — only ~12 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
-- **Trial booking page** — route exists at `(portal)/portal/[slug]/trial-booking/page.tsx` but needs full form logic (see `hmd-lineup/functions/src/booking/index.js` + `src/routes/TrialBooking/`)
-- **Gamification** — stubbed
+- **Full function port** — only ~15 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Outreach/automation engine** — not started
+- **Coaching page** — stub only; complex coach-slot management
 
 ---
 
@@ -238,6 +245,40 @@ pnpm --filter @lineup/mobile start              # Expo dev server
 pnpm typecheck                                  # typecheck all packages
 pnpm lint                                       # lint all packages
 ```
+
+---
+
+## UI/UX porting principles
+
+**Goal: functional parity, not pixel-perfect copy.**
+
+hmd-lineup's UI patterns were designed carefully — especially for mobile. When building or refactoring any page, read the reference first and replicate the *functionality and layout intent*, even though the visual style will differ (shadcn/Tailwind vs MUI).
+
+### What must be ported faithfully
+
+- **Navigation**: icons on every nav item, collapsible sidebar on desktop (full ↔ icon-only), mobile hamburger + swipeable sheet drawer, user/team info at bottom
+- **List pages**: mobile-first card/list layouts (avatar + name + status chips), NOT desktop-only tables. Tables are only acceptable for data-heavy views where mobile is less important.
+- **Detail pages**: contacts, sessions, events, and bookings all have full detail pages (own route), not just edit modals. A modal is only acceptable for quick create/edit of simple entities.
+- **Multi-tab detail views**: contact detail has tabs (profile, notes, activity, subscriptions, gamification). Port the tab structure even if some tabs start empty.
+- **Calendar view for sessions**: sessions page has a list tab AND a calendar tab (month/week/day). Use `react-big-calendar` or equivalent.
+- **Search + filters**: every list page with >1 filter has a search field + collapsible filter panel.
+- **Confirmation dialogs**: all destructive actions (delete, archive) require a confirmation dialog.
+- **FAB / primary action**: "New …" button is fixed bottom-right on mobile (FAB pattern), inline toolbar button on desktop.
+
+### What to intentionally diverge from
+
+- Visual style: MUI components → shadcn/ui + Tailwind equivalents
+- Redux state → TanStack Query + React context
+- Sport-specific fields: belt ranks, Swiss QR Bill, federation logic → remove or generalise
+- HMD-specific copy and branding
+
+### Rule
+
+Before writing a new page or refactoring an existing one, check:
+```
+C:\git\hmd\hmd-lineup\src\routes\{Feature}\   ← reference UX and data flow
+```
+If a pattern exists in hmd-lineup and is not sport-specific, port it.
 
 ---
 

@@ -30,7 +30,10 @@ import {
   ACTIVITIES_COLLECTION,
 } from '@lineup/shared'
 import type { Session, Activity } from '@lineup/shared'
-import { CalendarPlus, MapPin, Pencil, Trash2, Users } from 'lucide-react'
+import { CalendarPlus, MapPin, Pencil, Trash2, Users, List, CalendarDays } from 'lucide-react'
+import dynamic from 'next/dynamic'
+
+const SessionsCalendar = dynamic(() => import('./SessionsCalendar'), { ssr: false })
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +111,24 @@ function usePastSessions(teamId: string | null) {
         where('start', '<', Timestamp.now()),
         orderBy('start', 'desc'),
         limit(50),
+      )
+      const snap = await getDocs(q)
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Session)
+    },
+  })
+}
+
+function useAllSessions(teamId: string | null) {
+  return useQuery<Session[]>({
+    queryKey: ['sessions', 'all', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      if (!teamId) return []
+      const q = query(
+        collection(db, SESSIONS_COLLECTION),
+        where('teamId', '==', teamId),
+        orderBy('start', 'asc'),
+        limit(500),
       )
       const snap = await getDocs(q)
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Session)
@@ -418,30 +439,30 @@ function SessionTable({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'upcoming' | 'past'
+type Tab = 'upcoming' | 'past' | 'calendar'
 
 export default function SessionsPage() {
   const { currentTeamId, user } = useAuth()
   const [tab, setTab] = useState<Tab>('upcoming')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Session | null>(null)
+  const [calendarInitialDate, setCalendarInitialDate] = useState<Date | undefined>()
   const t = useTranslations('Sessions')
   const tCommon = useTranslations('Common')
   const qc = useQueryClient()
 
   const upcoming = useUpcomingSessions(currentTeamId)
   const past = usePastSessions(currentTeamId)
+  const allSessions = useAllSessions(currentTeamId)
   const activitiesQuery = useActivities(currentTeamId)
 
-  const current = tab === 'upcoming' ? upcoming : past
   const upcomingCount = upcoming.data?.length ?? 0
 
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['sessions'] })
-  }
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['sessions'] })
 
-  const handleNew = () => {
+  const handleNew = (initialStart?: Date) => {
     setEditing(null)
+    setCalendarInitialDate(initialStart)
     setDialogOpen(true)
   }
 
@@ -459,10 +480,13 @@ export default function SessionsPage() {
     invalidate()
   }
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'upcoming', label: t('tabUpcoming') },
-    { key: 'past', label: t('tabPast') },
+  const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
+    { key: 'upcoming', label: t('tabUpcoming'), icon: List },
+    { key: 'past',     label: t('tabPast'),     icon: List },
+    { key: 'calendar', label: t('tabCalendar'), icon: CalendarDays },
   ]
+
+  const listTab = tab === 'upcoming' ? upcoming : past
 
   return (
     <div className="space-y-6">
@@ -477,8 +501,8 @@ export default function SessionsPage() {
           )}
         </div>
         <button
-          onClick={handleNew}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          onClick={() => handleNew()}
+          className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
         >
           <CalendarPlus className="h-4 w-4" />
           {t('newSession')}
@@ -487,28 +511,49 @@ export default function SessionsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {tabs.map(({ key, label }) => (
+        {tabs.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
               tab === key
                 ? 'border-primary text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {label}
+            <Icon className="h-4 w-4" />
+            <span className="hidden sm:inline">{label}</span>
           </button>
         ))}
       </div>
 
-      <SessionTable
-        sessions={current.data ?? []}
-        isLoading={current.isLoading}
-        emptyText={tab === 'upcoming' ? t('emptyUpcoming') : t('emptyPast')}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
+      {/* Content */}
+      {tab === 'calendar' ? (
+        <SessionsCalendar
+          sessions={allSessions.data ?? []}
+          activities={activitiesQuery.data ?? []}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onSlotSelect={(date) => handleNew(date)}
+        />
+      ) : (
+        <SessionTable
+          sessions={listTab.data ?? []}
+          isLoading={listTab.isLoading}
+          emptyText={tab === 'upcoming' ? t('emptyUpcoming') : t('emptyPast')}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {/* Mobile FAB */}
+      <button
+        onClick={() => handleNew()}
+        className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-40"
+        aria-label={t('newSession')}
+      >
+        <CalendarPlus className="h-6 w-6" />
+      </button>
 
       {currentTeamId && user && (
         <SessionDialog

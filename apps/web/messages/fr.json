@@ -123,7 +123,16 @@
     "status_expired": "Expiré",
     "type_lead": "Prospect",
     "type_prospect": "Intéressé",
-    "type_customer": "Membre"
+    "type_customer": "Membre",
+    "tabAll": "Tous",
+    "tabActive": "Actifs",
+    "tabRequests": "Demandes",
+    "notFound": "Contact introuvable.",
+    "noNotes": "Aucune note pour l'instant.",
+    "tabProfile": "Profil",
+    "tabActivity": "Activité",
+    "tabNotes": "Notes",
+    "memberSince": "Membre depuis"
   },
   "Sessions": {
     "title": "Séances",
@@ -135,6 +144,7 @@
     "cancel": "Annuler",
     "tabUpcoming": "À venir",
     "tabPast": "Passées",
+    "tabCalendar": "Calendrier",
     "colDate": "Date",
     "colTime": "Heure",
     "colActivity": "Activité",
