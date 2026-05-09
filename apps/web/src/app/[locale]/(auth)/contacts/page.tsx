@@ -53,7 +53,7 @@ const contactSchema = z.object({
   lastname: z.string().min(1, 'Required').max(60),
   email: z.string().email('Invalid email').or(z.literal('')).optional(),
   phone: z.string().max(30).optional(),
-  type: z.enum(['lead', 'prospect', 'customer']).optional(),
+  type: z.enum(['trial', 'student', 'external']).optional(),
   notes: z.string().max(2000).optional(),
 })
 type ContactFormValues = z.infer<typeof contactSchema>
@@ -106,7 +106,7 @@ function CreateContactDialog({
       lastname: values.lastname,
       email: values.email || null,
       phone: values.phone || null,
-      type: values.type || 'lead',
+      type: values.type || 'trial',
       membership_status: 'guest',
       notes: values.notes || null,
       createdBy: userId,
@@ -119,7 +119,7 @@ function CreateContactDialog({
     onOpenChange(false)
   }
 
-  const TYPES: ContactType[] = ['lead', 'prospect', 'customer']
+  const TYPES: ContactType[] = ['trial', 'student', 'external']
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

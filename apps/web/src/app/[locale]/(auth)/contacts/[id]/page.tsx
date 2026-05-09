@@ -52,7 +52,7 @@ const profileSchema = z.object({
   lastname: z.string().min(1, 'Required').max(60),
   email: z.string().email('Invalid email').or(z.literal('')).optional(),
   phone: z.string().max(30).optional(),
-  type: z.enum(['lead', 'prospect', 'customer']).optional(),
+  type: z.enum(['trial', 'student', 'external']).optional(),
   membership_status: z.enum(['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired']).optional(),
   notes: z.string().max(2000).optional(),
 })
@@ -105,7 +105,7 @@ type TabId = 'profile' | 'activity' | 'notes'
 function ProfileTab({ contact, onSaved }: { contact: Contact; onSaved: () => void }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
-  const TYPES: ContactType[] = ['lead', 'prospect', 'customer']
+  const TYPES: ContactType[] = ['trial', 'student', 'external']
   const STATUSES: MembershipStatus[] = ['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired']
 
   const { register, handleSubmit, formState: { errors, isSubmitting, isDirty } } = useForm<ProfileValues>({

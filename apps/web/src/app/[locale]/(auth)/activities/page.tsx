@@ -28,6 +28,36 @@ import { ACTIVITIES_COLLECTION } from '@lineup/shared'
 import type { Activity, ActivityLevel } from '@lineup/shared'
 import { Plus, Pencil, Archive } from 'lucide-react'
 
+// ─── archive confirm dialog ───────────────────────────────────────────────────
+
+function ArchiveConfirmDialog({
+  activity,
+  onConfirm,
+  onCancel,
+}: {
+  activity: Activity | null
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const t = useTranslations('Activities')
+  return (
+    <Dialog open={!!activity} onOpenChange={(o) => { if (!o) onCancel() }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t('archive')}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground py-2">
+          {activity ? t('archiveConfirm', { name: activity.name }) : ''}
+        </p>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onCancel}>{t('cancel')}</Button>
+          <Button variant="destructive" onClick={onConfirm}>{t('archive')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function slugify(name: string): string {
@@ -268,30 +298,21 @@ export default function ActivitiesPage() {
   const t = useTranslations('Activities')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Activity | null>(null)
+  const [archiving, setArchiving] = useState<Activity | null>(null)
 
-  function openNew() {
-    setEditing(null)
-    setDialogOpen(true)
-  }
+  function openNew() { setEditing(null); setDialogOpen(true) }
+  function openEdit(a: Activity) { setEditing(a); setDialogOpen(true) }
+  function closeDialog() { setDialogOpen(false); setEditing(null) }
 
-  function openEdit(a: Activity) {
-    setEditing(a)
-    setDialogOpen(true)
-  }
-
-  function closeDialog() {
-    setDialogOpen(false)
-    setEditing(null)
-  }
-
-  async function handleArchive(a: Activity) {
-    if (!window.confirm(t('archiveConfirm', { name: a.name }))) return
-    await updateDoc(doc(db, ACTIVITIES_COLLECTION, a.id), { isActive: false })
+  async function handleArchiveConfirm() {
+    if (!archiving) return
+    await updateDoc(doc(db, ACTIVITIES_COLLECTION, archiving.id), { isActive: false })
     await qc.invalidateQueries({ queryKey: ['activities', currentTeamId] })
+    setArchiving(null)
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
@@ -301,10 +322,13 @@ export default function ActivitiesPage() {
             </p>
           )}
         </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4 mr-1.5" />
+        <button
+          onClick={openNew}
+          className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
           {t('newActivity')}
-        </Button>
+        </button>
       </div>
 
       {isLoading ? (
@@ -314,7 +338,7 @@ export default function ActivitiesPage() {
           ))}
         </div>
       ) : activities.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 border rounded-lg border-dashed gap-2">
+        <div className="flex flex-col items-center justify-center py-16 border rounded-xl border-dashed gap-2 bg-card">
           <p className="text-sm text-muted-foreground">{t('empty')}</p>
           <button onClick={openNew} className="text-sm text-primary hover:underline">
             {t('emptyAction')}
@@ -327,11 +351,20 @@ export default function ActivitiesPage() {
               key={a.id}
               activity={a}
               onEdit={() => openEdit(a)}
-              onArchive={() => handleArchive(a)}
+              onArchive={() => setArchiving(a)}
             />
           ))}
         </div>
       )}
+
+      {/* Mobile FAB */}
+      <button
+        onClick={openNew}
+        className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-40"
+        aria-label={t('newActivity')}
+      >
+        <Plus className="h-6 w-6" />
+      </button>
 
       {currentTeamId && user && (
         <ActivityDialog
@@ -343,6 +376,12 @@ export default function ActivitiesPage() {
           editing={editing}
         />
       )}
+
+      <ArchiveConfirmDialog
+        activity={archiving}
+        onConfirm={handleArchiveConfirm}
+        onCancel={() => setArchiving(null)}
+      />
     </div>
   )
 }

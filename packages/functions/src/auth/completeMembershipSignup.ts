@@ -130,7 +130,7 @@ export const completeMembershipSignup = onCall(async (request) => {
     phone: sanitized.phone,
     birthdate: sanitized.birthdate,
     notes: sanitized.notes,
-    type: 'customer',
+    type: 'student',
     teamId,
     membership_status: 'requested',
     membership_active: false,

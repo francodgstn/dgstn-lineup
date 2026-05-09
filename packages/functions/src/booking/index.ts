@@ -351,7 +351,7 @@ export const bookTrialSession = onCall(async (request) => {
         lastname: sanitized.lastname,
         email: sanitized.email,
         phone: sanitized.phone,
-        type: 'lead',
+        type: 'trial',
         teamId: data.teamId,
         membership_status: 'guest',
         membership_active: false,

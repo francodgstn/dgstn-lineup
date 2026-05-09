@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { collectionGroup, query, where, orderBy, limit, getDocs } from 'firebase/firestore'
@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { Booking } from '@lineup/shared'
 import { Search } from 'lucide-react'
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(ts: { toDate(): Date } | null | undefined): string {
   if (!ts) return '—'
@@ -24,6 +24,20 @@ function formatTime(ts: { toDate(): Date } | null | undefined): string {
   return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function initials(b: Booking) {
+  return `${b.firstname?.[0] ?? ''}${b.lastname?.[0] ?? ''}`.toUpperCase() || '?'
+}
+
+const AVATAR_COLORS = [
+  'bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500',
+  'bg-pink-500', 'bg-teal-500', 'bg-red-500', 'bg-indigo-500',
+]
+function avatarColor(id: string) {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+}
+
 type BookingStatus = 'pending' | 'confirmed' | 'cancelled'
 
 const STATUS_VARIANT: Record<BookingStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -32,7 +46,7 @@ const STATUS_VARIANT: Record<BookingStatus, 'default' | 'secondary' | 'destructi
   cancelled: 'destructive',
 }
 
-// ─── data hook ───────────────────────────────────────────────────────────────
+// ─── data hook ────────────────────────────────────────────────────────────────
 
 function useBookings(teamId: string | null) {
   return useQuery<Booking[]>({
@@ -52,49 +66,46 @@ function useBookings(teamId: string | null) {
   })
 }
 
-// ─── status tabs ─────────────────────────────────────────────────────────────
+// ─── tabs ─────────────────────────────────────────────────────────────────────
 
 type StatusFilter = BookingStatus | 'all'
 
-function StatusTabs({
-  active,
-  counts,
-  onChange,
-}: {
-  active: StatusFilter
-  counts: Record<StatusFilter, number>
-  onChange: (s: StatusFilter) => void
-}) {
-  const t = useTranslations('Bookings')
-  const tabs: { key: StatusFilter; label: string }[] = [
-    { key: 'all', label: t('tabAll') },
-    { key: 'pending', label: t('statusPending') },
-    { key: 'confirmed', label: t('statusConfirmed') },
-    { key: 'cancelled', label: t('statusCancelled') },
-  ]
+// ─── booking row ──────────────────────────────────────────────────────────────
 
+function BookingRow({ booking, statusLabel }: { booking: Booking; statusLabel: Record<BookingStatus, string> }) {
+  const status: BookingStatus = booking.status ?? 'pending'
   return (
-    <div className="flex gap-1 border-b">
-      {tabs.map(({ key, label }) => (
-        <button
-          key={key}
-          onClick={() => onChange(key)}
-          className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-            active === key
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {label}
-          {counts[key] > 0 && (
-            <span className={`text-xs rounded-full px-1.5 py-0.5 leading-none ${
-              active === key ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-            }`}>
-              {counts[key]}
-            </span>
+    <div className="flex items-center gap-3 px-4 py-3 border-b last:border-0">
+      <div className={`h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-semibold ${avatarColor(booking.id)}`}>
+        {initials(booking)}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="font-medium text-sm truncate">{booking.firstname} {booking.lastname}</p>
+          {booking.is_new_contact && (
+            <Badge variant="outline" className="text-xs shrink-0">Trial</Badge>
           )}
-        </button>
-      ))}
+        </div>
+        <p className="text-xs text-muted-foreground truncate">{booking.email ?? '—'}</p>
+      </div>
+
+      <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
+        <Badge variant={STATUS_VARIANT[status]} className="text-xs">{statusLabel[status]}</Badge>
+        <p className="text-xs text-muted-foreground">
+          {formatDate(booking.joinedAt as Parameters<typeof formatDate>[0])}
+          {formatTime(booking.joinedAt as Parameters<typeof formatTime>[0]) && (
+            <> · {formatTime(booking.joinedAt as Parameters<typeof formatTime>[0])}</>
+          )}
+        </p>
+      </div>
+
+      <div className="flex sm:hidden flex-col items-end gap-1 shrink-0">
+        <Badge variant={STATUS_VARIANT[status]} className="text-xs">{statusLabel[status]}</Badge>
+        <p className="text-xs text-muted-foreground">
+          {formatDate(booking.joinedAt as Parameters<typeof formatDate>[0])}
+        </p>
+      </div>
     </div>
   )
 }
@@ -114,14 +125,14 @@ export default function BookingsPage() {
     cancelled: t('statusCancelled'),
   }
 
-  // Counts per tab (after search, before status filter)
-  const searchFiltered = search.trim()
-    ? bookings.filter((b) => {
-        const q = search.toLowerCase()
-        const name = `${b.firstname} ${b.lastname}`.toLowerCase()
-        return name.includes(q) || (b.email ?? '').toLowerCase().includes(q)
-      })
-    : bookings
+  const searchFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return bookings
+    return bookings.filter((b) => {
+      const name = `${b.firstname} ${b.lastname}`.toLowerCase()
+      return name.includes(q) || (b.email ?? '').toLowerCase().includes(q)
+    })
+  }, [bookings, search])
 
   const counts: Record<StatusFilter, number> = {
     all: searchFiltered.length,
@@ -130,29 +141,36 @@ export default function BookingsPage() {
     cancelled: searchFiltered.filter((b) => b.status === 'cancelled').length,
   }
 
-  const filtered =
+  const filtered = useMemo(() =>
     statusFilter === 'all'
       ? searchFiltered
-      : searchFiltered.filter((b) => (b.status ?? 'pending') === statusFilter)
+      : searchFiltered.filter((b) => (b.status ?? 'pending') === statusFilter),
+    [searchFiltered, statusFilter],
+  )
 
   const trials = bookings.filter((b) => b.is_new_contact).length
 
+  const TABS: { key: StatusFilter; label: string }[] = [
+    { key: 'all', label: t('tabAll') },
+    { key: 'pending', label: t('statusPending') },
+    { key: 'confirmed', label: t('statusConfirmed') },
+    { key: 'cancelled', label: t('statusCancelled') },
+  ]
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          {!isLoading && (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t('subtitle', { total: bookings.length, trials })}
-            </p>
-          )}
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+        {!isLoading && (
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {t('subtitle', { total: bookings.length, trials })}
+          </p>
+        )}
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
+      <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           placeholder={t('searchPlaceholder')}
@@ -162,76 +180,53 @@ export default function BookingsPage() {
         />
       </div>
 
-      {/* Status tabs */}
-      <StatusTabs active={statusFilter} counts={counts} onChange={setStatusFilter} />
-
-      {/* Table */}
-      <div className="rounded-lg border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 border-b">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('colName')}</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('colEmail')}</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('colStatus')}</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('colDate')}</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('colTime')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading &&
-              Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i} className="border-b last:border-0">
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-36" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-14" /></td>
-                </tr>
-              ))}
-
-            {!isLoading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
-                  {search ? t('emptySearch') : t('empty')}
-                </td>
-              </tr>
+      {/* Tabs */}
+      <div className="flex gap-1 border-b overflow-x-auto">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setStatusFilter(key)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+              statusFilter === key
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+            {counts[key] > 0 && (
+              <span className={`text-xs rounded-full px-1.5 py-0.5 leading-none ${
+                statusFilter === key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}>
+                {counts[key]}
+              </span>
             )}
+          </button>
+        ))}
+      </div>
 
-            {!isLoading &&
-              filtered.map((b) => {
-                const status: BookingStatus = b.status ?? 'pending'
-                return (
-                  <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-semibold text-muted-foreground">
-                            {(b.firstname?.[0] ?? '?').toUpperCase()}
-                          </span>
-                        </div>
-                        <span className="font-medium">
-                          {b.firstname} {b.lastname}
-                        </span>
-                        {b.is_new_contact && (
-                          <Badge variant="outline" className="text-xs">{t('trialBadge')}</Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{b.email ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={STATUS_VARIANT[status]}>{statusLabel[status]}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {formatDate(b.joinedAt as Parameters<typeof formatDate>[0])}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {formatTime(b.joinedAt as Parameters<typeof formatTime>[0])}
-                    </td>
-                  </tr>
-                )
-              })}
-          </tbody>
-        </table>
+      {/* List */}
+      <div className="rounded-xl border overflow-hidden bg-card">
+        {isLoading &&
+          Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3 border-b last:border-0">
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-48" />
+              </div>
+              <Skeleton className="h-5 w-20 rounded-full" />
+            </div>
+          ))}
+
+        {!isLoading && filtered.length === 0 && (
+          <div className="px-4 py-16 text-center text-muted-foreground text-sm">
+            {search ? t('emptySearch') : t('empty')}
+          </div>
+        )}
+
+        {!isLoading && filtered.map((b) => (
+          <BookingRow key={b.id} booking={b} statusLabel={statusLabel} />
+        ))}
       </div>
     </div>
   )

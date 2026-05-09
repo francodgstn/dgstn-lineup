@@ -8,7 +8,7 @@ export type MembershipStatus =
   | 'active'
   | 'expired'
 
-export type ContactType = 'lead' | 'prospect' | 'customer'
+export type ContactType = 'trial' | 'student' | 'external'
 
 export interface Contact {
   id: string
