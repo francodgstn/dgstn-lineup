@@ -1,5 +1,273 @@
-// TODO: Port from hmd-lineup/functions/src/sendEventInvitations/index.js
-// TODO: Port from hmd-lineup/functions/src/handleEventInvitationResponse/index.js
-// TODO: Port from hmd-lineup/functions/src/getEventInvitationDetails/index.js
+import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { setGlobalOptions } from 'firebase-functions/v2'
+import * as admin from 'firebase-admin'
+import * as crypto from 'crypto'
+import { to } from '../utils/async'
+import { sendEmail } from '../utils/email'
+import { getHostingUrl } from '../utils/env'
 
-export {}
+setGlobalOptions({ region: 'europe-west6' })
+
+const EVENTS_COLLECTION = 'events'
+const CONTACTS_COLLECTION = 'contacts'
+const INVITATIONS_SUBCOLLECTION = 'invitations'
+const ATTENDEES_SUBCOLLECTION = 'attendees'
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function generateInvitationToken(): string {
+  return crypto.randomBytes(32).toString('hex')
+}
+
+function googleCalendarLink(title: string, start: Date, end: Date, location: string, description: string): string {
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0]
+  const p = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: `${fmt(start)}/${fmt(end)}`, details: description, location })
+  return `https://calendar.google.com/calendar/render?${p.toString()}`
+}
+
+function buildInvitationEmail(params: {
+  firstname: string; teamName: string; eventTitle: string
+  eventStart: string; eventEnd: string; location: string
+  link: string; calendarLink: string; fee: string
+}): { subject: string; html: string; text: string } {
+  const { firstname, teamName, eventTitle, eventStart, eventEnd, location, link, calendarLink, fee } = params
+  const subject = `Invitation: ${eventTitle}`
+  const feeHtml = fee ? `<p><strong>Fee:</strong> ${fee}</p>` : ''
+  const locHtml = location ? `<p><strong>Location:</strong> ${location}</p>` : ''
+  const calHtml = calendarLink ? `<p><a href="${calendarLink}">Add to Google Calendar</a></p>` : ''
+  const html = `<p>Hi ${firstname},</p><p>${teamName} invites you to <strong>${eventTitle}</strong>.</p><p><strong>When:</strong> ${eventStart}${eventEnd ? ` – ${eventEnd}` : ''}</p>${locHtml}${feeHtml}${calHtml}<p><a href="${link}">View invitation & RSVP</a></p>`
+  const text = `Hi ${firstname},\n\n${teamName} invites you to ${eventTitle}.\nWhen: ${eventStart}${eventEnd ? ` – ${eventEnd}` : ''}\n${location ? `Location: ${location}\n` : ''}${fee ? `Fee: ${fee}\n` : ''}\nRSVP: ${link}`
+  return { subject, html, text }
+}
+
+// ─── sendEventInvitations ─────────────────────────────────────────────────────
+
+export const sendEventInvitations = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated')
+
+  const { eventId, resend } = request.data as { eventId?: string; resend?: boolean }
+  if (!eventId) throw new HttpsError('invalid-argument', 'eventId is required')
+
+  const db = admin.firestore()
+
+  const [eventErr, eventDoc] = await to(db.collection(EVENTS_COLLECTION).doc(eventId).get())
+  if (eventErr || !eventDoc || !eventDoc.exists) throw new HttpsError('not-found', 'Event not found')
+
+  const event = eventDoc.data()!
+  const teamId = (event.teamId || event.teacher) as string | undefined
+  if (!teamId) throw new HttpsError('failed-precondition', 'Event has no team')
+
+  const eventEnd = event.end as admin.firestore.Timestamp | undefined
+  if (eventEnd && eventEnd.toDate() < new Date()) {
+    throw new HttpsError('failed-precondition', 'Cannot send invitations for an event that has already ended')
+  }
+
+  // Get team info for email
+  const [teamErr, teamDoc] = await to(db.collection('teams').doc(teamId).get())
+  const teamName = (!teamErr && teamDoc && teamDoc.exists) ? ((teamDoc.data()!.name as string) || 'Our Team') : 'Our Team'
+
+  // Get all active contacts for this team with an email address
+  const [contactsErr, contactsSnap] = await to(
+    db.collection(CONTACTS_COLLECTION)
+      .where('teamId', '==', teamId)
+      .where('deleted_at', '==', null)
+      .where('archived_at', '==', null)
+      .get(),
+  )
+  if (contactsErr || !contactsSnap || contactsSnap.empty) {
+    throw new HttpsError('failed-precondition', 'No active contacts to invite')
+  }
+
+  // Get existing invitations
+  const invRef = eventDoc.ref.collection(INVITATIONS_SUBCOLLECTION)
+  const [, existingSnap] = await to(invRef.get())
+  const existing = new Map<string, Record<string, unknown>>()
+  existingSnap?.docs.forEach((d) => existing.set(d.id, d.data()))
+
+  const eventStartDate = (event.start as admin.firestore.Timestamp | undefined)?.toDate()
+  const eventEndDate = (event.end as admin.firestore.Timestamp | undefined)?.toDate()
+  const locale = 'en-GB'
+  const eventStart = eventStartDate ? eventStartDate.toLocaleString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Zurich' }) : 'TBD'
+  const eventEndStr = eventEndDate ? eventEndDate.toLocaleString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Zurich' }) : ''
+  const calLink = eventStartDate ? googleCalendarLink(event.title as string, eventStartDate, eventEndDate ?? new Date(eventStartDate.getTime() + 2 * 3600000), (event.location as string) || '', (event.desc as string) || '') : ''
+
+  let sent = 0; let skipped = 0
+  const errors: Array<{ contactId: string; error: string }> = []
+
+  await Promise.all(contactsSnap.docs.map(async (contactDoc) => {
+    const email = contactDoc.data().email as string | undefined
+    if (!email) return
+
+    const existingInv = existing.get(contactDoc.id)
+    if (existingInv && !resend) { skipped++; return }
+
+    const token = (existingInv?.token as string | undefined) ?? generateInvitationToken()
+    const link = `${getHostingUrl()}/portal/event-invitation?token=${encodeURIComponent(token)}`
+
+    const emailContent = buildInvitationEmail({
+      firstname: (contactDoc.data().firstname as string) || 'Guest',
+      teamName,
+      eventTitle: (event.title as string) || 'Event',
+      eventStart,
+      eventEnd: eventEndStr,
+      location: (event.location as string) || '',
+      link,
+      calendarLink: calLink,
+      fee: (event.fee as string) || '',
+    })
+
+    try {
+      await sendEmail({ to: email, subject: emailContent.subject, html: emailContent.html, text: emailContent.text })
+
+      const baseData = {
+        contactId: contactDoc.id,
+        email,
+        firstname: contactDoc.data().firstname,
+        lastname: contactDoc.data().lastname,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentBy: request.auth!.uid,
+        token,
+        link,
+        eventId,
+      }
+      if (existingInv) {
+        await invRef.doc(contactDoc.id).update(baseData)
+      } else {
+        await invRef.doc(contactDoc.id).set({ ...baseData, status: 'sent', firstOpenedAt: null, lastOpenedAt: null, respondedAt: null })
+      }
+      sent++
+    } catch (err) {
+      console.error(`Error inviting ${email}:`, err)
+      errors.push({ contactId: contactDoc.id, error: err instanceof Error ? err.message : String(err) })
+    }
+  }))
+
+  await to(eventDoc.ref.update({
+    invitations_sent_count: admin.firestore.FieldValue.increment(sent),
+    last_invitation_sent_at: admin.firestore.FieldValue.serverTimestamp(),
+  }))
+
+  return { success: true, stats: { sent, skipped, errors } }
+})
+
+// ─── getEventInvitationDetails ────────────────────────────────────────────────
+
+export const getEventInvitationDetails = onCall(async (request) => {
+  const { token, trackView = true } = request.data as { token?: string; trackView?: boolean }
+  if (!token) throw new HttpsError('invalid-argument', 'token is required')
+
+  const db = admin.firestore()
+
+  const [invSnapErr, invSnap] = await to(
+    db.collectionGroup(INVITATIONS_SUBCOLLECTION).where('token', '==', token).limit(1).get(),
+  )
+  if (invSnapErr || !invSnap || invSnap.empty) throw new HttpsError('not-found', 'Invitation not found')
+
+  const invDoc = invSnap.docs[0]
+  const pathParts = invDoc.ref.path.split('/')
+  const eventId = pathParts[1]
+  const contactId = invDoc.data().contactId as string
+
+  const [eventErr, eventDoc] = await to(db.collection(EVENTS_COLLECTION).doc(eventId).get())
+  if (eventErr || !eventDoc || !eventDoc.exists) throw new HttpsError('not-found', 'Event not found')
+
+  const [contactErr, contactDoc] = await to(db.collection(CONTACTS_COLLECTION).doc(contactId).get())
+  if (contactErr || !contactDoc || !contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+
+  // Check if already an attendee
+  const [attErr, attDoc] = await to(eventDoc.ref.collection(ATTENDEES_SUBCOLLECTION).doc(contactId).get())
+  const attendee = (!attErr && attDoc && attDoc.exists) ? { id: contactId, ...attDoc.data() } : null
+
+  if (trackView) {
+    const currentStatus = invDoc.data().status as string
+    const updateData: Record<string, unknown> = { lastOpenedAt: admin.firestore.FieldValue.serverTimestamp() }
+    if (currentStatus === 'sent') { updateData.status = 'opened'; updateData.firstOpenedAt = admin.firestore.FieldValue.serverTimestamp() }
+    await to(invDoc.ref.update(updateData))
+  }
+
+  const event = eventDoc.data()!
+  const contact = contactDoc.data()!
+  return {
+    event: {
+      id: eventDoc.id,
+      title: event.title,
+      description: event.desc,
+      start: (event.start as admin.firestore.Timestamp)?.toDate().toJSON(),
+      end: (event.end as admin.firestore.Timestamp)?.toDate().toJSON(),
+      location: event.location,
+      type: event.type,
+      fee: event.fee,
+      status: event.status,
+    },
+    contact: {
+      id: contactDoc.id,
+      firstname: contact.firstname,
+      lastname: contact.lastname,
+      email: contact.email,
+      gender: contact.gender,
+      type: contact.type,
+    },
+    attendee,
+    token,
+  }
+})
+
+// ─── handleEventInvitationResponse ───────────────────────────────────────────
+
+export const handleEventInvitationResponse = onCall(async (request) => {
+  const { token, action, notes } = request.data as { token?: string; action?: 'attend' | 'decline'; notes?: string }
+  if (!token) throw new HttpsError('invalid-argument', 'token is required')
+  if (!action || !['attend', 'decline'].includes(action)) throw new HttpsError('invalid-argument', 'action must be "attend" or "decline"')
+
+  const db = admin.firestore()
+
+  const [invSnapErr, invSnap] = await to(
+    db.collectionGroup(INVITATIONS_SUBCOLLECTION).where('token', '==', token).limit(1).get(),
+  )
+  if (invSnapErr || !invSnap || invSnap.empty) throw new HttpsError('not-found', 'Invitation not found')
+
+  const invDoc = invSnap.docs[0]
+  const pathParts = invDoc.ref.path.split('/')
+  const eventId = pathParts[1]
+  const contactId = invDoc.data().contactId as string
+
+  const [eventErr, eventDoc] = await to(db.collection(EVENTS_COLLECTION).doc(eventId).get())
+  if (eventErr || !eventDoc || !eventDoc.exists) throw new HttpsError('not-found', 'Event not found')
+
+  const event = eventDoc.data()!
+  if (event.status !== 'open') throw new HttpsError('failed-precondition', 'Event is not open for registrations')
+
+  const [contactErr, contactDoc] = await to(db.collection(CONTACTS_COLLECTION).doc(contactId).get())
+  if (contactErr || !contactDoc || !contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+
+  const attendeeRef = eventDoc.ref.collection(ATTENDEES_SUBCOLLECTION).doc(contactId)
+
+  if (action === 'decline') {
+    await to(attendeeRef.delete())
+    await invDoc.ref.update({ status: 'declined', respondedAt: admin.firestore.FieldValue.serverTimestamp() })
+    await to(eventDoc.ref.update({ attendees_count: admin.firestore.FieldValue.increment(-1) }))
+    return { success: true, action: 'declined' }
+  }
+
+  // action === 'attend'
+  const contact = contactDoc.data()!
+  const attendeeData = {
+    contactId,
+    firstname: contact.firstname,
+    lastname: contact.lastname,
+    email: contact.email,
+    gender: contact.gender,
+    type: contact.type,
+    notes: notes ?? null,
+    respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }
+
+  const [attGetErr, attDoc] = await to(attendeeRef.get())
+  const isNew = attGetErr || !attDoc || !attDoc.exists
+
+  await attendeeRef.set(attendeeData, { merge: true })
+  await invDoc.ref.update({ status: 'responded', respondedAt: admin.firestore.FieldValue.serverTimestamp() })
+  if (isNew) await to(eventDoc.ref.update({ attendees_count: admin.firestore.FieldValue.increment(1) }))
+
+  return { success: true, action: 'attending', attendee: { id: contactId, ...attendeeData } }
+})

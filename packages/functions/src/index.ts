@@ -29,17 +29,22 @@ export { bookTrialSession, sendBookingVerificationCode, verifyBookingCode, cance
 export { recalculateScores, resetScores } from './gamification'
 
 // Sessions
-export { generateRecurringSessions, cancelSession } from './sessions'
+export { generateRecurringSessions, cancelSession, updateRecurringSession, selfCheckIn } from './sessions'
 
 // Contacts
-export { deleteContact, restoreContact, checkInContact } from './contacts'
+export { deleteContact, restoreContact, checkInContact, moveContacts } from './contacts'
+
+// Events
+export { sendEventInvitations, getEventInvitationDetails, handleEventInvitationResponse } from './events'
+
+// Analytics
+export { trackBookings, trackSessions, weeklyReports } from './analytics'
 
 // Auth / Membership
 export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'
 
 // --- Stubs (TODO: port from hmd-lineup) ---
 // export { rebookSession, getBookingDetails } from './booking'
-// export { updateRecurringSession, generateCoachSlots } from './sessions'
-// export { selfCheckIn, moveContacts, generateContactQR } from './contacts'
-// export { sendEventInvitations, handleEventInvitationResponse, getEventInvitationDetails } from './events'
-// export { weeklyReports, trackEventAttendees, trackSessionParticipants, generateDashboardInsight } from './analytics'
+// export { generateCoachSlots } from './sessions'
+// export { generateContactQR } from './contacts'
+// export { generateDashboardInsight } from './analytics'
