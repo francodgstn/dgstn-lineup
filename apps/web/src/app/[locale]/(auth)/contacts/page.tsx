@@ -185,58 +185,60 @@ function CreateContactDialog({
         <DialogHeader>
           <DialogTitle>{t('addContact')}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-1">
-          {/* Type radio */}
-          <div className="flex gap-2">
-            {TYPES.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setValue('type', v)}
-                className={`flex-1 py-1.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                  type === v
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-background text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {t(`type_${v}`)}
-              </button>
-            ))}
-          </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="contents">
+          <div className="space-y-4 pt-1">
+            {/* Type radio */}
+            <div className="flex gap-2">
+              {TYPES.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setValue('type', v)}
+                  className={`flex-1 py-1.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                    type === v
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {t(`type_${v}`)}
+                </button>
+              ))}
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">{t('fieldFirstname')} *</label>
-              <Input {...register('firstname')} autoCapitalize="words" />
-              {errors.firstname && <p className="text-xs text-destructive">{errors.firstname.message}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">{t('fieldFirstname')} *</label>
+                <Input {...register('firstname')} autoCapitalize="words" />
+                {errors.firstname && <p className="text-xs text-destructive">{errors.firstname.message}</p>}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">{t('fieldLastname')} *</label>
+                <Input {...register('lastname')} autoCapitalize="words" />
+                {errors.lastname && <p className="text-xs text-destructive">{errors.lastname.message}</p>}
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">{t('fieldLastname')} *</label>
-              <Input {...register('lastname')} autoCapitalize="words" />
-              {errors.lastname && <p className="text-xs text-destructive">{errors.lastname.message}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">{t('colEmail')}</label>
+                <Input type="email" {...register('email')} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">{t('fieldPhone')}</label>
+                <Input type="tel" {...register('phone')} />
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">{t('colEmail')}</label>
-              <Input type="email" {...register('email')} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">{t('fieldPhone')}</label>
-              <Input type="tel" {...register('phone')} />
-            </div>
-          </div>
+          <DialogFooter>
+            <button type="button" onClick={() => onOpenChange(false)}
+              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+              {t('cancel')}
+            </button>
+            <button type="submit" disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+              {isSubmitting ? tCommon('loading') : t('createContact')}
+            </button>
+          </DialogFooter>
         </form>
-        <DialogFooter>
-          <button type="button" onClick={() => onOpenChange(false)}
-            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
-            {t('cancel')}
-          </button>
-          <button onClick={handleSubmit(onSubmit)} disabled={isSubmitting}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
-            {isSubmitting ? tCommon('loading') : t('createContact')}
-          </button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
