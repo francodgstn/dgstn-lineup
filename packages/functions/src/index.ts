@@ -37,4 +37,4 @@ export { bookTrialSession, sendBookingVerificationCode, verifyBookingCode } from
 // Analytics
 // export { weeklyReports, trackEventAttendees, trackSessionParticipants, generateDashboardInsight } from './analytics'
 // Auth / Membership
-// export { completeMembershipSignup } from './auth/completeMembershipSignup'
+export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'

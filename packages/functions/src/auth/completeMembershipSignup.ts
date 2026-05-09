@@ -1,4 +1,172 @@
-// TODO: Port from hmd-lineup/functions/src/completeMembershipSignup/index.js
-// Verifies the 6-digit code and creates a contact + verification record
+/* eslint-disable no-console */
+import * as admin from 'firebase-admin'
+import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { setGlobalOptions } from 'firebase-functions/v2'
+import { getTeam } from '../utils/teams'
+import { sendEmail, buildEmailTemplate } from '../utils/email'
 
-export {}
+setGlobalOptions({ region: 'europe-west6' })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// verifyMembershipCode
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const verifyMembershipCode = onCall(async (request) => {
+  const data = request.data as { codeId?: string; code?: string }
+
+  if (!data?.codeId || !data?.code) {
+    throw new HttpsError('invalid-argument', 'codeId and code are required')
+  }
+
+  if (!/^\d{6}$/.test(data.code)) {
+    throw new HttpsError('invalid-argument', 'Code must be 6 digits')
+  }
+
+  const codeRef = admin.firestore().collection('verification_codes').doc(data.codeId)
+  const codeDoc = await codeRef.get()
+  if (!codeDoc.exists) throw new HttpsError('not-found', 'Invalid code')
+
+  const codeData = codeDoc.data()!
+
+  if (codeData.used) throw new HttpsError('failed-precondition', 'Code already used')
+
+  const now = admin.firestore.Timestamp.now()
+  if (codeData.expiresAt.toMillis() < now.toMillis()) {
+    throw new HttpsError('deadline-exceeded', 'Code has expired. Please request a new code.')
+  }
+
+  if ((codeData.attempts || 0) >= 5) {
+    throw new HttpsError('resource-exhausted', 'Too many failed attempts. Please request a new code.')
+  }
+
+  if (codeData.code !== data.code) {
+    await codeRef.update({ attempts: admin.firestore.FieldValue.increment(1) })
+    const remaining = 5 - ((codeData.attempts || 0) + 1)
+    throw new HttpsError('invalid-argument', `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`)
+  }
+
+  await codeRef.update({ verified: true, verifiedAt: admin.firestore.FieldValue.serverTimestamp() })
+
+  return { verified: true, email: codeData.email, teamId: codeData.team_id }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// completeMembershipSignup
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const completeMembershipSignup = onCall(async (request) => {
+  const data = request.data as {
+    codeId?: string
+    contactDetails?: {
+      firstname: string
+      lastname: string
+      phone?: string
+      birthdate?: string
+      notes?: string
+      privacyConsent: boolean
+    }
+  }
+
+  if (!data?.codeId || !data?.contactDetails) {
+    throw new HttpsError('invalid-argument', 'codeId and contactDetails are required')
+  }
+
+  const { contactDetails } = data
+
+  if (!contactDetails.firstname || !contactDetails.lastname) {
+    throw new HttpsError('invalid-argument', 'firstname and lastname are required')
+  }
+
+  if (!contactDetails.privacyConsent) {
+    throw new HttpsError('failed-precondition', 'Privacy consent is required')
+  }
+
+  const codeRef = admin.firestore().collection('verification_codes').doc(data.codeId)
+  const codeDoc = await codeRef.get()
+  if (!codeDoc.exists) throw new HttpsError('not-found', 'Invalid verification code')
+
+  const codeData = codeDoc.data()!
+
+  if (!codeData.verified) {
+    throw new HttpsError('failed-precondition', 'Email not verified. Please verify your email first.')
+  }
+  if (codeData.used) {
+    throw new HttpsError('already-exists', 'This verification code has already been used')
+  }
+
+  const email: string = codeData.email
+  const teamId: string = codeData.team_id
+
+  const team = await getTeam(teamId)
+  if (!team) throw new HttpsError('not-found', 'Team not found')
+
+  const teamName = team.name || 'Team'
+
+  // Get owner emails for notification
+  const ownersSnap = await admin.firestore().collection('teams').doc(teamId).collection('team_members').where('role', '==', 'owner').get()
+  const ownerEmails: string[] = []
+  for (const memberDoc of ownersSnap.docs) {
+    const userDoc = await admin.firestore().collection('users').doc(memberDoc.id).get()
+    if (userDoc.exists) {
+      const ownerEmail = userDoc.get('email')
+      if (ownerEmail) ownerEmails.push(ownerEmail)
+    }
+  }
+
+  const sanitized = {
+    firstname: contactDetails.firstname.trim(),
+    lastname: contactDetails.lastname.trim(),
+    phone: contactDetails.phone?.trim() || null,
+    birthdate: contactDetails.birthdate ? admin.firestore.Timestamp.fromDate(new Date(contactDetails.birthdate)) : null,
+    notes: contactDetails.notes?.trim() || null,
+  }
+
+  // Create contact
+  const contactRef = admin.firestore().collection('contacts').doc()
+  await contactRef.set({
+    firstname: sanitized.firstname,
+    lastname: sanitized.lastname,
+    email,
+    phone: sanitized.phone,
+    birthdate: sanitized.birthdate,
+    notes: sanitized.notes,
+    type: 'customer',
+    teamId,
+    membership_status: 'requested',
+    membership_active: false,
+    archived_at: null,
+    deleted_at: null,
+    created_at: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  const contactId = contactRef.id
+
+  // Mark code as used
+  await codeRef.update({ used: true, usedAt: admin.firestore.FieldValue.serverTimestamp(), contactId })
+
+  // Send welcome email
+  try {
+    const { html, text } = buildEmailTemplate({
+      title: `Welcome to ${teamName}!`,
+      body: `<p>Hi ${sanitized.firstname},</p><p>Thanks for signing up with <strong>${teamName}</strong>. Your membership request has been received and is under review.</p><p>We'll be in touch soon.</p>`,
+    })
+    await sendEmail({ to: email, subject: `Welcome to ${teamName}!`, html, text })
+    console.log(`Welcome email sent to ${email}`)
+  } catch (err) {
+    console.error('Error sending welcome email:', err)
+  }
+
+  // Notify owners
+  for (const ownerEmail of ownerEmails) {
+    try {
+      const { html, text } = buildEmailTemplate({
+        title: `New Member Signup: ${sanitized.firstname} ${sanitized.lastname}`,
+        body: `<p>A new membership request has been submitted.</p><p><strong>Name:</strong> ${sanitized.firstname} ${sanitized.lastname}</p><p><strong>Email:</strong> ${email}</p>${sanitized.phone ? `<p><strong>Phone:</strong> ${sanitized.phone}</p>` : ''}`,
+      })
+      await sendEmail({ to: ownerEmail, subject: `New Member Signup: ${sanitized.firstname} ${sanitized.lastname}`, html, text })
+    } catch (err) {
+      console.error('Error sending owner notification:', err)
+    }
+  }
+
+  return { success: true, contactId }
+})

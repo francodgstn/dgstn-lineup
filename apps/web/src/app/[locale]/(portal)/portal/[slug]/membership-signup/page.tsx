@@ -1,5 +1,9 @@
-// TODO: Port from hmd-lineup/src/routes/Portal/routes/MembershipSignup/
-// Pattern: collect email → call sendMembershipVerificationCode → verify code → completeMembershipSignup
+import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { notFound } from 'next/navigation'
+import MembershipSignupForm from './MembershipSignupForm'
+
+export const dynamic = 'force-dynamic'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -8,21 +12,20 @@ interface Props {
 export default async function MembershipSignupPage({ params }: Props) {
   const { slug } = await params
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Membership Signup</h1>
-        <p className="text-muted-foreground">Join us as a member. We&apos;ll send you a verification code to get started.</p>
-      </div>
-
-      <div className="bg-muted/40 border rounded-xl p-8 text-center">
-        <p className="text-muted-foreground text-sm">
-          Membership signup form — coming soon.
-        </p>
-        <p className="text-xs text-muted-foreground mt-2">
-          Port from <code className="bg-muted px-1 rounded">hmd-lineup/src/routes/Portal/routes/MembershipSignup/</code>
-        </p>
-      </div>
-    </div>
+  const q = query(
+    collectionGroup(db, 'public_profile'),
+    where('slug', '==', slug),
+    limit(1),
   )
+  const snap = await getDocs(q)
+  if (snap.empty) notFound()
+
+  const profileDoc = snap.docs[0]
+  const teamId = profileDoc.ref.parent.parent?.id
+  if (!teamId) notFound()
+
+  const data = profileDoc.data()
+  const teamName: string = data.name || 'Team'
+
+  return <MembershipSignupForm teamId={teamId} teamName={teamName} slug={slug} />
 }
