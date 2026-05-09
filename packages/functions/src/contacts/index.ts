@@ -1,8 +1,208 @@
-// TODO: Port from hmd-lineup/functions/src/checkInContact/index.js
-// TODO: Port from hmd-lineup/functions/src/selfCheckIn/index.js
-// TODO: Port from hmd-lineup/functions/src/deleteContact/index.js
-// TODO: Port from hmd-lineup/functions/src/restoreContact/index.js
-// TODO: Port from hmd-lineup/functions/src/moveContacts/index.js
-// TODO: Port from hmd-lineup/functions/src/generateContactQR/index.js
+import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { setGlobalOptions } from 'firebase-functions/v2'
+import * as admin from 'firebase-admin'
+import * as crypto from 'crypto'
+import { to } from '../utils/async'
+import { hasTeamRole, isTeamMember } from '../utils/teams'
 
-export {}
+setGlobalOptions({ region: 'europe-west6' })
+
+const CONTACTS_COLLECTION = 'contacts'
+const RETENTION_DAYS = 30
+
+// ─── deleteContact ────────────────────────────────────────────────────────────
+
+export const deleteContact = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated')
+
+  const { contactId } = request.data as { contactId?: string }
+  if (!contactId) throw new HttpsError('invalid-argument', 'contactId is required')
+
+  const db = admin.firestore()
+  const contactRef = db.collection(CONTACTS_COLLECTION).doc(contactId)
+  const [getErr, contactSnap] = await to(contactRef.get())
+  if (getErr) throw new HttpsError('internal', 'Error getting contact')
+  if (!contactSnap || !contactSnap.exists) throw new HttpsError('not-found', 'Contact not found')
+
+  const contactData = contactSnap.data()!
+  const teamId = (contactData.teamId || contactData.teacher) as string
+
+  const isLegacyOwner = contactData.teacher === request.auth.uid
+  const hasManagerRole = teamId ? await hasTeamRole(request.auth.uid, teamId, 'manager') : false
+  if (!isLegacyOwner && !hasManagerRole) {
+    throw new HttpsError('permission-denied', 'You do not have permission to delete this contact')
+  }
+
+  if (contactData.deleted_at) throw new HttpsError('failed-precondition', 'Contact is already deleted')
+  if (contactData.anonymized_at) throw new HttpsError('failed-precondition', 'Contact has been anonymized')
+
+  const [updateErr] = await to(contactRef.update({
+    deleted_at: admin.firestore.FieldValue.serverTimestamp(),
+    deleted_by: request.auth.uid,
+    anonymized_at: null,
+  }))
+  if (updateErr) throw new HttpsError('internal', 'Error deleting contact')
+
+  const restorationDeadline = new Date()
+  restorationDeadline.setDate(restorationDeadline.getDate() + RETENTION_DAYS)
+
+  return {
+    success: true,
+    contactId,
+    deleted_at: new Date().toISOString(),
+    restoration_deadline: restorationDeadline.toISOString(),
+  }
+})
+
+// ─── restoreContact ───────────────────────────────────────────────────────────
+
+export const restoreContact = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated')
+
+  const { contactId } = request.data as { contactId?: string }
+  if (!contactId) throw new HttpsError('invalid-argument', 'contactId is required')
+
+  const db = admin.firestore()
+  const contactRef = db.collection(CONTACTS_COLLECTION).doc(contactId)
+  const [getErr, contactSnap] = await to(contactRef.get())
+  if (getErr) throw new HttpsError('internal', 'Error getting contact')
+  if (!contactSnap || !contactSnap.exists) throw new HttpsError('not-found', 'Contact not found')
+
+  const contactData = contactSnap.data()!
+  const teamId = (contactData.teamId || contactData.teacher) as string
+
+  const isLegacyOwner = contactData.teacher === request.auth.uid
+  const hasManagerRole = teamId ? await hasTeamRole(request.auth.uid, teamId, 'manager') : false
+  if (!isLegacyOwner && !hasManagerRole) {
+    throw new HttpsError('permission-denied', 'You do not have permission to restore this contact')
+  }
+
+  if (!contactData.deleted_at) throw new HttpsError('failed-precondition', 'Contact is not deleted')
+  if (contactData.anonymized_at) throw new HttpsError('failed-precondition', 'Contact has been anonymized and cannot be restored')
+
+  const deletedAt = (contactData.deleted_at as admin.firestore.Timestamp).toDate()
+  const daysSinceDeletion = Math.floor((Date.now() - deletedAt.getTime()) / (1000 * 60 * 60 * 24))
+  if (daysSinceDeletion > RETENTION_DAYS) {
+    throw new HttpsError('failed-precondition', `Restoration window expired. Contact was deleted more than ${RETENTION_DAYS} days ago.`)
+  }
+
+  const [updateErr] = await to(contactRef.update({ deleted_at: null, deleted_by: null }))
+  if (updateErr) throw new HttpsError('internal', 'Error restoring contact')
+
+  return { success: true, contactId, restored_at: new Date().toISOString() }
+})
+
+// ─── checkInContact ───────────────────────────────────────────────────────────
+
+export const checkInContact = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated')
+
+  const { sessionId, contactId, hash, scope = 'sessions' } = request.data as {
+    sessionId?: string; contactId?: string; hash?: string; scope?: string
+  }
+  if (!sessionId || !contactId || !hash) {
+    throw new HttpsError('invalid-argument', 'sessionId, contactId, and hash are required')
+  }
+  if (scope !== 'sessions') {
+    throw new HttpsError('invalid-argument', 'Unsupported check-in scope')
+  }
+
+  const db = admin.firestore()
+  const teacherId = request.auth.uid
+
+  const sessionRef = db.collection('sessions').doc(sessionId)
+  const [sessionErr, sessionDoc] = await to(sessionRef.get())
+  if (sessionErr || !sessionDoc || !sessionDoc.exists) throw new HttpsError('not-found', 'Session not found')
+
+  const session = sessionDoc.data()!
+  const sessionTeamId = (session.teamId || session.teacher) as string
+
+  const isLegacyOwner = session.teacher === teacherId
+  const hasManagerRole = sessionTeamId ? await hasTeamRole(teacherId, sessionTeamId, 'manager') : false
+  if (!isLegacyOwner && !hasManagerRole) {
+    throw new HttpsError('permission-denied', 'You do not have permission to check in contacts for this session')
+  }
+
+  const contactRef = db.collection(CONTACTS_COLLECTION).doc(contactId)
+  const [contactErr, contactDoc] = await to(contactRef.get())
+  if (contactErr || !contactDoc || !contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+
+  const contact = contactDoc.data()!
+  const contactTeamId = (contact.teamId || contact.teacher) as string
+
+  const isContactLegacyOwner = contact.teacher === teacherId
+  const contactTeamMatch = contactTeamId === sessionTeamId
+  const hasContactTeamAccess = contactTeamId ? await isTeamMember(teacherId, contactTeamId) : false
+  if (!contactTeamMatch || (!isContactLegacyOwner && !hasContactTeamAccess)) {
+    throw new HttpsError('permission-denied', 'This contact does not belong to your team')
+  }
+
+  const contactSecret = contact.secret as string | undefined
+  if (!contactSecret) throw new HttpsError('failed-precondition', 'Contact does not have a QR code generated')
+
+  const expectedHash = crypto.createHash('sha256')
+    .update(`${contactId}:${teacherId}:${contactSecret}`)
+    .digest('hex')
+  if (hash !== expectedHash) throw new HttpsError('permission-denied', 'Invalid QR code signature')
+
+  const now = admin.firestore.Timestamp.now()
+  const sessionStart = session.start as admin.firestore.Timestamp
+  const sessionEnd = (session.end as admin.firestore.Timestamp) ||
+    admin.firestore.Timestamp.fromMillis(sessionStart.toMillis() + ((session.duration as number) || 60) * 60 * 1000)
+
+  const checkInWindowStart = admin.firestore.Timestamp.fromMillis(sessionStart.toMillis() - 60 * 60 * 1000)
+  const checkInWindowEnd = admin.firestore.Timestamp.fromMillis(sessionEnd.toMillis() + 60 * 60 * 1000)
+
+  if (now < checkInWindowStart || now > checkInWindowEnd) {
+    throw new HttpsError('failed-precondition', 'Check-in window has closed for this session')
+  }
+
+  const participantRef = sessionRef.collection('participants').doc(contactId)
+  const [partErr, participantDoc] = await to(participantRef.get())
+  if (!partErr && participantDoc && participantDoc.exists) {
+    return {
+      success: true,
+      alreadyCheckedIn: true,
+      contactName: `${contact.firstname as string} ${contact.lastname as string}`,
+      checkedInAt: participantDoc.data()!.checkedInAt,
+    }
+  }
+
+  const participantData = {
+    contact: contactId,
+    session: sessionId,
+    fullname: `${(contact.lastname as string) || ''} ${(contact.firstname as string) || ''}`.trim(),
+    firstname: (contact.firstname as string) || '',
+    lastname: (contact.lastname as string) || '',
+    avatar_url: (contact.avatar_url as string) || null,
+    checkedInAt: admin.firestore.FieldValue.serverTimestamp(),
+    checkedInBy: 'qr-scan',
+  }
+
+  const bookingRef = sessionRef.collection('bookings').doc(contactId)
+  const [bookingErr, bookingDoc] = await to(bookingRef.get())
+
+  const batch = db.batch()
+  batch.set(participantRef, participantData)
+
+  if (!bookingErr && bookingDoc && bookingDoc.exists) {
+    batch.update(bookingRef, {
+      status: 'confirmed',
+      confirmed_at: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    batch.update(sessionRef, {
+      portal_bookings_count: admin.firestore.FieldValue.increment(-1),
+      conversions_count: admin.firestore.FieldValue.increment(1),
+    })
+    batch.update(contactRef, { pending_bookings_count: admin.firestore.FieldValue.increment(-1) })
+  }
+
+  await batch.commit()
+
+  return {
+    success: true,
+    alreadyCheckedIn: false,
+    contactName: `${contact.firstname as string} ${contact.lastname as string}`,
+    checkedInAt: now,
+  }
+})

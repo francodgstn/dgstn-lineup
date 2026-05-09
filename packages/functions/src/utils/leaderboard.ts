@@ -1,0 +1,99 @@
+import * as admin from 'firebase-admin'
+import { to } from './async'
+
+const CONTACTS_COLLECTION = 'contacts'
+const TEAMS_COLLECTION = 'teams'
+const MONTHLY_SCORES_SUBCOLLECTION = 'monthly_scores'
+
+export async function updateTeamLeaderboard(teamId: string, month: string): Promise<void> {
+  if (!teamId || !month) return
+  const db = admin.firestore()
+
+  const [queryErr, contactsSnap] = await to(
+    db.collection(CONTACTS_COLLECTION)
+      .where('teamId', '==', teamId)
+      .where('deleted_at', '==', null)
+      .where('current_month_score', '>', 0)
+      .orderBy('current_month_score', 'desc')
+      .limit(50)
+      .get(),
+  )
+  if (queryErr) { console.error(`updateTeamLeaderboard query error:`, queryErr); return }
+
+  const rawEntries = (contactsSnap?.docs ?? []).map((doc) => {
+    const data = doc.data()
+    return {
+      contact_id: doc.id,
+      firstname: (data.firstname as string) || '',
+      lastname: (data.lastname as string) || '',
+      type: (data.type as string) || '',
+      score: (data.current_month_score as number) || 0,
+      streak: (data.current_streak as number) || 0,
+      max_streak: (data.max_streak as number) || 0,
+    }
+  })
+
+  let currentRank = 1
+  const entries = rawEntries.map((entry, index) => {
+    if (index > 0 && entry.score < rawEntries[index - 1].score) currentRank = index + 1
+    return { ...entry, rank: currentRank }
+  })
+
+  const scoreHistory: Record<string, Array<{ month: string; score: number }>> = {}
+  for (const entry of entries) {
+    const [histErr, histSnap] = await to(
+      db.collection(CONTACTS_COLLECTION).doc(entry.contact_id)
+        .collection(MONTHLY_SCORES_SUBCOLLECTION)
+        .where('team_id', '==', teamId)
+        .orderBy('month', 'desc')
+        .limit(12)
+        .get(),
+    )
+    if (!histErr && histSnap && !histSnap.empty) {
+      scoreHistory[entry.contact_id] = histSnap.docs
+        .map((d) => ({ month: d.data().month as string, score: (d.data().final_score as number) || 0 }))
+        .reverse()
+    }
+  }
+
+  const leaderboardRef = db.collection(TEAMS_COLLECTION).doc(teamId).collection('leaderboard').doc('current')
+  const [writeErr] = await to(
+    leaderboardRef.set({
+      month,
+      entries,
+      entries_count: entries.length,
+      score_history: scoreHistory,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }),
+  )
+  if (writeErr) console.error(`updateTeamLeaderboard write error:`, writeErr)
+}
+
+export async function incrementLeaderboardCounters(leaderId: string | null, top5Ids: string[]): Promise<void> {
+  if (!top5Ids || top5Ids.length === 0) return
+  const db = admin.firestore()
+  for (const contactId of top5Ids) {
+    const updates: Record<string, admin.firestore.FieldValue> = {
+      times_top5: admin.firestore.FieldValue.increment(1),
+    }
+    if (contactId === leaderId) updates.times_leader = admin.firestore.FieldValue.increment(1)
+    const [err] = await to(db.collection(CONTACTS_COLLECTION).doc(contactId).update(updates))
+    if (err) console.error(`incrementLeaderboardCounters error for ${contactId}:`, err)
+  }
+}
+
+export async function clearTeamLeaderboard(teamId: string, month: string): Promise<void> {
+  if (!teamId) return
+  const db = admin.firestore()
+  const leaderboardRef = db.collection(TEAMS_COLLECTION).doc(teamId).collection('leaderboard').doc('current')
+  const [writeErr] = await to(
+    leaderboardRef.set({
+      month,
+      entries: [],
+      entries_count: 0,
+      score_history: {},
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }),
+  )
+  if (writeErr) console.error(`clearTeamLeaderboard write error:`, writeErr)
+}

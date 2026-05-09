@@ -23,21 +23,23 @@ export { syncActivityPublicProfile } from './sync/syncActivityPublicProfile'
 export { indexUser } from './sync/indexUser'
 
 // Booking
-export { bookTrialSession, sendBookingVerificationCode, verifyBookingCode } from './booking'
+export { bookTrialSession, sendBookingVerificationCode, verifyBookingCode, cancelBooking } from './booking'
 
 // Gamification
 export { recalculateScores, resetScores } from './gamification'
 
-// --- Stubs (TODO: port from hmd-lineup) ---
-// Booking (remaining)
-// export { cancelBooking, rebookSession, getBookingDetails } from './booking'
 // Sessions
-// export { generateRecurringSessions, updateRecurringSession, cancelSession, generateCoachSlots } from './sessions'
+export { generateRecurringSessions, cancelSession } from './sessions'
+
 // Contacts
-// export { checkInContact, selfCheckIn, deleteContact, restoreContact, moveContacts, generateContactQR } from './contacts'
-// Events
-// export { sendEventInvitations, handleEventInvitationResponse, getEventInvitationDetails } from './events'
-// Analytics
-// export { weeklyReports, trackEventAttendees, trackSessionParticipants, generateDashboardInsight } from './analytics'
+export { deleteContact, restoreContact, checkInContact } from './contacts'
+
 // Auth / Membership
 export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'
+
+// --- Stubs (TODO: port from hmd-lineup) ---
+// export { rebookSession, getBookingDetails } from './booking'
+// export { updateRecurringSession, generateCoachSlots } from './sessions'
+// export { selfCheckIn, moveContacts, generateContactQR } from './contacts'
+// export { sendEventInvitations, handleEventInvitationResponse, getEventInvitationDetails } from './events'
+// export { weeklyReports, trackEventAttendees, trackSessionParticipants, generateDashboardInsight } from './analytics'

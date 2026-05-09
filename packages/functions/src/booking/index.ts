@@ -6,6 +6,7 @@ import { getTeam } from '../utils/teams'
 import { sendEmail } from '../utils/email'
 import { hashVerificationCode, verifyCode, generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
+import { to } from '../utils/async'
 import {
   buildTrialConfirmationEmail,
   buildTeacherNotificationEmail,
@@ -427,4 +428,91 @@ export const bookTrialSession = onCall(async (request) => {
     isAuthenticatedBooking,
     sessionDetails: { activityName, start: sessionStart.toISOString(), end: sessionEnd.toISOString() },
   }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cancelBooking — public, token-based (unauthenticated)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const cancelBooking = onCall(async (request) => {
+  const { token } = request.data as { token?: string }
+  if (!token) throw new HttpsError('invalid-argument', 'Booking token is required')
+
+  const db = admin.firestore()
+
+  let bookingsSnapshot = await db.collectionGroup('bookings').where('booking_token', '==', token).limit(1).get()
+  if (bookingsSnapshot.empty) {
+    bookingsSnapshot = await db.collectionGroup('participants').where('booking_token', '==', token).limit(1).get()
+  }
+  if (bookingsSnapshot.empty) {
+    throw new HttpsError('not-found', 'Booking not found. The link may have expired or the booking was already cancelled.')
+  }
+
+  const bookingDoc = bookingsSnapshot.docs[0]
+  const booking = bookingDoc.data()
+
+  const cancellableStatuses = ['pending', 'no_show']
+  if (booking.status && !cancellableStatuses.includes(booking.status as string)) {
+    throw new HttpsError('failed-precondition', 'This booking has already been cancelled or confirmed.')
+  }
+
+  const pathParts = bookingDoc.ref.path.split('/')
+  const sessionId = pathParts[1]
+  const contactId = booking.contact as string | undefined
+
+  const [sessionErr, sessionDoc] = await to(db.collection('sessions').doc(sessionId).get())
+  if (sessionErr || !sessionDoc || !sessionDoc.exists) throw new HttpsError('not-found', 'Session no longer exists.')
+
+  const session = sessionDoc.data()!
+  const sessionStart = (session.start as admin.firestore.Timestamp).toDate()
+  if (sessionStart < new Date()) throw new HttpsError('failed-precondition', 'Cannot cancel a booking for a past session.')
+
+  const teamId = (session.teamId || session.teacher) as string
+  let teamName = ''; let teamLanguage = 'en'; let teamSlug: string | null = null; let ctaUrl: string | null = null
+
+  const [teamErr, teamDoc] = await to(db.collection('teams').doc(teamId).get())
+  if (!teamErr && teamDoc && teamDoc.exists) {
+    const team = teamDoc.data()!
+    teamName = (team.name as string) || ''
+    teamSlug = (team.slug as string) || null
+    teamLanguage = (team.language as string) || 'en'
+    ctaUrl = (team.settings?.trialBookingCtaUrl as string) || null
+  }
+
+  let activityName = 'Session'
+  if (session.activityId) {
+    const [actErr, actDoc] = await to(db.collection('activities').doc(session.activityId as string).get())
+    if (!actErr && actDoc && actDoc.exists) activityName = (actDoc.data()?.name as string) || 'Session'
+  }
+
+  const cancelBatch = db.batch()
+  cancelBatch.update(bookingDoc.ref, { status: 'cancelled', cancelled_at: admin.firestore.FieldValue.serverTimestamp() })
+  cancelBatch.update(db.collection('sessions').doc(sessionId), { portal_bookings_count: admin.firestore.FieldValue.increment(-1) })
+  if (contactId) {
+    cancelBatch.update(db.collection('contacts').doc(contactId), { pending_bookings_count: admin.firestore.FieldValue.increment(-1) })
+  }
+  await cancelBatch.commit()
+
+  const rebookUrl = teamSlug
+    ? `${getHostingUrl()}/portal/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`
+    : null
+
+  const sessionEnd = (session.end as admin.firestore.Timestamp).toDate()
+  const dateStr = sessionStart.toLocaleDateString('en', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const timeStr = `${sessionStart.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })} – ${sessionEnd.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}`
+  const firstname = (booking.firstname as string) || 'Guest'
+  const rebookLine = rebookUrl ? `<p><a href="${rebookUrl}">Book another session</a></p>` : ''
+
+  try {
+    await sendEmail({
+      to: booking.email as string,
+      subject: `Booking Cancelled – ${activityName}`,
+      html: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.</p>${rebookLine}`,
+      text: `Hi ${firstname},\n\nYour booking for ${activityName} with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.\n${rebookUrl ? `Book another session: ${rebookUrl}` : ''}`,
+    })
+  } catch (err) {
+    console.error('Error sending cancellation confirmation email:', err)
+  }
+
+  return { success: true, message: 'Your booking has been cancelled.', rebookUrl }
 })
