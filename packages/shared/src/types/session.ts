@@ -36,13 +36,17 @@ export interface Booking {
   id: string
   teamId: string
   contact: string
+  session?: string
   email: string
   firstname: string
   lastname: string
   phone?: string
   is_new_contact: boolean
   joinedAt: Timestamp
-  status?: 'pending' | 'confirmed' | 'cancelled'
+  booking_token?: string
+  status?: 'pending' | 'confirmed' | 'cancelled' | 'no_show' | 'rebooked'
+  rebooked_from?: string
+  rebooked_to?: string
 }
 
 export interface SessionSeries {

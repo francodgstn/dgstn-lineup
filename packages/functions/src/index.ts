@@ -23,7 +23,7 @@ export { syncActivityPublicProfile } from './sync/syncActivityPublicProfile'
 export { indexUser } from './sync/indexUser'
 
 // Booking
-export { bookTrialSession, sendBookingVerificationCode, verifyBookingCode, cancelBooking } from './booking'
+export { bookTrialSession, sendBookingVerificationCode, verifyBookingCode, cancelBooking, getBookingDetails, rebookSession } from './booking'
 
 // Gamification
 export { recalculateScores, resetScores } from './gamification'

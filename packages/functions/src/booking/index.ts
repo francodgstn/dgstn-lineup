@@ -516,3 +516,254 @@ export const cancelBooking = onCall(async (request) => {
 
   return { success: true, message: 'Your booking has been cancelled.', rebookUrl }
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getBookingDetails — public, token-based (unauthenticated)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getBookingDetails = onCall(async (request) => {
+  const { token } = request.data as { token?: string }
+  if (!token) throw new HttpsError('invalid-argument', 'Booking token is required.')
+
+  const db = admin.firestore()
+
+  let bookingsSnapshot = await db.collectionGroup('bookings').where('booking_token', '==', token).limit(1).get()
+  if (bookingsSnapshot.empty) {
+    bookingsSnapshot = await db.collectionGroup('participants').where('booking_token', '==', token).limit(1).get()
+  }
+  if (bookingsSnapshot.empty) {
+    throw new HttpsError('not-found', 'Booking not found. The link may have expired or the booking was cancelled.')
+  }
+
+  const bookingDoc = bookingsSnapshot.docs[0]
+  const booking = bookingDoc.data()
+  const pathParts = bookingDoc.ref.path.split('/')
+  const sessionId = pathParts[1]
+
+  const [sessionErr, sessionDoc] = await to(db.collection('sessions').doc(sessionId).get())
+  if (sessionErr || !sessionDoc || !sessionDoc.exists) {
+    throw new HttpsError('not-found', 'Session no longer exists.')
+  }
+  const session = sessionDoc.data()!
+  const teamId = (session.teamId || session.teacher) as string
+
+  let activityName = 'Session'
+  const activityId = (session.activityId as string) || null
+  if (activityId) {
+    const [actErr, actDoc] = await to(db.collection('activities').doc(activityId).get())
+    if (!actErr && actDoc && actDoc.exists) activityName = (actDoc.data()?.name as string) || 'Session'
+  }
+
+  let teamName = ''; let teamSlug: string | null = null; let teamLanguage = 'en'
+  const [, teamDoc] = await to(db.collection('teams').doc(teamId).get())
+  if (teamDoc && teamDoc.exists) {
+    const team = teamDoc.data()!
+    teamName = (team.name as string) || ''
+    teamSlug = (team.slug as string) || null
+    teamLanguage = (team.language as string) || 'en'
+  }
+
+  const now = admin.firestore.Timestamp.now()
+  const futureLimit = new Date(); futureLimit.setDate(futureLimit.getDate() + 60)
+
+  let availableSessions: Array<{ id: string; start: string; end: string; location: string | null }> = []
+  if (activityId) {
+    const [, sessSnap] = await to(
+      db.collection('sessions')
+        .where('teamId', '==', teamId)
+        .where('activityId', '==', activityId)
+        .where('allowBooking', '==', true)
+        .where('start', '>=', now)
+        .where('start', '<=', admin.firestore.Timestamp.fromDate(futureLimit))
+        .orderBy('start', 'asc')
+        .limit(5)
+        .get(),
+    )
+    if (sessSnap) {
+      availableSessions = sessSnap.docs
+        .filter((d) => {
+          const data = d.data()
+          if (data.isException && data.exceptionType === 'cancelled') return false
+          return d.id !== sessionId
+        })
+        .map((d) => {
+          const data = d.data()
+          return {
+            id: d.id,
+            start: (data.start as admin.firestore.Timestamp).toDate().toISOString(),
+            end: (data.end as admin.firestore.Timestamp).toDate().toISOString(),
+            location: (data.location as string) || null,
+          }
+        })
+    }
+  }
+
+  const sessionStart = (session.start as admin.firestore.Timestamp).toDate()
+  const isPastSession = sessionStart < new Date()
+  const bookingStatus = (booking.status as string) || 'pending'
+  const canCancel = !isPastSession && ['pending', 'no_show'].includes(bookingStatus)
+  const canRebook = canCancel && availableSessions.length > 0
+
+  return {
+    success: true,
+    booking: {
+      contactId: booking.contact,
+      firstname: booking.firstname,
+      lastname: booking.lastname,
+      email: booking.email,
+      phone: (booking.phone as string) || null,
+      status: bookingStatus,
+      joinedAt: (booking.joinedAt as admin.firestore.Timestamp | undefined)?.toDate().toISOString() || null,
+    },
+    session: {
+      id: sessionId,
+      start: sessionStart.toISOString(),
+      end: (session.end as admin.firestore.Timestamp).toDate().toISOString(),
+      location: (session.location as string) || null,
+      isPast: isPastSession,
+    },
+    activity: { id: activityId, name: activityName },
+    team: { id: teamId, name: teamName, slug: teamSlug, language: teamLanguage },
+    availableSessions,
+    canCancel,
+    canRebook,
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// rebookSession — public, token-based (unauthenticated)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const rebookSession = onCall(async (request) => {
+  const { token, newSessionId } = request.data as { token?: string; newSessionId?: string }
+  if (!token) throw new HttpsError('invalid-argument', 'Booking token is required.')
+  if (!newSessionId) throw new HttpsError('invalid-argument', 'New session ID is required.')
+
+  const db = admin.firestore()
+
+  let bookingsSnapshot = await db.collectionGroup('bookings').where('booking_token', '==', token).limit(1).get()
+  if (bookingsSnapshot.empty) {
+    bookingsSnapshot = await db.collectionGroup('participants').where('booking_token', '==', token).limit(1).get()
+  }
+  if (bookingsSnapshot.empty) {
+    throw new HttpsError('not-found', 'Booking not found. The link may have expired or the booking was already cancelled.')
+  }
+
+  const bookingDoc = bookingsSnapshot.docs[0]
+  const booking = bookingDoc.data()
+  const rebookableStatuses = ['pending', 'no_show']
+  if (booking.status && !rebookableStatuses.includes(booking.status as string)) {
+    throw new HttpsError('failed-precondition', 'This booking can no longer be modified.')
+  }
+
+  const pathParts = bookingDoc.ref.path.split('/')
+  const oldSessionId = pathParts[1]
+  const contactId = booking.contact as string
+
+  if (oldSessionId === newSessionId) {
+    throw new HttpsError('invalid-argument', 'You are already booked for this session.')
+  }
+
+  const [, oldSessionDoc] = await to(db.collection('sessions').doc(oldSessionId).get())
+  if (!oldSessionDoc || !oldSessionDoc.exists) throw new HttpsError('not-found', 'Original session no longer exists.')
+  const oldSession = oldSessionDoc.data()!
+  const teamId = (oldSession.teamId || oldSession.teacher) as string
+
+  const [, newSessionDoc] = await to(db.collection('sessions').doc(newSessionId).get())
+  if (!newSessionDoc || !newSessionDoc.exists) throw new HttpsError('not-found', 'New session not found.')
+  const newSession = newSessionDoc.data()!
+
+  const newTeamId = (newSession.teamId || newSession.teacher) as string
+  if (newTeamId !== teamId) throw new HttpsError('permission-denied', 'Cannot rebook to a session from a different team.')
+  if (!newSession.allowBooking) throw new HttpsError('failed-precondition', 'This session is not available for booking.')
+
+  const newSessionStart = (newSession.start as admin.firestore.Timestamp).toDate()
+  if (newSessionStart < new Date()) throw new HttpsError('failed-precondition', 'Cannot book a session in the past.')
+  if (newSession.isException && newSession.exceptionType === 'cancelled') {
+    throw new HttpsError('failed-precondition', 'This session has been cancelled.')
+  }
+
+  const [[, existBookDoc], [, existPartDoc]] = await Promise.all([
+    to(db.collection('sessions').doc(newSessionId).collection('bookings').doc(contactId).get()),
+    to(db.collection('sessions').doc(newSessionId).collection('participants').doc(contactId).get()),
+  ])
+  if ((existBookDoc && existBookDoc.exists) || (existPartDoc && existPartDoc.exists)) {
+    throw new HttpsError('already-exists', 'You already have a booking for this session.')
+  }
+
+  const newBookingToken = generateSecureToken()
+  const newBookingRef = db.collection('sessions').doc(newSessionId).collection('bookings').doc(contactId)
+  const batch = db.batch()
+
+  batch.update(bookingDoc.ref, { status: 'rebooked', rebooked_to: newSessionId, rebooked_at: admin.firestore.FieldValue.serverTimestamp() })
+  batch.update(db.collection('sessions').doc(oldSessionId), { portal_bookings_count: admin.firestore.FieldValue.increment(-1) })
+  batch.set(newBookingRef, {
+    firstname: booking.firstname,
+    lastname: booking.lastname,
+    email: booking.email,
+    phone: (booking.phone as string) || null,
+    contact: contactId,
+    session: newSessionId,
+    teamId,
+    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    fromPortal: true,
+    status: 'pending',
+    booking_token: newBookingToken,
+    rebooked_from: oldSessionId,
+    rebooked_at: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  batch.update(db.collection('sessions').doc(newSessionId), {
+    has_bookings: true,
+    portal_bookings_count: admin.firestore.FieldValue.increment(1),
+    last_booking_at: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  await batch.commit()
+
+  let teamName = ''; let teamSlug: string | null = null
+  const [, teamDoc] = await to(db.collection('teams').doc(teamId).get())
+  if (teamDoc && teamDoc.exists) {
+    teamName = (teamDoc.data()!.name as string) || ''
+    teamSlug = (teamDoc.data()!.slug as string) || null
+  }
+
+  let activityName = 'Session'
+  if (newSession.activityId) {
+    const [, actDoc] = await to(db.collection('activities').doc(newSession.activityId as string).get())
+    if (actDoc && actDoc.exists) activityName = (actDoc.data()?.name as string) || 'Session'
+  }
+
+  const manageBookingUrl = teamSlug
+    ? `${getHostingUrl()}/portal/${teamSlug}/manage-booking?token=${newBookingToken}`
+    : null
+
+  const oldSessionStart = (oldSession.start as admin.firestore.Timestamp).toDate()
+  const newSessionEnd = (newSession.end as admin.firestore.Timestamp).toDate()
+  const locale = 'en-GB'
+  const dateOpts: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }
+  const firstname = (booking.firstname as string) || 'Guest'
+  const oldDateStr = oldSessionStart.toLocaleDateString(locale, dateOpts)
+  const newDateStr = newSessionStart.toLocaleDateString(locale, dateOpts)
+  const newTimeStr = `${newSessionStart.toLocaleTimeString(locale, timeOpts)} – ${newSessionEnd.toLocaleTimeString(locale, timeOpts)}`
+  const locationLine = newSession.location ? `<p><strong>Location:</strong> ${newSession.location}</p>` : ''
+  const manageLink = manageBookingUrl ? `<p><a href="${manageBookingUrl}">Manage your booking</a></p>` : ''
+
+  try {
+    await sendEmail({
+      to: booking.email as string,
+      subject: `Booking Changed – ${activityName}`,
+      html: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} has been changed.</p><p><strong>Previous date:</strong> ${oldDateStr}</p><p><strong>New date:</strong> ${newDateStr} at ${newTimeStr}</p>${locationLine}${manageLink}`,
+      text: `Hi ${firstname},\n\nYour booking for ${activityName} with ${teamName} has been changed.\nPrevious date: ${oldDateStr}\nNew date: ${newDateStr} at ${newTimeStr}\n${newSession.location ? `Location: ${newSession.location}\n` : ''}${manageBookingUrl ? `Manage your booking: ${manageBookingUrl}` : ''}`,
+    })
+  } catch (err) {
+    console.error('Error sending rebook confirmation email:', err)
+  }
+
+  return {
+    success: true,
+    message: 'Your booking has been changed.',
+    newBookingToken,
+    newSession: { id: newSessionId, start: newSessionStart.toISOString(), end: newSessionEnd.toISOString() },
+    manageBookingUrl,
+  }
+})
