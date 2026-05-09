@@ -5,12 +5,52 @@ import {
   DayPicker,
   getDefaultClassNames,
   type DayButton,
+  type DropdownProps,
   type Locale,
 } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { Button, buttonVariants } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react"
+
+// ─── custom dropdown — replaces the native <select> so it uses the app font ──
+
+function CalendarDropdown({ options, value, onChange, "aria-label": ariaLabel }: DropdownProps) {
+  return (
+    <Select
+      value={value !== undefined ? String(value) : undefined}
+      onValueChange={(newVal: unknown) => {
+        if (onChange) {
+          onChange({
+            target: { value: String(newVal) } as HTMLSelectElement,
+          } as React.ChangeEvent<HTMLSelectElement>)
+        }
+      }}
+    >
+      <SelectTrigger
+        size="sm"
+        aria-label={ariaLabel}
+        className="h-7 border-none bg-transparent px-1.5 py-0 shadow-none font-medium text-sm gap-0.5 hover:bg-muted focus-visible:ring-0 focus-visible:border-transparent"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="center">
+        {options?.map((opt) => (
+          <SelectItem key={opt.value} value={String(opt.value)} disabled={opt.disabled}>
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
 
 function Calendar({
   className,
@@ -133,6 +173,7 @@ function Calendar({
         ...classNames,
       }}
       components={{
+        Dropdown: CalendarDropdown,
         Root: ({ className, rootRef, ...props }) => {
           return (
             <div
