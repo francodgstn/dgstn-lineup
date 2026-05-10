@@ -36,7 +36,7 @@ interface ConfirmationParams {
   lang?: Lang
 }
 
-export function buildTrialConfirmationEmail(params: ConfirmationParams) {
+export function buildBookingConfirmationEmail(params: ConfirmationParams) {
   const {
     firstname,
     teamName,
@@ -67,28 +67,28 @@ export function buildTrialConfirmationEmail(params: ConfirmationParams) {
 
   const lines: Record<Lang, string[]> = {
     en: [
-      `Your trial class at <strong>${teamName}</strong> has been confirmed.`,
+      `Your session at <strong>${teamName}</strong> has been confirmed.`,
       `<strong>Activity:</strong> ${activityName}`,
       `<strong>Date:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Location:</strong> ${locationName}` : '',
       'We look forward to seeing you!',
     ],
     de: [
-      `Ihre Schnupperstunde bei <strong>${teamName}</strong> wurde bestätigt.`,
+      `Ihre Sitzung bei <strong>${teamName}</strong> wurde bestätigt.`,
       `<strong>Aktivität:</strong> ${activityName}`,
       `<strong>Datum:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Ort:</strong> ${locationName}` : '',
       'Wir freuen uns auf Sie!',
     ],
     fr: [
-      `Votre cours d'essai chez <strong>${teamName}</strong> a été confirmé.`,
+      `Votre session chez <strong>${teamName}</strong> a été confirmée.`,
       `<strong>Activité :</strong> ${activityName}`,
       `<strong>Date :</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Lieu :</strong> ${locationName}` : '',
       'Nous avons hâte de vous voir !',
     ],
     it: [
-      `La tua lezione di prova presso <strong>${teamName}</strong> è stata confermata.`,
+      `La tua sessione presso <strong>${teamName}</strong> è stata confermata.`,
       `<strong>Attività:</strong> ${activityName}`,
       `<strong>Data:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Luogo:</strong> ${locationName}` : '',
@@ -149,25 +149,25 @@ export function buildTeacherNotificationEmail(params: NotificationParams) {
 
   const lines: Record<Lang, string[]> = {
     en: [
-      `Hi ${teamOwnerFirstname}, a new trial booking has been made.`,
+      `Hi ${teamOwnerFirstname}, a new booking has been made.`,
       `<strong>Contact:</strong> ${contactName} (${contactEmail})${contactPhone ? ` – ${contactPhone}` : ''}`,
       `<strong>Activity:</strong> ${activityName}`,
       `<strong>Date:</strong> ${date} – ${endTime}`,
     ],
     de: [
-      `Hallo ${teamOwnerFirstname}, eine neue Schnupperbuchung ist eingegangen.`,
+      `Hallo ${teamOwnerFirstname}, eine neue Buchung ist eingegangen.`,
       `<strong>Kontakt:</strong> ${contactName} (${contactEmail})${contactPhone ? ` – ${contactPhone}` : ''}`,
       `<strong>Aktivität:</strong> ${activityName}`,
       `<strong>Datum:</strong> ${date} – ${endTime}`,
     ],
     fr: [
-      `Bonjour ${teamOwnerFirstname}, une nouvelle réservation d'essai vient d'être effectuée.`,
+      `Bonjour ${teamOwnerFirstname}, une nouvelle réservation vient d'être effectuée.`,
       `<strong>Contact :</strong> ${contactName} (${contactEmail})${contactPhone ? ` – ${contactPhone}` : ''}`,
       `<strong>Activité :</strong> ${activityName}`,
       `<strong>Date :</strong> ${date} – ${endTime}`,
     ],
     it: [
-      `Ciao ${teamOwnerFirstname}, è stata effettuata una nuova prenotazione di prova.`,
+      `Ciao ${teamOwnerFirstname}, è stata effettuata una nuova prenotazione.`,
       `<strong>Contatto:</strong> ${contactName} (${contactEmail})${contactPhone ? ` – ${contactPhone}` : ''}`,
       `<strong>Attività:</strong> ${activityName}`,
       `<strong>Data:</strong> ${date} – ${endTime}`,

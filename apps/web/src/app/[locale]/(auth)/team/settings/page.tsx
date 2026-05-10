@@ -3,23 +3,19 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import {
-  doc, getDoc, updateDoc, collection, query, where, getDocs,
-} from 'firebase/firestore'
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { useForm, useFieldArray, Controller } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TEAMS_COLLECTION } from '@lineup/shared'
-import type { Team, TeamLink } from '@lineup/shared'
-import { Plus, Trash2, Globe } from 'lucide-react'
+import type { Team } from '@lineup/shared'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -31,7 +27,7 @@ const SPORT_TYPES = [
 
 const SLUG_REGEX = /^[a-z0-9-]+$/
 
-// ─── schemas ──────────────────────────────────────────────────────────────────
+// ─── schema ───────────────────────────────────────────────────────────────────
 
 const generalSchema = z.object({
   name: z.string().min(2, 'At least 2 characters').max(60, 'Max 60 characters'),
@@ -44,21 +40,7 @@ const generalSchema = z.object({
     .regex(SLUG_REGEX, 'Only lowercase letters, numbers and hyphens'),
 })
 
-const linkItemSchema = z.object({
-  label: z.string().min(1, 'Required'),
-  description: z.string().optional(),
-  url: z.string().optional(),
-  showInPortal: z.boolean(),
-  isBookingLink: z.boolean().optional(),
-  isMembershipLink: z.boolean().optional(),
-})
-
-const portalLinksSchema = z.object({
-  links: z.array(linkItemSchema),
-})
-
 type GeneralData = z.infer<typeof generalSchema>
-type PortalLinksData = z.infer<typeof portalLinksSchema>
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
@@ -79,7 +61,7 @@ async function isSlugAvailable(slug: string, teamId: string): Promise<boolean> {
   return snap.docs.every((d) => d.id === teamId)
 }
 
-// ─── general tab ─────────────────────────────────────────────────────────────
+// ─── general form ─────────────────────────────────────────────────────────────
 
 function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
   const t = useTranslations('TeamSettings')
@@ -186,172 +168,11 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
   )
 }
 
-// ─── portal links tab ─────────────────────────────────────────────────────────
-
-function ShowInPortalCheckbox({
-  control,
-  index,
-}: {
-  control: ReturnType<typeof useForm<PortalLinksData>>['control']
-  index: number
-}) {
-  const t = useTranslations('TeamSettings')
-  return (
-    <Controller
-      control={control}
-      name={`links.${index}.showInPortal`}
-      render={({ field }) => (
-        <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={field.value}
-            onChange={(e) => field.onChange(e.target.checked)}
-            className="accent-primary"
-          />
-          {t('showInPortal')}
-        </label>
-      )}
-    />
-  )
-}
-
-function PortalLinksForm({ team, teamId }: { team: Team; teamId: string }) {
-  const t = useTranslations('TeamSettings')
-  const qc = useQueryClient()
-  const [saved, setSaved] = useState(false)
-
-  const {
-    register,
-    handleSubmit,
-    control,
-    formState: { isSubmitting, isDirty },
-  } = useForm<PortalLinksData>({
-    resolver: zodResolver(portalLinksSchema),
-    defaultValues: { links: (team.links ?? []) as PortalLinksData['links'] },
-  })
-
-  const { fields, append, remove } = useFieldArray({ control, name: 'links' })
-
-  // Identify special-link indices from the original team data (order is preserved by useFieldArray)
-  const bookingIdx = (team.links ?? []).findIndex((l) => l.isBookingLink)
-  const membershipIdx = (team.links ?? []).findIndex((l) => l.isMembershipLink)
-
-  async function onSubmit(data: PortalLinksData) {
-    await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { links: data.links })
-    await qc.invalidateQueries({ queryKey: ['team', teamId] })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-  }
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* Booking & membership links */}
-      {[
-        { idx: bookingIdx, labelKey: 'bookingLink' as const },
-        { idx: membershipIdx, labelKey: 'membershipLink' as const },
-      ]
-        .filter(({ idx }) => idx >= 0)
-        .map(({ idx, labelKey }) => (
-          <div key={fields[idx]?.id ?? idx} className="rounded-lg border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary">{t(labelKey)}</Badge>
-              <ShowInPortalCheckbox control={control} index={idx} />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">{t('linkLabel')}</Label>
-                <Input {...register(`links.${idx}.label`)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{t('linkDescription')}</Label>
-                <Input {...register(`links.${idx}.description`)} />
-              </div>
-            </div>
-          </div>
-        ))}
-
-      {/* Custom links */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">{t('customLinks')}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              append({ label: '', description: '', url: '', showInPortal: true })
-            }
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            {t('addLink')}
-          </Button>
-        </div>
-
-        {fields.every((_, i) => i === bookingIdx || i === membershipIdx) && (
-          <p className="text-sm text-muted-foreground py-4 text-center border rounded-lg border-dashed">
-            {t('noCustomLinks')}
-          </p>
-        )}
-
-        {fields.map((field, i) => {
-          if (i === bookingIdx || i === membershipIdx) return null
-          return (
-            <div key={field.id} className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <div className="flex items-center gap-3">
-                  <ShowInPortalCheckbox control={control} index={i} />
-                  <button
-                    type="button"
-                    onClick={() => remove(i)}
-                    className="text-muted-foreground hover:text-destructive transition-colors"
-                    aria-label={t('removeLink')}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">{t('linkLabel')}</Label>
-                  <Input {...register(`links.${i}.label`)} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">{t('linkDescription')}</Label>
-                  <Input {...register(`links.${i}.description`)} />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{t('linkUrl')}</Label>
-                <Input
-                  {...register(`links.${i}.url`)}
-                  type="url"
-                  placeholder="https://"
-                />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="flex items-center gap-3 pt-2">
-        <Button type="submit" disabled={isSubmitting || !isDirty}>
-          {isSubmitting ? t('saving') : t('save')}
-        </Button>
-        {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
-      </div>
-    </form>
-  )
-}
-
 // ─── page ─────────────────────────────────────────────────────────────────────
-
-type Tab = 'general' | 'portal'
 
 export default function TeamSettingsPage() {
   const { currentTeamId } = useAuth()
   const { data: team, isLoading } = useTeam(currentTeamId)
-  const [tab, setTab] = useState<Tab>('general')
   const t = useTranslations('TeamSettings')
 
   if (isLoading) {
@@ -367,11 +188,6 @@ export default function TeamSettingsPage() {
     return <p className="text-muted-foreground">{t('noTeam')}</p>
   }
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'general', label: t('tabGeneral') },
-    { key: 'portal', label: t('tabPortal') },
-  ]
-
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -379,30 +195,9 @@ export default function TeamSettingsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">{team.name}</p>
       </div>
 
-      <div className="flex gap-1 border-b">
-        {tabs.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              tab === key
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       <Card>
         <CardContent className="pt-6">
-          {tab === 'general' && (
-            <GeneralForm team={team} teamId={currentTeamId} />
-          )}
-          {tab === 'portal' && (
-            <PortalLinksForm team={team} teamId={currentTeamId} />
-          )}
+          <GeneralForm team={team} teamId={currentTeamId} />
         </CardContent>
       </Card>
     </div>

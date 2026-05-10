@@ -8,7 +8,7 @@ import { hashVerificationCode, verifyCode, generateSecureToken } from '../utils/
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
 import {
-  buildTrialConfirmationEmail,
+  buildBookingConfirmationEmail,
   buildTeacherNotificationEmail,
   buildVerificationCodeEmail,
 } from './templates'
@@ -193,10 +193,10 @@ export const verifyBookingCode = onCall(async (request) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// bookTrialSession
+// bookSession
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const bookTrialSession = onCall(async (request) => {
+export const bookSession = onCall(async (request) => {
   const data = request.data as {
     teamId?: string
     sessionId?: string
@@ -400,7 +400,7 @@ export const bookTrialSession = onCall(async (request) => {
   const sessionEnd: Date = sessionData.end.toDate()
 
   try {
-    const confirmEmail = buildTrialConfirmationEmail({ firstname: sanitized.firstname, teamName, activityName, sessionStart, sessionEnd, locationName: sessionData.location || null, manageBookingUrl, lang })
+    const confirmEmail = buildBookingConfirmationEmail({ firstname: sanitized.firstname, teamName, activityName, sessionStart, sessionEnd, locationName: sessionData.location || null, manageBookingUrl, lang })
     const subjects: Record<Lang, string> = { en: `Booking Confirmed – ${activityName}`, de: `Buchung bestätigt – ${activityName}`, fr: `Réservation confirmée – ${activityName}`, it: `Prenotazione confermata – ${activityName}` }
     await sendEmail({ to: sanitized.email, subject: subjects[lang], html: confirmEmail.html, text: confirmEmail.text })
     console.log(`Confirmation email sent to ${sanitized.email}`)

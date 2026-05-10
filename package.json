@@ -14,10 +14,13 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
-    "emulators": "firebase emulators:start --only firestore,database",
-    "emulators:all": "firebase emulators:start"
+    "emulators": "firebase emulators:start --only auth,firestore",
+    "emulators:all": "firebase emulators:start",
+    "seed": "tsx scripts/seed-emulator.ts"
   },
   "devDependencies": {
+    "firebase-admin": "^13.0.0",
+    "tsx": "^4.19.2",
     "turbo": "^2.3.3",
     "prettier": "^3.4.2",
     "typescript": "^5.7.3"

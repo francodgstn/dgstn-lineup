@@ -14,6 +14,7 @@ export interface Activity {
   base_score?: number | null
   isFreeTrial?: boolean
   isActive?: boolean
+  image_url?: string
   created_at?: Timestamp
   createdBy?: string
   archived_at?: Timestamp | null
@@ -25,4 +26,5 @@ export interface ActivityPublicProfile {
   description?: string
   slug: string
   color?: string
+  image_url?: string
 }

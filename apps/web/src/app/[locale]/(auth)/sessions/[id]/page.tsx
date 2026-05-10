@@ -1,0 +1,859 @@
+'use client'
+
+import { useState, useEffect, useCallback, useRef, use } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  collection, doc, getDoc, getDocs, query, where, orderBy, limit,
+  updateDoc, deleteDoc, setDoc, increment, serverTimestamp, Timestamp,
+} from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
+import { useAuth } from '@/contexts/AuthContext'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useTranslations } from 'next-intl'
+import { useRouter as useI18nRouter } from '@/i18n/navigation'
+import {
+  ArrowLeft, ChevronLeft, ChevronRight, Pencil, Trash2, UserPlus,
+  MapPin, Clock, Users, QrCode, BookOpen, CheckCircle2, UserX,
+  ExternalLink, X, Check, Ban, Camera, CameraOff,
+} from 'lucide-react'
+import {
+  SESSIONS_COLLECTION, ACTIVITIES_COLLECTION, CONTACTS_COLLECTION,
+  PARTICIPANTS_SUBCOLLECTION,
+} from '@lineup/shared'
+import type { Session, Booking, Contact, Activity } from '@lineup/shared'
+import { Controller, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+
+// ─── constants ────────────────────────────────────────────────────────────────
+
+const BOOKINGS_SUB = 'bookings'
+
+// ─── activity color palette (matches SessionsCalendar) ────────────────────────
+
+const PALETTE = [
+  { bg: '#EDE9FE', text: '#5B21B6', accent: '#7C3AED' },
+  { bg: '#FCE7F3', text: '#9D174D', accent: '#EC4899' },
+  { bg: '#DBEAFE', text: '#1D4ED8', accent: '#3B82F6' },
+  { bg: '#D1FAE5', text: '#065F46', accent: '#10B981' },
+  { bg: '#FEF3C7', text: '#92400E', accent: '#F59E0B' },
+  { bg: '#FFE4E6', text: '#9F1239', accent: '#F43F5E' },
+  { bg: '#E0F2FE', text: '#075985', accent: '#0EA5E9' },
+  { bg: '#F0FDF4', text: '#14532D', accent: '#22C55E' },
+]
+function activityPalette(activityId?: string | null, customColor?: string | null) {
+  if (customColor) return { bg: `${customColor}18`, text: customColor, accent: customColor }
+  if (!activityId) return PALETTE[0]
+  let h = 0
+  for (let i = 0; i < activityId.length; i++) h = (h * 31 + activityId.charCodeAt(i)) >>> 0
+  return PALETTE[h % PALETTE.length]
+}
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function formatDate(ts?: { toDate(): Date } | null) {
+  if (!ts) return '—'
+  return ts.toDate().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
+function formatTime(ts?: { toDate(): Date } | null) {
+  if (!ts) return ''
+  return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+function tsToInputValue(ts?: { toDate(): Date } | null) {
+  if (!ts) return ''
+  const d = ts.toDate()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// ─── session edit schema ──────────────────────────────────────────────────────
+
+const editSchema = z.object({
+  activityId: z.string().optional(),
+  start: z.string().min(1, 'Required'),
+  end: z.string().min(1, 'Required'),
+  location: z.string().max(120).optional(),
+  notes: z.string().max(2000).optional(),
+  allowBooking: z.boolean().optional(),
+}).refine((d) => !d.start || !d.end || new Date(d.end) > new Date(d.start), {
+  message: 'End must be after start', path: ['end'],
+})
+type EditFormValues = z.infer<typeof editSchema>
+
+// ─── participant type (Firestore doc shape) ───────────────────────────────────
+
+interface ParticipantDoc {
+  id: string
+  contact?: string
+  firstname: string
+  lastname: string
+  fullname?: string
+  avatar_url?: string | null
+  checkedInAt?: { toDate(): Date }
+  confirmedFromBooking?: boolean
+}
+
+// ─── QR scanner hook ──────────────────────────────────────────────────────────
+
+function useQrScanner(onScan: (text: string) => void) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [active, setActive] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const rafRef = useRef<number>(0)
+  const detectorRef = useRef<{ detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } | null>(null)
+
+  const start = useCallback(async () => {
+    setError(null)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (!('BarcodeDetector' in window)) { setError('QR scanning requires Chrome or Edge.'); return }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
+      streamRef.current = stream
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      detectorRef.current = new (window as any).BarcodeDetector({ formats: ['qr_code'] })
+      setActive(true)
+    } catch {
+      setError('Camera access denied. Allow camera and try again.')
+    }
+  }, [])
+
+  const stop = useCallback(() => {
+    cancelAnimationFrame(rafRef.current)
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setActive(false)
+  }, [])
+
+  // Scan loop — runs when active
+  useEffect(() => {
+    if (!active || !detectorRef.current) return
+    let stopped = false
+    const onScanRef = onScan
+    const loop = async () => {
+      if (stopped || !videoRef.current || !detectorRef.current) return
+      try {
+        if (videoRef.current.readyState >= 2) {
+          const barcodes = await detectorRef.current.detect(videoRef.current)
+          if (barcodes.length > 0) onScanRef(barcodes[0].rawValue)
+        }
+      } catch { /* ignore frame errors */ }
+      rafRef.current = requestAnimationFrame(loop)
+    }
+    loop()
+    return () => { stopped = true; cancelAnimationFrame(rafRef.current) }
+  }, [active, onScan])
+
+  useEffect(() => () => stop(), [stop])
+
+  return { videoRef, active, error, start, stop }
+}
+
+// ─── add participants dialog ──────────────────────────────────────────────────
+
+function AddParticipantsDialog({
+  open, onOpenChange, teamId, sessionId, existingIds, onAdded,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  teamId: string
+  sessionId: string
+  existingIds: Set<string>
+  onAdded: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const [adding, setAdding] = useState<string | null>(null)
+
+  const { data: contacts = [], isLoading } = useQuery<Contact[]>({
+    queryKey: ['contacts', 'active', teamId],
+    enabled: open,
+    queryFn: async () => {
+      const q = query(
+        collection(db, CONTACTS_COLLECTION),
+        where('teamId', '==', teamId),
+        where('deleted_at', '==', null),
+        where('archived_at', '==', null),
+        orderBy('lastname'),
+      )
+      const snap = await getDocs(q)
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Contact)
+    },
+  })
+
+  const filtered = contacts.filter((c) => {
+    if (existingIds.has(c.id)) return false
+    if (!search.trim()) return true
+    const s = search.toLowerCase()
+    return (
+      c.firstname?.toLowerCase().includes(s) ||
+      c.lastname?.toLowerCase().includes(s) ||
+      c.email?.toLowerCase().includes(s)
+    )
+  })
+
+  const add = async (contact: Contact) => {
+    setAdding(contact.id)
+    try {
+      const participantRef = doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, contact.id)
+      await setDoc(participantRef, {
+        contact: contact.id,
+        session: sessionId,
+        firstname: contact.firstname,
+        lastname: contact.lastname,
+        fullname: `${contact.lastname ?? ''} ${contact.firstname ?? ''}`.trim(),
+        avatar_url: contact.avatar_url ?? null,
+        checkedInAt: serverTimestamp(),
+        checkedInBy: 'manual',
+      })
+      await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), { participants_count: increment(1) })
+      onAdded()
+    } finally {
+      setAdding(null)
+    }
+  }
+
+  function initials(c: Contact) {
+    return `${c.firstname?.[0] ?? ''}${c.lastname?.[0] ?? ''}`.toUpperCase() || '?'
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-4 pt-4 pb-3 border-b">
+          <DialogTitle className="text-base">Add contact to session</DialogTitle>
+        </DialogHeader>
+        <div className="px-3 pt-3 pb-2">
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search contacts…"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <div className="overflow-y-auto max-h-80">
+          {isLoading && (
+            <div className="px-4 py-3 space-y-2">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          )}
+          {!isLoading && filtered.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">No contacts found</p>
+          )}
+          {!isLoading && filtered.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => add(c)}
+              disabled={adding === c.id}
+              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left disabled:opacity-50"
+            >
+              <div className="h-8 w-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                {initials(c)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{c.firstname} {c.lastname}</p>
+                {c.email && <p className="text-xs text-muted-foreground truncate">{c.email}</p>}
+              </div>
+              {adding === c.id && <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── edit session dialog ──────────────────────────────────────────────────────
+
+function EditSessionDialog({
+  open, onOpenChange, session, activities, onSaved,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  session: Session
+  activities: Activity[]
+  onSaved: () => void
+}) {
+  const { register, handleSubmit, control, formState: { errors, isSubmitting }, reset } = useForm<EditFormValues>({
+    resolver: zodResolver(editSchema),
+    defaultValues: {
+      activityId: session.activityId ?? '',
+      start: tsToInputValue(session.start),
+      end: tsToInputValue(session.end),
+      location: session.location ?? '',
+      notes: session.notes ?? '',
+      allowBooking: session.allowBooking ?? false,
+    },
+  })
+
+  const onSubmit = async (values: EditFormValues) => {
+    const activity = activities.find((a) => a.id === values.activityId)
+    await updateDoc(doc(db, SESSIONS_COLLECTION, session.id), {
+      activityId: values.activityId || null,
+      activityName: activity?.name ?? null,
+      start: Timestamp.fromDate(new Date(values.start)),
+      end: Timestamp.fromDate(new Date(values.end)),
+      location: values.location || null,
+      notes: values.notes || null,
+      allowBooking: values.allowBooking ?? false,
+    })
+    reset()
+    onSaved()
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Edit session</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Activity</label>
+            <select {...register('activityId')} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+              <option value="">No activity</option>
+              {activities.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Start</label>
+              <input type="datetime-local" {...register('start')} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+              {errors.start && <p className="text-xs text-destructive">{errors.start.message}</p>}
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">End</label>
+              <input type="datetime-local" {...register('end')} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+              {errors.end && <p className="text-xs text-destructive">{errors.end.message}</p>}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Location</label>
+            <input type="text" {...register('location')} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Notes</label>
+            <textarea {...register('notes')} rows={3} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" />
+          </div>
+          <div className="flex items-center gap-3">
+            <Controller name="allowBooking" control={control} render={({ field }) => (
+              <input type="checkbox" id="allowBooking" checked={field.value ?? false} onChange={field.onChange} className="h-4 w-4 rounded border-input accent-primary" />
+            )} />
+            <label htmlFor="allowBooking" className="text-sm">Allow portal booking</label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted">Cancel</button>
+            <button type="submit" disabled={isSubmitting} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+              {isSubmitting ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ icon, label, count, color }: { icon: React.ReactNode; label: string; count: number; color: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ background: `${color}20`, color }}>
+        {icon}
+      </div>
+      <span className="font-semibold text-sm">{label}</span>
+      <span className="h-5 min-w-5 px-1.5 rounded-full text-xs font-bold flex items-center justify-center" style={{ background: `${color}20`, color }}>
+        {count}
+      </span>
+    </div>
+  )
+}
+
+// ─── page ─────────────────────────────────────────────────────────────────────
+
+export default function SessionDetailPage() {
+  const params = useParams()
+  const sessionId = params.id as string
+  const router = useRouter()
+  const i18nRouter = useI18nRouter()
+  const { currentTeamId, user } = useAuth()
+  const qc = useQueryClient()
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanMsg, setScanMsg] = useState<{ text: string; ok: boolean } | null>(null)
+
+  // ── data fetching ────────────────────────────────────────────────────────────
+
+  const sessionQ = useQuery<Session | null>({
+    queryKey: ['session', sessionId],
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, SESSIONS_COLLECTION, sessionId))
+      if (!snap.exists()) return null
+      return { id: snap.id, ...snap.data() } as Session
+    },
+  })
+
+  const participantsQ = useQuery<ParticipantDoc[]>({
+    queryKey: ['session-participants', sessionId],
+    queryFn: async () => {
+      const snap = await getDocs(collection(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION))
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ParticipantDoc)
+    },
+  })
+
+  const bookingsQ = useQuery<Booking[]>({
+    queryKey: ['session-bookings', sessionId],
+    queryFn: async () => {
+      const snap = await getDocs(collection(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB))
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Booking)
+    },
+  })
+
+  const activitiesQ = useQuery<Activity[]>({
+    queryKey: ['activities', currentTeamId],
+    enabled: !!currentTeamId,
+    queryFn: async () => {
+      if (!currentTeamId) return []
+      const q = query(collection(db, ACTIVITIES_COLLECTION), where('teamId', '==', currentTeamId))
+      const snap = await getDocs(q)
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Activity)
+    },
+  })
+
+  // Adjacent sessions for prev/next navigation
+  const prevQ = useQuery<Session | null>({
+    queryKey: ['session-prev', sessionId, currentTeamId],
+    enabled: !!sessionQ.data?.start && !!currentTeamId,
+    queryFn: async () => {
+      if (!sessionQ.data?.start || !currentTeamId) return null
+      const q = query(
+        collection(db, SESSIONS_COLLECTION),
+        where('teamId', '==', currentTeamId),
+        where('start', '<', sessionQ.data.start),
+        orderBy('start', 'desc'),
+        limit(1),
+      )
+      const snap = await getDocs(q)
+      if (snap.empty) return null
+      return { id: snap.docs[0].id, ...snap.docs[0].data() } as Session
+    },
+  })
+
+  const nextQ = useQuery<Session | null>({
+    queryKey: ['session-next', sessionId, currentTeamId],
+    enabled: !!sessionQ.data?.start && !!currentTeamId,
+    queryFn: async () => {
+      if (!sessionQ.data?.start || !currentTeamId) return null
+      const q = query(
+        collection(db, SESSIONS_COLLECTION),
+        where('teamId', '==', currentTeamId),
+        where('start', '>', sessionQ.data.start),
+        orderBy('start', 'asc'),
+        limit(1),
+      )
+      const snap = await getDocs(q)
+      if (snap.empty) return null
+      return { id: snap.docs[0].id, ...snap.docs[0].data() } as Session
+    },
+  })
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['session', sessionId] })
+    qc.invalidateQueries({ queryKey: ['session-participants', sessionId] })
+    qc.invalidateQueries({ queryKey: ['session-bookings', sessionId] })
+    qc.invalidateQueries({ queryKey: ['sessions'] })
+  }
+
+  // ── booking actions ───────────────────────────────────────────────────────────
+
+  const confirmBooking = async (booking: Booking) => {
+    const bookingRef = doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, booking.id)
+    await updateDoc(bookingRef, { status: 'confirmed' })
+    // Add to participants subcollection
+    const participantRef = doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, booking.contact || booking.id)
+    await setDoc(participantRef, {
+      contact: booking.contact || null,
+      session: sessionId,
+      firstname: booking.firstname,
+      lastname: booking.lastname,
+      fullname: `${booking.lastname ?? ''} ${booking.firstname ?? ''}`.trim(),
+      checkedInAt: serverTimestamp(),
+      checkedInBy: 'booking-confirm',
+      confirmedFromBooking: true,
+    })
+    await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), { participants_count: increment(1) })
+    invalidate()
+  }
+
+  const markNoShow = async (bookingId: string) => {
+    await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, bookingId), { status: 'no_show' })
+    invalidate()
+  }
+
+  const removeBooking = async (bookingId: string) => {
+    await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, bookingId))
+    invalidate()
+  }
+
+  const removeParticipant = async (participantId: string) => {
+    await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, participantId))
+    await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), { participants_count: increment(-1) })
+    invalidate()
+  }
+
+  const deleteSession = async () => {
+    if (!window.confirm('Delete this session? This cannot be undone.')) return
+    await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId))
+    qc.invalidateQueries({ queryKey: ['sessions'] })
+    router.back()
+  }
+
+  // ── QR scanner ────────────────────────────────────────────────────────────────
+
+  const handleQrScan = useCallback(async (raw: string) => {
+    setScanMsg(null)
+    try {
+      const { c: contactId, h: hash } = JSON.parse(raw) as { c: string; h: string }
+      const fn = httpsCallable(functions, 'checkInContact')
+      const result = await fn({ sessionId, contactId, hash, scope: 'sessions' }) as { data: { success: boolean; alreadyCheckedIn?: boolean; contactName?: string } }
+      setScanMsg({
+        text: result.data.alreadyCheckedIn
+          ? `${result.data.contactName} already checked in`
+          : `✓ ${result.data.contactName} checked in`,
+        ok: true,
+      })
+      invalidate()
+    } catch (err: unknown) {
+      setScanMsg({ text: (err as Error).message || 'Invalid QR code', ok: false })
+    }
+    setTimeout(() => setScanMsg(null), 4000)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
+
+  const scanner = useQrScanner(handleQrScan)
+
+  const toggleScanner = () => {
+    if (scanner.active) { scanner.stop(); setScanning(false) }
+    else { scanner.start(); setScanning(true) }
+  }
+  useEffect(() => { if (!scanning) scanner.stop() }, [scanning, scanner])
+
+  // ── derived ───────────────────────────────────────────────────────────────────
+
+  const session = sessionQ.data
+  const participants = participantsQ.data ?? []
+  const bookings = bookingsQ.data ?? []
+  const activities = activitiesQ.data ?? []
+
+  const pendingBookings = bookings.filter((b) => !b.status || b.status === 'pending')
+  const noShowBookings  = bookings.filter((b) => b.status === 'no_show')
+  const existingParticipantIds = new Set(participants.map((p) => p.contact).filter(Boolean) as string[])
+  const activity = activities.find((a) => a.id === session?.activityId)
+  const { accent } = activityPalette(session?.activityId, activity?.color)
+
+  // ── loading / not found ───────────────────────────────────────────────────────
+
+  if (sessionQ.isLoading) {
+    return (
+      <div className="space-y-4 max-w-2xl mx-auto">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-36 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+      </div>
+    )
+  }
+
+  if (!session) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+        <p className="text-lg font-semibold">Session not found</p>
+        <button onClick={() => router.back()} className="text-sm text-primary hover:underline">← Go back</button>
+      </div>
+    )
+  }
+
+  const hasBookings = pendingBookings.length > 0 || noShowBookings.length > 0
+
+  return (
+    <div className="space-y-5 max-w-2xl mx-auto pb-20">
+
+      {/* Nav bar */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Sessions
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => prevQ.data && i18nRouter.push(`/sessions/${prevQ.data.id}` as Parameters<typeof i18nRouter.push>[0])}
+            disabled={!prevQ.data}
+            className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
+            title="Previous session"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => nextQ.data && i18nRouter.push(`/sessions/${nextQ.data.id}` as Parameters<typeof i18nRouter.push>[0])}
+            disabled={!nextQ.data}
+            className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
+            title="Next session"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Session card */}
+      <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+        {/* Accent top bar */}
+        <div className="h-1 w-full" style={{ background: accent }} />
+        <div className="px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl font-bold tracking-tight">
+                {session.activityName ?? formatDate(session.start)}
+              </h1>
+              <div className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  <span>{formatDate(session.start)} · {formatTime(session.start)}{session.end ? ` – ${formatTime(session.end)}` : ''}</span>
+                </div>
+                {session.location && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    <span>{session.location}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-3 mt-1 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" />
+                    <span className="font-medium text-foreground">{participants.length}</span>
+                    <span>check-ins</span>
+                  </div>
+                  {pendingBookings.length > 0 && (
+                    <div className="flex items-center gap-1.5 text-amber-600">
+                      <BookOpen className="h-3.5 w-3.5" />
+                      <span className="font-medium">{pendingBookings.length}</span>
+                      <span>pending bookings</span>
+                    </div>
+                  )}
+                  {session.allowBooking && (
+                    <Badge variant="secondary" className="text-xs">Booking open</Badge>
+                  )}
+                </div>
+              </div>
+              {session.notes && (
+                <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{session.notes}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={() => setEditOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title="Edit">
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button onClick={deleteSession} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" title="Delete">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Action row */}
+        <div className="px-5 pb-4 flex flex-wrap gap-2">
+          <button
+            onClick={toggleScanner}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              scanner.active
+                ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+            }`}
+          >
+            {scanner.active ? <CameraOff className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
+            {scanner.active ? 'Stop scanner' : 'Check-in scanner'}
+          </button>
+          <button
+            onClick={() => setAddOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+          >
+            <UserPlus className="h-4 w-4" /> Add contact
+          </button>
+          {session.allowBooking && (
+            <a
+              href={`/portal/${currentTeamId}/booking`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors text-muted-foreground"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Booking portal
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* QR scanner section */}
+      {scanner.active && (
+        <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+          <div className="p-4 border-b flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Camera className="h-4 w-4 text-primary" />
+              QR scanner active
+            </div>
+            <button onClick={() => { scanner.stop(); setScanning(false) }} className="text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="relative bg-black">
+            <video ref={scanner.videoRef} className="w-full max-h-64 object-cover" muted playsInline />
+            {/* scan frame */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="h-40 w-40 border-2 border-white/60 rounded-xl" />
+            </div>
+          </div>
+          {scanMsg && (
+            <div className={`px-4 py-3 text-sm font-medium ${scanMsg.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {scanMsg.text}
+            </div>
+          )}
+          {scanner.error && (
+            <div className="px-4 py-3 text-sm text-red-600 bg-red-50">{scanner.error}</div>
+          )}
+        </div>
+      )}
+
+      {/* Portal bookings */}
+      {hasBookings && (
+        <div className="rounded-xl border bg-card p-4 shadow-sm">
+          <SectionHeader icon={<BookOpen className="h-3.5 w-3.5" />} label="Portal bookings" count={pendingBookings.length + noShowBookings.length} color="#D97706" />
+
+          {/* Pending */}
+          {pendingBookings.map((b) => (
+            <div key={b.id} className="flex items-center gap-3 py-2.5 border-b last:border-0">
+              <div className="h-9 w-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                {b.firstname?.[0]}{b.lastname?.[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{b.lastname} {b.firstname}</p>
+                {b.email && <p className="text-xs text-muted-foreground">{b.email}</p>}
+              </div>
+              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Pending</Badge>
+              <div className="flex items-center gap-1">
+                <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title="Confirm attendance">
+                  <Check className="h-4 w-4" />
+                </button>
+                <button onClick={() => markNoShow(b.id)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title="Mark no-show">
+                  <UserX className="h-4 w-4" />
+                </button>
+                <button onClick={() => removeBooking(b.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Remove booking">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* No-shows */}
+          {noShowBookings.length > 0 && (
+            <>
+              {pendingBookings.length > 0 && (
+                <div className="px-1 pt-3 pb-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">No-shows</p>
+                </div>
+              )}
+              {noShowBookings.map((b) => (
+                <div key={b.id} className="flex items-center gap-3 py-2.5 border-b last:border-0 opacity-60">
+                  <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    {b.firstname?.[0]}{b.lastname?.[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium line-through">{b.lastname} {b.firstname}</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs text-destructive border-destructive/30">No-show</Badge>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title="Override: confirm attendance">
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => removeBooking(b.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Remove">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Participants / check-ins */}
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <SectionHeader icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Check-ins" count={participants.length} color="#059669" />
+
+        {participantsQ.isLoading && (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+          </div>
+        )}
+
+        {!participantsQ.isLoading && participants.length === 0 && (
+          <div className="py-8 text-center">
+            <Users className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+            <p className="text-sm text-muted-foreground">No check-ins yet</p>
+            <button onClick={() => setAddOpen(true)} className="mt-2 text-xs text-primary hover:underline">Add a contact manually</button>
+          </div>
+        )}
+
+        {participants.map((p) => (
+          <div key={p.id} className="flex items-center gap-3 py-2.5 border-b last:border-0">
+            <div className="h-9 w-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+              {p.firstname?.[0]}{p.lastname?.[0]}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{p.lastname} {p.firstname}</p>
+              {p.confirmedFromBooking && (
+                <p className="text-xs text-muted-foreground">Confirmed from booking</p>
+              )}
+            </div>
+            <button onClick={() => removeParticipant(p.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Remove check-in">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Mobile FAB — add participant */}
+      <button
+        onClick={() => setAddOpen(true)}
+        className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-40"
+        aria-label="Add contact"
+      >
+        <UserPlus className="h-6 w-6" />
+      </button>
+
+      {/* Dialogs */}
+      {currentTeamId && (
+        <AddParticipantsDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          teamId={currentTeamId}
+          sessionId={sessionId}
+          existingIds={existingParticipantIds}
+          onAdded={() => { invalidate(); setAddOpen(false) }}
+        />
+      )}
+
+      <EditSessionDialog
+        key={editOpen ? 'open' : 'closed'}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        session={session}
+        activities={activities}
+        onSaved={invalidate}
+      />
+    </div>
+  )
+}

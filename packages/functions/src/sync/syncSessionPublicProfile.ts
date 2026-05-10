@@ -1,26 +1,35 @@
 // Keeps sessions/{sessionId}/public_profile/{sessionId} in sync
-import { regionalFunctions } from '../utils/functions'
+import { onDocumentWritten } from 'firebase-functions/v2/firestore'
+import { setGlobalOptions } from 'firebase-functions/v2'
 
-export const syncSessionPublicProfile = regionalFunctions.firestore
-  .document('sessions/{sessionId}')
-  .onWrite(async (change, context) => {
-    const { sessionId } = context.params
+setGlobalOptions({ region: 'europe-west6' })
 
-    if (!change.after.exists) {
-      await change.after.ref.collection('public_profile').doc(sessionId).delete()
-      return
-    }
+export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}', async (event) => {
+  const { sessionId } = event.params
+  const afterRef = event.data!.after.ref
 
-    const data = change.after.data()!
+  // Remove public profile when session is deleted or booking is closed
+  if (!event.data!.after.exists || !event.data!.after.data()?.allowBooking) {
+    await afterRef.collection('public_profile').doc(sessionId).delete()
+    return
+  }
 
-    const publicProfile = {
-      teamId: data.teamId,
-      activityId: data.activityId || null,
-      activityName: data.activityName || null,
-      start: data.start,
-      end: data.end,
-      allowBooking: data.allowBooking === true,
-    }
+  const data = event.data!.after.data()!
 
-    await change.after.ref.collection('public_profile').doc(sessionId).set(publicProfile)
-  })
+  const publicProfile = {
+    type: 'session',
+    teamId: data.teamId,
+    activityId: data.activityId || null,
+    activityName: data.activityName || null,
+    activityColor: data.activityColor || null,
+    start: data.start,
+    end: data.end,
+    location: data.location || null,
+    capacity: data.capacity || null,
+    participants_count: data.participants_count || 0,
+    allowBooking: true,
+    slug: data.slug || null,
+  }
+
+  await afterRef.collection('public_profile').doc(sessionId).set(publicProfile)
+})

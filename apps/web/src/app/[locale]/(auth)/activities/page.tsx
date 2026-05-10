@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
   collection, query, where, orderBy, getDocs,
   addDoc, updateDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -26,7 +27,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION } from '@lineup/shared'
 import type { Activity, ActivityLevel } from '@lineup/shared'
-import { Plus, Pencil, Archive } from 'lucide-react'
+import { Plus, Pencil, Archive, ImageIcon, X } from 'lucide-react'
 
 // ─── archive confirm dialog ───────────────────────────────────────────────────
 
@@ -122,6 +123,9 @@ function ActivityDialog({
 }) {
   const t = useTranslations('Activities')
   const qc = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(editing?.image_url ?? null)
 
   const {
     register,
@@ -140,17 +144,45 @@ function ActivityDialog({
       : { name: '', description: '', level: 'all', color: '#6366f1', isFreeTrial: true },
   })
 
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  function clearImage() {
+    setImageFile(null)
+    setImagePreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function uploadImage(activityId: string): Promise<string | null> {
+    if (!imageFile) return null
+    const ext = imageFile.name.split('.').pop() ?? 'jpg'
+    const storageRef = ref(storage, `teams/${teamId}/activities/${activityId}/cover.${ext}`)
+    await uploadBytes(storageRef, imageFile)
+    return getDownloadURL(storageRef)
+  }
+
   async function onSubmit(data: ActivityFormData) {
     if (editing) {
-      await updateDoc(doc(db, ACTIVITIES_COLLECTION, editing.id), {
+      const updates: Record<string, unknown> = {
         name: data.name,
         description: data.description ?? '',
         level: data.level,
         color: data.color ?? '',
         isFreeTrial: data.isFreeTrial,
-      })
+      }
+      if (imageFile) {
+        const url = await uploadImage(editing.id)
+        if (url) updates.image_url = url
+      } else if (imagePreview === null && editing.image_url) {
+        updates.image_url = null
+      }
+      await updateDoc(doc(db, ACTIVITIES_COLLECTION, editing.id), updates)
     } else {
-      await addDoc(collection(db, ACTIVITIES_COLLECTION), {
+      const newRef = await addDoc(collection(db, ACTIVITIES_COLLECTION), {
         name: data.name,
         description: data.description ?? '',
         level: data.level,
@@ -162,6 +194,10 @@ function ActivityDialog({
         isActive: true,
         created_at: serverTimestamp(),
       })
+      if (imageFile) {
+        const url = await uploadImage(newRef.id)
+        if (url) await updateDoc(newRef, { image_url: url })
+      }
     }
     await qc.invalidateQueries({ queryKey: ['activities', teamId] })
     onClose()
@@ -188,6 +224,40 @@ function ActivityDialog({
               {...register('description')}
               rows={2}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+            />
+          </div>
+
+          {/* Cover image */}
+          <div className="space-y-1.5">
+            <Label>{t('fieldImage')}</Label>
+            {imagePreview ? (
+              <div className="relative w-full h-32 rounded-lg overflow-hidden border bg-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imagePreview} alt="" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={clearImage}
+                  className="absolute top-1.5 right-1.5 rounded-full bg-background/80 p-1 hover:bg-background transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-20 rounded-lg border-2 border-dashed border-input hover:border-primary/50 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ImageIcon className="h-5 w-5" />
+                <span className="text-xs">Click to upload</span>
+              </button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
             />
           </div>
 
@@ -247,10 +317,17 @@ function ActivityCard({
 
   return (
     <div className="flex items-start gap-3 p-4 rounded-lg border bg-card hover:shadow-sm transition-shadow">
-      <div
-        className="mt-0.5 h-4 w-4 rounded-full flex-shrink-0 ring-1 ring-inset ring-black/10"
-        style={{ backgroundColor: activity.color ?? '#e5e7eb' }}
-      />
+      {activity.image_url ? (
+        <div className="mt-0.5 h-10 w-10 rounded-md overflow-hidden flex-shrink-0 ring-1 ring-inset ring-black/10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={activity.image_url} alt="" className="h-full w-full object-cover" />
+        </div>
+      ) : (
+        <div
+          className="mt-0.5 h-4 w-4 rounded-full flex-shrink-0 ring-1 ring-inset ring-black/10 self-center"
+          style={{ backgroundColor: activity.color ?? '#e5e7eb' }}
+        />
+      )}
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">

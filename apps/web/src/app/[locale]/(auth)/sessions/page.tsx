@@ -443,7 +443,7 @@ type Tab = 'upcoming' | 'past' | 'calendar'
 
 export default function SessionsPage() {
   const { currentTeamId, user } = useAuth()
-  const [tab, setTab] = useState<Tab>('upcoming')
+  const [tab, setTab] = useState<Tab>('calendar')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Session | null>(null)
   const [calendarInitialDate, setCalendarInitialDate] = useState<Date | undefined>()
