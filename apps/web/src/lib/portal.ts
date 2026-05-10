@@ -1,0 +1,63 @@
+import type { SocialPlatform } from '@lineup/shared'
+
+export const PORTAL_GRADIENTS: Record<string, { label: string; css: string; dark: boolean }> = {
+  'blue-violet': { label: 'Blue Violet', css: 'linear-gradient(135deg,#667eea 0%,#764ba2 100%)', dark: true },
+  sunset:        { label: 'Sunset',      css: 'linear-gradient(135deg,#f093fb 0%,#f5576c 100%)', dark: true },
+  ocean:         { label: 'Ocean',       css: 'linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)', dark: false },
+  forest:        { label: 'Forest',      css: 'linear-gradient(135deg,#43e97b 0%,#38f9d7 100%)', dark: false },
+  fire:          { label: 'Fire',        css: 'linear-gradient(135deg,#fa709a 0%,#fee140 100%)', dark: false },
+  night:         { label: 'Night',       css: 'linear-gradient(135deg,#0f0c29 0%,#302b63 50%,#24243e 100%)', dark: true },
+  royal:         { label: 'Royal Blue',  css: 'linear-gradient(135deg,#1e3c72 0%,#2a5298 100%)', dark: true },
+  warm:          { label: 'Warm Flame',  css: 'linear-gradient(135deg,#f77062 0%,#fe5196 100%)', dark: true },
+}
+
+export const SOCIAL_PLATFORMS: SocialPlatform[] = [
+  'instagram', 'facebook', 'youtube', 'tiktok', 'x', 'linkedin', 'whatsapp', 'website', 'review',
+]
+
+export const SOCIAL_LABELS: Record<SocialPlatform, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  x: 'X (Twitter)',
+  linkedin: 'LinkedIn',
+  whatsapp: 'WhatsApp',
+  website: 'Website',
+  review: 'Reviews',
+}
+
+export const ICON_CATEGORIES: { label: string; icons: string[] }[] = [
+  { label: 'Calendar', icons: ['CalendarDays','CalendarCheck','CalendarPlus','Clock','Timer','BookOpen'] },
+  { label: 'Sports',   icons: ['Dumbbell','Zap','Activity','Heart','Flame','Target','Trophy','Award'] },
+  { label: 'Contact',  icons: ['Phone','Mail','MapPin','MessageCircle','Info','Bell'] },
+  { label: 'Business', icons: ['ShoppingBag','CreditCard','Gift','Tag','Users','UserCheck','Star'] },
+  { label: 'Web',      icons: ['Globe','Link2','ExternalLink','Youtube','Instagram','Facebook','FileText'] },
+  { label: 'General',  icons: ['Sparkles','Bookmark','Share2','Check','ArrowRight','Lightbulb'] },
+]
+
+export function resolveBackground(
+  bg: { type: 'solid' | 'gradient'; color: string } | undefined,
+  isDark: boolean,
+): string {
+  if (!bg) return isDark ? '#111827' : '#f3f4f6'
+  if (bg.type === 'solid') return bg.color
+  return PORTAL_GRADIENTS[bg.color]?.css ?? bg.color
+}
+
+export function getTextColor(
+  bg: { type: 'solid' | 'gradient'; color: string } | undefined,
+  isDark: boolean,
+): 'light' | 'dark' {
+  if (!bg) return isDark ? 'light' : 'dark'
+  if (bg.type === 'gradient') {
+    return PORTAL_GRADIENTS[bg.color]?.dark ? 'light' : isDark ? 'light' : 'dark'
+  }
+  // simple luminance check for solid
+  const hex = bg.color.replace('#', '')
+  const r = parseInt(hex.slice(0,2), 16)
+  const g = parseInt(hex.slice(2,4), 16)
+  const b = parseInt(hex.slice(4,6), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance > 0.5 ? 'dark' : 'light'
+}

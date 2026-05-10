@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link, useRouter, usePathname } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { TopBar } from '@/components/layout/TopBar'
 import {
   LayoutDashboard,
   Users,
@@ -18,7 +19,6 @@ import {
   Globe,
   Settings,
   LogOut,
-  Menu,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
@@ -45,7 +45,7 @@ const TEAM_NAV: NavItem[] = [
   { href: '/team/settings', labelKey: 'settings', icon: Settings },
 ]
 
-// ─── nav item ─────────────────────────────────────────────────────────────────
+// ─── nav link ─────────────────────────────────────────────────────────────────
 
 function NavLink({
   item,
@@ -70,13 +70,13 @@ function NavLink({
       href={item.href as Route}
       onClick={onClick}
       title={collapsed ? t(item.labelKey as Parameters<typeof t>[0]) : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
         isActive
-          ? 'bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          ? 'bg-primary/10 text-primary font-semibold'
+          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
       } ${collapsed ? 'justify-center px-2' : ''}`}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
       {!collapsed && <span>{t(item.labelKey as Parameters<typeof t>[0])}</span>}
     </Link>
   )
@@ -106,7 +106,11 @@ function SidebarContent({
     <div className="flex flex-col h-full">
       {/* Logo + collapse toggle */}
       <div className={`flex items-center border-b h-14 shrink-0 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
-        {!collapsed && <span className="text-lg font-bold tracking-tight">Lineup</span>}
+        {!collapsed && (
+          <Link href={'/dashboard' as Route} className="text-lg font-bold tracking-tight hover:opacity-80 transition-opacity">
+            Lineup
+          </Link>
+        )}
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
@@ -140,8 +144,8 @@ function SidebarContent({
         ))}
       </nav>
 
-      {/* Sign out */}
-      <div className={`border-t py-2 px-2 shrink-0`}>
+      {/* Sign out at bottom */}
+      <div className="border-t py-2 px-2 shrink-0">
         <button
           onClick={handleSignOut}
           title={collapsed ? t('signOut') : undefined}
@@ -202,30 +206,23 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="flex min-h-screen bg-background">
       {/* Desktop sidebar */}
       <aside
-        className={`hidden md:flex flex-col border-r bg-card shrink-0 transition-[width] duration-200 ${
+        className={`hidden md:flex flex-col border-r bg-sidebar shrink-0 transition-[width] duration-200 ${
           collapsed ? 'w-14' : 'w-60'
         }`}
       >
         <SidebarContent collapsed={collapsed} onToggleCollapse={handleToggleCollapse} />
       </aside>
 
-      {/* Mobile: top bar + sheet drawer */}
-      <div className="flex flex-col flex-1 min-w-0">
-        <header className="md:hidden flex items-center gap-3 h-14 px-4 border-b bg-card shrink-0">
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-              <Menu className="h-5 w-5" />
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-64">
-              <SidebarContent
-                collapsed={false}
-                onLinkClick={() => setMobileOpen(false)}
-              />
-            </SheetContent>
-          </Sheet>
-          <span className="text-lg font-bold tracking-tight">Lineup</span>
-        </header>
+      {/* Mobile sheet drawer */}
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="p-0 w-64">
+          <SidebarContent collapsed={false} onLinkClick={() => setMobileOpen(false)} />
+        </SheetContent>
+      </Sheet>
 
+      {/* Main column: topbar always visible + content */}
+      <div className="flex flex-col flex-1 min-w-0">
+        <TopBar onMobileMenu={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-8">
             {children}

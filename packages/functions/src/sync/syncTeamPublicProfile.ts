@@ -1,35 +1,48 @@
 // Keeps teams/{teamId}/public_profile/{teamId} in sync when a team document changes
-import { regionalFunctions } from '../utils/functions'
+import { onDocumentWritten } from 'firebase-functions/v2/firestore'
+import { setGlobalOptions } from 'firebase-functions/v2'
 
-export const syncTeamPublicProfile = regionalFunctions.firestore
-  .document('teams/{teamId}')
-  .onWrite(async (change, context) => {
-    const { teamId } = context.params
+setGlobalOptions({ region: 'europe-west6' })
 
-    // Document deleted — remove public profile
-    if (!change.after.exists) {
-      await change.after.ref.parent.parent!.collection('public_profile').doc(teamId).delete()
-      return
-    }
+export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (event) => {
+  const { teamId } = event.params
+  const afterRef = event.data!.after.ref
 
-    const data = change.after.data()!
+  if (!event.data!.after.exists) {
+    await afterRef.collection('public_profile').doc(teamId).delete()
+    return
+  }
 
-    // Only expose safe fields to the public
-    const publicProfile = {
-      name: data.name || '',
-      description: data.description || '',
-      slug: data.slug || '',
-      sport_type: data.sport_type || null,
-      links: (data.links || []).map((link: Record<string, unknown>) => ({
-        label: link.label,
-        description: link.description,
-        url: link.url,
-        showInPortal: link.showInPortal,
-        isBookingLink: link.isBookingLink || false,
-        isMembershipLink: link.isMembershipLink || false,
-      })),
-      updated_at: change.after.updateTime,
-    }
+  const data = event.data!.after.data()!
 
-    await change.after.ref.collection('public_profile').doc(teamId).set(publicProfile)
-  })
+  const publicProfile = {
+    type: 'team',
+    name: data.name || '',
+    description: data.description || '',
+    slug: data.slug || '',
+    sport_type: data.sport_type || null,
+    profileImage: data.profileImage || null,
+    heroImage: data.heroImage || null,
+    portalTheme: data.portalTheme || 'light',
+    portalAccentColor: data.portalAccentColor || null,
+    portalBackground: data.portalBackground || null,
+    socialLinks: (data.socialLinks || []).map((s: Record<string, unknown>) => ({
+      platform: s.platform,
+      url: s.url,
+    })),
+    links: (data.links || []).map((link: Record<string, unknown>) => ({
+      label: link.label,
+      description: link.description || null,
+      url: link.url || null,
+      iconName: link.iconName || null,
+      showInPortal: link.showInPortal !== false,
+      isBookingLink: link.isBookingLink || false,
+      isMembershipLink: link.isMembershipLink || false,
+    })),
+    membershipRequiredFields: data.membershipRequiredFields || null,
+    membershipOptionalFields: data.membershipOptionalFields || null,
+    updated_at: event.data!.after.updateTime,
+  }
+
+  await afterRef.collection('public_profile').doc(teamId).set(publicProfile)
+})

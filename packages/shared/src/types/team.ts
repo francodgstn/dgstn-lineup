@@ -16,8 +16,25 @@ export interface TeamLink {
   description?: string
   url: string
   showInPortal: boolean
+  iconName?: string
   isBookingLink?: boolean
   isMembershipLink?: boolean
+}
+
+export type SocialPlatform =
+  | 'instagram' | 'facebook' | 'youtube' | 'tiktok'
+  | 'x' | 'linkedin' | 'whatsapp' | 'website' | 'review'
+
+export interface SocialLink {
+  platform: SocialPlatform
+  url: string
+}
+
+export type PortalTheme = 'light' | 'dark' | 'auto'
+
+export interface PortalBackground {
+  type: 'solid' | 'gradient'
+  color: string
 }
 
 export interface Team {
@@ -31,6 +48,13 @@ export interface Team {
   links?: TeamLink[]
   language?: 'en' | 'de' | 'fr' | 'it'
   settings?: Record<string, unknown>
+  // Portal / link-in-bio
+  profileImage?: string
+  heroImage?: string
+  socialLinks?: SocialLink[]
+  portalTheme?: PortalTheme
+  portalAccentColor?: string
+  portalBackground?: PortalBackground
   // SaaS plan fields (new in Lineup)
   plan?: SaasPlan
   plan_status?: SaasStatus
@@ -58,6 +82,12 @@ export interface TeamPublicProfile {
   slug: string
   links?: TeamLink[]
   sport_type?: string
+  profileImage?: string
+  heroImage?: string
+  socialLinks?: SocialLink[]
+  portalTheme?: PortalTheme
+  portalAccentColor?: string
+  portalBackground?: PortalBackground
 }
 
 export interface TeamInvitation {

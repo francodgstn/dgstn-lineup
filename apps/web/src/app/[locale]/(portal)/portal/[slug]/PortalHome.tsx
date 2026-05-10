@@ -1,0 +1,270 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import {
+  Instagram, Facebook, Youtube, Twitter, Linkedin,
+  Globe, MessageCircle, Star, Music2, ChevronRight,
+} from 'lucide-react'
+import { DynamicIcon } from '@/components/ui/icon-picker'
+import { resolveBackground, getTextColor } from '@/lib/portal'
+import type { TeamLink, SocialLink, PortalTheme, PortalBackground } from '@lineup/shared'
+
+// ─── types ────────────────────────────────────────────────────────────────────
+
+export interface PortalTeamData {
+  name: string
+  description?: string
+  profileImage?: string
+  heroImage?: string
+  socialLinks?: SocialLink[]
+  links?: TeamLink[]
+  portalTheme?: PortalTheme
+  portalAccentColor?: string
+  portalBackground?: PortalBackground
+}
+
+// ─── social icon map ──────────────────────────────────────────────────────────
+
+const SOCIAL_ICONS: Record<string, React.FC<{ className?: string }>> = {
+  instagram: Instagram,
+  facebook: Facebook,
+  youtube: Youtube,
+  x: Twitter,
+  linkedin: Linkedin,
+  whatsapp: MessageCircle,
+  website: Globe,
+  review: Star,
+  tiktok: Music2,
+}
+
+// ─── component ───────────────────────────────────────────────────────────────
+
+interface Props {
+  slug: string
+  /** Pass for live preview (admin dashboard). Omit to fetch from Firestore (public portal). */
+  team?: PortalTeamData
+}
+
+export default function PortalHome({ slug, team: teamProp }: Props) {
+  const [team, setTeam] = useState<PortalTeamData | null>(teamProp ?? null)
+  const [loading, setLoading] = useState(!teamProp)
+  const [systemDark, setSystemDark] = useState(false)
+
+  // Fetch team from public_profile subcollection — no auth required
+  useEffect(() => {
+    if (teamProp) return  // skip fetch when data is provided (admin preview)
+    const q = query(
+      collectionGroup(db, 'public_profile'),
+      where('slug', '==', slug),
+      where('type', '==', 'team'),
+      limit(1)
+    )
+    getDocs(q)
+      .then((snap) => {
+        if (!snap.empty) setTeam(snap.docs[0].data() as PortalTeamData)
+      })
+      .catch(() => {/* leave team null → not-found state */})
+      .finally(() => setLoading(false))
+  }, [slug, teamProp])
+
+  // Keep preview in sync when admin edits the form
+  useEffect(() => {
+    if (teamProp) setTeam(teamProp)
+  }, [teamProp])
+
+  useEffect(() => {
+    if (team?.portalTheme !== 'auto') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    setSystemDark(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [team?.portalTheme])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    )
+  }
+
+  if (!team) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
+        <p className="text-lg font-semibold">Team not found</p>
+        <p className="text-sm text-muted-foreground">No team exists at this URL.</p>
+      </div>
+    )
+  }
+
+  const isDark =
+    team.portalTheme === 'dark' ||
+    (team.portalTheme === 'auto' && systemDark)
+
+  const bg = team.portalBackground
+  const bgStyle = resolveBackground(bg, isDark)
+  const textScheme = getTextColor(bg, isDark)
+  const onDark = textScheme === 'light'
+
+  const accent = team.portalAccentColor ?? '#6366f1'
+
+  const textMain  = onDark ? '#f9fafb' : '#111827'
+  const textMuted = onDark ? 'rgba(249,250,251,0.65)' : '#6b7280'
+  const cardBg    = onDark ? 'rgba(255,255,255,0.08)' : '#ffffff'
+  const cardBorder= onDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)'
+  const iconBg    = onDark ? 'rgba(255,255,255,0.12)' : `${accent}18`
+
+  const visibleLinks = (team.links ?? []).filter((l) => l.showInPortal)
+  const socialLinks  = (team.socialLinks ?? []).filter((s) => s.url)
+
+  return (
+    <div
+      className="min-h-screen w-full"
+      style={{ background: bgStyle, color: textMain, fontFamily: 'inherit' }}
+    >
+      {/* Hero image */}
+      {team.heroImage && (
+        <div className="w-full h-48 sm:h-60 overflow-hidden relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={team.heroImage}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+          <div
+            className="absolute inset-0"
+            style={{ background: 'linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.2) 100%)' }}
+          />
+        </div>
+      )}
+
+      <div className="max-w-[640px] mx-auto px-5 pb-16">
+        {/* Avatar */}
+        <div className={`flex justify-center ${team.heroImage ? '-mt-12' : 'pt-10'}`}>
+          <div
+            className="h-24 w-24 rounded-full overflow-hidden ring-4 shadow-lg flex-shrink-0"
+            style={{ boxShadow: `0 0 0 4px ${cardBg}` }}
+          >
+            {team.profileImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={team.profileImage} alt={team.name} className="h-full w-full object-cover" />
+            ) : (
+              <div
+                className="h-full w-full flex items-center justify-center text-3xl font-bold text-white"
+                style={{ background: accent }}
+              >
+                {team.name[0]?.toUpperCase()}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Name + description */}
+        <div className="mt-4 text-center space-y-1.5">
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: textMain }}>
+            {team.name}
+          </h1>
+          {team.description && (
+            <p className="text-sm leading-relaxed max-w-sm mx-auto" style={{ color: textMuted }}>
+              {team.description}
+            </p>
+          )}
+        </div>
+
+        {/* Social icons */}
+        {socialLinks.length > 0 && (
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            {socialLinks.map((s) => {
+              const Icon = SOCIAL_ICONS[s.platform] ?? Globe
+              return (
+                <a
+                  key={s.platform}
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-9 w-9 rounded-full flex items-center justify-center transition-opacity hover:opacity-70"
+                  style={{ background: cardBg, border: `1px solid ${cardBorder}`, color: textMain }}
+                  aria-label={s.platform}
+                >
+                  <Icon className="h-4 w-4" />
+                </a>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Links */}
+        {visibleLinks.length > 0 && (
+          <div className="mt-7 space-y-3">
+            {visibleLinks.map((link, i) => {
+              const isBooking = link.isBookingLink
+              const isMembership = link.isMembershipLink
+              const href = isBooking
+                ? `/portal/${slug}/booking`
+                : isMembership
+                ? `/portal/${slug}/membership-signup`
+                : link.url
+
+              const isInternal = isBooking || isMembership
+              const cardStyle = isBooking
+                ? { background: accent, border: 'none' }
+                : { background: cardBg, border: `1px solid ${cardBorder}` }
+
+              const labelColor = isBooking ? '#fff' : textMain
+              const descColor  = isBooking ? 'rgba(255,255,255,0.75)' : textMuted
+              const iconColor  = isBooking ? 'rgba(255,255,255,0.9)' : accent
+
+              return (
+                <a
+                  key={i}
+                  href={href || undefined}
+                  target={isInternal ? undefined : '_blank'}
+                  rel={isInternal ? undefined : 'noopener noreferrer'}
+                  className="flex items-center gap-4 rounded-2xl px-5 py-4 transition-all hover:scale-[1.015] hover:shadow-lg"
+                  style={{ ...cardStyle, textDecoration: 'none', display: 'flex' }}
+                >
+                  <div
+                    className="h-9 w-9 rounded-lg flex-shrink-0 flex items-center justify-center"
+                    style={{ background: isBooking ? 'rgba(255,255,255,0.2)' : iconBg, color: iconColor }}
+                  >
+                    <DynamicIcon
+                      name={link.iconName ?? (isBooking ? 'CalendarDays' : isMembership ? 'CreditCard' : 'Link2')}
+                      className="h-4 w-4"
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm leading-tight" style={{ color: labelColor }}>
+                      {link.label}
+                    </p>
+                    {link.description && (
+                      <p className="text-xs mt-0.5 leading-snug" style={{ color: descColor }}>
+                        {link.description}
+                      </p>
+                    )}
+                  </div>
+
+                  <ChevronRight
+                    className="h-4 w-4 flex-shrink-0"
+                    style={{ color: isBooking ? 'rgba(255,255,255,0.6)' : textMuted }}
+                  />
+                </a>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Footer */}
+        <p className="mt-12 text-center text-[11px]" style={{ color: textMuted }}>
+          Powered by{' '}
+          <a href="/" className="hover:underline font-medium" style={{ color: textMuted }}>
+            Lineup
+          </a>
+        </p>
+      </div>
+    </div>
+  )
+}
