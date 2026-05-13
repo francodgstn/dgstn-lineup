@@ -4,6 +4,7 @@ import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
 import { format } from 'date-fns'
 import { to } from '../utils/async'
+import { CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, PARTICIPANTS_SUBCOLLECTION } from '@lineup/shared'
 
 setGlobalOptions({ region: 'europe-west6' })
 
@@ -380,6 +381,42 @@ export const weeklyReports = onSchedule(
           trial_conversions_count: 0,
           trial_dropouts_count: 0,
         })
+
+        // Per-contact weekly reports — feeds the StatsPanel trend chart
+        if (sessionsSnap && !sessionsSnap.empty) {
+          const contactSessionCounts: Record<string, number> = {}
+
+          for (const sessionDoc of sessionsSnap.docs) {
+            const [, partsSnap] = await to(
+              sessionDoc.ref.collection(PARTICIPANTS_SUBCOLLECTION).get(),
+            )
+            if (!partsSnap || partsSnap.empty) continue
+            for (const partDoc of partsSnap.docs) {
+              // Participant doc ID is contactId; fallback to 'contact' field for safety
+              const contactId = partDoc.id || (partDoc.data().contact as string | undefined)
+              if (contactId) {
+                contactSessionCounts[contactId] = (contactSessionCounts[contactId] ?? 0) + 1
+              }
+            }
+          }
+
+          for (const [contactId, sessions_count_contact] of Object.entries(contactSessionCounts)) {
+            const contactReportRef = db
+              .collection('contacts')
+              .doc(contactId)
+              .collection(CONTACT_WEEKLY_REPORTS_SUBCOLLECTION)
+              .doc(weekLabel)
+            const [, existSnap] = await to(contactReportRef.get())
+            if (existSnap?.exists) continue // never overwrite mid-week increments
+            await to(
+              contactReportRef.set({
+                iso_week: weekLabel,
+                sessions_count: sessions_count_contact,
+                generated_at: admin.firestore.FieldValue.serverTimestamp(),
+              }),
+            )
+          }
+        }
       } catch (err) {
         console.error(`weeklyReports: error for team ${teamId}:`, err)
       }

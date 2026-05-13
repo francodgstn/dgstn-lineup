@@ -40,6 +40,9 @@ export { sendEventInvitations, getEventInvitationDetails, handleEventInvitationR
 // Analytics
 export { trackBookings, trackSessions, weeklyReports, trackContacts, trackSessionParticipants } from './analytics'
 
+// Daily maintenance tasks
+export { dailyTasks } from './dailyTasks'
+
 // Auth / Membership
 export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'
 

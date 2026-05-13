@@ -114,6 +114,101 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
   return buildEmailTemplate({ title: titles[lang], body })
 }
 
+interface ReminderParams {
+  firstname: string
+  teamName: string
+  activityName: string
+  sessionStart: Date
+  sessionEnd: Date
+  locationName?: string | null
+  locationAddress?: string | null
+  manageBookingUrl?: string | null
+  lang?: Lang
+}
+
+export function buildBookingReminderEmail(params: ReminderParams) {
+  const {
+    firstname,
+    teamName,
+    activityName,
+    sessionStart,
+    sessionEnd,
+    locationName,
+    locationAddress,
+    manageBookingUrl,
+    lang = 'en',
+  } = params
+
+  const date = formatDate(sessionStart, lang)
+  const endTime = formatTime(sessionEnd, lang)
+
+  const titles: Record<Lang, string> = {
+    en: 'Session Reminder',
+    de: 'Terminerinnerung',
+    fr: 'Rappel de session',
+    it: 'Promemoria sessione',
+  }
+
+  const greetings: Record<Lang, string> = {
+    en: `Hi ${firstname},`,
+    de: `Hallo ${firstname},`,
+    fr: `Bonjour ${firstname},`,
+    it: `Ciao ${firstname},`,
+  }
+
+  const intros: Record<Lang, string> = {
+    en: `This is a reminder for your upcoming session at <strong>${teamName}</strong>.`,
+    de: `Dies ist eine Erinnerung für Ihre bevorstehende Sitzung bei <strong>${teamName}</strong>.`,
+    fr: `Voici un rappel pour votre prochaine session chez <strong>${teamName}</strong>.`,
+    it: `Questo è un promemoria per la tua prossima sessione presso <strong>${teamName}</strong>.`,
+  }
+
+  const locationLabels: Record<Lang, string> = {
+    en: 'Location',
+    de: 'Ort',
+    fr: 'Lieu',
+    it: 'Luogo',
+  }
+
+  const manageLabels: Record<Lang, string> = {
+    en: 'Manage / Cancel Booking',
+    de: 'Buchung verwalten / stornieren',
+    fr: 'Gérer / Annuler la réservation',
+    it: 'Gestisci / Annulla prenotazione',
+  }
+
+  const activityLabels: Record<Lang, string> = {
+    en: 'Activity',
+    de: 'Aktivität',
+    fr: 'Activité',
+    it: 'Attività',
+  }
+
+  const dateLabels: Record<Lang, string> = {
+    en: 'Date',
+    de: 'Datum',
+    fr: 'Date',
+    it: 'Data',
+  }
+
+  const locationLine = locationName
+    ? `<strong>${locationLabels[lang]}:</strong> ${locationName}${locationAddress ? `, ${locationAddress}` : ''}`
+    : null
+
+  const body = [
+    `<p>${greetings[lang]}</p>`,
+    `<p>${intros[lang]}</p>`,
+    `<p><strong>${activityLabels[lang]}:</strong> ${activityName}</p>`,
+    `<p><strong>${dateLabels[lang]}:</strong> ${date} – ${endTime}</p>`,
+    locationLine ? `<p>${locationLine}</p>` : null,
+    manageBookingUrl ? `<p><a href="${manageBookingUrl}">${manageLabels[lang]}</a></p>` : null,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  return buildEmailTemplate({ title: titles[lang], body })
+}
+
 interface NotificationParams {
   teamOwnerFirstname: string
   contactName: string
