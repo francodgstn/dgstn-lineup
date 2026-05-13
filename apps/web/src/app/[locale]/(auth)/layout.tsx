@@ -23,20 +23,22 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import type { Route } from 'next'
+import type { SaasPlan } from '@lineup/shared'
+import { usePlan } from '@/hooks/usePlan'
 
 // ─── nav config ───────────────────────────────────────────────────────────────
 
-type NavItem = { href: string; labelKey: string; icon: React.ElementType }
+type NavItem = { href: string; labelKey: string; icon: React.ElementType; minPlan?: SaasPlan }
 
 const MAIN_NAV: NavItem[] = [
   { href: '/dashboard',    labelKey: 'dashboard',    icon: LayoutDashboard },
   { href: '/contacts',     labelKey: 'contacts',     icon: Users },
   { href: '/sessions',     labelKey: 'sessions',     icon: CalendarDays },
   { href: '/activities',   labelKey: 'activities',   icon: Zap },
-  { href: '/events',       labelKey: 'events',       icon: CalendarRange },
+  { href: '/events',       labelKey: 'events',       icon: CalendarRange,  minPlan: 'club' },
   { href: '/bookings',     labelKey: 'bookings',     icon: ClipboardList },
-  { href: '/coaching',     labelKey: 'coaching',     icon: GraduationCap },
-  { href: '/gamification', labelKey: 'gamification', icon: Trophy },
+  { href: '/coaching',     labelKey: 'coaching',     icon: GraduationCap,  minPlan: 'club' },
+  { href: '/gamification', labelKey: 'gamification', icon: Trophy,         minPlan: 'club' },
 ]
 
 const TEAM_NAV: NavItem[] = [
@@ -44,6 +46,12 @@ const TEAM_NAV: NavItem[] = [
   { href: '/team/portal',   labelKey: 'portal',   icon: Globe },
   { href: '/team/settings', labelKey: 'settings', icon: Settings },
 ]
+
+const PLAN_BADGE: Record<SaasPlan, { label: string; className: string }> = {
+  coach:        { label: 'Coach', className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
+  club:         { label: 'Club',  className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+  organization: { label: 'Org',   className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+}
 
 // ─── nav link ─────────────────────────────────────────────────────────────────
 
@@ -58,12 +66,40 @@ function NavLink({
 }) {
   const pathname = usePathname()
   const t = useTranslations('Nav')
+  const { isAtLeast } = usePlan()
   const Icon = item.icon
 
+  const isLocked = !!item.minPlan && !isAtLeast(item.minPlan)
+
   const isActive =
-    item.href === '/dashboard'
+    !isLocked &&
+    (item.href === '/dashboard'
       ? pathname === item.href
-      : pathname.startsWith(item.href)
+      : pathname.startsWith(item.href))
+
+  if (isLocked) {
+    const badge = PLAN_BADGE[item.minPlan!]
+    return (
+      <Link
+        href={'/upgrade' as Route}
+        onClick={onClick}
+        title={collapsed ? `${t(item.labelKey as Parameters<typeof t>[0])} — ${badge.label} plan` : undefined}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${
+          collapsed ? 'justify-center px-2' : ''
+        }`}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        {!collapsed && (
+          <>
+            <span className="flex-1">{t(item.labelKey as Parameters<typeof t>[0])}</span>
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${badge.className}`}>
+              {badge.label}
+            </span>
+          </>
+        )}
+      </Link>
+    )
+  }
 
   return (
     <Link

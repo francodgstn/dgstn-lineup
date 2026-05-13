@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -25,9 +25,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { useRouter } from '@/i18n/navigation'
+import { useRouter, usePathname } from '@/i18n/navigation'
 
 // ─── team data hook ───────────────────────────────────────────────────────────
 
@@ -317,6 +318,8 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
   const { data: team } = useTeam(currentTeamId)
   const { resolvedTheme, setTheme } = useTheme()
   const router = useRouter()
+  const pathname = usePathname()
+  const locale = useLocale()
   const [qrOpen, setQrOpen] = useState(false)
 
   async function handleSignOut() {
@@ -418,6 +421,20 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
                   {t('darkMode')}
                 </button>
               </div>
+            </div>
+            {/* Language switcher */}
+            <div className="px-2 py-1.5">
+              <Select value={locale} onValueChange={(l) => { if (l) router.replace(pathname, { locale: l }) }}>
+                <SelectTrigger className="h-7 text-xs w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="de">Deutsch</SelectItem>
+                  <SelectItem value="fr">Français</SelectItem>
+                  <SelectItem value="it">Italiano</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <DropdownMenuSeparator />
 

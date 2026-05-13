@@ -2,13 +2,20 @@ import type { Timestamp } from './common'
 
 export type TeamRole = 'owner' | 'manager' | 'viewer'
 
-export type SaasPlan = 'coach' | 'club' | 'org' | 'enterprise'
+export type SaasPlan = 'coach' | 'club' | 'organization'
 export type SaasStatus = 'trial' | 'active' | 'past_due' | 'cancelled'
 
-export interface LevelDefinition {
+export interface RankLevel {
+  value: number
   label: string
   color?: string
-  value: number
+}
+
+export interface RankingSystem {
+  id: string
+  name: string
+  levels: RankLevel[]
+  is_primary?: boolean
 }
 
 export interface TeamLink {
@@ -44,7 +51,7 @@ export interface Team {
   description?: string
   primaryContact?: string
   sport_type?: string
-  level_system?: LevelDefinition[]
+  ranking_systems?: RankingSystem[]
   links?: TeamLink[]
   language?: 'en' | 'de' | 'fr' | 'it'
   settings?: Record<string, unknown>

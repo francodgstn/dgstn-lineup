@@ -75,8 +75,8 @@ export interface Contact {
   // Alerts (denormalized count)
   alerts_count?: number
 
-  // Generic progression level (replaces martial-arts rank)
-  level?: number
+  // Ranking — keyed by RankingSystem.id (e.g. { "hmd": 5, "internal": 2 })
+  ranks?: Record<string, number>
 
   // Lifecycle
   created_at?: Timestamp
@@ -91,8 +91,7 @@ export interface SubscriptionType {
   id: string
   name: string
   description?: string
-  price?: number
-  currency?: string
+  source?: 'internal' | 'aggregator'
   active?: boolean
 }
 

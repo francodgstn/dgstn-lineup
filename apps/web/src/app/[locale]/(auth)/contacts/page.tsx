@@ -1,32 +1,40 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import {
   collection, query, where, orderBy, getDocs, addDoc, updateDoc,
-  doc, serverTimestamp, Timestamp,
+  doc, serverTimestamp, Timestamp, deleteField,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePlan } from '@/hooks/usePlan'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { MultiSelect } from '@/components/ui/multi-select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, CONTACT_REQUESTS_SUBCOLLECTION,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION,
 } from '@lineup/shared'
-import type { Contact, MembershipStatus, ContactType, ContactRequest } from '@lineup/shared'
+import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType } from '@lineup/shared'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  Search, UserPlus, ChevronRight, Filter, X, Flame,
+  Search, UserPlus, Filter, X, Flame,
   Star, AlertCircle, ChevronDown, ChevronUp, Archive, Trash2, RotateCcw,
+  MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
 } from 'lucide-react'
 import type { Route } from 'next'
+import { RosterCard } from '@/components/dashboard/RosterCard'
+import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
+import { getPrimaryRank } from '@/lib/rank-utils'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -37,16 +45,6 @@ function initials(c: Contact) {
 const STATUS_VARIANT: Record<MembershipStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   guest: 'secondary', requested: 'outline', under_review: 'outline',
   almost_ready: 'outline', active: 'default', expired: 'destructive',
-}
-
-const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500',
-  'bg-pink-500', 'bg-teal-500', 'bg-red-500', 'bg-indigo-500',
-]
-function avatarColor(id: string) {
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
-  return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
 function daysUntilAnonymisation(deletedAt: { toDate(): Date } | null | undefined): number | null {
@@ -115,9 +113,9 @@ function useDeletedContacts(teamId: string | null) {
       if (!teamId) return []
       const q = query(
         collection(db, CONTACTS_COLLECTION),
+        where('anonymized_at', '==', null),
         where('teamId', '==', teamId),
         where('deleted_at', '!=', null),
-        where('anonymized_at', '==', null),
         orderBy('deleted_at', 'desc'),
       )
       const snap = await getDocs(q)
@@ -138,6 +136,18 @@ function useContactRequests(teamId: string | null) {
       )
       const snap = await getDocs(q)
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ContactRequest)
+    },
+  })
+}
+
+function useSubscriptionTypes(teamId: string | null) {
+  return useQuery<SubscriptionType[]>({
+    queryKey: ['subscription-types', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      if (!teamId) return []
+      const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION))
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SubscriptionType)
     },
   })
 }
@@ -285,45 +295,40 @@ function ConfirmDialog({
   )
 }
 
-// ─── stats panel ──────────────────────────────────────────────────────────────
+// ─── overview panel ───────────────────────────────────────────────────────────
 
-function StatsPanel({ contacts }: { contacts: Contact[] }) {
+function OverviewPanel({
+  contacts, loading, rankingSystems,
+}: {
+  contacts: Contact[]
+  loading: boolean
+  rankingSystems?: RankingSystem[]
+}) {
   const t = useTranslations('Contacts')
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
 
-  const total = contacts.length
-  const active = contacts.filter((c) => c.membership_status === 'active').length
-  const trial = contacts.filter((c) => c.type === 'trial').length
-  const student = contacts.filter((c) => c.type === 'student').length
-  const external = contacts.filter((c) => c.type === 'external').length
-  const newCount = contacts.filter((c) => !c.acquisition?.acknowledged).length
-
-  const stats = [
-    { label: t('statsTotal'), value: total },
-    { label: t('statsActive'), value: active },
-    { label: t('statsTrial'), value: trial },
-    { label: t('statsStudent'), value: student },
-    { label: t('statsExternal'), value: external },
-    { label: t('statsNew'), value: newCount },
-  ]
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Skeleton className="h-52 rounded-xl" />
+        <Skeleton className="h-52 rounded-xl" />
+      </div>
+    )
+  }
 
   return (
-    <div className="rounded-xl border bg-card">
+    <div className="space-y-3">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
+        className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
       >
         {t('statsTitle')}
-        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </button>
       {open && (
-        <div className="border-t grid grid-cols-3 sm:grid-cols-6 divide-x divide-y sm:divide-y-0">
-          {stats.map(({ label, value }) => (
-            <div key={label} className="px-4 py-3 text-center">
-              <p className="text-xl font-bold">{value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-            </div>
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <RosterCard contacts={contacts} />
+          <DemographicsCard contacts={contacts} rankingSystems={rankingSystems} />
         </div>
       )}
     </div>
@@ -399,20 +404,86 @@ function ContactRow({
   selectable,
   selected,
   onSelect,
+  rankingSystems = [],
 }: {
   contact: Contact
   selectable: boolean
   selected: boolean
   onSelect: (id: string) => void
+  rankingSystems?: RankingSystem[]
 }) {
   const router = useRouter()
   const t = useTranslations('Contacts')
   const isNew = !contact.acquisition?.acknowledged
+  const rankColor = rankingSystems.length > 0
+    ? getPrimaryRank(contact, rankingSystems)?.level.color
+    : undefined
 
   return (
-    <div className="flex items-center gap-1 border-b last:border-0">
+    <div className="flex items-center border-b last:border-0 hover:bg-muted/50 transition-colors">
+      <button
+        onClick={() => router.push(`/contacts/${contact.id}` as Route)}
+        className="flex-1 flex items-center gap-3 px-4 py-3 text-left min-w-0"
+      >
+        {/* Avatar */}
+        <div className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center bg-muted text-muted-foreground text-sm font-semibold relative">
+          {initials(contact)}
+          {rankColor && (
+            <span
+              className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background"
+              style={{ background: rankColor }}
+            />
+          )}
+        </div>
+
+        {/* Text block */}
+        <div className="flex-1 min-w-0 space-y-0.5">
+          {/* Line 1: name */}
+          <p className="font-medium text-sm truncate">
+            {contact.firstname} {contact.lastname}
+            {isNew && (
+              <span className="ml-2 text-xs font-semibold text-blue-500">{t('newBadge')}</span>
+            )}
+          </p>
+          {/* Line 2: email + score/streak (desktop) */}
+          <p className="text-xs text-muted-foreground flex items-center gap-2 min-w-0">
+            <span className="truncate">{contact.email ?? contact.phone ?? '—'}</span>
+            {(contact.current_month_score ?? 0) > 0 && (
+              <span className="hidden md:flex items-center gap-0.5 shrink-0">
+                <Star className="h-3 w-3 text-yellow-500" />{contact.current_month_score}
+              </span>
+            )}
+            {(contact.current_streak ?? 0) > 0 && (
+              <span className="hidden md:flex items-center gap-0.5 shrink-0">
+                <Flame className="h-3 w-3 text-orange-500" />{contact.current_streak}w
+              </span>
+            )}
+          </p>
+          {/* Line 3: type + status chips */}
+          <div className="flex items-center gap-1.5 pt-0.5">
+            {contact.type && (
+              <Badge variant="outline" className="text-xs">{t(`type_${contact.type}`)}</Badge>
+            )}
+            {contact.membership_status && (
+              <Badge variant={STATUS_VARIANT[contact.membership_status]} className="text-xs">
+                {t(`status_${contact.membership_status}`)}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </button>
+
+      {/* Alerts indicator */}
+      {(contact.alerts_count ?? 0) > 0 && (
+        <div className="flex items-center gap-1 shrink-0 px-3 text-destructive">
+          <AlertCircle className="h-4 w-4" />
+          <span className="text-xs font-semibold">{contact.alerts_count}</span>
+        </div>
+      )}
+
+      {/* Checkbox — right side */}
       {selectable && (
-        <label className="pl-3 py-3 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+        <label className="pr-4 pl-2 py-3 cursor-pointer shrink-0" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={selected}
@@ -421,75 +492,6 @@ function ContactRow({
           />
         </label>
       )}
-      <button
-        onClick={() => router.push(`/contacts/${contact.id}` as Route)}
-        className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
-      >
-        {/* Avatar */}
-        <div className={`h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-semibold relative ${avatarColor(contact.id)}`}>
-          {initials(contact)}
-          {isNew && (
-            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-blue-500 border-2 border-background" />
-          )}
-          {(contact.alerts_count ?? 0) > 0 && (
-            <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-destructive border-2 border-background flex items-center justify-center">
-              <AlertCircle className="h-2.5 w-2.5 text-white" />
-            </span>
-          )}
-        </div>
-
-        {/* Name + meta */}
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate">
-            {contact.firstname} {contact.lastname}
-            {isNew && (
-              <span className="ml-2 text-xs font-semibold text-blue-500">{t('newBadge')}</span>
-            )}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">
-            {contact.email ?? contact.phone ?? '—'}
-          </p>
-        </div>
-
-        {/* Score + streak (desktop) */}
-        <div className="hidden md:flex items-center gap-3 shrink-0 text-xs text-muted-foreground">
-          {(contact.current_month_score ?? 0) > 0 && (
-            <span className="flex items-center gap-0.5">
-              <Star className="h-3 w-3 text-yellow-500" />
-              {contact.current_month_score}
-            </span>
-          )}
-          {(contact.current_streak ?? 0) > 0 && (
-            <span className="flex items-center gap-0.5">
-              <Flame className="h-3 w-3 text-orange-500" />
-              {contact.current_streak}w
-            </span>
-          )}
-        </div>
-
-        {/* Status + type chips (desktop) */}
-        <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-          {contact.type && (
-            <Badge variant="outline" className="text-xs">{t(`type_${contact.type}`)}</Badge>
-          )}
-          {contact.membership_status && (
-            <Badge variant={STATUS_VARIANT[contact.membership_status]} className="text-xs">
-              {t(`status_${contact.membership_status}`)}
-            </Badge>
-          )}
-        </div>
-
-        {/* Mobile: status only */}
-        <div className="flex sm:hidden shrink-0">
-          {contact.membership_status && (
-            <Badge variant={STATUS_VARIANT[contact.membership_status]} className="text-xs">
-              {t(`status_${contact.membership_status}`)}
-            </Badge>
-          )}
-        </div>
-
-        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-      </button>
     </div>
   )
 }
@@ -514,7 +516,7 @@ function DeletedRow({
           className="h-4 w-4 rounded border-border"
         />
       </label>
-      <div className={`h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-semibold ${avatarColor(contact.id)}`}>
+      <div className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center bg-muted text-muted-foreground text-sm font-semibold">
         {initials(contact)}
       </div>
       <div className="flex-1 min-w-0 ml-3">
@@ -559,18 +561,269 @@ function RequestsTab({ teamId }: { teamId: string }) {
   )
 }
 
+// ─── bulk edit dialogs ────────────────────────────────────────────────────────
+
+function BulkSetRankDialog({
+  open, onOpenChange, rankingSystems, count, onConfirm,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  rankingSystems: RankingSystem[]; count: number
+  onConfirm: (systemId: string, value: number | null) => Promise<void>
+}) {
+  const t = useTranslations('Contacts')
+  const [systemId, setSystemId] = useState(rankingSystems[0]?.id ?? '')
+  const [level, setLevel] = useState<number | 'clear' | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (open) { setSystemId(rankingSystems[0]?.id ?? ''); setLevel(null) }
+  }, [open, rankingSystems])
+
+  const system = rankingSystems.find((s) => s.id === systemId)
+  const useButtons = (system?.levels.length ?? 0) <= 6
+
+  const handleConfirm = async () => {
+    if (!systemId || level === null) return
+    setBusy(true)
+    try { await onConfirm(systemId, level === 'clear' ? null : level); onOpenChange(false) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{t('bulkSetRankTitle')}</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-1">
+          {rankingSystems.length > 1 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('bulkRankSystem')}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {rankingSystems.map((s) => (
+                  <button key={s.id}
+                    onClick={() => { setSystemId(s.id); setLevel(null) }}
+                    className={`px-3 py-1 rounded-lg border text-sm font-medium transition-colors ${
+                      systemId === s.id ? 'border-primary bg-primary/5 text-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >{s.name}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {system && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('bulkRankLevel')}</p>
+              {useButtons ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {system.levels.map((l) => (
+                    <button key={l.value}
+                      onClick={() => setLevel(level === l.value ? null : l.value)}
+                      className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        level === l.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {l.color && <div className="h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: l.color }} />}
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <Select
+                  value={typeof level === 'number' ? String(level) : ''}
+                  onValueChange={(v) => setLevel(v === '' ? null : Number(v))}
+                >
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    {system.levels.map((l) => (
+                      <SelectItem key={l.value} value={String(l.value)}>
+                        <span className="flex items-center gap-2">
+                          {l.color && <span className="inline-block h-2.5 w-2.5 rounded-full border border-border" style={{ background: l.color }} />}
+                          {l.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <button
+                onClick={() => setLevel(level === 'clear' ? null : 'clear')}
+                className={`text-xs transition-colors ${level === 'clear' ? 'text-destructive font-medium' : 'text-muted-foreground hover:text-destructive'}`}
+              >
+                {t('bulkClearRank')}
+              </button>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <button onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">{t('cancel')}</button>
+          <button onClick={handleConfirm} disabled={busy || level === null}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+            {t('bulkApplyTo', { count })}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function BulkSetSubscriptionDialog({
+  open, onOpenChange, subscriptionTypes, count, onConfirm,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  subscriptionTypes: SubscriptionType[]; count: number
+  onConfirm: (type: SubscriptionType | null) => Promise<void>
+}) {
+  const t = useTranslations('Contacts')
+  const tSettings = useTranslations('TeamSettings')
+  const [picked, setPicked] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => { if (open) setPicked(null) }, [open])
+
+  const handleConfirm = async () => {
+    if (!picked) return
+    setBusy(true)
+    const type = picked === 'none' ? null : subscriptionTypes.find((s) => s.id === picked) ?? null
+    try { await onConfirm(type); onOpenChange(false) } finally { setBusy(false) }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{t('bulkSetSubscriptionTitle')}</DialogTitle></DialogHeader>
+        <div className="space-y-1 py-1 max-h-72 overflow-y-auto">
+          <button
+            onClick={() => setPicked(picked === 'none' ? null : 'none')}
+            className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${picked === 'none' ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`}
+          >
+            <p className="font-medium text-muted-foreground">{t('bulkSubscriptionNone')}</p>
+          </button>
+          {subscriptionTypes.map((st) => (
+            <button key={st.id}
+              onClick={() => setPicked(picked === st.id ? null : st.id)}
+              className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${picked === st.id ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`}
+            >
+              <div className="flex items-center gap-2">
+                <p className="font-medium flex-1">{st.name}</p>
+                <Badge variant={st.source === 'aggregator' ? 'secondary' : 'outline'} className="text-xs shrink-0">
+                  {tSettings(st.source === 'aggregator' ? 'subTypeSourceAggregator' : 'subTypeSourceInternal')}
+                </Badge>
+              </div>
+              {st.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{st.description}</p>}
+            </button>
+          ))}
+          {subscriptionTypes.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">{t('bulkNoSubscriptions')}</p>
+          )}
+        </div>
+        <DialogFooter>
+          <button onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">{t('cancel')}</button>
+          <button onClick={handleConfirm} disabled={busy || !picked}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+            {t('bulkApplyTo', { count })}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function BulkSetTypeDialog({
+  open, onOpenChange, count, onConfirm,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  count: number
+  onConfirm: (type: ContactType) => Promise<void>
+}) {
+  const t = useTranslations('Contacts')
+  const [selected, setSelected] = useState<ContactType | null>(null)
+  const [busy, setBusy] = useState(false)
+  const TYPES: ContactType[] = ['trial', 'student', 'external']
+
+  useEffect(() => { if (open) setSelected(null) }, [open])
+
+  const handleConfirm = async () => {
+    if (!selected) return
+    setBusy(true)
+    try { await onConfirm(selected); onOpenChange(false) } finally { setBusy(false) }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xs">
+        <DialogHeader><DialogTitle>{t('bulkSetTypeTitle')}</DialogTitle></DialogHeader>
+        <div className="py-1">
+          <div className="flex gap-2">
+            {TYPES.map((v) => (
+              <button key={v}
+                onClick={() => setSelected(selected === v ? null : v)}
+                className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  selected === v ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t(`type_${v}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <DialogFooter>
+          <button onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">{t('cancel')}</button>
+          <button onClick={handleConfirm} disabled={busy || !selected}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+            {t('bulkApplyTo', { count })}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── bulk action bar ──────────────────────────────────────────────────────────
 
+interface MoreAction {
+  label: string
+  icon: React.ElementType
+  onClick: () => void
+  destructive?: boolean
+  disabled?: boolean
+}
+
 function BulkBar({
-  count, tab, onArchive, onDelete, onRestore, onClear,
+  count, tab, onArchive, onDelete, onRestore, onClear, moreActions = [], editActions = [],
 }: {
   count: number; tab: TabId
   onArchive?: () => void; onDelete?: () => void; onRestore?: () => void; onClear: () => void
+  moreActions?: MoreAction[]
+  editActions?: MoreAction[]
 }) {
   const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-card border rounded-full shadow-lg px-4 py-2">
       <span className="text-sm font-medium mr-2">{t('bulkSelected', { count })}</span>
+
+      {editActions.length > 0 && (
+        <>
+          <Popover>
+            <PopoverTrigger className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm hover:bg-muted transition-colors">
+              <Pencil className="h-3.5 w-3.5" />
+              {t('bulkEditFields')}
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </PopoverTrigger>
+            <PopoverContent side="top" align="center" className="w-52 p-1">
+              {editActions.map((action) => (
+                <button key={action.label} onClick={action.onClick}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-left">
+                  <action.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  {action.label}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+          <div className="w-px h-5 bg-border mx-0.5 shrink-0" />
+        </>
+      )}
+
       {onArchive && (
         <button onClick={onArchive}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm hover:bg-muted transition-colors">
@@ -589,8 +842,45 @@ function BulkBar({
           <Trash2 className="h-3.5 w-3.5" />{t('bulkDelete')}
         </button>
       )}
+
+      {moreActions.length > 0 && (
+        <>
+          <div className="w-px h-5 bg-border mx-0.5 shrink-0" />
+          <Popover>
+            <PopoverTrigger
+              className="p-1.5 rounded-full hover:bg-muted transition-colors text-muted-foreground"
+              aria-label={t('bulkMore')}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </PopoverTrigger>
+            <PopoverContent side="top" align="center" className="w-52 p-1">
+              {moreActions.map((action) => (
+                <button
+                  key={action.label}
+                  onClick={action.disabled ? undefined : action.onClick}
+                  disabled={action.disabled}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left ${
+                    action.disabled
+                      ? 'opacity-40 cursor-not-allowed'
+                      : action.destructive
+                        ? 'text-destructive hover:bg-destructive/10'
+                        : 'hover:bg-muted'
+                  }`}
+                >
+                  <action.icon className="h-4 w-4 shrink-0" />
+                  <span className="flex-1">{action.label}</span>
+                  {action.disabled && (
+                    <span className="text-xs text-muted-foreground">{tCommon('comingSoon')}</span>
+                  )}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </>
+      )}
+
       <button onClick={onClear}
-        className="p-1.5 rounded-full hover:bg-muted transition-colors ml-1 text-muted-foreground">
+        className="p-1.5 rounded-full hover:bg-muted transition-colors ml-0.5 text-muted-foreground">
         <X className="h-4 w-4" />
       </button>
     </div>
@@ -604,7 +894,8 @@ type TabId = 'active' | 'archived' | 'deleted' | 'requests'
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function ContactsPage() {
-  const { currentTeamId, user } = useAuth()
+  const { currentTeamId, user, team } = useAuth()
+  const { isAtLeast } = usePlan()
   const qc = useQueryClient()
   const t = useTranslations('Contacts')
 
@@ -612,22 +903,22 @@ export default function ContactsPage() {
   const { data: archived = [], isLoading: loadingArchived } = useArchivedContacts(currentTeamId)
   const { data: deleted = [], isLoading: loadingDeleted } = useDeletedContacts(currentTeamId)
   const { data: requests = [] } = useContactRequests(currentTeamId)
+  const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
 
   const [tab, setTab] = useState<TabId>('active')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'type' | null>(null)
 
   // confirm dialogs
   const [confirmArchive, setConfirmArchive] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState<string[]>([])
   const [confirmRestore, setConfirmRestore] = useState<string[]>([])
 
-  const invalidateAll = () => {
-    qc.invalidateQueries({ queryKey: ['contacts'] })
-    setSelected(new Set())
-  }
+  const invalidateContacts = () => qc.invalidateQueries({ queryKey: ['contacts'] })
+  const invalidateAll = () => { invalidateContacts(); setSelected(new Set()) }
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -699,6 +990,52 @@ export default function ContactsPage() {
     invalidateAll()
   }
 
+  const rankingSystems = team?.ranking_systems ?? []
+
+  const bulkSetRank = async (systemId: string, value: number | null) => {
+    const fieldKey = `ranks.${systemId}`
+    await Promise.all([...selected].map((id) =>
+      updateDoc(doc(db, CONTACTS_COLLECTION, id), {
+        [fieldKey]: value !== null ? value : deleteField(),
+        updatedAt: serverTimestamp(),
+      })
+    ))
+    invalidateContacts()
+  }
+
+  const bulkSetSubscription = async (type: SubscriptionType | null) => {
+    await Promise.all([...selected].map((id) =>
+      updateDoc(doc(db, CONTACTS_COLLECTION, id), {
+        subscription_type_id: type?.id ?? null,
+        subscription_type_name: type?.name ?? null,
+        updatedAt: serverTimestamp(),
+      })
+    ))
+    invalidateContacts()
+  }
+
+  const bulkSetContactType = async (contactType: ContactType) => {
+    await Promise.all([...selected].map((id) =>
+      updateDoc(doc(db, CONTACTS_COLLECTION, id), {
+        type: contactType,
+        updatedAt: serverTimestamp(),
+      })
+    ))
+    invalidateContacts()
+  }
+
+  // ── select all ────────────────────────────────────────────────────────────
+
+  const allSelected = currentList.length > 0 && (currentList as Contact[]).every((c) => selected.has(c.id))
+  const someSelected = !allSelected && (currentList as Contact[]).some((c) => selected.has(c.id))
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set((currentList as Contact[]).map((c) => c.id)))
+    }
+  }
+
   // ── tabs ──────────────────────────────────────────────────────────────────
 
   const TABS: { id: TabId; label: string; count: number }[] = [
@@ -735,8 +1072,14 @@ export default function ContactsPage() {
         </button>
       </div>
 
-      {/* Stats */}
-      {tab === 'active' && <StatsPanel contacts={active} />}
+      {/* Overview charts */}
+      {tab === 'active' && (
+        <OverviewPanel
+          contacts={active}
+          loading={loadingActive}
+          rankingSystems={team?.ranking_systems}
+        />
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -780,6 +1123,24 @@ export default function ContactsPage() {
       {/* Main list */}
       {tab !== 'requests' && (
         <div className="rounded-xl border overflow-hidden bg-card">
+          {/* Select-all header */}
+          {!isLoading && currentList.length > 0 && selectable && (
+            <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+              <span className="text-xs text-muted-foreground">
+                {selected.size > 0 ? t('selectAllCount', { count: selected.size, total: currentList.length }) : t('selectAll')}
+              </span>
+              <label className="cursor-pointer pr-0.5">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(el) => { if (el) el.indeterminate = someSelected }}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-border"
+                />
+              </label>
+            </div>
+          )}
+
           {isLoading && Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 px-4 py-3 border-b last:border-0">
               <Skeleton className="h-10 w-10 rounded-full" />
@@ -803,6 +1164,7 @@ export default function ContactsPage() {
               selectable={selectable}
               selected={selected.has(c.id)}
               onSelect={toggleSelect}
+              rankingSystems={rankingSystems}
             />
           ))}
 
@@ -837,6 +1199,15 @@ export default function ContactsPage() {
           onRestore={tab === 'archived' || tab === 'deleted' ? () => setConfirmRestore(selectedList) : undefined}
           onDelete={tab !== 'deleted' ? () => setConfirmDelete(selectedList) : undefined}
           onClear={() => setSelected(new Set())}
+          editActions={tab !== 'deleted' ? [
+            ...(rankingSystems.length > 0 ? [{ label: t('bulkSetRank'), icon: Award, onClick: () => setBulkEditMode('rank') }] : []),
+            { label: t('bulkSetSubscription'), icon: CreditCard, onClick: () => setBulkEditMode('subscription') },
+            { label: t('bulkSetType'), icon: Tag, onClick: () => setBulkEditMode('type') },
+          ] : []}
+          moreActions={tab === 'active' && isAtLeast('club') ? [
+            { label: t('bulkMove'),     icon: ArrowRightLeft, onClick: () => {}, disabled: true },
+            { label: t('bulkOutreach'), icon: Mail,           onClick: () => {}, disabled: true },
+          ] : []}
         />
       )}
 
@@ -877,6 +1248,29 @@ export default function ContactsPage() {
         desc={t('restoreContactDesc', { name: `${confirmRestore.length} contacts` })}
         confirmLabel={t('bulkRestore')}
         onConfirm={() => restoreContacts(confirmRestore)}
+      />
+
+      <BulkSetRankDialog
+        open={bulkEditMode === 'rank'}
+        onOpenChange={(v) => { if (!v) setBulkEditMode(null) }}
+        rankingSystems={rankingSystems}
+        count={selected.size}
+        onConfirm={bulkSetRank}
+      />
+
+      <BulkSetSubscriptionDialog
+        open={bulkEditMode === 'subscription'}
+        onOpenChange={(v) => { if (!v) setBulkEditMode(null) }}
+        subscriptionTypes={subscriptionTypes}
+        count={selected.size}
+        onConfirm={bulkSetSubscription}
+      />
+
+      <BulkSetTypeDialog
+        open={bulkEditMode === 'type'}
+        onOpenChange={(v) => { if (!v) setBulkEditMode(null) }}
+        count={selected.size}
+        onConfirm={bulkSetContactType}
       />
     </div>
   )

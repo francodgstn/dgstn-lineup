@@ -64,9 +64,11 @@ The system is structured around **business maturity**, not arbitrary feature gro
 * Immediate utility
 * Low cognitive load
 
+> **Plan code:** `coach`
+
 ---
 
-### Tier 2 — Team (Core Revenue Tier)
+### Tier 2 — Club (Core Revenue Tier)
 
 **Persona:**
 
@@ -131,6 +133,8 @@ The system is structured around **business maturity**, not arbitrary feature gro
 **Important:**
 👉 This is the **primary monetization tier** — most users should land here eventually.
 
+> **Plan code:** `club`
+
 ---
 
 ### Tier 3 — Organization (Multi-Entity Control)
@@ -181,6 +185,8 @@ The system is structured around **business maturity**, not arbitrary feature gro
 * Enable scaling without operational chaos
 * Provide visibility and control at the org level
 
+> **Plan code:** `organization`
+
 ---
 
 ## 3. Pricing Strategy
@@ -203,7 +209,7 @@ The system is structured around **business maturity**, not arbitrary feature gro
 | Tier         | Base Price | Included Students | Additional Students |
 |--------------|------------|-------------------|---------------------|
 | Coach        | €19–29     | ~20               | €0.5–1 / student    |
-| Team         | €59–99     | ~100              | €0.5–1 / student    |
+| Club         | €59–99     | ~100              | €0.5–1 / student    |
 | Organization | €149–299   | pooled            | volume pricing      |
 
 ### Optional Revenue Layer
@@ -225,12 +231,12 @@ Only if you provide real billing + subscription value — otherwise skip to avoi
 
 The system must naturally push users upward:
 
-* **Coach → Team trigger:**
+* **Coach → Club trigger:**
   * Needs subscriptions
   * Wants automation
   * Wants branded student experience (app)
 
-* **Team → Organization trigger:**
+* **Club → Organization trigger:**
   * Manages multiple locations
   * Needs centralized control
 

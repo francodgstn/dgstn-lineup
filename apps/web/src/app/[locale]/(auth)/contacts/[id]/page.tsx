@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import {
   doc, getDoc, updateDoc, collection, query, where, orderBy, collectionGroup,
-  getDocs, addDoc, deleteDoc, serverTimestamp, Timestamp,
+  getDocs, addDoc, deleteDoc, serverTimestamp, Timestamp, limit,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -20,11 +20,13 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION,
-  CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION,
+  CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION, CONTACT_ALERTS_SUBCOLLECTION,
+  ALERT_PRESETS_SUBCOLLECTION,
 } from '@lineup/shared'
 import type {
   Contact, MembershipStatus, ContactType, ContactGender,
-  SubscriptionType, SubscriptionHistoryEntry,
+  SubscriptionType, SubscriptionHistoryEntry, ContactAlert, AlertScheduleType,
+  RankingSystem,
 } from '@lineup/shared'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -32,6 +34,7 @@ import { z } from 'zod'
 import {
   ArrowLeft, CalendarDays, Mail, Phone, StickyNote, Star, Flame,
   BookOpen, Award, ChevronDown, ChevronUp, Plus, Trash2, Trophy,
+  Bell, Timer, Activity, ArchiveRestore, AlertTriangle,
 } from 'lucide-react'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -89,6 +92,7 @@ const profileSchema = z.object({
   address_locality: z.string().max(100).optional(),
   acquisition_channel: z.string().max(100).optional(),
   acquisition_notes: z.string().max(500).optional(),
+  ranks: z.record(z.string(), z.number()).optional(),
 })
 type ProfileValues = z.infer<typeof profileSchema>
 
@@ -115,6 +119,18 @@ function useSubscriptionTypes(teamId: string | null) {
         collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION)
       )
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SubscriptionType)
+    },
+  })
+}
+
+function useTeamRankingSystems(teamId: string | null) {
+  return useQuery<RankingSystem[]>({
+    queryKey: ['team-ranking-systems', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      if (!teamId) return []
+      const snap = await getDoc(doc(db, TEAMS_COLLECTION, teamId))
+      return (snap.data()?.ranking_systems as RankingSystem[] | undefined) ?? []
     },
   })
 }
@@ -169,6 +185,71 @@ function useContactBookings(contactId: string, teamId: string | null) {
   })
 }
 
+interface AttendanceEntry {
+  id: string
+  sessionId: string
+  joinedAt: { toDate(): Date } | null
+  status: string
+}
+
+function useContactActivity(contactId: string) {
+  return useQuery<AttendanceEntry[]>({
+    queryKey: ['contact-activity', contactId],
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collectionGroup(db, 'participants'),
+          where('contactId', '==', contactId),
+          orderBy('joinedAt', 'desc'),
+          limit(100),
+        )
+      )
+      return snap.docs.map((d) => ({
+        id: d.id,
+        sessionId: d.ref.parent.parent?.id ?? '',
+        joinedAt: d.data().joinedAt ?? null,
+        status: d.data().status ?? 'confirmed',
+      }))
+    },
+  })
+}
+
+function useContactAlerts(contactId: string) {
+  return useQuery<ContactAlert[]>({
+    queryKey: ['contact-alerts', contactId],
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, CONTACTS_COLLECTION, contactId, CONTACT_ALERTS_SUBCOLLECTION),
+          orderBy('created_at', 'desc'),
+        )
+      )
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ContactAlert)
+    },
+  })
+}
+
+interface AlertPresetRecord {
+  id: string
+  name: string
+  schedule_type: AlertScheduleType
+  schedule_value?: number
+  message: string
+  show_in_app?: boolean
+}
+
+function useAlertPresets(teamId: string | null) {
+  return useQuery<AlertPresetRecord[]>({
+    queryKey: ['alert-presets', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      if (!teamId) return []
+      const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION))
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AlertPresetRecord)
+    },
+  })
+}
+
 // ─── field wrapper ────────────────────────────────────────────────────────────
 
 function Field({ label, required, children, error }: {
@@ -185,6 +266,25 @@ function Field({ label, required, children, error }: {
   )
 }
 
+// ─── read-only detail row ─────────────────────────────────────────────────────
+
+function DetailRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="grid grid-cols-[150px_1fr] gap-2 py-2 border-b last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm">{value || '—'}</span>
+    </div>
+  )
+}
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-4 pb-1 first:pt-0">
+      {children}
+    </h3>
+  )
+}
+
 // ─── profile tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({
@@ -195,6 +295,7 @@ function ProfileTab({
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const { data: subTypes = [] } = useSubscriptionTypes(teamId)
+  const { data: rankingSystems = [] } = useTeamRankingSystems(teamId)
 
   const TYPES: ContactType[] = ['trial', 'student', 'external']
   const STATUSES: MembershipStatus[] = ['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired']
@@ -223,6 +324,7 @@ function ProfileTab({
       address_locality: contact.address?.locality ?? '',
       acquisition_channel: contact.acquisition?.channel ?? '',
       acquisition_notes: contact.acquisition?.notes ?? '',
+      ranks: contact.ranks ?? {},
     },
   })
 
@@ -251,6 +353,7 @@ function ProfileTab({
         notes: values.acquisition_notes || null,
         acknowledged: contact.acquisition?.acknowledged ?? false,
       },
+      ranks: values.ranks ?? {},
       updatedAt: serverTimestamp(),
     })
     onSaved()
@@ -284,6 +387,101 @@ function ProfileTab({
           )}
         />
       </div>
+
+      {/* Ranks — only rendered if team has ranking systems configured */}
+      {rankingSystems.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm font-medium">{t('sectionRanks')}</p>
+          <Controller
+            control={control}
+            name="ranks"
+            render={({ field }) => (
+              <div className="space-y-3">
+                {rankingSystems.map((system) => {
+                  const currentValue = field.value?.[system.id]
+                  const useButtons = system.levels.length <= 6
+                  return (
+                    <div key={system.id} className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        {system.name}
+                        {system.is_primary && (
+                          <span className="ml-1.5 text-primary">·</span>
+                        )}
+                      </p>
+                      {useButtons ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {system.levels.map((level) => {
+                            const selected = currentValue === level.value
+                            return (
+                              <button
+                                key={level.value}
+                                type="button"
+                                onClick={() => {
+                                  const next = { ...field.value }
+                                  if (selected) {
+                                    delete next[system.id]
+                                  } else {
+                                    next[system.id] = level.value
+                                  }
+                                  field.onChange(next)
+                                }}
+                                className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                                  selected
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-background text-muted-foreground hover:text-foreground'
+                                }`}
+                              >
+                                <div
+                                  className="h-2.5 w-2.5 rounded-full shrink-0 border border-border"
+                                  style={{ background: level.color }}
+                                />
+                                {level.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <Select
+                          value={currentValue !== undefined ? String(currentValue) : ''}
+                          onValueChange={(val) => {
+                            const next = { ...field.value }
+                            if (val === '') {
+                              delete next[system.id]
+                            } else {
+                              next[system.id] = Number(val)
+                            }
+                            field.onChange(next)
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="—" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">—</SelectItem>
+                            {system.levels.map((level) => (
+                              <SelectItem key={level.value} value={String(level.value)}>
+                                <span className="flex items-center gap-2">
+                                  {level.color && (
+                                    <span
+                                      className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border"
+                                      style={{ background: level.color }}
+                                    />
+                                  )}
+                                  {level.label}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          />
+        </div>
+      )}
 
       {/* Personal */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -782,9 +980,551 @@ function GamificationTab({ contact, teamId }: { contact: Contact; teamId: string
   )
 }
 
+// ─── activity tab ─────────────────────────────────────────────────────────────
+
+function ActivityTab({ contact }: { contact: Contact }) {
+  const t = useTranslations('Contacts')
+  const { data: activity = [], isLoading } = useContactActivity(contact.id)
+
+  if (isLoading) return (
+    <div className="space-y-2">
+      {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
+    </div>
+  )
+  if (activity.length === 0) return (
+    <div className="py-12 text-center text-muted-foreground text-sm">{t('noActivity')}</div>
+  )
+
+  return (
+    <div className="space-y-2">
+      {activity.map((entry) => (
+        <div key={`${entry.sessionId}-${entry.id}`} className="flex items-center gap-3 p-3 rounded-lg border">
+          <div className="h-8 w-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+            <Activity className="h-4 w-4 text-green-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium">{t('attendedSession')}</p>
+            <p className="text-xs text-muted-foreground">
+              {entry.joinedAt ? entry.joinedAt.toDate().toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+            </p>
+          </div>
+          {entry.status !== 'confirmed' && (
+            <Badge variant="outline" className="text-xs capitalize">{entry.status}</Badge>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── alerts tab ───────────────────────────────────────────────────────────────
+
+const alertSchema = z.object({
+  schedule_type: z.enum(['sessions_countdown', 'datetime']),
+  schedule_value_sessions: z.coerce.number().min(1).optional(),
+  schedule_value_date: z.date().optional(),
+  message: z.string().min(1).max(500),
+  show_in_app: z.boolean().optional(),
+})
+type AlertFormValues = z.infer<typeof alertSchema>
+
+function AlertDialog({
+  open, onOpenChange, contactId, onSaved,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  contactId: string; onSaved: () => void
+}) {
+  const t = useTranslations('Contacts')
+
+  const { register, handleSubmit, watch, control, reset, formState: { isSubmitting } } = useForm<AlertFormValues>({
+    resolver: zodResolver(alertSchema),
+    defaultValues: { schedule_type: 'sessions_countdown', schedule_value_sessions: 10, show_in_app: false },
+  })
+
+  const scheduleType = watch('schedule_type')
+
+  async function onSubmit(data: AlertFormValues) {
+    const payload: Record<string, unknown> = {
+      schedule_type: data.schedule_type,
+      message: data.message,
+      show_in_app: data.show_in_app ?? false,
+      archived_at: null,
+      created_at: serverTimestamp(),
+    }
+    if (data.schedule_type === 'sessions_countdown') {
+      payload.schedule_value = Number(data.schedule_value_sessions)
+    } else if (data.schedule_value_date) {
+      payload.schedule_value = Timestamp.fromDate(data.schedule_value_date)
+    }
+    await addDoc(collection(db, CONTACTS_COLLECTION, contactId, CONTACT_ALERTS_SUBCOLLECTION), payload)
+    onSaved()
+    reset()
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{t('addAlert')}</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 py-1">
+          {/* Trigger type */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t('alertScheduleType')}</label>
+            <div className="flex gap-2">
+              {(['sessions_countdown', 'datetime'] as AlertScheduleType[]).map((type) => (
+                <label key={type} className="flex-1 cursor-pointer">
+                  <input type="radio" value={type} {...register('schedule_type')} className="sr-only" />
+                  <div className={`flex items-center gap-1.5 justify-center py-1.5 px-2 rounded-lg border text-xs font-medium transition-colors ${
+                    scheduleType === type
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}>
+                    {type === 'sessions_countdown' ? <Timer className="h-3.5 w-3.5" /> : <CalendarDays className="h-3.5 w-3.5" />}
+                    {type === 'sessions_countdown' ? t('alertTypeSessionsCountdown') : t('alertTypeDatetime')}
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {scheduleType === 'sessions_countdown' ? (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">{t('alertSessionCount')}</label>
+              <Input type="number" min="1" {...register('schedule_value_sessions')} />
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">{t('alertDate')}</label>
+              <Controller
+                control={control}
+                name="schedule_value_date"
+                render={({ field }) => (
+                  <DatePicker value={field.value} onChange={field.onChange} />
+                )}
+              />
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">{t('alertMessage')}</label>
+            <Textarea {...register('message')} rows={2} placeholder="e.g. Give welcome gift" />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" {...register('show_in_app')} className="rounded border-input" />
+            {t('alertShowInApp')}
+          </label>
+
+          <DialogFooter>
+            <button type="button" onClick={() => onOpenChange(false)}
+              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
+              {t('addAlert')}
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function AlertPresetPicker({
+  open, onOpenChange, presets, onSelect,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  presets: AlertPresetRecord[]; onSelect: (p: AlertPresetRecord, date?: Date) => void
+}) {
+  const [dateStep, setDateStep] = useState<AlertPresetRecord | null>(null)
+  const [pickedDate, setPickedDate] = useState<Date | undefined>()
+
+  const handleSelect = (p: AlertPresetRecord) => {
+    if (p.schedule_type === 'datetime') {
+      setDateStep(p)
+    } else {
+      onSelect(p)
+      onOpenChange(false)
+    }
+  }
+
+  return (
+    <>
+      <Dialog open={open && !dateStep} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Apply preset</DialogTitle></DialogHeader>
+          <div className="space-y-2 py-1">
+            {presets.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => handleSelect(p)}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border text-left hover:bg-muted transition-colors"
+              >
+                <div className="shrink-0 text-muted-foreground">
+                  {p.schedule_type === 'sessions_countdown' ? <Timer className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{p.name}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-1">{p.message}</p>
+                </div>
+                {p.schedule_type === 'sessions_countdown' && (
+                  <Badge variant="outline" className="text-xs shrink-0">{p.schedule_value} sessions</Badge>
+                )}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Date picker for date-based presets */}
+      <Dialog open={!!dateStep} onOpenChange={() => { setDateStep(null); setPickedDate(undefined) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Select date for "{dateStep?.name}"</DialogTitle></DialogHeader>
+          <div className="py-2">
+            <DatePicker value={pickedDate} onChange={setPickedDate} />
+          </div>
+          <DialogFooter>
+            <button onClick={() => { setDateStep(null); setPickedDate(undefined) }}
+              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+              Cancel
+            </button>
+            <button
+              disabled={!pickedDate}
+              onClick={() => {
+                if (dateStep && pickedDate) {
+                  onSelect(dateStep, pickedDate)
+                  setDateStep(null)
+                  setPickedDate(undefined)
+                  onOpenChange(false)
+                }
+              }}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              Apply
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
+  const t = useTranslations('Contacts')
+  const qc = useQueryClient()
+  const { data: alerts = [], isLoading } = useContactAlerts(contact.id)
+  const { data: presets = [] } = useAlertPresets(teamId)
+  const [addOpen, setAddOpen] = useState(false)
+  const [presetOpen, setPresetOpen] = useState(false)
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['contact-alerts', contact.id] })
+
+  const handleDeleteAlert = async (id: string) => {
+    await deleteDoc(doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION, id))
+    invalidate()
+  }
+
+  const applyPreset = async (preset: AlertPresetRecord, date?: Date) => {
+    const payload: Record<string, unknown> = {
+      schedule_type: preset.schedule_type,
+      message: preset.message,
+      show_in_app: preset.show_in_app ?? false,
+      archived_at: null,
+      created_at: serverTimestamp(),
+    }
+    if (preset.schedule_type === 'sessions_countdown') {
+      payload.schedule_value = preset.schedule_value ?? 10
+    } else if (date) {
+      payload.schedule_value = Timestamp.fromDate(date)
+    }
+    await addDoc(collection(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION), payload)
+    invalidate()
+  }
+
+  const isAlertFired = (alert: ContactAlert): boolean => {
+    if (alert.schedule_type === 'sessions_countdown') {
+      return (contact.total_sessions ?? 0) >= (alert.schedule_value as number)
+    }
+    if (alert.schedule_type === 'datetime') {
+      const ts = alert.schedule_value as { toDate(): Date } | null
+      if (!ts) return false
+      return ts.toDate() <= new Date()
+    }
+    return false
+  }
+
+  if (isLoading) return (
+    <div className="space-y-2">
+      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+    </div>
+  )
+
+  return (
+    <div className="space-y-4 pb-24">
+      <div className="flex gap-2 justify-end">
+        {presets.length > 0 && (
+          <button
+            onClick={() => setPresetOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors"
+          >
+            <BookOpen className="h-4 w-4" />From preset
+          </button>
+        )}
+        <button
+          onClick={() => setAddOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors"
+        >
+          <Plus className="h-4 w-4" />{t('addAlert')}
+        </button>
+      </div>
+
+      {alerts.length === 0 ? (
+        <div className="py-12 text-center text-muted-foreground text-sm">{t('noAlerts')}</div>
+      ) : (
+        <div className="space-y-2">
+          {alerts.map((alert) => {
+            const fired = isAlertFired(alert)
+            return (
+              <div key={alert.id} className={`flex items-start gap-3 p-3 rounded-lg border ${fired ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : ''}`}>
+                <div className={`mt-0.5 shrink-0 ${fired ? 'text-orange-500' : 'text-muted-foreground'}`}>
+                  {alert.schedule_type === 'sessions_countdown'
+                    ? <Timer className="h-4 w-4" />
+                    : <CalendarDays className="h-4 w-4" />
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {alert.schedule_type === 'sessions_countdown' ? (
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {t('alertTypeSessionsCountdown')}: {alert.schedule_value as number}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {(alert.schedule_value as { toDate(): Date } | null)?.toDate()
+                          .toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
+                        ?? '—'}
+                      </span>
+                    )}
+                    <Badge
+                      variant={fired ? 'default' : 'outline'}
+                      className={`text-xs ${fired ? 'bg-orange-500 border-orange-500' : ''}`}
+                    >
+                      {fired ? t('alertFired') : t('alertPending')}
+                    </Badge>
+                    {alert.show_in_app && (
+                      <Badge variant="outline" className="text-xs">App</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm mt-0.5">{alert.message}</p>
+                </div>
+                <button
+                  onClick={() => handleDeleteAlert(alert.id)}
+                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <AlertDialog open={addOpen} onOpenChange={setAddOpen} contactId={contact.id} onSaved={invalidate} />
+      <AlertPresetPicker open={presetOpen} onOpenChange={setPresetOpen} presets={presets} onSelect={applyPreset} />
+    </div>
+  )
+}
+
+// ─── archived / deleted read-only view ───────────────────────────────────────
+
+function ArchivedContactView({ contact, onAction }: { contact: Contact; onAction: () => void }) {
+  const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
+  const qc = useQueryClient()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [acting, setActing] = useState(false)
+
+  const isDeleted = !!contact.deleted_at
+
+  const daysLeft = useMemo(() => {
+    if (!isDeleted) return null
+    const deletedDate = tsToDate(contact.deleted_at)
+    if (!deletedDate) return null
+    const anonymiseDate = new Date(deletedDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+    return Math.max(0, Math.ceil((anonymiseDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+  }, [contact.deleted_at, isDeleted])
+
+  const handleRestore = async () => {
+    setActing(true)
+    try {
+      await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
+        archived_at: null,
+        deleted_at: null,
+        updatedAt: serverTimestamp(),
+      })
+      qc.invalidateQueries({ queryKey: ['contact', contact.id] })
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      onAction()
+    } finally {
+      setActing(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setActing(true)
+    try {
+      await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
+        deleted_at: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      qc.invalidateQueries({ queryKey: ['contact', contact.id] })
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      setConfirmDelete(false)
+      onAction()
+    } finally {
+      setActing(false)
+    }
+  }
+
+  const address = contact.address
+  const hasAddress = address && Object.values(address).some(Boolean)
+  const hasAcquisition = contact.acquisition && (contact.acquisition.channel || contact.acquisition.notes)
+
+  return (
+    <div className="space-y-4">
+      {/* Deletion countdown warning */}
+      {isDeleted && daysLeft !== null && (
+        <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+          <p className="text-sm text-destructive font-medium">
+            {t('deletedDaysLeft', { days: daysLeft })}
+          </p>
+        </div>
+      )}
+
+      {/* Action bar + notice */}
+      <div className="rounded-xl border bg-card p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <p className="flex-1 text-sm text-muted-foreground">{t('archivedNotice')}</p>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleRestore}
+            disabled={acting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <ArchiveRestore className="h-4 w-4" />
+            {isDeleted ? t('bulkRestore') : t('actionUnarchive')}
+          </button>
+          {!isDeleted && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-sm font-medium text-destructive hover:bg-destructive/5 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              {t('bulkDelete')}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Core fields */}
+      <div className="rounded-xl border bg-card p-5">
+        <SectionHeader>{t('sectionBasicInfo')}</SectionHeader>
+        <DetailRow label={t('colType')} value={contact.type ? t(`type_${contact.type}`) : null} />
+        <DetailRow label={t('colStatus')} value={contact.membership_status ? t(`status_${contact.membership_status}`) : null} />
+        <DetailRow label={t('fieldGender')} value={contact.gender ? t(`gender_${contact.gender}`) : null} />
+
+        <SectionHeader>{t('sectionContactInfo')}</SectionHeader>
+        <DetailRow label={t('colEmail')} value={contact.email} />
+        <DetailRow label={t('fieldPhone')} value={contact.phone} />
+
+        <SectionHeader>{t('sectionPersonalInfo')}</SectionHeader>
+        <DetailRow label={t('fieldBirthdate')} value={formatDate(contact.birthdate)} />
+        <DetailRow label={t('fieldBirthplace')} value={contact.birthplace} />
+        {(contact.weight ?? 0) > 0 && (
+          <DetailRow label={t('fieldWeight')} value={`${contact.weight} kg`} />
+        )}
+      </div>
+
+      {/* Address */}
+      {hasAddress && (
+        <div className="rounded-xl border bg-card p-5">
+          <SectionHeader>{t('sectionAddress')}</SectionHeader>
+          {(address.route || address.street_number) && (
+            <DetailRow
+              label={t('fieldStreet')}
+              value={[address.route, address.street_number].filter(Boolean).join(' ')}
+            />
+          )}
+          {address.postal_code && <DetailRow label={t('fieldPostalCode')} value={address.postal_code} />}
+          {address.locality && <DetailRow label={t('fieldLocality')} value={address.locality} />}
+        </div>
+      )}
+
+      {/* Acquisition */}
+      {hasAcquisition && (
+        <div className="rounded-xl border bg-card p-5">
+          <SectionHeader>{t('sectionAcquisition')}</SectionHeader>
+          <DetailRow label={t('fieldAcquisitionChannel')} value={contact.acquisition?.channel} />
+          {contact.acquisition?.notes && (
+            <DetailRow label={t('fieldAcquisitionNotes')} value={contact.acquisition.notes} />
+          )}
+        </div>
+      )}
+
+      {/* Statistics */}
+      <div className="rounded-xl border bg-card p-5">
+        <SectionHeader>{t('sectionStats')}</SectionHeader>
+        <DetailRow label={t('statTotalSessions')} value={String(contact.total_sessions ?? 0)} />
+        {contact.created_at && (
+          <DetailRow label={t('memberSince')} value={formatDate(contact.created_at)} />
+        )}
+        {contact.archived_at && (
+          <DetailRow label={t('archivedSince')} value={formatDate(contact.archived_at)} />
+        )}
+      </div>
+
+      {/* Notes */}
+      {contact.notes && (
+        <div className="rounded-xl border bg-card p-5">
+          <SectionHeader>{t('fieldNotes')}</SectionHeader>
+          <p className="text-sm whitespace-pre-wrap">{contact.notes}</p>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('deleteContactTitle')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t('deleteContactDesc', { name: `${contact.firstname} ${contact.lastname}` })}
+          </p>
+          <DialogFooter>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+            >
+              {t('cancel')}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={acting}
+              className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+            >
+              {acting ? tCommon('loading') : t('bulkDelete')}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'profile' | 'notes' | 'bookings' | 'subscriptions' | 'gamification'
+type TabId = 'profile' | 'notes' | 'activity' | 'bookings' | 'subscriptions' | 'gamification' | 'alerts'
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -823,6 +1563,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
     { id: 'profile',       label: t('tabProfile'),       icon: Mail },
     { id: 'notes',         label: t('tabNotes'),         icon: StickyNote },
+    { id: 'activity',      label: t('tabActivity'),      icon: Activity },
+    { id: 'alerts',        label: t('tabAlerts'),        icon: Bell },
     { id: 'bookings',      label: t('tabBookings'),      icon: CalendarDays },
     { id: 'subscriptions', label: t('tabSubscriptions'), icon: BookOpen },
     { id: 'gamification',  label: t('tabGamification'),  icon: Star },
@@ -841,22 +1583,30 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Header card */}
       <div className="rounded-xl border bg-card p-5 flex items-start gap-4">
-        <div className={`h-16 w-16 rounded-full shrink-0 flex items-center justify-center text-white text-xl font-bold ${avatarColor(contact.id)}`}>
+        <div className="h-16 w-16 rounded-full shrink-0 flex items-center justify-center bg-muted text-muted-foreground text-xl font-bold">
           {initials(contact)}
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold">{contact.firstname} {contact.lastname}</h1>
           <div className="flex flex-wrap items-center gap-2 mt-1.5">
-            {contact.membership_status && (
-              <Badge variant={STATUS_VARIANT[contact.membership_status]}>
-                {t(`status_${contact.membership_status}`)}
-              </Badge>
-            )}
-            {contact.type && (
-              <Badge variant="outline">{t(`type_${contact.type}`)}</Badge>
-            )}
-            {!contact.acquisition?.acknowledged && (
-              <Badge className="bg-blue-500 text-white border-blue-500">{t('newBadge')}</Badge>
+            {contact.deleted_at ? (
+              <Badge variant="destructive">{t('deletedBadge')}</Badge>
+            ) : contact.archived_at ? (
+              <Badge variant="secondary">{t('archivedBadge')}</Badge>
+            ) : (
+              <>
+                {contact.membership_status && (
+                  <Badge variant={STATUS_VARIANT[contact.membership_status]}>
+                    {t(`status_${contact.membership_status}`)}
+                  </Badge>
+                )}
+                {contact.type && (
+                  <Badge variant="outline">{t(`type_${contact.type}`)}</Badge>
+                )}
+                {!contact.acquisition?.acknowledged && (
+                  <Badge className="bg-blue-500 text-white border-blue-500">{t('newBadge')}</Badge>
+                )}
+              </>
             )}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
@@ -884,45 +1634,58 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-0.5 border-b overflow-x-auto">
-        {TABS.map((tb) => {
-          const Icon = tb.icon
-          return (
-            <button
-              key={tb.id}
-              onClick={() => setTab(tb.id)}
-              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                tab === tb.id
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{tb.label}</span>
-            </button>
-          )
-        })}
-      </div>
+      {/* Archived / deleted → read-only summary; active → full tabbed view */}
+      {(contact.archived_at || contact.deleted_at) ? (
+        <ArchivedContactView contact={contact} onAction={invalidate} />
+      ) : (
+        <>
+          {/* Tabs */}
+          <div className="flex gap-0.5 border-b overflow-x-auto">
+            {TABS.map((tb) => {
+              const Icon = tb.icon
+              return (
+                <button
+                  key={tb.id}
+                  onClick={() => setTab(tb.id)}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                    tab === tb.id
+                      ? 'border-primary text-foreground'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{tb.label}</span>
+                </button>
+              )
+            })}
+          </div>
 
-      {/* Tab content */}
-      <div>
-        {tab === 'profile' && (
-          <ProfileTab contact={contact} teamId={currentTeamId} onSaved={invalidate} />
-        )}
-        {tab === 'notes' && (
-          <NotesTab contact={contact} onSaved={invalidate} />
-        )}
-        {tab === 'bookings' && (
-          <BookingsTab contact={contact} teamId={currentTeamId} />
-        )}
-        {tab === 'subscriptions' && (
-          <SubscriptionsTab contact={contact} teamId={currentTeamId} />
-        )}
-        {tab === 'gamification' && (
-          <GamificationTab contact={contact} teamId={currentTeamId} />
-        )}
-      </div>
+          {/* Tab content */}
+          <div>
+            {tab === 'profile' && (
+              <ProfileTab contact={contact} teamId={currentTeamId} onSaved={invalidate} />
+            )}
+            {tab === 'notes' && (
+              <NotesTab contact={contact} onSaved={invalidate} />
+            )}
+            {tab === 'activity' && (
+              <ActivityTab contact={contact} />
+            )}
+            {tab === 'alerts' && (
+              <AlertsTab contact={contact} teamId={currentTeamId} />
+            )}
+            {tab === 'bookings' && (
+              <BookingsTab contact={contact} teamId={currentTeamId} />
+            )}
+            {tab === 'subscriptions' && (
+              <SubscriptionsTab contact={contact} teamId={currentTeamId} />
+            )}
+            {tab === 'gamification' && (
+              <GamificationTab contact={contact} teamId={currentTeamId} />
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

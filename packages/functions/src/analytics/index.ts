@@ -118,6 +118,33 @@ export const trackSessions = onDocumentWritten('sessions/{sessionId}', async (ev
 
 // ─── weeklyReports ────────────────────────────────────────────────────────────
 // Runs every Monday at 00:05 UTC. Generates per-team weekly summary snapshots.
+// Only creates a report if one doesn't exist yet for the week — once created,
+// it is never overwritten, so incremental updates from event triggers are preserved.
+
+async function getActiveContacts(
+  db: admin.firestore.Firestore,
+  teamId: string,
+): Promise<admin.firestore.DocumentData[]> {
+  const [err, snap] = await to(
+    db.collection('contacts')
+      .where('teamId', '==', teamId)
+      .where('deleted_at', '==', null)
+      .where('archived_at', '==', null)
+      .get(),
+  )
+  if (err || !snap) return []
+  return snap.docs.map((d) => d.data())
+}
+
+function countByField(contacts: admin.firestore.DocumentData[], field: string): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const c of contacts) {
+    const val = c[field] as string | undefined
+    if (!val) continue
+    counts[val] = (counts[val] ?? 0) + 1
+  }
+  return counts
+}
 
 export const weeklyReports = onSchedule(
   { schedule: 'every monday 00:05', timeZone: 'UTC', timeoutSeconds: 300, memory: '512MiB' },
@@ -132,17 +159,24 @@ export const weeklyReports = onSchedule(
     for (const teamDoc of teamsSnap.docs) {
       const teamId = teamDoc.id
       try {
-        // Count active contacts
-        const [, contactsSnap] = await to(
-          db.collection('contacts')
-            .where('teamId', '==', teamId)
-            .where('deleted_at', '==', null)
-            .where('archived_at', '==', null)
-            .get(),
-        )
-        const activeContacts = contactsSnap?.size ?? 0
+        const reportRef = db.collection('teams').doc(teamId).collection('weekly_reports').doc(weekLabel)
 
-        // Count sessions in the past 7 days
+        // If a report already exists for this week, skip — never overwrite, to preserve
+        // any increments applied mid-week by event triggers (trackContacts, trackSessions).
+        const [existErr, existSnap] = await to(reportRef.get())
+        if (!existErr && existSnap?.exists) continue
+
+        const contacts = await getActiveContacts(db, teamId)
+        const active_contacts_count = contacts.length
+
+        const contacts_count_by_type = countByField(contacts, 'type')
+        const contacts_count_by_membership_status = countByField(contacts, 'membership_status')
+        const contacts_count_by_subscription_type = countByField(contacts, 'subscription_type_id')
+        const contacts_count_by_recurrence = countByField(
+          contacts.filter((c) => c.subscription_type_id),
+          'subscription_recurrence',
+        )
+
         const weekStart = admin.firestore.Timestamp.fromMillis(now.getTime() - 7 * 24 * 3600 * 1000)
         const [, sessionsSnap] = await to(
           db.collection('sessions')
@@ -151,13 +185,20 @@ export const weeklyReports = onSchedule(
             .where('start', '<=', admin.firestore.Timestamp.fromDate(now))
             .get(),
         )
-        const weekSessions = sessionsSnap?.size ?? 0
+        const sessions_count = sessionsSnap?.size ?? 0
 
-        await db.collection('teams').doc(teamId).collection('weekly_reports').doc(weekLabel).set({
-          week: weekLabel,
+        await reportRef.set({
+          iso_week: weekLabel,
           generated_at: admin.firestore.FieldValue.serverTimestamp(),
-          active_contacts: activeContacts,
-          sessions_count: weekSessions,
+          active_contacts_count,
+          contacts_count_by_type,
+          contacts_count_by_membership_status,
+          contacts_count_by_subscription_type,
+          contacts_count_by_recurrence,
+          sessions_count,
+          // Start at 0; incremented by trackContacts triggers as events occur during the week
+          trial_conversions_count: 0,
+          trial_dropouts_count: 0,
         })
       } catch (err) {
         console.error(`weeklyReports: error for team ${teamId}:`, err)

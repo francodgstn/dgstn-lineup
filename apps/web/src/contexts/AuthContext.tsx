@@ -2,14 +2,15 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { onAuthStateChanged, type User } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot } from 'firebase/firestore'
 import { auth } from '@/lib/firebase-auth'
 import { db } from '@/lib/firebase'
-import type { UserProfile } from '@lineup/shared'
+import type { UserProfile, Team } from '@lineup/shared'
 
 interface AuthContextValue {
   user: User | null
   profile: UserProfile | null
+  team: Team | null
   loading: boolean
   currentTeamId: string | null
 }
@@ -17,6 +18,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   profile: null,
+  team: null,
   loading: true,
   currentTeamId: null,
 })
@@ -24,6 +26,7 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [team, setTeam] = useState<Team | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -37,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         setProfile(null)
+        setTeam(null)
       }
 
       setLoading(false)
@@ -45,10 +49,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe
   }, [])
 
+  // Subscribe to the team document whenever currentTeamId changes
   const currentTeamId = profile?.currentTeam ?? null
+  useEffect(() => {
+    if (!currentTeamId) {
+      setTeam(null)
+      return
+    }
+    const unsub = onSnapshot(doc(db, 'teams', currentTeamId), (snap) => {
+      if (snap.exists()) {
+        setTeam({ id: snap.id, ...snap.data() } as Team)
+      } else {
+        setTeam(null)
+      }
+    })
+    return unsub
+  }, [currentTeamId])
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, currentTeamId }}>
+    <AuthContext.Provider value={{ user, profile, team, loading, currentTeamId }}>
       {children}
     </AuthContext.Provider>
   )

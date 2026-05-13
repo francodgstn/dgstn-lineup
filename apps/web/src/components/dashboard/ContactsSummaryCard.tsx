@@ -1,0 +1,330 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
+} from 'recharts'
+import { Card, CardContent } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { Users } from 'lucide-react'
+import { buildWeekKeys, shortWeekLabel, formatTooltipWeek, formatAxisWeek } from '@/lib/isoWeek'
+import type { WeeklyReport, SubscriptionTypeDoc } from '@/hooks/useDashboardData'
+
+// ─── colors ──────────────────────────────────────────────────────────────────
+
+const TYPE_COLORS: Record<string, string> = {
+  all: '#6366F1', student: '#6366F1', trial: '#10B981',
+  external: '#F59E0B', guest: '#EC4899', member: '#3B82F6',
+}
+const PALETTE = ['#6366F1','#10B981','#F59E0B','#EC4899','#3B82F6','#8B5CF6','#EF4444','#14B8A6','#F97316','#84CC16']
+const FALLBACK = '#6366F1'
+
+function typeColor(t: string) { return TYPE_COLORS[t] ?? FALLBACK }
+function paletteColor(i: number) { return PALETTE[i % PALETTE.length] }
+
+// ─── dimensions ──────────────────────────────────────────────────────────────
+
+const DIMENSIONS = [
+  { value: 'type',                   label: 'Contact type' },
+  { value: 'membership_status',      label: 'Membership' },
+  { value: 'subscription_type',      label: 'Subscription' },
+  { value: 'subscription_recurrence',label: 'Billing recurrence' },
+]
+
+function getField(dim: string): string {
+  if (dim === 'membership_status')       return 'contacts_count_by_membership_status'
+  if (dim === 'subscription_type')       return 'contacts_count_by_subscription_type'
+  if (dim === 'subscription_recurrence') return 'contacts_count_by_recurrence'
+  return 'contacts_count_by_type'
+}
+
+function countFor(report: WeeklyReport | undefined, dim: string, value: string): number {
+  if (!report) return 0
+  const field = getField(dim) as keyof WeeklyReport
+  const map = (report[field] as Record<string, number>) ?? {}
+  if (value === 'all') return Object.values(map).reduce((s, v) => s + v, 0)
+  return map[value] ?? 0
+}
+
+// ─── tooltip ─────────────────────────────────────────────────────────────────
+
+function ChartTooltip({ active, payload, label, valueLabel, color, compareWith, series }: {
+  active?: boolean; payload?: { dataKey: string; value: number }[]
+  label?: string; valueLabel?: string; color?: string
+  compareWith?: string; series?: { value: string; label: string; color: string }[]
+}) {
+  if (!active || !payload?.length || !label) return null
+  const weekLabel = formatTooltipWeek(label)
+
+  if (series) {
+    return (
+      <div className="bg-background border rounded-lg shadow-lg p-3 text-xs max-w-[220px]">
+        <p className="font-bold mb-1.5">{weekLabel}</p>
+        {series.map((s) => {
+          const p = payload.find((x) => x.dataKey === s.value)
+          if (!p) return null
+          return (
+            <div key={s.value} className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+              <span className="flex-1 capitalize">{s.label}</span>
+              <span className="font-bold">{p.value}</span>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const mainVal = payload.find((p) => p.dataKey === 'value')?.value ?? 0
+  const compVal = payload.find((p) => p.dataKey === 'comparison')?.value
+  return (
+    <div className="bg-background border rounded-lg shadow-lg p-3 text-xs max-w-[220px]">
+      <p className="font-bold mb-1">{weekLabel}</p>
+      <p style={{ color }}>{valueLabel}: <strong>{mainVal}</strong></p>
+      {compareWith && compareWith !== 'none' && compVal !== undefined && (
+        <p className="text-muted-foreground mt-0.5">
+          {compareWith === 'last_year' ? 'Last year' : 'Prev. period'}: <strong>{compVal}</strong>
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── series selector ──────────────────────────────────────────────────────────
+// Simple multi-series toggle: click a colored dot to add/remove a series.
+// Clicking "All" deselects everything else.
+
+function SeriesSelector({ options, selected, onToggle }: {
+  options: { value: string; label: string; color: string }[]
+  selected: string[]
+  onToggle: (val: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((o) => {
+        const active = selected.includes(o.value)
+        return (
+          <button
+            key={o.value}
+            onClick={() => onToggle(o.value)}
+            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors
+              ${active ? 'border-transparent text-foreground' : 'border-border text-muted-foreground'}`}
+            style={active ? { background: o.color + '22', borderColor: o.color } : {}}
+          >
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: o.color }} />
+            <span className="capitalize">{o.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── component ────────────────────────────────────────────────────────────────
+
+interface Props {
+  weeklyReports: WeeklyReport[]
+  comparisonWeeklyReports?: WeeklyReport[]
+  compareWith?: string
+  trendsWeeks?: number
+  subscriptionTypes?: SubscriptionTypeDoc[]
+  title?: string
+}
+
+export function ContactsSummaryCard({
+  weeklyReports, comparisonWeeklyReports = [], compareWith = 'none',
+  trendsWeeks = 13, subscriptionTypes = [], title,
+}: Props) {
+  const [dimension, setDimension] = useState('type')
+  const [selectedValues, setSelectedValues] = useState<string[]>(['all'])
+
+  const comparisonOffset = compareWith === 'last_year' ? 52 : trendsWeeks
+
+  const valueOptions = useMemo(() => {
+    if (dimension === 'type') {
+      const types = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_type ?? {})))).sort()
+      return [
+        { value: 'all', label: 'All types', color: typeColor('all') },
+        ...types.map((t) => ({ value: t, label: t, color: typeColor(t) })),
+      ]
+    }
+    if (dimension === 'membership_status') {
+      const statuses = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_membership_status ?? {})))).sort()
+      return [
+        { value: 'all', label: 'All statuses', color: FALLBACK },
+        ...statuses.map((s, i) => ({ value: s, label: s, color: paletteColor(i) })),
+      ]
+    }
+    if (dimension === 'subscription_recurrence') {
+      const recs = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_recurrence ?? {})))).sort()
+      return [
+        { value: 'all', label: 'All recurrences', color: FALLBACK },
+        ...recs.map((r, i) => ({ value: r, label: r, color: paletteColor(i) })),
+      ]
+    }
+    // subscription_type
+    const ids = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_subscription_type ?? {}))))
+    const nameMap = Object.fromEntries((subscriptionTypes ?? []).map((st) => [st.id, st.name]))
+    return [
+      { value: 'all', label: 'All subscriptions', color: FALLBACK },
+      ...ids.map((id, i) => ({ value: id, label: nameMap[id] ?? id, color: paletteColor(i) })),
+    ]
+  }, [dimension, weeklyReports, subscriptionTypes])
+
+  const handleDimensionChange = (dim: string) => {
+    setDimension(dim)
+    setSelectedValues(['all'])
+  }
+
+  const handleToggle = (val: string) => {
+    if (val === 'all') { setSelectedValues(['all']); return }
+    setSelectedValues((prev) => {
+      const without = prev.filter((v) => v !== 'all')
+      if (without.includes(val)) {
+        const next = without.filter((v) => v !== val)
+        return next.length > 0 ? next : ['all']
+      }
+      return [...without, val]
+    })
+  }
+
+  const isSplit = selectedValues.length > 1 || (selectedValues.length === 1 && !selectedValues.includes('all') && selectedValues[0] !== 'all')
+  const combinedSeries = useMemo(
+    () => valueOptions.filter((o) => selectedValues.includes(o.value)),
+    [valueOptions, selectedValues],
+  )
+  const singleValue = selectedValues[0] ?? 'all'
+  const currentOption = valueOptions.find((o) => o.value === singleValue) ?? valueOptions[0]
+  const color = currentOption?.color ?? FALLBACK
+  const gradId = `gradContacts_${dimension}_${singleValue}`
+
+  const chartData = useMemo(() => {
+    const weekKeys = buildWeekKeys(trendsWeeks, 0)
+    const compWeekKeys = compareWith !== 'none' ? buildWeekKeys(trendsWeeks, comparisonOffset) : []
+    const byWeek = Object.fromEntries((weeklyReports).map((r) => [r.iso_week, r]))
+    const compByWeek = Object.fromEntries((comparisonWeeklyReports).map((r) => [r.iso_week, r]))
+
+    if (isSplit) {
+      return weekKeys.map((key, idx) => {
+        const pt: Record<string, unknown> = { week: key, label: shortWeekLabel(key, weekKeys[idx - 1]) }
+        combinedSeries.forEach((s) => { pt[s.value] = countFor(byWeek[key], dimension, s.value) })
+        return pt
+      })
+    }
+    return weekKeys.map((key, idx) => ({
+      week: key,
+      label: shortWeekLabel(key, weekKeys[idx - 1]),
+      value: countFor(byWeek[key], dimension, singleValue),
+      ...(compareWith !== 'none' && { comparison: countFor(compByWeek[compWeekKeys[idx]], dimension, singleValue) }),
+    }))
+  }, [weeklyReports, comparisonWeeklyReports, dimension, singleValue, isSplit, combinedSeries, trendsWeeks, compareWith, comparisonOffset])
+
+  const hasData = isSplit
+    ? (chartData as Record<string, unknown>[]).some((d) => combinedSeries.some((s) => (d[s.value] as number ?? 0) > 0))
+    : (chartData as { value: number; comparison?: number }[]).some((d) => d.value > 0 || (d.comparison ?? 0) > 0)
+
+  return (
+    <Card className="flex flex-col h-full">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+        <Users className="h-4 w-4 text-primary flex-shrink-0" />
+        <p className="text-sm font-bold flex-1 truncate">{title || 'Contacts'}</p>
+        <Select value={dimension} onValueChange={(v) => { if (v) handleDimensionChange(v) }}>
+          <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {DIMENSIONS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {valueOptions.length > 1 && (
+        <div className="px-4 pb-2">
+          <SeriesSelector options={valueOptions} selected={selectedValues} onToggle={handleToggle} />
+        </div>
+      )}
+      <Separator />
+      <CardContent className="flex-1 flex flex-col pb-4 pt-3">
+        {!hasData ? (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-sm text-muted-foreground">No data for this period</p>
+          </div>
+        ) : (
+          <div className="mt-auto">
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={chartData as object[]} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <defs>
+                  {isSplit ? combinedSeries.map((s) => (
+                    <linearGradient key={s.value} id={`grad_comb_${s.value}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={s.color} stopOpacity={0.12} />
+                      <stop offset="95%" stopColor={s.color} stopOpacity={0} />
+                    </linearGradient>
+                  )) : <>
+                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={color} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={color} stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id={`${gradId}_comp`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={color} stopOpacity={0.08} />
+                      <stop offset="95%" stopColor={color} stopOpacity={0} />
+                    </linearGradient>
+                  </>}
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                <XAxis dataKey="week" tickFormatter={formatAxisWeek} tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={36} tickCount={5} />
+                <Tooltip content={
+                  isSplit
+                    ? <ChartTooltip series={combinedSeries} />
+                    : <ChartTooltip valueLabel={currentOption?.label} color={color} compareWith={compareWith} />
+                } />
+                {isSplit
+                  ? combinedSeries.map((s) => (
+                    <Area key={s.value} type="monotone" dataKey={s.value}
+                      stroke={s.color} strokeWidth={2} fill={`url(#grad_comb_${s.value})`}
+                      dot={false} activeDot={{ r: 3 }} isAnimationActive={false} />
+                  )) : <>
+                    {compareWith !== 'none' && (
+                      <Area type="monotone" dataKey="comparison"
+                        stroke={color} strokeWidth={1.5} strokeDasharray="5 3" strokeOpacity={0.45}
+                        fill={`url(#${gradId}_comp)`} dot={false} activeDot={false} isAnimationActive={false} />
+                    )}
+                    <Area type="monotone" dataKey="value"
+                      stroke={color} strokeWidth={2} fill={`url(#${gradId})`}
+                      dot={false} activeDot={{ r: 4 }} />
+                  </>}
+              </AreaChart>
+            </ResponsiveContainer>
+
+            {/* legend */}
+            {isSplit && (
+              <div className="flex flex-wrap gap-3 justify-center mt-1.5">
+                {combinedSeries.map((s) => (
+                  <div key={s.value} className="flex items-center gap-1">
+                    <div className="w-4 h-0.5 rounded" style={{ background: s.color }} />
+                    <span className="text-xs text-muted-foreground capitalize">{s.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!isSplit && compareWith !== 'none' && (
+              <div className="flex items-center gap-4 justify-end mt-1.5">
+                <div className="flex items-center gap-1">
+                  <div className="w-5 h-0.5 rounded" style={{ background: color }} />
+                  <span className="text-xs text-muted-foreground">Current</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-5 h-0" style={{ borderTop: `2px dashed ${color}`, opacity: 0.45 }} />
+                  <span className="text-xs text-muted-foreground">
+                    {compareWith === 'last_year' ? 'Last year' : 'Prev. period'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

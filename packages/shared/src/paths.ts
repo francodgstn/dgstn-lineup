@@ -22,6 +22,7 @@ export const TEAM_REBUILD_JOBS_SUBCOLLECTION = 'rebuild_jobs'
 export const SAAS_SUBSCRIPTIONS_COLLECTION = 'saas_subscriptions'
 export const ORGANIZATIONS_COLLECTION = 'organizations'
 export const ORG_MEMBERS_SUBCOLLECTION = 'org_members'
+export const TEAM_INTEGRATIONS_SUBCOLLECTION = 'integrations'
 
 export const PROJECTS_COLLECTION = 'projects'
 export const CONTACTS_COLLECTION = 'contacts'
