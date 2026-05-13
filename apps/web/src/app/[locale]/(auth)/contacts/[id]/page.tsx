@@ -21,6 +21,7 @@ import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION,
   CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION, CONTACT_ALERTS_SUBCOLLECTION,
   ALERT_PRESETS_SUBCOLLECTION, TEAM_ACTIVITY_LOG_SUBCOLLECTION,
+  CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
 } from '@lineup/shared'
 import type {
   Contact, MembershipStatus, ContactType, ContactGender,
@@ -35,8 +36,9 @@ import {
   BookOpen, Award, ChevronDown, ChevronUp, Plus, Trash2, Trophy,
   Bell, Timer, Activity, ArchiveRestore, AlertTriangle,
   UserPlus, Archive, RotateCcw, ArrowRightLeft, CheckCircle, XCircle,
-  CalendarCheck, CalendarX, CreditCard, BarChart2,
+  CalendarCheck, CalendarX, CreditCard, BarChart2, Lock,
 } from 'lucide-react'
+import { LineChart, Line, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -215,6 +217,26 @@ function useContactRecentSessions(contactId: string, count: number) {
   })
 }
 
+interface WeeklyReport { iso_week: string; sessions_count: number }
+
+function useContactWeeklyReports(contactId: string) {
+  return useQuery<WeeklyReport[]>({
+    queryKey: ['contact-weekly-reports', contactId],
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, CONTACTS_COLLECTION, contactId, CONTACT_WEEKLY_REPORTS_SUBCOLLECTION),
+          orderBy('iso_week', 'desc'),
+          limit(16),
+        )
+      )
+      return snap.docs
+        .map((d) => ({ iso_week: d.data().iso_week as string, sessions_count: (d.data().sessions_count as number) ?? 0 }))
+        .reverse()
+    },
+  })
+}
+
 function useContactAlerts(contactId: string) {
   return useQuery<ContactAlert[]>({
     queryKey: ['contact-alerts', contactId],
@@ -310,23 +332,27 @@ function FormBlock({ title, children }: { title: string; children: React.ReactNo
 
 type StatsPanelTab = 'attendance' | 'training'
 
+function isoWeekLabel(isoWeek: string) {
+  // "2024-W03" → parse to a date and show "Jan 15"
+  const [year, week] = isoWeek.split('-W').map(Number)
+  if (!year || !week) return isoWeek
+  // ISO week 1 is the week containing Jan 4
+  const jan4 = new Date(year, 0, 4)
+  const dayOfWeek = jan4.getDay() || 7
+  const weekStart = new Date(jan4)
+  weekStart.setDate(jan4.getDate() - dayOfWeek + 1 + (week - 1) * 7)
+  return weekStart.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
 function StatsPanel({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
-  const tG = useTranslations('Gamification')
   const [panelTab, setPanelTab] = useState<StatsPanelTab>('attendance')
-  const { data: recentSessions = [], isLoading: sessLoading } = useContactRecentSessions(contact.id, 12)
+  const { data: weeklyReports = [], isLoading: reportsLoading } = useContactWeeklyReports(contact.id)
 
-  const { data: team } = useQuery({
-    queryKey: ['team', teamId],
-    enabled: !!teamId,
-    queryFn: async () => {
-      if (!teamId) return null
-      const d = await getDoc(doc(db, 'teams', teamId))
-      return d.exists() ? d.data() : null
-    },
-  })
-  const coachBadges: Array<{ key: string; label: string }> = team?.settings?.gamification?.coach_badges ?? []
-  const assignedBadges: string[] = contact.custom_badges ?? []
+  const chartData = weeklyReports.map((r) => ({
+    label: isoWeekLabel(r.iso_week),
+    sessions: r.sessions_count,
+  }))
 
   return (
     <div className="flex flex-col h-full">
@@ -348,80 +374,80 @@ function StatsPanel({ contact, teamId }: { contact: Contact; teamId: string | nu
         ))}
       </div>
 
-      <div className="p-4 flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto">
         {panelTab === 'attendance' && (
-          <div className="space-y-4">
+          <div>
+            {/* Trend chart */}
+            <div className="pt-3 px-1">
+              {reportsLoading ? (
+                <div className="h-[90px] rounded-md bg-muted animate-pulse" />
+              ) : chartData.length === 0 ? (
+                <div className="h-[90px] flex items-center justify-center">
+                  <p className="text-xs text-muted-foreground">{t('noActivity')}</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={90}>
+                  <LineChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
+                    />
+                    <Tooltip
+                      contentStyle={{ fontSize: 11, padding: '4px 8px', borderRadius: 6 }}
+                      formatter={(v) => [v, t('statTotalSessions')]}
+                      labelStyle={{ display: 'none' }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="sessions"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
             {/* Key stats */}
-            <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="grid grid-cols-3 gap-2 text-center px-4 py-3 border-t">
               <div>
-                <p className="text-2xl font-bold tabular-nums">{contact.total_sessions ?? 0}</p>
+                <p className="text-xl font-bold tabular-nums">{contact.total_sessions ?? 0}</p>
                 <p className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t('statTotalSessions')}</p>
               </div>
               <div>
-                <p className="text-2xl font-bold tabular-nums">{contact.current_streak ?? 0}<span className="text-sm font-normal">w</span></p>
+                <p className="text-xl font-bold tabular-nums">
+                  {contact.current_streak ?? 0}<span className="text-xs font-normal">w</span>
+                </p>
                 <p className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t('statStreak')}</p>
               </div>
               <div>
-                <p className="text-2xl font-bold tabular-nums">{contact.current_month_score ?? 0}</p>
+                <p className="text-xl font-bold tabular-nums">{contact.current_month_score ?? 0}</p>
                 <p className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t('statMonthScore')}</p>
               </div>
-            </div>
-
-            {/* Recent sessions */}
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                {t('statRecentSessions')}
-              </p>
-              {sessLoading ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="h-5 w-14 rounded-md bg-muted animate-pulse" />
-                  ))}
-                </div>
-              ) : recentSessions.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{t('noActivity')}</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {recentSessions.map((s) => (
-                    <div key={s.id} className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-500/10 text-[10px] text-green-700 dark:text-green-400 font-medium">
-                      <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
-                      {s.joinedAt ? s.joinedAt.toDate().toLocaleDateString([], { day: '2-digit', month: 'short' }) : '—'}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         )}
 
         {panelTab === 'training' && (
-          <div className="space-y-4">
-            {coachBadges.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  {tG('coachBadgesSection')}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {coachBadges.map((badge) => {
-                    const assigned = assignedBadges.includes(badge.key)
-                    return (
-                      <span
-                        key={badge.key}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                          assigned
-                            ? 'bg-primary/10 text-primary border-primary/30'
-                            : 'text-muted-foreground border-border'
-                        }`}
-                      >
-                        <Award className="h-2.5 w-2.5 shrink-0" />
-                        {badge.label}
-                      </span>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">{t('trainingProfileComingSoon')}</p>
+          <div className="flex flex-col items-center justify-center gap-3 h-full min-h-[160px] px-5 py-6 text-center">
+            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+              <Lock className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">{t('trainingProfileLockedTitle')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('trainingProfileLockedDesc')}</p>
+            </div>
+            <button
+              type="button"
+              className="mt-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+            >
+              {t('upgradeToClub')}
+            </button>
           </div>
         )}
       </div>
@@ -1872,7 +1898,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           </div>
 
           {/* Desktop stats — right, always visible */}
-          <div className="hidden lg:flex flex-col border-l w-[260px] xl:w-[300px] shrink-0">
+          <div className="hidden lg:flex flex-col border-l w-1/3 shrink-0">
             <StatsPanel contact={contact} teamId={currentTeamId} />
           </div>
         </div>
