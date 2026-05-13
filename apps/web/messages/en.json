@@ -203,6 +203,7 @@
     "fieldBirthplace": "Place of birth",
     "fieldWeight": "Weight (kg)",
     "sectionAddress": "Address",
+    "sectionContact": "Contact",
     "fieldStreet": "Street",
     "fieldStreetNumber": "Number",
     "fieldPostalCode": "Postal code",

@@ -606,7 +606,8 @@ function ProfileTab({
         </Field>
       </div>
 
-      {/* Identity & contact info */}
+      {/* Personal details */}
+      <SectionDivider label={t('sectionPersonalInfo')} />
       <div className="grid grid-cols-1 gap-4">
         <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
           <Input {...register('firstname')} autoCapitalize="words" />
@@ -614,17 +615,6 @@ function ProfileTab({
         <Field label={t('fieldLastname')} required error={errors.lastname?.message}>
           <Input {...register('lastname')} autoCapitalize="words" />
         </Field>
-        <Field label={t('colEmail')}>
-          <Input type="email" {...register('email')} inputMode="email" />
-        </Field>
-        <Field label={t('fieldPhone')}>
-          <Input type="tel" {...register('phone')} inputMode="tel" />
-        </Field>
-      </div>
-
-      {/* Personal details */}
-      <SectionDivider label={t('sectionPersonalInfo')} />
-      <div className="grid grid-cols-1 gap-4">
         <Field label={t('fieldGender')}>
           <Controller
             control={control}
@@ -736,19 +726,25 @@ function ProfileTab({
         </div>
       )}
 
-      {/* Address — open by default */}
-      <Accordion defaultValue={["address"]}>
-        <AccordionItem value="address" className="border-0">
+      {/* Contact (email, phone, address) — open by default */}
+      <Accordion defaultValue={["contact"]}>
+        <AccordionItem value="contact" className="border-0">
           <AccordionTrigger className="hover:no-underline py-3 text-muted-foreground hover:text-foreground">
             <div className="flex flex-1 items-center gap-2 mr-2">
               <span className="text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
-                {t('sectionAddress')}
+                {t('sectionContact')}
               </span>
               <div className="h-px flex-1 bg-border" />
             </div>
           </AccordionTrigger>
           <AccordionContent>
             <div className="grid grid-cols-1 gap-4 pt-1 pb-2">
+              <Field label={t('colEmail')}>
+                <Input type="email" {...register('email')} inputMode="email" />
+              </Field>
+              <Field label={t('fieldPhone')}>
+                <Input type="tel" {...register('phone')} inputMode="tel" />
+              </Field>
               <Field label={t('fieldStreet')}>
                 <Input {...register('address_route')} />
               </Field>
