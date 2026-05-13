@@ -13,6 +13,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Card, CardContent } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -137,6 +138,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<GeneralData>({
     resolver: zodResolver(generalSchema),
@@ -192,14 +194,23 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
 
       <div className="space-y-1.5">
         <Label htmlFor="sport_type">{t('sportType')}</Label>
-        <select
-          id="sport_type"
-          {...register('sport_type')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-        >
-          <option value="">{t('sportTypeNone')}</option>
-          {SPORT_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <Controller
+          name="sport_type"
+          control={control}
+          render={({ field }) => (
+            <Select value={field.value || '__none__'} onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t('sportTypeNone')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{t('sportTypeNone')}</SelectItem>
+                {SPORT_TYPES.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
       </div>
 
       <div className="space-y-1.5">

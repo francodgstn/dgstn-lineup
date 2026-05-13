@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git checkout*)",
+      "Bash(git remote*)",
+      "Bash(git branch*)",
+      "Bash(gh pr*)",
+      "Bash(gh run view*)",
+      "Bash(gh auth status)",
+      "PowerShell(pnpm *)",
+      "Bash(pnpm *)",
+      "PowerShell(firebase use*)",
+      "PowerShell(firebase emulators*)",
+      "PowerShell(firebase functions:log*)",
+      "PowerShell(firebase firestore:indexes*)",
+      "PowerShell(java *)",
+      "PowerShell(node *)",
+      "Bash(node *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(New-Item *)",
+      "PowerShell(netstat *)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Get-Process *)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs"
+    ],
+    "deny": [
+      "PowerShell(firebase deploy*)",
+      "Bash(firebase deploy*)",
+      "Bash(git reset --hard*)",
+      "Bash(rm -rf*)",
+      "PowerShell(Remove-Item * -Recurse -Force)"
+    ]
+  }
+}

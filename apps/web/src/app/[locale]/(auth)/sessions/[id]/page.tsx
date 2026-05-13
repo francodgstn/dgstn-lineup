@@ -26,6 +26,7 @@ import {
 } from '@lineup/shared'
 import type { Session, Booking, Contact, Activity } from '@lineup/shared'
 import { Controller, useForm } from 'react-hook-form'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
@@ -315,10 +316,23 @@ function EditSessionDialog({
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
           <div className="space-y-1">
             <label className="text-sm font-medium">Activity</label>
-            <select {...register('activityId')} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-              <option value="">No activity</option>
-              {activities.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+            <Controller
+              name="activityId"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value || '__none__'} onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No activity</SelectItem>
+                    {activities.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">

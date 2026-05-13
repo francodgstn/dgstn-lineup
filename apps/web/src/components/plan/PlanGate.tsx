@@ -1,6 +1,8 @@
 'use client'
 
+import { Lock } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
+import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import type { SaasPlan, PlanFeature } from '@lineup/shared'
 import { PLAN_ORDER } from '@lineup/shared'
 
@@ -15,21 +17,20 @@ interface PlanGateProps {
   fallback?: React.ReactNode
 }
 
-const PLAN_LABELS: Record<SaasPlan, string> = {
-  coach: 'Coach',
-  club: 'Club',
-  organization: 'Organization',
-}
-
-function UpgradePrompt({ requiredPlan }: { requiredPlan: SaasPlan }) {
+function UpgradePrompt({ minPlan, feature }: { minPlan: SaasPlan; feature?: PlanFeature }) {
+  const { openUpgradeModal } = useUpgradeModal()
   return (
     <div className="rounded-lg border border-dashed p-6 text-center">
+      <Lock className="h-5 w-5 mx-auto mb-2 text-muted-foreground/40" />
       <p className="text-sm font-medium text-foreground">
-        Available on the <span className="font-semibold">{PLAN_LABELS[requiredPlan]}</span> plan
+        This feature requires a higher plan
       </p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Upgrade to unlock this feature
-      </p>
+      <button
+        onClick={() => openUpgradeModal({ minPlan, feature })}
+        className="mt-2 text-xs text-primary hover:underline"
+      >
+        See upgrade options
+      </button>
     </div>
   )
 }
@@ -39,13 +40,11 @@ export function PlanGate({ minPlan, feature, children, fallback }: PlanGateProps
 
   if (isLoading) return null
 
-  // Resolve the required plan for the fallback label
   const requiredPlan: SaasPlan =
     minPlan ?? (feature ? minimumPlanFor(feature) : PLAN_ORDER[0])
 
-  // No plan at all (shouldn't happen in practice — trial is always set on signup)
   if (!plan || !hasAccess) {
-    return <>{fallback ?? <UpgradePrompt requiredPlan={requiredPlan} />}</>
+    return <>{fallback ?? <UpgradePrompt minPlan={requiredPlan} feature={feature} />}</>
   }
 
   const allowed =
@@ -53,7 +52,7 @@ export function PlanGate({ minPlan, feature, children, fallback }: PlanGateProps
     (feature ? hasFeature(feature) : true)
 
   if (!allowed) {
-    return <>{fallback ?? <UpgradePrompt requiredPlan={requiredPlan} />}</>
+    return <>{fallback ?? <UpgradePrompt minPlan={requiredPlan} feature={feature} />}</>
   }
 
   return <>{children}</>

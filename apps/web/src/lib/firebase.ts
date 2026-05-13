@@ -20,10 +20,10 @@ export const storage = getStorage(app)
 export const functions = getFunctions(app, 'europe-west6')
 
 // Connect to local emulators when NEXT_PUBLIC_USE_EMULATORS=true.
-// Guard with a flag stored on globalThis so HMR doesn't call connect() twice.
+// Guard with globalThis flag to prevent double-connect on HMR (client) and
+// across module re-evaluations in server components.
 if (
   process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' &&
-  typeof window !== 'undefined' &&
   !(globalThis as { _emulatorConnected?: boolean })._emulatorConnected
 ) {
   connectFirestoreEmulator(db, 'localhost', 8080)

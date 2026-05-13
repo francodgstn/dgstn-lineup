@@ -13,9 +13,11 @@ export type PlanFeature =
   | 'signup_forms'
   | 'basic_dashboard'
   | 'basic_alerts'
-  // Club
   | 'subscriptions'
   | 'payment_tracking'
+  | 'goals'
+  | 'coaching'
+  // Club
   | 'student_app'
   | 'gamification'
   | 'outreach_templates'
@@ -44,6 +46,10 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'signup_forms',
     'basic_dashboard',
     'basic_alerts',
+    'subscriptions',
+    'payment_tracking',
+    'goals',
+    'coaching',
   ],
   club: [
     'contacts',
@@ -56,6 +62,8 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'basic_alerts',
     'subscriptions',
     'payment_tracking',
+    'goals',
+    'coaching',
     'student_app',
     'gamification',
     'outreach_templates',
@@ -77,6 +85,8 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'basic_alerts',
     'subscriptions',
     'payment_tracking',
+    'goals',
+    'coaching',
     'student_app',
     'gamification',
     'outreach_templates',

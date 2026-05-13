@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EVENTS_COLLECTION } from '@lineup/shared'
 import type { Event, EventType } from '@lineup/shared'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, Users, MapPin, CalendarDays } from 'lucide-react'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -118,7 +119,7 @@ function EventDialog({
   const t = useTranslations('Events')
   const qc = useQueryClient()
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<EventFormData>({
+  const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
     defaultValues: editing
       ? {
@@ -175,15 +176,22 @@ function EventDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="ev-type">{t('fieldType')}</Label>
-            <select
-              id="ev-type"
-              {...register('type')}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {EVENT_TYPES.map((type) => (
-                <option key={type} value={type}>{t(`type_${type}` as Parameters<typeof t>[0])}</option>
-              ))}
-            </select>
+            <Controller
+              name="type"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>{t(`type_${type}` as Parameters<typeof t>[0])}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CONTACTS_COLLECTION, ACTIVITIES_COLLECTION, TEAMS_COLLECTION } from '@lineup/shared'
 import type { Contact, Activity, Team } from '@lineup/shared'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Trophy, Flame, Star, Plus, Trash2, Save, ChevronDown, ChevronRight, Info,
 } from 'lucide-react'
@@ -430,15 +431,19 @@ function ScoringTab({
           <div key={field.id} className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 items-end p-3 rounded-lg bg-muted/40 border">
             <div className="space-y-1">
               <label className="text-xs font-medium">{t('multiplierDay')}</label>
-              <select
-                value={watch(`time_multipliers.${index}.day`) ?? 5}
-                onChange={(e) => setValue(`time_multipliers.${index}.day`, Number(e.target.value), { shouldDirty: true })}
-                className="rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              <Select
+                value={String(watch(`time_multipliers.${index}.day`) ?? 5)}
+                onValueChange={(v) => setValue(`time_multipliers.${index}.day`, Number(v), { shouldDirty: true })}
               >
-                {DAY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+                <SelectTrigger className="h-8 w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DAY_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1 w-20">
               <label className="text-xs font-medium">{t('multiplierFrom')}</label>

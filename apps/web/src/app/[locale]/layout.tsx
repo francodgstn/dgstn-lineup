@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { ThemeProvider } from 'next-themes'
 import { AuthProvider } from '@/contexts/AuthContext'
 import QueryProvider from '@/contexts/QueryProvider'
+import { Toaster } from '@/components/ui/sonner'
 import { routing } from '@/i18n/routing'
 
 export default async function LocaleLayout({
@@ -24,6 +25,7 @@ export default async function LocaleLayout({
         <QueryProvider>
           <AuthProvider>{children}</AuthProvider>
         </QueryProvider>
+        <Toaster richColors position="top-right" />
       </NextIntlClientProvider>
     </ThemeProvider>
   )

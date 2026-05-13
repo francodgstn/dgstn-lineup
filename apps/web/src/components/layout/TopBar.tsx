@@ -442,9 +442,9 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
               <Settings className="h-4 w-4 mr-2" />
               {tNav('settings')}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push('/team/members' as Route)}>
+            <DropdownMenuItem onClick={() => router.push('/team/managers' as Route)}>
               <Users className="h-4 w-4 mr-2" />
-              {tNav('members')}
+              {tNav('managers')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
 

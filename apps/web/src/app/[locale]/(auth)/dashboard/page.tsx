@@ -16,9 +16,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { PlanGate } from '@/components/plan/PlanGate'
+import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import {
   Users, TrendingUp, BookOpen,
-  Plus, UserPlus, ArrowRight, Clock, Bell,
+  Plus, UserPlus, ArrowRight, Clock, Bell, Lock,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
@@ -396,11 +397,19 @@ function TriggeredAlertsCard({ contacts }: { contacts: Contact[] }) {
 
 function TrendsUpsell() {
   const t = useTranslations('Dashboard')
+  const { openUpgradeModal } = useUpgradeModal()
   return (
-    <div className="rounded-xl border border-dashed p-8 text-center space-y-2">
+    <div className="rounded-xl border border-dashed p-8 text-center space-y-3">
       <TrendingUp className="h-8 w-8 mx-auto text-muted-foreground/40" />
       <p className="text-sm font-medium">{t('sectionTrends')}</p>
       <p className="text-xs text-muted-foreground max-w-xs mx-auto">{t('trendsUpsell')}</p>
+      <button
+        onClick={() => openUpgradeModal({ minPlan: 'club' })}
+        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+      >
+        <Lock className="h-3 w-3" />
+        See upgrade options
+      </button>
     </div>
   )
 }

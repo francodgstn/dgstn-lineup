@@ -176,6 +176,37 @@
     font-weight: 600;
   }
 
+  button:not(:disabled),
+  a[href],
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="menuitemcheckbox"]:not([aria-disabled="true"]),
+  [role="menuitemradio"]:not([aria-disabled="true"]),
+  [role="switch"]:not([aria-disabled="true"]),
+  [role="radio"]:not([aria-disabled="true"]),
+  [role="checkbox"]:not([aria-disabled="true"]),
+  [role="combobox"]:not([aria-disabled="true"]),
+  [type="checkbox"]:not(:disabled),
+  [type="radio"]:not(:disabled),
+  select:not(:disabled),
+  label[for] {
+    cursor: pointer;
+  }
+
+  /* Tiptap note content rendering */
+  .prose-notes > * + * { margin-top: 0.5em; }
+  .prose-notes h2 { font-size: 1rem; font-weight: 700; margin-top: 0.75em; }
+  .prose-notes h3 { font-size: 0.9rem; font-weight: 600; margin-top: 0.75em; }
+  .prose-notes ul { list-style-type: disc; padding-left: 1.25em; }
+  .prose-notes ol { list-style-type: decimal; padding-left: 1.25em; }
+  .prose-notes li + li { margin-top: 0.15em; }
+  .prose-notes blockquote { border-left: 3px solid oklch(0.905 0.013 288); padding-left: 0.75em; color: oklch(0.50 0.03 288); font-style: italic; }
+  .prose-notes code { background: oklch(0.955 0.009 288); border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.85em; font-family: ui-monospace, monospace; }
+  .prose-notes strong { font-weight: 600; }
+  .prose-notes p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: oklch(0.50 0.03 288); opacity: 0.6; pointer-events: none; float: left; height: 0; }
+
   /* Thin, styled scrollbars — unobtrusive but intentional */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }

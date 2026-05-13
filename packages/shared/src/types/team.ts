@@ -83,6 +83,16 @@ export interface TeamMember {
   roleUpdatedAt?: Timestamp
 }
 
+export interface BookingSettings {
+  flowType: 'activity-first' | 'date-first'
+  windowMonths: number
+  showPhone: boolean
+  showActivityDescription?: boolean
+  showFitnessAppField?: boolean
+  ctaUrl?: string | null
+  ctaLabel?: string | null
+}
+
 export interface TeamPublicProfile {
   name: string
   description?: string
@@ -95,6 +105,7 @@ export interface TeamPublicProfile {
   portalTheme?: PortalTheme
   portalAccentColor?: string
   portalBackground?: PortalBackground
+  bookingSettings?: BookingSettings
 }
 
 export interface TeamInvitation {

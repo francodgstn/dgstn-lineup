@@ -26,8 +26,10 @@ import {
 import type {
   Contact, MembershipStatus, ContactType, ContactGender,
   SubscriptionType, SubscriptionHistoryEntry, ContactAlert, AlertScheduleType,
-  RankingSystem, ActivityLogEntry, ActivityEventType,
+  RankingSystem, ActivityLogEntry, ActivityEventType, PlanFeature,
 } from '@lineup/shared'
+import { usePlan } from '@/hooks/usePlan'
+import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -36,9 +38,11 @@ import {
   BookOpen, Award, ChevronDown, ChevronUp, Plus, Trash2, Trophy,
   Bell, Timer, Activity, ArchiveRestore, AlertTriangle,
   UserPlus, Archive, RotateCcw, ArrowRightLeft, CheckCircle, XCircle,
-  CalendarCheck, CalendarX, CreditCard, BarChart2, Lock,
+  CalendarCheck, CalendarX, CreditCard, BarChart2, Lock, Flag,
 } from 'lucide-react'
 import { LineChart, Line, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { GoalsTab } from './GoalsTab'
+import { NotesTab } from './NotesTab'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -843,49 +847,6 @@ function ProfileTab({
 
 // ─── notes tab ────────────────────────────────────────────────────────────────
 
-function NotesTab({ contact, onSaved }: { contact: Contact; onSaved: () => void }) {
-  const t = useTranslations('Contacts')
-  const tCommon = useTranslations('Common')
-  const [notes, setNotes] = useState(contact.notes ?? '')
-  const [saving, setSaving] = useState(false)
-  const isDirty = notes !== (contact.notes ?? '')
-
-  const save = async () => {
-    setSaving(true)
-    try {
-      await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
-        notes: notes || null,
-        updatedAt: serverTimestamp(),
-      })
-      onSaved()
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4 pb-24">
-      <Textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        rows={12}
-        placeholder={t('noNotes')}
-        className="resize-none"
-      />
-      {isDirty && (
-        <div className="fixed bottom-6 right-6 z-40">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="flex items-center gap-2 px-5 py-3 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-          >
-            {saving ? tCommon('loading') : t('saveChanges')}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ─── bookings tab ─────────────────────────────────────────────────────────────
 
@@ -1784,7 +1745,7 @@ function ArchivedContactView({ contact, onAction }: { contact: Contact; onAction
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'profile' | 'notes' | 'activity' | 'bookings' | 'subscriptions' | 'gamification' | 'alerts'
+type TabId = 'profile' | 'notes' | 'activity' | 'bookings' | 'subscriptions' | 'goals' | 'gamification' | 'alerts'
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -1794,6 +1755,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter()
   const t = useTranslations('Contacts')
   const qc = useQueryClient()
+  const { hasFeature } = usePlan()
+  const { openUpgradeModal } = useUpgradeModal()
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['contact', id] })
@@ -1820,14 +1783,15 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     return <div className="py-16 text-center text-muted-foreground">{t('notFound')}</div>
   }
 
-  const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  const TABS: { id: TabId; label: string; icon: React.ElementType; feature?: PlanFeature }[] = [
     { id: 'profile',       label: t('tabProfile'),       icon: Mail },
     { id: 'notes',         label: t('tabNotes'),         icon: StickyNote },
     { id: 'activity',      label: t('tabActivity'),      icon: Activity },
     { id: 'alerts',        label: t('tabAlerts'),        icon: Bell },
     { id: 'bookings',      label: t('tabBookings'),      icon: CalendarDays },
-    { id: 'subscriptions', label: t('tabSubscriptions'), icon: BookOpen },
-    { id: 'gamification',  label: t('tabGamification'),  icon: Star },
+    { id: 'subscriptions', label: t('tabSubscriptions'), icon: BookOpen,  feature: 'subscriptions' },
+    { id: 'goals',         label: t('tabGoals'),         icon: Flag,      feature: 'goals' },
+    { id: 'gamification',  label: t('tabGamification'),  icon: Star,      feature: 'gamification' },
   ]
 
   return (
@@ -1872,25 +1836,25 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   </>
                 )}
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+              <div className="flex flex-col gap-1 mt-2">
                 {contact.email && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Mail className="h-3 w-3" /> {contact.email}
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Mail className="h-3 w-3 shrink-0" /> {contact.email}
                   </span>
                 )}
                 {contact.phone && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Phone className="h-3 w-3" /> {contact.phone}
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Phone className="h-3 w-3 shrink-0" /> {contact.phone}
                   </span>
                 )}
                 {contact.created_at && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <CalendarDays className="h-3 w-3" /> {t('memberSince')} {formatDate(contact.created_at)}
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <CalendarDays className="h-3 w-3 shrink-0" /> {t('memberSince')} {formatDate(contact.created_at)}
                   </span>
                 )}
                 {(contact.current_streak ?? 0) > 0 && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Flame className="h-3 w-3 text-orange-500" /> {contact.current_streak}w streak
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Flame className="h-3 w-3 shrink-0 text-orange-500" /> {contact.current_streak}w streak
                   </span>
                 )}
               </div>
@@ -1898,7 +1862,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           </div>
 
           {/* Desktop stats — right, always visible */}
-          <div className="hidden lg:flex flex-col border-l w-1/3 shrink-0">
+          <div className="hidden lg:flex flex-col border-l w-3/8 shrink-0">
             <StatsPanel contact={contact} teamId={currentTeamId} />
           </div>
         </div>
@@ -1915,19 +1879,23 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           {/* Tabs */}
           <div className="flex gap-0.5 border-b overflow-x-auto">
             {TABS.map((tb) => {
+              const locked = tb.feature ? !hasFeature(tb.feature) : false
               const Icon = tb.icon
               return (
                 <button
                   key={tb.id}
-                  onClick={() => setTab(tb.id)}
-                  className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                    tab === tb.id
-                      ? 'border-primary text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  onClick={() => locked ? openUpgradeModal({ feature: tb.feature }) : setTab(tb.id)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                    locked
+                      ? 'border-transparent text-muted-foreground/50 hover:text-muted-foreground/70'
+                      : tab === tb.id
+                        ? 'border-primary text-foreground'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
                   <span className="hidden sm:inline">{tb.label}</span>
+                  {locked && <Lock className="h-3 w-3 text-muted-foreground/30" />}
                 </button>
               )
             })}
@@ -1939,7 +1907,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               <ProfileTab contact={contact} teamId={currentTeamId} onSaved={invalidate} />
             )}
             {tab === 'notes' && (
-              <NotesTab contact={contact} onSaved={invalidate} />
+              <NotesTab contact={contact} />
             )}
             {tab === 'activity' && (
               <ActivityTab contact={contact} teamId={currentTeamId} />
@@ -1953,12 +1921,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {tab === 'subscriptions' && (
               <SubscriptionsTab contact={contact} teamId={currentTeamId} />
             )}
+            {tab === 'goals' && (
+              <GoalsTab contact={contact} teamId={currentTeamId} />
+            )}
             {tab === 'gamification' && (
               <GamificationTab contact={contact} teamId={currentTeamId} />
             )}
           </div>
         </>
       )}
+
     </div>
   )
 }

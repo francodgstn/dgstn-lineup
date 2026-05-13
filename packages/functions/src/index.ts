@@ -46,8 +46,9 @@ export { dailyTasks } from './dailyTasks'
 // Auth / Membership
 export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'
 
+// Coaching (1:1 slots)
+export { generateCoachSlots, generateCoachSlotsScheduled, bookCoachSlot, cancelCoachBooking, trackCoachBookings } from './coaching'
+
 // --- Stubs (TODO: port from hmd-lineup) ---
-// export { rebookSession, getBookingDetails } from './booking'
-// export { generateCoachSlots } from './sessions'
 // export { generateContactQR } from './contacts'
 // export { generateDashboardInsight } from './analytics'

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -15,6 +15,7 @@ import {
 import { db } from '@/lib/firebase'
 import { signUp } from '@/lib/auth'
 import { Card, CardContent } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -214,6 +215,7 @@ function StepTeam({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<TeamData>({ resolver: zodResolver(teamSchema) })
 
@@ -239,18 +241,23 @@ function StepTeam({
         <Label htmlFor="sport_type">
           {t('sportType')} <span className="text-muted-foreground font-normal">{t('sportTypeOptional')}</span>
         </Label>
-        <select
-          id="sport_type"
-          {...register('sport_type')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-        >
-          <option value="">{t('sportTypeSelect')}</option>
-          {SPORT_TYPES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <Controller
+          name="sport_type"
+          control={control}
+          render={({ field }) => (
+            <Select value={field.value || '__none__'} onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t('sportTypeSelect')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{t('sportTypeSelect')}</SelectItem>
+                {SPORT_TYPES.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
       </div>
 
       {error && (

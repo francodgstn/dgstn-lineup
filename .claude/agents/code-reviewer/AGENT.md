@@ -51,6 +51,7 @@ When asked to review changes, run `git diff` or read the specified files and che
 - [ ] No new shadcn/ui components added without checking `src/components/ui/` first
 - [ ] `typedRoutes` — route strings that can't be inferred use `as Route` cast
 - [ ] Plan-gated features use `<PlanGate>` or `usePlan()` — not ad-hoc plan checks
+- [ ] **No native `<select>` elements** — use the shadcn `<Select>` component from `@/components/ui/select` instead. Native `<select>` ignores Tailwind theme tokens and breaks dark mode, border-radius, and focus ring consistency. Flag any `<select>` tag that is not inside a component specifically designed to wrap a native input (e.g. `<input type="color">`).
 - [ ] Lint passes: `pnpm --filter @lineup/web run lint`
 
 ## Mobile app checklist

@@ -77,7 +77,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~15 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Outreach/automation engine** — not started
-- **Coaching page** — stub only; complex coach-slot management
+- **Coaching page** — stub only; needs full implementation (see `docs/product-strategy.md` for scope). Coach plan: availability templates + portal-based slot booking + .ics emails. Club plan: mobile app integration + push reminders. Source: `C:\git\hmd\hmd-lineup\functions\src\{bookCoachSlot,cancelCoachBooking,generateCoachSlots,trackCoachBookings}\` and `src\routes\CoachSlots\`
 
 ---
 

@@ -3,22 +3,24 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form'
+import { useForm, useFieldArray, Controller, useWatch, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { IconPicker } from '@/components/ui/icon-picker'
 import PortalHome from '../../../(portal)/portal/[slug]/PortalHome'
+import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@lineup/shared'
-import type { Team, SocialPlatform } from '@lineup/shared'
+import type { Team, SocialPlatform, BookingSettings } from '@lineup/shared'
 import {
   PORTAL_GRADIENTS, SOCIAL_PLATFORMS, SOCIAL_LABELS,
 } from '@/lib/portal'
@@ -46,6 +48,16 @@ const linkSchema = z.object({
   isMembershipLink: z.boolean().optional(),
 })
 
+const bookingSchema = z.object({
+  flowType:                z.enum(['activity-first', 'date-first']),
+  windowMonths:            z.number().int().min(1).max(6),
+  showPhone:               z.boolean(),
+  showActivityDescription: z.boolean(),
+  showFitnessAppField:     z.boolean(),
+  ctaUrl:                  z.string().optional(),
+  ctaLabel:                z.string().optional(),
+})
+
 const schema = z.object({
   portalTheme: z.enum(['light', 'dark', 'auto']),
   accentColor: z.string(),
@@ -62,6 +74,7 @@ const schema = z.object({
   website:   z.string().optional(),
   review:    z.string().optional(),
   links: z.array(linkSchema),
+  booking: bookingSchema,
 })
 
 type FormData = z.infer<typeof schema>
@@ -486,9 +499,243 @@ function SocialTab({
   )
 }
 
+// ─── booking tab ──────────────────────────────────────────────────────────────
+
+function BookingTab({
+  control,
+  register,
+}: {
+  control: ReturnType<typeof useForm<FormData>>['control']
+  register: ReturnType<typeof useForm<FormData>>['register']
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Flow type */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Booking flow</p>
+        <p className="text-xs text-muted-foreground">Choose how visitors browse sessions.</p>
+        <Controller
+          control={control}
+          name="booking.flowType"
+          render={({ field }) => (
+            <div className="space-y-2">
+              {([
+                { value: 'activity-first', label: 'Activity-first', desc: 'Visitors pick an activity, then a time slot.' },
+                { value: 'date-first',     label: 'Date-first',     desc: 'Visitors pick a date, then an activity.' },
+              ] as const).map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                    field.value === opt.value ? 'border-primary bg-primary/5' : 'hover:bg-muted/30'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    value={opt.value}
+                    checked={field.value === opt.value}
+                    onChange={() => field.onChange(opt.value)}
+                    className="mt-0.5 accent-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">{opt.label}</p>
+                    <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        />
+      </div>
+
+      {/* Booking window */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Booking window</p>
+        <p className="text-xs text-muted-foreground">How far ahead visitors can book sessions.</p>
+        <Controller
+          control={control}
+          name="booking.windowMonths"
+          render={({ field }) => (
+            <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+              <SelectTrigger className="h-9 w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 month</SelectItem>
+                <SelectItem value="2">2 months</SelectItem>
+                <SelectItem value="3">3 months</SelectItem>
+                <SelectItem value="6">6 months</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
+      {/* Toggle helper */}
+      {(
+        [
+          { name: 'booking.showPhone'               as const, label: 'Show phone field',              desc: 'Include an optional phone field in the new guest form.' },
+          { name: 'booking.showActivityDescription' as const, label: 'Show activity description',     desc: 'Show the activity description text on the activity selection screen.' },
+          { name: 'booking.showFitnessAppField'     as const, label: 'Show fitness app field',        desc: 'Ask new guests which fitness app they\'re coming from (e.g. Fitpass, ClassPass).' },
+        ] as const
+      ).map(({ name, label, desc }) => (
+        <div key={name} className="flex items-center justify-between rounded-lg border p-3">
+          <div>
+            <p className="text-sm font-medium">{label}</p>
+            <p className="text-xs text-muted-foreground">{desc}</p>
+          </div>
+          <Controller
+            control={control}
+            name={name}
+            render={({ field }) => (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={field.value}
+                onClick={() => field.onChange(!field.value)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
+                  field.value ? 'bg-primary' : 'bg-muted'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
+                    field.value ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            )}
+          />
+        </div>
+      ))}
+
+      {/* CTA button */}
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-medium">CTA button (optional)</p>
+          <p className="text-xs text-muted-foreground">
+            Shown on the confirmation screen after a successful booking.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Button URL</label>
+            <Input
+              {...register('booking.ctaUrl')}
+              type="url"
+              placeholder="https://example.com"
+              className="h-9 text-sm font-mono"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Button label</label>
+            <Input
+              {...register('booking.ctaLabel')}
+              placeholder="e.g. Contact Us"
+              className="h-9 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── booking preview panel ────────────────────────────────────────────────────
+
+const SAMPLE_ACTIVITIES = [
+  { name: 'Morning Yoga', color: '#6366f1' },
+  { name: 'HIIT Training', color: '#10b981' },
+  { name: 'Pilates', color: '#f59e0b' },
+]
+
+function gradientForColor(color: string) {
+  return `linear-gradient(135deg, ${color}cc, ${color}66)`
+}
+
+function BookingPreviewPanel({
+  teamName,
+  accentColor,
+  onBack,
+}: {
+  teamName: string
+  accentColor: string
+  onBack: () => void
+}) {
+  return (
+    <div className="min-h-[600px] bg-background text-foreground font-sans">
+      {/* Top nav */}
+      <div className="border-b bg-card px-5 py-3">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          {teamName}
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-lg mx-auto px-5 py-8 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Book a Session</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Choose an activity to get started.</p>
+        </div>
+
+        <div className="space-y-3">
+          {SAMPLE_ACTIVITIES.map((a) => (
+            <div
+              key={a.name}
+              className="w-full rounded-xl border bg-card flex items-stretch overflow-hidden opacity-80"
+            >
+              <div
+                className="w-20 shrink-0"
+                style={{ background: gradientForColor(a.color) }}
+              />
+              <div className="flex-1 p-4">
+                <p className="font-semibold text-sm">{a.name}</p>
+                <span className="mt-1 inline-block rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
+                  Sample activity
+                </span>
+              </div>
+              <div className="flex items-center pr-4 text-muted-foreground">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Sticky bar preview */}
+        <div
+          className="rounded-2xl border p-3 flex items-center gap-3 mt-4"
+          style={{ borderColor: `${accentColor}40`, background: `${accentColor}08` }}
+        >
+          <div
+            className="w-12 h-12 rounded-lg shrink-0"
+            style={{ background: gradientForColor(accentColor) }}
+          />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm truncate">Morning Yoga</p>
+            <p className="text-xs text-muted-foreground">Mon 9 Jun · 09:00–10:00</p>
+          </div>
+          <button
+            className="shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-white"
+            style={{ background: accentColor }}
+          >
+            Confirm
+          </button>
+        </div>
+        <p className="text-center text-xs text-muted-foreground">↑ Booking summary bar</p>
+      </div>
+    </div>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'appearance' | 'links' | 'social'
+type Tab = 'appearance' | 'links' | 'social' | 'booking'
 
 export default function TeamPortalEditorPage() {
   const { currentTeamId } = useAuth()
@@ -497,7 +744,7 @@ export default function TeamPortalEditorPage() {
   const t = useTranslations('TeamPortal')
 
   const [tab, setTab] = useState<Tab>('appearance')
-  const [saved, setSaved] = useState(false)
+  const [previewPage, setPreviewPage] = useState<'home' | 'booking'>('home')
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null)
 
@@ -571,20 +818,62 @@ export default function TeamPortalEditorPage() {
 
   async function onSubmit(data: FormData) {
     if (!currentTeamId) return
+
     const socialLinks = SOCIAL_PLATFORMS
       .filter((p) => (data[p as keyof FormData] as string | undefined))
       .map((p) => ({ platform: p, url: data[p as keyof FormData] as string }))
 
-    await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
+    const bookingSettings: BookingSettings = {
+      flowType:                data.booking.flowType,
+      windowMonths:            data.booking.windowMonths,
+      showPhone:               data.booking.showPhone,
+      showActivityDescription: data.booking.showActivityDescription,
+      showFitnessAppField:     data.booking.showFitnessAppField,
+      ctaUrl:                  data.booking.ctaUrl || null,
+      ctaLabel:                data.booking.ctaLabel || null,
+    }
+
+    // Firestore rejects `undefined` values — strip them before any write
+    const portalPayload = stripUndefined({
       portalTheme: data.portalTheme,
       portalAccentColor: data.accentColor,
       portalBackground: { type: data.bgType, color: data.bgColor },
       socialLinks,
       links: data.links,
     })
-    await qc.invalidateQueries({ queryKey: ['team', currentTeamId] })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+
+    try {
+      // ① Write public_profile first — only needs team-member permission, source of
+      //    truth for the public portal. Must succeed.
+      const profileRef = doc(db, TEAMS_COLLECTION, currentTeamId, 'public_profile', currentTeamId)
+      await setDoc(profileRef, stripUndefined({
+        type: 'team',
+        slug: team?.slug ?? '',
+        name: team?.name ?? '',
+        bookingSettings,
+        ...portalPayload,
+      }), { merge: true })
+
+      // ② Also update the team doc (needs owner role) so the editor form re-hydrates
+      //    correctly after reload. Non-fatal: log but don't fail the whole save.
+      updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
+        ...portalPayload,
+        'settings.booking': bookingSettings,
+      }).catch((err) => {
+        console.warn('[portal save] team doc update failed (non-fatal):', err)
+      })
+
+      await qc.invalidateQueries({ queryKey: ['team', currentTeamId] })
+      toast.success('Portal settings saved')
+    } catch (err) {
+      console.error('[portal save] failed:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to save. Please try again.')
+    }
+  }
+
+  function onInvalidForm(errors: FieldErrors<FormData>) {
+    toast.error('Some fields have errors — check the form and try again.')
+    console.error('[portal save] form validation errors:', JSON.stringify(errors, null, 2))
   }
 
   // ── preview data ──────────────────────────────────────────────────────────
@@ -644,6 +933,7 @@ export default function TeamPortalEditorPage() {
     { key: 'appearance', label: t('tabAppearance') },
     { key: 'links',      label: t('tabLinks') },
     { key: 'social',     label: t('tabSocial') },
+    { key: 'booking',    label: 'Booking' },
   ]
 
   return (
@@ -662,12 +952,9 @@ export default function TeamPortalEditorPage() {
             <ExternalLink className="h-3 w-3" />
           </a>
         </div>
-        <div className="flex items-center gap-3">
-          {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
-          <Button onClick={handleSubmit(onSubmit)} disabled={isSubmitting || !isDirty}>
-            {isSubmitting ? t('saving') : t('save')}
-          </Button>
-        </div>
+        <Button onClick={handleSubmit(onSubmit, onInvalidForm)} disabled={isSubmitting}>
+          {isSubmitting ? t('saving') : t('save')}
+        </Button>
       </div>
 
       {/* Two-column layout */}
@@ -681,7 +968,7 @@ export default function TeamPortalEditorPage() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setTab(key)}
+                onClick={() => { setTab(key); setPreviewPage(key === 'booking' ? 'booking' : 'home') }}
                 className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   tab === key
                     ? 'border-primary text-foreground'
@@ -693,7 +980,7 @@ export default function TeamPortalEditorPage() {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit, onInvalidForm)}>
             {tab === 'appearance' && (
               <AppearanceTab
                 control={control}
@@ -711,6 +998,9 @@ export default function TeamPortalEditorPage() {
             )}
             {tab === 'social' && (
               <SocialTab register={register} />
+            )}
+            {tab === 'booking' && (
+              <BookingTab control={control} register={register} />
             )}
           </form>
         </div>
@@ -733,7 +1023,21 @@ export default function TeamPortalEditorPage() {
             </a>
           </div>
           <div className="rounded-xl border overflow-hidden max-h-[calc(100vh-12rem)] overflow-y-auto shadow-sm">
-            <PortalHome team={previewTeam} slug={team.slug} />
+            {previewPage === 'booking' ? (
+              <BookingPreviewPanel
+                teamName={team.name}
+                accentColor={formValues.accentColor ?? '#6366f1'}
+                onBack={() => setPreviewPage('home')}
+              />
+            ) : (
+              <PortalHome
+                team={previewTeam}
+                slug={team.slug}
+                onLinkClick={(type) => {
+                  if (type === 'booking') setPreviewPage('booking')
+                }}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -743,14 +1047,31 @@ export default function TeamPortalEditorPage() {
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+/** Recursively removes `undefined` values so Firestore never sees them. */
+function stripUndefined<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj)) as T
+}
+
 function getDefaults(team: Team | null): FormData {
   const sl = team?.socialLinks ?? []
   const getSocial = (p: SocialPlatform) => sl.find((s) => s.platform === p)?.url ?? ''
+
+  // Cast through unknown so TS allows us to read possibly-missing sub-keys
+  const rawBooking = ((team?.settings as Record<string, unknown> | undefined)?.booking ?? {}) as Record<string, unknown>
+
+  // Coerce windowMonths to a valid integer (Firestore can return floats or strings)
+  const rawMonths = Number(rawBooking.windowMonths)
+  const windowMonths = Number.isInteger(rawMonths) && rawMonths >= 1 && rawMonths <= 6 ? rawMonths : 2
+
+  const flowType = rawBooking.flowType === 'date-first' ? 'date-first' : 'activity-first'
+
   return {
-    portalTheme: team?.portalTheme ?? 'light',
-    accentColor: team?.portalAccentColor ?? '#6366f1',
-    bgType:  team?.portalBackground?.type  ?? 'solid',
-    bgColor: team?.portalBackground?.color ?? '#ffffff',
+    portalTheme: (['light', 'dark', 'auto'] as const).includes(team?.portalTheme as never)
+      ? (team!.portalTheme as FormData['portalTheme'])
+      : 'light',
+    accentColor: typeof team?.portalAccentColor === 'string' ? team.portalAccentColor : '#6366f1',
+    bgType: team?.portalBackground?.type === 'gradient' ? 'gradient' : 'solid',
+    bgColor: typeof team?.portalBackground?.color === 'string' ? team.portalBackground.color : '#ffffff',
     instagram: getSocial('instagram'),
     facebook:  getSocial('facebook'),
     youtube:   getSocial('youtube'),
@@ -760,6 +1081,24 @@ function getDefaults(team: Team | null): FormData {
     whatsapp:  getSocial('whatsapp'),
     website:   getSocial('website'),
     review:    getSocial('review'),
-    links: (team?.links ?? []) as FormData['links'],
+    // Sanitize each link to ensure all required fields are valid for the schema
+    links: (team?.links ?? []).map((l) => ({
+      label:          typeof l.label === 'string' ? l.label : '',
+      description:    typeof l.description === 'string' ? l.description : undefined,
+      url:            typeof l.url === 'string' ? l.url : '',
+      showInPortal:   l.showInPortal === true || l.showInPortal === false ? l.showInPortal : false,
+      iconName:       typeof l.iconName === 'string' ? l.iconName : undefined,
+      isBookingLink:  l.isBookingLink === true ? true : undefined,
+      isMembershipLink: l.isMembershipLink === true ? true : undefined,
+    })),
+    booking: {
+      flowType,
+      windowMonths,
+      showPhone:               rawBooking.showPhone               !== false,
+      showActivityDescription: rawBooking.showActivityDescription !== false,
+      showFitnessAppField:     rawBooking.showFitnessAppField     === true,
+      ctaUrl:                  typeof rawBooking.ctaUrl  === 'string' ? rawBooking.ctaUrl  : '',
+      ctaLabel:                typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
+    },
   }
 }

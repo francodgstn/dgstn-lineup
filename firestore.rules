@@ -169,8 +169,8 @@ service cloud.firestore {
       match /public_profile/{publicProfileId} {
         // Anyone can read (needed for public portal access)
         allow read;
-        // Only cloud functions can write
-        allow write: if false;
+        // Team members can update portal settings (appearance, links, booking config)
+        allow write: if isTeamMember(teamId);
       }
 
       // Team members subcollection
@@ -498,29 +498,17 @@ service cloud.firestore {
 
     // Coach Slots (individual bookable instances generated from templates or created manually)
     match /coach_slots/{slotId} {
-      // GET: resource.data is available, full check for both admin and student
-      allow get: if (isAuthed() && isTeamMember(resource.data.teamId))
-                 || (request.auth != null
-                     && request.auth.token.teamId == resource.data.teamId
-                     && request.auth.token.sessionExpires != null
-                     && request.auth.token.sessionExpires >= request.time.toMillis());
-
-      // LIST: resource.data is not reliably available for query rules (see referrals note).
-      // Admin: must be a member of their currentTeam. Student: valid session token with teamId claim.
-      allow list: if (isAuthed() && isTeamMember(getUserCurrentTeam()))
-                  || (request.auth != null
-                      && request.auth.token.teamId != null
-                      && request.auth.token.sessionExpires != null
-                      && request.auth.token.sessionExpires >= request.time.toMillis());
+      // Public read — slots are intentionally public (portal booking page, no auth required)
+      allow get: if true;
+      allow list: if true;
 
       allow create: if isAuthed() && hasTeamRole(request.resource.data.teamId, 'manager');
       allow update: if isAuthed() && hasTeamRole(resource.data.teamId, 'manager');
       allow delete: if false;
 
-      // Bookings subcollection — cloud functions write, managers and self-contact read
+      // Bookings subcollection — cloud functions write only; managers can read for admin UI
       match /bookings/{bookingId} {
-        allow read: if (isAuthed() && isTeamMember(get(/databases/$(database)/documents/coach_slots/$(slotId)).data.teamId))
-                    || isSelfContact(bookingId);
+        allow read: if isAuthed() && isTeamMember(get(/databases/$(database)/documents/coach_slots/$(slotId)).data.teamId);
         allow write: if false; // cloud functions only
       }
     }

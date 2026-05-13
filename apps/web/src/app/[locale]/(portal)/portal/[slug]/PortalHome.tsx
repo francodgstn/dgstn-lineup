@@ -45,9 +45,11 @@ interface Props {
   slug: string
   /** Pass for live preview (admin dashboard). Omit to fetch from Firestore (public portal). */
   team?: PortalTeamData
+  /** When set, link clicks call this instead of navigating (preview mode). */
+  onLinkClick?: (type: 'booking' | 'signup' | 'external', url?: string) => void
 }
 
-export default function PortalHome({ slug, team: teamProp }: Props) {
+export default function PortalHome({ slug, team: teamProp, onLinkClick }: Props) {
   const [team, setTeam] = useState<PortalTeamData | null>(teamProp ?? null)
   const [loading, setLoading] = useState(!teamProp)
   const [systemDark, setSystemDark] = useState(false)
@@ -182,9 +184,10 @@ export default function PortalHome({ slug, team: teamProp }: Props) {
               return (
                 <a
                   key={s.platform}
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={onLinkClick ? undefined : s.url}
+                  target={onLinkClick ? undefined : '_blank'}
+                  rel={onLinkClick ? undefined : 'noopener noreferrer'}
+                  onClick={onLinkClick ? (e) => { e.preventDefault(); onLinkClick('external', s.url) } : undefined}
                   className="h-9 w-9 rounded-full flex items-center justify-center transition-opacity hover:opacity-70"
                   style={{ background: cardBg, border: `1px solid ${cardBorder}`, color: textMain }}
                   aria-label={s.platform}
@@ -205,7 +208,7 @@ export default function PortalHome({ slug, team: teamProp }: Props) {
               const href = isBooking
                 ? `/portal/${slug}/booking`
                 : isMembership
-                ? `/portal/${slug}/membership-signup`
+                ? `/portal/${slug}/signup`
                 : link.url
 
               const isInternal = isBooking || isMembership
@@ -220,10 +223,14 @@ export default function PortalHome({ slug, team: teamProp }: Props) {
               return (
                 <a
                   key={i}
-                  href={href || undefined}
-                  target={isInternal ? undefined : '_blank'}
-                  rel={isInternal ? undefined : 'noopener noreferrer'}
-                  className="flex items-center gap-4 rounded-2xl px-5 py-4 transition-all hover:scale-[1.015] hover:shadow-lg"
+                  href={onLinkClick ? undefined : (href || undefined)}
+                  target={isInternal || onLinkClick ? undefined : '_blank'}
+                  rel={isInternal || onLinkClick ? undefined : 'noopener noreferrer'}
+                  onClick={onLinkClick ? (e) => {
+                    e.preventDefault()
+                    onLinkClick(isBooking ? 'booking' : isMembership ? 'signup' : 'external', href || undefined)
+                  } : undefined}
+                  className="flex items-center gap-4 rounded-2xl px-5 py-4 transition-all hover:scale-[1.015] hover:shadow-lg cursor-pointer"
                   style={{ ...cardStyle, textDecoration: 'none', display: 'flex' }}
                 >
                   <div
@@ -231,7 +238,7 @@ export default function PortalHome({ slug, team: teamProp }: Props) {
                     style={{ background: isBooking ? 'rgba(255,255,255,0.2)' : iconBg, color: iconColor }}
                   >
                     <DynamicIcon
-                      name={link.iconName ?? (isBooking ? 'CalendarDays' : isMembership ? 'CreditCard' : 'Link2')}
+                      name={link.iconName ?? (isBooking ? 'CalendarDays' : isMembership ? 'UserPlus' : 'Link2')}
                       className="h-4 w-4"
                     />
                   </div>

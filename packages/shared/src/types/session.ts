@@ -23,6 +23,15 @@ export interface SessionPublicProfile {
   start: Timestamp
   end: Timestamp
   allowBooking: boolean
+  location?: string
+  instructorName?: string
+  locationAddress?: string
+  locationMapsUrl?: string
+  activitySlug?: string
+  activityColor?: string
+  activityImage?: string | null
+  activityLevel?: string
+  activityIsFreeTrial?: boolean
 }
 
 export interface Participant {

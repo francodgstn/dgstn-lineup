@@ -41,6 +41,23 @@ function hoursOffset(base: Date, hours: number) {
   return new Date(base.getTime() + hours * 3_600_000)
 }
 
+function isoWeekLabel(date: Date): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  return `${d.getUTCFullYear()}-W${week.toString().padStart(2, '0')}`
+}
+
+function mondayOfWeeksAgo(n: number): Date {
+  const d = new Date()
+  const day = d.getDay()
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1) - n * 7)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
 async function clearEmulator() {
   await fetch(
     'http://localhost:8080/emulator/v1/projects/demo-lineup/databases/(default)/documents',
@@ -112,6 +129,13 @@ async function seedTeam(opts: {
         { label: 'Book a Free Trial', isBookingLink: true,  isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
         { label: 'Join as Member',    isBookingLink: false, isMembershipLink: true,  showInPortal: true, iconName: 'UserCheck',    url: null },
       ],
+      bookingSettings: {
+        flowType: 'activity-first',
+        windowMonths: 2,
+        showPhone: true,
+        ctaUrl: null,
+        ctaLabel: null,
+      },
       membershipRequiredFields: null,
       membershipOptionalFields: null,
       updated_at: ts(new Date()),
@@ -148,29 +172,45 @@ async function seedTeam(opts: {
   }
 
   // ── sessions ────────────────────────────────────────────────────────────────
-  type SessionDef = { dayOffset: number; actId: string; actName: string; hour: number; duration: number; location: string; allowBooking: boolean }
+  type SessionDef = {
+    dayOffset: number; actId: string; actName: string; hour: number
+    duration: number; location: string; allowBooking: boolean
+    instructor?: string; locationAddress?: string
+  }
   const sessionDefs: SessionDef[] = []
 
   for (let week = -4; week <= -1; week++) {
-    for (const [dayOff, actId, actName, hour, dur, loc] of [
-      [1, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 18, 1.5, 'Dojo A'],
-      [3, `${teamId}-act-kickbox`, 'Kickboxing',          19, 1,   'Dojo B'],
-      [5, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 7,  1,   'Dojo A'],
-      [6, `${teamId}-act-mma`,     'MMA',                 10, 2,   'Main Hall'],
+    for (const [dayOff, actId, actName, hour, dur, loc, instr] of [
+      [1, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 18, 1.5, 'Dojo A',    'Marco Silva'],
+      [3, `${teamId}-act-kickbox`, 'Kickboxing',          19, 1,   'Dojo B',    'Elena Rossi'],
+      [5, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 7,  1,   'Dojo A',    'Marco Silva'],
+      [6, `${teamId}-act-mma`,     'MMA',                 10, 2,   'Main Hall', null],
     ] as const) {
-      sessionDefs.push({ dayOffset: week * 7 + Number(dayOff), actId, actName, hour: Number(hour), duration: Number(dur), location: String(loc), allowBooking: false })
+      sessionDefs.push({
+        dayOffset: week * 7 + Number(dayOff), actId, actName,
+        hour: Number(hour), duration: Number(dur), location: String(loc),
+        allowBooking: false,
+        instructor: instr ?? undefined,
+        locationAddress: '123 Fighter St',
+      })
     }
   }
   for (let week = 0; week <= 3; week++) {
-    for (const [dayOff, actId, actName, hour, dur, loc, ab] of [
-      [1, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 18, 1.5, 'Dojo A',    true],
-      [2, `${teamId}-act-yoga`,    'Yoga & Mobility',     9,  1,   'Studio',    true],
-      [3, `${teamId}-act-kickbox`, 'Kickboxing',          19, 1,   'Dojo B',    true],
-      [5, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 7,  1,   'Dojo A',    true],
-      [6, `${teamId}-act-mma`,     'MMA',                 10, 2,   'Main Hall', true],
-      [0, `${teamId}-act-yoga`,    'Yoga & Mobility',     10, 1.5, 'Studio',    false],
+    for (const [dayOff, actId, actName, hour, dur, loc, ab, instr] of [
+      [1, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 18, 1.5, 'Dojo A',    true,  'Marco Silva'],
+      [2, `${teamId}-act-yoga`,    'Yoga & Mobility',     9,  1,   'Studio',    true,  'Aiko Tanaka'],
+      [3, `${teamId}-act-kickbox`, 'Kickboxing',          19, 1,   'Dojo B',    true,  'Elena Rossi'],
+      [5, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 7,  1,   'Dojo A',    true,  'Marco Silva'],
+      [6, `${teamId}-act-mma`,     'MMA',                 10, 2,   'Main Hall', true,  null],
+      [0, `${teamId}-act-yoga`,    'Yoga & Mobility',     10, 1.5, 'Studio',    false, 'Aiko Tanaka'],
     ] as const) {
-      sessionDefs.push({ dayOffset: week * 7 + Number(dayOff), actId, actName, hour: Number(hour), duration: Number(dur), location: String(loc), allowBooking: Boolean(ab) })
+      sessionDefs.push({
+        dayOffset: week * 7 + Number(dayOff), actId, actName,
+        hour: Number(hour), duration: Number(dur), location: String(loc),
+        allowBooking: Boolean(ab),
+        instructor: (instr as string | null) ?? undefined,
+        locationAddress: '123 Fighter St',
+      })
     }
   }
 
@@ -183,9 +223,15 @@ async function seedTeam(opts: {
     const end = hoursOffset(base, s.duration)
     const id  = `${teamId}-session-${i.toString().padStart(3, '0')}`
     sessionIds.push(id)
+
+    // Resolve activity metadata for public_profile
+    const act = activities.find((a) => a.id === s.actId)
+
     await db.collection('sessions').doc(id).set({
       teamId, activityId: s.actId, activityName: s.actName,
       start: ts(base), end: ts(end), location: s.location,
+      instructor: s.instructor ?? null,
+      locationAddress: s.locationAddress ?? null,
       allowBooking: s.allowBooking, participants_count: 0,
       created_at: ts(daysFromNow(-100)), createdBy: uid,
     })
@@ -193,7 +239,15 @@ async function seedTeam(opts: {
       await db.collection('sessions').doc(id)
         .collection('public_profile').doc(id).set({
           type: 'session', teamId, activityId: s.actId, activityName: s.actName,
-          activityColor: null, start: ts(base), end: ts(end), location: s.location,
+          activityColor: act?.color ?? null,
+          activitySlug: act?.slug ?? null,
+          activityIsFreeTrial: act?.isFreeTrial ?? false,
+          activityLevel: act?.level ?? null,
+          activityImage: null,
+          start: ts(base), end: ts(end), location: s.location,
+          instructorName: s.instructor ?? null,
+          locationAddress: s.locationAddress ?? null,
+          locationMapsUrl: null,
           capacity: null, participants_count: 0, allowBooking: true, slug: null,
         })
     }
@@ -201,24 +255,24 @@ async function seedTeam(opts: {
 
   // ── contacts ─────────────────────────────────────────────────────────────────
   const contactSeeds = [
-    { firstname: 'Luca',      lastname: 'Ferrari',   email: `luca.ferrari.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'M', totalSessions: 48 },
-    { firstname: 'Sofia',     lastname: 'Bianchi',   email: `sofia.bianchi.${teamId}@email.com`,  type: 'student',  status: 'active',       gender: 'F', totalSessions: 32 },
-    { firstname: 'Alex',      lastname: 'Müller',    email: `alex.mueller.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'M', totalSessions: 67 },
-    { firstname: 'Chiara',    lastname: 'Romano',    email: `chiara.romano.${teamId}@email.com`,  type: 'student',  status: 'active',       gender: 'F', totalSessions: 21 },
-    { firstname: 'Matteo',    lastname: 'Esposito',  email: `matteo.espo.${teamId}@email.com`,    type: 'student',  status: 'active',       gender: 'M', totalSessions: 55 },
-    { firstname: 'Emma',      lastname: 'Schneider', email: `emma.schneid.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'F', totalSessions: 14 },
-    { firstname: 'David',     lastname: 'Costa',     email: `david.costa.${teamId}@email.com`,    type: 'student',  status: 'active',       gender: 'M', totalSessions: 39 },
-    { firstname: 'Julia',     lastname: 'Weber',     email: `julia.weber.${teamId}@email.com`,    type: 'student',  status: 'almost_ready', gender: 'F', totalSessions: 8  },
-    { firstname: 'Marco',     lastname: 'Conti',     email: `marco.conti.${teamId}@email.com`,    type: 'student',  status: 'almost_ready', gender: 'M', totalSessions: 6  },
-    { firstname: 'Sara',      lastname: 'Ricci',     email: `sara.ricci.${teamId}@email.com`,     type: 'student',  status: 'expired',      gender: 'F', totalSessions: 28 },
-    { firstname: 'Tobias',    lastname: 'Huber',     email: `tobias.huber.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'M', totalSessions: 19 },
-    { firstname: 'Nina',      lastname: 'Moreau',    email: `nina.moreau.${teamId}@email.com`,    type: 'student',  status: 'active',       gender: 'F', totalSessions: 44 },
-    { firstname: 'Lorenzo',   lastname: 'De Luca',   email: `lorenzo.dl.${teamId}@email.com`,     type: 'trial',    status: 'requested',    gender: 'M', totalSessions: 1  },
-    { firstname: 'Amélie',    lastname: 'Dupont',    email: `amelie.dupont.${teamId}@email.com`,  type: 'trial',    status: 'requested',    gender: 'F', totalSessions: 0  },
-    { firstname: 'Kevin',     lastname: 'Nguyen',    email: `kevin.nguyen.${teamId}@email.com`,   type: 'trial',    status: 'under_review', gender: 'M', totalSessions: 2  },
-    { firstname: 'Hannah',    lastname: 'Fischer',   email: `hannah.fisch.${teamId}@email.com`,   type: 'external', status: 'guest',        gender: 'F', totalSessions: 0  },
-    { firstname: 'Radu',      lastname: 'Ionescu',   email: `radu.ionescu.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'M', totalSessions: 77 },
-    { firstname: 'Valentina', lastname: 'Greco',     email: `val.greco.${teamId}@email.com`,      type: 'student',  status: 'active',       gender: 'F', totalSessions: 29 },
+    { firstname: 'Luca',      lastname: 'Ferrari',   email: `luca.ferrari.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'M', totalSessions: 48, birthdate: new Date('1992-03-14'), birthplace: 'Milan'       },
+    { firstname: 'Sofia',     lastname: 'Bianchi',   email: `sofia.bianchi.${teamId}@email.com`,  type: 'student',  status: 'active',       gender: 'F', totalSessions: 32, birthdate: new Date('1995-07-22'), birthplace: 'Rome'        },
+    { firstname: 'Alex',      lastname: 'Müller',    email: `alex.mueller.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'M', totalSessions: 67, birthdate: new Date('1988-11-05'), birthplace: 'Zurich'      },
+    { firstname: 'Chiara',    lastname: 'Romano',    email: `chiara.romano.${teamId}@email.com`,  type: 'student',  status: 'active',       gender: 'F', totalSessions: 21, birthdate: new Date('1999-01-30'), birthplace: 'Naples'      },
+    { firstname: 'Matteo',    lastname: 'Esposito',  email: `matteo.espo.${teamId}@email.com`,    type: 'student',  status: 'active',       gender: 'M', totalSessions: 55, birthdate: new Date('1990-09-18'), birthplace: 'Turin'       },
+    { firstname: 'Emma',      lastname: 'Schneider', email: `emma.schneid.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'F', totalSessions: 14, birthdate: new Date('2001-04-11'), birthplace: 'Bern'        },
+    { firstname: 'David',     lastname: 'Costa',     email: `david.costa.${teamId}@email.com`,    type: 'student',  status: 'active',       gender: 'M', totalSessions: 39, birthdate: new Date('1993-06-27'), birthplace: 'Lisbon'      },
+    { firstname: 'Julia',     lastname: 'Weber',     email: `julia.weber.${teamId}@email.com`,    type: 'student',  status: 'almost_ready', gender: 'F', totalSessions: 8,  birthdate: new Date('2000-12-03'), birthplace: 'Basel'       },
+    { firstname: 'Marco',     lastname: 'Conti',     email: `marco.conti.${teamId}@email.com`,    type: 'student',  status: 'almost_ready', gender: 'M', totalSessions: 6,  birthdate: new Date('1997-08-15'), birthplace: 'Florence'    },
+    { firstname: 'Sara',      lastname: 'Ricci',     email: `sara.ricci.${teamId}@email.com`,     type: 'student',  status: 'expired',      gender: 'F', totalSessions: 28, birthdate: new Date('1994-02-09'), birthplace: 'Bologna'     },
+    { firstname: 'Tobias',    lastname: 'Huber',     email: `tobias.huber.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'M', totalSessions: 19, birthdate: new Date('1996-05-21'), birthplace: 'Geneva'      },
+    { firstname: 'Nina',      lastname: 'Moreau',    email: `nina.moreau.${teamId}@email.com`,    type: 'student',  status: 'active',       gender: 'F', totalSessions: 44, birthdate: new Date('1991-10-08'), birthplace: 'Paris'       },
+    { firstname: 'Lorenzo',   lastname: 'De Luca',   email: `lorenzo.dl.${teamId}@email.com`,     type: 'trial',    status: 'requested',    gender: 'M', totalSessions: 1,  birthdate: new Date('2003-07-19'), birthplace: 'Palermo'     },
+    { firstname: 'Amélie',    lastname: 'Dupont',    email: `amelie.dupont.${teamId}@email.com`,  type: 'trial',    status: 'requested',    gender: 'F', totalSessions: 0,  birthdate: null,                   birthplace: null          },
+    { firstname: 'Kevin',     lastname: 'Nguyen',    email: `kevin.nguyen.${teamId}@email.com`,   type: 'trial',    status: 'under_review', gender: 'M', totalSessions: 2,  birthdate: new Date('1998-03-25'), birthplace: 'Lyon'        },
+    { firstname: 'Hannah',    lastname: 'Fischer',   email: `hannah.fisch.${teamId}@email.com`,   type: 'external', status: 'guest',        gender: 'F', totalSessions: 0,  birthdate: null,                   birthplace: null          },
+    { firstname: 'Radu',      lastname: 'Ionescu',   email: `radu.ionescu.${teamId}@email.com`,   type: 'student',  status: 'active',       gender: 'M', totalSessions: 77, birthdate: new Date('1987-12-31'), birthplace: 'Bucharest'   },
+    { firstname: 'Valentina', lastname: 'Greco',     email: `val.greco.${teamId}@email.com`,      type: 'student',  status: 'active',       gender: 'F', totalSessions: 29, birthdate: new Date('1993-09-14'), birthplace: 'Catania'     },
   ]
 
   for (let i = 0; i < contactSeeds.length; i++) {
@@ -226,6 +280,7 @@ async function seedTeam(opts: {
     const id = `${teamId}-contact-${i.toString().padStart(3, '0')}`
     await db.collection('contacts').doc(id).set({
       teamId, ...c,
+      birthdate:         c.birthdate ? ts(c.birthdate) : null,
       membership_status: c.status,
       membership_active: c.status === 'active',
       total_sessions:    c.totalSessions,
@@ -280,6 +335,102 @@ async function seedTeam(opts: {
         joinedAt:       ts(daysFromNow(-2)),
         status:         'pending',
         booking_token:  `tok-${teamId}-${i}`,
+      })
+  }
+
+  // ── weekly reports (feeds the trend chart in the contact header) ────────────
+  for (let i = 0; i < contactSeeds.length; i++) {
+    const c = contactSeeds[i]
+    if (c.totalSessions === 0) continue
+    const contactId = `${teamId}-contact-${i.toString().padStart(3, '0')}`
+    const maxPerWeek = Math.min(3, Math.ceil(c.totalSessions / 16))
+    for (let w = 7; w >= 0; w--) {
+      const monday = mondayOfWeeksAgo(w)
+      const label  = isoWeekLabel(monday)
+      // Most active contacts attend most weeks; less active ones skip more
+      const attendChance = Math.min(0.9, c.totalSessions / 30)
+      const count = Math.random() < attendChance
+        ? 1 + Math.floor(Math.random() * maxPerWeek)
+        : 0
+      await db.collection('contacts').doc(contactId)
+        .collection('contact_weekly_reports').doc(label).set({
+          iso_week:       label,
+          sessions_count: count,
+          generated_at:   ts(monday),
+        })
+    }
+  }
+
+  // ── goals & tasks (coaching data) ────────────────────────────────────────────
+  const goalDefs = [
+    { title: 'Improve guard passing',         description: 'Work on pressure passing and leg weave.',         categories: ['technique', 'physical'] },
+    { title: 'Compete at next tournament',     description: 'Enter the regional open and go for gold.',       categories: ['attitude', 'mental']    },
+    { title: 'Build consistent training habit', description: 'Train at least 3 × per week for 8 weeks.',      categories: ['attendance', 'attitude'] },
+    { title: 'Develop rear-naked choke finish', description: 'Clean finish from back control.',               categories: ['technique']              },
+    { title: 'Improve cardio base',            description: 'Finish hard rounds without gassing in minute 3.', categories: ['physical', 'mental']    },
+  ]
+  const taskDefs = [
+    'Watch 3 guard-passing breakdown videos',
+    'Practice solo drills 10 min/day this week',
+    'Stretch routine every morning (5 days)',
+    'Review competition weight-cut plan',
+    'Write post-training notes for each session',
+  ]
+
+  for (let i = 0; i < contactSeeds.length; i++) {
+    const c = contactSeeds[i]
+    if (c.type !== 'student' || c.totalSessions < 5) continue
+    const contactId = `${teamId}-contact-${i.toString().padStart(3, '0')}`
+
+    // 1–2 long-term goals
+    const numGoals = i < 4 ? 2 : 1
+    for (let g = 0; g < numGoals; g++) {
+      const def    = goalDefs[(i + g) % goalDefs.length]
+      const goalId = `${contactId}-goal-${g}`
+      const status = (i < 3 && g === 0) ? 'in_progress' : 'open'
+      await db.collection('contacts').doc(contactId)
+        .collection('goals').doc(goalId).set({
+          type:         'goal',
+          title:        def.title,
+          description:  def.description,
+          status,
+          categories:   def.categories,
+          created_by:   'coach',
+          created_at:   ts(daysFromNow(-28)),
+          target_date:  ts(daysFromNow(60)),
+          completed_at: null,
+        })
+
+      if (status === 'in_progress') {
+        for (let e = 0; e < 2; e++) {
+          await db.collection('contacts').doc(contactId)
+            .collection('goals').doc(goalId)
+            .collection('evaluations').doc(`${goalId}-eval-${e}`).set({
+              evaluated_at: ts(daysFromNow(-14 + e * 7)),
+              evaluated_by: 'coach',
+              score:        3 + e,
+              notes:        e === 0 ? 'Good start — needs more drilling time.' : 'Visible improvement over last session.',
+              status_after: 'in_progress',
+              edited:       false,
+            })
+        }
+      }
+    }
+
+    // 1 task (some already completed)
+    const taskId   = `${contactId}-task-0`
+    const taskDone = i % 3 === 0
+    await db.collection('contacts').doc(contactId)
+      .collection('goals').doc(taskId).set({
+        type:         'task',
+        title:        taskDefs[i % taskDefs.length],
+        description:  null,
+        status:       taskDone ? 'achieved' : 'open',
+        categories:   [],
+        created_by:   'coach',
+        created_at:   ts(daysFromNow(-7)),
+        target_date:  ts(daysFromNow(7)),
+        completed_at: taskDone ? ts(daysFromNow(-2)) : null,
       })
   }
 

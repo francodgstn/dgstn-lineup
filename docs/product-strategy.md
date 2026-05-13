@@ -10,13 +10,13 @@ The platform is **not a generic CRM**.
 
 It is:
 
-> **An operating system for coaching businesses (especially combat sports gyms)**
+> **An operating system for coaching businesses — group classes or 1:1 training**
 
 Core value drivers:
 
 * **Revenue generation** (subscriptions, referrals)
 * **Retention** (engagement, gamification, communication)
-* **Operational efficiency** (sessions, attendance, automation)
+* **Operational efficiency** (sessions, appointments, automation)
 
 All features must map to at least one of these.
 
@@ -30,39 +30,81 @@ The system is structured around **business maturity**, not arbitrary feature gro
 
 **Persona:**
 
-* 1 coach
-* 10–40 active students
-* No complex monetization yet
+* Solo coach, personal trainer, or small independent instructor
+* 10–60 active clients
+* May run group sessions, 1:1 appointments, or both
+* Sells memberships, session packages, or monthly retainers — often all three
 
 **Goal:**
 
-* Run sessions
-* Accept bookings
-* Manage contacts simply
+* Run sessions and 1:1 appointments
+* Let clients book online without back-and-forth
+* Manage contacts and billing in one place
 
 **Core Features:**
 
-* Contacts & student profiles
+* Contacts & client profiles
 * Session management (single sessions + simple series)
-* Public booking page
+* Public booking page (group sessions)
+
+* **Coaching — 1:1 appointment booking**
+  * Availability templates: define recurring windows (days × time × duration)
+  * Auto-generated appointment slots from templates (daily task)
+  * Portal-based client self-booking (same public URL as group session booking — no app required)
+  * Confirmation emails with **.ics calendar invite** sent to both client and coach
+  * Booking reminder email before the appointment
+  * Named service types (e.g. "Personal Training", "Assessment", "Online Consultation")
+  * Online session support: optional meeting URL per slot (Zoom, Meet, etc.) included in confirmation email
+  * Buffer time between consecutive slots (coach-configurable)
+  * Minimum advance booking notice (e.g. must book ≥ 24h ahead)
+  * Coach dashboard: upcoming appointments list with client contact details, one-click cancel
+
+* **Monetization**
+  * Subscriptions — recurring billing (monthly retainers, class memberships)
+  * Session packages — one-off credit bundles, single data model with type discriminator:
+    * `group_sessions` — class packs (e.g. 10-class pass)
+    * `coaching` — 1:1 bundles (e.g. 5 PT sessions)
+    * UI shows packages and subscriptions together in the contact's "Subscription & membership" section
+  * Payment tracking — manual or via payment gateway (Stripe, Payrexx)
+
+* **Coaching productivity**
+  * Session notes — coach writes a post-session note after each 1:1; surfaces in contact activity timeline
+  * Progress check-ins — client submits weight, mood (1–5), and a short note between sessions; coach reviews timeline in training profile
+  * Client intake / assessment form — pre-session onboarding: goals, experience level, injuries, notes; populates contact profile
+  * Slot waiting list — when a coaching slot is full, clients can join a waiting list and are notified if a spot opens
+
+* **Goals & progress framework** (extends existing goals system)
+  * Long-term goals — numeric targets with a deadline (e.g. lose 5 kg by June); coach and client both comment and evaluate progress
+  * Short-term tasks / homework — boolean-completion goals assigned by coach after a session (e.g. "3× stretch routine this week"); client marks done; coach sees completion rate
+  * Progress photos — photo attachments on goal progress updates; photos are evidence toward a specific goal, not a standalone gallery
+  * Bidirectional comment thread on each goal — coach and client annotate progress entries; visible in contact profile and student app
+  * Unified "Goals & Progress" section in contact profile covering all three types
+
+* **Resource sharing**
+  * Coach attaches files (PDFs, links, videos) to a contact or to a specific coaching slot
+  * Displayed as a simple list in the contact profile — not a structured library
+  * Client can access shared resources via portal or mobile app
+
 * QR-based self check-in
 * Public profile / link-in-bio page
 * Sign-up forms
 * Basic dashboard (attendance, simple stats)
 * Alerts (manual or simple triggers)
+* Booking flow communications (confirmation, reminder, reschedule, no-show follow-up)
 
 **Constraints (important):**
 
 * Max 1 team manager
 * No advanced automation
-* No subscriptions (or very limited/basic if needed for upsell bridge)
-* No student app
+* No student app (clients book via portal/web; app is Club)
 
 **Product Intent:**
 
 * Extremely fast onboarding (≤10 min setup)
-* Immediate utility
+* Immediate utility for both group-class coaches and personal trainers
 * Low cognitive load
+
+**Note for personal trainers:** The Coach plan replaces three tools in one — Calendly/Acuity for 1:1 scheduling, a subscription/package billing tool, and a client CRM. Clients self-book via the public portal, receive calendar invites automatically, and the coach manages sessions, billing, and client progress in one place.
 
 > **Plan code:** `coach`
 
@@ -86,12 +128,22 @@ The system is structured around **business maturity**, not arbitrary feature gro
 
 #### Monetization
 
-* Subscriptions (recurring billing)
-* Payment tracking (if integrated via gateway like Payrexx)
+* Advanced billing features built on top of Coach plan:
+  * Automated payment failure handling and retry logic
+  * Automated payment reminders (overdue notices)
+  * Subscription revenue analytics (MRR, churn, LTV)
 
 #### Engagement
 
 * Student mobile app (iOS + Android)
+
+* **Coaching — mobile app integration** (extends Coach plan's 1:1 system)
+  * In-app slot browsing and booking (upcoming slots carousel + featured next-slot card)
+  * Booking and cancellation from within the app (token-based, no login required for simple flows)
+  * Push notification reminder 1 hour before a 1:1 appointment
+  * Per-client coaching session history visible in student profile
+  * Progress notes shared between coach and client (ties into Training Profile)
+
 * Gamification:
   * Points
   * Streaks
@@ -206,11 +258,11 @@ The system is structured around **business maturity**, not arbitrary feature gro
 
 ### Suggested Pricing Structure
 
-| Tier         | Base Price | Included Students | Additional Students |
-|--------------|------------|-------------------|---------------------|
-| Coach        | €19–29     | ~20               | €0.5–1 / student    |
-| Club         | €59–99     | ~100              | €0.5–1 / student    |
-| Organization | €149–299   | pooled            | volume pricing      |
+| Tier         | Base Price  | Included Students | Additional Students |
+|--------------|-------------|-------------------|---------------------|
+| Coach        | CHF 5–19    | ~20               | CHF 0.5–1 / student |
+| Club         | CHF 19–39   | ~100              | CHF 0.5–1 / student |
+| Organization | CHF 99–149  | pooled            | volume pricing      |
 
 ### Optional Revenue Layer
 
@@ -232,9 +284,11 @@ Only if you provide real billing + subscription value — otherwise skip to avoi
 The system must naturally push users upward:
 
 * **Coach → Club trigger:**
-  * Needs subscriptions
-  * Wants automation
-  * Wants branded student experience (app)
+  * Wants a branded client mobile app (in-app booking, push reminders, coaching history)
+  * Wants gamification to drive engagement (streaks, leaderboards, badges)
+  * Wants automated outreach (inactivity follow-ups, onboarding sequences)
+  * Needs multiple coaches or managers on the team
+  * Wants a referral program to drive growth
 
 * **Club → Organization trigger:**
   * Manages multiple locations
@@ -252,10 +306,11 @@ Avoid competing as "Gym CRM". Position as:
 
 Core differentiators:
 
-* Built for class-based sports (especially combat sports)
+* Built for any coaching business — group classes, personal training, or hybrid
+* 1:1 appointment booking with calendar integration (replaces Calendly for coaches)
 * Strong attendance + engagement loop
 * Gamification layer
-* Mobile-first student experience
+* Mobile-first student/client experience
 
 ---
 
@@ -265,10 +320,13 @@ The platform should be modular, with these domains:
 
 | Module | Description |
 |--------|-------------|
-| Contacts & CRM | Student profiles, lifecycle, alerts |
+| Contacts & CRM | Client profiles, lifecycle, alerts |
 | Sessions & Scheduling | Single + recurring sessions, calendar |
 | Bookings | Portal booking, QR check-in, self check-in |
-| Payments & Subscriptions | Recurring billing, payment tracking |
+| Coaching & 1:1 scheduling | Availability templates, slot generation, client self-booking, calendar invites, session notes, waiting list |
+| Goals & progress | Long-term goals, short-term tasks/homework, progress photos, bidirectional coach–client comment thread |
+| Resource sharing | File and link attachments per contact or coaching slot, accessible via portal and mobile app |
+| Payments & Subscriptions | Recurring billing, session packages (class packs + coaching bundles), payment tracking |
 | Communication | Email / SMS / push notifications |
 | Automation engine | Triggers + workflows |
 | Gamification engine | Points, streaks, leaderboards, badges |
