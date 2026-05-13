@@ -257,7 +257,21 @@
     "sectionContactInfo": "Contact information",
     "sectionPersonalInfo": "Personal information",
     "sectionStats": "Statistics",
-    "statTotalSessions": "Total sessions"
+    "sectionMembership": "Membership",
+    "statTotalSessions": "Total sessions",
+    "statStreak": "Week streak",
+    "statMonthScore": "Month score",
+    "statRecentSessions": "Recent sessions",
+    "statsPanelTitle": "Stats & training",
+    "statsPanelAttendance": "Attendance",
+    "statsPanelTraining": "Training",
+    "trainingProfileComingSoon": "Training profile coming soon.",
+    "recurrence_per_class": "Per class",
+    "recurrence_weekly": "Weekly",
+    "recurrence_biweekly": "Biweekly",
+    "recurrence_monthly": "Monthly",
+    "recurrence_quarterly": "Quarterly",
+    "recurrence_annual": "Annual"
   },
   "Sessions": {
     "title": "Sessions",

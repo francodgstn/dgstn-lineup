@@ -36,23 +36,13 @@ import {
   BookOpen, Award, ChevronDown, ChevronUp, Plus, Trash2, Trophy,
   Bell, Timer, Activity, ArchiveRestore, AlertTriangle,
   UserPlus, Archive, RotateCcw, ArrowRightLeft, CheckCircle, XCircle,
-  CalendarCheck, CalendarX, CreditCard,
+  CalendarCheck, CalendarX, CreditCard, BarChart2,
 } from 'lucide-react'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function initials(c: Contact) {
   return `${c.firstname?.[0] ?? ''}${c.lastname?.[0] ?? ''}`.toUpperCase() || '?'
-}
-
-const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500',
-  'bg-pink-500', 'bg-teal-500', 'bg-red-500', 'bg-indigo-500',
-]
-function avatarColor(id: string) {
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
-  return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
 const STATUS_VARIANT: Record<MembershipStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -207,6 +197,25 @@ function useContactActivityLog(contactId: string, teamId: string | null) {
   })
 }
 
+interface RecentSession { id: string; joinedAt: { toDate(): Date } | null }
+
+function useContactRecentSessions(contactId: string, count: number) {
+  return useQuery<RecentSession[]>({
+    queryKey: ['contact-recent-sessions', contactId, count],
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collectionGroup(db, 'participants'),
+          where('contactId', '==', contactId),
+          orderBy('joinedAt', 'desc'),
+          limit(count),
+        )
+      )
+      return snap.docs.map((d) => ({ id: d.id, joinedAt: d.data().joinedAt ?? null }))
+    },
+  })
+}
+
 function useContactAlerts(contactId: string) {
   return useQuery<ContactAlert[]>({
     queryKey: ['contact-alerts', contactId],
@@ -275,6 +284,165 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
     <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-4 pb-1 first:pt-0">
       {children}
     </h3>
+  )
+}
+
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2 mt-6 mb-1">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+        {label}
+      </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  )
+}
+
+// ─── header stats panel ───────────────────────────────────────────────────────
+
+type StatsPanelTab = 'attendance' | 'training'
+
+function StatsPanel({ contact, teamId }: { contact: Contact; teamId: string | null }) {
+  const t = useTranslations('Contacts')
+  const tG = useTranslations('Gamification')
+  const [panelTab, setPanelTab] = useState<StatsPanelTab>('attendance')
+  const { data: recentSessions = [], isLoading: sessLoading } = useContactRecentSessions(contact.id, 12)
+
+  const { data: team } = useQuery({
+    queryKey: ['team', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      if (!teamId) return null
+      const d = await getDoc(doc(db, 'teams', teamId))
+      return d.exists() ? d.data() : null
+    },
+  })
+  const coachBadges: Array<{ key: string; label: string }> = team?.settings?.gamification?.coach_badges ?? []
+  const assignedBadges: string[] = contact.custom_badges ?? []
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Tab strip */}
+      <div className="flex border-b shrink-0">
+        {(['attendance', 'training'] as StatsPanelTab[]).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setPanelTab(tab)}
+            className={`flex-1 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
+              panelTab === tab
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {tab === 'attendance' ? t('statsPanelAttendance') : t('statsPanelTraining')}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-4 flex-1 overflow-auto">
+        {panelTab === 'attendance' && (
+          <div className="space-y-4">
+            {/* Key stats */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-2xl font-bold tabular-nums">{contact.total_sessions ?? 0}</p>
+                <p className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t('statTotalSessions')}</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold tabular-nums">{contact.current_streak ?? 0}<span className="text-sm font-normal">w</span></p>
+                <p className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t('statStreak')}</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold tabular-nums">{contact.current_month_score ?? 0}</p>
+                <p className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t('statMonthScore')}</p>
+              </div>
+            </div>
+
+            {/* Recent sessions */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                {t('statRecentSessions')}
+              </p>
+              {sessLoading ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="h-5 w-14 rounded-md bg-muted animate-pulse" />
+                  ))}
+                </div>
+              ) : recentSessions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{t('noActivity')}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {recentSessions.map((s) => (
+                    <div key={s.id} className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-500/10 text-[10px] text-green-700 dark:text-green-400 font-medium">
+                      <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                      {s.joinedAt ? s.joinedAt.toDate().toLocaleDateString([], { day: '2-digit', month: 'short' }) : '—'}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {panelTab === 'training' && (
+          <div className="space-y-4">
+            {coachBadges.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  {tG('coachBadgesSection')}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {coachBadges.map((badge) => {
+                    const assigned = assignedBadges.includes(badge.key)
+                    return (
+                      <span
+                        key={badge.key}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                          assigned
+                            ? 'bg-primary/10 text-primary border-primary/30'
+                            : 'text-muted-foreground border-border'
+                        }`}
+                      >
+                        <Award className="h-2.5 w-2.5 shrink-0" />
+                        {badge.label}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">{t('trainingProfileComingSoon')}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MobileStatsToggle({ contact, teamId }: { contact: Contact; teamId: string | null }) {
+  const t = useTranslations('Contacts')
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="lg:hidden border-t">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <BarChart2 className="h-4 w-4" />
+          {t('statsPanelTitle')}
+        </span>
+        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-4 pb-5">
+          <StatsPanel contact={contact} teamId={teamId} />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -353,9 +521,9 @@ function ProfileTab({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pb-24">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pb-24">
       {/* Contact type */}
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <p className="text-sm font-medium">{t('colType')}</p>
         <Controller
           control={control}
@@ -381,10 +549,10 @@ function ProfileTab({
         />
       </div>
 
-      {/* Ranks — only rendered if team has ranking systems configured */}
+      {/* Ranks */}
       {rankingSystems.length > 0 && (
         <div className="space-y-3">
-          <p className="text-sm font-medium">{t('sectionRanks')}</p>
+          <SectionDivider label={t('sectionRanks')} />
           <Controller
             control={control}
             name="ranks"
@@ -397,9 +565,7 @@ function ProfileTab({
                     <div key={system.id} className="space-y-1.5">
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         {system.name}
-                        {system.is_primary && (
-                          <span className="ml-1.5 text-primary">·</span>
-                        )}
+                        {system.is_primary && <span className="ml-1.5 text-primary">·</span>}
                       </p>
                       {useButtons ? (
                         <div className="flex flex-wrap gap-1.5">
@@ -411,11 +577,7 @@ function ProfileTab({
                                 type="button"
                                 onClick={() => {
                                   const next = { ...field.value }
-                                  if (selected) {
-                                    delete next[system.id]
-                                  } else {
-                                    next[system.id] = level.value
-                                  }
+                                  if (selected) { delete next[system.id] } else { next[system.id] = level.value }
                                   field.onChange(next)
                                 }}
                                 className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg border text-sm font-medium transition-colors ${
@@ -424,10 +586,7 @@ function ProfileTab({
                                     : 'bg-background text-muted-foreground hover:text-foreground'
                                 }`}
                               >
-                                <div
-                                  className="h-2.5 w-2.5 rounded-full shrink-0 border border-border"
-                                  style={{ background: level.color }}
-                                />
+                                <div className="h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
                                 {level.label}
                               </button>
                             )
@@ -438,11 +597,7 @@ function ProfileTab({
                           value={currentValue !== undefined ? String(currentValue) : ''}
                           onValueChange={(val) => {
                             const next = { ...field.value }
-                            if (val === '') {
-                              delete next[system.id]
-                            } else {
-                              next[system.id] = Number(val)
-                            }
+                            if (val === '') { delete next[system.id] } else { next[system.id] = Number(val) }
                             field.onChange(next)
                           }}
                         >
@@ -455,10 +610,7 @@ function ProfileTab({
                               <SelectItem key={level.value} value={String(level.value)}>
                                 <span className="flex items-center gap-2">
                                   {level.color && (
-                                    <span
-                                      className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border"
-                                      style={{ background: level.color }}
-                                    />
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
                                   )}
                                   {level.label}
                                 </span>
@@ -476,7 +628,7 @@ function ProfileTab({
         </div>
       )}
 
-      {/* Personal */}
+      {/* Identity & contact info — always 2 cols, no heading needed */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
           <Input {...register('firstname')} autoCapitalize="words" />
@@ -485,21 +637,25 @@ function ProfileTab({
           <Input {...register('lastname')} autoCapitalize="words" />
         </Field>
         <Field label={t('colEmail')}>
-          <Input type="email" {...register('email')} />
+          <Input type="email" {...register('email')} inputMode="email" />
         </Field>
         <Field label={t('fieldPhone')}>
-          <Input type="tel" {...register('phone')} />
+          <Input type="tel" {...register('phone')} inputMode="tel" />
         </Field>
+      </div>
 
-        {/* Gender */}
+      {/* Personal details */}
+      <SectionDivider label={t('sectionPersonalInfo')} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Field label={t('fieldGender')}>
           <Controller
             control={control}
             name="gender"
             render={({ field }) => (
-              <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
+              <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val || undefined)}>
                 <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">—</SelectItem>
                   {GENDERS.map((g) => (
                     <SelectItem key={g} value={g}>{t(`gender_${g}`)}</SelectItem>
                   ))}
@@ -508,32 +664,24 @@ function ProfileTab({
             )}
           />
         </Field>
-
-        {/* Date of birth */}
         <Field label={t('fieldBirthdate')}>
           <Controller
             control={control}
             name="birthdate"
-            render={({ field }) => (
-              <DatePicker
-                value={field.value}
-                onChange={field.onChange}
-              />
-            )}
+            render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
           />
         </Field>
-
         <Field label={t('fieldBirthplace')}>
           <Input {...register('birthplace')} />
         </Field>
-
         <Field label={t('fieldWeight')}>
-          <Input type="number" step="0.1" min="0" max="500" {...register('weight')} />
+          <Input type="number" step="0.1" min="0" max="500" inputMode="decimal" {...register('weight')} />
         </Field>
       </div>
 
       {/* Membership */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <SectionDivider label={t('sectionMembership')} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Field label={t('colStatus')}>
           <Controller
             control={control}
@@ -550,7 +698,6 @@ function ProfileTab({
             )}
           />
         </Field>
-
         {subTypes.length > 0 && (
           <Field label={t('subscriptionTypeName')}>
             <Controller
@@ -561,7 +708,7 @@ function ProfileTab({
                   <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">—</SelectItem>
-                    {subTypes.map((st) => (
+                    {subTypes.filter((st) => st.active !== false).map((st) => (
                       <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -570,7 +717,6 @@ function ProfileTab({
             />
           </Field>
         )}
-
         <Field label={t('subscriptionRecurrence')}>
           <Controller
             control={control}
@@ -581,7 +727,7 @@ function ProfileTab({
                 <SelectContent>
                   <SelectItem value="">—</SelectItem>
                   {RECURRENCES.map((r) => (
-                    <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>
+                    <SelectItem key={r} value={r}>{t(`recurrence_${r}`)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -590,12 +736,19 @@ function ProfileTab({
         </Field>
       </div>
 
-      {/* Address */}
-      <Accordion>
-        <AccordionItem value="address">
-          <AccordionTrigger className="text-sm font-medium">{t('sectionAddress')}</AccordionTrigger>
+      {/* Address — open by default */}
+      <Accordion defaultValue={["address"]}>
+        <AccordionItem value="address" className="border-0">
+          <AccordionTrigger className="hover:no-underline py-3 text-muted-foreground hover:text-foreground">
+            <div className="flex flex-1 items-center gap-2 mr-2">
+              <span className="text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
+                {t('sectionAddress')}
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+          </AccordionTrigger>
           <AccordionContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1 pb-2">
               <Field label={t('fieldStreet')}>
                 <Input {...register('address_route')} />
               </Field>
@@ -613,12 +766,19 @@ function ProfileTab({
         </AccordionItem>
       </Accordion>
 
-      {/* Acquisition */}
-      <Accordion>
-        <AccordionItem value="acquisition">
-          <AccordionTrigger className="text-sm font-medium">{t('sectionAcquisition')}</AccordionTrigger>
+      {/* Acquisition — open by default */}
+      <Accordion defaultValue={["acquisition"]}>
+        <AccordionItem value="acquisition" className="border-0">
+          <AccordionTrigger className="hover:no-underline py-3 text-muted-foreground hover:text-foreground">
+            <div className="flex flex-1 items-center gap-2 mr-2">
+              <span className="text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
+                {t('sectionAcquisition')}
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+          </AccordionTrigger>
           <AccordionContent>
-            <div className="grid grid-cols-1 gap-4 pt-2">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1 pb-2">
               <Field label={t('fieldAcquisitionChannel')}>
                 <Input {...register('acquisition_channel')} />
               </Field>
@@ -630,7 +790,7 @@ function ProfileTab({
         </AccordionItem>
       </Accordion>
 
-      {/* Save */}
+      {/* Floating save */}
       {isDirty && (
         <div className="fixed bottom-6 right-6 z-40">
           <button
@@ -1647,56 +1807,69 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       </button>
 
       {/* Header card */}
-      <div className="rounded-xl border bg-card p-5 flex items-start gap-4">
-        <div className="h-16 w-16 rounded-full shrink-0 flex items-center justify-center bg-muted text-muted-foreground text-xl font-bold">
-          {initials(contact)}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold">{contact.firstname} {contact.lastname}</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-1.5">
-            {contact.deleted_at ? (
-              <Badge variant="destructive">{t('deletedBadge')}</Badge>
-            ) : contact.archived_at ? (
-              <Badge variant="secondary">{t('archivedBadge')}</Badge>
-            ) : (
-              <>
-                {contact.membership_status && (
-                  <Badge variant={STATUS_VARIANT[contact.membership_status]}>
-                    {t(`status_${contact.membership_status}`)}
-                  </Badge>
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="flex flex-col lg:flex-row">
+          {/* Identity — left */}
+          <div className="p-5 flex items-start gap-4 flex-1 min-w-0">
+            <div className="h-16 w-16 rounded-full shrink-0 flex items-center justify-center bg-muted text-muted-foreground text-xl font-bold">
+              {initials(contact)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl font-bold">{contact.firstname} {contact.lastname}</h1>
+              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                {contact.deleted_at ? (
+                  <Badge variant="destructive">{t('deletedBadge')}</Badge>
+                ) : contact.archived_at ? (
+                  <Badge variant="secondary">{t('archivedBadge')}</Badge>
+                ) : (
+                  <>
+                    {contact.membership_status && (
+                      <Badge variant={STATUS_VARIANT[contact.membership_status]}>
+                        {t(`status_${contact.membership_status}`)}
+                      </Badge>
+                    )}
+                    {contact.type && (
+                      <Badge variant="outline">{t(`type_${contact.type}`)}</Badge>
+                    )}
+                    {!contact.acquisition?.acknowledged && (
+                      <Badge className="bg-blue-500 text-white border-blue-500">{t('newBadge')}</Badge>
+                    )}
+                  </>
                 )}
-                {contact.type && (
-                  <Badge variant="outline">{t(`type_${contact.type}`)}</Badge>
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                {contact.email && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Mail className="h-3 w-3" /> {contact.email}
+                  </span>
                 )}
-                {!contact.acquisition?.acknowledged && (
-                  <Badge className="bg-blue-500 text-white border-blue-500">{t('newBadge')}</Badge>
+                {contact.phone && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Phone className="h-3 w-3" /> {contact.phone}
+                  </span>
                 )}
-              </>
-            )}
+                {contact.created_at && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <CalendarDays className="h-3 w-3" /> {t('memberSince')} {formatDate(contact.created_at)}
+                  </span>
+                )}
+                {(contact.current_streak ?? 0) > 0 && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Flame className="h-3 w-3 text-orange-500" /> {contact.current_streak}w streak
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
-            {contact.email && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Mail className="h-3 w-3" /> {contact.email}
-              </span>
-            )}
-            {contact.phone && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Phone className="h-3 w-3" /> {contact.phone}
-              </span>
-            )}
-            {contact.created_at && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <CalendarDays className="h-3 w-3" /> {t('memberSince')} {formatDate(contact.created_at)}
-              </span>
-            )}
-            {(contact.current_streak ?? 0) > 0 && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Flame className="h-3 w-3 text-orange-500" /> {contact.current_streak}w streak
-              </span>
-            )}
+
+          {/* Desktop stats — right, always visible */}
+          <div className="hidden lg:flex flex-col border-l w-[260px] xl:w-[300px] shrink-0">
+            <StatsPanel contact={contact} teamId={currentTeamId} />
           </div>
         </div>
+
+        {/* Mobile stats — collapsible at bottom */}
+        <MobileStatsToggle contact={contact} teamId={currentTeamId} />
       </div>
 
       {/* Archived / deleted → read-only summary; active → full tabbed view */}

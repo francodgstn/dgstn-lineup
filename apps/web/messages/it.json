@@ -257,7 +257,21 @@
     "sectionContactInfo": "Informazioni di contatto",
     "sectionPersonalInfo": "Informazioni personali",
     "sectionStats": "Statistiche",
-    "statTotalSessions": "Sessioni totali"
+    "sectionMembership": "Abbonamento",
+    "statTotalSessions": "Sessioni totali",
+    "statStreak": "Serie di settimane",
+    "statMonthScore": "Punteggio mensile",
+    "statRecentSessions": "Sessioni recenti",
+    "statsPanelTitle": "Statistiche & allenamento",
+    "statsPanelAttendance": "Presenze",
+    "statsPanelTraining": "Allenamento",
+    "trainingProfileComingSoon": "Profilo di allenamento in arrivo.",
+    "recurrence_per_class": "Per lezione",
+    "recurrence_weekly": "Settimanale",
+    "recurrence_biweekly": "Bisettimanale",
+    "recurrence_monthly": "Mensile",
+    "recurrence_quarterly": "Trimestrale",
+    "recurrence_annual": "Annuale"
   },
   "Sessions": {
     "title": "Sessioni",

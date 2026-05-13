@@ -257,7 +257,21 @@
     "sectionContactInfo": "Coordonnées",
     "sectionPersonalInfo": "Informations personnelles",
     "sectionStats": "Statistiques",
-    "statTotalSessions": "Séances au total"
+    "sectionMembership": "Abonnement",
+    "statTotalSessions": "Séances au total",
+    "statStreak": "Série de semaines",
+    "statMonthScore": "Score du mois",
+    "statRecentSessions": "Séances récentes",
+    "statsPanelTitle": "Stats & entraînement",
+    "statsPanelAttendance": "Présence",
+    "statsPanelTraining": "Entraînement",
+    "trainingProfileComingSoon": "Profil d'entraînement à venir.",
+    "recurrence_per_class": "Par séance",
+    "recurrence_weekly": "Hebdomadaire",
+    "recurrence_biweekly": "Bihebdomadaire",
+    "recurrence_monthly": "Mensuel",
+    "recurrence_quarterly": "Trimestriel",
+    "recurrence_annual": "Annuel"
   },
   "Sessions": {
     "title": "Séances",

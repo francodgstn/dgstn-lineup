@@ -257,7 +257,21 @@
     "sectionContactInfo": "Kontaktinformationen",
     "sectionPersonalInfo": "Persönliche Informationen",
     "sectionStats": "Statistiken",
-    "statTotalSessions": "Einheiten gesamt"
+    "sectionMembership": "Mitgliedschaft",
+    "statTotalSessions": "Einheiten gesamt",
+    "statStreak": "Wochen-Streak",
+    "statMonthScore": "Monatspunkte",
+    "statRecentSessions": "Letzte Einheiten",
+    "statsPanelTitle": "Statistiken & Training",
+    "statsPanelAttendance": "Anwesenheit",
+    "statsPanelTraining": "Training",
+    "trainingProfileComingSoon": "Trainingsprofil folgt in Kürze.",
+    "recurrence_per_class": "Pro Einheit",
+    "recurrence_weekly": "Wöchentlich",
+    "recurrence_biweekly": "Zweiwöchentlich",
+    "recurrence_monthly": "Monatlich",
+    "recurrence_quarterly": "Vierteljährlich",
+    "recurrence_annual": "Jährlich"
   },
   "Sessions": {
     "title": "Einheiten",
