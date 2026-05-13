@@ -93,7 +93,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "date",
+          "fieldPath": "created_at",
           "order": "DESCENDING"
         },
         {

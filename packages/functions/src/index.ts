@@ -38,7 +38,7 @@ export { deleteContact, restoreContact, checkInContact, moveContacts } from './c
 export { sendEventInvitations, getEventInvitationDetails, handleEventInvitationResponse } from './events'
 
 // Analytics
-export { trackBookings, trackSessions, weeklyReports } from './analytics'
+export { trackBookings, trackSessions, weeklyReports, trackContacts, trackSessionParticipants } from './analytics'
 
 // Auth / Membership
 export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'

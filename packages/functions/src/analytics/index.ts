@@ -116,6 +116,186 @@ export const trackSessions = onDocumentWritten('sessions/{sessionId}', async (ev
   ))
 })
 
+// ─── trackContacts ────────────────────────────────────────────────────────────
+
+export const trackContacts = onDocumentWritten('contacts/{contactId}', async (event) => {
+  const newData = event.data?.after.exists ? event.data.after.data() : null
+  const oldData = event.data?.before.exists ? event.data.before.data() : null
+
+  const teamId = ((newData?.teamId || newData?.teacher || oldData?.teamId || oldData?.teacher) as string | undefined)
+  if (!teamId) return
+
+  // No logging after anonymization (GDPR)
+  if (newData?.anonymized_at) return
+
+  const firstname = ((newData?.firstname || oldData?.firstname) as string | undefined) ?? ''
+  const lastname = ((newData?.lastname || oldData?.lastname) as string | undefined) ?? ''
+  const fullname = `${firstname} ${lastname}`.trim() || event.params.contactId
+  const contactId = event.params.contactId
+
+  const baseRefs = { contact: contactId, user: teamId }
+
+  // Contact created
+  if (!oldData && newData) {
+    await logActivity(teamId, {
+      event: 'contact_add',
+      parameters: {
+        description: `${fullname} was added as a contact.`,
+        contact_firstname: firstname,
+        contact_lastname: lastname,
+      },
+      refs: baseRefs,
+    })
+    return
+  }
+
+  if (!oldData || !newData) return
+
+  const promises: Promise<void>[] = []
+
+  // Soft-delete
+  if (!oldData.deleted_at && newData.deleted_at) {
+    promises.push(logActivity(teamId, {
+      event: 'contact_delete',
+      parameters: {
+        description: `${fullname} was moved to trash.`,
+        contact_firstname: firstname,
+        contact_lastname: lastname,
+      },
+      refs: baseRefs,
+    }))
+  }
+
+  // Archive / unarchive
+  if (!oldData.archived_at && newData.archived_at) {
+    promises.push(logActivity(teamId, {
+      event: 'contact_archive',
+      parameters: {
+        description: `${fullname} was archived.`,
+        contact_firstname: firstname,
+        contact_lastname: lastname,
+      },
+      refs: baseRefs,
+    }))
+  } else if (oldData.archived_at && !newData.archived_at) {
+    promises.push(logActivity(teamId, {
+      event: 'contact_unarchive',
+      parameters: {
+        description: `${fullname} was restored from archive.`,
+        contact_firstname: firstname,
+        contact_lastname: lastname,
+      },
+      refs: baseRefs,
+    }))
+  }
+
+  // Contact type change
+  if (oldData.type && newData.type && oldData.type !== newData.type) {
+    promises.push(logActivity(teamId, {
+      event: 'contact_type_change',
+      parameters: {
+        description: `${fullname} changed from ${oldData.type as string} to ${newData.type as string}.`,
+        contact_firstname: firstname,
+        contact_lastname: lastname,
+        contact_type: { before: oldData.type, after: newData.type },
+      },
+      refs: baseRefs,
+    }))
+  }
+
+  // Subscription change
+  if ((oldData.subscription_type_id ?? null) !== (newData.subscription_type_id ?? null)) {
+    const before = (oldData.subscription_type_name ?? oldData.subscription_type_id ?? 'none') as string
+    const after = (newData.subscription_type_name ?? newData.subscription_type_id ?? 'none') as string
+    promises.push(logActivity(teamId, {
+      event: 'subscription_change',
+      parameters: {
+        description: `${fullname} subscription changed from "${before}" to "${after}".`,
+        contact_firstname: firstname,
+        contact_lastname: lastname,
+        subscription: { before, after },
+      },
+      refs: baseRefs,
+    }))
+  }
+
+  // Rank changes — one log entry per system that changed
+  const oldRanks = (oldData.ranks ?? {}) as Record<string, number>
+  const newRanks = (newData.ranks ?? {}) as Record<string, number>
+  const allSystems = new Set([...Object.keys(oldRanks), ...Object.keys(newRanks)])
+  for (const systemId of allSystems) {
+    const before = oldRanks[systemId] ?? null
+    const after = newRanks[systemId] ?? null
+    if (before !== after) {
+      promises.push(logActivity(teamId, {
+        event: 'rank_change',
+        parameters: {
+          description: `${fullname} rank changed in system "${systemId}".`,
+          contact_firstname: firstname,
+          contact_lastname: lastname,
+          systemId,
+          rank: { before, after },
+        },
+        refs: baseRefs,
+      }))
+    }
+  }
+
+  await Promise.all(promises)
+})
+
+// ─── trackSessionParticipants ─────────────────────────────────────────────────
+
+export const trackSessionParticipants = onDocumentWritten(
+  'sessions/{sessionId}/participants/{participantId}',
+  async (event) => {
+    const { sessionId } = event.params
+    const newData = event.data?.after.exists ? event.data.after.data() : null
+    const oldData = event.data?.before.exists ? event.data.before.data() : null
+
+    const activityEvent = !oldData && newData ? 'session_participant_add'
+      : oldData && !newData ? 'session_participant_delete'
+        : null
+    if (!activityEvent) return
+
+    const participantData = newData ?? oldData!
+    const contactId = participantData.contactId as string | undefined
+    if (!contactId) return
+
+    const db = admin.firestore()
+
+    const [sessionErr, sessionDoc] = await to(db.collection('sessions').doc(sessionId).get())
+    if (sessionErr || !sessionDoc?.exists) return
+    const session = sessionDoc.data()!
+    const teamId = (session.teamId || session.teacher) as string | undefined
+    if (!teamId) return
+
+    const [, contactDoc] = await to(db.collection('contacts').doc(contactId).get())
+    const contact = contactDoc?.data()
+    const firstname = (contact?.firstname as string | undefined) ?? ''
+    const lastname = (contact?.lastname as string | undefined) ?? ''
+    const fullname = `${firstname} ${lastname}`.trim() || contactId
+
+    const sessionStart = session.start as admin.firestore.Timestamp | undefined
+    const sessionDateLabel = sessionStart ? format(sessionStart.toDate(), DATE_FORMAT) : 'unknown date'
+
+    const description = activityEvent === 'session_participant_add'
+      ? `${fullname} attended a session on ${sessionDateLabel}.`
+      : `${fullname} was removed from a session on ${sessionDateLabel}.`
+
+    await logActivity(teamId, {
+      event: activityEvent,
+      parameters: {
+        description,
+        contact_firstname: firstname,
+        contact_lastname: lastname,
+        session_date: sessionStart ?? null,
+      },
+      refs: { contact: contactId, session: sessionId, user: teamId },
+    })
+  },
+)
+
 // ─── weeklyReports ────────────────────────────────────────────────────────────
 // Runs every Monday at 00:05 UTC. Generates per-team weekly summary snapshots.
 // Only creates a report if one doesn't exist yet for the week — once created,

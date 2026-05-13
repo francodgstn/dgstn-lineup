@@ -21,12 +21,12 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION,
   CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION, CONTACT_ALERTS_SUBCOLLECTION,
-  ALERT_PRESETS_SUBCOLLECTION,
+  ALERT_PRESETS_SUBCOLLECTION, TEAM_ACTIVITY_LOG_SUBCOLLECTION,
 } from '@lineup/shared'
 import type {
   Contact, MembershipStatus, ContactType, ContactGender,
   SubscriptionType, SubscriptionHistoryEntry, ContactAlert, AlertScheduleType,
-  RankingSystem,
+  RankingSystem, ActivityLogEntry, ActivityEventType,
 } from '@lineup/shared'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -35,6 +35,8 @@ import {
   ArrowLeft, CalendarDays, Mail, Phone, StickyNote, Star, Flame,
   BookOpen, Award, ChevronDown, ChevronUp, Plus, Trash2, Trophy,
   Bell, Timer, Activity, ArchiveRestore, AlertTriangle,
+  UserPlus, Archive, RotateCcw, ArrowRightLeft, CheckCircle, XCircle,
+  CalendarCheck, CalendarX, CreditCard,
 } from 'lucide-react'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -185,31 +187,22 @@ function useContactBookings(contactId: string, teamId: string | null) {
   })
 }
 
-interface AttendanceEntry {
-  id: string
-  sessionId: string
-  joinedAt: { toDate(): Date } | null
-  status: string
-}
+const PAGE_SIZE = 50
 
-function useContactActivity(contactId: string) {
-  return useQuery<AttendanceEntry[]>({
-    queryKey: ['contact-activity', contactId],
+function useContactActivityLog(contactId: string, teamId: string | null) {
+  return useQuery<ActivityLogEntry[]>({
+    queryKey: ['contact-activity-log', contactId],
+    enabled: !!teamId,
     queryFn: async () => {
       const snap = await getDocs(
         query(
-          collectionGroup(db, 'participants'),
-          where('contactId', '==', contactId),
-          orderBy('joinedAt', 'desc'),
-          limit(100),
+          collection(db, TEAMS_COLLECTION, teamId!, TEAM_ACTIVITY_LOG_SUBCOLLECTION),
+          where('refs.contact', '==', contactId),
+          orderBy('created_at', 'desc'),
+          limit(PAGE_SIZE),
         )
       )
-      return snap.docs.map((d) => ({
-        id: d.id,
-        sessionId: d.ref.parent.parent?.id ?? '',
-        joinedAt: d.data().joinedAt ?? null,
-        status: d.data().status ?? 'confirmed',
-      }))
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ActivityLogEntry)
     },
   })
 }
@@ -982,37 +975,109 @@ function GamificationTab({ contact, teamId }: { contact: Contact; teamId: string
 
 // ─── activity tab ─────────────────────────────────────────────────────────────
 
-function ActivityTab({ contact }: { contact: Contact }) {
+type EventMeta = { Icon: React.ElementType; bg: string; fg: string }
+
+const EVENT_META: Record<ActivityEventType, EventMeta> = {
+  contact_add:                 { Icon: UserPlus,        bg: 'bg-green-500/10',  fg: 'text-green-600'  },
+  contact_archive:             { Icon: Archive,         bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  contact_unarchive:           { Icon: RotateCcw,       bg: 'bg-green-500/10',  fg: 'text-green-600'  },
+  contact_delete:              { Icon: Trash2,          bg: 'bg-red-500/10',    fg: 'text-red-600'    },
+  contact_type_change:         { Icon: ArrowRightLeft,  bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  rank_change:                 { Icon: Award,           bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  subscription_change:         { Icon: CreditCard,      bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  session_participant_add:     { Icon: CalendarCheck,   bg: 'bg-green-500/10',  fg: 'text-green-600'  },
+  session_participant_delete:  { Icon: CalendarX,       bg: 'bg-red-500/10',    fg: 'text-red-600'    },
+  booking_created:             { Icon: CalendarDays,    bg: 'bg-blue-500/10',   fg: 'text-blue-600'   },
+  booking_confirmed:           { Icon: CheckCircle,     bg: 'bg-blue-500/10',   fg: 'text-blue-600'   },
+  booking_cancelled:           { Icon: XCircle,         bg: 'bg-red-500/10',    fg: 'text-red-600'    },
+  booking_rebooked:            { Icon: CalendarDays,    bg: 'bg-blue-500/10',   fg: 'text-blue-600'   },
+  contact_login:               { Icon: Activity,        bg: 'bg-green-500/10',  fg: 'text-green-600'  },
+  outreach_email_sent:         { Icon: Mail,            bg: 'bg-blue-500/10',   fg: 'text-blue-600'   },
+  contact_anonymized:          { Icon: Trash2,          bg: 'bg-muted',         fg: 'text-muted-foreground' },
+}
+
+function formatActivityTimestamp(ts: { toDate(): Date } | null | undefined): string {
+  if (!ts) return '—'
+  const d = ts.toDate()
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffHrs = diffMs / 3_600_000
+
+  if (diffHrs < 1) {
+    const mins = Math.max(1, Math.round(diffMs / 60_000))
+    return `${mins}m ago`
+  }
+  if (diffHrs < 24) return `${Math.round(diffHrs)}h ago`
+  if (diffHrs < 48) return `Yesterday at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function dateDayLabel(ts: { toDate(): Date } | null | undefined): string {
+  if (!ts) return ''
+  const d = ts.toDate()
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const diffDays = (today.getTime() - day.getTime()) / 86_400_000
+  if (diffDays < 1) return 'Today'
+  if (diffDays < 2) return 'Yesterday'
+  return d.toLocaleDateString([], { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
-  const { data: activity = [], isLoading } = useContactActivity(contact.id)
+  const { data: entries = [], isLoading } = useContactActivityLog(contact.id, teamId)
 
   if (isLoading) return (
     <div className="space-y-2">
       {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
     </div>
   )
-  if (activity.length === 0) return (
+  if (entries.length === 0) return (
     <div className="py-12 text-center text-muted-foreground text-sm">{t('noActivity')}</div>
   )
 
+  // Group by calendar day
+  const groups: { label: string; items: ActivityLogEntry[] }[] = []
+  let currentLabel = ''
+  for (const entry of entries) {
+    const label = dateDayLabel(entry.created_at as { toDate(): Date } | null | undefined)
+    if (label !== currentLabel) {
+      groups.push({ label, items: [] })
+      currentLabel = label
+    }
+    groups[groups.length - 1].items.push(entry)
+  }
+
   return (
-    <div className="space-y-2">
-      {activity.map((entry) => (
-        <div key={`${entry.sessionId}-${entry.id}`} className="flex items-center gap-3 p-3 rounded-lg border">
-          <div className="h-8 w-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-            <Activity className="h-4 w-4 text-green-600" />
+    <div className="space-y-4">
+      {groups.map((group) => (
+        <div key={group.label}>
+          <p className="text-xs font-medium text-muted-foreground px-1 mb-2">{group.label}</p>
+          <div className="space-y-1.5">
+            {group.items.map((entry) => {
+              const meta = EVENT_META[entry.event] ?? { Icon: Activity, bg: 'bg-muted', fg: 'text-muted-foreground' }
+              const { Icon, bg, fg } = meta
+              return (
+                <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border">
+                  <div className={`h-8 w-8 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                    <Icon className={`h-4 w-4 ${fg}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm">{entry.parameters.description as string}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatActivityTimestamp(entry.created_at as { toDate(): Date } | null | undefined)}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium">{t('attendedSession')}</p>
-            <p className="text-xs text-muted-foreground">
-              {entry.joinedAt ? entry.joinedAt.toDate().toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
-            </p>
-          </div>
-          {entry.status !== 'confirmed' && (
-            <Badge variant="outline" className="text-xs capitalize">{entry.status}</Badge>
-          )}
         </div>
       ))}
+      {entries.length === PAGE_SIZE && (
+        <p className="text-center text-xs text-muted-foreground py-2">{t('activityLoadMore')}</p>
+      )}
     </div>
   )
 }
@@ -1669,7 +1734,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               <NotesTab contact={contact} onSaved={invalidate} />
             )}
             {tab === 'activity' && (
-              <ActivityTab contact={contact} />
+              <ActivityTab contact={contact} teamId={currentTeamId} />
             )}
             {tab === 'alerts' && (
               <AlertsTab contact={contact} teamId={currentTeamId} />
