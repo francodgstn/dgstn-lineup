@@ -17,7 +17,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION,
   CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION, CONTACT_ALERTS_SUBCOLLECTION,
@@ -298,6 +297,15 @@ function SectionDivider({ label }: { label: string }) {
   )
 }
 
+function FormBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border p-4 space-y-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
+      {children}
+    </div>
+  )
+}
+
 // ─── header stats panel ───────────────────────────────────────────────────────
 
 type StatsPanelTab = 'attendance' | 'training'
@@ -521,8 +529,8 @@ function ProfileTab({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pb-24 lg:max-w-lg">
-      {/* Contact type — segmented control */}
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24">
+      {/* Contact type — segmented control, full width */}
       <div className="space-y-1.5">
         <p className="text-sm font-medium">{t('colType')}</p>
         <Controller
@@ -549,242 +557,247 @@ function ProfileTab({
         />
       </div>
 
-      {/* Membership — right after type */}
-      <SectionDivider label={t('sectionMembership')} />
-      <div className="grid grid-cols-1 gap-4">
-        <Field label={t('colStatus')}>
-          <Controller
-            control={control}
-            name="membership_status"
-            render={({ field }) => (
-              <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  {STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>{t(`status_${s}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </Field>
-        {subTypes.length > 0 && (
-          <Field label={t('subscriptionTypeName')}>
+      {/* 2-col section blocks on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+
+        {/* Subscription & membership */}
+        <FormBlock title={t('sectionMembership')}>
+          <Field label={t('colStatus')}>
             <Controller
               control={control}
-              name="subscription_type_id"
+              name="membership_status"
               render={({ field }) => (
                 <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value ? t(`status_${field.value}`) : <span className="text-muted-foreground">—</span>}
+                    </span>
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">—</SelectItem>
-                    {subTypes.filter((st) => st.active !== false).map((st) => (
-                      <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
+                    {STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>{t(`status_${s}`)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
             />
           </Field>
-        )}
-        <Field label={t('subscriptionRecurrence')}>
-          <Controller
-            control={control}
-            name="subscription_recurrence"
-            render={({ field }) => (
-              <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">—</SelectItem>
-                  {RECURRENCES.map((r) => (
-                    <SelectItem key={r} value={r}>{t(`recurrence_${r}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </Field>
-      </div>
-
-      {/* Personal details */}
-      <SectionDivider label={t('sectionPersonalInfo')} />
-      <div className="grid grid-cols-1 gap-4">
-        <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
-          <Input {...register('firstname')} autoCapitalize="words" />
-        </Field>
-        <Field label={t('fieldLastname')} required error={errors.lastname?.message}>
-          <Input {...register('lastname')} autoCapitalize="words" />
-        </Field>
-        <Field label={t('fieldGender')}>
-          <Controller
-            control={control}
-            name="gender"
-            render={({ field }) => (
-              <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val || undefined)}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">—</SelectItem>
-                  {GENDERS.map((g) => (
-                    <SelectItem key={g} value={g}>{t(`gender_${g}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </Field>
-        <Field label={t('fieldBirthdate')}>
-          <Controller
-            control={control}
-            name="birthdate"
-            render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
-          />
-        </Field>
-        <Field label={t('fieldBirthplace')}>
-          <Input {...register('birthplace')} />
-        </Field>
-        <Field label={t('fieldWeight')}>
-          <Input type="number" step="0.1" min="0" max="500" inputMode="decimal" {...register('weight')} />
-        </Field>
-      </div>
-
-      {/* Ranks */}
-      {rankingSystems.length > 0 && (
-        <div className="space-y-3">
-          <SectionDivider label={t('sectionRanks')} />
-          <Controller
-            control={control}
-            name="ranks"
-            render={({ field }) => (
-              <div className="space-y-3">
-                {rankingSystems.map((system) => {
-                  const currentValue = field.value?.[system.id]
-                  const useButtons = system.levels.length <= 6
+          {subTypes.length > 0 && (
+            <Field label={t('subscriptionTypeName')}>
+              <Controller
+                control={control}
+                name="subscription_type_id"
+                render={({ field }) => {
+                  const selected = subTypes.find((st) => st.id === field.value)
                   return (
-                    <div key={system.id} className="space-y-1.5">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        {system.name}
-                        {system.is_primary && <span className="ml-1.5 text-primary">·</span>}
-                      </p>
-                      {useButtons ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {system.levels.map((level) => {
-                            const selected = currentValue === level.value
-                            return (
-                              <button
-                                key={level.value}
-                                type="button"
-                                onClick={() => {
-                                  const next = { ...field.value }
-                                  if (selected) { delete next[system.id] } else { next[system.id] = level.value }
-                                  field.onChange(next)
-                                }}
-                                className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                                  selected
-                                    ? 'bg-primary text-primary-foreground border-primary'
-                                    : 'bg-background text-muted-foreground hover:text-foreground'
-                                }`}
-                              >
-                                <div className="h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
-                                {level.label}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      ) : (
-                        <Select
-                          value={currentValue !== undefined ? String(currentValue) : ''}
-                          onValueChange={(val) => {
-                            const next = { ...field.value }
-                            if (val === '') { delete next[system.id] } else { next[system.id] = Number(val) }
-                            field.onChange(next)
-                          }}
-                        >
-                          <SelectTrigger className="w-1/4">
-                            <SelectValue placeholder="—" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="">—</SelectItem>
-                            {system.levels.map((level) => (
-                              <SelectItem key={level.value} value={String(level.value)}>
-                                <span className="flex items-center gap-2">
-                                  {level.color && (
-                                    <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
-                                  )}
-                                  {level.label}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
+                    <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
+                      <SelectTrigger className="w-full">
+                        <span className="flex flex-1 text-left text-sm truncate">
+                          {selected ? selected.name : <span className="text-muted-foreground">—</span>}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">—</SelectItem>
+                        {subTypes.filter((st) => st.active !== false).map((st) => (
+                          <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )
-                })}
-              </div>
-            )}
-          />
-        </div>
-      )}
+                }}
+              />
+            </Field>
+          )}
+          <Field label={t('subscriptionRecurrence')}>
+            <Controller
+              control={control}
+              name="subscription_recurrence"
+              render={({ field }) => (
+                <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value ? t(`recurrence_${field.value}`) : <span className="text-muted-foreground">—</span>}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">—</SelectItem>
+                    {RECURRENCES.map((r) => (
+                      <SelectItem key={r} value={r}>{t(`recurrence_${r}`)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </Field>
+        </FormBlock>
 
-      {/* Contact (email, phone, address) — open by default */}
-      <Accordion defaultValue={["contact"]}>
-        <AccordionItem value="contact" className="border-0">
-          <AccordionTrigger className="hover:no-underline py-3 text-muted-foreground hover:text-foreground">
-            <div className="flex flex-1 items-center gap-2 mr-2">
-              <span className="text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
-                {t('sectionContact')}
-              </span>
-              <div className="h-px flex-1 bg-border" />
-            </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="grid grid-cols-1 gap-4 pt-1 pb-2">
-              <Field label={t('colEmail')}>
-                <Input type="email" {...register('email')} inputMode="email" />
-              </Field>
-              <Field label={t('fieldPhone')}>
-                <Input type="tel" {...register('phone')} inputMode="tel" />
-              </Field>
-              <Field label={t('fieldStreet')}>
-                <Input {...register('address_route')} />
-              </Field>
-              <Field label={t('fieldStreetNumber')}>
-                <Input {...register('address_street_number')} />
-              </Field>
-              <Field label={t('fieldPostalCode')}>
-                <Input {...register('address_postal_code')} />
-              </Field>
-              <Field label={t('fieldLocality')}>
-                <Input {...register('address_locality')} />
-              </Field>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+        {/* Personal information */}
+        <FormBlock title={t('sectionPersonalInfo')}>
+          <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
+            <Input {...register('firstname')} autoCapitalize="words" />
+          </Field>
+          <Field label={t('fieldLastname')} required error={errors.lastname?.message}>
+            <Input {...register('lastname')} autoCapitalize="words" />
+          </Field>
+          <Field label={t('fieldGender')}>
+            <Controller
+              control={control}
+              name="gender"
+              render={({ field }) => (
+                <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val || undefined)}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value ? t(`gender_${field.value}`) : <span className="text-muted-foreground">—</span>}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">—</SelectItem>
+                    {GENDERS.map((g) => (
+                      <SelectItem key={g} value={g}>{t(`gender_${g}`)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </Field>
+          <Field label={t('fieldBirthdate')}>
+            <Controller
+              control={control}
+              name="birthdate"
+              render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
+            />
+          </Field>
+          <Field label={t('fieldBirthplace')}>
+            <Input {...register('birthplace')} />
+          </Field>
+          <Field label={t('fieldWeight')}>
+            <Input type="number" step="0.1" min="0" max="500" inputMode="decimal" {...register('weight')} />
+          </Field>
+        </FormBlock>
 
-      {/* Acquisition — open by default */}
-      <Accordion defaultValue={["acquisition"]}>
-        <AccordionItem value="acquisition" className="border-0">
-          <AccordionTrigger className="hover:no-underline py-3 text-muted-foreground hover:text-foreground">
-            <div className="flex flex-1 items-center gap-2 mr-2">
-              <span className="text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
-                {t('sectionAcquisition')}
-              </span>
-              <div className="h-px flex-1 bg-border" />
-            </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="grid grid-cols-1 gap-4 pt-1 pb-2">
-              <Field label={t('fieldAcquisitionChannel')}>
-                <Input {...register('acquisition_channel')} />
-              </Field>
-              <Field label={t('fieldAcquisitionNotes')}>
-                <Textarea {...register('acquisition_notes')} rows={3} />
-              </Field>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+        {/* Ranks */}
+        {rankingSystems.length > 0 && (
+          <FormBlock title={t('sectionRanks')}>
+            <Controller
+              control={control}
+              name="ranks"
+              render={({ field }) => (
+                <div className="space-y-3">
+                  {rankingSystems.map((system) => {
+                    const currentValue = field.value?.[system.id]
+                    const useButtons = system.levels.length <= 6
+                    return (
+                      <div key={system.id} className="space-y-1.5">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          {system.name}
+                          {system.is_primary && <span className="ml-1.5 text-primary">·</span>}
+                        </p>
+                        {useButtons ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {system.levels.map((level) => {
+                              const selected = currentValue === level.value
+                              return (
+                                <button
+                                  key={level.value}
+                                  type="button"
+                                  onClick={() => {
+                                    const next = { ...field.value }
+                                    if (selected) { delete next[system.id] } else { next[system.id] = level.value }
+                                    field.onChange(next)
+                                  }}
+                                  className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                                    selected
+                                      ? 'bg-primary text-primary-foreground border-primary'
+                                      : 'bg-background text-muted-foreground hover:text-foreground'
+                                  }`}
+                                >
+                                  <div className="h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
+                                  {level.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <Select
+                            value={currentValue !== undefined ? String(currentValue) : ''}
+                            onValueChange={(val) => {
+                              const next = { ...field.value }
+                              if (val === '') { delete next[system.id] } else { next[system.id] = Number(val) }
+                              field.onChange(next)
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <span className="flex flex-1 text-left text-sm truncate">
+                                {currentValue !== undefined
+                                  ? (() => {
+                                      const lvl = system.levels.find((l) => l.value === currentValue)
+                                      return lvl ? (
+                                        <span className="flex items-center gap-2">
+                                          {lvl.color && <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: lvl.color }} />}
+                                          {lvl.label}
+                                        </span>
+                                      ) : String(currentValue)
+                                    })()
+                                  : <span className="text-muted-foreground">—</span>}
+                              </span>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">—</SelectItem>
+                              {system.levels.map((level) => (
+                                <SelectItem key={level.value} value={String(level.value)}>
+                                  <span className="flex items-center gap-2">
+                                    {level.color && (
+                                      <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
+                                    )}
+                                    {level.label}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            />
+          </FormBlock>
+        )}
+
+        {/* Contact */}
+        <FormBlock title={t('sectionContact')}>
+          <Field label={t('colEmail')}>
+            <Input type="email" {...register('email')} inputMode="email" />
+          </Field>
+          <Field label={t('fieldPhone')}>
+            <Input type="tel" {...register('phone')} inputMode="tel" />
+          </Field>
+          <Field label={t('fieldStreet')}>
+            <Input {...register('address_route')} />
+          </Field>
+          <Field label={t('fieldStreetNumber')}>
+            <Input {...register('address_street_number')} />
+          </Field>
+          <Field label={t('fieldPostalCode')}>
+            <Input {...register('address_postal_code')} />
+          </Field>
+          <Field label={t('fieldLocality')}>
+            <Input {...register('address_locality')} />
+          </Field>
+        </FormBlock>
+
+        {/* Acquisition */}
+        <FormBlock title={t('sectionAcquisition')}>
+          <Field label={t('fieldAcquisitionChannel')}>
+            <Input {...register('acquisition_channel')} />
+          </Field>
+          <Field label={t('fieldAcquisitionNotes')}>
+            <Textarea {...register('acquisition_notes')} rows={3} />
+          </Field>
+        </FormBlock>
+
+      </div>
 
       {/* Floating save */}
       {isDirty && (
