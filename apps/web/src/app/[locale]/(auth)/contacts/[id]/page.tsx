@@ -521,7 +521,7 @@ function ProfileTab({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pb-24">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pb-24 lg:max-w-lg">
       {/* Contact type — segmented control */}
       <div className="space-y-1.5">
         <p className="text-sm font-medium">{t('colType')}</p>
@@ -551,7 +551,7 @@ function ProfileTab({
 
       {/* Membership — right after type */}
       <SectionDivider label={t('sectionMembership')} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Field label={t('colStatus')}>
           <Controller
             control={control}
@@ -606,8 +606,8 @@ function ProfileTab({
         </Field>
       </div>
 
-      {/* Identity & contact info — always 2 cols, no heading needed */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Identity & contact info */}
+      <div className="grid grid-cols-1 gap-4">
         <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
           <Input {...register('firstname')} autoCapitalize="words" />
         </Field>
@@ -624,7 +624,7 @@ function ProfileTab({
 
       {/* Personal details */}
       <SectionDivider label={t('sectionPersonalInfo')} />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Field label={t('fieldGender')}>
           <Controller
             control={control}
@@ -748,7 +748,7 @@ function ProfileTab({
             </div>
           </AccordionTrigger>
           <AccordionContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1 pb-2">
+            <div className="grid grid-cols-1 gap-4 pt-1 pb-2">
               <Field label={t('fieldStreet')}>
                 <Input {...register('address_route')} />
               </Field>
@@ -778,7 +778,7 @@ function ProfileTab({
             </div>
           </AccordionTrigger>
           <AccordionContent>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1 pb-2">
+            <div className="grid grid-cols-1 gap-4 pt-1 pb-2">
               <Field label={t('fieldAcquisitionChannel')}>
                 <Input {...register('acquisition_channel')} />
               </Field>
