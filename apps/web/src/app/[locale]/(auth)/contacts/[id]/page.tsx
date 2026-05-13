@@ -657,50 +657,6 @@ function ProfileTab({
           </Field>
         </FormBlock>
 
-        {/* Personal information */}
-        <FormBlock title={t('sectionPersonalInfo')}>
-          <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
-            <Input {...register('firstname')} autoCapitalize="words" />
-          </Field>
-          <Field label={t('fieldLastname')} required error={errors.lastname?.message}>
-            <Input {...register('lastname')} autoCapitalize="words" />
-          </Field>
-          <Field label={t('fieldGender')}>
-            <Controller
-              control={control}
-              name="gender"
-              render={({ field }) => (
-                <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val || undefined)}>
-                  <SelectTrigger className="w-full">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value ? t(`gender_${field.value}`) : <span className="text-muted-foreground">—</span>}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">—</SelectItem>
-                    {GENDERS.map((g) => (
-                      <SelectItem key={g} value={g}>{t(`gender_${g}`)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </Field>
-          <Field label={t('fieldBirthdate')}>
-            <Controller
-              control={control}
-              name="birthdate"
-              render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
-            />
-          </Field>
-          <Field label={t('fieldBirthplace')}>
-            <Input {...register('birthplace')} />
-          </Field>
-          <Field label={t('fieldWeight')}>
-            <Input type="number" step="0.1" min="0" max="500" inputMode="decimal" {...register('weight')} />
-          </Field>
-        </FormBlock>
-
         {/* Ranks */}
         {rankingSystems.length > 0 && (
           <FormBlock title={t('sectionRanks')}>
@@ -790,6 +746,50 @@ function ProfileTab({
             />
           </FormBlock>
         )}
+
+        {/* Personal information */}
+        <FormBlock title={t('sectionPersonalInfo')}>
+          <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
+            <Input {...register('firstname')} autoCapitalize="words" />
+          </Field>
+          <Field label={t('fieldLastname')} required error={errors.lastname?.message}>
+            <Input {...register('lastname')} autoCapitalize="words" />
+          </Field>
+          <Field label={t('fieldGender')}>
+            <Controller
+              control={control}
+              name="gender"
+              render={({ field }) => (
+                <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val || undefined)}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value ? t(`gender_${field.value}`) : <span className="text-muted-foreground">—</span>}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">—</SelectItem>
+                    {GENDERS.map((g) => (
+                      <SelectItem key={g} value={g}>{t(`gender_${g}`)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </Field>
+          <Field label={t('fieldBirthdate')}>
+            <Controller
+              control={control}
+              name="birthdate"
+              render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
+            />
+          </Field>
+          <Field label={t('fieldBirthplace')}>
+            <Input {...register('birthplace')} />
+          </Field>
+          <Field label={t('fieldWeight')}>
+            <Input type="number" step="0.1" min="0" max="500" inputMode="decimal" {...register('weight')} />
+          </Field>
+        </FormBlock>
 
         {/* Contact */}
         <FormBlock title={t('sectionContact')}>
