@@ -522,23 +522,23 @@ function ProfileTab({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pb-24">
-      {/* Contact type */}
+      {/* Contact type — segmented control */}
       <div className="space-y-1.5">
         <p className="text-sm font-medium">{t('colType')}</p>
         <Controller
           control={control}
           name="type"
           render={({ field }) => (
-            <div className="flex gap-2">
+            <div className="inline-flex items-center rounded-lg border bg-background p-1 gap-0.5">
               {TYPES.map((v) => (
                 <button
                   key={v}
                   type="button"
                   onClick={() => field.onChange(v)}
-                  className={`flex-1 py-1.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                  className={`px-4 py-1 rounded-md text-sm font-medium transition-all duration-150 ${
                     field.value === v
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background text-muted-foreground hover:text-foreground'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {t(`type_${v}`)}
@@ -549,137 +549,7 @@ function ProfileTab({
         />
       </div>
 
-      {/* Ranks */}
-      {rankingSystems.length > 0 && (
-        <div className="space-y-3">
-          <SectionDivider label={t('sectionRanks')} />
-          <Controller
-            control={control}
-            name="ranks"
-            render={({ field }) => (
-              <div className="space-y-3">
-                {rankingSystems.map((system) => {
-                  const currentValue = field.value?.[system.id]
-                  const useButtons = system.levels.length <= 6
-                  return (
-                    <div key={system.id} className="space-y-1.5">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        {system.name}
-                        {system.is_primary && <span className="ml-1.5 text-primary">·</span>}
-                      </p>
-                      {useButtons ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {system.levels.map((level) => {
-                            const selected = currentValue === level.value
-                            return (
-                              <button
-                                key={level.value}
-                                type="button"
-                                onClick={() => {
-                                  const next = { ...field.value }
-                                  if (selected) { delete next[system.id] } else { next[system.id] = level.value }
-                                  field.onChange(next)
-                                }}
-                                className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                                  selected
-                                    ? 'bg-primary text-primary-foreground border-primary'
-                                    : 'bg-background text-muted-foreground hover:text-foreground'
-                                }`}
-                              >
-                                <div className="h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
-                                {level.label}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      ) : (
-                        <Select
-                          value={currentValue !== undefined ? String(currentValue) : ''}
-                          onValueChange={(val) => {
-                            const next = { ...field.value }
-                            if (val === '') { delete next[system.id] } else { next[system.id] = Number(val) }
-                            field.onChange(next)
-                          }}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="—" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="">—</SelectItem>
-                            {system.levels.map((level) => (
-                              <SelectItem key={level.value} value={String(level.value)}>
-                                <span className="flex items-center gap-2">
-                                  {level.color && (
-                                    <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
-                                  )}
-                                  {level.label}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          />
-        </div>
-      )}
-
-      {/* Identity & contact info — always 2 cols, no heading needed */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
-          <Input {...register('firstname')} autoCapitalize="words" />
-        </Field>
-        <Field label={t('fieldLastname')} required error={errors.lastname?.message}>
-          <Input {...register('lastname')} autoCapitalize="words" />
-        </Field>
-        <Field label={t('colEmail')}>
-          <Input type="email" {...register('email')} inputMode="email" />
-        </Field>
-        <Field label={t('fieldPhone')}>
-          <Input type="tel" {...register('phone')} inputMode="tel" />
-        </Field>
-      </div>
-
-      {/* Personal details */}
-      <SectionDivider label={t('sectionPersonalInfo')} />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Field label={t('fieldGender')}>
-          <Controller
-            control={control}
-            name="gender"
-            render={({ field }) => (
-              <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val || undefined)}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">—</SelectItem>
-                  {GENDERS.map((g) => (
-                    <SelectItem key={g} value={g}>{t(`gender_${g}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </Field>
-        <Field label={t('fieldBirthdate')}>
-          <Controller
-            control={control}
-            name="birthdate"
-            render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
-          />
-        </Field>
-        <Field label={t('fieldBirthplace')}>
-          <Input {...register('birthplace')} />
-        </Field>
-        <Field label={t('fieldWeight')}>
-          <Input type="number" step="0.1" min="0" max="500" inputMode="decimal" {...register('weight')} />
-        </Field>
-      </div>
-
-      {/* Membership */}
+      {/* Membership — right after type */}
       <SectionDivider label={t('sectionMembership')} />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Field label={t('colStatus')}>
@@ -735,6 +605,136 @@ function ProfileTab({
           />
         </Field>
       </div>
+
+      {/* Identity & contact info — always 2 cols, no heading needed */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
+          <Input {...register('firstname')} autoCapitalize="words" />
+        </Field>
+        <Field label={t('fieldLastname')} required error={errors.lastname?.message}>
+          <Input {...register('lastname')} autoCapitalize="words" />
+        </Field>
+        <Field label={t('colEmail')}>
+          <Input type="email" {...register('email')} inputMode="email" />
+        </Field>
+        <Field label={t('fieldPhone')}>
+          <Input type="tel" {...register('phone')} inputMode="tel" />
+        </Field>
+      </div>
+
+      {/* Personal details */}
+      <SectionDivider label={t('sectionPersonalInfo')} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Field label={t('fieldGender')}>
+          <Controller
+            control={control}
+            name="gender"
+            render={({ field }) => (
+              <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val || undefined)}>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  {GENDERS.map((g) => (
+                    <SelectItem key={g} value={g}>{t(`gender_${g}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </Field>
+        <Field label={t('fieldBirthdate')}>
+          <Controller
+            control={control}
+            name="birthdate"
+            render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
+          />
+        </Field>
+        <Field label={t('fieldBirthplace')}>
+          <Input {...register('birthplace')} />
+        </Field>
+        <Field label={t('fieldWeight')}>
+          <Input type="number" step="0.1" min="0" max="500" inputMode="decimal" {...register('weight')} />
+        </Field>
+      </div>
+
+      {/* Ranks */}
+      {rankingSystems.length > 0 && (
+        <div className="space-y-3">
+          <SectionDivider label={t('sectionRanks')} />
+          <Controller
+            control={control}
+            name="ranks"
+            render={({ field }) => (
+              <div className="space-y-3">
+                {rankingSystems.map((system) => {
+                  const currentValue = field.value?.[system.id]
+                  const useButtons = system.levels.length <= 6
+                  return (
+                    <div key={system.id} className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        {system.name}
+                        {system.is_primary && <span className="ml-1.5 text-primary">·</span>}
+                      </p>
+                      {useButtons ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {system.levels.map((level) => {
+                            const selected = currentValue === level.value
+                            return (
+                              <button
+                                key={level.value}
+                                type="button"
+                                onClick={() => {
+                                  const next = { ...field.value }
+                                  if (selected) { delete next[system.id] } else { next[system.id] = level.value }
+                                  field.onChange(next)
+                                }}
+                                className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                                  selected
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-background text-muted-foreground hover:text-foreground'
+                                }`}
+                              >
+                                <div className="h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
+                                {level.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <Select
+                          value={currentValue !== undefined ? String(currentValue) : ''}
+                          onValueChange={(val) => {
+                            const next = { ...field.value }
+                            if (val === '') { delete next[system.id] } else { next[system.id] = Number(val) }
+                            field.onChange(next)
+                          }}
+                        >
+                          <SelectTrigger className="w-1/4">
+                            <SelectValue placeholder="—" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">—</SelectItem>
+                            {system.levels.map((level) => (
+                              <SelectItem key={level.value} value={String(level.value)}>
+                                <span className="flex items-center gap-2">
+                                  {level.color && (
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
+                                  )}
+                                  {level.label}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          />
+        </div>
+      )}
 
       {/* Address — open by default */}
       <Accordion defaultValue={["address"]}>
