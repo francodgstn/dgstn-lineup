@@ -1,5 +1,5 @@
 import { getAuth, connectAuthEmulator } from 'firebase/auth'
-import app, { emulatorEndpoint } from './firebase'
+import app, { emulatorProxy } from './firebase'
 
 export const auth = getAuth(app)
 
@@ -8,9 +8,9 @@ if (
   typeof window !== 'undefined' &&
   !(globalThis as { _authEmulatorConnected?: boolean })._authEmulatorConnected
 ) {
-  const { host, port, ssl } = emulatorEndpoint(9099)
-  connectAuthEmulator(auth, `${ssl ? 'https' : 'http'}://${host}:${port}`, {
-    disableWarnings: true,
-  })
+  // In a Codespace the auth emulator is proxied through this app's origin
+  // (see next.config.ts); locally it's reached directly.
+  const url = emulatorProxy ? emulatorProxy.origin : 'http://localhost:9099'
+  connectAuthEmulator(auth, url, { disableWarnings: true })
   ;(globalThis as { _authEmulatorConnected?: boolean })._authEmulatorConnected = true
 }

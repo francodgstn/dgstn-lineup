@@ -21,23 +21,19 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
 const useEmulators = process.env.NEXT_PUBLIC_USE_EMULATORS === 'true'
 
-// In a browser-based Codespace the emulators aren't on localhost — each
-// forwarded port is served over HTTPS at <codespace>-<port>.<domain>.
-// Server-side code runs inside the Codespace itself, so it still uses
-// localhost; only the browser bundle needs the forwarded host.
-const codespace = process.env.NEXT_PUBLIC_CODESPACE_NAME
-const codespaceDomain = process.env.NEXT_PUBLIC_CODESPACE_DOMAIN
-
-export function emulatorEndpoint(port: number): {
-  host: string
-  port: number
-  ssl: boolean
-} {
-  if (typeof window !== 'undefined' && codespace && codespaceDomain) {
-    return { host: `${codespace}-${port}.${codespaceDomain}`, port: 443, ssl: true }
-  }
-  return { host: 'localhost', port, ssl: false }
-}
+// In a browser-based Codespace the emulators aren't reachable on localhost.
+// Instead of relying on (public) forwarded emulator ports, the browser talks
+// to this app's own origin and the Next.js dev server proxies the emulator
+// API paths to the real emulators — see next.config.ts rewrites.
+// Server-side code and normal local dev still hit the emulators directly.
+export const emulatorProxy =
+  typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CODESPACE_NAME
+    ? {
+        origin: window.location.origin,
+        host: window.location.host,
+        ssl: window.location.protocol === 'https:',
+      }
+    : null
 
 // Cache the Firestore instance across HMR / module re-evaluation —
 // initializeFirestore throws if called twice for the same app.
@@ -45,13 +41,16 @@ const globalForFirebase = globalThis as { _lineupDb?: Firestore }
 
 function createDb(): Firestore {
   if (!useEmulators) return getFirestore(app)
-  const { host, port, ssl } = emulatorEndpoint(8080)
-  return initializeFirestore(app, {
-    host: `${host}:${port}`,
-    ssl,
-    // A proxied HTTPS emulator can't use WebChannel streaming.
-    experimentalForceLongPolling: ssl,
-  })
+  if (emulatorProxy) {
+    return initializeFirestore(app, {
+      host: emulatorProxy.host,
+      ssl: emulatorProxy.ssl,
+      // Long-polling survives the dev-server proxy hop; WebChannel streaming
+      // does not.
+      experimentalForceLongPolling: true,
+    })
+  }
+  return initializeFirestore(app, { host: 'localhost:8080', ssl: false })
 }
 
 export const db =
@@ -66,8 +65,9 @@ if (
   useEmulators &&
   !(globalThis as { _emulatorConnected?: boolean })._emulatorConnected
 ) {
-  const fns = emulatorEndpoint(5001)
-  connectFunctionsEmulator(functions, fns.host, fns.port)
+  // The functions emulator isn't started by scripts/dev.sh; only wire it up
+  // for direct (non-proxied) local dev.
+  if (!emulatorProxy) connectFunctionsEmulator(functions, 'localhost', 5001)
   ;(globalThis as { _emulatorConnected?: boolean })._emulatorConnected = true
 }
 
