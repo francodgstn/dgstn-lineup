@@ -258,6 +258,12 @@ service cloud.firestore {
         allow write: if hasTeamRole(teamId, 'owner');
       }
 
+      // Payment gateway integrations (Stripe / Payrexx config — secrets stored in Secret Manager)
+      match /integrations/{integrationId} {
+        // Only owners can view or modify gateway configuration
+        allow read, write: if hasTeamRole(teamId, 'owner');
+      }
+
       // Subscription types subcollection (team-defined subscription plans and aggregators)
       match /subscription_types/{subscriptionTypeId} {
         // All team members can read all subscription types

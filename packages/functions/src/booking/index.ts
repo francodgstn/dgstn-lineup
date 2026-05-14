@@ -7,6 +7,7 @@ import { sendEmail } from '../utils/email'
 import { hashVerificationCode, verifyCode, generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
+import { resolveReferralCode, createReferral } from '../utils/referrals'
 import {
   buildBookingConfirmationEmail,
   buildTeacherNotificationEmail,
@@ -203,16 +204,47 @@ export const bookSession = onCall(async (request) => {
     contactDetails?: { firstname: string; lastname: string; email: string; phone?: string }
     authenticatedContactId?: string
     verificationCodeId?: string
+    bookingAuthToken?: string
+    referralCode?: string
+    subscription_type_id?: string
   }
 
   if (!data?.teamId || !data?.sessionId) {
     throw new HttpsError('invalid-argument', 'teamId and sessionId are required')
   }
 
-  const isAuthenticatedBooking = !!data.authenticatedContactId
+  // ── Referral code resolution (non-fatal) ────────────────────────────────────
+  let referrerContactId: string | null = null
+  if (data.referralCode && typeof data.referralCode === 'string') {
+    try {
+      const referral = await resolveReferralCode(data.referralCode.trim().toUpperCase())
+      if (referral && referral.teamId === data.teamId) {
+        referrerContactId = referral.contactId
+      }
+    } catch (err) {
+      console.error('Error resolving referral code, ignoring:', err)
+    }
+  }
 
-  // Rate limit: 10 bookings per hour per session
+  // ── IP rate limit: max 10 bookings per hour per IP ──────────────────────────
+  const bookingIp: string | null = request.rawRequest?.ip || null
   const oneHourAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 60 * 60 * 1000)
+
+  if (bookingIp) {
+    const recentIpBookings = await admin
+      .firestore()
+      .collection('sessions')
+      .doc(data.sessionId)
+      .collection('bookings')
+      .where('booking_ip', '==', bookingIp)
+      .where('joinedAt', '>', oneHourAgo)
+      .get()
+    if (recentIpBookings.size >= 10) {
+      throw new HttpsError('resource-exhausted', 'Too many booking requests. Please try again later.')
+    }
+  }
+
+  // ── Session rate limit: max 50 bookings per hour per session ─────────────────
   const recentSessionBookings = await admin
     .firestore()
     .collection('sessions')
@@ -225,8 +257,33 @@ export const bookSession = onCall(async (request) => {
     throw new HttpsError('resource-exhausted', 'This session has reached its booking limit.')
   }
 
-  // Resolve authenticated contact
+  // ── Resolve authenticated contact ────────────────────────────────────────────
   let authenticatedContact: admin.firestore.DocumentData & { id: string } | null = null
+
+  // bookingAuthToken path — one-time token stored in auth_tokens with type:'booking'
+  if (data.bookingAuthToken) {
+    const tokenDoc = await admin.firestore().collection('auth_tokens').doc(data.bookingAuthToken).get()
+    if (!tokenDoc.exists) throw new HttpsError('invalid-argument', 'Invalid booking auth token')
+    const tokenData = tokenDoc.data()!
+    if (tokenData.type !== 'booking') throw new HttpsError('permission-denied', 'Token is not a booking token')
+    if (tokenData.team_id !== data.teamId) throw new HttpsError('permission-denied', 'Token does not match the requested team')
+    const now = admin.firestore.Timestamp.now()
+    if (tokenData.expires_at?.toMillis() < now.toMillis()) throw new HttpsError('deadline-exceeded', 'Booking auth token has expired')
+    if (tokenData.used) throw new HttpsError('failed-precondition', 'Booking auth token has already been used')
+
+    const contactDoc = await admin.firestore().collection('contacts').doc(tokenData.contact_id).get()
+    if (!contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+    const c = contactDoc.data()!
+    if (c.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Contact does not belong to this team')
+
+    await admin.firestore().collection('auth_tokens').doc(data.bookingAuthToken).update({
+      used: true,
+      used_at: admin.firestore.FieldValue.serverTimestamp(),
+      used_for_session: data.sessionId,
+    })
+
+    authenticatedContact = { id: tokenData.contact_id as string, ...c }
+  }
 
   if (data.authenticatedContactId) {
     // Validate verification code
@@ -252,6 +309,8 @@ export const bookSession = onCall(async (request) => {
     if (contactData.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Contact does not belong to this team')
     authenticatedContact = { id: data.authenticatedContactId, ...contactData }
   }
+
+  const isAuthenticatedBooking = !!authenticatedContact
 
   // Build sanitized contact details
   let sanitized: { firstname: string; lastname: string; email: string; phone?: string | null }
@@ -370,12 +429,13 @@ export const bookSession = onCall(async (request) => {
   const bookingToken = generateSecureToken()
   const teamSlug: string | null = team.slug || null
   const manageBookingUrl = teamSlug ? `${getHostingUrl()}/portal/${teamSlug}/manage-booking?token=${bookingToken}` : null
+  const subscriptionTypeId = typeof data.subscription_type_id === 'string' && data.subscription_type_id ? data.subscription_type_id : null
 
   await admin.firestore().collection('sessions').doc(data.sessionId).collection('bookings').doc(contactId).set({
     firstname: sanitized.firstname,
     lastname: sanitized.lastname,
     email: sanitized.email,
-    phone: sanitized.phone,
+    phone: sanitized.phone ?? null,
     contact: contactId,
     session: data.sessionId,
     teamId: data.teamId,
@@ -383,16 +443,57 @@ export const bookSession = onCall(async (request) => {
     fromPortal: true,
     is_new_contact: isNewContact,
     booking_token: bookingToken,
+    booking_ip: bookingIp,
     authenticated_booking: isAuthenticatedBooking,
+    subscription_type_id: subscriptionTypeId,
   })
 
   await admin.firestore().collection('sessions').doc(data.sessionId).set(
-    { has_bookings: true, portal_bookings_count: admin.firestore.FieldValue.increment(1), last_booking_at: admin.firestore.FieldValue.serverTimestamp() },
+    {
+      has_bookings: true,
+      portal_bookings_count: admin.firestore.FieldValue.increment(1),
+      ...(isNewContact && { portal_new_contact_bookings_count: admin.firestore.FieldValue.increment(1) }),
+      last_booking_at: admin.firestore.FieldValue.serverTimestamp(),
+    },
     { merge: true },
   )
 
   if (!isNewContact) {
     await admin.firestore().collection('contacts').doc(contactId).update({ pending_bookings_count: admin.firestore.FieldValue.increment(1) })
+  }
+
+  // Contact alert (booking notification, shows immediately)
+  try {
+    const sessionStart: Date = (sessionData.start as admin.firestore.Timestamp).toDate()
+    await admin.firestore().collection('contacts').doc(contactId).collection('contact_alerts').add({
+      teamId: data.teamId,
+      contact: { id: contactId, firstname: sanitized.firstname, lastname: sanitized.lastname, avatar_url: authenticatedContact?.avatar_url ?? null },
+      message: `New booking for ${activityName} on ${sessionStart.toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })}`,
+      schedule: { type: 'datetime', value: admin.firestore.Timestamp.now() },
+      alert_type: 'booking',
+      session_id: data.sessionId,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      archived_at: null,
+    })
+  } catch (alertErr) {
+    console.error('Failed to create contact alert for booking:', alertErr)
+  }
+
+  // Referral tracking (non-fatal)
+  if (referrerContactId && referrerContactId !== contactId) {
+    try {
+      const existingReferral = await admin.firestore()
+        .collection('referrals')
+        .where('referred_contact_id', '==', contactId)
+        .where('team_id', '==', data.teamId)
+        .limit(1)
+        .get()
+      if (existingReferral.empty) {
+        await createReferral(referrerContactId, contactId, data.teamId)
+      }
+    } catch (refErr) {
+      console.error('Failed to create referral record:', refErr)
+    }
   }
 
   // Send confirmation email

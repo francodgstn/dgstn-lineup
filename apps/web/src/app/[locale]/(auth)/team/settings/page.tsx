@@ -22,10 +22,11 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import {
   TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, ALERT_PRESETS_SUBCOLLECTION,
 } from '@lineup/shared'
-import type { Team, SubscriptionType, AlertScheduleType, RankingSystem, RankLevel } from '@lineup/shared'
+import type { Team, SubscriptionType, AlertScheduleType, RankingSystem, RankLevel, TeamIntegration, PaymentGatewayType } from '@lineup/shared'
 import { CalendarDays, Timer, Plus, Pencil, Trash2, Star } from 'lucide-react'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 
@@ -83,6 +84,13 @@ const presetSchema = z.object({
 })
 type PresetData = z.infer<typeof presetSchema>
 
+const gatewaySchema = z.object({
+  gatewayType: z.enum(['stripe', 'payrexx']),
+  identifier: z.string().min(1, 'Required'),
+  currency: z.string().min(3).max(3).toUpperCase(),
+})
+type GatewayFormData = z.infer<typeof gatewaySchema>
+
 // ─── data helpers ─────────────────────────────────────────────────────────────
 
 async function isSlugAvailable(slug: string, teamId: string): Promise<boolean> {
@@ -122,6 +130,20 @@ function useAlertPresets(teamId: string | null) {
       if (!teamId) return []
       const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION))
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AlertPreset)
+    },
+  })
+}
+
+function useGatewayIntegrations(teamId: string | null) {
+  return useQuery<TeamIntegration[]>({
+    queryKey: ['gateway-integrations', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      if (!teamId) return []
+      const snap = await getDocs(
+        query(collection(db, TEAMS_COLLECTION, teamId, 'integrations'), where('type', '==', 'payment_gateway'))
+      )
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TeamIntegration)
     },
   })
 }
@@ -1060,9 +1082,198 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
   )
 }
 
+// ─── payments tab ─────────────────────────────────────────────────────────────
+
+function PaymentsTab({ teamId }: { teamId: string }) {
+  const t = useTranslations('TeamSettings')
+  const qc = useQueryClient()
+  const { user } = useAuth()
+  const { data: integrations = [], isLoading } = useGatewayIntegrations(teamId)
+
+  const [showDialog, setShowDialog] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<GatewayFormData>({
+    resolver: zodResolver(gatewaySchema),
+    defaultValues: { gatewayType: 'stripe', identifier: '', currency: 'CHF' },
+  })
+
+  const selectedType = watch('gatewayType') as PaymentGatewayType
+
+  function openAdd() {
+    reset({ gatewayType: 'stripe', identifier: '', currency: 'CHF' })
+    setEditingId(null)
+    setShowDialog(true)
+  }
+
+  function openEdit(item: TeamIntegration) {
+    const cfg = item.config
+    reset({
+      gatewayType: cfg.type,
+      identifier: cfg.type === 'stripe' ? cfg.publishable_key : cfg.instance_name,
+      currency: cfg.currency,
+    })
+    setEditingId(item.id)
+    setShowDialog(true)
+  }
+
+  async function onSubmit(values: GatewayFormData) {
+    setSaving(true)
+    try {
+      const config =
+        values.gatewayType === 'stripe'
+          ? { type: 'stripe' as const, publishable_key: values.identifier, currency: values.currency }
+          : { type: 'payrexx' as const, instance_name: values.identifier, currency: values.currency }
+
+      if (editingId) {
+        await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', editingId), {
+          config,
+          updated_at: serverTimestamp(),
+        })
+      } else {
+        await addDoc(collection(db, TEAMS_COLLECTION, teamId, 'integrations'), {
+          teamId,
+          type: 'payment_gateway',
+          enabled: true,
+          config,
+          created: serverTimestamp(),
+          createdBy: user?.uid ?? '',
+        })
+      }
+      await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
+      setShowDialog(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleToggleEnabled(item: TeamIntegration) {
+    await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', item.id), {
+      enabled: !item.enabled,
+      updated_at: serverTimestamp(),
+    })
+    await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', deleteTarget))
+    await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
+    setDeleteTarget(null)
+  }
+
+  if (isLoading) return <div className="space-y-2"><Skeleton className="h-16 rounded" /></div>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t('paymentsGateway')}</p>
+        <Button size="sm" onClick={openAdd}><Plus className="h-4 w-4 mr-1" />{t('paymentsAddGateway')}</Button>
+      </div>
+
+      {integrations.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">{t('paymentsNoGateway')}</p>
+      ) : (
+        <div className="divide-y border rounded-lg">
+          {integrations.map((item) => {
+            const cfg = item.config
+            const label = cfg.type === 'stripe' ? 'Stripe' : 'Payrexx'
+            const identifier = cfg.type === 'stripe' ? cfg.publishable_key : cfg.instance_name
+            return (
+              <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="text-xs text-muted-foreground truncate">{identifier} · {cfg.currency}</p>
+                </div>
+                <Badge variant={item.enabled ? 'default' : 'outline'} className="text-xs">
+                  {item.enabled ? t('paymentsEnabled') : t('paymentsDisabled')}
+                </Badge>
+                <Switch checked={item.enabled} onCheckedChange={() => handleToggleEnabled(item)} />
+                <button onClick={() => openEdit(item)} className="text-muted-foreground hover:text-foreground p-1">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={() => setDeleteTarget(item.id)} className="text-muted-foreground hover:text-destructive p-1">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">{t('paymentsSecretNote')}</p>
+
+      {/* Add/edit dialog */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingId ? t('paymentsEditGateway') : t('paymentsAddGateway')}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>{t('paymentsGatewayType')}</Label>
+              <Controller
+                name="gatewayType"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="stripe">Stripe</SelectItem>
+                      <SelectItem value="payrexx">Payrexx</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{selectedType === 'stripe' ? t('paymentsPublishableKey') : 'Instance name'}</Label>
+              <Input {...register('identifier')} placeholder={selectedType === 'stripe' ? 'pk_live_…' : 'my-instance'} />
+              {errors.identifier && <p className="text-xs text-destructive">{errors.identifier.message}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('paymentsCurrency')}</Label>
+              <Input {...register('currency')} placeholder="CHF" maxLength={3} className="uppercase w-24" />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('paymentsDeleteGateway')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('paymentsDeleteConfirm')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>
+              {t('paymentsDeleteGateway')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = 'general' | 'subscriptions' | 'alerts' | 'ranking'
+type SettingsTab = 'general' | 'subscriptions' | 'alerts' | 'ranking' | 'payments'
 
 export default function TeamSettingsPage() {
   const { currentTeamId } = useAuth()
@@ -1088,6 +1299,7 @@ export default function TeamSettingsPage() {
     { id: 'subscriptions', label: t('tabSubscriptionTypes') },
     { id: 'alerts', label: t('tabAlerts') },
     { id: 'ranking', label: t('tabRanking') },
+    { id: 'payments', label: t('tabPayments') },
   ]
 
   return (
@@ -1120,6 +1332,7 @@ export default function TeamSettingsPage() {
           {tab === 'subscriptions' && <SubscriptionTypesTab teamId={currentTeamId} />}
           {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
           {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
+          {tab === 'payments' && <PaymentsTab teamId={currentTeamId} />}
         </CardContent>
       </Card>
     </div>

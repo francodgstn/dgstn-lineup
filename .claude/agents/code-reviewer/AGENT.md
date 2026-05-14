@@ -70,6 +70,24 @@ When a feature creates, modifies, or deletes a contact, session, booking, partic
 - [ ] For newly ported Cloud Functions: check that the hmd-lineup source called `logActivity()` and replicate that call using the Lineup `logActivity()` helper
 - [ ] New Firestore triggers that write to `activity_log` are exported from `packages/functions/src/index.ts`
 
+## Payment & billing checklist
+
+**Applies when any of these paths are touched:**
+`packages/functions/src/saas-billing/`, `packages/functions/src/utils/gateway/`,
+`apps/web/src/app/[locale]/(auth)/billing/`, any file matching `*integrations*`
+
+- [ ] No hardcoded API keys, webhook secrets, or publishable keys in source — all secrets via `packages/functions/src/utils/secrets.ts` (Secret Manager)
+- [ ] All payment mutations go through Cloud Functions — never direct client Firestore writes to `saas_subscriptions` or `integrations`
+- [ ] Webhook handlers use `onRequest` (not `onCall`) and validate the gateway signature **before** reading the event payload — return 400 immediately if signature invalid
+- [ ] Idempotency: webhook handler checks `gateway_data.last_event_id` before processing; checkout creation uses a deterministic Stripe idempotency key
+- [ ] Amount fields are integers (cents/rappen), never floats
+- [ ] `saas_subscriptions/{teamId}` writes only from webhook handlers or admin billing functions — confirm `firestore.rules` still blocks client writes
+- [ ] `teams/{teamId}/integrations/{id}` readable/writable only by team owner — verify against `firestore.rules`
+- [ ] Stripe customer IDs, subscription IDs, and payment method IDs must not be returned to non-owner callers
+- [ ] Payment decline errors (card declined, insufficient funds) returned as `HttpsError('failed-precondition', ...)` to distinguish from system errors
+- [ ] Billing pages access-guard with `teamRole === 'owner'` check — never show billing data to non-owners
+- [ ] `stripe` package imported only in `packages/functions/` — never in `apps/web/` (use Stripe.js / Elements if client-side UI is needed)
+
 ## General
 
 - [ ] New Firestore fields use `snake_case`

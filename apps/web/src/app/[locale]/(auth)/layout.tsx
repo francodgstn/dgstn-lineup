@@ -18,6 +18,7 @@ import {
   UserCog,
   Globe,
   Settings,
+  CreditCard,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -68,6 +69,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/team/managers', labelKey: 'managers', icon: UserCog },
       { href: '/team/settings', labelKey: 'settings', icon: Settings },
+      { href: '/billing',       labelKey: 'billing',  icon: CreditCard },
     ],
   },
 ]

@@ -40,8 +40,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `sendTeamInvitation`
 - ✅ `getTeamInvitationDetails`
 - ✅ `acceptTeamInvitation`
-- ❌ `manageTeamInvitation`
-- ❌ `manageTeamMember`
+- ❌ `manageTeamInvitation` (club+)
+- ❌ `manageTeamMember` (club+)
 - ✅ `generateAuthToken`
 - ✅ `sendMembershipVerificationCode`
 - ✅ `verifyMembershipCode`
@@ -63,8 +63,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `cancelSession`
 - ✅ `updateRecurringSession`
 - ✅ `selfCheckIn`
-- ❌ `generateCoachSlots`
-- ❌ `generateCoachSlotsNow`
+- ✅ `generateCoachSlots` (callable) + `generateCoachSlotsScheduled` (daily cron)
+- ~~`generateCoachSlotsNow`~~ — merged into `generateCoachSlots` callable
 - ❌ `setSessionLocation`
 - ❌ `setSessionTags`
 
@@ -75,10 +75,10 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `cancelBooking`
 - ✅ `rebookSession`
 - ✅ `getBookingDetails`
-- ❌ `bookTrialSession`
-- ❌ `bookCoachSlot`
-- ❌ `cancelCoachBooking`
-- ❌ `trackCoachBookings`
+- ~~`bookTrialSession`~~ — superseded by `bookSession` (handles trial + authenticated portal bookings, referral tracking, IP rate limiting, bookingAuthToken)
+- ✅ `bookCoachSlot`
+- ✅ `cancelCoachBooking`
+- ✅ `trackCoachBookings`
 
 ### Contacts
 - ✅ `deleteContact`
@@ -92,7 +92,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ❌ `requestContactUpdate`
 - ❌ `switchMembershipContact`
 
-### Events
+### Events (club+)
 - ✅ `sendEventInvitations`
 - ✅ `getEventInvitationDetails`
 - ✅ `handleEventInvitationResponse`
@@ -102,14 +102,14 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `trackBookings`
 - ✅ `trackSessions`
 - ✅ `weeklyReports` (scheduled, expanded with full breakdown fields + idempotency guard)
-- ❌ `trackContacts`
-- ❌ `trackSessionParticipants`
+- ✅ `trackContacts`
+- ✅ `trackSessionParticipants`
 - ❌ `generateDashboardInsight` (AI/Gemini)
-- ❌ `dailyTasks` (scheduled cleanup)
+- ✅ `dailyTasks` (scheduled cleanup)
 - ❌ `triggerAutomationRule`
 - ❌ `previewAutomationRule`
 
-### Gamification
+### Gamification (club+)
 - ✅ `recalculateScores`
 - ✅ `resetScores`
 - ❌ `processScoresRebuildJob`
@@ -126,6 +126,14 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 ### Portal
 - ✅ `portalPreview`
 - ❌ `getInTouchForm`
+
+### SaaS Billing
+- ✅ `SaasSubscription` shared type (`packages/shared/src/types/saas.ts`)
+- ✅ Gateway adapter interface + Stripe adapter + Payrexx stub (`packages/functions/src/utils/gateway/`)
+- ✅ `createCheckoutSession` (onCall — Stripe Checkout redirect)
+- ✅ `handleStripeWebhook` (onRequest — signature validation, idempotency, saas_subscriptions sync)
+- ✅ `cancelSaasSubscription` (onCall — cancel at period end)
+- ✅ `getSaasInvoices` (onCall — live from Stripe, not stored)
 
 ### Other
 - ~~`generateQrBill`~~ (Swiss QR Bill — out of scope)
@@ -164,8 +172,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 
 ### Contacts
 - ✅ Contacts list page
-- ❌ Contact detail page (`/contacts/[id]`) — tabbed: profile, notes, activity, subscriptions, gamification
-- ❌ Contact create/edit flow
+- ✅ Contact detail page (`/contacts/[id]`) — profile, notes, activity, alerts, bookings, subscriptions, goals, gamification tabs
+- ✅ Contact create flow (new contact dialog in contacts list page)
 
 ### Sessions
 - ✅ Sessions list page
@@ -176,7 +184,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 ### Activities
 - ✅ Activities list + create/edit/archive
 
-### Events
+### Events (club+)
 - ❌ Events list page
 - ❌ Event detail page
 - ❌ Event invitation flow
@@ -186,25 +194,30 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ❌ Booking detail / management
 
 ### Coaching
-- ❌ Coach slot management page
-- ❌ Coach booking flow
+- ✅ Coach slot management page (`/coaching` — templates + upcoming slots)
+- ✅ Coach booking flow (portal: `/portal/[slug]/coaching` + cancel page)
 
-### Gamification
+### Gamification (club+)
 - ⏳ Stub page only — no leaderboard or scoring UI
 
 ### Team
 - ✅ Team settings page
 - ✅ Team portal settings
 - ✅ Team members page (view only)
-- ❌ Invite / manage members UI
-- ❌ Subscription types management
+- ❌ Invite / manage members UI (club+)
+- ✅ Subscription types management (CRUD in team settings — name, description, source, active toggle)
+- ✅ Payment gateway config (Payments tab in team settings — add/edit/delete Stripe/Payrexx gateways)
+
+### Billing
+- ✅ Billing page (`/billing`) — subscription status, plan selection, invoice history, cancel flow
+- ✅ Sidebar nav entry
 
 ### Portal (public, unauthenticated)
 - ✅ Public profile page
 - ✅ Session booking flow
 - ✅ Trial sign-up form
 - ❌ Contact update request form
-- ❌ Event RSVP page
+- ❌ Event RSVP page (club+)
 
 ---
 

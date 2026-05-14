@@ -49,6 +49,9 @@ export { verifyMembershipCode, completeMembershipSignup } from './auth/completeM
 // Coaching (1:1 slots)
 export { generateCoachSlots, generateCoachSlotsScheduled, bookCoachSlot, cancelCoachBooking, trackCoachBookings } from './coaching'
 
+// SaaS billing
+export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices } from './saas-billing'
+
 // --- Stubs (TODO: port from hmd-lineup) ---
 // export { generateContactQR } from './contacts'
 // export { generateDashboardInsight } from './analytics'
