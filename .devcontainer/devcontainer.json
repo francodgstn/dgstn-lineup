@@ -1,0 +1,30 @@
+{
+  "name": "dgstn-lineup",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "21",
+      "installGradle": false,
+      "installMaven": false
+    }
+  },
+  "forwardPorts": [3000, 4000, 5001, 8080, 9000, 9099],
+  "portsAttributes": {
+    "3000": { "label": "Web Admin Panel", "onAutoForward": "openBrowser" },
+    "4000": { "label": "Firebase Emulator UI", "onAutoForward": "notify" },
+    "5001": { "label": "Functions Emulator", "onAutoForward": "silent" },
+    "8080": { "label": "Firestore Emulator", "onAutoForward": "silent" },
+    "9000": { "label": "Realtime DB Emulator", "onAutoForward": "silent" },
+    "9099": { "label": "Auth Emulator", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}

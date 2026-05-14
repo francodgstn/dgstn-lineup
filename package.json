@@ -16,7 +16,8 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
     "emulators": "firebase emulators:start --only auth,firestore",
     "emulators:all": "firebase emulators:start",
-    "seed": "tsx scripts/seed-emulator.ts"
+    "seed": "tsx scripts/seed-emulator.ts",
+    "dev:codespace": "bash scripts/dev.sh"
   },
   "devDependencies": {
     "firebase-admin": "^13.0.0",
