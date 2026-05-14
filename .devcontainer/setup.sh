@@ -7,9 +7,8 @@ echo "==> Enabling pnpm via corepack"
 corepack enable
 corepack prepare pnpm@9.15.0 --activate
 
-echo "==> Installing firebase-tools (emulator CLI)"
-npm install -g firebase-tools
-
+# Installs all workspace deps including firebase-tools (a root devDependency),
+# so the `firebase` CLI is available to pnpm-invoked scripts via node_modules/.bin.
 echo "==> Installing workspace dependencies"
 pnpm install
 

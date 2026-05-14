@@ -7,7 +7,9 @@ cleanup() { kill 0 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
 echo "==> Starting Firebase emulators (auth, firestore)"
-firebase emulators:start --only auth,firestore --project demo-lineup &
+# Use pnpm exec so the firebase-tools binary resolves from node_modules/.bin
+# regardless of how this script is invoked.
+pnpm exec firebase emulators:start --only auth,firestore --project demo-lineup &
 
 echo "==> Waiting for Firestore emulator on :8080"
 until curl -s http://127.0.0.1:8080 >/dev/null 2>&1; do sleep 1; done
