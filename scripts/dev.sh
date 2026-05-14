@@ -6,6 +6,11 @@ set -euo pipefail
 cleanup() { kill 0 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
+# Always regenerate apps/web/.env.local so the web app has valid emulator
+# config — guards against a missing or stale file from an interrupted setup.
+echo "==> Ensuring apps/web/.env.local"
+bash scripts/write-env-local.sh
+
 echo "==> Starting Firebase emulators (auth, firestore)"
 # Use pnpm exec so the firebase-tools binary resolves from node_modules/.bin
 # regardless of how this script is invoked.
