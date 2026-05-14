@@ -15,6 +15,15 @@ echo "==> Waiting for Auth emulator on :9099"
 until curl -s http://127.0.0.1:9099/ 2>/dev/null | grep -q '"ready"'; do sleep 1; done
 echo "    emulators up"
 
+# In a browser-based Codespace the emulator ports must be public so the
+# Firebase web SDK (running in your browser) can reach them over HTTPS.
+if [ -n "${CODESPACE_NAME:-}" ] && command -v gh >/dev/null 2>&1; then
+  echo "==> Making emulator ports public (Codespaces)"
+  gh codespace ports visibility 8080:public 9099:public 4000:public \
+    -c "$CODESPACE_NAME" 2>/dev/null \
+    || echo "    NOTE: set ports 8080 & 9099 to 'Public' in the Ports panel manually"
+fi
+
 echo "==> Seeding emulator data"
 pnpm seed || echo "    seed failed (continuing anyway)"
 

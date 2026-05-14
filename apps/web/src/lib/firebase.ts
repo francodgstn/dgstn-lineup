@@ -1,5 +1,9 @@
 import { initializeApp, getApps, getApp } from 'firebase/app'
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
+import {
+  getFirestore,
+  initializeFirestore,
+  type Firestore,
+} from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions'
 
@@ -15,19 +19,55 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
-export const db = getFirestore(app)
+const useEmulators = process.env.NEXT_PUBLIC_USE_EMULATORS === 'true'
+
+// In a browser-based Codespace the emulators aren't on localhost — each
+// forwarded port is served over HTTPS at <codespace>-<port>.<domain>.
+// Server-side code runs inside the Codespace itself, so it still uses
+// localhost; only the browser bundle needs the forwarded host.
+const codespace = process.env.NEXT_PUBLIC_CODESPACE_NAME
+const codespaceDomain = process.env.NEXT_PUBLIC_CODESPACE_DOMAIN
+
+export function emulatorEndpoint(port: number): {
+  host: string
+  port: number
+  ssl: boolean
+} {
+  if (typeof window !== 'undefined' && codespace && codespaceDomain) {
+    return { host: `${codespace}-${port}.${codespaceDomain}`, port: 443, ssl: true }
+  }
+  return { host: 'localhost', port, ssl: false }
+}
+
+// Cache the Firestore instance across HMR / module re-evaluation —
+// initializeFirestore throws if called twice for the same app.
+const globalForFirebase = globalThis as { _lineupDb?: Firestore }
+
+function createDb(): Firestore {
+  if (!useEmulators) return getFirestore(app)
+  const { host, port, ssl } = emulatorEndpoint(8080)
+  return initializeFirestore(app, {
+    host: `${host}:${port}`,
+    ssl,
+    // A proxied HTTPS emulator can't use WebChannel streaming.
+    experimentalForceLongPolling: ssl,
+  })
+}
+
+export const db =
+  globalForFirebase._lineupDb ?? (globalForFirebase._lineupDb = createDb())
 export const storage = getStorage(app)
 export const functions = getFunctions(app, 'europe-west6')
 
 // Connect to local emulators when NEXT_PUBLIC_USE_EMULATORS=true.
-// Guard with globalThis flag to prevent double-connect on HMR (client) and
-// across module re-evaluations in server components.
+// Guard with a globalThis flag to prevent double-connect on HMR (client)
+// and across module re-evaluations in server components.
 if (
-  process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' &&
+  useEmulators &&
   !(globalThis as { _emulatorConnected?: boolean })._emulatorConnected
 ) {
-  connectFirestoreEmulator(db, 'localhost', 8080)
-  connectFunctionsEmulator(functions, 'localhost', 5001)
+  const fns = emulatorEndpoint(5001)
+  connectFunctionsEmulator(functions, fns.host, fns.port)
   ;(globalThis as { _emulatorConnected?: boolean })._emulatorConnected = true
 }
 

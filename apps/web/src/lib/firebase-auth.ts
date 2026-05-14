@@ -1,5 +1,5 @@
 import { getAuth, connectAuthEmulator } from 'firebase/auth'
-import app from './firebase'
+import app, { emulatorEndpoint } from './firebase'
 
 export const auth = getAuth(app)
 
@@ -8,6 +8,9 @@ if (
   typeof window !== 'undefined' &&
   !(globalThis as { _authEmulatorConnected?: boolean })._authEmulatorConnected
 ) {
-  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
+  const { host, port, ssl } = emulatorEndpoint(9099)
+  connectAuthEmulator(auth, `${ssl ? 'https' : 'http'}://${host}:${port}`, {
+    disableWarnings: true,
+  })
   ;(globalThis as { _authEmulatorConnected?: boolean })._authEmulatorConnected = true
 }
