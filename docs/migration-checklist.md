@@ -54,9 +54,9 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `syncSessionPublicProfile`
 - ✅ `syncActivityPublicProfile`
 - ✅ `indexUser`
-- ❌ `syncSubscriptionTypesToPublicProfile`
-- ❌ `onContactSubscriptionChange`
-- ❌ `onSessionUpdate`
+- ✅ `syncSubscriptionTypesToPublicProfile`
+- ✅ `onContactSubscriptionChange`
+- ✅ `onSessionUpdate`
 
 ### Sessions
 - ✅ `generateRecurringSessions`
@@ -185,13 +185,13 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ Activities list + create/edit/archive
 
 ### Events (club+)
-- ❌ Events list page
+- ✅ Events list page
 - ❌ Event detail page
 - ❌ Event invitation flow
 
 ### Bookings
 - ✅ Bookings list page (basic)
-- ❌ Booking detail / management
+- ✅ Booking management — confirm (creates participant), revert to pending, mark no-show, cancel, rebook
 
 ### Coaching
 - ✅ Coach slot management page (`/coaching` — templates + upcoming slots)

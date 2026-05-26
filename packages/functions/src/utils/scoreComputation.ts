@@ -165,6 +165,68 @@ export async function recalculateMonthForTeam(
   return { contactIds, recalculatedCount }
 }
 
+/**
+ * Compute the monthly score for a single contact in a given month.
+ * Used by onSessionUpdate to recalculate after session edits.
+ */
+export async function computeContactMonthScore(
+  db: admin.firestore.Firestore,
+  contactId: string,
+  teamId: string,
+  month: string,
+  settings: GamificationSettings,
+  _activityScoresCache: Record<string, number> | null,
+): Promise<{ totalPoints: number; finalScore: number; sessionsCount: number }> {
+  const monthDate = new Date(`${month}-01T00:00:00`)
+  const mStart = admin.firestore.Timestamp.fromDate(startOfMonth(monthDate))
+  const mEnd = admin.firestore.Timestamp.fromDate(endOfMonth(monthDate))
+
+  const [sessionsErr, sessionsSnap] = await to(
+    db.collection(SESSIONS_COLLECTION)
+      .where('teamId', '==', teamId)
+      .where('start', '>=', mStart)
+      .where('start', '<=', mEnd)
+      .get(),
+  )
+  if (sessionsErr || !sessionsSnap || sessionsSnap.empty) {
+    return { totalPoints: 0, finalScore: 0, sessionsCount: 0 }
+  }
+
+  let totalPoints = 0
+  let sessionsCount = 0
+
+  for (const sessionDoc of sessionsSnap.docs) {
+    const partRef = db
+      .collection(SESSIONS_COLLECTION)
+      .doc(sessionDoc.id)
+      .collection('participants')
+      .doc(contactId)
+    const [, partSnap] = await to(partRef.get())
+    if (!partSnap || !partSnap.exists) continue
+
+    const sessionData = sessionDoc.data()
+    const startDate: Date | undefined = sessionData.start?.toDate()
+    if (!startDate) continue
+
+    const actId = sessionData.activityId as string | undefined
+    let baseScore = settings.default_base_score
+    if (actId) {
+      const [, actDoc] = await to(db.collection(ACTIVITIES_COLLECTION).doc(actId).get())
+      if (actDoc && actDoc.exists) {
+        const bs = actDoc.data()?.base_score
+        if (bs != null) baseScore = bs as number
+      }
+    }
+
+    const timeMultiplier = getTimeMultiplier(startDate, settings.time_multipliers)
+    totalPoints += calculateAttendancePoints(baseScore, timeMultiplier)
+    sessionsCount++
+  }
+
+  const finalScore = calculateMonthlyScore(totalPoints, settings.monthly_cap)
+  return { totalPoints, finalScore, sessionsCount }
+}
+
 export async function computeContactStreak(
   db: admin.firestore.Firestore,
   contactId: string,

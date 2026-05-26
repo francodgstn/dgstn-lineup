@@ -21,6 +21,9 @@ export { syncTeamPublicProfile } from './sync/syncTeamPublicProfile'
 export { syncSessionPublicProfile } from './sync/syncSessionPublicProfile'
 export { syncActivityPublicProfile } from './sync/syncActivityPublicProfile'
 export { indexUser } from './sync/indexUser'
+export { syncSubscriptionTypesToPublicProfile } from './sync/syncSubscriptionTypesToPublicProfile'
+export { onContactSubscriptionChange } from './sync/onContactSubscriptionChange'
+export { onSessionUpdate } from './sync/onSessionUpdate'
 
 // Booking
 export { bookSession, sendBookingVerificationCode, verifyBookingCode, cancelBooking, getBookingDetails, rebookSession } from './booking'

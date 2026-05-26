@@ -5,9 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
   collectionGroup, query, where, orderBy, limit, getDocs,
-  doc, getDoc, writeBatch, serverTimestamp, increment,
+  doc, getDoc, writeBatch, serverTimestamp, increment, collection,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -20,8 +21,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import type { Booking } from '@lineup/shared'
-import { Search, MoreHorizontal, Check, X, UserX } from 'lucide-react'
+import { Search, MoreHorizontal, Check, X, UserX, Undo, Repeat } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
+import type { Route } from 'next'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,8 +55,11 @@ function formatTime(ts: { toDate(): Date } | null | undefined): string {
 function formatIso(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)
-  return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
-    + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return (
+    d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) +
+    ' · ' +
+    d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  )
 }
 
 function initials(b: Booking) {
@@ -70,6 +90,7 @@ interface SessionInfo {
   activityName?: string
   start?: string
   end?: string
+  allowBooking?: boolean
 }
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
@@ -112,6 +133,7 @@ function useSessionMap(bookings: Booking[]) {
             activityName: data.activityName as string | undefined,
             start: (data.start as { toDate(): Date } | undefined)?.toDate().toISOString(),
             end: (data.end as { toDate(): Date } | undefined)?.toDate().toISOString(),
+            allowBooking: data.allowBooking as boolean | undefined,
           }
         }
       }
@@ -120,39 +142,215 @@ function useSessionMap(bookings: Booking[]) {
   })
 }
 
-// ─── admin actions ────────────────────────────────────────────────────────────
+// Future sessions available for rebooking
+function useFutureSessions(teamId: string | null) {
+  return useQuery<{ id: string; activityName?: string; start?: string; end?: string }[]>({
+    queryKey: ['future-sessions', teamId],
+    enabled: !!teamId,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      if (!teamId) return []
+      const now = new Date()
+      const q = query(
+        collection(db, 'sessions'),
+        where('teamId', '==', teamId),
+        where('allowBooking', '==', true),
+        orderBy('start', 'asc'),
+        limit(50),
+      )
+      const snap = await getDocs(q)
+      return snap.docs
+        .map((d) => {
+          const data = d.data()
+          const start = (data.start as { toDate(): Date } | undefined)?.toDate()
+          return {
+            id: d.id,
+            activityName: data.activityName as string | undefined,
+            start: start?.toISOString(),
+            end: (data.end as { toDate(): Date } | undefined)?.toDate().toISOString(),
+          }
+        })
+        .filter((s) => s.start && new Date(s.start) > now)
+    },
+  })
+}
+
+// ─── booking actions ──────────────────────────────────────────────────────────
+
+type BookingAction = 'confirm' | 'no_show' | 'cancel' | 'revert'
 
 function useBookingAction(teamId: string | null) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ booking, action }: { booking: Booking; action: 'confirm' | 'no_show' | 'cancel' }) => {
+    mutationFn: async ({ booking, action }: { booking: Booking; action: BookingAction }) => {
       if (!booking.session) throw new Error('Missing session ID on booking')
       const bookingRef = doc(db, 'sessions', booking.session, 'bookings', booking.id)
+      const sessionRef = doc(db, 'sessions', booking.session)
       const batch = writeBatch(db)
 
       if (action === 'confirm') {
+        // Mark booking confirmed
         batch.update(bookingRef, { status: 'confirmed', confirmed_at: serverTimestamp() })
+        // Add participant from booking data
+        const participantRef = doc(db, 'sessions', booking.session, 'participants', booking.id)
+        batch.set(participantRef, {
+          fullname: `${booking.firstname ?? ''} ${booking.lastname ?? ''}`.trim(),
+          firstname: booking.firstname ?? '',
+          lastname: booking.lastname ?? '',
+          avatar_url: null,
+          contact: booking.contact ?? booking.id,
+          session: booking.session,
+          confirmedFromBooking: true,
+        })
+        // Adjust session counters
+        batch.update(sessionRef, {
+          portal_bookings_count: increment(-1),
+          conversions_count: increment(1),
+        })
+        if (booking.contact) {
+          batch.update(doc(db, 'contacts', booking.contact), {
+            pending_bookings_count: increment(-1),
+          })
+        }
+      } else if (action === 'revert') {
+        // Revert confirmed → pending
+        batch.update(bookingRef, {
+          status: 'pending',
+          confirmed_at: null,
+        })
+        // Remove participant doc
+        const participantRef = doc(db, 'sessions', booking.session, 'participants', booking.id)
+        batch.delete(participantRef)
+        // Undo session counters
+        batch.update(sessionRef, {
+          portal_bookings_count: increment(1),
+          conversions_count: increment(-1),
+        })
+        if (booking.contact) {
+          batch.update(doc(db, 'contacts', booking.contact), {
+            pending_bookings_count: increment(1),
+          })
+        }
       } else if (action === 'no_show') {
         batch.update(bookingRef, { status: 'no_show', no_show_at: serverTimestamp() })
-      } else {
-        batch.update(bookingRef, { status: 'cancelled', cancelled_at: serverTimestamp(), cancelled_by: 'admin' })
         const wasPending = !booking.status || booking.status === 'pending'
         if (wasPending) {
-          batch.update(doc(db, 'sessions', booking.session), { portal_bookings_count: increment(-1) })
+          batch.update(sessionRef, { portal_bookings_count: increment(-1) })
           if (booking.contact) {
-            batch.update(doc(db, 'contacts', booking.contact), { pending_bookings_count: increment(-1) })
+            batch.update(doc(db, 'contacts', booking.contact), {
+              pending_bookings_count: increment(-1),
+            })
+          }
+        }
+      } else if (action === 'cancel') {
+        batch.update(bookingRef, {
+          status: 'cancelled',
+          cancelled_at: serverTimestamp(),
+          cancelled_by: 'admin',
+        })
+        const wasPending = !booking.status || booking.status === 'pending'
+        if (wasPending) {
+          batch.update(sessionRef, { portal_bookings_count: increment(-1) })
+          if (booking.contact) {
+            batch.update(doc(db, 'contacts', booking.contact), {
+              pending_bookings_count: increment(-1),
+            })
           }
         }
       }
+
       await batch.commit()
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings', 'all', teamId] }),
   })
 }
 
-// ─── tabs ─────────────────────────────────────────────────────────────────────
+function useRebookAction(teamId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ token, newSessionId }: { token: string; newSessionId: string }) => {
+      const fn = httpsCallable(functions, 'rebookSession')
+      await fn({ token, newSessionId })
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings', 'all', teamId] }),
+  })
+}
 
-type StatusFilter = BookingStatus | 'all'
+// ─── rebook dialog ────────────────────────────────────────────────────────────
+
+function RebookDialog({
+  booking,
+  futureSessions,
+  bookedSessionIds,
+  onConfirm,
+  onClose,
+  loading,
+}: {
+  booking: Booking
+  futureSessions: { id: string; activityName?: string; start?: string; end?: string }[]
+  bookedSessionIds: Set<string>
+  onConfirm: (newSessionId: string) => void
+  onClose: () => void
+  loading: boolean
+}) {
+  const t = useTranslations('Bookings')
+  const [selectedId, setSelectedId] = useState('')
+
+  const options = futureSessions.filter(
+    (s) => s.start && new Date(s.start) > new Date() && !bookedSessionIds.has(s.id)
+  )
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t('rebookTitle')}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {t('rebookDesc', { name: `${booking.firstname} ${booking.lastname}` })}
+        </p>
+        {options.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('rebookNoSessions')}</p>
+        ) : (
+          <Select value={selectedId} onValueChange={(v) => setSelectedId(v ?? '')}>
+            <SelectTrigger>
+              <SelectValue placeholder={t('rebookPickSession')} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((s) => {
+                const start = s.start ? new Date(s.start) : null
+                const end = s.end ? new Date(s.end) : null
+                const label = start
+                  ? start.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) +
+                    ' ' +
+                    start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+                    (end ? ' – ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '')
+                  : s.id
+                return (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="font-medium">{s.activityName ?? '—'}</span>
+                    <span className="text-muted-foreground ml-2 text-xs">{label}</span>
+                  </SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={loading}>
+            {t('rebookCancel')}
+          </Button>
+          <Button
+            onClick={() => selectedId && onConfirm(selectedId)}
+            disabled={loading || !selectedId}
+          >
+            {loading ? t('rebookInProgress') : t('rebookConfirm')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 // ─── booking row ──────────────────────────────────────────────────────────────
 
@@ -161,31 +359,41 @@ function BookingRow({
   sessionInfo,
   statusLabel,
   onAction,
+  onRebook,
 }: {
   booking: Booking
   sessionInfo?: SessionInfo
   statusLabel: Record<BookingStatus, string>
-  onAction: (booking: Booking, action: 'confirm' | 'no_show' | 'cancel') => void
+  onAction: (booking: Booking, action: BookingAction) => void
+  onRebook: (booking: Booking) => void
 }) {
+  const t = useTranslations('Bookings')
   const status: BookingStatus = (booking.status as BookingStatus) ?? 'pending'
   const sessionDate = sessionInfo?.start ? formatIso(sessionInfo.start) : null
   const activityName = sessionInfo?.activityName
 
-  const canConfirm = status === 'pending'
-  const canNoShow = status === 'confirmed' || status === 'pending'
-  const canCancel = status !== 'cancelled' && status !== 'rebooked'
+  const isPending = status === 'pending'
+  const isConfirmed = status === 'confirmed'
+  const isNoShow = status === 'no_show'
+  const isActive = isPending || isConfirmed || isNoShow
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 border-b last:border-0 group">
-      <div className={`h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-semibold ${avatarColor(booking.id)}`}>
+      <div
+        className={`h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-semibold ${avatarColor(booking.id)}`}
+      >
         {initials(booking)}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="font-medium text-sm truncate">{booking.firstname} {booking.lastname}</p>
+          <p className="font-medium text-sm truncate">
+            {booking.firstname} {booking.lastname}
+          </p>
           {booking.is_new_contact && (
-            <Badge variant="outline" className="text-xs shrink-0">Trial</Badge>
+            <Badge variant="outline" className="text-xs shrink-0">
+              {t('trialBadge')}
+            </Badge>
           )}
         </div>
         <p className="text-xs text-muted-foreground truncate">{booking.email ?? '—'}</p>
@@ -194,13 +402,36 @@ function BookingRow({
             {activityName && <span className="font-medium">{activityName}</span>}
             {activityName && sessionDate && ' · '}
             {sessionDate}
+            {booking.session && (
+              <>
+                {' · '}
+                <Link
+                  href={`/sessions/${booking.session}` as Route}
+                  className="underline underline-offset-2 hover:text-foreground transition-colors"
+                >
+                  {t('viewSession')}
+                </Link>
+              </>
+            )}
+          </p>
+        )}
+        {booking.contact && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            <Link
+              href={`/contacts/${booking.contact}` as Route}
+              className="underline underline-offset-2 hover:text-foreground transition-colors"
+            >
+              {t('viewContact')}
+            </Link>
           </p>
         )}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
         <div className="hidden sm:flex flex-col items-end gap-1">
-          <Badge variant={STATUS_VARIANT[status]} className="text-xs">{statusLabel[status]}</Badge>
+          <Badge variant={STATUS_VARIANT[status]} className="text-xs">
+            {statusLabel[status]}
+          </Badge>
           <p className="text-xs text-muted-foreground">
             {formatDate(booking.joinedAt as Parameters<typeof formatDate>[0])}
             {formatTime(booking.joinedAt as Parameters<typeof formatTime>[0]) && (
@@ -209,29 +440,61 @@ function BookingRow({
           </p>
         </div>
         <div className="flex sm:hidden">
-          <Badge variant={STATUS_VARIANT[status]} className="text-xs">{statusLabel[status]}</Badge>
+          <Badge variant={STATUS_VARIANT[status]} className="text-xs">
+            {statusLabel[status]}
+          </Badge>
         </div>
 
-        {(canConfirm || canNoShow || canCancel) && (
+        {isActive && (
           <DropdownMenu>
             <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent">
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {canConfirm && (
-                <DropdownMenuItem onClick={() => onAction(booking, 'confirm')} className="gap-2">
-                  <Check className="h-3.5 w-3.5 text-green-600" /> Confirm attendance
+              {isPending && (
+                <DropdownMenuItem
+                  onClick={() => onAction(booking, 'confirm')}
+                  className="gap-2"
+                >
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                  {t('actionConfirm')}
                 </DropdownMenuItem>
               )}
-              {canNoShow && (
-                <DropdownMenuItem onClick={() => onAction(booking, 'no_show')} className="gap-2">
-                  <UserX className="h-3.5 w-3.5 text-orange-500" /> Mark as no-show
+              {isConfirmed && (
+                <DropdownMenuItem
+                  onClick={() => onAction(booking, 'revert')}
+                  className="gap-2"
+                >
+                  <Undo className="h-3.5 w-3.5 text-orange-500" />
+                  {t('actionRevert')}
                 </DropdownMenuItem>
               )}
-              {(canConfirm || canNoShow) && canCancel && <DropdownMenuSeparator />}
-              {canCancel && (
-                <DropdownMenuItem onClick={() => onAction(booking, 'cancel')} className="gap-2 text-destructive focus:text-destructive">
-                  <X className="h-3.5 w-3.5" /> Cancel booking
+              {(isPending || isNoShow) && (
+                <DropdownMenuItem
+                  onClick={() => onAction(booking, 'no_show')}
+                  className="gap-2"
+                >
+                  <UserX className="h-3.5 w-3.5 text-orange-500" />
+                  {t('actionNoShow')}
+                </DropdownMenuItem>
+              )}
+              {isPending && booking.booking_token && (
+                <DropdownMenuItem
+                  onClick={() => onRebook(booking)}
+                  className="gap-2"
+                >
+                  <Repeat className="h-3.5 w-3.5" />
+                  {t('actionRebook')}
+                </DropdownMenuItem>
+              )}
+              {(isPending || isNoShow) && <DropdownMenuSeparator />}
+              {(isPending || isNoShow) && (
+                <DropdownMenuItem
+                  onClick={() => onAction(booking, 'cancel')}
+                  className="gap-2 text-destructive focus:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  {t('actionCancel')}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -244,16 +507,21 @@ function BookingRow({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
+type StatusFilter = BookingStatus | 'all'
+
 export default function BookingsPage() {
   const { currentTeamId } = useAuth()
   const { data: bookings = [], isLoading } = useBookings(currentTeamId)
   const { data: sessionMap = {} } = useSessionMap(bookings)
+  const { data: futureSessions = [] } = useFutureSessions(currentTeamId)
   const { mutate: doAction } = useBookingAction(currentTeamId)
+  const { mutate: doRebook, isPending: rebooking } = useRebookAction(currentTeamId)
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [rebookTarget, setRebookTarget] = useState<Booking | null>(null)
   const t = useTranslations('Bookings')
 
   const statusLabel: Record<BookingStatus, string> = {
@@ -265,9 +533,30 @@ export default function BookingsPage() {
   }
 
   const handleAction = useCallback(
-    (booking: Booking, action: 'confirm' | 'no_show' | 'cancel') => doAction({ booking, action }),
+    (booking: Booking, action: BookingAction) => doAction({ booking, action }),
     [doAction],
   )
+
+  const handleRebookConfirm = useCallback(
+    (newSessionId: string) => {
+      if (!rebookTarget?.booking_token) return
+      doRebook(
+        { token: rebookTarget.booking_token, newSessionId },
+        { onSuccess: () => setRebookTarget(null) }
+      )
+    },
+    [rebookTarget, doRebook],
+  )
+
+  // Session IDs already booked by the rebookTarget contact (exclude from picker)
+  const bookedSessionIds = useMemo(() => {
+    if (!rebookTarget) return new Set<string>()
+    return new Set(
+      bookings
+        .filter((b) => b.contact === rebookTarget.contact && b.session)
+        .map((b) => b.session as string)
+    )
+  }, [rebookTarget, bookings])
 
   const searchFiltered = useMemo(() => {
     let result = bookings
@@ -286,7 +575,8 @@ export default function BookingsPage() {
       })
     }
     if (dateTo) {
-      const to = new Date(dateTo); to.setHours(23, 59, 59, 999)
+      const to = new Date(dateTo)
+      to.setHours(23, 59, 59, 999)
       result = result.filter((b) => {
         const ts = b.joinedAt as { toDate(): Date } | undefined
         return ts ? ts.toDate() <= to : false
@@ -305,7 +595,10 @@ export default function BookingsPage() {
   }
 
   const filtered = useMemo(
-    () => statusFilter === 'all' ? searchFiltered : searchFiltered.filter((b) => (b.status ?? 'pending') === statusFilter),
+    () =>
+      statusFilter === 'all'
+        ? searchFiltered
+        : searchFiltered.filter((b) => (b.status ?? 'pending') === statusFilter),
     [searchFiltered, statusFilter],
   )
 
@@ -344,11 +637,21 @@ export default function BookingsPage() {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground shrink-0">{t('filterFrom')}</span>
-          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-36 text-sm" />
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="w-36 text-sm"
+          />
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground shrink-0">{t('filterTo')}</span>
-          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-36 text-sm" />
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="w-36 text-sm"
+          />
         </div>
       </div>
 
@@ -366,9 +669,13 @@ export default function BookingsPage() {
           >
             {label}
             {counts[key] > 0 && (
-              <span className={`text-xs rounded-full px-1.5 py-0.5 leading-none ${
-                statusFilter === key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-              }`}>
+              <span
+                className={`text-xs rounded-full px-1.5 py-0.5 leading-none ${
+                  statusFilter === key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
                 {counts[key]}
               </span>
             )}
@@ -396,16 +703,30 @@ export default function BookingsPage() {
           </div>
         )}
 
-        {!isLoading && filtered.map((b) => (
-          <BookingRow
-            key={b.id}
-            booking={b}
-            sessionInfo={b.session ? sessionMap[b.session] : undefined}
-            statusLabel={statusLabel}
-            onAction={handleAction}
-          />
-        ))}
+        {!isLoading &&
+          filtered.map((b) => (
+            <BookingRow
+              key={b.id}
+              booking={b}
+              sessionInfo={b.session ? sessionMap[b.session] : undefined}
+              statusLabel={statusLabel}
+              onAction={handleAction}
+              onRebook={setRebookTarget}
+            />
+          ))}
       </div>
+
+      {/* Rebook dialog */}
+      {rebookTarget && (
+        <RebookDialog
+          booking={rebookTarget}
+          futureSessions={futureSessions}
+          bookedSessionIds={bookedSessionIds}
+          onConfirm={handleRebookConfirm}
+          onClose={() => setRebookTarget(null)}
+          loading={rebooking}
+        />
+      )}
     </div>
   )
 }
