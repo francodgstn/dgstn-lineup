@@ -19,7 +19,7 @@
     "emulators": "firebase emulators:start --only auth,firestore",
     "emulators:all": "firebase emulators:start",
     "seed": "tsx scripts/seed-emulator.ts",
-    "dev:local": "bash scripts/dev.sh",
+    "dev:local": "node scripts/dev-local.mjs",
     "dev:codespace": "bash scripts/dev.sh"
   },
   "devDependencies": {
