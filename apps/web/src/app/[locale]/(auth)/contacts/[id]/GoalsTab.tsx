@@ -16,6 +16,10 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Flag, CheckSquare, Circle, ChevronDown, ChevronUp, Plus, Trash2,
   Star, Info, CheckCircle2,
 } from 'lucide-react'
@@ -305,6 +309,7 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
   const [showEvalDialog, setShowEvalDialog] = useState(false)
   const [editingEval, setEditingEval] = useState<GoalEvaluation | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   const goalRef = doc(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goal.id)
@@ -356,9 +361,8 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
   }
 
   const handleDelete = async () => {
-    if (!confirm(t('goalDeleteDesc'))) return
     setDeleting(true)
-    try { await deleteDoc(goalRef); onChanged() } finally { setDeleting(false) }
+    try { await deleteDoc(goalRef); onChanged() } finally { setDeleting(false); setConfirmDelete(false) }
   }
 
   const canEval = goal.status === 'open' || goal.status === 'in_progress'
@@ -377,16 +381,16 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {goal.created_by === 'coach' ? (
+              {goal.created_by !== 'coach' ? (
                 <span title={t('goalCoachInfo')}>
-                  <Info className="h-4 w-4 text-violet-500" />
+                  <Info className="h-4 w-4 text-blue-400" />
                 </span>
               ) : (
                 <>
                   <button onClick={() => setEditOpen(true)} className="p-1 rounded hover:bg-muted transition-colors">
                     <Flag className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
-                  <button onClick={handleDelete} disabled={deleting} className="p-1 rounded hover:bg-muted transition-colors">
+                  <button onClick={() => setConfirmDelete(true)} disabled={deleting} className="p-1 rounded hover:bg-muted transition-colors">
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                   </button>
                 </>
@@ -471,6 +475,21 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
         )}
       </div>
 
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('goalDeleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('goalDeleteDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <GoalFormDialog
         open={editOpen}
         type="goal"
@@ -509,6 +528,7 @@ interface TaskCardProps {
 function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
   const t = useTranslations('Contacts')
   const [editOpen, setEditOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [acting, setActing] = useState(false)
   const isDone = goal.status === 'achieved'
   const goalRef = doc(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goal.id)
@@ -534,9 +554,9 @@ function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
   }
 
   const handleDelete = async () => {
-    if (!confirm(t('taskDeleteDesc'))) return
     await deleteDoc(goalRef)
     onChanged()
+    setConfirmDelete(false)
   }
 
   return (
@@ -564,11 +584,26 @@ function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
           <button onClick={() => setEditOpen(true)} className="p-1 rounded hover:bg-muted transition-colors">
             <CheckSquare className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
-          <button onClick={handleDelete} className="p-1 rounded hover:bg-muted transition-colors">
+          <button onClick={() => setConfirmDelete(true)} className="p-1 rounded hover:bg-muted transition-colors">
             <Trash2 className="h-3.5 w-3.5 text-destructive" />
           </button>
         </div>
       </div>
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('taskDeleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('taskDeleteDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <GoalFormDialog
         open={editOpen}
         type="task"

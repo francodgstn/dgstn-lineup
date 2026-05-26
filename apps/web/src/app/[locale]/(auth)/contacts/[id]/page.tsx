@@ -926,7 +926,7 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
                     {isActive && <Badge variant="default" className="text-xs">{t('subscriptionActiveLabel')}</Badge>}
                   </div>
                   {entry.recurrence && (
-                    <p className="text-xs text-muted-foreground">{entry.recurrence.replace('_', ' ')}</p>
+                    <p className="text-xs text-muted-foreground">{t(`recurrence_${entry.recurrence}`)}</p>
                   )}
                   <p className="text-xs text-muted-foreground">
                     {formatDate(entry.start_date)} – {entry.end_date ? formatDate(entry.end_date) : t('subscriptionEndNone')}
@@ -1093,7 +1093,7 @@ function GamificationTab({ contact, teamId }: { contact: Contact; teamId: string
         <div className="rounded-xl border bg-card p-4 text-center">
           <p className="text-2xl font-bold">{contact.total_sessions ?? 0}</p>
           <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
-            <Trophy className="h-3 w-3 text-primary" />Sessions
+            <Trophy className="h-3 w-3 text-primary" />{t('tabBookings')}
           </p>
         </div>
       </div>
@@ -1168,20 +1168,21 @@ function formatActivityTimestamp(ts: { toDate(): Date } | null | undefined): str
   return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function dateDayLabel(ts: { toDate(): Date } | null | undefined): string {
+function dateDayLabel(ts: { toDate(): Date } | null | undefined, tCommon: (k: string) => string): string {
   if (!ts) return ''
   const d = ts.toDate()
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const day = new Date(d.getFullYear(), d.getMonth(), d.getDate())
   const diffDays = (today.getTime() - day.getTime()) / 86_400_000
-  if (diffDays < 1) return 'Today'
-  if (diffDays < 2) return 'Yesterday'
+  if (diffDays < 1) return tCommon('today')
+  if (diffDays < 2) return tCommon('yesterday')
   return d.toLocaleDateString([], { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
   const { data: entries = [], isLoading } = useContactActivityLog(contact.id, teamId)
 
   if (isLoading) return (
@@ -1197,7 +1198,7 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
   const groups: { label: string; items: ActivityLogEntry[] }[] = []
   let currentLabel = ''
   for (const entry of entries) {
-    const label = dateDayLabel(entry.created_at as { toDate(): Date } | null | undefined)
+    const label = dateDayLabel(entry.created_at as { toDate(): Date } | null | undefined, tCommon)
     if (label !== currentLabel) {
       groups.push({ label, items: [] })
       currentLabel = label

@@ -83,6 +83,7 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                suppressHydrationWarning
                 {...register('email')}
               />
               {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
@@ -97,6 +98,7 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                suppressHydrationWarning
                 {...register('password')}
               />
               {errors.password && <p className="text-destructive text-xs">{errors.password.message}</p>}

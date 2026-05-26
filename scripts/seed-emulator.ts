@@ -84,6 +84,104 @@ async function seedTeam(opts: {
 }) {
   const { uid, email, displayName, teamId, teamName, teamSlug, plan, planStatus, accentColor } = opts
 
+  // ── plan-tier config ─────────────────────────────────────────────────────────
+
+  // Subscription types — vary by plan
+  const subscriptionTypeDefs = plan === 'coach'
+    ? [
+        { id: `${teamId}-sub-monthly`,  name: 'Monthly Membership', description: 'Unlimited classes, billed monthly.',       source: 'internal', price: 95,  active: true },
+        { id: `${teamId}-sub-10class`,  name: '10-Class Pack',      description: 'Pre-paid block of 10 sessions.',            source: 'internal', price: 180, active: true },
+        { id: `${teamId}-sub-dropin`,   name: 'Drop-in',            description: 'Pay per session, no commitment.',           source: 'internal', price: 25,  active: true },
+      ]
+    : plan === 'club'
+    ? [
+        { id: `${teamId}-sub-monthly`,  name: 'Monthly Membership', description: 'Unlimited classes, billed monthly.',       source: 'internal', price: 110, active: true  },
+        { id: `${teamId}-sub-quarterly`,name: 'Quarterly Plan',     description: '3-month commitment, 10% discount.',        source: 'internal', price: 300, active: true  },
+        { id: `${teamId}-sub-annual`,   name: 'Annual Membership',  description: 'Best value — 2 months free.',              source: 'internal', price: 990, active: true  },
+        { id: `${teamId}-sub-dropin`,   name: 'Drop-in',            description: 'Pay per session, no commitment.',           source: 'internal', price: 30,  active: true  },
+        { id: `${teamId}-sub-fitpass`,  name: 'FitPass Partner',    description: 'Access via FitPass aggregator network.',   source: 'aggregator', price: null, active: true },
+        { id: `${teamId}-sub-sportpass`,name: 'SportPass',          description: 'Access via SportPass membership card.',    source: 'aggregator', price: null, active: true },
+      ]
+    : [
+        { id: `${teamId}-sub-monthly`,  name: 'Monthly Membership', description: 'Unlimited classes, billed monthly.',       source: 'internal', price: 120, active: true },
+        { id: `${teamId}-sub-quarterly`,name: 'Quarterly Plan',     description: '3-month commitment, 10% discount.',        source: 'internal', price: 330, active: true },
+        { id: `${teamId}-sub-annual`,   name: 'Annual Membership',  description: 'Best value — 2 months free.',              source: 'internal', price: 1100, active: true },
+        { id: `${teamId}-sub-youth`,    name: 'Youth Plan (U18)',   description: 'Under-18 discounted monthly rate.',         source: 'internal', price: 80,  active: true },
+        { id: `${teamId}-sub-dropin`,   name: 'Drop-in',            description: 'Pay per session, no commitment.',           source: 'internal', price: 35,  active: true },
+      ]
+
+  // Ranking systems — BJJ belt system for club/org, none for coach
+  const rankingSystemDefs = plan !== 'coach'
+    ? [{
+        id: 'bjj-belt',
+        name: 'BJJ Belt',
+        is_primary: true,
+        levels: [
+          { value: 0, label: 'White Belt',  color: '#e5e7eb' },
+          { value: 1, label: 'Blue Belt',   color: '#1d4ed8' },
+          { value: 2, label: 'Purple Belt', color: '#7e22ce' },
+          { value: 3, label: 'Brown Belt',  color: '#78350f' },
+          { value: 4, label: 'Black Belt',  color: '#111827' },
+        ],
+      }]
+    : []
+
+  // Gamification — enabled for club/org, disabled for coach
+  const gamificationSettings = plan === 'coach'
+    ? { enabled: false, default_base_score: 10, streak_min_sessions: 2, monthly_cap: 200, time_multipliers: [] }
+    : plan === 'club'
+    ? {
+        enabled: true,
+        default_base_score: 10,
+        streak_min_sessions: 2,
+        monthly_cap: 200,
+        time_multipliers: [
+          { day: 1, start_hour: 6, end_hour: 9, multiplier: 1.5 },
+          { day: 3, start_hour: 6, end_hour: 9, multiplier: 1.5 },
+          { day: 6, start_hour: 7, end_hour: 10, multiplier: 1.3 },
+        ],
+      }
+    : {
+        enabled: true,
+        default_base_score: 10,
+        streak_min_sessions: 2,
+        monthly_cap: 300,
+        time_multipliers: [
+          { day: 1, start_hour: 6, end_hour: 9, multiplier: 1.5 },
+          { day: 3, start_hour: 6, end_hour: 9, multiplier: 1.5 },
+          { day: 5, start_hour: 6, end_hour: 9, multiplier: 1.5 },
+          { day: 6, start_hour: 7, end_hour: 10, multiplier: 1.3 },
+        ],
+      }
+
+  // Per-contact subscription + rank assignment (index → config)
+  // Active students get a subscription; ranks only for club/org
+  const subMonthly  = `${teamId}-sub-monthly`
+  const subAnnual   = `${teamId}-sub-annual`
+  const subDropin   = `${teamId}-sub-dropin`
+  const subFitpass  = `${teamId}-sub-fitpass`
+  const subSportpass= `${teamId}-sub-sportpass`
+  type SubAssign = { subId: string; subName: string; recurrence: string | null; rank: number | null }
+  const contactSubRank: Record<number, SubAssign> = {
+    0:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 1 : null },
+    1:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 1 : null },
+    2:  { subId: subAnnual,    subName: 'Annual Membership',  recurrence: 'annual',   rank: plan !== 'coach' ? 2 : null },
+    3:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 0 : null },
+    4:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 1 : null },
+    5:  { subId: subDropin,    subName: 'Drop-in',            recurrence: null,        rank: plan !== 'coach' ? 0 : null },
+    6:  { subId: plan !== 'coach' ? subFitpass : subMonthly,
+          subName: plan !== 'coach' ? 'FitPass Partner' : 'Monthly Membership',
+          recurrence: plan !== 'coach' ? null : 'monthly',
+          rank: plan !== 'coach' ? 1 : null },
+    10: { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 0 : null },
+    11: { subId: subAnnual,    subName: 'Annual Membership',  recurrence: 'annual',   rank: plan !== 'coach' ? 1 : null },
+    16: { subId: subAnnual,    subName: 'Annual Membership',  recurrence: 'annual',   rank: plan !== 'coach' ? 2 : null },
+    17: { subId: plan !== 'coach' ? subSportpass : subMonthly,
+          subName: plan !== 'coach' ? 'SportPass' : 'Monthly Membership',
+          recurrence: null,
+          rank: plan !== 'coach' ? 1 : null },
+  }
+
   // Auth user
   await auth.createUser({ uid, email, password: 'lineup123', displayName, emailVerified: true })
 
@@ -99,6 +197,8 @@ async function seedTeam(opts: {
     plan,
     plan_status: planStatus,
     ...(trialEndsAt ? { trial_ends_at: trialEndsAt } : {}),
+    ...(rankingSystemDefs.length ? { ranking_systems: rankingSystemDefs } : {}),
+    settings: { gamification: gamificationSettings },
     portalTheme:       'light',
     portalAccentColor: accentColor,
     portalBackground:  { type: 'solid', color: '#ffffff' },
@@ -168,6 +268,20 @@ async function seedTeam(opts: {
       .collection('public_profile').doc(a.id).set({
         type: 'activity', teamId, name: a.name, slug: a.slug, color: a.color,
         image_url: null, isFreeTrial: a.isFreeTrial, level: a.level,
+      })
+  }
+
+  // ── subscription types ──────────────────────────────────────────────────────
+  for (const st of subscriptionTypeDefs) {
+    await db.collection('teams').doc(teamId)
+      .collection('subscription_types').doc(st.id).set({
+        name:        st.name,
+        description: st.description,
+        source:      st.source,
+        active:      st.active,
+        ...(st.price != null ? { price: st.price } : {}),
+        teamId,
+        created_at: ts(daysFromNow(-60)),
       })
   }
 
@@ -278,6 +392,10 @@ async function seedTeam(opts: {
   for (let i = 0; i < contactSeeds.length; i++) {
     const c = contactSeeds[i]
     const id = `${teamId}-contact-${i.toString().padStart(3, '0')}`
+    const subAssign = contactSubRank[i] ?? null
+    const primaryRank = subAssign?.rank != null && rankingSystemDefs.length > 0
+      ? { 'bjj-belt': subAssign.rank }
+      : {}
     await db.collection('contacts').doc(id).set({
       teamId, ...c,
       birthdate:         c.birthdate ? ts(c.birthdate) : null,
@@ -289,7 +407,45 @@ async function seedTeam(opts: {
       current_streak:      Math.floor(Math.random() * 8),
       created_at: ts(daysFromNow(-Math.floor(Math.random() * 90) - 10)),
       deleted_at: null, archived_at: null,
+      ...(subAssign ? {
+        subscription_type_id:    subAssign.subId,
+        subscription_type_name:  subAssign.subName,
+        subscription_recurrence: subAssign.recurrence,
+      } : {}),
+      ...(Object.keys(primaryRank).length ? { ranks: primaryRank } : {}),
     })
+  }
+
+  // ── subscription history ───────────────────────────────────────────────────
+  for (let i = 0; i < contactSeeds.length; i++) {
+    const subAssign = contactSubRank[i] ?? null
+    if (!subAssign) continue
+    const contactId  = `${teamId}-contact-${i.toString().padStart(3, '0')}`
+    const startedAt  = daysFromNow(-Math.floor(Math.random() * 90) - 30)
+    // Closed previous entry for some contacts (realistic history)
+    if (i < 4) {
+      const prevStartedAt = daysFromNow(-Math.floor(Math.random() * 120) - 90)
+      const prevEndedAt   = new Date(startedAt.getTime() - 1)
+      await db.collection('contacts').doc(contactId)
+        .collection('subscription_history').doc(`${contactId}-sub-prev`).set({
+          subscription_type_id:   subAssign.subId,
+          subscription_type_name: subAssign.subName,
+          recurrence:             subAssign.recurrence,
+          start_date:             ts(prevStartedAt),
+          end_date:               ts(prevEndedAt),
+          created_at:             ts(prevStartedAt),
+        })
+    }
+    // Current open entry
+    await db.collection('contacts').doc(contactId)
+      .collection('subscription_history').doc(`${contactId}-sub-current`).set({
+        subscription_type_id:   subAssign.subId,
+        subscription_type_name: subAssign.subName,
+        recurrence:             subAssign.recurrence,
+        start_date:             ts(startedAt),
+        end_date:               null,    // open — currently active
+        created_at:             ts(startedAt),
+      })
   }
 
   // Past-session participants
