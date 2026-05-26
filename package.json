@@ -10,6 +10,8 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "dev:web": "pnpm --filter @lineup/web dev",
+    "dev:mobile": "pnpm --filter @lineup/mobile start",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
@@ -17,6 +19,7 @@
     "emulators": "firebase emulators:start --only auth,firestore",
     "emulators:all": "firebase emulators:start",
     "seed": "tsx scripts/seed-emulator.ts",
+    "dev:local": "bash scripts/dev.sh",
     "dev:codespace": "bash scripts/dev.sh"
   },
   "devDependencies": {

@@ -1,0 +1,5 @@
+# Ensure consistent line endings
+* text=auto
+
+# Shell scripts must always use LF (bash breaks on CRLF)
+*.sh text eol=lf

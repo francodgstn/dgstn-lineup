@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts the Firebase emulators, seeds them, then runs the web dev server.
-# Intended for Codespaces / dev containers — Ctrl+C stops everything.
+# Intended for local dev and Codespaces — Ctrl+C stops everything.
 set -euo pipefail
 
 cleanup() { kill 0 2>/dev/null || true; }
