@@ -177,7 +177,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 
 ### Sessions
 - ✅ Sessions list page
-- ✅ Sessions calendar view (react-big-calendar)
+- ✅ Sessions calendar view (custom mini-grid + day detail panel — react-big-calendar removed)
 - ✅ Session detail page (`/sessions/[id]`)
 - ✅ New session / recurring session wizard
 
@@ -194,8 +194,13 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ Booking management — confirm (creates participant), revert to pending, mark no-show, cancel, rebook
 
 ### Coaching
-- ✅ Coach slot management page (`/coaching` — templates + upcoming slots)
+> Restructured: there is no separate `/coaching` admin page. Coaching is modelled as an activity type
+> (`type: 'group_class' | 'coaching'` on `Activity`). Sessions inherit `activityType` from their linked
+> activity. Coach slot generation remains a backend concern. The portal-side booking flow is intact.
+- ✅ Activity `type` field (group_class | coaching) — selectable in Activities form; sessions inherit `activityType`
+- ✅ Coach slot generation functions (`generateCoachSlots`, `generateCoachSlotsScheduled`)
 - ✅ Coach booking flow (portal: `/portal/[slug]/coaching` + cancel page)
+- ~~Admin `/coaching` page~~ — intentionally removed; coaching sessions live in the Sessions page
 
 ### Gamification (club+)
 - ⏳ Stub page only — no leaderboard or scoring UI
