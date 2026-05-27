@@ -12,8 +12,11 @@
  *   org@lineup.dev    / lineup123  →  plan: organization (active)
  *
  *   Per team:
- *   - 4 activities, 36 sessions (past + upcoming), 18 contacts,
- *     3 events, 4 bookings, past-session participants
+ *   - 4 group-class activities + 1 coaching activity (type='coaching')
+ *   - 36 group-class sessions (past + upcoming) + 6 coaching sessions (open/full mix)
+ *   - 1 coach_availability template per team
+ *   - 18 contacts, 3 events, 4 group bookings + 2 coaching bookings
+ *   - Past-session participants, weekly reports, goals
  */
 
 // emulator env vars must be set BEFORE admin.initializeApp()
@@ -276,10 +279,10 @@ async function seedTeam(opts: {
 
   // ── activities ──────────────────────────────────────────────────────────────
   const activities = [
-    { id: `${teamId}-act-bjj`,     name: 'Brazilian Jiu-Jitsu', slug: 'bjj',           color: accentColor,  level: 'all',          isFreeTrial: true  },
-    { id: `${teamId}-act-mma`,     name: 'MMA',                  slug: 'mma',           color: '#dc2626',    level: 'intermediate', isFreeTrial: false },
-    { id: `${teamId}-act-kickbox`, name: 'Kickboxing',           slug: 'kickboxing',    color: '#ea580c',    level: 'all',          isFreeTrial: true  },
-    { id: `${teamId}-act-yoga`,    name: 'Yoga & Mobility',      slug: 'yoga-mobility', color: '#059669',    level: 'all',          isFreeTrial: true  },
+    { id: `${teamId}-act-bjj`,     name: 'Brazilian Jiu-Jitsu', slug: 'bjj',           color: accentColor,  level: 'all',          isFreeTrial: true,  type: 'group_class' as const },
+    { id: `${teamId}-act-mma`,     name: 'MMA',                  slug: 'mma',           color: '#dc2626',    level: 'intermediate', isFreeTrial: false, type: 'group_class' as const },
+    { id: `${teamId}-act-kickbox`, name: 'Kickboxing',           slug: 'kickboxing',    color: '#ea580c',    level: 'all',          isFreeTrial: true,  type: 'group_class' as const },
+    { id: `${teamId}-act-yoga`,    name: 'Yoga & Mobility',      slug: 'yoga-mobility', color: '#059669',    level: 'all',          isFreeTrial: true,  type: 'group_class' as const },
   ]
   for (const a of activities) {
     await db.collection('activities').doc(a.id).set({ ...a, teamId, isActive: true, created_at: ts(daysFromNow(-100)) })
@@ -288,6 +291,142 @@ async function seedTeam(opts: {
         type: 'activity', teamId, name: a.name, slug: a.slug, color: a.color,
         image_url: null, isFreeTrial: a.isFreeTrial, level: a.level,
       })
+  }
+
+  // ── coaching activity ────────────────────────────────────────────────────────
+  const coachingActId   = `${teamId}-act-coaching`
+  const coachingActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
+  await db.collection('activities').doc(coachingActId).set({
+    teamId,
+    name:       coachingActName,
+    slug:       '1on1-coaching',
+    color:      accentColor,
+    type:       'coaching',
+    coachId:    uid,
+    coachName:  displayName,
+    level:      'all',
+    isFreeTrial: true,
+    isActive:   true,
+    created_at: ts(daysFromNow(-90)),
+  })
+  await db.collection('activities').doc(coachingActId)
+    .collection('public_profile').doc(coachingActId).set({
+      type: 'activity', teamId,
+      name: coachingActName, slug: '1on1-coaching', color: accentColor,
+      image_url: null, isFreeTrial: true, level: 'all',
+    })
+
+  // ── coach availability template ──────────────────────────────────────────────
+  const coachingTemplateId = `${teamId}-tpl-coaching`
+  await db.collection('coach_availability').doc(coachingTemplateId).set({
+    teamId,
+    coachId:          uid,
+    coachName:        displayName,
+    activityId:       coachingActId,
+    title:            coachingActName,
+    description:      'One-on-one coaching session.',
+    duration_minutes: 60,
+    max_participants: 1,
+    isFreeTrial:      true,
+    location:         'Dojo A',
+    onlineUrl:        null,
+    status:           'active',
+    recurrence: {
+      type:     'weekly',
+      days:     [1, 3],    // Mon + Wed
+      time:     '08:00',
+      timezone: 'Europe/Zurich',
+    },
+    window_days: 30,
+    created_at: ts(daysFromNow(-30)),
+  })
+
+  // ── coaching sessions (generated as if onCoachAvailabilityWritten ran) ───────
+  // Mix of open and full slots to represent a realistic schedule.
+  const coachingSlotDefs = [
+    { dayOffset: 1,  hour: 8,  bookings: 0 },  // open
+    { dayOffset: 3,  hour: 8,  bookings: 1 },  // full (1/1)
+    { dayOffset: 8,  hour: 8,  bookings: 0 },  // open
+    { dayOffset: 10, hour: 8,  bookings: 1 },  // full
+    { dayOffset: 15, hour: 8,  bookings: 0 },  // open
+    { dayOffset: 17, hour: 8,  bookings: 0 },  // open
+  ]
+  // First active contact will be the pre-booked student (Luca Ferrari)
+  const bookedContact = {
+    id:        `${teamId}-contact-000`,
+    firstname: 'Luca',
+    lastname:  'Ferrari',
+    email:     `luca.ferrari.${teamId}@email.com`,
+  }
+
+  for (let i = 0; i < coachingSlotDefs.length; i++) {
+    const slotDef = coachingSlotDefs[i]
+    const base = daysFromNow(slotDef.dayOffset)
+    base.setHours(slotDef.hour, 0, 0, 0)
+    const end = hoursOffset(base, 1)
+    const sid = `${teamId}-coaching-session-${i}`
+    const isFull = slotDef.bookings >= 1
+    const status = isFull ? 'full' : 'open'
+
+    await db.collection('sessions').doc(sid).set({
+      teamId,
+      activityType:     'coaching',
+      activityId:       coachingActId,
+      activityName:     coachingActName,
+      templateId:       coachingTemplateId,
+      coachId:          uid,
+      coachName:        displayName,
+      isFreeTrial:      true,
+      start:            ts(base),
+      end:              ts(end),
+      duration_minutes: 60,
+      max_participants: 1,
+      bookings_count:   slotDef.bookings,
+      location:         'Dojo A',
+      onlineUrl:        null,
+      allowBooking:     true,
+      status,
+      created_at:       ts(daysFromNow(-7)),
+    })
+
+    // Public profile — enables unauthenticated portal access
+    await db.collection('sessions').doc(sid)
+      .collection('public_profile').doc(sid).set({
+        type:             'coaching_session',
+        teamId,
+        activityType:     'coaching',
+        activityName:     coachingActName,
+        coachId:          uid,
+        coachName:        displayName,
+        templateId:       coachingTemplateId,
+        start:            ts(base),
+        end:              ts(end),
+        duration_minutes: 60,
+        location:         'Dojo A',
+        onlineUrl:        null,
+        max_participants: 1,
+        bookings_count:   slotDef.bookings,
+        isFreeTrial:      true,
+        status,
+        allowBooking:     true,
+      })
+
+    // Booking doc for full slots
+    if (isFull) {
+      await db.collection('sessions').doc(sid)
+        .collection('bookings').doc(bookedContact.id).set({
+          teamId,
+          contactId:      bookedContact.id,
+          session:        sid,
+          email:          bookedContact.email,
+          firstname:      bookedContact.firstname,
+          lastname:       bookedContact.lastname,
+          status:         'confirmed',
+          joinedAt:       ts(daysFromNow(-2)),
+          booking_token:  `tok-coaching-${teamId}-${i}`,
+          is_new_contact: false,
+        })
+    }
   }
 
   // ── subscription types ──────────────────────────────────────────────────────
