@@ -69,24 +69,13 @@ function StatusBadge({ status }: { status: string }) {
 interface DayCellProps {
   day: Date
   sessions: Session[]
-  activities: Activity[]
   isSelected: boolean
   isToday: boolean
   onClick: (d: Date) => void
 }
 
-function DayCell({ day, sessions, activities, isSelected, isToday, onClick }: DayCellProps) {
-  // Up to 3 dots — one per distinct activity
-  const seen = new Set<string>()
-  const dots: string[] = []
-  for (const s of sessions) {
-    const key = s.activityId ?? '__none__'
-    if (!seen.has(key)) {
-      seen.add(key)
-      dots.push(activityAccent(s.activityId, activities))
-    }
-    if (dots.length === 3) break
-  }
+function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) {
+  const count = sessions.length
 
   return (
     <button
@@ -101,15 +90,18 @@ function DayCell({ day, sessions, activities, isSelected, isToday, onClick }: Da
       )}
     >
       <span className="text-sm leading-none">{day.getDate()}</span>
-      <div className="flex gap-[3px] h-[5px]">
-        {dots.map((color, i) => (
-          <div
-            key={i}
-            className="w-[5px] h-[5px] rounded-full"
-            style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.75)' : color }}
-          />
-        ))}
-      </div>
+      {count > 0 && (
+        <span
+          className={cn(
+            'text-[10px] font-semibold leading-4 min-w-[18px] px-1 rounded-full text-center tabular-nums',
+            isSelected
+              ? 'bg-white/25 text-white'
+              : 'bg-primary/10 text-primary',
+          )}
+        >
+          {count}
+        </span>
+      )}
     </button>
   )
 }
@@ -272,7 +264,6 @@ export default function SessionsCalendar({
                   key={di}
                   day={day}
                   sessions={sessionsByDate.get(dateKey(day)) ?? []}
-                  activities={activities}
                   isSelected={sameDay(day, selected)}
                   isToday={sameDay(day, today)}
                   onClick={setSelected}
