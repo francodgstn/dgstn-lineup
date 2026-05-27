@@ -11,6 +11,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
     "dev:web": "pnpm --filter @lineup/web dev",
+    "dev:landing": "pnpm --filter @lineup/landing dev",
     "dev:mobile": "pnpm --filter @lineup/mobile start",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
