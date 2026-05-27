@@ -94,10 +94,10 @@ function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) 
       {count > 0 && (
         <div className="flex items-center justify-center h-2">
           {/* front dot */}
-          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
           {/* back dot — offset behind front, lower opacity → "stacked" look */}
           {count > 1 && (
-            <div className="w-2 h-2 rounded-full shrink-0 -ml-1" style={{ backgroundColor: dotColor, opacity: 0.4 }} />
+            <div className="w-1.5 h-1.5 rounded-full shrink-0 -ml-1" style={{ backgroundColor: dotColor, opacity: 0.4 }} />
           )}
         </div>
       )}
