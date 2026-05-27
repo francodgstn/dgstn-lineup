@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useForm, Controller } from 'react-hook-form'
@@ -60,8 +60,11 @@ function sessionDuration(s: Session): string {
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
+const SESSION_TYPES = ['group_class', 'coaching'] as const
+
 const sessionSchema = z.object({
   activityId: z.string().optional(),
+  activityType: z.enum(SESSION_TYPES).default('group_class'),
   start: z.date({ required_error: 'Required' }),
   end: z.date({ required_error: 'Required' }),
   location: z.string().max(120).optional(),
@@ -176,12 +179,15 @@ function SessionDialog({
     register,
     handleSubmit,
     control,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
     reset,
   } = useForm<SessionFormValues>({
     resolver: zodResolver(sessionSchema),
     defaultValues: {
       activityId: editing?.activityId ?? '',
+      activityType: (editing?.activityType as typeof SESSION_TYPES[number]) ?? 'group_class',
       start: editing?.start?.toDate() ?? undefined,
       end: editing?.end?.toDate() ?? undefined,
       location: editing?.location ?? '',
@@ -189,6 +195,13 @@ function SessionDialog({
       allowBooking: editing?.allowBooking ?? false,
     },
   })
+
+  // Auto-fill activityType from the selected activity's type
+  const watchedActivityId = watch('activityId')
+  useEffect(() => {
+    const activity = activities.find((a) => a.id === watchedActivityId)
+    if (activity?.type) setValue('activityType', activity.type)
+  }, [watchedActivityId, activities, setValue])
 
   const onSubmit = async (values: SessionFormValues) => {
     const activityEntry = activities.find((a) => a.id === values.activityId)
@@ -199,7 +212,7 @@ function SessionDialog({
       teamId,
       activityId: values.activityId || null,
       activityName: activityEntry?.name ?? null,
-      activityType: activityEntry?.type ?? 'group_class',
+      activityType: values.activityType,
       start: startTs,
       end: endTs,
       location: values.location || null,
@@ -259,6 +272,32 @@ function SessionDialog({
                 </Select>
               )}
             />
+          </div>
+
+          {/* Session type */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium">{t('fieldType')}</label>
+            <Controller
+              name="activityType"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value ? t(`type_${field.value}` as const) : '—'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SESSION_TYPES.map((tp) => (
+                      <SelectItem key={tp} value={tp}>{t(`type_${tp}` as const)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {watchedActivityId && activities.find((a) => a.id === watchedActivityId)?.type && (
+              <p className="text-xs text-muted-foreground">{t('typeAutoSet')}</p>
+            )}
           </div>
 
           {/* Start */}

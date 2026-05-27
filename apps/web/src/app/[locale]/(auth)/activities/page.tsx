@@ -134,6 +134,7 @@ function ActivityDialog({
     register,
     handleSubmit,
     control,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
@@ -257,6 +258,11 @@ function ActivityDialog({
                 </Select>
               )}
             />
+            {editing && watch('type') !== (editing.type ?? 'group_class') && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                {t('typeChangeWarning')}
+              </p>
+            )}
           </div>
 
           {/* Cover image */}

@@ -74,8 +74,11 @@ function tsToInputValue(ts?: { toDate(): Date } | null) {
 
 // ─── session edit schema ──────────────────────────────────────────────────────
 
+const SESSION_TYPES = ['group_class', 'coaching'] as const
+
 const editSchema = z.object({
   activityId: z.string().optional(),
+  activityType: z.enum(SESSION_TYPES).default('group_class'),
   start: z.date({ required_error: 'Required' }),
   end: z.date({ required_error: 'Required' }),
   location: z.string().max(120).optional(),
@@ -282,10 +285,11 @@ function EditSessionDialog({
   activities: Activity[]
   onSaved: () => void
 }) {
-  const { register, handleSubmit, control, formState: { errors, isSubmitting }, reset } = useForm<EditFormValues>({
+  const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting }, reset } = useForm<EditFormValues>({
     resolver: zodResolver(editSchema),
     defaultValues: {
       activityId: session.activityId ?? '',
+      activityType: (session.activityType as typeof SESSION_TYPES[number]) ?? 'group_class',
       start: session.start?.toDate() ?? undefined,
       end: session.end?.toDate() ?? undefined,
       location: session.location ?? '',
@@ -294,12 +298,19 @@ function EditSessionDialog({
     },
   })
 
+  // Auto-fill activityType from the selected activity
+  const watchedActivityId = watch('activityId')
+  useEffect(() => {
+    const activity = activities.find((a) => a.id === watchedActivityId)
+    if (activity?.type) setValue('activityType', activity.type)
+  }, [watchedActivityId, activities, setValue])
+
   const onSubmit = async (values: EditFormValues) => {
     const activity = activities.find((a) => a.id === values.activityId)
     await updateDoc(doc(db, SESSIONS_COLLECTION, session.id), {
       activityId: values.activityId || null,
       activityName: activity?.name ?? null,
-      activityType: activity?.type ?? 'group_class',
+      activityType: values.activityType,
       start: Timestamp.fromDate(values.start),
       end: Timestamp.fromDate(values.end),
       location: values.location || null,
@@ -339,6 +350,32 @@ function EditSessionDialog({
                 </Select>
               )}
             />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Type</label>
+            <Controller
+              name="activityType"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value === 'coaching' ? 'Coaching' : 'Group class'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SESSION_TYPES.map((tp) => (
+                      <SelectItem key={tp} value={tp}>
+                        {tp === 'coaching' ? 'Coaching' : 'Group class'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {watchedActivityId && activities.find((a) => a.id === watchedActivityId)?.type && (
+              <p className="text-xs text-muted-foreground">Auto-set from activity — you can override if needed.</p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
