@@ -75,7 +75,9 @@ interface DayCellProps {
 }
 
 function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) {
-  const count = sessions.length
+  const hasGroup    = sessions.some((s) => s.activityType !== 'coaching')
+  const hasCoaching = sessions.some((s) => s.activityType === 'coaching')
+  const dotColor    = isSelected ? 'rgba(255,255,255,0.8)' : 'hsl(var(--primary))'
 
   return (
     <button
@@ -90,17 +92,11 @@ function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) 
       )}
     >
       <span className="text-sm leading-none">{day.getDate()}</span>
-      {count > 0 && (
-        <span
-          className={cn(
-            'text-[10px] font-semibold leading-4 min-w-[18px] px-1 rounded-full text-center tabular-nums',
-            isSelected
-              ? 'bg-white/25 text-white'
-              : 'bg-primary/10 text-primary',
-          )}
-        >
-          {count}
-        </span>
+      {(hasGroup || hasCoaching) && (
+        <div className="flex gap-[3px] items-center h-[6px]">
+          {hasGroup    && <div className="w-[5px] h-[5px] rounded-full"    style={{ backgroundColor: dotColor }} />}
+          {hasCoaching && <div className="w-[5px] h-[5px] rounded-[1.5px]" style={{ backgroundColor: dotColor }} />}
+        </div>
       )}
     </button>
   )
