@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
 import { CONTACTS_COLLECTION, TEAMS_COLLECTION } from '@lineup/shared'
 
@@ -41,7 +42,7 @@ export async function resetMonthlyScores(): Promise<{ skipped?: boolean; reset?:
     const teamId = (data.teamId || data.teacher) as string | undefined
     if (teamId) affectedTeamIds.add(teamId)
 
-    batch.update(doc.ref, { current_month_score: admin.firestore.FieldValue.delete() })
+    batch.update(doc.ref, { current_month_score: FieldValue.delete() })
     count++
 
     if (count % BATCH_SIZE === 0) {
@@ -66,7 +67,7 @@ export async function resetMonthlyScores(): Promise<{ skipped?: boolean; reset?:
           month: currentMonth,
           entries: [],
           entries_count: 0,
-          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
         }),
     )
     if (lbErr) {

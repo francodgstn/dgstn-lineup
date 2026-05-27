@@ -42,6 +42,13 @@ function runToCompletion(cmd, args) {
   })
 }
 
+console.log('==> Building @lineup/shared…')
+const sharedBuildCode = await runToCompletion('pnpm', ['--filter', '@lineup/shared', 'run', 'build'])
+if (sharedBuildCode !== 0) {
+  console.error('❌ Shared package build failed')
+  process.exit(1)
+}
+
 console.log('==> Building Cloud Functions…')
 const buildCode = await runToCompletion('pnpm', ['--filter', '@lineup/functions', 'run', 'build'])
 if (buildCode !== 0) {

@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
 import { SESSIONS_COLLECTION, CONTACTS_COLLECTION } from '@lineup/shared'
 
@@ -13,8 +14,8 @@ export async function markNoShowBookings(): Promise<{ sessions: number; updated:
   const [sessErr, sessSnap] = await to(
     db
       .collection(SESSIONS_COLLECTION)
-      .where('end', '>=', admin.firestore.Timestamp.fromDate(sevenDaysAgo))
-      .where('end', '<', admin.firestore.Timestamp.fromDate(now))
+      .where('end', '>=', Timestamp.fromDate(sevenDaysAgo))
+      .where('end', '<', Timestamp.fromDate(now))
       .get(),
   )
   if (sessErr) {
@@ -46,19 +47,19 @@ export async function markNoShowBookings(): Promise<{ sessions: number; updated:
         const booking = bookingDoc.data()
         batch.update(bookingDoc.ref, {
           status: 'no_show',
-          no_show_at: admin.firestore.FieldValue.serverTimestamp(),
+          no_show_at: FieldValue.serverTimestamp(),
         })
 
         const contactId = (booking.contact || booking.contactId) as string | undefined
         if (contactId) {
           batch.update(db.collection(CONTACTS_COLLECTION).doc(contactId), {
-            pending_bookings_count: admin.firestore.FieldValue.increment(-1),
+            pending_bookings_count: FieldValue.increment(-1),
           })
         }
       }
 
       batch.update(sessionDoc.ref, {
-        portal_bookings_count: admin.firestore.FieldValue.increment(-pendingDocs.length),
+        portal_bookings_count: FieldValue.increment(-pendingDocs.length),
       })
 
       await batch.commit()

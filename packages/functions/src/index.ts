@@ -1,9 +1,13 @@
 import * as admin from 'firebase-admin'
+import { setGlobalOptions } from 'firebase-functions/v2'
 
 // Initialize Firebase Admin (once)
 if (!admin.apps.length) {
   admin.initializeApp()
 }
+
+// Set region once — individual modules must NOT call setGlobalOptions
+setGlobalOptions({ region: 'europe-west6' })
 
 // Teams
 export { createTeam } from './teams/createTeam'

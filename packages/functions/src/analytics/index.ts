@@ -1,12 +1,11 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { format } from 'date-fns'
 import { to } from '../utils/async'
 import { CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, PARTICIPANTS_SUBCOLLECTION } from '@lineup/shared'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 const DATE_FORMAT = 'PPP'
 
@@ -17,7 +16,7 @@ async function logActivity(teamId: string, entry: Record<string, unknown>): Prom
   const [err] = await to(
     db.collection('teams').doc(teamId).collection('activity_log').add({
       ...entry,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      created_at: FieldValue.serverTimestamp(),
     }),
   )
   if (err) console.error('logActivity error:', err)
@@ -66,7 +65,7 @@ export const trackBookings = onDocumentWritten(
     if (!teamId) return
 
     const contactFullname = `${(bookingData.firstname as string) || ''} ${(bookingData.lastname as string) || ''}`.trim() || event.params.bookingId
-    const sessionStart = session.start as admin.firestore.Timestamp | undefined
+    const sessionStart = session.start as Timestamp | undefined
     const sessionDateLabel = sessionStart ? format(sessionStart.toDate(), DATE_FORMAT) : 'unknown date'
 
     const descMap: Record<string, string> = {
@@ -105,14 +104,14 @@ export const trackSessions = onDocumentWritten('sessions/{sessionId}', async (ev
   if (increment === 0) return
 
   const db = admin.firestore()
-  const sessionDate = (newData?.start || oldData?.start) as admin.firestore.Timestamp | undefined
+  const sessionDate = (newData?.start || oldData?.start) as Timestamp | undefined
   const month = sessionDate ? format(sessionDate.toDate(), 'yyyy-MM') : null
   if (!month) return
 
   // Upsert a monthly session counter for the team
   const counterRef = db.collection('teams').doc(teamId).collection('session_counts').doc(month)
   await to(counterRef.set(
-    { month, sessions_count: admin.firestore.FieldValue.increment(increment), updated_at: admin.firestore.FieldValue.serverTimestamp() },
+    { month, sessions_count: FieldValue.increment(increment), updated_at: FieldValue.serverTimestamp() },
     { merge: true },
   ))
 })
@@ -277,7 +276,7 @@ export const trackSessionParticipants = onDocumentWritten(
     const lastname = (contact?.lastname as string | undefined) ?? ''
     const fullname = `${firstname} ${lastname}`.trim() || contactId
 
-    const sessionStart = session.start as admin.firestore.Timestamp | undefined
+    const sessionStart = session.start as Timestamp | undefined
     const sessionDateLabel = sessionStart ? format(sessionStart.toDate(), DATE_FORMAT) : 'unknown date'
 
     const description = activityEvent === 'session_participant_add'
@@ -358,19 +357,19 @@ export const weeklyReports = onSchedule(
           'subscription_recurrence',
         )
 
-        const weekStart = admin.firestore.Timestamp.fromMillis(now.getTime() - 7 * 24 * 3600 * 1000)
+        const weekStart = Timestamp.fromMillis(now.getTime() - 7 * 24 * 3600 * 1000)
         const [, sessionsSnap] = await to(
           db.collection('sessions')
             .where('teamId', '==', teamId)
             .where('start', '>=', weekStart)
-            .where('start', '<=', admin.firestore.Timestamp.fromDate(now))
+            .where('start', '<=', Timestamp.fromDate(now))
             .get(),
         )
         const sessions_count = sessionsSnap?.size ?? 0
 
         await reportRef.set({
           iso_week: weekLabel,
-          generated_at: admin.firestore.FieldValue.serverTimestamp(),
+          generated_at: FieldValue.serverTimestamp(),
           active_contacts_count,
           contacts_count_by_type,
           contacts_count_by_membership_status,
@@ -412,7 +411,7 @@ export const weeklyReports = onSchedule(
               contactReportRef.set({
                 iso_week: weekLabel,
                 sessions_count: sessions_count_contact,
-                generated_at: admin.firestore.FieldValue.serverTimestamp(),
+                generated_at: FieldValue.serverTimestamp(),
               }),
             )
           }

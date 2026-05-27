@@ -1,13 +1,12 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
 import { getTeamRole } from '../utils/teams'
 import { resolveGamificationSettings } from '../utils/scoring'
 import { updateTeamLeaderboard, incrementLeaderboardCounters, clearTeamLeaderboard } from '../utils/leaderboard'
 import { recalculateMonthForTeam, computeContactStreak } from '../utils/scoreComputation'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 const CONTACTS_COLLECTION = 'contacts'
 const TEAMS_COLLECTION = 'teams'
@@ -123,9 +122,9 @@ export const resetScores = onCall(async (request) => {
   if (month === currentMonth) {
     for (const contactId of contactIds) {
       batch.update(db.collection(CONTACTS_COLLECTION).doc(contactId), {
-        current_month_score: admin.firestore.FieldValue.delete(),
-        current_streak: admin.firestore.FieldValue.delete(),
-        streak_last_qualified_week: admin.firestore.FieldValue.delete(),
+        current_month_score: FieldValue.delete(),
+        current_streak: FieldValue.delete(),
+        streak_last_qualified_week: FieldValue.delete(),
       })
       batchCount++
       if (batchCount >= BATCH_SIZE) {

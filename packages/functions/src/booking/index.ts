@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import { getTeam } from '../utils/teams'
 import { sendEmail } from '../utils/email'
 import { hashVerificationCode, verifyCode, generateSecureToken } from '../utils/crypto'
@@ -14,7 +14,6 @@ import {
   buildVerificationCodeEmail,
 } from './templates'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 const VALID_LANGS: Lang[] = ['en', 'de', 'fr', 'it']
@@ -50,7 +49,7 @@ export const sendBookingVerificationCode = onCall(async (request) => {
   const lang: Lang = isLang(teamData.language) ? teamData.language : 'en'
 
   // Rate limit: max 3 codes per email+team per hour
-  const oneHourAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 60 * 60 * 1000)
+  const oneHourAgo = Timestamp.fromMillis(Date.now() - 60 * 60 * 1000)
   const recentCodes = await admin
     .firestore()
     .collection('booking_verification_codes')
@@ -80,7 +79,7 @@ export const sendBookingVerificationCode = onCall(async (request) => {
 
   // Generate and store code
   const code = Math.floor(100000 + Math.random() * 900000).toString()
-  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 10 * 60 * 1000)
+  const expiresAt = Timestamp.fromMillis(Date.now() + 10 * 60 * 1000)
   const codeHash = hashVerificationCode(code, sanitizedEmail)
 
   const codeRef = await admin.firestore().collection('booking_verification_codes').add({
@@ -88,7 +87,7 @@ export const sendBookingVerificationCode = onCall(async (request) => {
     team_id: teamId,
     code_hash: codeHash,
     attempts: 0,
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    created_at: FieldValue.serverTimestamp(),
     expires_at: expiresAt,
     verified: false,
     used: false,
@@ -137,7 +136,7 @@ export const verifyBookingCode = onCall(async (request) => {
 
   if (codeData.used) throw new HttpsError('failed-precondition', 'This verification code has already been used.')
 
-  const now = admin.firestore.Timestamp.now()
+  const now = Timestamp.now()
   if (codeData.expires_at.toMillis() < now.toMillis()) {
     throw new HttpsError('deadline-exceeded', 'Verification code has expired. Please request a new code.')
   }
@@ -164,12 +163,12 @@ export const verifyBookingCode = onCall(async (request) => {
     const isValid = codeData.code_hash ? verifyCode(data.code, codeData.email, codeData.code_hash) : false
 
     if (!isValid) {
-      await codeRef.update({ attempts: admin.firestore.FieldValue.increment(1) })
+      await codeRef.update({ attempts: FieldValue.increment(1) })
       const remaining = 5 - (codeData.attempts + 1)
       throw new HttpsError('invalid-argument', `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`)
     }
 
-    await codeRef.update({ verified: true, verified_at: admin.firestore.FieldValue.serverTimestamp() })
+    await codeRef.update({ verified: true, verified_at: FieldValue.serverTimestamp() })
   }
 
   // Fetch matched contacts
@@ -228,7 +227,7 @@ export const bookSession = onCall(async (request) => {
 
   // ── IP rate limit: max 10 bookings per hour per IP ──────────────────────────
   const bookingIp: string | null = request.rawRequest?.ip || null
-  const oneHourAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 60 * 60 * 1000)
+  const oneHourAgo = Timestamp.fromMillis(Date.now() - 60 * 60 * 1000)
 
   if (bookingIp) {
     const recentIpBookings = await admin
@@ -267,7 +266,7 @@ export const bookSession = onCall(async (request) => {
     const tokenData = tokenDoc.data()!
     if (tokenData.type !== 'booking') throw new HttpsError('permission-denied', 'Token is not a booking token')
     if (tokenData.team_id !== data.teamId) throw new HttpsError('permission-denied', 'Token does not match the requested team')
-    const now = admin.firestore.Timestamp.now()
+    const now = Timestamp.now()
     if (tokenData.expires_at?.toMillis() < now.toMillis()) throw new HttpsError('deadline-exceeded', 'Booking auth token has expired')
     if (tokenData.used) throw new HttpsError('failed-precondition', 'Booking auth token has already been used')
 
@@ -278,7 +277,7 @@ export const bookSession = onCall(async (request) => {
 
     await admin.firestore().collection('auth_tokens').doc(data.bookingAuthToken).update({
       used: true,
-      used_at: admin.firestore.FieldValue.serverTimestamp(),
+      used_at: FieldValue.serverTimestamp(),
       used_for_session: data.sessionId,
     })
 
@@ -297,7 +296,7 @@ export const bookSession = onCall(async (request) => {
       if (!isValid) throw new HttpsError('permission-denied', 'Contact not found in verified matches')
       await admin.firestore().collection('booking_verification_codes').doc(data.verificationCodeId).update({
         used: true,
-        used_at: admin.firestore.FieldValue.serverTimestamp(),
+        used_at: FieldValue.serverTimestamp(),
         used_for_session: data.sessionId,
         used_contact_id: data.authenticatedContactId,
       })
@@ -358,7 +357,7 @@ export const bookSession = onCall(async (request) => {
   if (sessionData.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Session does not belong to this team')
   if (!sessionData.allowBooking) throw new HttpsError('permission-denied', 'Bookings are not allowed for this session')
 
-  const now = admin.firestore.Timestamp.now()
+  const now = Timestamp.now()
   if (sessionData.start.toMillis() < now.toMillis()) {
     throw new HttpsError('failed-precondition', 'Cannot book sessions in the past')
   }
@@ -417,7 +416,7 @@ export const bookSession = onCall(async (request) => {
         membership_active: false,
         archived_at: null,
         deleted_at: null,
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        created_at: FieldValue.serverTimestamp(),
         pending_bookings_count: 1,
       })
       contactId = newContactRef.id
@@ -439,7 +438,7 @@ export const bookSession = onCall(async (request) => {
     contact: contactId,
     session: data.sessionId,
     teamId: data.teamId,
-    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    joinedAt: FieldValue.serverTimestamp(),
     fromPortal: true,
     is_new_contact: isNewContact,
     booking_token: bookingToken,
@@ -451,28 +450,28 @@ export const bookSession = onCall(async (request) => {
   await admin.firestore().collection('sessions').doc(data.sessionId).set(
     {
       has_bookings: true,
-      portal_bookings_count: admin.firestore.FieldValue.increment(1),
-      ...(isNewContact && { portal_new_contact_bookings_count: admin.firestore.FieldValue.increment(1) }),
-      last_booking_at: admin.firestore.FieldValue.serverTimestamp(),
+      portal_bookings_count: FieldValue.increment(1),
+      ...(isNewContact && { portal_new_contact_bookings_count: FieldValue.increment(1) }),
+      last_booking_at: FieldValue.serverTimestamp(),
     },
     { merge: true },
   )
 
   if (!isNewContact) {
-    await admin.firestore().collection('contacts').doc(contactId).update({ pending_bookings_count: admin.firestore.FieldValue.increment(1) })
+    await admin.firestore().collection('contacts').doc(contactId).update({ pending_bookings_count: FieldValue.increment(1) })
   }
 
   // Contact alert (booking notification, shows immediately)
   try {
-    const sessionStart: Date = (sessionData.start as admin.firestore.Timestamp).toDate()
+    const sessionStart: Date = (sessionData.start as Timestamp).toDate()
     await admin.firestore().collection('contacts').doc(contactId).collection('contact_alerts').add({
       teamId: data.teamId,
       contact: { id: contactId, firstname: sanitized.firstname, lastname: sanitized.lastname, avatar_url: authenticatedContact?.avatar_url ?? null },
       message: `New booking for ${activityName} on ${sessionStart.toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })}`,
-      schedule: { type: 'datetime', value: admin.firestore.Timestamp.now() },
+      schedule: { type: 'datetime', value: Timestamp.now() },
       alert_type: 'booking',
       session_id: data.sessionId,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      created_at: FieldValue.serverTimestamp(),
       archived_at: null,
     })
   } catch (alertErr) {
@@ -565,7 +564,7 @@ export const cancelBooking = onCall(async (request) => {
   if (sessionErr || !sessionDoc || !sessionDoc.exists) throw new HttpsError('not-found', 'Session no longer exists.')
 
   const session = sessionDoc.data()!
-  const sessionStart = (session.start as admin.firestore.Timestamp).toDate()
+  const sessionStart = (session.start as Timestamp).toDate()
   if (sessionStart < new Date()) throw new HttpsError('failed-precondition', 'Cannot cancel a booking for a past session.')
 
   const teamId = (session.teamId || session.teacher) as string
@@ -587,10 +586,10 @@ export const cancelBooking = onCall(async (request) => {
   }
 
   const cancelBatch = db.batch()
-  cancelBatch.update(bookingDoc.ref, { status: 'cancelled', cancelled_at: admin.firestore.FieldValue.serverTimestamp() })
-  cancelBatch.update(db.collection('sessions').doc(sessionId), { portal_bookings_count: admin.firestore.FieldValue.increment(-1) })
+  cancelBatch.update(bookingDoc.ref, { status: 'cancelled', cancelled_at: FieldValue.serverTimestamp() })
+  cancelBatch.update(db.collection('sessions').doc(sessionId), { portal_bookings_count: FieldValue.increment(-1) })
   if (contactId) {
-    cancelBatch.update(db.collection('contacts').doc(contactId), { pending_bookings_count: admin.firestore.FieldValue.increment(-1) })
+    cancelBatch.update(db.collection('contacts').doc(contactId), { pending_bookings_count: FieldValue.increment(-1) })
   }
   await cancelBatch.commit()
 
@@ -598,7 +597,7 @@ export const cancelBooking = onCall(async (request) => {
     ? `${getHostingUrl()}/portal/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`
     : null
 
-  const sessionEnd = (session.end as admin.firestore.Timestamp).toDate()
+  const sessionEnd = (session.end as Timestamp).toDate()
   const dateStr = sessionStart.toLocaleDateString('en', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const timeStr = `${sessionStart.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })} – ${sessionEnd.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}`
   const firstname = (booking.firstname as string) || 'Guest'
@@ -664,7 +663,7 @@ export const getBookingDetails = onCall(async (request) => {
     teamLanguage = (team.language as string) || 'en'
   }
 
-  const now = admin.firestore.Timestamp.now()
+  const now = Timestamp.now()
   const futureLimit = new Date(); futureLimit.setDate(futureLimit.getDate() + 60)
 
   let availableSessions: Array<{ id: string; start: string; end: string; location: string | null }> = []
@@ -675,7 +674,7 @@ export const getBookingDetails = onCall(async (request) => {
         .where('activityId', '==', activityId)
         .where('allowBooking', '==', true)
         .where('start', '>=', now)
-        .where('start', '<=', admin.firestore.Timestamp.fromDate(futureLimit))
+        .where('start', '<=', Timestamp.fromDate(futureLimit))
         .orderBy('start', 'asc')
         .limit(5)
         .get(),
@@ -691,15 +690,15 @@ export const getBookingDetails = onCall(async (request) => {
           const data = d.data()
           return {
             id: d.id,
-            start: (data.start as admin.firestore.Timestamp).toDate().toISOString(),
-            end: (data.end as admin.firestore.Timestamp).toDate().toISOString(),
+            start: (data.start as Timestamp).toDate().toISOString(),
+            end: (data.end as Timestamp).toDate().toISOString(),
             location: (data.location as string) || null,
           }
         })
     }
   }
 
-  const sessionStart = (session.start as admin.firestore.Timestamp).toDate()
+  const sessionStart = (session.start as Timestamp).toDate()
   const isPastSession = sessionStart < new Date()
   const bookingStatus = (booking.status as string) || 'pending'
   const canCancel = !isPastSession && ['pending', 'no_show'].includes(bookingStatus)
@@ -714,12 +713,12 @@ export const getBookingDetails = onCall(async (request) => {
       email: booking.email,
       phone: (booking.phone as string) || null,
       status: bookingStatus,
-      joinedAt: (booking.joinedAt as admin.firestore.Timestamp | undefined)?.toDate().toISOString() || null,
+      joinedAt: (booking.joinedAt as Timestamp | undefined)?.toDate().toISOString() || null,
     },
     session: {
       id: sessionId,
       start: sessionStart.toISOString(),
-      end: (session.end as admin.firestore.Timestamp).toDate().toISOString(),
+      end: (session.end as Timestamp).toDate().toISOString(),
       location: (session.location as string) || null,
       isPast: isPastSession,
     },
@@ -778,7 +777,7 @@ export const rebookSession = onCall(async (request) => {
   if (newTeamId !== teamId) throw new HttpsError('permission-denied', 'Cannot rebook to a session from a different team.')
   if (!newSession.allowBooking) throw new HttpsError('failed-precondition', 'This session is not available for booking.')
 
-  const newSessionStart = (newSession.start as admin.firestore.Timestamp).toDate()
+  const newSessionStart = (newSession.start as Timestamp).toDate()
   if (newSessionStart < new Date()) throw new HttpsError('failed-precondition', 'Cannot book a session in the past.')
   if (newSession.isException && newSession.exceptionType === 'cancelled') {
     throw new HttpsError('failed-precondition', 'This session has been cancelled.')
@@ -796,8 +795,8 @@ export const rebookSession = onCall(async (request) => {
   const newBookingRef = db.collection('sessions').doc(newSessionId).collection('bookings').doc(contactId)
   const batch = db.batch()
 
-  batch.update(bookingDoc.ref, { status: 'rebooked', rebooked_to: newSessionId, rebooked_at: admin.firestore.FieldValue.serverTimestamp() })
-  batch.update(db.collection('sessions').doc(oldSessionId), { portal_bookings_count: admin.firestore.FieldValue.increment(-1) })
+  batch.update(bookingDoc.ref, { status: 'rebooked', rebooked_to: newSessionId, rebooked_at: FieldValue.serverTimestamp() })
+  batch.update(db.collection('sessions').doc(oldSessionId), { portal_bookings_count: FieldValue.increment(-1) })
   batch.set(newBookingRef, {
     firstname: booking.firstname,
     lastname: booking.lastname,
@@ -806,17 +805,17 @@ export const rebookSession = onCall(async (request) => {
     contact: contactId,
     session: newSessionId,
     teamId,
-    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    joinedAt: FieldValue.serverTimestamp(),
     fromPortal: true,
     status: 'pending',
     booking_token: newBookingToken,
     rebooked_from: oldSessionId,
-    rebooked_at: admin.firestore.FieldValue.serverTimestamp(),
+    rebooked_at: FieldValue.serverTimestamp(),
   })
   batch.update(db.collection('sessions').doc(newSessionId), {
     has_bookings: true,
-    portal_bookings_count: admin.firestore.FieldValue.increment(1),
-    last_booking_at: admin.firestore.FieldValue.serverTimestamp(),
+    portal_bookings_count: FieldValue.increment(1),
+    last_booking_at: FieldValue.serverTimestamp(),
   })
   await batch.commit()
 
@@ -837,8 +836,8 @@ export const rebookSession = onCall(async (request) => {
     ? `${getHostingUrl()}/portal/${teamSlug}/manage-booking?token=${newBookingToken}`
     : null
 
-  const oldSessionStart = (oldSession.start as admin.firestore.Timestamp).toDate()
-  const newSessionEnd = (newSession.end as admin.firestore.Timestamp).toDate()
+  const oldSessionStart = (oldSession.start as Timestamp).toDate()
+  const newSessionEnd = (newSession.end as Timestamp).toDate()
   const locale = 'en-GB'
   const dateOpts: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
   const timeOpts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }

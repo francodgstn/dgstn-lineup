@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
 import { sendEmail } from '../utils/email'
 import { buildBookingReminderEmail } from '../booking/templates'
@@ -62,8 +63,8 @@ export async function sendBookingReminders(): Promise<{
   const [sessionsErr, sessionsSnap] = await to(
     db
       .collection(SESSIONS_COLLECTION)
-      .where('start', '>=', admin.firestore.Timestamp.fromDate(windowStart))
-      .where('start', '<', admin.firestore.Timestamp.fromDate(windowEnd))
+      .where('start', '>=', Timestamp.fromDate(windowStart))
+      .where('start', '<', Timestamp.fromDate(windowEnd))
       .get(),
   )
 
@@ -182,7 +183,7 @@ export async function sendBookingReminders(): Promise<{
         }
 
         await sendEmail({ to: booking.email as string, subject: subjects[team.lang], html, text })
-        await bookingDoc.ref.update({ reminderSentAt: admin.firestore.FieldValue.serverTimestamp() })
+        await bookingDoc.ref.update({ reminderSentAt: FieldValue.serverTimestamp() })
 
         sent++
         console.log(`sendBookingReminders: reminder sent to ${booking.email} for session ${sessionId}`) // eslint-disable-line no-console

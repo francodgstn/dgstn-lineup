@@ -7,7 +7,6 @@
  * to teams/{teamId}/public_profile/{teamId}.aggregator_subscription_types.
  */
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
 import { to } from '../utils/async'
 import {
@@ -15,7 +14,6 @@ import {
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
 } from '@lineup/shared'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
   `${TEAMS_COLLECTION}/{teamId}/${SUBSCRIPTION_TYPES_SUBCOLLECTION}/{typeId}`,

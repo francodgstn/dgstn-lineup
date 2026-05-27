@@ -1,12 +1,11 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { to } from '../utils/async'
 import { sendEmail } from '../utils/email'
 import { getHostingUrl } from '../utils/env'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 const EVENTS_COLLECTION = 'events'
 const CONTACTS_COLLECTION = 'contacts'
@@ -57,7 +56,7 @@ export const sendEventInvitations = onCall(async (request) => {
   const teamId = (event.teamId || event.teacher) as string | undefined
   if (!teamId) throw new HttpsError('failed-precondition', 'Event has no team')
 
-  const eventEnd = event.end as admin.firestore.Timestamp | undefined
+  const eventEnd = event.end as Timestamp | undefined
   if (eventEnd && eventEnd.toDate() < new Date()) {
     throw new HttpsError('failed-precondition', 'Cannot send invitations for an event that has already ended')
   }
@@ -84,8 +83,8 @@ export const sendEventInvitations = onCall(async (request) => {
   const existing = new Map<string, Record<string, unknown>>()
   existingSnap?.docs.forEach((d) => existing.set(d.id, d.data()))
 
-  const eventStartDate = (event.start as admin.firestore.Timestamp | undefined)?.toDate()
-  const eventEndDate = (event.end as admin.firestore.Timestamp | undefined)?.toDate()
+  const eventStartDate = (event.start as Timestamp | undefined)?.toDate()
+  const eventEndDate = (event.end as Timestamp | undefined)?.toDate()
   const locale = 'en-GB'
   const eventStart = eventStartDate ? eventStartDate.toLocaleString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Zurich' }) : 'TBD'
   const eventEndStr = eventEndDate ? eventEndDate.toLocaleString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Zurich' }) : ''
@@ -124,7 +123,7 @@ export const sendEventInvitations = onCall(async (request) => {
         email,
         firstname: contactDoc.data().firstname,
         lastname: contactDoc.data().lastname,
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentAt: FieldValue.serverTimestamp(),
         sentBy: request.auth!.uid,
         token,
         link,
@@ -143,8 +142,8 @@ export const sendEventInvitations = onCall(async (request) => {
   }))
 
   await to(eventDoc.ref.update({
-    invitations_sent_count: admin.firestore.FieldValue.increment(sent),
-    last_invitation_sent_at: admin.firestore.FieldValue.serverTimestamp(),
+    invitations_sent_count: FieldValue.increment(sent),
+    last_invitation_sent_at: FieldValue.serverTimestamp(),
   }))
 
   return { success: true, stats: { sent, skipped, errors } }
@@ -180,8 +179,8 @@ export const getEventInvitationDetails = onCall(async (request) => {
 
   if (trackView) {
     const currentStatus = invDoc.data().status as string
-    const updateData: Record<string, unknown> = { lastOpenedAt: admin.firestore.FieldValue.serverTimestamp() }
-    if (currentStatus === 'sent') { updateData.status = 'opened'; updateData.firstOpenedAt = admin.firestore.FieldValue.serverTimestamp() }
+    const updateData: Record<string, unknown> = { lastOpenedAt: FieldValue.serverTimestamp() }
+    if (currentStatus === 'sent') { updateData.status = 'opened'; updateData.firstOpenedAt = FieldValue.serverTimestamp() }
     await to(invDoc.ref.update(updateData))
   }
 
@@ -192,8 +191,8 @@ export const getEventInvitationDetails = onCall(async (request) => {
       id: eventDoc.id,
       title: event.title,
       description: event.desc,
-      start: (event.start as admin.firestore.Timestamp)?.toDate().toJSON(),
-      end: (event.end as admin.firestore.Timestamp)?.toDate().toJSON(),
+      start: (event.start as Timestamp)?.toDate().toJSON(),
+      end: (event.end as Timestamp)?.toDate().toJSON(),
       location: event.location,
       type: event.type,
       fee: event.fee,
@@ -244,8 +243,8 @@ export const handleEventInvitationResponse = onCall(async (request) => {
 
   if (action === 'decline') {
     await to(attendeeRef.delete())
-    await invDoc.ref.update({ status: 'declined', respondedAt: admin.firestore.FieldValue.serverTimestamp() })
-    await to(eventDoc.ref.update({ attendees_count: admin.firestore.FieldValue.increment(-1) }))
+    await invDoc.ref.update({ status: 'declined', respondedAt: FieldValue.serverTimestamp() })
+    await to(eventDoc.ref.update({ attendees_count: FieldValue.increment(-1) }))
     return { success: true, action: 'declined' }
   }
 
@@ -259,15 +258,15 @@ export const handleEventInvitationResponse = onCall(async (request) => {
     gender: contact.gender,
     type: contact.type,
     notes: notes ?? null,
-    respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+    respondedAt: FieldValue.serverTimestamp(),
   }
 
   const [attGetErr, attDoc] = await to(attendeeRef.get())
   const isNew = attGetErr || !attDoc || !attDoc.exists
 
   await attendeeRef.set(attendeeData, { merge: true })
-  await invDoc.ref.update({ status: 'responded', respondedAt: admin.firestore.FieldValue.serverTimestamp() })
-  if (isNew) await to(eventDoc.ref.update({ attendees_count: admin.firestore.FieldValue.increment(1) }))
+  await invDoc.ref.update({ status: 'responded', respondedAt: FieldValue.serverTimestamp() })
+  if (isNew) await to(eventDoc.ref.update({ attendees_count: FieldValue.increment(1) }))
 
   return { success: true, action: 'attending', attendee: { id: contactId, ...attendeeData } }
 })

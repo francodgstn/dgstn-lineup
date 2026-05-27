@@ -63,6 +63,9 @@ function runToCompletion(cmd, args) {
 
 // ── main ──────────────────────────────────────────────────────────────────────
 
+console.log('==> Building @lineup/shared…')
+await runToCompletion('pnpm', ['--filter', '@lineup/shared', 'run', 'build'])
+
 console.log('==> Building Cloud Functions…')
 await runToCompletion('pnpm', ['--filter', '@lineup/functions', 'run', 'build'])
 

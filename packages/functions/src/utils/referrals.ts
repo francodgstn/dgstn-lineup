@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import crypto from 'crypto'
 
 const REFERRAL_CODE_LENGTH = 7
@@ -32,7 +33,7 @@ export async function ensureReferralCode(contactId: string, teamId: string): Pro
   batch.set(db.collection('referral_codes').doc(code), {
     contactId,
     teamId,
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    created_at: FieldValue.serverTimestamp(),
   })
   await batch.commit()
   return code
@@ -48,7 +49,7 @@ export async function resolveReferralCode(code: string): Promise<{ contactId: st
 
 export async function createReferral(referrerContactId: string, referredContactId: string, teamId: string): Promise<string> {
   const db = admin.firestore()
-  const now = admin.firestore.FieldValue.serverTimestamp()
+  const now = FieldValue.serverTimestamp()
   const referralRef = db.collection('referrals').doc()
   await referralRef.set({
     referrer_contact_id: referrerContactId,
@@ -74,8 +75,8 @@ export async function updateReferralStatus(
   const db = admin.firestore()
   const update: Record<string, unknown> = {
     status: newStatus,
-    updated_at: admin.firestore.FieldValue.serverTimestamp(),
-    status_history: admin.firestore.FieldValue.arrayUnion({
+    updated_at: FieldValue.serverTimestamp(),
+    status_history: FieldValue.arrayUnion({
       status: newStatus,
       changed_at: new Date().toISOString(),
       changed_by: changedBy,

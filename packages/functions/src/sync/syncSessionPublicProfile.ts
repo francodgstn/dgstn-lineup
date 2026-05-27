@@ -1,8 +1,6 @@
 // Keeps sessions/{sessionId}/public_profile/{sessionId} in sync
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
-import { setGlobalOptions } from 'firebase-functions/v2'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}', async (event) => {
   const { sessionId } = event.params

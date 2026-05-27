@@ -1,13 +1,12 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { addMonths, getDay } from 'date-fns'
 import { to } from '../utils/async'
 import { calculateOccurrences, validateRecurrence } from '../utils/recurrence'
 import { sendEmail } from '../utils/email'
 import { getHostingUrl } from '../utils/env'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 const SESSION_SERIES_COLLECTION = 'session_series'
 const SESSIONS_COLLECTION = 'sessions'
@@ -63,7 +62,7 @@ export const generateRecurringSessions = onCall(async (request) => {
       const [existErr, existSnap] = await to(
         db.collection(SESSIONS_COLLECTION)
           .where('seriesId', '==', seriesId)
-          .where('instanceDate', '==', admin.firestore.Timestamp.fromDate(occurrence.start))
+          .where('instanceDate', '==', Timestamp.fromDate(occurrence.start))
           .limit(1)
           .get(),
       )
@@ -72,9 +71,9 @@ export const generateRecurringSessions = onCall(async (request) => {
       const sessionRef = db.collection(SESSIONS_COLLECTION).doc()
       batch.set(sessionRef, {
         seriesId,
-        instanceDate: admin.firestore.Timestamp.fromDate(occurrence.start),
-        start: admin.firestore.Timestamp.fromDate(occurrence.start),
-        end: admin.firestore.Timestamp.fromDate(occurrence.end),
+        instanceDate: Timestamp.fromDate(occurrence.start),
+        start: Timestamp.fromDate(occurrence.start),
+        end: Timestamp.fromDate(occurrence.end),
         activityId: seriesData.template?.activityId ?? null,
         location: seriesData.template?.location ?? null,
         tags: seriesData.template?.tags ?? [],
@@ -96,9 +95,9 @@ export const generateRecurringSessions = onCall(async (request) => {
   }
 
   await to(seriesRef.update({
-    lastGeneratedUntil: admin.firestore.Timestamp.fromDate(generationEnd),
-    totalOccurrences: admin.firestore.FieldValue.increment(generatedCount),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastGeneratedUntil: Timestamp.fromDate(generationEnd),
+    totalOccurrences: FieldValue.increment(generatedCount),
+    updatedAt: FieldValue.serverTimestamp(),
   }))
 
   return { success: true, generatedCount, message: `Successfully generated ${generatedCount} sessions` }
@@ -169,14 +168,14 @@ async function cancelSingleSession(
           firstname: (booking.firstname as string) || 'Guest',
           teamName: teamData.name,
           activityName,
-          sessionStart: (sessionData.start as admin.firestore.Timestamp).toDate(),
-          sessionEnd: (sessionData.end as admin.firestore.Timestamp).toDate(),
+          sessionStart: (sessionData.start as Timestamp).toDate(),
+          sessionEnd: (sessionData.end as Timestamp).toDate(),
           rebookUrl,
         })
         await sendEmail({ to: booking.email as string, subject: email.subject, html: email.html, text: email.text })
         if (booking.contact) {
           await to(db.collection('contacts').doc(booking.contact as string).update({
-            pending_bookings_count: admin.firestore.FieldValue.increment(-1),
+            pending_bookings_count: FieldValue.increment(-1),
           }))
         }
         sent++
@@ -191,7 +190,7 @@ async function cancelSingleSession(
     await sessionRef.update({
       isException: true,
       exceptionType: 'cancelled',
-      cancelled_at: admin.firestore.FieldValue.serverTimestamp(),
+      cancelled_at: FieldValue.serverTimestamp(),
     })
   } else {
     // Delete bookings subcollection
@@ -271,15 +270,15 @@ export const cancelSession = onCall(async (request) => {
 
 // ─── updateRecurringSession ───────────────────────────────────────────────────
 
-function toTimestamp(val: unknown): admin.firestore.Timestamp {
-  if (!val) return val as admin.firestore.Timestamp
-  if (val instanceof admin.firestore.Timestamp) return val
+function toTimestamp(val: unknown): Timestamp {
+  if (!val) return val as Timestamp
+  if (val instanceof Timestamp) return val
   const v = val as Record<string, number>
-  if (v._seconds !== undefined) return new admin.firestore.Timestamp(v._seconds, v._nanoseconds ?? 0)
-  if (v.seconds !== undefined) return new admin.firestore.Timestamp(v.seconds, v.nanoseconds ?? 0)
-  if (val instanceof Date) return admin.firestore.Timestamp.fromDate(val)
+  if (v._seconds !== undefined) return new Timestamp(v._seconds, v._nanoseconds ?? 0)
+  if (v.seconds !== undefined) return new Timestamp(v.seconds, v.nanoseconds ?? 0)
+  if (val instanceof Date) return Timestamp.fromDate(val)
   const parsed = new Date(val as string | number)
-  return isNaN(parsed.getTime()) ? val as admin.firestore.Timestamp : admin.firestore.Timestamp.fromDate(parsed)
+  return isNaN(parsed.getTime()) ? val as Timestamp : Timestamp.fromDate(parsed)
 }
 
 export const updateRecurringSession = onCall(async (request) => {
@@ -316,7 +315,7 @@ export const updateRecurringSession = onCall(async (request) => {
     if (_loc !== undefined) normalized.location = _loc
     if (_tags !== undefined) normalized.tags = _tags
 
-    await sessionRef.update({ ...normalized, isException: true, exceptionType: 'modified', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    await sessionRef.update({ ...normalized, isException: true, exceptionType: 'modified', updatedAt: FieldValue.serverTimestamp() })
     return { success: true, message: 'Session updated as exception.', updatedCount: 1 }
   }
 
@@ -353,19 +352,19 @@ export const updateRecurringSession = onCall(async (request) => {
 
   const batch = db.batch()
   for (const doc of (futureSnap?.docs ?? [])) {
-    const perDoc: Record<string, unknown> = { ...regularUpdates, updatedAt: admin.firestore.FieldValue.serverTimestamp() }
+    const perDoc: Record<string, unknown> = { ...regularUpdates, updatedAt: FieldValue.serverTimestamp() }
     if (location !== undefined) perDoc.location = location
     if (tags !== undefined) perDoc.tags = tags
 
     if (newTimeHours !== null && newTimeMinutes !== null) {
-      const orig = (doc.data().start as admin.firestore.Timestamp).toDate()
+      const orig = (doc.data().start as Timestamp).toDate()
       const newStart = new Date(Date.UTC(orig.getUTCFullYear(), orig.getUTCMonth(), orig.getUTCDate(), newTimeHours, newTimeMinutes, 0, 0))
-      perDoc.start = admin.firestore.Timestamp.fromDate(newStart)
+      perDoc.start = Timestamp.fromDate(newStart)
       perDoc.instanceDate = perDoc.start
-      if (newDuration) perDoc.end = admin.firestore.Timestamp.fromDate(new Date(newStart.getTime() + newDuration * 60000))
+      if (newDuration) perDoc.end = Timestamp.fromDate(new Date(newStart.getTime() + newDuration * 60000))
     } else if (newDuration) {
-      const orig = (doc.data().start as admin.firestore.Timestamp).toDate()
-      perDoc.end = admin.firestore.Timestamp.fromDate(new Date(orig.getTime() + newDuration * 60000))
+      const orig = (doc.data().start as Timestamp).toDate()
+      perDoc.end = Timestamp.fromDate(new Date(orig.getTime() + newDuration * 60000))
       perDoc.duration = newDuration
     }
 
@@ -374,8 +373,8 @@ export const updateRecurringSession = onCall(async (request) => {
 
   const generationEnd = addMonths(new Date(), 6)
   const seriesUpdates: Record<string, unknown> = {
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    lastGeneratedUntil: admin.firestore.Timestamp.fromDate(generationEnd),
+    updatedAt: FieldValue.serverTimestamp(),
+    lastGeneratedUntil: Timestamp.fromDate(generationEnd),
   }
   if (updates.activityId !== undefined) seriesUpdates['template.activityId'] = updates.activityId
   if (location !== undefined) seriesUpdates['template.location'] = location
@@ -387,8 +386,8 @@ export const updateRecurringSession = onCall(async (request) => {
 
   if (start !== undefined && newTimeHours !== null && newTimeMinutes !== null) {
     const seriesData = seriesDoc.data()!
-    const currentStart = (seriesData.recurrence.startDate as admin.firestore.Timestamp).toDate()
-    seriesUpdates['recurrence.startDate'] = admin.firestore.Timestamp.fromDate(
+    const currentStart = (seriesData.recurrence.startDate as Timestamp).toDate()
+    seriesUpdates['recurrence.startDate'] = Timestamp.fromDate(
       new Date(Date.UTC(currentStart.getUTCFullYear(), currentStart.getUTCMonth(), currentStart.getUTCDate(), newTimeHours, newTimeMinutes, 0, 0)),
     )
   }
@@ -423,7 +422,7 @@ export const updateRecurringSession = onCall(async (request) => {
   let generatedCount = 0
 
   if (recurrenceChanged && newRecurrence) {
-    const sessionStart = session.start as admin.firestore.Timestamp
+    const sessionStart = session.start as Timestamp
     const [allFutureErr, allFutureSnap] = await to(
       db.collection(SESSIONS_COLLECTION)
         .where('seriesId', '==', session.seriesId)
@@ -438,7 +437,7 @@ export const updateRecurringSession = onCall(async (request) => {
     const existingDates = new Set<string>()
 
     for (const doc of (allFutureSnap?.docs ?? [])) {
-      const docStart = (doc.data().start as admin.firestore.Timestamp).toDate()
+      const docStart = (doc.data().start as Timestamp).toDate()
       const dateKey = docStart.toISOString().slice(0, 10)
       if (newRecurrence.frequency === 'weekly' && Array.isArray(newRecurrence.daysOfWeek)) {
         if (!(newRecurrence.daysOfWeek as number[]).includes(getDay(docStart))) {
@@ -475,9 +474,9 @@ export const updateRecurringSession = onCall(async (request) => {
         const ref = db.collection(SESSIONS_COLLECTION).doc()
         createBatch.set(ref, {
           seriesId: session.seriesId,
-          instanceDate: admin.firestore.Timestamp.fromDate(occ.start),
-          start: admin.firestore.Timestamp.fromDate(occ.start),
-          end: admin.firestore.Timestamp.fromDate(occ.end),
+          instanceDate: Timestamp.fromDate(occ.start),
+          start: Timestamp.fromDate(occ.start),
+          end: Timestamp.fromDate(occ.end),
           ...tpl,
           teamId,
           teacher: seriesData.teacher,
@@ -531,7 +530,7 @@ export const selfCheckIn = onCall(async (request) => {
   const contact = contactSnap.data()!
   if ((contact.teamId || contact.teacher) !== teamId) throw new HttpsError('permission-denied', 'You are not a member of this team')
 
-  const now = admin.firestore.Timestamp.now()
+  const now = Timestamp.now()
 
   let sessionsToProcess: Array<Record<string, unknown> & { id: string }> = []
 
@@ -543,16 +542,16 @@ export const selfCheckIn = onCall(async (request) => {
     sessionsToProcess = [{ id: requestedSessionId, ...s }]
   } else {
     const LOOKBACK_MS = 4 * 60 * 60 * 1000
-    const queryStart = admin.firestore.Timestamp.fromMillis(now.toMillis() - LOOKBACK_MS)
-    const queryEnd = admin.firestore.Timestamp.fromMillis(now.toMillis() + windowMs)
+    const queryStart = Timestamp.fromMillis(now.toMillis() - LOOKBACK_MS)
+    const queryEnd = Timestamp.fromMillis(now.toMillis() + windowMs)
     const [sessErr, sessSnap] = await to(
       db.collection('sessions').where('teamId', '==', teamId).where('start', '>=', queryStart).where('start', '<=', queryEnd).orderBy('start', 'asc').get(),
     )
     sessionsToProcess = (sessSnap?.docs ?? [])
       .map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown> & { id: string }))
       .filter((s) => {
-        const end = (s.end as admin.firestore.Timestamp | undefined) || admin.firestore.Timestamp.fromMillis((s.start as admin.firestore.Timestamp).toMillis() + ((s.duration as number | undefined) || 60) * 60 * 1000)
-        const checkInOpens = admin.firestore.Timestamp.fromMillis((s.start as admin.firestore.Timestamp).toMillis() - windowMs)
+        const end = (s.end as Timestamp | undefined) || Timestamp.fromMillis((s.start as Timestamp).toMillis() + ((s.duration as number | undefined) || 60) * 60 * 1000)
+        const checkInOpens = Timestamp.fromMillis((s.start as Timestamp).toMillis() - windowMs)
         return now >= checkInOpens && end.toMillis() > now.toMillis()
       })
   }
@@ -575,16 +574,16 @@ export const selfCheckIn = onCall(async (request) => {
         id: s.id,
         activityName: resolveActivityName(s),
         start: s.start,
-        end: (s.end as admin.firestore.Timestamp) || admin.firestore.Timestamp.fromMillis((s.start as admin.firestore.Timestamp).toMillis() + ((s.duration as number) || 60) * 60 * 1000),
+        end: (s.end as Timestamp) || Timestamp.fromMillis((s.start as Timestamp).toMillis() + ((s.duration as number) || 60) * 60 * 1000),
       })),
     }
   }
 
   const session = sessionsToProcess[0]
   const resolvedSessionId = session.id
-  const sessionStart = session.start as admin.firestore.Timestamp
-  const sessionEnd = (session.end as admin.firestore.Timestamp) || admin.firestore.Timestamp.fromMillis(sessionStart.toMillis() + ((session.duration as number) || 60) * 60 * 1000)
-  const checkInWindowStart = admin.firestore.Timestamp.fromMillis(sessionStart.toMillis() - windowMs)
+  const sessionStart = session.start as Timestamp
+  const sessionEnd = (session.end as Timestamp) || Timestamp.fromMillis(sessionStart.toMillis() + ((session.duration as number) || 60) * 60 * 1000)
+  const checkInWindowStart = Timestamp.fromMillis(sessionStart.toMillis() - windowMs)
 
   if (now < checkInWindowStart || now > sessionEnd) throw new HttpsError('failed-precondition', 'Check-in window is not open for this session')
 
@@ -602,7 +601,7 @@ export const selfCheckIn = onCall(async (request) => {
     firstname: (contact.firstname as string) || '',
     lastname: (contact.lastname as string) || '',
     avatar_url: (contact.avatar_url as string) || null,
-    checkedInAt: admin.firestore.FieldValue.serverTimestamp(),
+    checkedInAt: FieldValue.serverTimestamp(),
     checkedInBy: 'self-scan',
   }
 
@@ -615,9 +614,9 @@ export const selfCheckIn = onCall(async (request) => {
   if (!bErr && bookingDoc && bookingDoc.exists) {
     const bStatus = bookingDoc.data()?.status as string | undefined
     if (!bStatus || bStatus === 'pending') {
-      batch.update(bookingRef, { status: 'confirmed', confirmed_at: admin.firestore.FieldValue.serverTimestamp() })
-      batch.update(sessionRef, { portal_bookings_count: admin.firestore.FieldValue.increment(-1), conversions_count: admin.firestore.FieldValue.increment(1) })
-      batch.update(db.collection('contacts').doc(contactId), { pending_bookings_count: admin.firestore.FieldValue.increment(-1) })
+      batch.update(bookingRef, { status: 'confirmed', confirmed_at: FieldValue.serverTimestamp() })
+      batch.update(sessionRef, { portal_bookings_count: FieldValue.increment(-1), conversions_count: FieldValue.increment(1) })
+      batch.update(db.collection('contacts').doc(contactId), { pending_bookings_count: FieldValue.increment(-1) })
     }
   }
 

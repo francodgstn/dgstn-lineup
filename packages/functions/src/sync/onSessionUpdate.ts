@@ -5,8 +5,8 @@
  * No-op when gamification is disabled (coach plan) — always safe to run.
  */
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { format } from 'date-fns'
 import { to } from '../utils/async'
 import { resolveGamificationSettings, type GamificationSettings } from '../utils/scoring'
@@ -20,13 +20,12 @@ import {
   MONTHLY_SCORES_SUBCOLLECTION,
 } from '@lineup/shared'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 const MONTH_FORMAT = 'yyyy-MM'
 
 function timestampsEqual(
-  a: admin.firestore.Timestamp | null | undefined,
-  b: admin.firestore.Timestamp | null | undefined
+  a: Timestamp | null | undefined,
+  b: Timestamp | null | undefined
 ): boolean {
   if (!a && !b) return true
   if (!a || !b) return false
@@ -57,7 +56,7 @@ async function recalculateMonthlyScoreSummary(
       await existingScores.docs[0].ref.delete()
     }
     if (month === currentMonth) {
-      await contactRef.update({ current_month_score: admin.firestore.FieldValue.delete() })
+      await contactRef.update({ current_month_score: FieldValue.delete() })
       await updateTeamLeaderboard(teamId, currentMonth)
     }
     const streakResult = await computeContactStreak(db, contactId, teamId, settings)
@@ -83,8 +82,8 @@ async function recalculateMonthlyScoreSummary(
       total_points: result.totalPoints,
       final_score: result.finalScore,
       sessions_count: result.sessionsCount,
-      updated_at: admin.firestore.FieldValue.serverTimestamp(),
-      weekly_bonus: admin.firestore.FieldValue.delete(),
+      updated_at: FieldValue.serverTimestamp(),
+      weekly_bonus: FieldValue.delete(),
     },
     { merge: true }
   )
@@ -109,8 +108,8 @@ export const onSessionUpdate = onDocumentUpdated(
     const after = event.data!.after.data()
 
     const startChanged = !timestampsEqual(
-      before.start as admin.firestore.Timestamp | null,
-      after.start as admin.firestore.Timestamp | null
+      before.start as Timestamp | null,
+      after.start as Timestamp | null
     )
     const activityChanged = before.activityId !== after.activityId
 
@@ -135,7 +134,7 @@ export const onSessionUpdate = onDocumentUpdated(
     )
     if (!settings.enabled) return
 
-    const newStartDate = (after.start as admin.firestore.Timestamp | null)?.toDate()
+    const newStartDate = (after.start as Timestamp | null)?.toDate()
     if (!newStartDate) return
 
     const newMonth = format(newStartDate, MONTH_FORMAT)
@@ -149,7 +148,7 @@ export const onSessionUpdate = onDocumentUpdated(
     )
     if (partErr || !participantsSnap || participantsSnap.empty) return
 
-    const oldStartDate = (before.start as admin.firestore.Timestamp | null)?.toDate()
+    const oldStartDate = (before.start as Timestamp | null)?.toDate()
     const oldMonth = oldStartDate ? format(oldStartDate, MONTH_FORMAT) : null
 
     const affectedMonths = new Set<string>([newMonth])

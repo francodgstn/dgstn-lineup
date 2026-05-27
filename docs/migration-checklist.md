@@ -86,7 +86,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `checkInContact`
 - ✅ `moveContacts`
 - ❌ `generateContactQR`
-- ❌ `sendContactQrCodes`
+- ~~`sendContactQrCodes`~~ — deprecated; QR code lives in the student mobile app instead
 - ❌ `getMembershipQR`
 - ❌ `manageContactUpdateRequest`
 - ❌ `requestContactUpdate`

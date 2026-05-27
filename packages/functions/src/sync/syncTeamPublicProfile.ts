@@ -1,8 +1,6 @@
 // Keeps teams/{teamId}/public_profile/{teamId} in sync when a team document changes
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
-import { setGlobalOptions } from 'firebase-functions/v2'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (event) => {
   const { teamId } = event.params

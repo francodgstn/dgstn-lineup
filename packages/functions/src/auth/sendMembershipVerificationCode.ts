@@ -1,12 +1,11 @@
 /* eslint-disable no-console */
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 const CODE_EXPIRY_MS = 15 * 60 * 1000 // 15 minutes
 const MAX_CODES_PER_HOUR = 5
@@ -23,7 +22,7 @@ export const sendMembershipVerificationCode = onCall(async (request) => {
   const team = await getTeam(teamId)
   if (!team) throw new HttpsError('not-found', 'Team not found')
 
-  const oneHourAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 60 * 60 * 1000))
+  const oneHourAgo = Timestamp.fromDate(new Date(Date.now() - 60 * 60 * 1000))
   const recentCodes = await admin
     .firestore()
     .collection('verification_codes')
@@ -37,7 +36,7 @@ export const sendMembershipVerificationCode = onCall(async (request) => {
   }
 
   const code = crypto.randomInt(100000, 999999).toString()
-  const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + CODE_EXPIRY_MS))
+  const expiresAt = Timestamp.fromDate(new Date(Date.now() + CODE_EXPIRY_MS))
 
   const docRef = await admin.firestore().collection('verification_codes').add({
     email: normalizedEmail,
@@ -47,7 +46,7 @@ export const sendMembershipVerificationCode = onCall(async (request) => {
     used: false,
     verified: false,
     attempts: 0,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   })
 
   const { html, text } = buildEmailTemplate({

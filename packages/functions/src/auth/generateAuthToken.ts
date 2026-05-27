@@ -1,6 +1,7 @@
 // Generates a custom Firebase auth token for a student (contact) scoped to a team
 // Source: hmd-lineup/functions/src/generateAuthToken/index.js
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { regionalFunctions } from '../utils/functions'
 import { isTeamMember } from '../utils/teams'
 
@@ -39,7 +40,7 @@ export const generateAuthToken = regionalFunctions.https.onCall(
       teamId,
       createdBy: userId,
       sessionExpires,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      created_at: FieldValue.serverTimestamp(),
     })
 
     return { customToken, sessionExpires }

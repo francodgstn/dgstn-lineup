@@ -1,11 +1,10 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { to } from '../utils/async'
 import { hasTeamRole, isTeamMember } from '../utils/teams'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 const CONTACTS_COLLECTION = 'contacts'
 const RETENTION_DAYS = 30
@@ -37,7 +36,7 @@ export const deleteContact = onCall(async (request) => {
   if (contactData.anonymized_at) throw new HttpsError('failed-precondition', 'Contact has been anonymized')
 
   const [updateErr] = await to(contactRef.update({
-    deleted_at: admin.firestore.FieldValue.serverTimestamp(),
+    deleted_at: FieldValue.serverTimestamp(),
     deleted_by: request.auth.uid,
     anonymized_at: null,
   }))
@@ -80,7 +79,7 @@ export const restoreContact = onCall(async (request) => {
   if (!contactData.deleted_at) throw new HttpsError('failed-precondition', 'Contact is not deleted')
   if (contactData.anonymized_at) throw new HttpsError('failed-precondition', 'Contact has been anonymized and cannot be restored')
 
-  const deletedAt = (contactData.deleted_at as admin.firestore.Timestamp).toDate()
+  const deletedAt = (contactData.deleted_at as Timestamp).toDate()
   const daysSinceDeletion = Math.floor((Date.now() - deletedAt.getTime()) / (1000 * 60 * 60 * 24))
   if (daysSinceDeletion > RETENTION_DAYS) {
     throw new HttpsError('failed-precondition', `Restoration window expired. Contact was deleted more than ${RETENTION_DAYS} days ago.`)
@@ -145,13 +144,13 @@ export const checkInContact = onCall(async (request) => {
     .digest('hex')
   if (hash !== expectedHash) throw new HttpsError('permission-denied', 'Invalid QR code signature')
 
-  const now = admin.firestore.Timestamp.now()
-  const sessionStart = session.start as admin.firestore.Timestamp
-  const sessionEnd = (session.end as admin.firestore.Timestamp) ||
-    admin.firestore.Timestamp.fromMillis(sessionStart.toMillis() + ((session.duration as number) || 60) * 60 * 1000)
+  const now = Timestamp.now()
+  const sessionStart = session.start as Timestamp
+  const sessionEnd = (session.end as Timestamp) ||
+    Timestamp.fromMillis(sessionStart.toMillis() + ((session.duration as number) || 60) * 60 * 1000)
 
-  const checkInWindowStart = admin.firestore.Timestamp.fromMillis(sessionStart.toMillis() - 60 * 60 * 1000)
-  const checkInWindowEnd = admin.firestore.Timestamp.fromMillis(sessionEnd.toMillis() + 60 * 60 * 1000)
+  const checkInWindowStart = Timestamp.fromMillis(sessionStart.toMillis() - 60 * 60 * 1000)
+  const checkInWindowEnd = Timestamp.fromMillis(sessionEnd.toMillis() + 60 * 60 * 1000)
 
   if (now < checkInWindowStart || now > checkInWindowEnd) {
     throw new HttpsError('failed-precondition', 'Check-in window has closed for this session')
@@ -175,7 +174,7 @@ export const checkInContact = onCall(async (request) => {
     firstname: (contact.firstname as string) || '',
     lastname: (contact.lastname as string) || '',
     avatar_url: (contact.avatar_url as string) || null,
-    checkedInAt: admin.firestore.FieldValue.serverTimestamp(),
+    checkedInAt: FieldValue.serverTimestamp(),
     checkedInBy: 'qr-scan',
   }
 
@@ -188,13 +187,13 @@ export const checkInContact = onCall(async (request) => {
   if (!bookingErr && bookingDoc && bookingDoc.exists) {
     batch.update(bookingRef, {
       status: 'confirmed',
-      confirmed_at: admin.firestore.FieldValue.serverTimestamp(),
+      confirmed_at: FieldValue.serverTimestamp(),
     })
     batch.update(sessionRef, {
-      portal_bookings_count: admin.firestore.FieldValue.increment(-1),
-      conversions_count: admin.firestore.FieldValue.increment(1),
+      portal_bookings_count: FieldValue.increment(-1),
+      conversions_count: FieldValue.increment(1),
     })
-    batch.update(contactRef, { pending_bookings_count: admin.firestore.FieldValue.increment(-1) })
+    batch.update(contactRef, { pending_bookings_count: FieldValue.increment(-1) })
   }
 
   await batch.commit()

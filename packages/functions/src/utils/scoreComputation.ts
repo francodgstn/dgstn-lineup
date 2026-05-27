@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { to } from './async'
 import {
@@ -43,8 +44,8 @@ export async function recalculateMonthForTeam(
   activityScoresCache: Record<string, number>,
 ): Promise<{ contactIds: string[]; recalculatedCount: number }> {
   const monthDate = new Date(`${month}-01T00:00:00`)
-  const mStart = admin.firestore.Timestamp.fromDate(startOfMonth(monthDate))
-  const mEnd = admin.firestore.Timestamp.fromDate(endOfMonth(monthDate))
+  const mStart = Timestamp.fromDate(startOfMonth(monthDate))
+  const mEnd = Timestamp.fromDate(endOfMonth(monthDate))
 
   const [sessionsErr, sessionsSnap] = await to(
     db.collection(SESSIONS_COLLECTION)
@@ -111,7 +112,7 @@ export async function recalculateMonthForTeam(
       for (let s = 0; s < allContactsSnap.docs.length; s += BATCH_SIZE) {
         const clearBatch = db.batch()
         for (const d of allContactsSnap.docs.slice(s, s + BATCH_SIZE)) {
-          clearBatch.update(d.ref, { current_month_score: admin.firestore.FieldValue.delete() })
+          clearBatch.update(d.ref, { current_month_score: FieldValue.delete() })
         }
         await clearBatch.commit()
       }
@@ -149,7 +150,7 @@ export async function recalculateMonthForTeam(
         total_points: totalPoints,
         final_score: finalScore,
         sessions_count: entry.logs.length,
-        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
       }, { merge: true })
 
       if (isCurrentMonth) {
@@ -178,8 +179,8 @@ export async function computeContactMonthScore(
   _activityScoresCache: Record<string, number> | null,
 ): Promise<{ totalPoints: number; finalScore: number; sessionsCount: number }> {
   const monthDate = new Date(`${month}-01T00:00:00`)
-  const mStart = admin.firestore.Timestamp.fromDate(startOfMonth(monthDate))
-  const mEnd = admin.firestore.Timestamp.fromDate(endOfMonth(monthDate))
+  const mStart = Timestamp.fromDate(startOfMonth(monthDate))
+  const mEnd = Timestamp.fromDate(endOfMonth(monthDate))
 
   const [sessionsErr, sessionsSnap] = await to(
     db.collection(SESSIONS_COLLECTION)
@@ -241,8 +242,8 @@ export async function computeContactStreak(
 
   for (let i = 0; i < 12; i++) {
     const targetDate = i === 0 ? now : subMonths(now, i)
-    const mStart = admin.firestore.Timestamp.fromDate(startOfMonth(targetDate))
-    const mEnd = admin.firestore.Timestamp.fromDate(endOfMonth(targetDate))
+    const mStart = Timestamp.fromDate(startOfMonth(targetDate))
+    const mEnd = Timestamp.fromDate(endOfMonth(targetDate))
 
     const [sessionsErr, sessionsSnap] = await to(
       db.collection(SESSIONS_COLLECTION)

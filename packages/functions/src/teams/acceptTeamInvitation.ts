@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { regionalFunctions } from '../utils/functions'
 import { addTeamMember, setUserCurrentTeam, getUserCurrentTeam } from '../utils/teams'
 
@@ -29,7 +30,7 @@ export const acceptTeamInvitation = regionalFunctions.https.onCall(
     const currentTeam = await getUserCurrentTeam(userId)
     if (!currentTeam) await setUserCurrentTeam(userId, teamId)
 
-    await invDoc.ref.update({ accepted_at: admin.firestore.FieldValue.serverTimestamp(), acceptedBy: userId })
+    await invDoc.ref.update({ accepted_at: FieldValue.serverTimestamp(), acceptedBy: userId })
 
     return { teamId }
   }

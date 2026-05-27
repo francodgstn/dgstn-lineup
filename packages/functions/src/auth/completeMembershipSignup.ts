@@ -1,11 +1,10 @@
 /* eslint-disable no-console */
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 // ─────────────────────────────────────────────────────────────────────────────
 // verifyMembershipCode
@@ -30,7 +29,7 @@ export const verifyMembershipCode = onCall(async (request) => {
 
   if (codeData.used) throw new HttpsError('failed-precondition', 'Code already used')
 
-  const now = admin.firestore.Timestamp.now()
+  const now = Timestamp.now()
   if (codeData.expiresAt.toMillis() < now.toMillis()) {
     throw new HttpsError('deadline-exceeded', 'Code has expired. Please request a new code.')
   }
@@ -40,12 +39,12 @@ export const verifyMembershipCode = onCall(async (request) => {
   }
 
   if (codeData.code !== data.code) {
-    await codeRef.update({ attempts: admin.firestore.FieldValue.increment(1) })
+    await codeRef.update({ attempts: FieldValue.increment(1) })
     const remaining = 5 - ((codeData.attempts || 0) + 1)
     throw new HttpsError('invalid-argument', `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`)
   }
 
-  await codeRef.update({ verified: true, verifiedAt: admin.firestore.FieldValue.serverTimestamp() })
+  await codeRef.update({ verified: true, verifiedAt: FieldValue.serverTimestamp() })
 
   return { verified: true, email: codeData.email, teamId: codeData.team_id }
 })
@@ -117,7 +116,7 @@ export const completeMembershipSignup = onCall(async (request) => {
     firstname: contactDetails.firstname.trim(),
     lastname: contactDetails.lastname.trim(),
     phone: contactDetails.phone?.trim() || null,
-    birthdate: contactDetails.birthdate ? admin.firestore.Timestamp.fromDate(new Date(contactDetails.birthdate)) : null,
+    birthdate: contactDetails.birthdate ? Timestamp.fromDate(new Date(contactDetails.birthdate)) : null,
     notes: contactDetails.notes?.trim() || null,
   }
 
@@ -136,12 +135,12 @@ export const completeMembershipSignup = onCall(async (request) => {
     membership_active: false,
     archived_at: null,
     deleted_at: null,
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    created_at: FieldValue.serverTimestamp(),
   })
   const contactId = contactRef.id
 
   // Mark code as used
-  await codeRef.update({ used: true, usedAt: admin.firestore.FieldValue.serverTimestamp(), contactId })
+  await codeRef.update({ used: true, usedAt: FieldValue.serverTimestamp(), contactId })
 
   // Send welcome email
   try {

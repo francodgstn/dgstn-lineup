@@ -1,12 +1,10 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import { markNoShowBookings } from './markNoShowBookings'
 import { autoArchiveTrialContacts } from './autoArchiveTrialContacts'
 import { resetExpiredStreaks } from './resetExpiredStreaks'
 import { resetMonthlyScores } from './resetMonthlyScores'
 import { sendBookingReminders } from './sendBookingReminders'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 interface TaskResult {
   name: string

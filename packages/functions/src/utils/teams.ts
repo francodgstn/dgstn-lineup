@@ -1,5 +1,6 @@
 // Ported from hmd-lineup/functions/src/utils/teams.js — converted to TypeScript
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import type { Team, TeamMember, TeamRole } from '@lineup/shared'
 
 export async function isAdmin(userId: string): Promise<boolean> {
@@ -68,7 +69,7 @@ export async function setUserCurrentTeam(userId: string, teamId: string): Promis
   if (!isMember) throw new Error(`User ${userId} is not a member of team ${teamId}`)
   await admin.firestore().collection('users').doc(userId).update({
     currentTeam: teamId,
-    currentTeamUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    currentTeamUpdatedAt: FieldValue.serverTimestamp(),
   })
 }
 
@@ -86,7 +87,7 @@ export async function addTeamMember(teamId: string, userId: string, role: TeamRo
       userId,
       teamId,
       role,
-      joined: admin.firestore.FieldValue.serverTimestamp(),
+      joined: FieldValue.serverTimestamp(),
       addedBy,
     })
 }
@@ -102,7 +103,7 @@ export async function updateTeamMemberRole(teamId: string, userId: string, newRo
     .doc(teamId)
     .collection('team_members')
     .doc(userId)
-    .update({ role: newRole, roleUpdatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    .update({ role: newRole, roleUpdatedAt: FieldValue.serverTimestamp() })
 }
 
 export async function createTeamRecord(
@@ -142,7 +143,7 @@ export async function createTeamRecord(
     settings: teamData.settings || {},
     slug,
     links: defaultLinks,
-    created: admin.firestore.FieldValue.serverTimestamp(),
+    created: FieldValue.serverTimestamp(),
     createdBy: ownerId,
   })
 

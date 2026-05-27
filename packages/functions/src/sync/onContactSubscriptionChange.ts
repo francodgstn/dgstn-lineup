@@ -5,8 +5,8 @@
  * Also writes a team-level transition event for cross-contact analytics.
  */
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
+import { Timestamp } from 'firebase-admin/firestore'
 import {
   CONTACTS_COLLECTION,
   TEAMS_COLLECTION,
@@ -15,7 +15,6 @@ import {
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
 } from '@lineup/shared'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 export const onContactSubscriptionChange = onDocumentUpdated(
   `${CONTACTS_COLLECTION}/{contactId}`,
@@ -43,7 +42,7 @@ export const onContactSubscriptionChange = onDocumentUpdated(
       .doc(contactId)
       .collection(CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION)
 
-    const now = admin.firestore.Timestamp.now()
+    const now = Timestamp.now()
 
     // Close any currently open history entry
     const openSnap = await historyRef.where('end_date', '==', null).get()

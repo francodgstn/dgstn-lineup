@@ -1,14 +1,13 @@
 /* eslint-disable no-console */
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import { getSecret } from '../utils/secrets'
 import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
 import { StripeAdapter } from '../utils/gateway/stripe'
 import type { SaasPlan } from '@lineup/shared'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 const VALID_PLANS: SaasPlan[] = ['coach', 'club', 'organization']
 
@@ -52,7 +51,7 @@ export const createCheckoutSession = onCall(async (request) => {
   await assertOwner(request.auth.uid, teamId)
 
   // Rate limit: max 3 checkout session requests per team per hour
-  const oneHourAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 60 * 60 * 1000)
+  const oneHourAgo = Timestamp.fromMillis(Date.now() - 60 * 60 * 1000)
   const recentAttempts = await admin.firestore()
     .collection('saas_checkout_attempts')
     .where('teamId', '==', teamId)
@@ -91,7 +90,7 @@ export const createCheckoutSession = onCall(async (request) => {
     teamId,
     plan,
     sessionId: session.sessionId,
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    created_at: FieldValue.serverTimestamp(),
   }).catch((err) => console.error('Failed to log checkout attempt:', err))
 
   return { url: session.url }
@@ -161,7 +160,7 @@ export const handleStripeWebhook = onRequest(
         }
       }
 
-      const now = admin.firestore.FieldValue.serverTimestamp()
+      const now = FieldValue.serverTimestamp()
 
       // Map event to saas_subscriptions fields
       const update: Record<string, unknown> = {
@@ -177,8 +176,8 @@ export const handleStripeWebhook = onRequest(
           update['gateway_data.subscription_id'] = event.subscriptionId
           update['gateway_data.customer_id'] = event.customerId
           if (event.plan) update.plan = event.plan
-          if (event.currentPeriodStart) update.current_period_start = admin.firestore.Timestamp.fromDate(event.currentPeriodStart)
-          if (event.currentPeriodEnd) update.current_period_end = admin.firestore.Timestamp.fromDate(event.currentPeriodEnd)
+          if (event.currentPeriodStart) update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
+          if (event.currentPeriodEnd) update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
           update.cancel_at_period_end = false
           update.trial_ends_at = null
           if (!existing.exists) {
@@ -188,8 +187,8 @@ export const handleStripeWebhook = onRequest(
 
         case 'subscription.updated':
           if (event.plan) update.plan = event.plan
-          if (event.currentPeriodStart) update.current_period_start = admin.firestore.Timestamp.fromDate(event.currentPeriodStart)
-          if (event.currentPeriodEnd) update.current_period_end = admin.firestore.Timestamp.fromDate(event.currentPeriodEnd)
+          if (event.currentPeriodStart) update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
+          if (event.currentPeriodEnd) update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
           if (event.cancelAtPeriodEnd !== undefined) update.cancel_at_period_end = event.cancelAtPeriodEnd
           if (event.subscriptionId) update['gateway_data.subscription_id'] = event.subscriptionId
           if (event.customerId) update['gateway_data.customer_id'] = event.customerId
@@ -263,7 +262,7 @@ export const cancelSaasSubscription = onCall(async (request) => {
   // Optimistically set it here so the UI updates immediately.
   await admin.firestore().collection('saas_subscriptions').doc(data.teamId).update({
     cancel_at_period_end: true,
-    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    updated_at: FieldValue.serverTimestamp(),
   })
 
   return { success: true }

@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { to } from './async'
 
 const CONTACTS_COLLECTION = 'contacts'
@@ -63,7 +64,7 @@ export async function updateTeamLeaderboard(teamId: string, month: string): Prom
       entries,
       entries_count: entries.length,
       score_history: scoreHistory,
-      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      updated_at: FieldValue.serverTimestamp(),
     }),
   )
   if (writeErr) console.error(`updateTeamLeaderboard write error:`, writeErr)
@@ -73,10 +74,10 @@ export async function incrementLeaderboardCounters(leaderId: string | null, top5
   if (!top5Ids || top5Ids.length === 0) return
   const db = admin.firestore()
   for (const contactId of top5Ids) {
-    const updates: Record<string, admin.firestore.FieldValue> = {
-      times_top5: admin.firestore.FieldValue.increment(1),
+    const updates: Record<string, FieldValue> = {
+      times_top5: FieldValue.increment(1),
     }
-    if (contactId === leaderId) updates.times_leader = admin.firestore.FieldValue.increment(1)
+    if (contactId === leaderId) updates.times_leader = FieldValue.increment(1)
     const [err] = await to(db.collection(CONTACTS_COLLECTION).doc(contactId).update(updates))
     if (err) console.error(`incrementLeaderboardCounters error for ${contactId}:`, err)
   }
@@ -92,7 +93,7 @@ export async function clearTeamLeaderboard(teamId: string, month: string): Promi
       entries: [],
       entries_count: 0,
       score_history: {},
-      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      updated_at: FieldValue.serverTimestamp(),
     }),
   )
   if (writeErr) console.error(`clearTeamLeaderboard write error:`, writeErr)

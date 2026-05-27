@@ -1,9 +1,9 @@
 /* eslint-disable no-console */
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import { getTeam } from '../utils/teams'
 import { sendEmail } from '../utils/email'
 import { generateSecureToken } from '../utils/crypto'
@@ -16,7 +16,6 @@ import {
   buildCoachingCancellationEmail,
 } from './templates'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 const VALID_LANGS: Lang[] = ['en', 'de', 'fr', 'it']
@@ -68,8 +67,8 @@ interface AvailabilityDoc {
   recurrence: {
     daysOfWeek: number[]
     time: string
-    startDate: admin.firestore.Timestamp
-    endDate?: admin.firestore.Timestamp | null
+    startDate: Timestamp
+    endDate?: Timestamp | null
   }
 }
 
@@ -118,7 +117,7 @@ async function generateSlotsForTemplate(
   let skipped = 0
 
   for (const occ of occurrences) {
-    const startTs = admin.firestore.Timestamp.fromDate(occ.start)
+    const startTs = Timestamp.fromDate(occ.start)
     const existing = await db.collection('coach_slots')
       .where('templateId', '==', templateId)
       .where('start', '==', startTs)
@@ -135,14 +134,14 @@ async function generateSlotsForTemplate(
       title: template.title,
       description: template.description ?? null,
       start: startTs,
-      end: admin.firestore.Timestamp.fromDate(occ.end),
+      end: Timestamp.fromDate(occ.end),
       duration_minutes: template.duration_minutes,
       max_participants: template.max_participants,
       bookings_count: 0,
       location: template.location ?? null,
       onlineUrl: template.onlineUrl ?? null,
       status: 'open',
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      created_at: FieldValue.serverTimestamp(),
       cancelled_at: null,
     })
     created++
@@ -264,7 +263,7 @@ export const bookCoachSlot = onCall(async (request) => {
   if (slot.status === 'cancelled') throw new HttpsError('failed-precondition', 'This slot has been cancelled')
   if (slot.status === 'full') throw new HttpsError('failed-precondition', 'This slot is fully booked')
 
-  const now = admin.firestore.Timestamp.now()
+  const now = Timestamp.now()
   if (slot.start.toMillis() < now.toMillis()) {
     throw new HttpsError('failed-precondition', 'Cannot book slots in the past')
   }
@@ -306,7 +305,7 @@ export const bookCoachSlot = onCall(async (request) => {
       notes: sanitized.notes,
       cancel_token: cancelToken,
       status: 'confirmed',
-      booked_at: admin.firestore.FieldValue.serverTimestamp(),
+      booked_at: FieldValue.serverTimestamp(),
       cancelled_at: null,
     })
 
@@ -428,7 +427,7 @@ export const cancelCoachBooking = onCall(async (request) => {
   // Cancel the booking
   await bookingDoc.ref.update({
     status: 'cancelled',
-    cancelled_at: admin.firestore.FieldValue.serverTimestamp(),
+    cancelled_at: FieldValue.serverTimestamp(),
   })
   // trackCoachBookings trigger will update the slot's bookings_count and status
 

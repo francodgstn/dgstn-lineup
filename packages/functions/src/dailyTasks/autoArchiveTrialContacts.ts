@@ -1,11 +1,12 @@
 import * as admin from 'firebase-admin'
+import { Timestamp } from 'firebase-admin/firestore'
 import { CONTACTS_COLLECTION, TEAMS_COLLECTION } from '@lineup/shared'
 
 const BATCH_SIZE = 500
 
 export async function autoArchiveTrialContacts(): Promise<{ processed: number; archived: number; errors: number }> {
   const db = admin.firestore()
-  const now = admin.firestore.Timestamp.now()
+  const now = Timestamp.now()
   const results = { processed: 0, archived: 0, errors: 0 }
 
   const teamsSnap = await db.collection(TEAMS_COLLECTION).get()
@@ -21,7 +22,7 @@ export async function autoArchiveTrialContacts(): Promise<{ processed: number; a
     const teamId = teamDoc.id
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - days)
-    const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff)
+    const cutoffTs = Timestamp.fromDate(cutoff)
 
     console.log(`autoArchiveTrialContacts: processing team ${teamId}, threshold ${days} days`) // eslint-disable-line no-console
 

@@ -1,8 +1,6 @@
 // Keeps activities/{activityId}/public_profile/{activityId} in sync
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
-import { setGlobalOptions } from 'firebase-functions/v2'
 
-setGlobalOptions({ region: 'europe-west6' })
 
 export const syncActivityPublicProfile = onDocumentWritten('activities/{activityId}', async (event) => {
   const { activityId } = event.params

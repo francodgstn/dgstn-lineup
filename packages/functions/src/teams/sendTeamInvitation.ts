@@ -1,6 +1,7 @@
 // Port from hmd-lineup/functions/src/sendTeamInvitation/index.js
 // TODO: copy email template HTML from hmd-lineup and update branding to "Lineup"
 import * as admin from 'firebase-admin'
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { regionalFunctions } from '../utils/functions'
 import { isTeamMember, hasTeamRole, getTeam } from '../utils/teams'
@@ -23,7 +24,7 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
     if (!team) throw new (await import('firebase-functions')).https.HttpsError('not-found', 'Team not found')
 
     const token = crypto.randomBytes(32).toString('hex')
-    const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
+    const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
 
     const invRef = await admin.firestore().collection('teams').doc(teamId).collection('team_invitations').add({
       teamId,
@@ -31,7 +32,7 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
       role,
       token,
       invitedBy: userId,
-      created: admin.firestore.FieldValue.serverTimestamp(),
+      created: FieldValue.serverTimestamp(),
       expires_at: expiresAt,
     })
 
