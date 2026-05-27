@@ -77,7 +77,7 @@ interface DayCellProps {
 function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) {
   const hasGroup    = sessions.some((s) => s.activityType !== 'coaching')
   const hasCoaching = sessions.some((s) => s.activityType === 'coaching')
-  const dotColor    = isSelected ? 'rgba(255,255,255,0.8)' : 'hsl(var(--primary))'
+  const dotColor    = isSelected ? 'rgba(255,255,255,0.8)' : 'var(--primary)'
 
   return (
     <button
