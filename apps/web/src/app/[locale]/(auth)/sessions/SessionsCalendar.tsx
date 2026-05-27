@@ -93,9 +93,11 @@ function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) 
     >
       <span className="text-sm leading-none">{day.getDate()}</span>
       {(hasGroup || hasCoaching) && (
-        <div className="flex gap-[3px] items-center h-[6px]">
-          {hasGroup    && <div className="w-[5px] h-[5px] rounded-full"    style={{ backgroundColor: dotColor }} />}
-          {hasCoaching && <div className="w-[5px] h-[5px] rounded-[1.5px]" style={{ backgroundColor: dotColor }} />}
+        <div className="flex gap-1 items-center h-2">
+          {/* filled circle — group class */}
+          {hasGroup    && <div className="w-2 h-2 rounded-full"    style={{ backgroundColor: dotColor }} />}
+          {/* outline circle — coaching */}
+          {hasCoaching && <div className="w-2 h-2 rounded-full border-[1.5px]" style={{ borderColor: dotColor }} />}
         </div>
       )}
     </button>
