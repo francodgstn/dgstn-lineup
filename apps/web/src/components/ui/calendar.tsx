@@ -11,44 +11,31 @@ import {
 
 import { cn } from "@/lib/utils"
 import { Button, buttonVariants } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react"
 
-// ─── custom dropdown — replaces the native <select> so it uses the app font ──
+// ─── custom dropdown — native <select> avoids portal conflicts inside Popover ─
 
 function CalendarDropdown({ options, value, onChange, "aria-label": ariaLabel }: DropdownProps) {
   return (
-    <Select
-      value={value !== undefined ? String(value) : undefined}
-      onValueChange={(newVal: unknown) => {
-        if (onChange) {
-          onChange({
-            target: { value: String(newVal) } as HTMLSelectElement,
-          } as React.ChangeEvent<HTMLSelectElement>)
-        }
-      }}
-    >
-      <SelectTrigger
-        size="sm"
+    <div className="relative">
+      <select
+        value={value !== undefined ? String(value) : undefined}
+        onChange={onChange}
         aria-label={ariaLabel}
-        className="h-7 border-none bg-transparent px-1.5 py-0 shadow-none font-medium text-sm gap-0.5 hover:bg-muted focus-visible:ring-0 focus-visible:border-transparent"
+        className={cn(
+          "h-7 appearance-none cursor-pointer rounded-md bg-transparent pr-5 pl-2 py-0",
+          "text-sm font-medium text-foreground outline-none",
+          "hover:bg-muted focus:outline-none focus:bg-muted",
+        )}
       >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent align="center">
         {options?.map((opt) => (
-          <SelectItem key={opt.value} value={String(opt.value)} disabled={opt.disabled}>
+          <option key={opt.value} value={opt.value} disabled={opt.disabled}>
             {opt.label}
-          </SelectItem>
+          </option>
         ))}
-      </SelectContent>
-    </Select>
+      </select>
+      <ChevronDownIcon className="pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+    </div>
   )
 }
 

@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { format, setHours, setMinutes } from 'date-fns'
-import { CalendarIcon, Clock } from 'lucide-react'
+import { CalendarIcon, Clock, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -28,11 +28,12 @@ function snapMinute(raw: number): string {
 }
 
 const nativeSelectCls =
-  'h-8 w-[3.2rem] rounded-md border border-input bg-background px-1 text-center text-sm text-foreground ' +
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring ' +
+  'h-8 w-16 appearance-none rounded-md border border-input bg-background pl-2 pr-6 ' +
+  'text-sm text-foreground text-center ' +
+  'focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring ' +
   'cursor-pointer transition-colors hover:bg-accent/50'
 
-/** Two compact native selects for hour + minute — safe to nest inside any Popover */
+/** Two compact native selects for hour + minute — safe to nest inside any Popover (no portal) */
 function TimeSelects({
   hour,
   minute,
@@ -46,23 +47,29 @@ function TimeSelects({
 }) {
   return (
     <div className="flex items-center gap-1">
-      <select
-        value={hour}
-        onChange={(e) => onHourChange(e.target.value)}
-        className={nativeSelectCls}
-        aria-label="Hour"
-      >
-        {HOUR_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
-      </select>
+      <div className="relative">
+        <select
+          value={hour}
+          onChange={(e) => onHourChange(e.target.value)}
+          className={nativeSelectCls}
+          aria-label="Hour"
+        >
+          {HOUR_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      </div>
       <span className="text-sm font-semibold text-muted-foreground select-none">:</span>
-      <select
-        value={minute}
-        onChange={(e) => onMinuteChange(e.target.value)}
-        className={nativeSelectCls}
-        aria-label="Minute"
-      >
-        {MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
-      </select>
+      <div className="relative">
+        <select
+          value={minute}
+          onChange={(e) => onMinuteChange(e.target.value)}
+          className={nativeSelectCls}
+          aria-label="Minute"
+        >
+          {MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      </div>
     </div>
   )
 }
