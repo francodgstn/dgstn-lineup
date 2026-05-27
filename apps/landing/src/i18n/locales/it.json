@@ -33,49 +33,22 @@
     }
   },
   "plans": {
-    "title": "Prezzi semplici e trasparenti",
-    "subtitle": "Inizia gratis, passa al piano superiore quando sei pronto. Nessuna tariffa nascosta.",
+    "title": "Piani per ogni fase",
+    "subtitle": "I dettagli sui prezzi arriveranno presto. Iscriviti all'accesso anticipato per essere tra i primi a saperlo.",
+    "comingSoon": "Prezzi in arrivo",
+    "earlyAccessCta": "Accesso anticipato",
+    "earlyAccessNote": "Gratuito durante l'accesso anticipato. Nessuna carta di credito richiesta.",
     "coach": {
       "name": "Coach",
-      "description": "Per istruttori singoli e coach privati che gestiscono il proprio calendario.",
-      "price": "Prossimamente",
-      "cta": "Ricevi notifica",
-      "features": [
-        "Sessioni illimitate",
-        "Fino a 50 contatti",
-        "Vista calendario",
-        "Link di prenotazione",
-        "Notifiche email"
-      ]
+      "audience": "Per istruttori singoli e coach privati."
     },
     "club": {
       "name": "Club",
-      "badge": "Più popolare",
-      "description": "Per palestre e club con più coach e corsi.",
-      "price": "Prossimamente",
-      "cta": "Ricevi notifica",
-      "features": [
-        "Tutto nel piano Coach",
-        "Contatti illimitati",
-        "Più coach",
-        "App mobile per studenti (iOS & Android)",
-        "Monitoraggio presenze",
-        "Notifiche push"
-      ]
+      "audience": "Per palestre e club con più coach e corsi."
     },
     "org": {
       "name": "Organizzazione",
-      "description": "Per club multi-sede, federazioni e franchising.",
-      "price": "Prossimamente",
-      "cta": "Contattaci",
-      "features": [
-        "Tutto nel piano Club",
-        "Più sedi",
-        "Gestione gerarchica",
-        "Reportistica avanzata",
-        "Supporto prioritario",
-        "Branding personalizzato"
-      ]
+      "audience": "Per club multi-sede, federazioni e franchising."
     }
   },
   "cta": {

@@ -33,49 +33,22 @@
     }
   },
   "plans": {
-    "title": "Simple, transparent pricing",
-    "subtitle": "Start free, upgrade when you're ready. No hidden fees.",
+    "title": "Plans for every stage",
+    "subtitle": "Pricing details coming soon. Join early access and be the first to know.",
+    "comingSoon": "Pricing coming soon",
+    "earlyAccessCta": "Join early access",
+    "earlyAccessNote": "Free during early access. No credit card required.",
     "coach": {
       "name": "Coach",
-      "description": "For solo instructors and private coaches managing their own schedule.",
-      "price": "Coming soon",
-      "cta": "Get notified",
-      "features": [
-        "Unlimited sessions",
-        "Up to 50 contacts",
-        "Calendar view",
-        "Booking links",
-        "Email notifications"
-      ]
+      "audience": "For solo instructors and private coaches."
     },
     "club": {
       "name": "Club",
-      "badge": "Most popular",
-      "description": "For gyms and clubs with multiple coaches and classes.",
-      "price": "Coming soon",
-      "cta": "Get notified",
-      "features": [
-        "Everything in Coach",
-        "Unlimited contacts",
-        "Multiple coaches",
-        "Student mobile app (iOS & Android)",
-        "Attendance tracking",
-        "Push notifications"
-      ]
+      "audience": "For gyms and clubs with multiple coaches and classes."
     },
     "org": {
       "name": "Organisation",
-      "description": "For multi-location clubs, federations, and franchises.",
-      "price": "Coming soon",
-      "cta": "Contact us",
-      "features": [
-        "Everything in Club",
-        "Multiple locations",
-        "Hierarchy management",
-        "Advanced reporting",
-        "Priority support",
-        "Custom branding"
-      ]
+      "audience": "For multi-location clubs, federations, and franchises."
     }
   },
   "cta": {

@@ -33,49 +33,22 @@
     }
   },
   "plans": {
-    "title": "Einfache, transparente Preise",
-    "subtitle": "Kostenlos starten, upgraden wenn du bereit bist. Keine versteckten Gebühren.",
+    "title": "Pläne für jede Grösse",
+    "subtitle": "Preisdetails folgen bald. Melde dich für den frühen Zugang an und erfahre es als Erster.",
+    "comingSoon": "Preise folgen bald",
+    "earlyAccessCta": "Frühen Zugang sichern",
+    "earlyAccessNote": "Kostenlos während des Early Access. Keine Kreditkarte erforderlich.",
     "coach": {
       "name": "Coach",
-      "description": "Für Einzeltrainer und Privatcoaches, die ihren eigenen Stundenplan verwalten.",
-      "price": "Demnächst",
-      "cta": "Benachrichtigung erhalten",
-      "features": [
-        "Unbegrenzte Lektionen",
-        "Bis zu 50 Kontakte",
-        "Kalenderansicht",
-        "Buchungslinks",
-        "E-Mail-Benachrichtigungen"
-      ]
+      "audience": "Für Einzeltrainer und Privatcoaches."
     },
     "club": {
       "name": "Verein",
-      "badge": "Beliebteste Wahl",
-      "description": "Für Fitnessstudios und Vereine mit mehreren Trainern und Klassen.",
-      "price": "Demnächst",
-      "cta": "Benachrichtigung erhalten",
-      "features": [
-        "Alles im Coach-Plan",
-        "Unbegrenzte Kontakte",
-        "Mehrere Trainer",
-        "Schüler-App (iOS & Android)",
-        "Anwesenheitsverfolgung",
-        "Push-Benachrichtigungen"
-      ]
+      "audience": "Für Fitnessstudios und Vereine mit mehreren Trainern und Klassen."
     },
     "org": {
       "name": "Organisation",
-      "description": "Für Mehrstandort-Vereine, Verbände und Franchises.",
-      "price": "Demnächst",
-      "cta": "Kontakt aufnehmen",
-      "features": [
-        "Alles im Vereinsplan",
-        "Mehrere Standorte",
-        "Hierarchieverwaltung",
-        "Erweitertes Reporting",
-        "Prioritätssupport",
-        "Individuelles Branding"
-      ]
+      "audience": "Für Mehrstandort-Vereine, Verbände und Franchises."
     }
   },
   "cta": {

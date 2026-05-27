@@ -33,49 +33,22 @@
     }
   },
   "plans": {
-    "title": "Des tarifs simples et transparents",
-    "subtitle": "Commencez gratuitement, passez à la formule supérieure quand vous êtes prêt. Sans frais cachés.",
+    "title": "Des formules pour chaque étape",
+    "subtitle": "Les tarifs arrivent bientôt. Rejoignez l'accès anticipé pour être parmi les premiers informés.",
+    "comingSoon": "Tarifs à venir",
+    "earlyAccessCta": "Rejoindre l'accès anticipé",
+    "earlyAccessNote": "Gratuit pendant l'accès anticipé. Aucune carte de crédit requise.",
     "coach": {
       "name": "Coach",
-      "description": "Pour les instructeurs solos et coaches privés gérant leur propre planning.",
-      "price": "Bientôt disponible",
-      "cta": "Être notifié",
-      "features": [
-        "Sessions illimitées",
-        "Jusqu'à 50 contacts",
-        "Vue calendrier",
-        "Liens de réservation",
-        "Notifications par e-mail"
-      ]
+      "audience": "Pour les instructeurs solos et coaches privés."
     },
     "club": {
       "name": "Club",
-      "badge": "Le plus populaire",
-      "description": "Pour les salles de sport et clubs avec plusieurs coaches et cours.",
-      "price": "Bientôt disponible",
-      "cta": "Être notifié",
-      "features": [
-        "Tout dans Coach",
-        "Contacts illimités",
-        "Plusieurs coaches",
-        "Application mobile étudiante (iOS & Android)",
-        "Suivi des présences",
-        "Notifications push"
-      ]
+      "audience": "Pour les salles de sport et clubs avec plusieurs coaches et cours."
     },
     "org": {
       "name": "Organisation",
-      "description": "Pour les clubs multi-sites, fédérations et franchises.",
-      "price": "Bientôt disponible",
-      "cta": "Nous contacter",
-      "features": [
-        "Tout dans Club",
-        "Plusieurs sites",
-        "Gestion hiérarchique",
-        "Rapports avancés",
-        "Support prioritaire",
-        "Branding personnalisé"
-      ]
+      "audience": "Pour les clubs multi-sites, fédérations et franchises."
     }
   },
   "cta": {
