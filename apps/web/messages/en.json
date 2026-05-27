@@ -414,7 +414,7 @@
     "fieldType": "Type",
     "type_group_class": "Group class",
     "type_coaching": "Coaching",
-    "typeChangeWarning": "Existing sessions linked to this activity won't update automatically — re-save each session to apply the new type.",
+    "typeChangeWarning": "Upcoming sessions will be updated automatically. Past sessions are kept as-is to preserve history.",
     "fieldFreeTrial": "Available as free trial booking",
     "level_all": "All levels",
     "level_beginners": "Beginners",

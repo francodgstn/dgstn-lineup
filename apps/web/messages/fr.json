@@ -414,7 +414,7 @@
     "fieldType": "Type",
     "type_group_class": "Cours collectif",
     "type_coaching": "Coaching",
-    "typeChangeWarning": "Les séances existantes liées à cette activité ne seront pas mises à jour automatiquement — re-enregistrez chaque séance pour appliquer le nouveau type.",
+    "typeChangeWarning": "Les séances à venir seront mises à jour automatiquement. Les séances passées sont conservées telles quelles pour préserver l'historique.",
     "fieldFreeTrial": "Disponible comme cours d'essai",
     "level_all": "Tous niveaux",
     "level_beginners": "Débutants",

@@ -414,7 +414,7 @@
     "fieldType": "Tipo",
     "type_group_class": "Lezione collettiva",
     "type_coaching": "Coaching",
-    "typeChangeWarning": "Le sessioni esistenti collegate a questa attività non verranno aggiornate automaticamente — ri-salva ogni sessione per applicare il nuovo tipo.",
+    "typeChangeWarning": "Le sessioni future verranno aggiornate automaticamente. Le sessioni passate rimangono invariate per preservare la cronologia.",
     "fieldFreeTrial": "Disponibile come prenotazione di prova",
     "level_all": "Tutti i livelli",
     "level_beginners": "Principianti",

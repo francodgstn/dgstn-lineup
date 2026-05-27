@@ -28,6 +28,7 @@ export { indexUser } from './sync/indexUser'
 export { syncSubscriptionTypesToPublicProfile } from './sync/syncSubscriptionTypesToPublicProfile'
 export { onContactSubscriptionChange } from './sync/onContactSubscriptionChange'
 export { onSessionUpdate } from './sync/onSessionUpdate'
+export { onActivityTypeChange } from './sync/onActivityTypeChange'
 
 // Booking
 export { bookSession, sendBookingVerificationCode, verifyBookingCode, cancelBooking, getBookingDetails, rebookSession } from './booking'

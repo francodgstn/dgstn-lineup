@@ -414,7 +414,7 @@
     "fieldType": "Typ",
     "type_group_class": "Gruppentraining",
     "type_coaching": "Coaching",
-    "typeChangeWarning": "Bestehende Einheiten dieser Aktivität werden nicht automatisch aktualisiert — jede Einheit muss erneut gespeichert werden.",
+    "typeChangeWarning": "Bevorstehende Einheiten werden automatisch aktualisiert. Vergangene Einheiten bleiben unverändert, um die Historie zu erhalten.",
     "fieldFreeTrial": "Als Schnupperstunde buchbar",
     "level_all": "Alle Niveaus",
     "level_beginners": "Anfänger",
