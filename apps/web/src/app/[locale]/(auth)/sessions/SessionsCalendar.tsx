@@ -97,7 +97,7 @@ function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) 
           <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
           {/* back dot — offset behind front, lower opacity → "stacked" look */}
           {count > 1 && (
-            <div className="w-1.5 h-1.5 rounded-full shrink-0 ml-0.5" style={{ backgroundColor: dotColor, opacity: 0.4 }} />
+            <div className="w-1.5 h-1.5 rounded-full shrink-0 -ml-0.5" style={{ backgroundColor: dotColor, opacity: 0.4 }} />
           )}
         </div>
       )}
