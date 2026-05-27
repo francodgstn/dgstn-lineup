@@ -17,6 +17,7 @@
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
     "emulators": "firebase emulators:start --only auth,firestore",
+    "emulators:full": "pnpm --filter @lineup/functions run build && firebase emulators:start --only auth,firestore,functions",
     "emulators:all": "firebase emulators:start",
     "seed": "tsx scripts/seed-emulator.ts",
     "dev:local": "node scripts/dev-local.mjs",
