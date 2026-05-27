@@ -1006,7 +1006,7 @@ export const FirestoreService = {
     }
   },
 
-  // ── Coach slots ──────────────────────────────────────────────────────────────
+  // ── Coach slots (now backed by sessions with activityType === 'coaching') ────
 
   async getUpcomingCoachSlots(
     teamId: string,
@@ -1015,48 +1015,53 @@ export const FirestoreService = {
     try {
       const now = Timestamp.now();
       const slotsQuery = query(
-        collection(db, 'coach_slots'),
+        collection(db, 'sessions'),
         where('teamId', '==', teamId),
+        where('activityType', '==', 'coaching'),
         where('start', '>=', now),
         orderBy('start', 'asc'),
         limit(20)
       );
 
       const slotsSnap = await getDocs(slotsQuery);
-      const slots = slotsSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-        start: d.data().start?.toDate?.() || new Date(),
-        end: d.data().end?.toDate?.() || new Date(),
-      })) as CoachSlot[];
+      const slots = slotsSnap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          teamId: data.teamId,
+          templateId: data.templateId || null,
+          coachId: data.coachId || '',
+          coachName: data.coachName || '',
+          activityName: data.activityName || '',
+          start: data.start?.toDate?.() || new Date(),
+          end: data.end?.toDate?.() || new Date(),
+          max_participants: data.max_participants || 1,
+          bookings_count: data.bookings_count || 0,
+          location: data.location || null,
+          status: data.status || 'open',
+        } as CoachSlot;
+      });
 
-      // For each slot check if the contact has a pending booking
+      // For each slot check if the contact has a confirmed/pending booking
       const results: CoachSlotWithStatus[] = await Promise.all(
         slots.map(async (slot) => {
           let bookingStatus: CoachSlotWithStatus['bookingStatus'] = 'available';
           if (slot.status === 'cancelled') {
             bookingStatus = 'cancelled';
-          } else if (slot.status === 'full') {
-            bookingStatus = 'full';
-            // But check if the contact themselves booked it
-            try {
-              const bookingRef = doc(db, 'coach_slots', slot.id, 'bookings', contactId);
-              const bookingSnap = await getDoc(bookingRef);
-              if (bookingSnap.exists() && bookingSnap.data()?.status === 'pending') {
-                bookingStatus = 'booked';
-              }
-            } catch {
-              // leave as full
-            }
           } else {
             try {
-              const bookingRef = doc(db, 'coach_slots', slot.id, 'bookings', contactId);
+              const bookingRef = doc(db, 'sessions', slot.id, 'bookings', contactId);
               const bookingSnap = await getDoc(bookingRef);
-              if (bookingSnap.exists() && bookingSnap.data()?.status === 'pending') {
-                bookingStatus = 'booked';
+              if (bookingSnap.exists()) {
+                const bStatus = bookingSnap.data()?.status;
+                if (bStatus === 'confirmed' || bStatus === 'pending' || !bStatus) {
+                  bookingStatus = 'booked';
+                }
+              } else if (slot.status === 'full') {
+                bookingStatus = 'full';
               }
             } catch {
-              // leave as available
+              if (slot.status === 'full') bookingStatus = 'full';
             }
           }
           return { ...slot, bookingStatus };
@@ -1070,49 +1075,25 @@ export const FirestoreService = {
     }
   },
 
+  // Book a coaching session — delegates to the unified bookSession logic
   async bookCoachSlot(params: {
     teamId: string;
     slotId: string;
     contactId: string;
   }): Promise<{ success: boolean }> {
-    try {
-      const tokenResult = await this.generateAuthToken(params.contactId, 'booking');
-      if (!tokenResult?.token) {
-        throw new Error('Failed to generate booking auth token');
-      }
-      const bookCoachSlotFn = httpsCallable(getFunctions(), 'bookCoachSlot');
-      const result = await bookCoachSlotFn({
-        teamId: params.teamId,
-        slotId: params.slotId,
-        bookingAuthToken: tokenResult.token,
-      });
-      return result.data as any;
-    } catch (error) {
-      console.error('Error booking coach slot:', error);
-      throw error;
-    }
+    return this.bookSession({
+      teamId: params.teamId,
+      sessionId: params.slotId,
+      contactId: params.contactId,
+      contactDetails: { firstname: '', lastname: '', email: '' }, // contact already known; bookSession handles auth path
+    });
   },
 
+  // Cancel a coaching booking — delegates to the unified cancelSession logic
   async cancelCoachBooking(params: {
     slotId: string;
     contactId: string;
   }): Promise<{ success: boolean }> {
-    try {
-      const bookingRef = doc(db, 'coach_slots', params.slotId, 'bookings', params.contactId);
-      const bookingSnap = await getDoc(bookingRef);
-      if (!bookingSnap.exists()) {
-        throw new Error('Booking not found');
-      }
-      const bookingToken = bookingSnap.data()?.booking_token;
-      if (!bookingToken) {
-        throw new Error('Booking token not found');
-      }
-      const cancelCoachBookingFn = httpsCallable(getFunctions(), 'cancelCoachBooking');
-      const result = await cancelCoachBookingFn({ token: bookingToken });
-      return result.data as any;
-    } catch (error) {
-      console.error('Error cancelling coach booking:', error);
-      throw error;
-    }
+    return this.cancelSession({ sessionId: params.slotId, contactId: params.contactId });
   },
 };

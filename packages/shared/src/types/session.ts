@@ -5,25 +5,46 @@ export interface Session {
   teamId: string
   activityId?: string
   activityName?: string
+  /** Denormalised from the linked Activity.type — 'group_class' | 'coaching'. Default group_class. */
+  activityType?: string
   start: Timestamp
   end: Timestamp
+  duration_minutes?: number
   location?: string
+  onlineUrl?: string
   tags?: string[]
   participants_count?: number
   allowBooking?: boolean
   notes?: string
   created_at?: Timestamp
   createdBy?: string
+  // ── Coaching-specific fields (only populated when activityType === 'coaching') ──
+  /** Back-link to the coach_availability template that generated this session. */
+  templateId?: string
+  /** UID of the assigned coach. */
+  coachId?: string
+  /** Display name of the assigned coach. */
+  coachName?: string
+  /** Hard booking cap for coaching sessions. */
+  max_participants?: number
+  /** Active booking count — maintained by trigger. */
+  bookings_count?: number
+  /** Free trial flag — if false, members only (type !== 'trial'). */
+  isFreeTrial?: boolean
+  /** Booking status for coaching sessions; 'open' | 'full' | 'cancelled'. */
+  status?: 'open' | 'full' | 'cancelled'
 }
 
 export interface SessionPublicProfile {
   teamId: string
   activityId?: string
   activityName?: string
+  activityType?: string
   start: Timestamp
   end: Timestamp
   allowBooking: boolean
   location?: string
+  onlineUrl?: string
   instructorName?: string
   locationAddress?: string
   locationMapsUrl?: string
@@ -32,6 +53,14 @@ export interface SessionPublicProfile {
   activityImage?: string | null
   activityLevel?: string
   activityIsFreeTrial?: boolean
+  // Coaching-specific public fields
+  coachId?: string
+  coachName?: string
+  max_participants?: number
+  bookings_count?: number
+  isFreeTrial?: boolean
+  templateId?: string
+  status?: 'open' | 'full' | 'cancelled'
 }
 
 export interface Participant {

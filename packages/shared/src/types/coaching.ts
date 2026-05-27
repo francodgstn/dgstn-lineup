@@ -25,25 +25,8 @@ export interface CoachAvailability {
   createdBy: string
 }
 
-export interface CoachSlot {
-  teamId: string
-  templateId: string
-  coachId: string
-  coachName: string
-  title: string
-  description?: string
-  isFreeTrial?: boolean
-  start: Timestamp
-  end: Timestamp
-  duration_minutes: number
-  max_participants: number
-  bookings_count: number
-  location?: string
-  onlineUrl?: string
-  status: 'open' | 'full' | 'cancelled'
-  created_at?: Timestamp
-  cancelled_at?: Timestamp | null
-}
+// CoachSlot has been merged into Session (packages/shared/src/types/session.ts).
+// Use Session with activityType === 'coaching' for coaching slots going forward.
 
 export interface CoachBooking {
   slotId: string

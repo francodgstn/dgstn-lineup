@@ -106,13 +106,14 @@ export interface TeamPublicProfile {
   coaches?: TeamCoach[];
 }
 
+// CoachSlot now maps to a Session with activityType === 'coaching'
 export interface CoachSlot {
   id: string;
   teamId: string;
   templateId: string | null;
   coachId: string;
   coachName: string;
-  title: string;
+  activityName: string;
   description?: string;
   start: Date;
   end: Date;

@@ -23,12 +23,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   COACH_AVAILABILITY_COLLECTION,
-  COACH_SLOTS_COLLECTION,
-  COACH_SLOT_BOOKINGS_SUBCOLLECTION,
+  SESSIONS_COLLECTION,
+  PARTICIPANTS_SUBCOLLECTION,
   TEAMS_COLLECTION,
   TEAM_MEMBERS_SUBCOLLECTION,
 } from '@lineup/shared'
-import type { CoachAvailability, CoachSlot, CoachBooking } from '@lineup/shared'
+import type { CoachAvailability, CoachBooking, Session } from '@lineup/shared'
 import { CalendarClock, Pause, Play, Pencil, Plus, MapPin, Video, Users, Dumbbell } from 'lucide-react'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -56,19 +56,20 @@ function formatDaysTime(rec: CoachAvailability['recurrence']): string {
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
 function useUpcomingSlots(teamId: string | null) {
-  return useQuery<(CoachSlot & { id: string })[]>({
+  return useQuery<(Session & { id: string })[]>({
     queryKey: ['coachSlots', 'upcoming', teamId],
     enabled: !!teamId,
     queryFn: async () => {
       const q = query(
-        collection(db, COACH_SLOTS_COLLECTION),
+        collection(db, SESSIONS_COLLECTION),
         where('teamId', '==', teamId),
+        where('activityType', '==', 'coaching'),
         where('start', '>=', Timestamp.now()),
         orderBy('start', 'asc'),
         limit(60),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as CoachSlot & { id: string })
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Session & { id: string })
     },
   })
 }
@@ -335,7 +336,7 @@ function TemplateDialog({
 // ─── slot detail dialog ───────────────────────────────────────────────────────
 
 function SlotDetailDialog({ slot, onClose, onCancelled }: {
-  slot: (CoachSlot & { id: string }) | null
+  slot: (Session & { id: string }) | null
   onClose: () => void
   onCancelled: () => void
 }) {
@@ -349,7 +350,7 @@ function SlotDetailDialog({ slot, onClose, onCancelled }: {
     if (!slot) return
     setLoadingBookings(true)
     try {
-      const snap = await getDocs(collection(db, COACH_SLOTS_COLLECTION, slot.id, COACH_SLOT_BOOKINGS_SUBCOLLECTION))
+      const snap = await getDocs(collection(db, SESSIONS_COLLECTION, slot.id, 'bookings'))
       setBookings(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() }) as CoachBooking & { id: string })
@@ -362,7 +363,7 @@ function SlotDetailDialog({ slot, onClose, onCancelled }: {
     if (!slot) return
     setCancelling(true)
     try {
-      await updateDoc(doc(db, COACH_SLOTS_COLLECTION, slot.id), { status: 'cancelled' })
+      await updateDoc(doc(db, SESSIONS_COLLECTION, slot.id), { status: 'cancelled', allowBooking: false })
       onCancelled()
     } finally { setCancelling(false); setConfirmCancel(false) }
   }
@@ -374,14 +375,14 @@ function SlotDetailDialog({ slot, onClose, onCancelled }: {
           {slot && (<>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 flex-wrap">
-                {slot.title}
-                <StatusBadge status={slot.status} />
+                {slot.activityName}
+                <StatusBadge status={slot.status ?? 'open'} />
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-1 text-sm">
               <p className="text-muted-foreground">{formatSlotDate(slot.start)}</p>
               <p className="font-medium">{formatSlotTime(slot.start)} – {formatSlotTime(slot.end)}</p>
-              <p className="text-muted-foreground">{slot.coachName} · {formatDuration(slot.duration_minutes)}</p>
+              <p className="text-muted-foreground">{slot.coachName} · {formatDuration(slot.duration_minutes ?? 60)}</p>
               {slot.location && <p className="flex items-center gap-1 text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{slot.location}</p>}
               {slot.onlineUrl && <p className="flex items-center gap-1 text-muted-foreground"><Video className="h-3.5 w-3.5" />{t('onlineSession')}</p>}
             </div>
@@ -411,7 +412,7 @@ function SlotDetailDialog({ slot, onClose, onCancelled }: {
               )}
             </div>
 
-            {slot.status !== 'cancelled' && (
+            {(slot.status ?? 'open') !== 'cancelled' && (
               <div className="border-t pt-3">
                 <Button variant="destructive" size="sm" className="w-full"
                   onClick={() => setConfirmCancel(true)}>
@@ -455,7 +456,7 @@ export default function CoachingPage() {
   const membersQ = useTeamMemberOptions(teamId)
 
   const [templateDialog, setTemplateDialog] = useState<{ open: boolean; editing: (CoachAvailability & { id: string }) | null }>({ open: false, editing: null })
-  const [slotDetail, setSlotDetail] = useState<(CoachSlot & { id: string }) | null>(null)
+  const [slotDetail, setSlotDetail] = useState<(Session & { id: string }) | null>(null)
 
   async function toggleTemplateStatus(tmpl: CoachAvailability & { id: string }) {
     await updateDoc(doc(db, COACH_AVAILABILITY_COLLECTION, tmpl.id), {
@@ -511,8 +512,8 @@ export default function CoachingPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm">{slot.title}</p>
-                      <StatusBadge status={slot.status} />
+                      <p className="font-medium text-sm">{slot.activityName}</p>
+                      <StatusBadge status={slot.status ?? 'open'} />
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
                       {formatSlotDate(slot.start)} · {formatSlotTime(slot.start)} – {formatSlotTime(slot.end)}
@@ -521,7 +522,7 @@ export default function CoachingPage() {
                   </div>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 mt-0.5">
                     <Users className="h-3.5 w-3.5" />
-                    {slot.bookings_count}/{slot.max_participants}
+                    {slot.bookings_count ?? 0}/{slot.max_participants ?? 1}
                   </div>
                 </div>
               </button>

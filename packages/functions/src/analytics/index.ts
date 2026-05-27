@@ -64,13 +64,34 @@ export const trackBookings = onDocumentWritten(
     const teamId = (session.teamId || session.teacher) as string | undefined
     if (!teamId) return
 
+    // ── Coaching session: maintain bookings_count and status ─────────────────
+    if (session.activityType === 'coaching') {
+      const [, confirmedSnap] = await to(
+        db.collection('sessions').doc(sessionId)
+          .collection('bookings')
+          .where('status', '==', 'confirmed')
+          .get()
+      )
+      if (confirmedSnap) {
+        const count = confirmedSnap.size
+        const maxParticipants = (session.max_participants as number) || 1
+        const newStatus = session.status === 'cancelled' ? 'cancelled'
+          : count >= maxParticipants ? 'full' : 'open'
+        await to(db.collection('sessions').doc(sessionId).update({
+          bookings_count: count,
+          status: newStatus,
+        }))
+      }
+    }
+
     const contactFullname = `${(bookingData.firstname as string) || ''} ${(bookingData.lastname as string) || ''}`.trim() || event.params.bookingId
     const sessionStart = session.start as Timestamp | undefined
     const sessionDateLabel = sessionStart ? format(sessionStart.toDate(), DATE_FORMAT) : 'unknown date'
+    const isCoaching = session.activityType === 'coaching'
 
     const descMap: Record<string, string> = {
-      booking_created: `${contactFullname} booked a session on ${sessionDateLabel}.`,
-      booking_confirmed: `${contactFullname} confirmed for session on ${sessionDateLabel}.`,
+      booking_created: `${contactFullname} booked a ${isCoaching ? 'coaching session' : 'session'} on ${sessionDateLabel}.`,
+      booking_confirmed: `${contactFullname} confirmed for ${isCoaching ? 'coaching session' : 'session'} on ${sessionDateLabel}.`,
       booking_cancelled: `Booking for ${contactFullname} on ${sessionDateLabel} was cancelled.`,
       booking_rebooked: `${contactFullname} rebooked from session on ${sessionDateLabel}.`,
     }
@@ -83,6 +104,7 @@ export const trackBookings = onDocumentWritten(
         contact_lastname: bookingData.lastname,
         session_date: sessionStart ?? null,
         session_id: sessionId,
+        activity_type: session.activityType || 'group_class',
         from_portal: bookingData.fromPortal === true,
         authenticated_booking: bookingData.authenticated_booking === true,
       },
@@ -108,10 +130,17 @@ export const trackSessions = onDocumentWritten('sessions/{sessionId}', async (ev
   const month = sessionDate ? format(sessionDate.toDate(), 'yyyy-MM') : null
   if (!month) return
 
-  // Upsert a monthly session counter for the team
+  const activityType = ((newData?.activityType || oldData?.activityType) as string | undefined) || 'group_class'
+
+  // Upsert a monthly session counter for the team — total + per-type breakdown
   const counterRef = db.collection('teams').doc(teamId).collection('session_counts').doc(month)
   await to(counterRef.set(
-    { month, sessions_count: FieldValue.increment(increment), updated_at: FieldValue.serverTimestamp() },
+    {
+      month,
+      sessions_count: FieldValue.increment(increment),
+      [`sessions_count_by_type.${activityType}`]: FieldValue.increment(increment),
+      updated_at: FieldValue.serverTimestamp(),
+    },
     { merge: true },
   ))
 })
@@ -367,6 +396,41 @@ export const weeklyReports = onSchedule(
         )
         const sessions_count = sessionsSnap?.size ?? 0
 
+        // Per-type breakdown: group_class vs coaching (and any future types)
+        const sessions_count_by_type: Record<string, number> = {}
+        if (sessionsSnap) {
+          for (const s of sessionsSnap.docs) {
+            const t = (s.data().activityType as string | undefined) || 'group_class'
+            sessions_count_by_type[t] = (sessions_count_by_type[t] ?? 0) + 1
+          }
+        }
+
+        // Bookings in the same window — count by session type
+        const [, bookingsSnap] = await to(
+          db.collectionGroup('bookings')
+            .where('teamId', '==', teamId)
+            .where('joinedAt', '>=', weekStart)
+            .where('joinedAt', '<=', Timestamp.fromDate(now))
+            .where('status', '==', 'confirmed')
+            .get(),
+        )
+        const bookings_count_by_type: Record<string, number> = {}
+        const bookings_count = bookingsSnap?.size ?? 0
+        if (bookingsSnap) {
+          // Resolve activityType per booking via parent session
+          const sessionTypeCache: Record<string, string> = {}
+          for (const b of bookingsSnap.docs) {
+            const sessionRef = b.ref.parent.parent
+            if (!sessionRef) continue
+            if (!sessionTypeCache[sessionRef.id]) {
+              const [, sDoc] = await to(sessionRef.get())
+              sessionTypeCache[sessionRef.id] = (sDoc?.data()?.activityType as string | undefined) || 'group_class'
+            }
+            const t = sessionTypeCache[sessionRef.id]
+            bookings_count_by_type[t] = (bookings_count_by_type[t] ?? 0) + 1
+          }
+        }
+
         await reportRef.set({
           iso_week: weekLabel,
           generated_at: FieldValue.serverTimestamp(),
@@ -376,6 +440,9 @@ export const weeklyReports = onSchedule(
           contacts_count_by_subscription_type,
           contacts_count_by_recurrence,
           sessions_count,
+          sessions_count_by_type,
+          bookings_count,
+          bookings_count_by_type,
           // Start at 0; incremented by trackContacts triggers as events occur during the week
           trial_conversions_count: 0,
           trial_dropouts_count: 0,

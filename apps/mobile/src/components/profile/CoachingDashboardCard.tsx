@@ -81,7 +81,7 @@ export const CoachingDashboardCard: React.FC<Props> = ({ slots, contact, onRefre
             {/* Details */}
             <View style={styles.slotDetails}>
               <Text variant="labelLarge" style={{ color: textColor, fontWeight: '800' }} numberOfLines={1}>
-                {nextSlot.title}
+                {nextSlot.activityName}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
                 <Icon source="clock-outline" size={11} color={subtleText} />
@@ -122,7 +122,7 @@ export const CoachingDashboardCard: React.FC<Props> = ({ slots, contact, onRefre
             </View>
 
             <Text variant="headlineSmall" style={[styles.modalTitle, { color: theme.colors.onSurface }]}>
-              {selectedSlot?.title}
+              {selectedSlot?.activityName}
             </Text>
             {selectedSlot?.coachName ? (
               <View style={styles.coachRow}>

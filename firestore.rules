@@ -502,22 +502,8 @@ service cloud.firestore {
       allow delete: if false; // soft delete only
     }
 
-    // Coach Slots (individual bookable instances generated from templates or created manually)
-    match /coach_slots/{slotId} {
-      // Public read — slots are intentionally public (portal booking page, no auth required)
-      allow get: if true;
-      allow list: if true;
-
-      allow create: if isAuthed() && hasTeamRole(request.resource.data.teamId, 'manager');
-      allow update: if isAuthed() && hasTeamRole(resource.data.teamId, 'manager');
-      allow delete: if false;
-
-      // Bookings subcollection — cloud functions write only; managers can read for admin UI
-      match /bookings/{bookingId} {
-        allow read: if isAuthed() && isTeamMember(get(/databases/$(database)/documents/coach_slots/$(slotId)).data.teamId);
-        allow write: if false; // cloud functions only
-      }
-    }
+    // Coach Slots collection removed — coaching sessions now live in `sessions`
+    // with activityType === 'coaching'. Public access via sessions/{id}/public_profile.
 
     // Session Series (recurring sessions)
     match /session_series/{seriesId} {

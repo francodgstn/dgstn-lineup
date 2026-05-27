@@ -61,7 +61,7 @@ interface ConfirmParams {
   end: Date
   location?: string | null
   onlineUrl?: string | null
-  cancelUrl: string
+  cancelUrl?: string | null
   lang?: Lang
 }
 
@@ -123,7 +123,7 @@ export function buildCoachingConfirmationEmail(params: ConfirmParams) {
   const body = [
     `<p>${greetings[lang]}</p>`,
     ...lines[lang].filter(Boolean).map((l) => `<p>${l}</p>`),
-    `<p><a href="${cancelUrl}">${cancelLabels[lang]}</a></p>`,
+    ...(cancelUrl ? [`<p><a href="${cancelUrl}">${cancelLabels[lang]}</a></p>`] : []),
   ].join('\n')
 
   return buildEmailTemplate({ title: titles[lang], body })

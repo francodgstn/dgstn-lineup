@@ -40,7 +40,7 @@ export const CoachSlotsCard: React.FC<CoachSlotsCardProps> = ({ slots, contact, 
     }
     Alert.alert(
       'Book appointment',
-      `Book "${slot.title}" on ${formatSlotTime(slot.start, slot.end)}?`,
+      `Book "${slot.activityName}" on ${formatSlotTime(slot.start, slot.end)}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -70,7 +70,7 @@ export const CoachSlotsCard: React.FC<CoachSlotsCardProps> = ({ slots, contact, 
     if (!contact?.id) return;
     Alert.alert(
       'Cancel appointment',
-      `Cancel your booking for "${slot.title}"?`,
+      `Cancel your booking for "${slot.activityName}"?`,
       [
         { text: 'Keep it', style: 'cancel' },
         {
@@ -112,7 +112,7 @@ export const CoachSlotsCard: React.FC<CoachSlotsCardProps> = ({ slots, contact, 
             <View key={slot.id} style={styles.slotRow}>
               <View style={styles.slotInfo}>
                 <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
-                  {slot.title}
+                  {slot.activityName}
                 </Text>
                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                   {formatSlotTime(slot.start, slot.end)}

@@ -119,7 +119,7 @@ export const CoachSlotsCarousel: React.FC<Props> = ({ slots, contact, onRefresh,
             {startTime}–{endTime}
           </Text>
           <Text style={{ color: theme.colors.onSurface, fontWeight: '600', fontSize: 11, lineHeight: 14, marginTop: 2 }} numberOfLines={2}>
-            {slot.title}
+            {slot.activityName}
           </Text>
         </View>
         <View style={styles.cardFooter}>
@@ -201,7 +201,7 @@ export const CoachSlotsCarousel: React.FC<Props> = ({ slots, contact, onRefresh,
             </View>
 
             <Text variant="headlineSmall" style={[styles.modalTitle, { color: theme.colors.onSurface }]}>
-              {selectedSlot?.title}
+              {selectedSlot?.activityName}
             </Text>
             {selectedSlot?.coachName ? (
               <View style={styles.coachRow}>

@@ -13,6 +13,11 @@ import {
   buildTeacherNotificationEmail,
   buildVerificationCodeEmail,
 } from './templates'
+import {
+  buildCoachingConfirmationEmail,
+  buildCoachingICalAttachment,
+  buildCoachNotificationEmail,
+} from '../coaching/templates'
 
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
@@ -363,13 +368,24 @@ export const bookSession = onCall(async (request) => {
   }
 
   // Get activity name and isFreeTrial flag
-  let activityName = 'Session'
+  const isCoachingSession = sessionData.activityType === 'coaching'
+  let activityName = (sessionData.activityName as string) || 'Session'
   let sessionIsFreeTrial = true  // default open
-  if (sessionData.activityId) {
+
+  if (isCoachingSession) {
+    // Coaching sessions carry isFreeTrial directly on the session doc
+    sessionIsFreeTrial = sessionData.isFreeTrial !== false
+    // Check capacity
+    const maxParticipants = (sessionData.max_participants as number) || 1
+    const bookingsCount = (sessionData.bookings_count as number) || 0
+    if (sessionData.status === 'full' || bookingsCount >= maxParticipants) {
+      throw new HttpsError('failed-precondition', 'This coaching slot is fully booked.')
+    }
+  } else if (sessionData.activityId) {
     try {
       const actDoc = await admin.firestore().collection('activities').doc(sessionData.activityId).get()
       if (actDoc.exists) {
-        activityName = actDoc.data()!.name || 'Session'
+        activityName = actDoc.data()!.name || activityName
         sessionIsFreeTrial = actDoc.data()!.isFreeTrial !== false
       }
     } catch (_) { /* non-fatal */ }
@@ -378,10 +394,16 @@ export const bookSession = onCall(async (request) => {
   // ── Members-only gate ──────────────────────────────────────────────────────
   if (!sessionIsFreeTrial) {
     if (!authenticatedContact) {
-      throw new HttpsError('permission-denied', 'This session is for registered members only. Please verify your email.')
+      const msg = isCoachingSession
+        ? 'This coaching series is for registered members only. Please verify your email.'
+        : 'This session is for registered members only. Please verify your email.'
+      throw new HttpsError('permission-denied', msg)
     }
     if (authenticatedContact.type === 'trial') {
-      throw new HttpsError('permission-denied', 'This session is for members only. Trial accounts cannot book this class.')
+      const msg = isCoachingSession
+        ? 'This coaching series is for members only. Trial accounts cannot book.'
+        : 'This session is for members only. Trial accounts cannot book this class.'
+      throw new HttpsError('permission-denied', msg)
     }
   }
 
@@ -513,24 +535,108 @@ export const bookSession = onCall(async (request) => {
   const sessionStart: Date = sessionData.start.toDate()
   const sessionEnd: Date = sessionData.end.toDate()
 
-  try {
-    const confirmEmail = buildBookingConfirmationEmail({ firstname: sanitized.firstname, teamName, activityName, sessionStart, sessionEnd, locationName: sessionData.location || null, manageBookingUrl, lang })
-    const subjects: Record<Lang, string> = { en: `Booking Confirmed – ${activityName}`, de: `Buchung bestätigt – ${activityName}`, fr: `Réservation confirmée – ${activityName}`, it: `Prenotazione confermata – ${activityName}` }
-    await sendEmail({ to: sanitized.email, subject: subjects[lang], html: confirmEmail.html, text: confirmEmail.text })
-    console.log(`Confirmation email sent to ${sanitized.email}`)
-  } catch (err) {
-    console.error('Error sending confirmation email:', err)
-  }
+  if (isCoachingSession) {
+    // ── Coaching session: personalised confirmation + .ics + coach notification ─
+    const coachId = sessionData.coachId as string | null
+    const coachName = (sessionData.coachName as string) || 'Your coach'
+    let coachEmail: string | null = null
+    let coachFirstname = 'Coach'
+    if (coachId) {
+      const [, coachDoc] = await to(admin.firestore().collection('users').doc(coachId).get())
+      if (coachDoc?.exists) {
+        coachEmail = coachDoc.get('email') || null
+        coachFirstname = coachDoc.get('firstname') || 'Coach'
+      }
+    }
 
-  // Send notification to owner
-  if (ownerEmail) {
+    const cancelUrl = manageBookingUrl  // reuse manage-booking URL for cancellation
     try {
-      const notifEmail = buildTeacherNotificationEmail({ teamOwnerFirstname: ownerFirstname, contactName: `${sanitized.firstname} ${sanitized.lastname}`, contactEmail: sanitized.email, contactPhone: sanitized.phone, activityName, sessionStart, sessionEnd, lang })
-      const subjects: Record<Lang, string> = { en: `New Booking: ${sanitized.firstname} ${sanitized.lastname}`, de: `Neue Buchung: ${sanitized.firstname} ${sanitized.lastname}`, fr: `Nouvelle réservation : ${sanitized.firstname} ${sanitized.lastname}`, it: `Nuova prenotazione: ${sanitized.firstname} ${sanitized.lastname}` }
-      await sendEmail({ to: ownerEmail, subject: subjects[lang], html: notifEmail.html, text: notifEmail.text })
-      console.log(`Owner notification sent to ${ownerEmail}`)
+      const email = buildCoachingConfirmationEmail({
+        firstname: sanitized.firstname,
+        teamName,
+        slotTitle: activityName,
+        coachName,
+        start: sessionStart,
+        end: sessionEnd,
+        location: sessionData.location || null,
+        onlineUrl: sessionData.onlineUrl || null,
+        cancelUrl: cancelUrl || null,
+        lang,
+      })
+      const ical = buildCoachingICalAttachment({
+        bookingId: `${data.sessionId}-${contactId}`,
+        slotTitle: activityName,
+        start: sessionStart,
+        end: sessionEnd,
+        location: sessionData.location || null,
+        coachName,
+        coachEmail: coachEmail || 'noreply@lineup.app',
+        clientName: `${sanitized.firstname} ${sanitized.lastname}`,
+        clientEmail: sanitized.email,
+      })
+      const subjects: Record<Lang, string> = {
+        en: `Appointment Confirmed – ${activityName}`,
+        de: `Termin bestätigt – ${activityName}`,
+        fr: `Rendez-vous confirmé – ${activityName}`,
+        it: `Appuntamento confermato – ${activityName}`,
+      }
+      await sendEmail({
+        to: sanitized.email,
+        subject: subjects[lang],
+        html: email.html,
+        text: email.text,
+        attachments: [{ filename: ical.filename, content: ical.content, contentType: ical.contentType }],
+      })
     } catch (err) {
-      console.error('Error sending owner notification:', err)
+      console.error('Error sending coaching confirmation email:', err)
+    }
+
+    // Coach notification
+    if (coachEmail) {
+      try {
+        const notif = buildCoachNotificationEmail({
+          coachFirstname,
+          clientName: `${sanitized.firstname} ${sanitized.lastname}`,
+          clientEmail: sanitized.email,
+          clientPhone: sanitized.phone || null,
+          slotTitle: activityName,
+          start: sessionStart,
+          end: sessionEnd,
+          notes: null,
+          lang,
+        })
+        const subjects: Record<Lang, string> = {
+          en: `New appointment: ${sanitized.firstname} ${sanitized.lastname}`,
+          de: `Neuer Termin: ${sanitized.firstname} ${sanitized.lastname}`,
+          fr: `Nouveau rendez-vous : ${sanitized.firstname} ${sanitized.lastname}`,
+          it: `Nuovo appuntamento: ${sanitized.firstname} ${sanitized.lastname}`,
+        }
+        await sendEmail({ to: coachEmail, subject: subjects[lang], html: notif.html, text: notif.text })
+      } catch (err) {
+        console.error('Error sending coaching coach notification email:', err)
+      }
+    }
+  } else {
+    // ── Regular group-class session ─────────────────────────────────────────────
+    try {
+      const confirmEmail = buildBookingConfirmationEmail({ firstname: sanitized.firstname, teamName, activityName, sessionStart, sessionEnd, locationName: sessionData.location || null, manageBookingUrl, lang })
+      const subjects: Record<Lang, string> = { en: `Booking Confirmed – ${activityName}`, de: `Buchung bestätigt – ${activityName}`, fr: `Réservation confirmée – ${activityName}`, it: `Prenotazione confermata – ${activityName}` }
+      await sendEmail({ to: sanitized.email, subject: subjects[lang], html: confirmEmail.html, text: confirmEmail.text })
+      console.log(`Confirmation email sent to ${sanitized.email}`)
+    } catch (err) {
+      console.error('Error sending confirmation email:', err)
+    }
+
+    // Send notification to owner
+    if (ownerEmail) {
+      try {
+        const notifEmail = buildTeacherNotificationEmail({ teamOwnerFirstname: ownerFirstname, contactName: `${sanitized.firstname} ${sanitized.lastname}`, contactEmail: sanitized.email, contactPhone: sanitized.phone, activityName, sessionStart, sessionEnd, lang })
+        const subjects: Record<Lang, string> = { en: `New Booking: ${sanitized.firstname} ${sanitized.lastname}`, de: `Neue Buchung: ${sanitized.firstname} ${sanitized.lastname}`, fr: `Nouvelle réservation : ${sanitized.firstname} ${sanitized.lastname}`, it: `Nuova prenotazione: ${sanitized.firstname} ${sanitized.lastname}` }
+        await sendEmail({ to: ownerEmail, subject: subjects[lang], html: notifEmail.html, text: notifEmail.text })
+        console.log(`Owner notification sent to ${ownerEmail}`)
+      } catch (err) {
+        console.error('Error sending owner notification:', err)
+      }
     }
   }
 

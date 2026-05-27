@@ -53,8 +53,8 @@ export { dailyTasks } from './dailyTasks'
 // Auth / Membership
 export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'
 
-// Coaching (1:1 slots)
-export { generateCoachSlots, generateCoachSlotsScheduled, bookCoachSlot, cancelCoachBooking, trackCoachBookings, onCoachAvailabilityWritten, getPublicCoachSlots } from './coaching'
+// Coaching (1:1 slots) — booking/cancellation handled by bookSession/cancelBooking
+export { generateCoachSlots, generateCoachSlotsScheduled, onCoachAvailabilityWritten } from './coaching'
 
 // SaaS billing
 export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices } from './saas-billing'

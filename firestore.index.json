@@ -325,15 +325,15 @@
       "density": "SPARSE_ALL"
     },
     {
-      "collectionGroup": "coach_slots",
+      "collectionGroup": "sessions",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "coachId",
+          "fieldPath": "teamId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "teamId",
+          "fieldPath": "activityType",
           "order": "ASCENDING"
         },
         {
@@ -348,7 +348,7 @@
       "density": "SPARSE_ALL"
     },
     {
-      "collectionGroup": "coach_slots",
+      "collectionGroup": "sessions",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -356,22 +356,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "start",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "coach_slots",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "teamId",
+          "fieldPath": "activityType",
           "order": "ASCENDING"
         },
         {
@@ -390,7 +375,7 @@
       "density": "SPARSE_ALL"
     },
     {
-      "collectionGroup": "coach_slots",
+      "collectionGroup": "sessions",
       "queryScope": "COLLECTION",
       "fields": [
         {
