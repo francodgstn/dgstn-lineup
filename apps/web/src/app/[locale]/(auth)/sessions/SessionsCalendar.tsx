@@ -75,9 +75,8 @@ interface DayCellProps {
 }
 
 function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) {
-  const hasGroup    = sessions.some((s) => s.activityType !== 'coaching')
-  const hasCoaching = sessions.some((s) => s.activityType === 'coaching')
-  const dotColor    = isSelected ? 'rgba(255,255,255,0.8)' : 'var(--primary)'
+  const count    = sessions.length
+  const dotColor = isSelected ? 'rgba(255,255,255,0.8)' : 'var(--primary)'
 
   return (
     <button
@@ -92,12 +91,14 @@ function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) 
       )}
     >
       <span className="text-sm leading-none">{day.getDate()}</span>
-      {(hasGroup || hasCoaching) && (
-        <div className="flex gap-1 items-center h-2">
-          {/* filled circle — group class */}
-          {hasGroup    && <div className="w-2 h-2 rounded-full"    style={{ backgroundColor: dotColor }} />}
-          {/* outline circle — coaching */}
-          {hasCoaching && <div className="w-2 h-2 rounded-full border-[1.5px]" style={{ borderColor: dotColor }} />}
+      {count > 0 && (
+        <div className="flex items-center justify-center h-2">
+          {/* front dot */}
+          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+          {/* back dot — offset behind front, lower opacity → "stacked" look */}
+          {count > 1 && (
+            <div className="w-2 h-2 rounded-full shrink-0 -ml-1" style={{ backgroundColor: dotColor, opacity: 0.4 }} />
+          )}
         </div>
       )}
     </button>
