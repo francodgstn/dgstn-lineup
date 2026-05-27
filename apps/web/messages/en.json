@@ -315,7 +315,8 @@
     "goalCoachInfo": "Created by the client.",
     "goalEditGoal": "Edit goal",
     "goalEditTask": "Edit task",
-    "save": "Save"
+    "save": "Save",
+    "loading": "Loading…"
   },
   "Sessions": {
     "title": "Sessions",

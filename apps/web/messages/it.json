@@ -315,7 +315,8 @@
     "goalCoachInfo": "Creato dal cliente.",
     "goalEditGoal": "Modifica obiettivo",
     "goalEditTask": "Modifica compito",
-    "save": "Salva"
+    "save": "Salva",
+    "loading": "Caricamento…"
   },
   "Sessions": {
     "title": "Sessioni",
