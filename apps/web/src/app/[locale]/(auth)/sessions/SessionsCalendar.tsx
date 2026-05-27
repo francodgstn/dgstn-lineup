@@ -5,8 +5,10 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   ChevronLeft, ChevronRight, Clock, MapPin, Users,
-  Pencil, Trash2, Plus, CalendarDays,
+  Pencil, Trash2, CalendarDays,
 } from 'lucide-react'
+import type { Route } from 'next'
+import { useRouter } from '@/i18n/navigation'
 import type { Session, Activity } from '@lineup/shared'
 
 // ─── colour palette ───────────────────────────────────────────────────────────
@@ -110,17 +112,24 @@ function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) 
 interface SessionCardProps {
   session: Session
   activities: Activity[]
+  onOpen: (s: Session) => void
   onEdit: (s: Session) => void
   onDelete: (s: Session) => void
 }
 
-function SessionCard({ session, activities, onEdit, onDelete }: SessionCardProps) {
+function SessionCard({ session, activities, onOpen, onEdit, onDelete }: SessionCardProps) {
   const color = activityAccent(session.activityId, activities)
   const fmt = (ts?: { toDate(): Date } | null) =>
     ts?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? ''
 
   return (
-    <div className="flex gap-3 rounded-xl border bg-card p-3.5 hover:bg-accent/20 transition-colors group">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(session)}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen(session)}
+      className="flex gap-3 rounded-xl border bg-card p-3.5 hover:bg-accent/20 transition-colors group cursor-pointer"
+    >
       {/* activity colour strip */}
       <div className="w-1 rounded-full shrink-0 self-stretch" style={{ backgroundColor: color }} />
 
@@ -155,13 +164,13 @@ function SessionCard({ session, activities, onEdit, onDelete }: SessionCardProps
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button
               variant="ghost" size="icon" className="h-7 w-7"
-              onClick={() => onEdit(session)}
+              onClick={(e) => { e.stopPropagation(); onEdit(session) }}
             >
               <Pencil className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost" size="icon" className="h-7 w-7"
-              onClick={() => onDelete(session)}
+              onClick={(e) => { e.stopPropagation(); onDelete(session) }}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -179,7 +188,6 @@ interface SessionsCalendarProps {
   activities: Activity[]
   onEdit: (s: Session) => void
   onDelete: (s: Session) => void
-  onSlotSelect: (start: Date) => void
 }
 
 export default function SessionsCalendar({
@@ -187,8 +195,8 @@ export default function SessionsCalendar({
   activities,
   onEdit,
   onDelete,
-  onSlotSelect,
 }: SessionsCalendarProps) {
+  const router = useRouter()
   const today = useMemo(() => new Date(), [])
 
   const [viewYear,  setViewYear ] = useState(() => today.getFullYear())
@@ -277,17 +285,11 @@ export default function SessionsCalendar({
 
       {/* ── Day detail pane ── */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-base">
-            {selected.toLocaleDateString([], {
-              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-            })}
-          </h3>
-          <Button size="sm" onClick={() => onSlotSelect(selected)}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            New session
-          </Button>
-        </div>
+        <h3 className="font-semibold text-base mb-4">
+          {selected.toLocaleDateString([], {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+          })}
+        </h3>
 
         {daySessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
@@ -301,6 +303,7 @@ export default function SessionsCalendar({
                 key={s.id}
                 session={s}
                 activities={activities}
+                onOpen={(s) => router.push(`/sessions/${s.id}` as Route)}
                 onEdit={onEdit}
                 onDelete={onDelete}
               />

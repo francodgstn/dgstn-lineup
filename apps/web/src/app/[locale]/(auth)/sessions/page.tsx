@@ -546,7 +546,6 @@ export default function SessionsPage() {
           activities={activitiesQuery.data ?? []}
           onEdit={handleEdit}
           onDelete={handleDelete}
-          onSlotSelect={(date) => handleNew(date)}
         />
       ) : (
         <SessionTable
