@@ -63,9 +63,12 @@ function runToCompletion(cmd, args) {
 
 // ── main ──────────────────────────────────────────────────────────────────────
 
-console.log('==> Starting Firebase emulators (auth, firestore)')
+console.log('==> Building Cloud Functions…')
+await runToCompletion('pnpm', ['--filter', '@lineup/functions', 'run', 'build'])
+
+console.log('==> Starting Firebase emulators (auth, firestore, functions)')
 const emulators = run('pnpm', ['exec', 'firebase', 'emulators:start',
-  '--only', 'auth,firestore', '--project', 'demo-lineup'])
+  '--only', 'auth,firestore,functions', '--project', 'demo-lineup'])
 
 // Kill emulators when this process exits
 function cleanup() {
@@ -80,6 +83,8 @@ process.on('SIGTERM', () => process.exit(0))
   await waitForPort(8080)
   console.log('==> Waiting for Auth emulator on :9099')
   await waitForPort(9099)
+  console.log('==> Waiting for Functions emulator on :5001')
+  await waitForPort(5001)
   console.log('    emulators up')
 
   console.log('==> Seeding emulator data')
