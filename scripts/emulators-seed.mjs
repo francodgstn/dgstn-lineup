@@ -67,7 +67,7 @@ await waitForPort(5001)
 console.log('    emulators up')
 
 console.log('==> Seeding emulator data')
-const seedCode = await runToCompletion('pnpm', ['seed'])
+const seedCode = await runToCompletion('pnpm', ['exec', 'tsx', 'scripts/seed-emulator.ts'])
 if (seedCode !== 0) console.log('    seed failed (continuing anyway)')
 
 console.log('\n✅ Ready — start the web app in another terminal: pnpm dev:web\n')

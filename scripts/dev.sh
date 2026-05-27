@@ -32,7 +32,7 @@ echo "    emulators up"
 # so the emulator ports do not need to be made public.
 
 echo "==> Seeding emulator data"
-pnpm seed || echo "    seed failed (continuing anyway)"
+pnpm exec tsx scripts/seed-emulator.ts || echo "    seed failed (continuing anyway)"
 
 echo "==> Starting Next.js dev server on :3000"
 pnpm --filter @lineup/web dev

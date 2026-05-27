@@ -17,7 +17,6 @@
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
     "emulators:seed": "node scripts/emulators-seed.mjs",
-    "seed": "tsx scripts/seed-emulator.ts",
     "dev:local": "node scripts/dev-local.mjs",
     "dev:billing": "node scripts/dev-billing.mjs",
     "dev:codespace": "bash scripts/dev.sh",
