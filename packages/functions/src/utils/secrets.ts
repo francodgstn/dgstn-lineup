@@ -5,7 +5,33 @@ const client = new SecretManagerServiceClient()
 const secretCache = new Map<string, { value: string; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000
 
+/**
+ * Retrieves a secret value.
+ *
+ * In production → reads from Google Cloud Secret Manager.
+ * In the Firebase Functions emulator (FUNCTIONS_EMULATOR=true) → reads from
+ * environment variables instead (Secret Manager is unavailable locally).
+ *
+ * Env-var name convention: secret name uppercased, hyphens → underscores.
+ *   e.g. 'stripe-secret-key'     → STRIPE_SECRET_KEY
+ *        'stripe-webhook-secret' → STRIPE_WEBHOOK_SECRET
+ *
+ * Set these in packages/functions/.env.local (loaded automatically by the
+ * Functions emulator; never committed to git).
+ */
 export async function getSecret(secretName: string, version = 'latest'): Promise<string> {
+  // ── emulator fallback ────────────────────────────────────────────────────────
+  if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    const envKey = secretName.replace(/-/g, '_').toUpperCase()
+    const value = process.env[envKey]
+    if (value) return value
+    throw new Error(
+      `[emulator] Secret '${secretName}' not found in env. ` +
+      `Add ${envKey}=<value> to packages/functions/.env.local`,
+    )
+  }
+
+  // ── production: Google Cloud Secret Manager ──────────────────────────────────
   const cacheKey = `${secretName}:${version}`
   const now = Date.now()
 

@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
-import { getFunctions, httpsCallable } from 'firebase/functions'
+import { doc, getDoc } from 'firebase/firestore'
+import { db, functions } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -59,7 +59,7 @@ function useInvoices(teamId: string | null, enabled: boolean) {
     queryKey: ['saas-invoices', teamId],
     enabled: !!teamId && enabled,
     queryFn: async () => {
-      const fns = getFunctions(undefined, 'europe-west6')
+      const fns = functions
       const getSaasInvoices = httpsCallable<{ teamId: string }, { invoices: Invoice[] }>(fns, 'getSaasInvoices')
       const result = await getSaasInvoices({ teamId: teamId! })
       return result.data.invoices
@@ -99,7 +99,7 @@ function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamI
   async function handleUpgrade(plan: string) {
     setCheckoutLoading(plan)
     try {
-      const fns = getFunctions(undefined, 'europe-west6')
+      const fns = functions
       const createCheckout = httpsCallable<{ teamId: string; plan: string }, { url: string }>(fns, 'createCheckoutSession')
       const result = await createCheckout({ teamId, plan })
       window.location.href = result.data.url
@@ -113,7 +113,7 @@ function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamI
   async function handleCancel() {
     setCancelling(true)
     try {
-      const fns = getFunctions(undefined, 'europe-west6')
+      const fns = functions
       const cancelFn = httpsCallable<{ teamId: string }>(fns, 'cancelSaasSubscription')
       await cancelFn({ teamId })
       setConfirmCancel(false)
