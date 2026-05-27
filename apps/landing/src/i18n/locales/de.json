@@ -1,0 +1,95 @@
+{
+  "site": {
+    "name": "Lineup",
+    "description": "Das All-in-one-Verwaltungstool für Trainer und Vereine — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort."
+  },
+  "nav": {
+    "features": "Funktionen",
+    "pricing": "Preise",
+    "login": "Anmelden",
+    "cta": "Kostenlos starten"
+  },
+  "hero": {
+    "tagline": "Für Trainer, Fitnessstudios und Vereine",
+    "title": "Lektionen planen. Schüler kennen. Verein wachsen lassen.",
+    "subtitle": "Lineup ist das All-in-one-Verwaltungstool für Trainer und Vereine — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort.",
+    "cta": "Kostenlos starten",
+    "ctaSecondary": "Funktionen ansehen"
+  },
+  "features": {
+    "title": "Alles, was du für einen modernen Verein brauchst",
+    "subtitle": "Von der Einzelperson bis zur Mehrstandort-Organisation — Lineup passt sich deiner Arbeitsweise an.",
+    "sessions": {
+      "title": "Lektionen",
+      "description": "Klassen mühelos planen und verfolgen. Wiederkehrende Lektionen einrichten, Anwesenheit verwalten und die gesamte Woche in der Kalenderansicht überblicken."
+    },
+    "contacts": {
+      "title": "Kontakte",
+      "description": "Jeden Schüler kennen. Profilseiten, Notizen, Aktivitätsverlauf und Abonnementstatus — alles, was du brauchst, um langfristige Beziehungen aufzubauen."
+    },
+    "mobile": {
+      "title": "Schüler-App",
+      "description": "Schüler buchen Lektionen, checken ein und bleiben auf iOS und Android verbunden. Kein WhatsApp-Chaos mehr."
+    }
+  },
+  "plans": {
+    "title": "Einfache, transparente Preise",
+    "subtitle": "Kostenlos starten, upgraden wenn du bereit bist. Keine versteckten Gebühren.",
+    "coach": {
+      "name": "Coach",
+      "description": "Für Einzeltrainer und Privatcoaches, die ihren eigenen Stundenplan verwalten.",
+      "price": "Demnächst",
+      "cta": "Benachrichtigung erhalten",
+      "features": [
+        "Unbegrenzte Lektionen",
+        "Bis zu 50 Kontakte",
+        "Kalenderansicht",
+        "Buchungslinks",
+        "E-Mail-Benachrichtigungen"
+      ]
+    },
+    "club": {
+      "name": "Verein",
+      "badge": "Beliebteste Wahl",
+      "description": "Für Fitnessstudios und Vereine mit mehreren Trainern und Klassen.",
+      "price": "Demnächst",
+      "cta": "Benachrichtigung erhalten",
+      "features": [
+        "Alles im Coach-Plan",
+        "Unbegrenzte Kontakte",
+        "Mehrere Trainer",
+        "Schüler-App (iOS & Android)",
+        "Anwesenheitsverfolgung",
+        "Push-Benachrichtigungen"
+      ]
+    },
+    "org": {
+      "name": "Organisation",
+      "description": "Für Mehrstandort-Vereine, Verbände und Franchises.",
+      "price": "Demnächst",
+      "cta": "Kontakt aufnehmen",
+      "features": [
+        "Alles im Vereinsplan",
+        "Mehrere Standorte",
+        "Hierarchieverwaltung",
+        "Erweitertes Reporting",
+        "Prioritätssupport",
+        "Individuelles Branding"
+      ]
+    }
+  },
+  "cta": {
+    "title": "Bereit loszulegen?",
+    "subtitle": "Schliess dich Trainern und Vereinen an, die Lineup bereits für ihr Business nutzen.",
+    "button": "Kostenlos starten"
+  },
+  "footer": {
+    "tagline": "Das moderne Verwaltungstool für Trainer und Vereine.",
+    "links": {
+      "privacy": "Datenschutz",
+      "terms": "AGB",
+      "contact": "Kontakt"
+    },
+    "copyright": "© {year} Lineup. Alle Rechte vorbehalten."
+  }
+}

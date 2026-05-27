@@ -1,0 +1,52 @@
+---
+import LanguageSwitcher from './LanguageSwitcher.astro';
+import type { Language } from '~/i18n';
+import { useTranslations, getLocalizedPath } from '~/i18n';
+
+interface Props {
+  lang: Language;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.lineup.io';
+---
+
+<header class="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-100">
+  <nav class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+    <!-- Logo -->
+    <a href={getLocalizedPath('/', lang)} class="flex items-center gap-2 font-bold text-xl text-gray-900">
+      <span class="text-brand-600">▲</span>
+      Lineup
+    </a>
+
+    <!-- Centre links (desktop) -->
+    <div class="hidden md:flex items-center gap-6">
+      <a href={getLocalizedPath('/#features', lang)} class="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+        {t('nav.features')}
+      </a>
+      <a href={getLocalizedPath('/#pricing', lang)} class="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+        {t('nav.pricing')}
+      </a>
+    </div>
+
+    <!-- Right side -->
+    <div class="flex items-center gap-3">
+      <LanguageSwitcher currentLang={lang} />
+
+      <a
+        href={`${APP_URL}/login`}
+        class="hidden sm:inline-flex text-sm text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5"
+      >
+        {t('nav.login')}
+      </a>
+
+      <a
+        href={`${APP_URL}/signup`}
+        class="inline-flex items-center gap-1.5 text-sm font-semibold bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
+      >
+        {t('nav.cta')}
+      </a>
+    </div>
+  </nav>
+</header>

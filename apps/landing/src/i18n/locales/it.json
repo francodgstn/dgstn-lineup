@@ -1,0 +1,95 @@
+{
+  "site": {
+    "name": "Lineup",
+    "description": "Lo strumento di gestione all-in-one per coach e club — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto."
+  },
+  "nav": {
+    "features": "Funzionalità",
+    "pricing": "Prezzi",
+    "login": "Accedi",
+    "cta": "Inizia gratis"
+  },
+  "hero": {
+    "tagline": "Per coach, palestre e club",
+    "title": "Gestisci le tue lezioni. Conosci i tuoi studenti. Fai crescere il tuo club.",
+    "subtitle": "Lineup è lo strumento di gestione all-in-one per coach e club — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto.",
+    "cta": "Inizia gratis",
+    "ctaSecondary": "Scopri le funzionalità"
+  },
+  "features": {
+    "title": "Tutto ciò di cui hai bisogno per gestire un club moderno",
+    "subtitle": "Dal coach solo all'organizzazione multi-sede, Lineup si adatta al tuo modo di lavorare.",
+    "sessions": {
+      "title": "Sessioni",
+      "description": "Pianifica e monitora le lezioni senza sforzo. Crea sessioni ricorrenti, gestisci le presenze e vedi l'intera settimana in un colpo d'occhio."
+    },
+    "contacts": {
+      "title": "Contatti",
+      "description": "Conosci ogni studente. Pagine di profilo, note, cronologia attività e stato abbonamento — tutto ciò che serve per costruire relazioni durature."
+    },
+    "mobile": {
+      "title": "App mobile per studenti",
+      "description": "Gli studenti prenotano sessioni, fanno il check-in e rimangono connessi su iOS e Android. Niente più caos su WhatsApp."
+    }
+  },
+  "plans": {
+    "title": "Prezzi semplici e trasparenti",
+    "subtitle": "Inizia gratis, passa al piano superiore quando sei pronto. Nessuna tariffa nascosta.",
+    "coach": {
+      "name": "Coach",
+      "description": "Per istruttori singoli e coach privati che gestiscono il proprio calendario.",
+      "price": "Prossimamente",
+      "cta": "Ricevi notifica",
+      "features": [
+        "Sessioni illimitate",
+        "Fino a 50 contatti",
+        "Vista calendario",
+        "Link di prenotazione",
+        "Notifiche email"
+      ]
+    },
+    "club": {
+      "name": "Club",
+      "badge": "Più popolare",
+      "description": "Per palestre e club con più coach e corsi.",
+      "price": "Prossimamente",
+      "cta": "Ricevi notifica",
+      "features": [
+        "Tutto nel piano Coach",
+        "Contatti illimitati",
+        "Più coach",
+        "App mobile per studenti (iOS & Android)",
+        "Monitoraggio presenze",
+        "Notifiche push"
+      ]
+    },
+    "org": {
+      "name": "Organizzazione",
+      "description": "Per club multi-sede, federazioni e franchising.",
+      "price": "Prossimamente",
+      "cta": "Contattaci",
+      "features": [
+        "Tutto nel piano Club",
+        "Più sedi",
+        "Gestione gerarchica",
+        "Reportistica avanzata",
+        "Supporto prioritario",
+        "Branding personalizzato"
+      ]
+    }
+  },
+  "cta": {
+    "title": "Pronto per iniziare?",
+    "subtitle": "Unisciti ai coach e ai club che già usano Lineup per gestire la propria attività.",
+    "button": "Inizia gratis"
+  },
+  "footer": {
+    "tagline": "Lo strumento di gestione moderno per coach e club.",
+    "links": {
+      "privacy": "Privacy",
+      "terms": "Termini",
+      "contact": "Contatto"
+    },
+    "copyright": "© {year} Lineup. Tutti i diritti riservati."
+  }
+}

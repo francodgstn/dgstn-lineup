@@ -1,0 +1,95 @@
+{
+  "site": {
+    "name": "Lineup",
+    "description": "The all-in-one management tool for coaches and clubs — sessions, contacts, bookings, and a student mobile app."
+  },
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "login": "Log in",
+    "cta": "Start free"
+  },
+  "hero": {
+    "tagline": "For coaches, gyms, and clubs",
+    "title": "Run your classes. Know your students. Grow your club.",
+    "subtitle": "Lineup is the all-in-one management tool for coaches and clubs — sessions, contacts, bookings, and a student mobile app, all in one place.",
+    "cta": "Start for free",
+    "ctaSecondary": "See features"
+  },
+  "features": {
+    "title": "Everything you need to run a modern club",
+    "subtitle": "From solo coach to multi-location organisation, Lineup adapts to the way you work.",
+    "sessions": {
+      "title": "Sessions",
+      "description": "Schedule and track classes effortlessly. Set recurring sessions, manage attendance, and see your whole week at a glance in the calendar view."
+    },
+    "contacts": {
+      "title": "Contacts",
+      "description": "Know every student. Profile pages, notes, activity history, and subscription status — everything you need to build lasting relationships."
+    },
+    "mobile": {
+      "title": "Student mobile app",
+      "description": "Students book sessions, check in, and stay connected on iOS and Android. No more WhatsApp chaos."
+    }
+  },
+  "plans": {
+    "title": "Simple, transparent pricing",
+    "subtitle": "Start free, upgrade when you're ready. No hidden fees.",
+    "coach": {
+      "name": "Coach",
+      "description": "For solo instructors and private coaches managing their own schedule.",
+      "price": "Coming soon",
+      "cta": "Get notified",
+      "features": [
+        "Unlimited sessions",
+        "Up to 50 contacts",
+        "Calendar view",
+        "Booking links",
+        "Email notifications"
+      ]
+    },
+    "club": {
+      "name": "Club",
+      "badge": "Most popular",
+      "description": "For gyms and clubs with multiple coaches and classes.",
+      "price": "Coming soon",
+      "cta": "Get notified",
+      "features": [
+        "Everything in Coach",
+        "Unlimited contacts",
+        "Multiple coaches",
+        "Student mobile app (iOS & Android)",
+        "Attendance tracking",
+        "Push notifications"
+      ]
+    },
+    "org": {
+      "name": "Organisation",
+      "description": "For multi-location clubs, federations, and franchises.",
+      "price": "Coming soon",
+      "cta": "Contact us",
+      "features": [
+        "Everything in Club",
+        "Multiple locations",
+        "Hierarchy management",
+        "Advanced reporting",
+        "Priority support",
+        "Custom branding"
+      ]
+    }
+  },
+  "cta": {
+    "title": "Ready to get started?",
+    "subtitle": "Join coaches and clubs already using Lineup to run their business.",
+    "button": "Start for free"
+  },
+  "footer": {
+    "tagline": "The modern management tool for coaches and clubs.",
+    "links": {
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "contact": "Contact"
+    },
+    "copyright": "© {year} Lineup. All rights reserved."
+  }
+}

@@ -1,0 +1,32 @@
+---
+import type { Language } from '~/i18n';
+import { useTranslations } from '~/i18n';
+
+interface Props {
+  lang: Language;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.lineup.io';
+---
+
+<section class="py-24 bg-brand-600">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">
+      {t('cta.title')}
+    </h2>
+    <p class="text-brand-100 text-lg max-w-xl mx-auto mb-10">
+      {t('cta.subtitle')}
+    </p>
+    <a
+      href={`${APP_URL}/signup`}
+      class="inline-flex items-center gap-2 bg-white text-brand-600 font-semibold text-base px-8 py-3.5 rounded-xl hover:bg-brand-50 transition-colors shadow-lg"
+    >
+      {t('cta.button')}
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+      </svg>
+    </a>
+  </div>
+</section>

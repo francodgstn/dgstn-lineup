@@ -3,5 +3,19 @@
     "default": "demo-lineup",
     "staging": "lineup-staging",
     "production": "lineup-prod"
+  },
+  "targets": {
+    "lineup-staging": {
+      "hosting": {
+        "app": ["lineup-staging"],
+        "landing": ["lineup-staging-landing"]
+      }
+    },
+    "lineup-prod": {
+      "hosting": {
+        "app": ["lineup-prod"],
+        "landing": ["lineup-prod-landing"]
+      }
+    }
   }
 }

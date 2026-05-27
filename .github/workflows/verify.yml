@@ -100,3 +100,27 @@ jobs:
           NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: placeholder.appspot.com
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
           NEXT_PUBLIC_FIREBASE_APP_ID: placeholder
+
+  build-landing:
+    name: Build Landing Site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build landing site
+        run: pnpm --filter @lineup/landing run build
+        env:
+          PUBLIC_APP_URL: https://app.lineup.io
+          PUBLIC_SITE_URL: https://lineup.io

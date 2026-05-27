@@ -1,0 +1,146 @@
+---
+import type { Language } from '~/i18n';
+import { useTranslations, translations } from '~/i18n';
+
+interface Props {
+  lang: Language;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.lineup.io';
+
+const plans = ['coach', 'club', 'org'] as const;
+
+// Read feature arrays directly from the locale object (t() only returns strings)
+function getFeatures(plan: 'coach' | 'club' | 'org'): string[] {
+  const locale = translations[lang] as any;
+  const features = locale?.plans?.[plan]?.features;
+  if (Array.isArray(features)) return features as string[];
+  // fallback to English
+  const en = translations['en'] as any;
+  return (en?.plans?.[plan]?.features ?? []) as string[];
+}
+---
+
+<section id="pricing" class="py-24 bg-gray-50">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Section header -->
+    <div class="text-center mb-16">
+      <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+        {t('plans.title')}
+      </h2>
+      <p class="text-lg text-gray-500 max-w-xl mx-auto">
+        {t('plans.subtitle')}
+      </p>
+    </div>
+
+    <!-- Plan cards -->
+    <div class="grid md:grid-cols-3 gap-8 items-start">
+      {
+        plans.map((plan) => {
+          const isPopular = plan === 'club';
+          const features = getFeatures(plan);
+
+          return (
+            <div
+              class:list={[
+                'relative rounded-2xl p-8 flex flex-col',
+                isPopular
+                  ? 'bg-brand-600 text-white ring-4 ring-brand-600/20 shadow-xl shadow-brand-600/10'
+                  : 'bg-white border border-gray-200',
+              ]}
+            >
+              {/* Popular badge */}
+              {isPopular && (
+                <div class="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                  <span class="bg-amber-400 text-amber-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
+                    {t(`plans.${plan}.badge`)}
+                  </span>
+                </div>
+              )}
+
+              {/* Plan name */}
+              <h3
+                class:list={[
+                  'text-xl font-bold mb-2',
+                  isPopular ? 'text-white' : 'text-gray-900',
+                ]}
+              >
+                {t(`plans.${plan}.name`)}
+              </h3>
+
+              {/* Description */}
+              <p
+                class:list={[
+                  'text-sm mb-6 leading-relaxed',
+                  isPopular ? 'text-brand-100' : 'text-gray-500',
+                ]}
+              >
+                {t(`plans.${plan}.description`)}
+              </p>
+
+              {/* Price */}
+              <div class="mb-8">
+                <span
+                  class:list={[
+                    'inline-block text-sm font-semibold px-3 py-1 rounded-full',
+                    isPopular
+                      ? 'bg-brand-500/50 text-brand-100'
+                      : 'bg-gray-100 text-gray-500',
+                  ]}
+                >
+                  {t(`plans.${plan}.price`)}
+                </span>
+              </div>
+
+              {/* CTA */}
+              <a
+                href={plan === 'org' ? 'mailto:hello@lineup.io' : `${APP_URL}/signup`}
+                class:list={[
+                  'w-full inline-flex items-center justify-center text-sm font-semibold px-6 py-3 rounded-xl transition-colors mb-8',
+                  isPopular
+                    ? 'bg-white text-brand-600 hover:bg-brand-50'
+                    : 'bg-brand-600 text-white hover:bg-brand-700',
+                ]}
+              >
+                {t(`plans.${plan}.cta`)}
+              </a>
+
+              {/* Divider */}
+              <div
+                class:list={[
+                  'border-t mb-6',
+                  isPopular ? 'border-brand-500' : 'border-gray-100',
+                ]}
+              />
+
+              {/* Feature list */}
+              <ul class="space-y-3">
+                {features.map((feature) => (
+                  <li class="flex items-start gap-2.5 text-sm">
+                    <svg
+                      class:list={[
+                        'w-4 h-4 mt-0.5 shrink-0',
+                        isPopular ? 'text-brand-200' : 'text-brand-500',
+                      ]}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span class:list={[isPopular ? 'text-brand-50' : 'text-gray-600']}>
+                      {feature}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })
+      }
+    </div>
+  </div>
+</section>
