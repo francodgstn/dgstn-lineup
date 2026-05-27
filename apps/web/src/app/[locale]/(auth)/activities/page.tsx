@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION } from '@lineup/shared'
-import type { Activity, ActivityLevel } from '@lineup/shared'
+import type { Activity, ActivityLevel, ActivityType } from '@lineup/shared'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Archive, ImageIcon, X } from 'lucide-react'
 
@@ -74,12 +74,14 @@ function slugify(name: string): string {
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const LEVELS = ['all', 'beginners', 'intermediate', 'advanced'] as const
+const ACTIVITY_TYPES: ActivityType[] = ['group_class', 'coaching']
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
 const activitySchema = z.object({
   name: z.string().min(1, 'Required').max(80),
   description: z.string().max(500).optional(),
+  type: z.enum(['group_class', 'coaching'] as const).default('group_class'),
   level: z.enum(LEVELS),
   color: z.string().optional(),
   isFreeTrial: z.boolean(),
@@ -139,11 +141,12 @@ function ActivityDialog({
       ? {
           name: editing.name,
           description: editing.description ?? '',
+          type: (editing.type ?? 'group_class') as ActivityType,
           level: editing.level ?? 'all',
           color: editing.color ?? '',
           isFreeTrial: editing.isFreeTrial ?? true,
         }
-      : { name: '', description: '', level: 'all', color: '#6366f1', isFreeTrial: true },
+      : { name: '', description: '', type: 'group_class' as ActivityType, level: 'all', color: '#6366f1', isFreeTrial: true },
   })
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -172,6 +175,7 @@ function ActivityDialog({
       const updates: Record<string, unknown> = {
         name: data.name,
         description: data.description ?? '',
+        type: data.type,
         level: data.level,
         color: data.color ?? '',
         isFreeTrial: data.isFreeTrial,
@@ -187,6 +191,7 @@ function ActivityDialog({
       const newRef = await addDoc(collection(db, ACTIVITIES_COLLECTION), {
         name: data.name,
         description: data.description ?? '',
+        type: data.type,
         level: data.level,
         color: data.color ?? '',
         isFreeTrial: data.isFreeTrial,
@@ -226,6 +231,31 @@ function ActivityDialog({
               {...register('description')}
               rows={2}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+            />
+          </div>
+
+          {/* Type */}
+          <div className="space-y-1.5">
+            <Label>{t('fieldType')}</Label>
+            <Controller
+              name="type"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value
+                        ? t(`type_${field.value}` as const)
+                        : <span className="text-muted-foreground">—</span>}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACTIVITY_TYPES.map((tp) => (
+                      <SelectItem key={tp} value={tp}>{t(`type_${tp}` as const)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             />
           </div>
 
@@ -345,6 +375,9 @@ function ActivityCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-medium text-sm">{activity.name}</p>
+          {activity.type === 'coaching' && (
+            <Badge variant="secondary" className="text-xs">{t('type_coaching')}</Badge>
+          )}
           {activity.level && activity.level !== 'all' && (
             <Badge variant="secondary" className="text-xs">
               {t(`level_${activity.level}` as const)}

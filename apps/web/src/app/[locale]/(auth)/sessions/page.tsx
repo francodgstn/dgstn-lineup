@@ -199,6 +199,7 @@ function SessionDialog({
       teamId,
       activityId: values.activityId || null,
       activityName: activityEntry?.name ?? null,
+      activityType: activityEntry?.type ?? 'group_class',
       start: startTs,
       end: endTs,
       location: values.location || null,

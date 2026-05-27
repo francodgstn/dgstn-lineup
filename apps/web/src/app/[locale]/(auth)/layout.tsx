@@ -13,7 +13,6 @@ import {
   Zap,
   CalendarRange,
   ClipboardList,
-  GraduationCap,
   Trophy,
   UserCog,
   Globe,
@@ -42,7 +41,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/sessions',  labelKey: 'sessions',  icon: CalendarDays },
       { href: '/bookings',  labelKey: 'bookings',  icon: ClipboardList },
       { href: '/events',    labelKey: 'events',    icon: CalendarRange, minPlan: 'club' },
-      { href: '/coaching',  labelKey: 'coaching',  icon: GraduationCap, minPlan: 'coach' },
     ],
   },
   {

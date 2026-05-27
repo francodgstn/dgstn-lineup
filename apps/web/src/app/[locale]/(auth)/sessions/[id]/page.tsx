@@ -299,6 +299,7 @@ function EditSessionDialog({
     await updateDoc(doc(db, SESSIONS_COLLECTION, session.id), {
       activityId: values.activityId || null,
       activityName: activity?.name ?? null,
+      activityType: activity?.type ?? 'group_class',
       start: Timestamp.fromDate(values.start),
       end: Timestamp.fromDate(values.end),
       location: values.location || null,
