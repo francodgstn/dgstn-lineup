@@ -322,7 +322,11 @@ function EditSessionDialog({
               render={({ field }) => (
                 <Select value={field.value || '__none__'} onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}>
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value && field.value !== '__none__'
+                        ? activities.find((a) => a.id === field.value)?.name ?? field.value
+                        : <span className="text-muted-foreground">No activity</span>}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">No activity</SelectItem>

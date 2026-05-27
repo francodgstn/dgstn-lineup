@@ -182,7 +182,11 @@ function EventDialog({
               render={({ field }) => (
                 <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value
+                        ? t(`type_${field.value}` as Parameters<typeof t>[0])
+                        : <span className="text-muted-foreground">—</span>}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {EVENT_TYPES.map((type) => (

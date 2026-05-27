@@ -272,7 +272,11 @@ function ActivityDialog({
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue />
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {field.value
+                          ? t(`level_${field.value}` as const)
+                          : <span className="text-muted-foreground">—</span>}
+                      </span>
                     </SelectTrigger>
                     <SelectContent>
                       {LEVELS.map((l) => (

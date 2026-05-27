@@ -236,7 +236,11 @@ function TemplateDialog({
             <Label>{t('fieldCoach')}</Label>
             <Controller name="coachId" control={control} render={({ field }) => (
               <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {members.find((m) => m.id === field.value)?.name ?? <span className="text-muted-foreground">—</span>}
+                  </span>
+                </SelectTrigger>
                 <SelectContent>
                   {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
                 </SelectContent>

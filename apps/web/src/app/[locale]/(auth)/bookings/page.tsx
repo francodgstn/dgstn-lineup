@@ -314,7 +314,16 @@ function RebookDialog({
         ) : (
           <Select value={selectedId} onValueChange={(v) => setSelectedId(v ?? '')}>
             <SelectTrigger>
-              <SelectValue placeholder={t('rebookPickSession')} />
+              <span className="flex flex-1 text-left text-sm truncate">
+                {(() => {
+                  const selected = options.find((s) => s.id === selectedId)
+                  if (!selected) return <span className="text-muted-foreground">{t('rebookPickSession')}</span>
+                  const start = selected.start ? new Date(selected.start) : null
+                  return start
+                    ? `${selected.activityName ?? '—'} · ${start.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    : selected.activityName ?? selected.id
+                })()}
+              </span>
             </SelectTrigger>
             <SelectContent>
               {options.map((s) => {

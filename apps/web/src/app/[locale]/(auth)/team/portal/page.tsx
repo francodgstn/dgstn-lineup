@@ -558,7 +558,9 @@ function BookingTab({
           render={({ field }) => (
             <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
               <SelectTrigger className="h-9 w-36">
-                <SelectValue />
+                <span className="flex flex-1 text-left text-sm truncate">
+                  {({ 1: '1 month', 2: '2 months', 3: '3 months', 6: '6 months' } as Record<number, string>)[field.value] ?? `${field.value} months`}
+                </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="1">1 month</SelectItem>

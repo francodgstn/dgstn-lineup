@@ -436,7 +436,9 @@ function ScoringTab({
                 onValueChange={(v) => setValue(`time_multipliers.${index}.day`, Number(v), { shouldDirty: true })}
               >
                 <SelectTrigger className="h-8 w-32">
-                  <SelectValue />
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {DAY_OPTIONS.find((o) => o.value === (watch(`time_multipliers.${index}.day`) ?? 5))?.label ?? '—'}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   {DAY_OPTIONS.map((opt) => (

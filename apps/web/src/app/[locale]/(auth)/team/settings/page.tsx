@@ -1226,7 +1226,11 @@ function PaymentsTab({ teamId }: { teamId: string }) {
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {field.value === 'stripe' ? 'Stripe' : field.value === 'payrexx' ? 'Payrexx' : <span className="text-muted-foreground">—</span>}
+                      </span>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="stripe">Stripe</SelectItem>
                       <SelectItem value="payrexx">Payrexx</SelectItem>
