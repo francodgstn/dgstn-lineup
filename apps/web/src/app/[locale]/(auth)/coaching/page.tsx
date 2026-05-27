@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DatePicker, TimePicker } from '@/components/ui/date-picker'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -311,18 +312,47 @@ function TemplateDialog({
 
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="time">{t('fieldTime')}</Label>
-                <Input id="time" type="time" {...register('time')} />
+                <Label>{t('fieldTime')}</Label>
+                <Controller
+                  name="time"
+                  control={control}
+                  render={({ field }) => (
+                    <TimePicker value={field.value} onChange={field.onChange} />
+                  )}
+                />
                 {errors.time && <p className="text-destructive text-xs">{errors.time.message}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="startDate">{t('fieldStartDate')}</Label>
-                <Input id="startDate" type="date" {...register('startDate')} />
+                <Label>{t('fieldStartDate')}</Label>
+                <Controller
+                  name="startDate"
+                  control={control}
+                  render={({ field }) => (
+                    <DatePicker
+                      value={field.value ? new Date(field.value) : undefined}
+                      onChange={(d) => field.onChange(d ? d.toISOString().split('T')[0] : '')}
+                      fromYear={new Date().getFullYear() - 1}
+                      toYear={new Date().getFullYear() + 3}
+                    />
+                  )}
+                />
                 {errors.startDate && <p className="text-destructive text-xs">{errors.startDate.message}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="endDate">{t('fieldEndDate')}</Label>
-                <Input id="endDate" type="date" {...register('endDate')} />
+                <Label>{t('fieldEndDate')}</Label>
+                <Controller
+                  name="endDate"
+                  control={control}
+                  render={({ field }) => (
+                    <DatePicker
+                      value={field.value ? new Date(field.value) : undefined}
+                      onChange={(d) => field.onChange(d ? d.toISOString().split('T')[0] : '')}
+                      placeholder="No end date"
+                      fromYear={new Date().getFullYear() - 1}
+                      toYear={new Date().getFullYear() + 3}
+                    />
+                  )}
+                />
               </div>
             </div>
           </div>

@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -646,20 +647,20 @@ export default function BookingsPage() {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground shrink-0">{t('filterFrom')}</span>
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="w-36 text-sm"
+          <DatePicker
+            value={dateFrom ? new Date(dateFrom) : undefined}
+            onChange={(d) => setDateFrom(d ? d.toISOString().split('T')[0] : '')}
+            placeholder="—"
+            className="w-[9rem]"
           />
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground shrink-0">{t('filterTo')}</span>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="w-36 text-sm"
+          <DatePicker
+            value={dateTo ? new Date(dateTo) : undefined}
+            onChange={(d) => setDateTo(d ? d.toISOString().split('T')[0] : '')}
+            placeholder="—"
+            className="w-[9rem]"
           />
         </div>
       </div>

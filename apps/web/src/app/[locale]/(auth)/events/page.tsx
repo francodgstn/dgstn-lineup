@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { DateTimePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EVENTS_COLLECTION } from '@lineup/shared'
@@ -52,12 +53,6 @@ function eventDuration(e: Event): string {
   return m ? `${h}h ${m}m` : `${h}h`
 }
 
-function tsToInputValue(ts: { toDate(): Date } | null | undefined): string {
-  if (!ts) return ''
-  const d = ts.toDate()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
@@ -65,13 +60,13 @@ const eventSchema = z
   .object({
     title: z.string().min(1, 'Required').max(120),
     type: z.enum(['competition', 'camp', 'exam', 'seminar', 'workshop']),
-    start: z.string().min(1, 'Required'),
-    end: z.string().min(1, 'Required'),
+    start: z.date({ required_error: 'Required' }),
+    end: z.date({ required_error: 'Required' }),
     location: z.string().max(120).optional(),
     fee: z.string().optional(),
     description: z.string().max(1000).optional(),
   })
-  .refine((d) => !d.start || !d.end || new Date(d.end) > new Date(d.start), {
+  .refine((d) => !d.start || !d.end || d.end > d.start, {
     message: 'End must be after start',
     path: ['end'],
   })
@@ -125,21 +120,21 @@ function EventDialog({
       ? {
           title: editing.title,
           type: editing.type as EventFormData['type'],
-          start: tsToInputValue(editing.start),
-          end: tsToInputValue(editing.end),
+          start: (editing.start as { toDate(): Date } | null | undefined)?.toDate() ?? undefined,
+          end: (editing.end as { toDate(): Date } | null | undefined)?.toDate() ?? undefined,
           location: editing.location ?? '',
           fee: editing.fee != null ? String(editing.fee) : '',
           description: editing.description ?? '',
         }
-      : { title: '', type: 'competition', start: '', end: '', location: '', fee: '', description: '' },
+      : { title: '', type: 'competition', start: undefined, end: undefined, location: '', fee: '', description: '' },
   })
 
   async function onSubmit(data: EventFormData) {
     const payload = {
       title: data.title,
       type: data.type,
-      start: Timestamp.fromDate(new Date(data.start)),
-      end: Timestamp.fromDate(new Date(data.end)),
+      start: Timestamp.fromDate(data.start),
+      end: Timestamp.fromDate(data.end),
       location: data.location ?? '',
       fee: data.fee ? Number(data.fee) : null,
       description: data.description ?? '',
@@ -200,13 +195,25 @@ function EventDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="ev-start">{t('fieldStart')}</Label>
-              <Input id="ev-start" type="datetime-local" {...register('start')} />
+              <Label>{t('fieldStart')}</Label>
+              <Controller
+                name="start"
+                control={control}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} />
+                )}
+              />
               {errors.start && <p className="text-destructive text-xs">{errors.start.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ev-end">{t('fieldEnd')}</Label>
-              <Input id="ev-end" type="datetime-local" {...register('end')} />
+              <Label>{t('fieldEnd')}</Label>
+              <Controller
+                name="end"
+                control={control}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} />
+                )}
+              />
               {errors.end && <p className="text-destructive text-xs">{errors.end.message}</p>}
             </div>
           </div>

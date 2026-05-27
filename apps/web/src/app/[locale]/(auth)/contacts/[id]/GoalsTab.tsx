@@ -13,6 +13,7 @@ import type { Goal, GoalEvaluation, GoalStatus, GoalType, TrainingIndicator } fr
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
@@ -205,8 +206,8 @@ function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: 
   const [title, setTitle] = useState(initial?.title ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [selectedCats, setSelectedCats] = useState<string[]>(initial?.categories ?? [])
-  const [targetDate, setTargetDate] = useState<string>(
-    tsToDate(initial?.target_date)?.toISOString().split('T')[0] ?? '',
+  const [targetDate, setTargetDate] = useState<Date | null>(
+    tsToDate(initial?.target_date) ?? null,
   )
   const [saving, setSaving] = useState(false)
 
@@ -215,7 +216,7 @@ function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: 
       setTitle(initial?.title ?? '')
       setDescription(initial?.description ?? '')
       setSelectedCats(initial?.categories ?? [])
-      setTargetDate(tsToDate(initial?.target_date)?.toISOString().split('T')[0] ?? '')
+      setTargetDate(tsToDate(initial?.target_date) ?? null)
     }
   }
 
@@ -230,7 +231,7 @@ function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: 
         title: title.trim(),
         description: description.trim(),
         categories: selectedCats,
-        targetDate: targetDate ? new Date(targetDate) : null,
+        targetDate: targetDate,
       })
     } finally { setSaving(false) }
   }
@@ -279,7 +280,13 @@ function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: 
           )}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">{t('goalFormTargetDate')}</label>
-            <Input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+            <DatePicker
+              value={targetDate ?? undefined}
+              onChange={(d) => setTargetDate(d ?? null)}
+              placeholder="No target date"
+              fromYear={new Date().getFullYear() - 1}
+              toYear={new Date().getFullYear() + 5}
+            />
           </div>
         </div>
         <DialogFooter>

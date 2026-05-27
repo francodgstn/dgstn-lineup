@@ -27,6 +27,7 @@ import {
 import type { Session, Booking, Contact, Activity } from '@lineup/shared'
 import { Controller, useForm } from 'react-hook-form'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DateTimePicker } from '@/components/ui/date-picker'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
@@ -75,12 +76,12 @@ function tsToInputValue(ts?: { toDate(): Date } | null) {
 
 const editSchema = z.object({
   activityId: z.string().optional(),
-  start: z.string().min(1, 'Required'),
-  end: z.string().min(1, 'Required'),
+  start: z.date({ required_error: 'Required' }),
+  end: z.date({ required_error: 'Required' }),
   location: z.string().max(120).optional(),
   notes: z.string().max(2000).optional(),
   allowBooking: z.boolean().optional(),
-}).refine((d) => !d.start || !d.end || new Date(d.end) > new Date(d.start), {
+}).refine((d) => !d.start || !d.end || d.end > d.start, {
   message: 'End must be after start', path: ['end'],
 })
 type EditFormValues = z.infer<typeof editSchema>
@@ -285,8 +286,8 @@ function EditSessionDialog({
     resolver: zodResolver(editSchema),
     defaultValues: {
       activityId: session.activityId ?? '',
-      start: tsToInputValue(session.start),
-      end: tsToInputValue(session.end),
+      start: session.start?.toDate() ?? undefined,
+      end: session.end?.toDate() ?? undefined,
       location: session.location ?? '',
       notes: session.notes ?? '',
       allowBooking: session.allowBooking ?? false,
@@ -298,8 +299,8 @@ function EditSessionDialog({
     await updateDoc(doc(db, SESSIONS_COLLECTION, session.id), {
       activityId: values.activityId || null,
       activityName: activity?.name ?? null,
-      start: Timestamp.fromDate(new Date(values.start)),
-      end: Timestamp.fromDate(new Date(values.end)),
+      start: Timestamp.fromDate(values.start),
+      end: Timestamp.fromDate(values.end),
       location: values.location || null,
       notes: values.notes || null,
       allowBooking: values.allowBooking ?? false,
@@ -341,12 +342,24 @@ function EditSessionDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-sm font-medium">Start</label>
-              <input type="datetime-local" {...register('start')} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+              <Controller
+                name="start"
+                control={control}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} />
+                )}
+              />
               {errors.start && <p className="text-xs text-destructive">{errors.start.message}</p>}
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">End</label>
-              <input type="datetime-local" {...register('end')} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+              <Controller
+                name="end"
+                control={control}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} />
+                )}
+              />
               {errors.end && <p className="text-xs text-destructive">{errors.end.message}</p>}
             </div>
           </div>

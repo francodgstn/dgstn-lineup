@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useForm, Controller } from 'react-hook-form'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DateTimePicker } from '@/components/ui/date-picker'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -56,24 +57,18 @@ function sessionDuration(s: Session): string {
   return m ? `${h}h ${m}m` : `${h}h`
 }
 
-function tsToInputValue(ts: { toDate(): Date } | null | undefined): string {
-  if (!ts) return ''
-  const d = ts.toDate()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
 const sessionSchema = z.object({
   activityId: z.string().optional(),
-  start: z.string().min(1, 'Required'),
-  end: z.string().min(1, 'Required'),
+  start: z.date({ required_error: 'Required' }),
+  end: z.date({ required_error: 'Required' }),
   location: z.string().max(120).optional(),
   notes: z.string().max(2000).optional(),
   allowBooking: z.boolean().optional(),
 }).refine(
-  (d) => !d.start || !d.end || new Date(d.end) > new Date(d.start),
+  (d) => !d.start || !d.end || d.end > d.start,
   { message: 'End must be after start', path: ['end'] },
 )
 
@@ -187,8 +182,8 @@ function SessionDialog({
     resolver: zodResolver(sessionSchema),
     defaultValues: {
       activityId: editing?.activityId ?? '',
-      start: tsToInputValue(editing?.start),
-      end: tsToInputValue(editing?.end),
+      start: editing?.start?.toDate() ?? undefined,
+      end: editing?.end?.toDate() ?? undefined,
       location: editing?.location ?? '',
       notes: editing?.notes ?? '',
       allowBooking: editing?.allowBooking ?? false,
@@ -197,8 +192,8 @@ function SessionDialog({
 
   const onSubmit = async (values: SessionFormValues) => {
     const activityEntry = activities.find((a) => a.id === values.activityId)
-    const startTs = Timestamp.fromDate(new Date(values.start))
-    const endTs = Timestamp.fromDate(new Date(values.end))
+    const startTs = Timestamp.fromDate(values.start)
+    const endTs = Timestamp.fromDate(values.end)
 
     const payload = {
       teamId,
@@ -268,10 +263,12 @@ function SessionDialog({
           {/* Start */}
           <div className="space-y-1">
             <label className="text-sm font-medium">{t('fieldStart')}</label>
-            <input
-              type="datetime-local"
-              {...register('start')}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            <Controller
+              name="start"
+              control={control}
+              render={({ field }) => (
+                <DateTimePicker value={field.value} onChange={field.onChange} />
+              )}
             />
             {errors.start && <p className="text-xs text-destructive">{errors.start.message}</p>}
           </div>
@@ -279,10 +276,12 @@ function SessionDialog({
           {/* End */}
           <div className="space-y-1">
             <label className="text-sm font-medium">{t('fieldEnd')}</label>
-            <input
-              type="datetime-local"
-              {...register('end')}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            <Controller
+              name="end"
+              control={control}
+              render={({ field }) => (
+                <DateTimePicker value={field.value} onChange={field.onChange} />
+              )}
             />
             {errors.end && <p className="text-xs text-destructive">{errors.end.message}</p>}
           </div>
