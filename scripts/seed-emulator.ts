@@ -110,9 +110,20 @@ async function seedTeam(opts: {
         { id: `${teamId}-sub-dropin`,   name: 'Drop-in',            description: 'Pay per session, no commitment.',           source: 'internal', price: 35,  active: true },
       ]
 
-  // Ranking systems — BJJ belt system for club/org, none for coach
-  const rankingSystemDefs = plan !== 'coach'
+  // Ranking systems — Training Level for coach, BJJ Belt for club/org
+  const rankingSystemDefs = plan === 'coach'
     ? [{
+        id: 'training-level',
+        name: 'Training Level',
+        is_primary: true,
+        levels: [
+          { value: 0, label: 'Beginner',     color: '#6b7280' },
+          { value: 1, label: 'Intermediate', color: '#2563eb' },
+          { value: 2, label: 'Advanced',     color: '#7c3aed' },
+          { value: 3, label: 'Expert',       color: '#dc2626' },
+        ],
+      }]
+    : [{
         id: 'bjj-belt',
         name: 'BJJ Belt',
         is_primary: true,
@@ -124,7 +135,9 @@ async function seedTeam(opts: {
           { value: 4, label: 'Black Belt',  color: '#111827' },
         ],
       }]
-    : []
+
+  // Rank system ID used as key in contact.ranks map
+  const rankSystemId = plan === 'coach' ? 'training-level' : 'bjj-belt'
 
   // Gamification — enabled for club/org, disabled for coach
   const gamificationSettings = plan === 'coach'
@@ -154,33 +167,39 @@ async function seedTeam(opts: {
         ],
       }
 
-  // Per-contact subscription + rank assignment (index → config)
-  // Active students get a subscription; ranks only for club/org
+  // Per-contact subscription assignment (index → config)
+  // Active students get a subscription type linked to them
   const subMonthly  = `${teamId}-sub-monthly`
   const subAnnual   = `${teamId}-sub-annual`
   const subDropin   = `${teamId}-sub-dropin`
   const subFitpass  = `${teamId}-sub-fitpass`
   const subSportpass= `${teamId}-sub-sportpass`
-  type SubAssign = { subId: string; subName: string; recurrence: string | null; rank: number | null }
+  type SubAssign = { subId: string; subName: string; recurrence: string | null }
   const contactSubRank: Record<number, SubAssign> = {
-    0:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 1 : null },
-    1:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 1 : null },
-    2:  { subId: subAnnual,    subName: 'Annual Membership',  recurrence: 'annual',   rank: plan !== 'coach' ? 2 : null },
-    3:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 0 : null },
-    4:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 1 : null },
-    5:  { subId: subDropin,    subName: 'Drop-in',            recurrence: null,        rank: plan !== 'coach' ? 0 : null },
-    6:  { subId: plan !== 'coach' ? subFitpass : subMonthly,
+    0:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly'  },
+    1:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly'  },
+    2:  { subId: subAnnual,    subName: 'Annual Membership',  recurrence: 'annual'   },
+    3:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly'  },
+    4:  { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly'  },
+    5:  { subId: subDropin,    subName: 'Drop-in',            recurrence: null       },
+    6:  { subId: plan !== 'coach' ? subFitpass  : subMonthly,
           subName: plan !== 'coach' ? 'FitPass Partner' : 'Monthly Membership',
-          recurrence: plan !== 'coach' ? null : 'monthly',
-          rank: plan !== 'coach' ? 1 : null },
-    10: { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly',  rank: plan !== 'coach' ? 0 : null },
-    11: { subId: subAnnual,    subName: 'Annual Membership',  recurrence: 'annual',   rank: plan !== 'coach' ? 1 : null },
-    16: { subId: subAnnual,    subName: 'Annual Membership',  recurrence: 'annual',   rank: plan !== 'coach' ? 2 : null },
+          recurrence: plan !== 'coach' ? null : 'monthly' },
+    10: { subId: subMonthly,   subName: 'Monthly Membership', recurrence: 'monthly'  },
+    11: { subId: subAnnual,    subName: 'Annual Membership',  recurrence: 'annual'   },
+    16: { subId: subAnnual,    subName: 'Annual Membership',  recurrence: 'annual'   },
     17: { subId: plan !== 'coach' ? subSportpass : subMonthly,
           subName: plan !== 'coach' ? 'SportPass' : 'Monthly Membership',
-          recurrence: null,
-          rank: plan !== 'coach' ? 1 : null },
+          recurrence: null },
   }
+
+  // Per-contact rank assignment — keyed by contact index.
+  // Covers all students (active, almost_ready, expired); trials & external have no rank.
+  // coach → Training Level (0 Beginner … 3 Expert, inferred from session count)
+  // club/org → BJJ Belt (0 White … 4 Black)
+  const contactRankMap: Record<number, number> = plan === 'coach'
+    ? { 0: 2, 1: 2, 2: 3, 3: 1, 4: 2, 5: 0, 6: 2, 7: 0, 8: 0, 9: 1, 10: 1, 11: 2, 16: 3, 17: 1 }
+    : { 0: 1, 1: 1, 2: 2, 3: 0, 4: 1, 5: 0, 6: 1, 7: 0, 8: 0, 9: 1, 10: 0, 11: 1, 16: 2, 17: 1 }
 
   // Auth user
   await auth.createUser({ uid, email, password: 'lineup123', displayName, emailVerified: true })
@@ -197,7 +216,7 @@ async function seedTeam(opts: {
     plan,
     plan_status: planStatus,
     ...(trialEndsAt ? { trial_ends_at: trialEndsAt } : {}),
-    ...(rankingSystemDefs.length ? { ranking_systems: rankingSystemDefs } : {}),
+    ranking_systems: rankingSystemDefs,
     settings: { gamification: gamificationSettings },
     portalTheme:       'light',
     portalAccentColor: accentColor,
@@ -392,10 +411,8 @@ async function seedTeam(opts: {
   for (let i = 0; i < contactSeeds.length; i++) {
     const c = contactSeeds[i]
     const id = `${teamId}-contact-${i.toString().padStart(3, '0')}`
-    const subAssign = contactSubRank[i] ?? null
-    const primaryRank = subAssign?.rank != null && rankingSystemDefs.length > 0
-      ? { 'bjj-belt': subAssign.rank }
-      : {}
+    const subAssign  = contactSubRank[i] ?? null
+    const rankValue  = contactRankMap[i] ?? null
     await db.collection('contacts').doc(id).set({
       teamId, ...c,
       birthdate:         c.birthdate ? ts(c.birthdate) : null,
@@ -412,7 +429,7 @@ async function seedTeam(opts: {
         subscription_type_name:  subAssign.subName,
         subscription_recurrence: subAssign.recurrence,
       } : {}),
-      ...(Object.keys(primaryRank).length ? { ranks: primaryRank } : {}),
+      ...(rankValue != null ? { ranks: { [rankSystemId]: rankValue } } : {}),
     })
   }
 
