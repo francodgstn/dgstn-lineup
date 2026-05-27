@@ -750,7 +750,9 @@
     "fieldDaysOfWeek": "Giorni della settimana",
     "fieldTime": "Orario",
     "fieldStartDate": "Data di inizio",
-    "fieldEndDate": "Data di fine (opzionale)"
+    "fieldEndDate": "Data di fine (opzionale)",
+    "tabSchedules": "Programmi",
+    "fieldFreeTrial": "Aperto a tutti (prova gratuita / pubblico)"
   },
   "CoachingPortal": {
     "title": "Prenota una sessione",

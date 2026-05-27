@@ -760,7 +760,9 @@
     "fieldDaysOfWeek": "Wochentage",
     "fieldTime": "Uhrzeit",
     "fieldStartDate": "Startdatum",
-    "fieldEndDate": "Enddatum (optional)"
+    "fieldEndDate": "Enddatum (optional)",
+    "tabSchedules": "Zeitpläne",
+    "fieldFreeTrial": "Offen für alle (kostenlose Probestunde / öffentlich)"
   },
   "CoachingPortal": {
     "title": "Sitzung buchen",

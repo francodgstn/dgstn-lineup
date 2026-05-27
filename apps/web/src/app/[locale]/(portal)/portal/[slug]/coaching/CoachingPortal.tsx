@@ -5,28 +5,39 @@ import { useTranslations } from 'next-intl'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import {
-  collectionGroup, collection, query, where, orderBy,
-  limit, getDocs, Timestamp,
-} from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { functions } from '@/lib/firebase'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { COACH_SLOTS_COLLECTION } from '@lineup/shared'
-import type { CoachSlot } from '@lineup/shared'
-import { CalendarClock, MapPin, Video, Clock, User, Check } from 'lucide-react'
+import { CalendarClock, MapPin, Video, Clock, User, Check, Lock } from 'lucide-react'
+
+// ─── types ────────────────────────────────────────────────────────────────────
+
+interface PublicSlot {
+  id: string
+  title: string
+  description: string | null
+  coachName: string
+  start: number   // milliseconds
+  end: number     // milliseconds
+  duration_minutes: number
+  max_participants: number
+  bookings_count: number
+  location: string | null
+  onlineUrl: string | null
+  isFreeTrial: boolean
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function formatDate(ts: { toDate(): Date }): string {
-  return ts.toDate().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+function formatDate(ms: number): string {
+  return new Date(ms).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-function formatTime(ts: { toDate(): Date }): string {
-  return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+function formatTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function formatDuration(mins: number): string {
@@ -46,14 +57,24 @@ const bookingSchema = z.object({
 })
 type BookingFormValues = z.infer<typeof bookingSchema>
 
-// ─── slot card ────────────────────────────────────────────────────────────────
+const emailSchema = z.object({
+  email: z.string().email('Enter a valid email address'),
+})
+type EmailValues = z.infer<typeof emailSchema>
+
+const codeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+})
+type CodeValues = z.infer<typeof codeSchema>
+
+// ─── slot card (open / members-only) ─────────────────────────────────────────
 
 function SlotCard({
   slot,
   teamId,
   onBooked,
 }: {
-  slot: CoachSlot & { id: string }
+  slot: PublicSlot
   teamId: string
   onBooked: (details: { firstname: string; email: string; start: Date; title: string }) => void
 }) {
@@ -61,11 +82,31 @@ function SlotCard({
   const [expanded, setExpanded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Members-only verification state
+  type VerifyStep = 'email' | 'code' | 'done'
+  const [verifyStep, setVerifyStep] = useState<VerifyStep>('email')
+  const [returningEmail, setReturningEmail] = useState('')
+  const [codeId, setCodeId] = useState('')
+  const [authenticatedContactId, setAuthenticatedContactId] = useState<string | null>(null)
+  const [verificationCodeId, setVerificationCodeId] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState(0)
+
+  useEffect(() => {
+    if (countdown <= 0) return
+    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [countdown])
+
+  // Guest booking form (isFreeTrial === true)
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingSchema),
   })
 
-  async function onSubmit(data: BookingFormValues) {
+  // Email form (members-only)
+  const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
+  const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
+
+  async function onSubmitGuest(data: BookingFormValues) {
     setError(null)
     try {
       const fn = httpsCallable(functions, 'bookCoachSlot')
@@ -80,7 +121,7 @@ function SlotCard({
           notes: data.notes || undefined,
         },
       })
-      onBooked({ firstname: data.firstname, email: data.email, start: slot.start.toDate(), title: slot.title })
+      onBooked({ firstname: data.firstname, email: data.email, start: new Date(slot.start), title: slot.title })
     } catch (err) {
       const e = err as { code?: string; message?: string }
       if (e.code === 'already-exists') setError(t('errorAlreadyBooked'))
@@ -89,13 +130,118 @@ function SlotCard({
     }
   }
 
-  const isFull = slot.status === 'full'
+  async function onSendCode(values: EmailValues) {
+    setError(null)
+    try {
+      const fn = httpsCallable<
+        { email: string; teamId: string },
+        { codeId: string; hasContacts?: boolean }
+      >(functions, 'sendBookingVerificationCode')
+      const result = await fn({ email: values.email, teamId })
+      if (result.data.hasContacts === false) {
+        setError('No registered account found for this email. Please contact your coach to join.')
+        return
+      }
+      setReturningEmail(values.email)
+      setCodeId(result.data.codeId)
+      setCountdown(60)
+      setVerifyStep('code')
+    } catch (err) {
+      const e = err as { message?: string }
+      setError(e.message || 'Failed to send code. Please try again.')
+    }
+  }
+
+  async function onVerifyCode(values: CodeValues) {
+    setError(null)
+    try {
+      const fn = httpsCallable<
+        { codeId: string; code: string },
+        {
+          verified: boolean
+          codeId: string
+          requiresContactSelection: boolean
+          selectedContactId?: string
+          contactData?: { id: string; firstname: string; lastname: string; email: string; phone: string }
+          matchedContacts?: { id: string; firstname: string; lastname: string; phone: string }[]
+        }
+      >(functions, 'verifyBookingCode')
+      const result = await fn({ codeId, code: values.code })
+
+      // Use first matched contact if auto-selected
+      const contactId = result.data.selectedContactId
+        ?? result.data.matchedContacts?.[0]?.id
+        ?? null
+
+      if (!contactId) {
+        setError('Could not determine your account. Please try again.')
+        return
+      }
+
+      setAuthenticatedContactId(contactId)
+      setVerificationCodeId(result.data.codeId)
+
+      // Now book with authenticated contact
+      await bookAuthenticated(contactId, result.data.codeId)
+    } catch (err) {
+      const e = err as { message?: string; code?: string }
+      if (e.code === 'already-exists') setError(t('errorAlreadyBooked'))
+      else setError(e.message || 'Incorrect code. Please try again.')
+    }
+  }
+
+  async function bookAuthenticated(contactId: string, verCodeId: string) {
+    setError(null)
+    try {
+      const fn = httpsCallable(functions, 'bookCoachSlot')
+      await fn({
+        teamId,
+        slotId: slot.id,
+        authenticatedContactId: contactId,
+        verificationCodeId: verCodeId,
+      })
+      // We don't have contact name here — use email as display
+      onBooked({ firstname: returningEmail.split('@')[0], email: returningEmail, start: new Date(slot.start), title: slot.title })
+    } catch (err) {
+      const e = err as { code?: string; message?: string }
+      if (e.code === 'already-exists') setError(t('errorAlreadyBooked'))
+      else if (e.code === 'permission-denied') setError(e.message || 'Members only. Please contact your coach.')
+      else setError(t('errorGeneric'))
+    }
+  }
+
+  async function onResendCode() {
+    if (countdown > 0) return
+    setError(null)
+    try {
+      const fn = httpsCallable<{ email: string; teamId: string }, { codeId: string }>(
+        functions, 'sendBookingVerificationCode',
+      )
+      const result = await fn({ email: returningEmail, teamId })
+      setCodeId(result.data.codeId)
+      setCountdown(60)
+      codeForm.reset()
+    } catch (err) {
+      const e = err as { message?: string }
+      setError(e.message || 'Failed to resend code.')
+    }
+  }
+
+  const isFull = slot.bookings_count >= slot.max_participants
 
   return (
     <div className="rounded-xl border overflow-hidden">
       <div className="p-4 flex items-start gap-3">
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm">{slot.title}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-semibold text-sm">{slot.title}</p>
+            {!slot.isFreeTrial && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                <Lock className="h-2.5 w-2.5" />
+                Members only
+              </span>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-0.5">{formatDate(slot.start)}</p>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
@@ -125,7 +271,7 @@ function SlotCard({
           {isFull ? (
             <span className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-medium">{t('full')}</span>
           ) : (
-            <Button size="sm" onClick={() => setExpanded((v) => !v)} variant={expanded ? 'outline' : 'default'}>
+            <Button size="sm" onClick={() => { setExpanded((v) => !v); setError(null) }} variant={expanded ? 'outline' : 'default'}>
               {expanded ? t('hideForm') : t('book')}
             </Button>
           )}
@@ -134,46 +280,136 @@ function SlotCard({
 
       {expanded && !isFull && (
         <div className="border-t bg-muted/30 px-4 pb-4 pt-3">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor={`fn-${slot.id}`} className="text-xs">{t('fieldFirstname')}</Label>
-                <Input id={`fn-${slot.id}`} {...register('firstname')} />
-                {errors.firstname && <p className="text-destructive text-xs">{errors.firstname.message}</p>}
+
+          {/* ── Guest booking form (isFreeTrial) ── */}
+          {slot.isFreeTrial && (
+            <form onSubmit={handleSubmit(onSubmitGuest)} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor={`fn-${slot.id}`} className="text-xs">{t('fieldFirstname')}</Label>
+                  <Input id={`fn-${slot.id}`} {...register('firstname')} />
+                  {errors.firstname && <p className="text-destructive text-xs">{errors.firstname.message}</p>}
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`ln-${slot.id}`} className="text-xs">{t('fieldLastname')}</Label>
+                  <Input id={`ln-${slot.id}`} {...register('lastname')} />
+                  {errors.lastname && <p className="text-destructive text-xs">{errors.lastname.message}</p>}
+                </div>
               </div>
               <div className="space-y-1">
-                <Label htmlFor={`ln-${slot.id}`} className="text-xs">{t('fieldLastname')}</Label>
-                <Input id={`ln-${slot.id}`} {...register('lastname')} />
-                {errors.lastname && <p className="text-destructive text-xs">{errors.lastname.message}</p>}
+                <Label htmlFor={`em-${slot.id}`} className="text-xs">{t('fieldEmail')}</Label>
+                <Input id={`em-${slot.id}`} type="email" {...register('email')} />
+                {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
               </div>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`em-${slot.id}`} className="text-xs">{t('fieldEmail')}</Label>
-              <Input id={`em-${slot.id}`} type="email" {...register('email')} />
-              {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`ph-${slot.id}`} className="text-xs">{t('fieldPhone')}</Label>
-              <Input id={`ph-${slot.id}`} type="tel" {...register('phone')} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`nt-${slot.id}`} className="text-xs">{t('fieldNotes')}</Label>
-              <Input id={`nt-${slot.id}`} {...register('notes')} />
-            </div>
-            {error && (
-              <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded px-3 py-2">
-                {error}
+              <div className="space-y-1">
+                <Label htmlFor={`ph-${slot.id}`} className="text-xs">{t('fieldPhone')}</Label>
+                <Input id={`ph-${slot.id}`} type="tel" {...register('phone')} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor={`nt-${slot.id}`} className="text-xs">{t('fieldNotes')}</Label>
+                <Input id={`nt-${slot.id}`} {...register('notes')} />
+              </div>
+              {error && (
+                <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded px-3 py-2">
+                  {error}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setExpanded(false)}>
+                  {t('cancel')}
+                </Button>
+                <Button type="submit" size="sm" disabled={isSubmitting}>
+                  {isSubmitting ? t('submitting') : t('submit')}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {/* ── Members-only: email verification ── */}
+          {!slot.isFreeTrial && verifyStep === 'email' && (
+            <form onSubmit={emailForm.handleSubmit(onSendCode)} className="space-y-3">
+              <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                This slot is for registered members only. Enter your email to verify.
               </p>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setExpanded(false)}>
-                {t('cancel')}
-              </Button>
-              <Button type="submit" size="sm" disabled={isSubmitting}>
-                {isSubmitting ? t('submitting') : t('submit')}
-              </Button>
-            </div>
-          </form>
+              <div className="space-y-1">
+                <Label className="text-xs">Email address</Label>
+                <Input
+                  type="email"
+                  {...emailForm.register('email')}
+                  autoComplete="email"
+                  placeholder="your@email.com"
+                />
+                {emailForm.formState.errors.email && (
+                  <p className="text-destructive text-xs">{emailForm.formState.errors.email.message}</p>
+                )}
+              </div>
+              {error && (
+                <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded px-3 py-2">
+                  {error}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setExpanded(false)}>
+                  {t('cancel')}
+                </Button>
+                <Button type="submit" size="sm" disabled={emailForm.formState.isSubmitting}>
+                  {emailForm.formState.isSubmitting ? 'Sending…' : 'Send verification code'}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {/* ── Members-only: code entry ── */}
+          {!slot.isFreeTrial && verifyStep === 'code' && (
+            <form onSubmit={codeForm.handleSubmit(onVerifyCode)} className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                We sent a 6-digit code to <strong>{returningEmail}</strong>
+              </p>
+              <div className="space-y-1">
+                <Label className="text-xs">Verification code</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  {...codeForm.register('code', {
+                    onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6) },
+                  })}
+                  placeholder="000000"
+                  className="text-center tracking-widest text-lg font-mono"
+                />
+                {codeForm.formState.errors.code && (
+                  <p className="text-destructive text-xs">{codeForm.formState.errors.code.message}</p>
+                )}
+              </div>
+              {error && (
+                <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded px-3 py-2">
+                  {error}
+                </p>
+              )}
+              <div className="flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={onResendCode}
+                  disabled={countdown > 0}
+                  className="text-xs text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+                >
+                  {countdown > 0 ? `Resend in ${countdown}s` : "Didn't receive it? Resend"}
+                </button>
+                <div className="flex gap-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => { setVerifyStep('email'); setError(null); codeForm.reset() }}>
+                    Back
+                  </Button>
+                  <Button type="submit" size="sm" disabled={codeForm.formState.isSubmitting}>
+                    {codeForm.formState.isSubmitting ? 'Verifying…' : 'Confirm booking'}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {/* Unused state refs to avoid lint warnings */}
+          {authenticatedContactId && verificationCodeId && false && null}
         </div>
       )}
     </div>
@@ -205,38 +441,34 @@ export default function CoachingPortal({ slug }: { slug: string }) {
   const t = useTranslations('CoachingPortal')
   const [teamId, setTeamId] = useState<string | null>(null)
   const [teamName, setTeamName] = useState('')
-  const [slots, setSlots] = useState<(CoachSlot & { id: string })[] | null>(null)
+  const [slots, setSlots] = useState<PublicSlot[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [confirmed, setConfirmed] = useState<{ firstname: string; email: string } | null>(null)
 
   useEffect(() => {
     async function load() {
-      // 1. Resolve team by slug
-      const teamSnap = await getDocs(
-        query(collectionGroup(db, 'public_profile'), where('slug', '==', slug), where('type', '==', 'team'), limit(1))
-      )
-      if (teamSnap.empty) { setLoading(false); return }
-
-      const resolvedTeamId = teamSnap.docs[0].ref.parent.parent!.id
-      setTeamId(resolvedTeamId)
-      setTeamName(teamSnap.docs[0].data().name || '')
-
-      // 2. Load open slots
-      const slotsSnap = await getDocs(
-        query(
-          collection(db, COACH_SLOTS_COLLECTION),
-          where('teamId', '==', resolvedTeamId),
-          where('status', 'in', ['open', 'full']),
-          where('start', '>=', Timestamp.now()),
-          orderBy('start', 'asc'),
-          limit(30),
+      try {
+        const fn = httpsCallable<{ teamSlug: string }, { teamId: string; slots: PublicSlot[] }>(
+          functions, 'getPublicCoachSlots',
         )
-      )
-      setSlots(slotsSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as CoachSlot & { id: string }))
-      setLoading(false)
+        const result = await fn({ teamSlug: slug })
+        setTeamId(result.data.teamId)
+        setSlots(result.data.slots)
+      } catch {
+        setSlots([])
+      } finally {
+        setLoading(false)
+      }
     }
-    load().catch(() => setLoading(false))
+    load()
   }, [slug])
+
+  // Resolve team name from the first slot's coachName context or leave empty
+  // (teamName is informational only — loaded separately if needed)
+  useEffect(() => {
+    // We don't expose teamName from getPublicCoachSlots; it's optional display-only
+    setTeamName('')
+  }, [])
 
   if (confirmed) {
     return <ConfirmationScreen firstname={confirmed.firstname} email={confirmed.email} />

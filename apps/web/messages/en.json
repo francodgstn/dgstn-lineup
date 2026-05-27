@@ -760,7 +760,9 @@
     "fieldDaysOfWeek": "Days of week",
     "fieldTime": "Time",
     "fieldStartDate": "Start date",
-    "fieldEndDate": "End date (optional)"
+    "fieldEndDate": "End date (optional)",
+    "tabSchedules": "Schedules",
+    "fieldFreeTrial": "Open to all (free trial / public)"
   },
   "CoachingPortal": {
     "title": "Book a Session",

@@ -13,6 +13,7 @@ export interface CoachAvailability {
   coachName: string
   title: string
   description?: string
+  isFreeTrial?: boolean
   duration_minutes: number
   max_participants: number
   location?: string
@@ -31,6 +32,7 @@ export interface CoachSlot {
   coachName: string
   title: string
   description?: string
+  isFreeTrial?: boolean
   start: Timestamp
   end: Timestamp
   duration_minutes: number

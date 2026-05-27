@@ -91,6 +91,7 @@ export interface BookingSettings {
   showFitnessAppField?: boolean
   ctaUrl?: string | null
   ctaLabel?: string | null
+  coachingEnabled?: boolean
 }
 
 export interface TeamPublicProfile {

@@ -569,7 +569,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       >(functions, 'sendBookingVerificationCode')
       const result = await fn({ email: values.email, teamId })
       if (result.data.hasContacts === false) {
-        setReturningError("We couldn't find a profile for this email. Please use the new guest form.")
+        const isMembersOnly = selectedActivity?.isFreeTrial === false
+        setReturningError(
+          isMembersOnly
+            ? 'No registered account found for this email. Please contact your coach to join.'
+            : "We couldn't find a profile for this email. Please use the new guest form."
+        )
         return
       }
       setReturningEmail(values.email)
@@ -872,7 +877,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                       key={s.id}
                       onClick={() => {
                         setSelectedSession(s)
-                        setStep('who')
+                        // If members-only activity, skip new-visitor option
+                        const nextStep = selectedActivity?.isFreeTrial === false ? 'ret-email' : 'who'
+                        setStep(nextStep)
                       }}
                       className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group"
                     >
@@ -920,6 +927,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   // ─── Step: Who? ───────────────────────────────────────────────────────────
 
   if (step === 'who' && selectedSession) {
+    const isMembersOnly = selectedActivity?.isFreeTrial === false
     return withBar(
       <>
         <div>
@@ -928,18 +936,20 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         </div>
 
         <div className="space-y-3">
-          <button
-            onClick={() => setStep('details')}
-            className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
-          >
-            <div className="flex-1">
-              <p className="font-semibold text-sm">First time here</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Fill in your details to book</p>
-            </div>
-            <svg className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+          {!isMembersOnly && (
+            <button
+              onClick={() => setStep('details')}
+              className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
+            >
+              <div className="flex-1">
+                <p className="font-semibold text-sm">First time here</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Fill in your details to book</p>
+              </div>
+              <svg className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={() => setStep('ret-email')}
             className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
@@ -960,10 +970,11 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   // ─── Step: Returning — enter email ────────────────────────────────────────
 
   if (step === 'ret-email' && selectedSession) {
+    const isMembersOnly = selectedActivity?.isFreeTrial === false
     return withBar(
       <>
         <div>
-          <BackButton onClick={() => { setStep('who'); setReturningError(null); emailForm.reset() }} />
+          <BackButton onClick={() => { setStep(isMembersOnly ? 'sessions' : 'who'); setReturningError(null); emailForm.reset() }} />
           <h1 className="text-2xl font-bold">Welcome back</h1>
           <p className="text-muted-foreground mt-1 text-sm">
             Enter your email and we&apos;ll send a quick verification code.

@@ -60,6 +60,8 @@ interface AvailabilityDoc {
   coachName: string
   title: string
   description?: string | null
+  isFreeTrial?: boolean
+  status: 'active' | 'paused' | 'archived'
   duration_minutes: number
   max_participants: number
   location?: string | null
@@ -133,6 +135,7 @@ async function generateSlotsForTemplate(
       coachName: template.coachName,
       title: template.title,
       description: template.description ?? null,
+      isFreeTrial: template.isFreeTrial !== false,
       start: startTs,
       end: Timestamp.fromDate(occ.end),
       duration_minutes: template.duration_minutes,
@@ -216,6 +219,8 @@ export const bookCoachSlot = onCall(async (request) => {
   const data = request.data as {
     teamId?: string
     slotId?: string
+    authenticatedContactId?: string
+    verificationCodeId?: string
     contact?: {
       firstname: string
       lastname: string
@@ -227,23 +232,6 @@ export const bookCoachSlot = onCall(async (request) => {
 
   if (!data?.teamId || !data?.slotId) {
     throw new HttpsError('invalid-argument', 'teamId and slotId are required')
-  }
-  if (!data.contact) throw new HttpsError('invalid-argument', 'contact details are required')
-
-  const { firstname, lastname, email, phone, notes } = data.contact
-  if (!firstname || !lastname || !email) {
-    throw new HttpsError('invalid-argument', 'firstname, lastname and email are required')
-  }
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(email)) throw new HttpsError('invalid-argument', 'Invalid email format')
-
-  const sanitized = {
-    firstname: firstname.trim(),
-    lastname: lastname.trim(),
-    fullname: `${firstname.trim()} ${lastname.trim()}`,
-    email: email.toLowerCase().trim(),
-    phone: phone?.trim() || null,
-    notes: notes?.trim() || null,
   }
 
   const db = admin.firestore()
@@ -266,6 +254,69 @@ export const bookCoachSlot = onCall(async (request) => {
   const now = Timestamp.now()
   if (slot.start.toMillis() < now.toMillis()) {
     throw new HttpsError('failed-precondition', 'Cannot book slots in the past')
+  }
+
+  // ── Members-only gate ──────────────────────────────────────────────────────
+  const slotIsFreeTrial = slot.isFreeTrial !== false
+
+  if (!slotIsFreeTrial) {
+    if (!data.authenticatedContactId) {
+      throw new HttpsError('permission-denied', 'This coaching series is for registered members only. Please verify your email.')
+    }
+    // Validate verification code
+    if (data.verificationCodeId) {
+      const codeDoc = await db.collection('booking_verification_codes').doc(data.verificationCodeId).get()
+      if (!codeDoc.exists) throw new HttpsError('invalid-argument', 'Invalid verification code')
+      const codeData = codeDoc.data()!
+      if (!codeData.verified) throw new HttpsError('failed-precondition', 'Verification code not verified')
+      if (codeData.team_id !== data.teamId) throw new HttpsError('permission-denied', 'Code does not match team')
+      if (!(codeData.matched_contact_ids || []).includes(data.authenticatedContactId)) {
+        throw new HttpsError('permission-denied', 'Contact not found in verified matches')
+      }
+    }
+    const contactDoc = await db.collection('contacts').doc(data.authenticatedContactId).get()
+    if (!contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+    const contactData = contactDoc.data()!
+    if (contactData.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Contact does not belong to this team')
+    if (contactData.type === 'trial') {
+      throw new HttpsError('permission-denied', 'This coaching series is for members only. Trial accounts cannot book.')
+    }
+  }
+
+  // Resolve contact details — authenticated path uses Firestore, guest path uses form input
+  let resolvedContact: { firstname: string; lastname: string; email: string; phone?: string | null; notes?: string | null }
+
+  if (data.authenticatedContactId) {
+    const contactDoc = await db.collection('contacts').doc(data.authenticatedContactId).get()
+    if (!contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+    const c = contactDoc.data()!
+    resolvedContact = {
+      firstname: c.firstname || '',
+      lastname: c.lastname || '',
+      email: (c.email || '').toLowerCase().trim(),
+      phone: c.phone || null,
+      notes: null,
+    }
+  } else {
+    if (!data.contact) throw new HttpsError('invalid-argument', 'contact details are required')
+    const { firstname, lastname, email, phone, notes } = data.contact
+    if (!firstname || !lastname || !email) {
+      throw new HttpsError('invalid-argument', 'firstname, lastname and email are required')
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) throw new HttpsError('invalid-argument', 'Invalid email format')
+    resolvedContact = {
+      firstname: firstname.trim(),
+      lastname: lastname.trim(),
+      email: email.toLowerCase().trim(),
+      phone: phone?.trim() || null,
+      notes: notes?.trim() || null,
+    }
+  }
+
+  const sanitized = {
+    ...resolvedContact,
+    fullname: `${resolvedContact.firstname} ${resolvedContact.lastname}`,
   }
 
   // Duplicate check by email
@@ -491,3 +542,72 @@ export const trackCoachBookings = onDocumentWritten(
     await slotDoc.ref.update({ bookings_count: count, status: newStatus })
   },
 )
+
+// ─── onCoachAvailabilityWritten — auto-generate slots on template save ────────
+
+export const onCoachAvailabilityWritten = onDocumentWritten(
+  'coach_availability/{templateId}',
+  async (event) => {
+    const after = event.data?.after
+    if (!after?.exists) return  // deleted — nothing to generate
+    const template = after.data() as AvailabilityDoc
+    if (template.status !== 'active') return  // paused or archived
+    try {
+      const result = await generateSlotsForTemplate(event.params.templateId, template)
+      console.log(`onCoachAvailabilityWritten templateId=${event.params.templateId}: created=${result.created} skipped=${result.skipped}`)
+    } catch (err) {
+      console.error('onCoachAvailabilityWritten: slot generation failed', err)
+    }
+  },
+)
+
+// ─── getPublicCoachSlots — public callable for portal use ────────────────────
+
+export const getPublicCoachSlots = onCall(async (request) => {
+  const { teamSlug } = request.data as { teamSlug?: string }
+  if (!teamSlug) throw new HttpsError('invalid-argument', 'teamSlug is required')
+
+  const db = admin.firestore()
+
+  // Resolve team by slug
+  const profileSnap = await db.collectionGroup('public_profile')
+    .where('slug', '==', teamSlug)
+    .where('type', '==', 'team')
+    .limit(1)
+    .get()
+  if (profileSnap.empty) throw new HttpsError('not-found', 'Team not found')
+  const teamId = profileSnap.docs[0].ref.parent.parent!.id
+
+  const now = Timestamp.now()
+  const windowEnd = Timestamp.fromMillis(now.toMillis() + 60 * 24 * 60 * 60_000)
+
+  const slotsSnap = await db.collection('coach_slots')
+    .where('teamId', '==', teamId)
+    .where('status', '==', 'open')
+    .where('start', '>=', now)
+    .where('start', '<=', windowEnd)
+    .orderBy('start', 'asc')
+    .limit(50)
+    .get()
+
+  return {
+    teamId,
+    slots: slotsSnap.docs.map((d) => {
+      const s = d.data()
+      return {
+        id: d.id,
+        title: s.title as string,
+        description: (s.description as string) ?? null,
+        coachName: s.coachName as string,
+        start: (s.start as Timestamp).toMillis(),
+        end: (s.end as Timestamp).toMillis(),
+        duration_minutes: s.duration_minutes as number,
+        max_participants: s.max_participants as number,
+        bookings_count: s.bookings_count as number,
+        location: (s.location as string) ?? null,
+        onlineUrl: (s.onlineUrl as string) ?? null,
+        isFreeTrial: s.isFreeTrial !== false,
+      }
+    }),
+  }
+})

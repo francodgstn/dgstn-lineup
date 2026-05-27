@@ -56,6 +56,7 @@ const bookingSchema = z.object({
   showFitnessAppField:     z.boolean(),
   ctaUrl:                  z.string().optional(),
   ctaLabel:                z.string().optional(),
+  coachingEnabled:         z.boolean().optional(),
 })
 
 const schema = z.object({
@@ -635,6 +636,22 @@ function BookingTab({
           </div>
         </div>
       </div>
+
+      {/* Coaching portal toggle */}
+      <div className="flex items-center gap-2">
+        <Controller name="booking.coachingEnabled" control={control} render={({ field }) => (
+          <input
+            type="checkbox"
+            id="coachingEnabled"
+            checked={field.value ?? false}
+            onChange={field.onChange}
+            className="accent-primary"
+          />
+        )} />
+        <label htmlFor="coachingEnabled" className="text-sm cursor-pointer">
+          Show coaching slots in portal booking
+        </label>
+      </div>
     </div>
   )
 }
@@ -831,6 +848,7 @@ export default function TeamPortalEditorPage() {
       showFitnessAppField:     data.booking.showFitnessAppField,
       ctaUrl:                  data.booking.ctaUrl || null,
       ctaLabel:                data.booking.ctaLabel || null,
+      coachingEnabled:         data.booking.coachingEnabled ?? false,
     }
 
     // Firestore rejects `undefined` values — strip them before any write
@@ -1099,6 +1117,7 @@ function getDefaults(team: Team | null): FormData {
       showFitnessAppField:     rawBooking.showFitnessAppField     === true,
       ctaUrl:                  typeof rawBooking.ctaUrl  === 'string' ? rawBooking.ctaUrl  : '',
       ctaLabel:                typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
+      coachingEnabled:         rawBooking.coachingEnabled         === true,
     },
   }
 }

@@ -90,6 +90,27 @@ export class StripeAdapter implements GatewayAdapter {
     return this.mapStripeEvent(event)
   }
 
+  /**
+   * Derive the plan name from the subscription's price lookup key.
+   * This is reliable even when the subscription is modified from the Stripe
+   * portal, which changes the price but does NOT update subscription metadata.
+   * Falls back to metadata.plan (set at checkout creation) for backwards compat.
+   *
+   * Lookup key convention: lineup_{plan}_monthly  →  plan = 'coach' | 'club' | 'organization'
+   */
+  private extractPlanFromSubscription(sub: any): string | undefined {
+    const items: any[] = sub.items?.data ?? []
+    if (items.length > 0) {
+      const lookupKey = items[0]?.price?.lookup_key as string | undefined
+      if (lookupKey) {
+        const match = lookupKey.match(/^lineup_(.+)_monthly$/)
+        if (match) return match[1]
+      }
+    }
+    // Fallback: metadata set at checkout time (stale after portal plan changes)
+    return sub.metadata?.plan as string | undefined
+  }
+
   private mapStripeEvent(event: any): WebhookEvent {
     const base = { eventId: event.id as string, raw: event }
     const obj = event.data?.object ?? {}
@@ -102,7 +123,7 @@ export class StripeAdapter implements GatewayAdapter {
           customerId: typeof obj.customer === 'string' ? obj.customer : obj.customer?.id,
           subscriptionId: obj.id as string,
           teamId: obj.metadata?.teamId as string | undefined,
-          plan: obj.metadata?.plan as string | undefined,
+          plan: this.extractPlanFromSubscription(obj),
           currentPeriodStart: obj.current_period_start ? new Date((obj.current_period_start as number) * 1000) : undefined,
           currentPeriodEnd: obj.current_period_end ? new Date((obj.current_period_end as number) * 1000) : undefined,
           cancelAtPeriodEnd: obj.cancel_at_period_end as boolean | undefined,
@@ -115,7 +136,7 @@ export class StripeAdapter implements GatewayAdapter {
           customerId: typeof obj.customer === 'string' ? obj.customer : obj.customer?.id,
           subscriptionId: obj.id as string,
           teamId: obj.metadata?.teamId as string | undefined,
-          plan: obj.metadata?.plan as string | undefined,
+          plan: this.extractPlanFromSubscription(obj),
           currentPeriodStart: obj.current_period_start ? new Date((obj.current_period_start as number) * 1000) : undefined,
           currentPeriodEnd: obj.current_period_end ? new Date((obj.current_period_end as number) * 1000) : undefined,
           cancelAtPeriodEnd: obj.cancel_at_period_end as boolean | undefined,

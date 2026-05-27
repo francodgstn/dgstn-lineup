@@ -362,13 +362,27 @@ export const bookSession = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'Cannot book sessions in the past')
   }
 
-  // Get activity name
+  // Get activity name and isFreeTrial flag
   let activityName = 'Session'
+  let sessionIsFreeTrial = true  // default open
   if (sessionData.activityId) {
     try {
       const actDoc = await admin.firestore().collection('activities').doc(sessionData.activityId).get()
-      if (actDoc.exists) activityName = actDoc.data()!.name || 'Session'
+      if (actDoc.exists) {
+        activityName = actDoc.data()!.name || 'Session'
+        sessionIsFreeTrial = actDoc.data()!.isFreeTrial !== false
+      }
     } catch (_) { /* non-fatal */ }
+  }
+
+  // ── Members-only gate ──────────────────────────────────────────────────────
+  if (!sessionIsFreeTrial) {
+    if (!authenticatedContact) {
+      throw new HttpsError('permission-denied', 'This session is for registered members only. Please verify your email.')
+    }
+    if (authenticatedContact.type === 'trial') {
+      throw new HttpsError('permission-denied', 'This session is for members only. Trial accounts cannot book this class.')
+    }
   }
 
   // Resolve or create contact

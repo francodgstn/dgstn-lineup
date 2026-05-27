@@ -11,8 +11,7 @@ import {
   getDocs, addDoc, updateDoc, doc, getDoc,
   serverTimestamp, Timestamp,
 } from 'firebase/firestore'
-import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,7 +29,7 @@ import {
   TEAM_MEMBERS_SUBCOLLECTION,
 } from '@lineup/shared'
 import type { CoachAvailability, CoachSlot, CoachBooking } from '@lineup/shared'
-import { CalendarClock, Pause, Play, Pencil, RefreshCw, Plus, MapPin, Video, Users, Dumbbell } from 'lucide-react'
+import { CalendarClock, Pause, Play, Pencil, Plus, MapPin, Video, Users, Dumbbell } from 'lucide-react'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -141,6 +140,7 @@ const templateSchema = z.object({
   max_participants: z.number().int().min(1).max(50),
   location: z.string().max(120).optional(),
   onlineUrl: z.string().url('Enter a valid URL').optional().or(z.literal('')),
+  isFreeTrial: z.boolean(),
   daysOfWeek: z.array(z.number()).min(1, 'Select at least one day'),
   time: z.string().regex(/^\d{2}:\d{2}$/, 'Enter HH:MM'),
   startDate: z.string().min(1, 'Required'),
@@ -172,13 +172,14 @@ function TemplateDialog({
         max_participants: editing.max_participants,
         location: editing.location || '',
         onlineUrl: editing.onlineUrl || '',
+        isFreeTrial: editing.isFreeTrial !== false,
         daysOfWeek: editing.recurrence.daysOfWeek,
         time: editing.recurrence.time,
         startDate: editing.recurrence.startDate.toDate().toISOString().split('T')[0],
         endDate: editing.recurrence.endDate?.toDate().toISOString().split('T')[0] || '',
       } : {
         title: '', coachId: userId, duration_minutes: 60, max_participants: 1,
-        location: '', onlineUrl: '', daysOfWeek: [], time: '09:00',
+        location: '', onlineUrl: '', isFreeTrial: true, daysOfWeek: [], time: '09:00',
         startDate: new Date().toISOString().split('T')[0], endDate: '',
       },
     })
@@ -202,7 +203,9 @@ function TemplateDialog({
     const payload = {
       teamId, coachId: data.coachId, coachName: member?.name || data.coachId,
       title: data.title, duration_minutes: data.duration_minutes, max_participants: data.max_participants,
-      location: data.location || null, onlineUrl: data.onlineUrl || null, recurrence,
+      location: data.location || null, onlineUrl: data.onlineUrl || null,
+      isFreeTrial: data.isFreeTrial,
+      recurrence,
     }
     if (editing) {
       await updateDoc(doc(db, COACH_AVAILABILITY_COLLECTION, editing.id), { ...payload, updated_at: serverTimestamp() })
@@ -264,6 +267,21 @@ function TemplateDialog({
             <Label htmlFor="onlineUrl">{t('fieldOnlineUrl')}</Label>
             <Input id="onlineUrl" placeholder="https://meet.google.com/…" {...register('onlineUrl')} />
             {errors.onlineUrl && <p className="text-destructive text-xs">{errors.onlineUrl.message}</p>}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Controller name="isFreeTrial" control={control} render={({ field }) => (
+              <input
+                type="checkbox"
+                id="isFreeTrial"
+                checked={field.value}
+                onChange={field.onChange}
+                className="accent-primary"
+              />
+            )} />
+            <Label htmlFor="isFreeTrial" className="cursor-pointer">
+              {t('fieldFreeTrial')}
+            </Label>
           </div>
 
           <div className="space-y-3 rounded-lg border p-3">
@@ -438,21 +456,6 @@ export default function CoachingPage() {
 
   const [templateDialog, setTemplateDialog] = useState<{ open: boolean; editing: (CoachAvailability & { id: string }) | null }>({ open: false, editing: null })
   const [slotDetail, setSlotDetail] = useState<(CoachSlot & { id: string }) | null>(null)
-  const [generating, setGenerating] = useState(false)
-  const [generateMsg, setGenerateMsg] = useState<string | null>(null)
-
-  async function handleGenerate() {
-    if (!teamId) return
-    setGenerating(true); setGenerateMsg(null)
-    try {
-      const fn = httpsCallable(functions, 'generateCoachSlots')
-      const result = await fn({ teamId }) as { data: { created: number; skipped: number } }
-      setGenerateMsg(t('generateResult', { created: result.data.created, skipped: result.data.skipped }))
-      qc.invalidateQueries({ queryKey: ['coachSlots'] })
-    } catch {
-      setGenerateMsg(t('generateError'))
-    } finally { setGenerating(false) }
-  }
 
   async function toggleTemplateStatus(tmpl: CoachAvailability & { id: string }) {
     await updateDoc(doc(db, COACH_AVAILABILITY_COLLECTION, tmpl.id), {
@@ -482,19 +485,11 @@ export default function CoachingPage() {
       <Tabs defaultValue="slots">
         <TabsList>
           <TabsTrigger value="slots">{t('tabSlots')}</TabsTrigger>
-          <TabsTrigger value="templates">{t('tabTemplates')}</TabsTrigger>
+          <TabsTrigger value="templates">{t('tabSchedules')}</TabsTrigger>
         </TabsList>
 
         {/* ─ Slots tab ─ */}
         <TabsContent value="slots" className="space-y-4 mt-4">
-          <div className="flex items-center gap-3">
-            <Button size="sm" variant="outline" onClick={handleGenerate} disabled={generating}>
-              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${generating ? 'animate-spin' : ''}`} />
-              {generating ? t('generating') : t('generateNow')}
-            </Button>
-            {generateMsg && <p className="text-sm text-muted-foreground">{generateMsg}</p>}
-          </div>
-
           {slotsQ.isLoading && (
             <div className="space-y-2">
               {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
@@ -563,6 +558,11 @@ export default function CoachingPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium text-sm">{tmpl.title}</p>
                     <StatusBadge status={tmpl.status} />
+                    {tmpl.isFreeTrial === false && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                        Members only
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">
                     {formatDaysTime(tmpl.recurrence)} · {formatDuration(tmpl.duration_minutes)}
