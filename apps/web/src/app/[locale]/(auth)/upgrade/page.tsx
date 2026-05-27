@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl'
 import { Check, ChevronRight, Zap } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
 import { PLAN_ORDER, type SaasPlan } from '@lineup/shared'
+import { Link } from '@/i18n/navigation'
 
 // ─── feature data (sourced from docs/product-strategy.md) ────────────────────
 
@@ -149,11 +150,12 @@ const PLAN_COLOR: Record<SaasPlan, {
 
 // ─── plan card ────────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, isCurrent }: { plan: SaasPlan; isCurrent: boolean }) {
+function PlanCard({ plan, isCurrent, currentPlan }: { plan: SaasPlan; isCurrent: boolean; currentPlan: SaasPlan | null }) {
   const t = useTranslations('Upgrade')
   const colors = PLAN_COLOR[plan]
   const sections = PLAN_SECTIONS[plan]
   const includes = PLAN_INCLUDES[plan]
+  const isUpgrade = !isCurrent && PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan ?? 'coach')
 
   return (
     <div className={`relative flex flex-col rounded-xl border-2 p-6 ${
@@ -204,9 +206,17 @@ function PlanCard({ plan, isCurrent }: { plan: SaasPlan; isCurrent: boolean }) {
           <div className="w-full text-center text-sm text-muted-foreground py-2 rounded-lg border border-dashed">
             {t('currentPlanCta')}
           </div>
+        ) : isUpgrade ? (
+          <Link
+            href="/billing"
+            className={`flex items-center justify-center gap-1.5 w-full text-sm font-semibold py-2 px-4 rounded-lg ${colors.badge} hover:opacity-90 transition-opacity`}
+          >
+            {t('upgradeCtaButton')}
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
         ) : (
           <div className="w-full text-center text-sm text-muted-foreground py-2 rounded-lg border border-dashed">
-            {t('upgradeCta')}
+            {t('downgradeCta')}
           </div>
         )}
       </div>
@@ -234,7 +244,7 @@ export default function UpgradePage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-start">
         {PLAN_ORDER.map((p) => (
-          <PlanCard key={p} plan={p} isCurrent={plan === p} />
+          <PlanCard key={p} plan={p} isCurrent={plan === p} currentPlan={plan} />
         ))}
       </div>
 

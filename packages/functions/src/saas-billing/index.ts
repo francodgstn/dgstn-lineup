@@ -5,8 +5,8 @@ import { setGlobalOptions } from 'firebase-functions/v2'
 import { getSecret } from '../utils/secrets'
 import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
-import { getGatewayAdapter } from '../utils/gateway'
-import type { PaymentGatewayConfig, SaasPlan } from '@lineup/shared'
+import { StripeAdapter } from '../utils/gateway/stripe'
+import type { SaasPlan } from '@lineup/shared'
 
 setGlobalOptions({ region: 'europe-west6' })
 
@@ -14,21 +14,17 @@ const VALID_PLANS: SaasPlan[] = ['coach', 'club', 'organization']
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-async function getEnabledGatewayConfig(teamId: string): Promise<{ config: PaymentGatewayConfig; secretRef: string } | null> {
-  const snap = await admin.firestore()
-    .collection('teams').doc(teamId)
-    .collection('integrations')
-    .where('type', '==', 'payment_gateway')
-    .where('enabled', '==', true)
-    .limit(1)
-    .get()
-  if (snap.empty) return null
-  const data = snap.docs[0].data()
-  const config = data.config as PaymentGatewayConfig
-  const secretRef = config.type === 'stripe'
-    ? (config.webhook_secret_ref ?? 'stripe-secret-key')
-    : (config.api_secret_ref ?? 'payrexx-api-secret')
-  return { config, secretRef }
+/**
+ * Returns a StripeAdapter using Lineup's platform Stripe secret key.
+ * SaaS billing always uses Lineup's own Stripe account — never a team-level
+ * payment gateway integration (those are for teams charging their own clients).
+ */
+async function getPlatformStripeAdapter(): Promise<StripeAdapter> {
+  const secretKey = await getSecret('stripe-secret-key')
+  return StripeAdapter.withSecretKey(
+    { type: 'stripe', publishable_key: '', currency: 'chf' },
+    secretKey,
+  )
 }
 
 async function assertOwner(uid: string, teamId: string): Promise<void> {
@@ -66,20 +62,11 @@ export const createCheckoutSession = onCall(async (request) => {
     throw new HttpsError('resource-exhausted', 'Too many checkout requests. Please try again in an hour.')
   }
 
-  // Get gateway config
-  const gateway = await getEnabledGatewayConfig(teamId)
-  if (!gateway) {
-    throw new HttpsError('failed-precondition', 'No payment gateway configured for this team')
-  }
-
   // Get owner email for pre-filling checkout
   const ownerDoc = await admin.firestore().collection('users').doc(request.auth.uid).get()
   const customerEmail: string = ownerDoc.exists ? (ownerDoc.data()!.email ?? '') : ''
 
-  // Resolve secret key from Secret Manager
-  const secretKey = await getSecret(gateway.secretRef)
-
-  const adapter = getGatewayAdapter(gateway.config, secretKey)
+  const adapter = await getPlatformStripeAdapter()
 
   const hostingUrl = getHostingUrl()
   const idempotencyKey = `checkout:${teamId}:${plan}:${Math.floor(Date.now() / 60000)}` // 1-minute window
@@ -138,11 +125,7 @@ export const handleStripeWebhook = onRequest(
       return
     }
 
-    // Temporarily create a gateway adapter just to validate the webhook
-    // (no team-specific config needed for webhook validation)
-    const dummyConfig = { type: 'stripe' as const, publishable_key: '', currency: 'chf' }
-    const secretKey = await getSecret('stripe-secret-key').catch(() => '')
-    const adapter = getGatewayAdapter(dummyConfig, secretKey)
+    const adapter = await getPlatformStripeAdapter()
 
     let event: Awaited<ReturnType<typeof adapter.parseWebhook>>
     try {
@@ -267,11 +250,7 @@ export const cancelSaasSubscription = onCall(async (request) => {
   const subscriptionId = subData.gateway_data?.subscription_id as string | undefined
   if (!subscriptionId) throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
 
-  const gateway = await getEnabledGatewayConfig(data.teamId)
-  if (!gateway) throw new HttpsError('failed-precondition', 'No payment gateway configured')
-
-  const secretKey = await getSecret(gateway.secretRef)
-  const adapter = getGatewayAdapter(gateway.config, secretKey)
+  const adapter = await getPlatformStripeAdapter()
 
   try {
     await adapter.cancelSubscription({ subscriptionId })
@@ -308,11 +287,7 @@ export const getSaasInvoices = onCall(async (request) => {
   const customerId = subDoc.data()?.gateway_data?.customer_id as string | undefined
   if (!customerId) return { invoices: [] }
 
-  const gateway = await getEnabledGatewayConfig(data.teamId)
-  if (!gateway) return { invoices: [] }
-
-  const secretKey = await getSecret(gateway.secretRef)
-  const adapter = getGatewayAdapter(gateway.config, secretKey)
+  const adapter = await getPlatformStripeAdapter()
 
   try {
     const invoices = await adapter.fetchInvoices({ customerId, limit: data.limit ?? 10 })

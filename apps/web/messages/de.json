@@ -829,6 +829,8 @@
     "currentPlan": "Aktueller Plan",
     "currentPlanCta": "Dein aktiver Plan",
     "upgradeCta": "Demnächst — kontaktiere uns für ein Upgrade",
+    "upgradeCtaButton": "Auf diesen Plan upgraden",
+    "downgradeCta": "Kontaktiere uns für ein Downgrade",
     "contactNote": "Um deinen Plan zu ändern, wende dich an das Lineup-Team."
   }
 }

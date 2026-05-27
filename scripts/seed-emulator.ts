@@ -623,6 +623,42 @@ async function seedTeam(opts: {
       status: 'open', createdBy: uid, created_at: ts(daysFromNow(-10)),
     })
   }
+
+  // ── saas_subscriptions ────────────────────────────────────────────────────
+  // Mirrors the state the Stripe webhook would write after a real payment.
+  // gateway_type: null = manually managed (no real Stripe customer yet in dev).
+  const now = ts(new Date())
+  if (plan === 'coach') {
+    await db.collection('saas_subscriptions').doc(teamId).set({
+      teamId,
+      plan:                  'coach',
+      status:                'trial',
+      trial_ends_at:         ts(daysFromNow(14)),
+      current_period_start:  null,
+      current_period_end:    null,
+      cancel_at_period_end:  false,
+      gateway_type:          null,
+      gateway_data:          null,
+      created_at:            now,
+      updated_at:            now,
+    })
+  } else {
+    const periodStart = ts(daysFromNow(-30))
+    const periodEnd   = ts(daysFromNow(1))   // renews tomorrow
+    await db.collection('saas_subscriptions').doc(teamId).set({
+      teamId,
+      plan,
+      status:                'active',
+      trial_ends_at:         null,
+      current_period_start:  periodStart,
+      current_period_end:    periodEnd,
+      cancel_at_period_end:  false,
+      gateway_type:          null,   // null = manually managed / pre-configured
+      gateway_data:          null,
+      created_at:            ts(daysFromNow(-120)),
+      updated_at:            now,
+    })
+  }
 }
 
 // ── main ──────────────────────────────────────────────────────────────────────

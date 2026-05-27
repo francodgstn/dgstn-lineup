@@ -651,6 +651,12 @@ service cloud.firestore {
       allow write: if false; // Stripe webhook Cloud Function only
     }
 
+    // Rate-limit log written by createCheckoutSession Cloud Function
+    match /saas_checkout_attempts/{docId} {
+      allow read:  if false;
+      allow write: if false; // Cloud Function only
+    }
+
     // ----------------------------------------------
     // Organizations (multi-club tier — Phase 2, not yet implemented)
     // ----------------------------------------------
