@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+import { randomInt } from 'crypto'
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
@@ -83,7 +84,7 @@ export const sendBookingVerificationCode = onCall(async (request) => {
   const matchedContactIds = contactsSnap.docs.map((d) => d.id)
 
   // Generate and store code
-  const code = Math.floor(100000 + Math.random() * 900000).toString()
+  const code = randomInt(100000, 1000000).toString()
   const expiresAt = Timestamp.fromMillis(Date.now() + 10 * 60 * 1000)
   const codeHash = hashVerificationCode(code, sanitizedEmail)
 
@@ -110,7 +111,7 @@ export const sendBookingVerificationCode = onCall(async (request) => {
       it: `Il tuo codice di verifica per ${teamName}`,
     }
     await sendEmail({ to: sanitizedEmail, subject: subjects[lang], html: emailContent.html, text: emailContent.text })
-    console.log(`Booking verification email sent to ${sanitizedEmail}`)
+    console.log(`Booking verification email sent (team: ${teamId})`)
   } catch (err) {
     await codeRef.delete()
     throw new HttpsError('internal', 'Failed to send verification email. Please try again.')

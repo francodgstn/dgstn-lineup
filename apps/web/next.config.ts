@@ -33,10 +33,25 @@ const emulatorRewrites = async () => {
   }
 }
 
+const securityHeaders = [
+  // Prevent clickjacking
+  { key: 'X-Frame-Options', value: 'DENY' },
+  // Stop browsers from MIME-sniffing
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  // Control referrer in cross-origin requests
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  // Enforce HTTPS for 2 years (preload-eligible)
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  // Note: CSP is deferred — Firebase SDK + next-intl require careful inline-script handling
+]
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   typedRoutes: true,
   rewrites: emulatorRewrites,
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }]
+  },
 }
 
 export default withNextIntl(nextConfig)

@@ -113,13 +113,13 @@ service cloud.firestore {
 
     // Private user profiles
     match /users/{userId} {
-      // Only authenticated users can read profiles (protects email/PII)
-      allow read: if isAuthed();
+      // Users can only read their own profile; admins can read any. Restricts PII (email) exposure.
+      allow read: if (isAuthed() && request.auth.uid == userId) || hasRole('admin');
       allow write: if request.auth.uid == userId;
 
       // Activity log sub-collection
       match /activity_log/{activityLogId} {
-        allow read;
+        allow read: if (isAuthed() && request.auth.uid == userId) || hasRole('admin');
         allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
       }
 
@@ -153,8 +153,10 @@ service cloud.firestore {
 
     // Teams collection
     match /teams/{teamId} {
-      // Anyone authenticated can read teams (needed for team selection, contact transfer, etc.)
-      allow read: if isAuthed();
+      // Team members can read their own team. A user can also read a team they created
+      // (needed during the signup flow before they are formally added as a member).
+      allow read: if isTeamMember(teamId)
+               || (isAuthed() && resource.data.createdBy == request.auth.uid);
 
       // Only team owners can update team details
       allow update: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
@@ -266,9 +268,9 @@ service cloud.firestore {
 
       // Subscription types subcollection (team-defined subscription plans and aggregators)
       match /subscription_types/{subscriptionTypeId} {
-        // All team members can read all subscription types
-        // Public (unauthenticated) can also read — safe since it's just plan/aggregator names
-        allow read: if true;
+        // Team members (and authenticated users viewing the public portal) can read.
+        // Unauthenticated access removed: no need to expose plan structures without auth.
+        allow read: if isTeamMember(teamId) || isAuthed();
 
         // Managers and owners can create, update, delete subscription types
         allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');

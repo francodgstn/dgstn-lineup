@@ -306,8 +306,21 @@ export const updateRecurringSession = onCall(async (request) => {
   }
   if (!session.seriesId) throw new HttpsError('invalid-argument', 'This is not a recurring session')
 
+  // Whitelist allowed update fields — prevents overwriting privileged fields
+  // like teacher, teamId, seriesId, isException, createdBy, etc.
+  const ALLOWED_UPDATE_FIELDS = new Set([
+    'title', 'description', 'start', 'end', 'duration',
+    'location', 'tags', 'maxParticipants', 'type', 'notes', 'recurrence',
+  ])
+  const safeUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([k]) => ALLOWED_UPDATE_FIELDS.has(k))
+  )
+  if (Object.keys(safeUpdates).length === 0) {
+    throw new HttpsError('invalid-argument', 'No valid fields to update')
+  }
+
   if (editScope === 'single') {
-    const { location: _loc, tags: _tags, ...regularUpdates } = updates
+    const { location: _loc, tags: _tags, ...regularUpdates } = safeUpdates
     const normalized: Record<string, unknown> = { ...regularUpdates }
     if (regularUpdates.start !== undefined) normalized.start = toTimestamp(regularUpdates.start)
     if (regularUpdates.end !== undefined) normalized.end = toTimestamp(regularUpdates.end)
@@ -333,7 +346,7 @@ export const updateRecurringSession = onCall(async (request) => {
   )
   if (futureErr) throw new HttpsError('internal', 'Failed to fetch future sessions')
 
-  const { location, tags, start, end, duration, recurrence: recurrenceUpdates, ...regularUpdates } = updates
+  const { location, tags, start, end, duration, recurrence: recurrenceUpdates, ...regularUpdates } = safeUpdates
 
   let newTimeHours: number | null = null
   let newTimeMinutes: number | null = null

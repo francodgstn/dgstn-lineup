@@ -102,7 +102,12 @@ function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamI
       const fns = functions
       const createCheckout = httpsCallable<{ teamId: string; plan: string }, { url: string }>(fns, 'createCheckoutSession')
       const result = await createCheckout({ teamId, plan })
-      window.location.href = result.data.url
+      // Guard against open-redirect: only allow Stripe-owned domains
+      const url = result.data.url
+      if (!url.startsWith('https://checkout.stripe.com/') && !url.startsWith('https://billing.stripe.com/')) {
+        throw new Error('Unexpected checkout URL')
+      }
+      window.location.href = url
     } catch (err) {
       console.error('Checkout failed:', err)
     } finally {

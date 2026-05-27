@@ -38,10 +38,17 @@ const ACCENT_PRESETS = [
 
 // ─── form schema ─────────────────────────────────────────────────────────────
 
+// Accepts an empty string (no URL) or a valid https:// / http:// URL.
+// Rejects javascript:, data:, and other dangerous protocols (stored XSS prevention).
+const safeUrl = z
+  .string()
+  .refine((v) => v === '' || /^https?:\/\/.+/.test(v), 'Must be a valid https:// URL')
+  .optional()
+
 const linkSchema = z.object({
   label: z.string(),
   description: z.string().optional(),
-  url: z.string().optional(),
+  url: safeUrl,
   showInPortal: z.boolean(),
   iconName: z.string().optional(),
   isBookingLink: z.boolean().optional(),
@@ -54,7 +61,7 @@ const bookingSchema = z.object({
   showPhone:               z.boolean(),
   showActivityDescription: z.boolean(),
   showFitnessAppField:     z.boolean(),
-  ctaUrl:                  z.string().optional(),
+  ctaUrl:                  safeUrl,
   ctaLabel:                z.string().optional(),
   coachingEnabled:         z.boolean().optional(),
 })
