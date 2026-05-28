@@ -51,7 +51,9 @@ export type AutomationAction =
   | { type: 'send_email'; templateId: string }
   | { type: 'create_alert'; presetId: string }
   | { type: 'assign_tag'; tag: string }
-  | { type: 'update_field'; field: string; value: unknown }
+  | { type: 'update_field'; field: string; value: string | number | boolean | null }
+  | { type: 'notify_team'; subject: string; body: string }
+  | { type: 'log_activity'; message: string }
   | { type: 'webhook'; url: string }
 
 export interface AutomationRule {
@@ -368,20 +370,23 @@ async function createContactAlertDoc(
 /**
  * Returns true if the rule has at least one action that can currently be executed.
  *
- * - send_email: needs a resolved template
- * - create_alert: needs a resolved alertPreset
- * - assign_tag / update_field / webhook: Phase 2+ — logged-and-skipped but not an error
- *
- * The guard is intentionally lenient toward Phase 2+ actions so that rules which mix
- * current and future action types don't get rejected before the future types are implemented.
+ * - send_email:    needs a resolved template
+ * - create_alert:  needs a resolved alertPreset
+ * - update_field:  self-contained (field allowlist enforced at runtime)
+ * - notify_team:   self-contained (team email resolved at runtime)
+ * - log_activity:  self-contained (always succeeds)
+ * - assign_tag / webhook: Phase 2+ — no-ops, not errors
  */
 function hasResolvableActions(actions: AutomationAction[], resolved: ResolvedActions): boolean {
-  const hasPhase2Plus = actions.some(
-    (a) => a.type === 'assign_tag' || a.type === 'update_field' || a.type === 'webhook'
-  )
-  if (hasPhase2Plus) return true // won't error, just no-ops until implemented
-  if (actions.some((a) => a.type === 'send_email') && resolved.template) return true
-  if (actions.some((a) => a.type === 'create_alert') && resolved.alertPreset) return true
+  for (const a of actions) {
+    if (a.type === 'send_email' && resolved.template) return true
+    if (a.type === 'create_alert' && resolved.alertPreset) return true
+    if (a.type === 'update_field') return true
+    if (a.type === 'notify_team') return true
+    if (a.type === 'log_activity') return true
+    // Phase 2+ not-yet-implemented — no-ops, not errors
+    if (a.type === 'assign_tag' || a.type === 'webhook') return true
+  }
   return false
 }
 
@@ -464,8 +469,66 @@ async function executeActionsForContact(
         executed++
       }
 
-      // Phase 2+ actions — log and skip for now
-      if (action.type === 'assign_tag' || action.type === 'update_field' || action.type === 'webhook') {
+      // update_field — write a whitelisted contact field
+      if (action.type === 'update_field') {
+        const ALLOWED_UPDATE_FIELDS = ['type', 'membership_status'] as const
+        const field = action.field
+        if (!(ALLOWED_UPDATE_FIELDS as readonly string[]).includes(field)) {
+          console.log(`[automationEngine] update_field: field '${field}' not in allowlist, skipping`)
+        } else {
+          await admin.firestore().collection('contacts').doc(contactId).update({ [field]: action.value })
+          await to(
+            logActivity(teamId, {
+              date: FieldValue.serverTimestamp(),
+              event: 'automation_update_field',
+              parameters: {
+                description: `Automation set '${field}' to '${String(action.value)}' for ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
+                field,
+                value: action.value,
+                rule_id: ruleId,
+                automated: true,
+              },
+              refs: { contact: contactId, user: null },
+            })
+          )
+          executed++
+        }
+      }
+
+      // notify_team — send an internal email to the team's notification address
+      if (action.type === 'notify_team') {
+        const settings = (teamData.settings as Record<string, unknown>) || {}
+        const toEmail = (settings.teamEmail as string) || (teamData.email as string) || ''
+        if (!toEmail) {
+          console.log(`[automationEngine] notify_team: no team email configured for team ${teamId}, skipping`)
+        } else {
+          const subject = substituteVariables(action.subject, contact, teamName, now, teamData)
+          const rawBody = substituteVariables(action.body, contact, teamName, now, teamData)
+          const htmlBody = renderBody({ body_mode: 'markdown' }, rawBody)
+          const { html, text } = buildOutreachEmail({ body: htmlBody, teamName, teamData })
+          await sendEmail({ to: toEmail, subject, html, text })
+          executed++
+        }
+      }
+
+      // log_activity — append a note to the team activity log
+      if (action.type === 'log_activity') {
+        const message = substituteVariables(action.message, contact, teamName, now, teamData)
+        await logActivity(teamId, {
+          date: FieldValue.serverTimestamp(),
+          event: 'automation_action',
+          parameters: {
+            description: message,
+            rule_id: ruleId,
+            automated: true,
+          },
+          refs: { contact: contactId, user: null },
+        })
+        executed++
+      }
+
+      // Phase 2+ not-yet-implemented — log and skip, not an error
+      if (action.type === 'assign_tag' || action.type === 'webhook') {
         console.log(`[automationEngine] Action type '${action.type}' not yet implemented, skipping`)
       }
     } catch (err) {

@@ -51,6 +51,11 @@ interface AutomationAction {
   type: string
   templateId?: string
   presetId?: string
+  field?: string
+  value?: unknown
+  subject?: string
+  body?: string
+  message?: string
 }
 
 interface AutomationRule {
@@ -80,7 +85,15 @@ interface OutreachTemplate {
 
 // Form shapes
 interface FormCondition { type: string; value: string }
-interface FormAction { type: string; templateId: string }
+interface FormAction {
+  type: string
+  templateId: string    // send_email
+  field?: string        // update_field — which contact field
+  fieldValue?: string   // update_field — the new value
+  subject?: string      // notify_team — email subject
+  body?: string         // notify_team — email body (markdown)
+  message?: string      // log_activity — log message
+}
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -134,6 +147,9 @@ function actionSummary(a: AutomationAction, templates: OutreachTemplate[]): stri
     return `Email: ${tmpl?.name ?? a.templateId ?? '—'}`
   }
   if (a.type === 'create_alert') return 'Create alert'
+  if (a.type === 'update_field') return `Set ${a.field ?? '—'} → ${String(a.value ?? '—')}`
+  if (a.type === 'notify_team') return `Notify team: ${a.subject ?? ''}`
+  if (a.type === 'log_activity') return `Log: ${a.message ?? ''}`
   return a.type
 }
 
@@ -479,6 +495,9 @@ function RuleCard({
             <span key={i} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
               {a.type === 'send_email' && <Mail className="h-3 w-3" />}
               {a.type === 'create_alert' && <Bell className="h-3 w-3" />}
+              {a.type === 'update_field' && <Settings2 className="h-3 w-3" />}
+              {a.type === 'notify_team' && <Bell className="h-3 w-3" />}
+              {a.type === 'log_activity' && <FileText className="h-3 w-3" />}
               {actionSummary(a, templates)}
             </span>
           ))}
@@ -592,6 +611,11 @@ function ConditionEditor({
 
 // ─── Action editor ────────────────────────────────────────────────────────────
 
+const UPDATE_FIELD_OPTIONS = [
+  { value: 'type', label: 'Contact type', values: ['trial', 'student', 'external'] },
+  { value: 'membership_status', label: 'Membership status', values: ['guest', 'requested', 'being_checked', 'almost_ready', 'active', 'expired'] },
+] as const
+
 function ActionEditor({
   actions, templates, onChange,
 }: { actions: FormAction[]; templates: OutreachTemplate[]; onChange: (a: FormAction[]) => void }) {
@@ -601,38 +625,126 @@ function ActionEditor({
     onChange(actions.map((a, idx) => idx === i ? { ...a, ...patch } : a))
   }
 
+  const selectedFieldMeta = (action: FormAction) =>
+    UPDATE_FIELD_OPTIONS.find((o) => o.value === action.field)
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {actions.map((action, i) => (
         <div key={i} className="flex gap-2 items-start">
-          <div className="flex-1 grid grid-cols-2 gap-2">
-            <Select value={action.type} onValueChange={(v) => update(i, { type: v ?? 'send_email', templateId: '' })}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="send_email" className="text-xs">Send email</SelectItem>
-                <SelectItem value="create_alert" className="text-xs">Create alert (coming soon)</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {action.type === 'send_email' && (
-              <Select value={action.templateId} onValueChange={(v) => update(i, { templateId: v ?? '' })}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Select template" />
-                </SelectTrigger>
+          <div className="flex-1 space-y-2">
+            {/* Row 1: action type + inline secondary for simple types */}
+            <div className="grid grid-cols-2 gap-2">
+              <Select
+                value={action.type}
+                onValueChange={(v) => update(i, {
+                  type: v ?? 'send_email',
+                  templateId: '',
+                  field: undefined,
+                  fieldValue: undefined,
+                  subject: undefined,
+                  body: undefined,
+                  message: undefined,
+                })}
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {templates.length === 0
-                    ? <SelectItem value="__none" disabled className="text-xs text-muted-foreground">No templates</SelectItem>
-                    : templates.map((t) => (
-                        <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
-                      ))
-                  }
+                  <SelectItem value="send_email"    className="text-xs">Send email</SelectItem>
+                  <SelectItem value="update_field"  className="text-xs">Update contact field</SelectItem>
+                  <SelectItem value="notify_team"   className="text-xs">Notify team (email)</SelectItem>
+                  <SelectItem value="log_activity"  className="text-xs">Log activity entry</SelectItem>
+                  <SelectItem value="create_alert"  className="text-xs">Create alert (coming soon)</SelectItem>
                 </SelectContent>
               </Select>
+
+              {/* Inline secondary for send_email */}
+              {action.type === 'send_email' && (
+                <Select value={action.templateId} onValueChange={(v) => update(i, { templateId: v ?? '' })}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.length === 0
+                      ? <SelectItem value="__none" disabled className="text-xs text-muted-foreground">No templates</SelectItem>
+                      : templates.map((t) => (
+                          <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                        ))
+                    }
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* create_alert placeholder */}
+              {action.type === 'create_alert' && (
+                <p className="text-xs text-muted-foreground self-center">Alert presets coming soon</p>
+              )}
+            </div>
+
+            {/* Row 2+: expanded controls for complex types */}
+
+            {action.type === 'update_field' && (
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  value={action.field ?? ''}
+                  onValueChange={(v) => update(i, {
+                    field: v ?? '',
+                    fieldValue: selectedFieldMeta({ ...action, field: v ?? '' })?.values[0] ?? '',
+                  })}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Field" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UPDATE_FIELD_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={action.fieldValue ?? ''}
+                  onValueChange={(v) => update(i, { fieldValue: v ?? '' })}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Value" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(selectedFieldMeta(action)?.values ?? []).map((v) => (
+                      <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
-            {action.type === 'create_alert' && (
-              <p className="text-xs text-muted-foreground self-center">Alert presets coming soon</p>
+
+            {action.type === 'notify_team' && (
+              <div className="space-y-2">
+                <Input
+                  className="h-8 text-xs"
+                  placeholder="Subject — use {{firstname}}, {{teamName}}…"
+                  value={action.subject ?? ''}
+                  onChange={(e) => update(i, { subject: e.target.value })}
+                />
+                <Textarea
+                  className="text-xs font-mono resize-none"
+                  rows={3}
+                  placeholder="Body (markdown) — {{firstname}} attended a session at {{teamName}}."
+                  value={action.body ?? ''}
+                  onChange={(e) => update(i, { body: e.target.value })}
+                />
+              </div>
+            )}
+
+            {action.type === 'log_activity' && (
+              <Input
+                className="h-8 text-xs"
+                placeholder="Message — use {{firstname}}, {{teamName}}…"
+                value={action.message ?? ''}
+                onChange={(e) => update(i, { message: e.target.value })}
+              />
             )}
           </div>
+
           <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => remove(i)}>
             <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
@@ -695,6 +807,11 @@ function RuleDialog({
       setActions(editing.actions.map((a) => ({
         type: a.type,
         templateId: a.templateId ?? '',
+        field: a.field,
+        fieldValue: a.value != null ? String(a.value) : undefined,
+        subject: a.subject,
+        body: a.body,
+        message: a.message,
       })))
     } else {
       reset({ name: '', trigger_type: 'schedule_daily', delay_minutes: 0, active: true })
@@ -724,7 +841,13 @@ function RuleDialog({
         }),
         actions: actions
           .filter((a) => a.type !== 'create_alert') // skip placeholder
-          .map((a) => ({ type: a.type, templateId: a.templateId })),
+          .map((a) => {
+            if (a.type === 'send_email')   return { type: 'send_email',   templateId: a.templateId }
+            if (a.type === 'update_field') return { type: 'update_field', field: a.field ?? '', value: a.fieldValue ?? '' }
+            if (a.type === 'notify_team')  return { type: 'notify_team',  subject: a.subject ?? '', body: a.body ?? '' }
+            if (a.type === 'log_activity') return { type: 'log_activity', message: a.message ?? '' }
+            return { type: a.type }
+          }),
         updated_at: serverTimestamp(),
       }
 
