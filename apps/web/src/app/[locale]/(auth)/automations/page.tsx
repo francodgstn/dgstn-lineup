@@ -146,6 +146,17 @@ const SUBSCRIPTION_VALUES = [
   { value: 'none', label: 'No subscription' },
 ]
 
+const ACTION_TYPE_LABELS: Record<string, string> = {
+  send_email:   'Send email',
+  update_field: 'Update contact field',
+  assign_tag:   'Add tag to contact',
+  remove_tag:   'Remove tag from contact',
+  notify_team:  'Notify team (email)',
+  log_activity: 'Log activity entry',
+  webhook:      'Webhook (POST)',
+  create_alert: 'Create alert (coming soon)',
+}
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function triggerLabel(type: string): string {
@@ -395,7 +406,9 @@ function ConditionEditor({
                   update(i, { type: next, value: defaultVal, condField: undefined })
                 }}>
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {CONDITION_TYPE_OPTIONS.find((o) => o.value === cond.type)?.label ?? cond.type}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {CONDITION_TYPE_OPTIONS.map((o) => (
@@ -429,7 +442,11 @@ function ConditionEditor({
                     )}
                     {opt?.input === 'subscription_select' && (
                       <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs">
+                          <span className="flex flex-1 text-left text-xs truncate">
+                            {SUBSCRIPTION_VALUES.find((sv) => sv.value === cond.value)?.label ?? cond.value}
+                          </span>
+                        </SelectTrigger>
                         <SelectContent>
                           {SUBSCRIPTION_VALUES.map((sv) => (
                             <SelectItem key={sv.value} value={sv.value} className="text-xs">{sv.label}</SelectItem>
@@ -530,7 +547,11 @@ function ActionEditor({
                   url: undefined,
                 })}
               >
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs">
+                  <span className="flex flex-1 text-left text-xs truncate">
+                    {ACTION_TYPE_LABELS[action.type] ?? action.type}
+                  </span>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="send_email"    className="text-xs">Send email</SelectItem>
                   <SelectItem value="update_field"  className="text-xs">Update contact field</SelectItem>
@@ -547,7 +568,10 @@ function ActionEditor({
               {action.type === 'send_email' && (
                 <Select value={action.templateId} onValueChange={(v) => update(i, { templateId: v ?? '' })}>
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Select template" />
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {templates.find((t) => t.id === action.templateId)?.name
+                        ?? <span className="text-muted-foreground">Select template</span>}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {templates.length === 0
@@ -578,7 +602,10 @@ function ActionEditor({
                   })}
                 >
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Field" />
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {UPDATE_FIELD_OPTIONS.find((o) => o.value === action.field)?.label
+                        ?? <span className="text-muted-foreground">Field</span>}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {UPDATE_FIELD_OPTIONS.map((o) => (
@@ -785,7 +812,7 @@ function RuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? 'Edit automation' : 'New automation'}</DialogTitle>
         </DialogHeader>
@@ -818,7 +845,9 @@ function RuleDialog({
                 <Label className="text-xs">When</Label>
                 <Select value={triggerType} onValueChange={(v) => setValue('trigger_type', v ?? '')}>
                   <SelectTrigger className="mt-1 h-8 text-xs">
-                    <SelectValue />
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {TRIGGER_OPTIONS.find((t) => t.value === triggerType)?.label ?? triggerType}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {TRIGGER_OPTIONS.map((t) => (
@@ -853,7 +882,10 @@ function RuleDialog({
                 ) : (
                   <Select value={webhookEndpointId} onValueChange={(v) => setWebhookEndpointId(v ?? '')}>
                     <SelectTrigger className="mt-1 h-8 text-xs">
-                      <SelectValue placeholder="Select endpoint" />
+                      <span className="flex flex-1 text-left text-xs truncate">
+                        {webhookEndpoints.find((ep) => ep.id === webhookEndpointId)?.name
+                          ?? <span className="text-muted-foreground">Select endpoint</span>}
+                      </span>
                     </SelectTrigger>
                     <SelectContent>
                       {webhookEndpoints.map((ep) => (
