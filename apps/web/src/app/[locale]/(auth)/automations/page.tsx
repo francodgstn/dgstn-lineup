@@ -30,6 +30,7 @@ import {
   Clock, UserPlus, CheckCircle, XCircle,
   CalendarCheck, ShieldCheck, CreditCard, Mail, Bell,
   FileText, Settings2, Zap, RefreshCw, Sparkles, BookOpen,
+  Tag, Webhook,
 } from 'lucide-react'
 import { TEAMS_COLLECTION } from '@lineup/shared'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
@@ -44,6 +45,7 @@ interface AutomationTrigger {
 interface AutomationCondition {
   type: string
   value?: string
+  field?: string      // field_equals condition
   delay_days?: number
 }
 
@@ -56,6 +58,8 @@ interface AutomationAction {
   subject?: string
   body?: string
   message?: string
+  tag?: string     // assign_tag / remove_tag
+  url?: string     // webhook
 }
 
 interface AutomationRule {
@@ -84,7 +88,11 @@ interface OutreachTemplate {
 }
 
 // Form shapes
-interface FormCondition { type: string; value: string }
+interface FormCondition {
+  type: string
+  value: string
+  condField?: string    // field_equals — the field name
+}
 interface FormAction {
   type: string
   templateId: string    // send_email
@@ -93,6 +101,8 @@ interface FormAction {
   subject?: string      // notify_team — email subject
   body?: string         // notify_team — email body (markdown)
   message?: string      // log_activity — log message
+  tag?: string          // assign_tag / remove_tag
+  url?: string          // webhook
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -102,6 +112,7 @@ const TRIGGER_OPTIONS = [
   { value: 'contact_created',           label: 'Contact created',                icon: UserPlus,       supportsDelay: true },
   { value: 'booking_confirmed',         label: 'Booking confirmed',              icon: CheckCircle,    supportsDelay: true },
   { value: 'booking_no_show',           label: 'Booking marked no-show',         icon: XCircle,        supportsDelay: true },
+  { value: 'booking_cancelled',         label: 'Booking cancelled',              icon: XCircle,        supportsDelay: true },
   { value: 'membership_status_changed', label: 'Membership status changed',      icon: ShieldCheck,    supportsDelay: true },
   { value: 'subscription_changed',      label: 'Subscription changed',           icon: CreditCard,     supportsDelay: true },
   { value: 'session_ended',             label: 'Session ended',                  icon: CalendarCheck,  supportsDelay: true },
@@ -109,15 +120,20 @@ const TRIGGER_OPTIONS = [
 ]
 
 const CONDITION_TYPE_OPTIONS = [
-  { value: 'contact_type',              label: 'Contact type',            input: 'contact_type_select' },
-  { value: 'membership_status',         label: 'Membership status',       input: 'membership_select' },
-  { value: 'subscription',             label: 'Subscription',             input: 'subscription_select' },
-  { value: 'sessions_attended_min',     label: 'Sessions attended ≥',     input: 'number' },
-  { value: 'sessions_attended_max',     label: 'Sessions attended ≤',     input: 'number' },
-  { value: 'sessions_attended_exactly', label: 'Sessions attended =',     input: 'number' },
-  { value: 'inactivity_days',           label: 'Inactive for at least (days)', input: 'number' },
-  { value: 'inactivity_days_max',       label: 'Inactive for at most (days)',  input: 'number' },
-  { value: 'portal_booking_no_show',    label: 'Portal booking no-show',  input: 'none' },
+  { value: 'contact_type',              label: 'Contact type',                    input: 'contact_type_select' },
+  { value: 'membership_status',         label: 'Membership status',               input: 'membership_select' },
+  { value: 'subscription',              label: 'Subscription',                    input: 'subscription_select' },
+  { value: 'sessions_attended_min',     label: 'Sessions attended ≥',            input: 'number' },
+  { value: 'sessions_attended_max',     label: 'Sessions attended ≤',            input: 'number' },
+  { value: 'sessions_attended_exactly', label: 'Sessions attended =',            input: 'number' },
+  { value: 'inactivity_days',           label: 'Inactive for at least (days)',   input: 'number' },
+  { value: 'inactivity_days_max',       label: 'Inactive for at most (days)',    input: 'number' },
+  { value: 'subscription_expires_in',   label: 'Subscription expires in ≤ (days)', input: 'number' },
+  { value: 'days_since_created',        label: 'Days since created ≥',          input: 'number' },
+  { value: 'tag',                       label: 'Has tag',                         input: 'text' },
+  { value: 'field_equals',              label: 'Field equals',                    input: 'field_equals' },
+  { value: 'birthday_today',            label: 'Birthday today',                 input: 'none' },
+  { value: 'portal_booking_no_show',    label: 'Portal booking no-show',         input: 'none' },
 ]
 
 const CONTACT_TYPE_VALUES = ['trial', 'student', 'external']
@@ -138,6 +154,7 @@ function conditionSummary(c: AutomationCondition): string {
   if (!opt) return c.type
   if (opt.input === 'none') return opt.label
   if (opt.input === 'number') return `${opt.label} ${c.value ?? ''}`
+  if (c.type === 'field_equals') return `${c.field ?? '?'} = ${c.value ?? ''}`
   return `${opt.label}: ${c.value ?? ''}`
 }
 
@@ -150,6 +167,9 @@ function actionSummary(a: AutomationAction, templates: OutreachTemplate[]): stri
   if (a.type === 'update_field') return `Set ${a.field ?? '—'} → ${String(a.value ?? '—')}`
   if (a.type === 'notify_team') return `Notify team: ${a.subject ?? ''}`
   if (a.type === 'log_activity') return `Log: ${a.message ?? ''}`
+  if (a.type === 'assign_tag') return `Add tag: ${a.tag ?? '—'}`
+  if (a.type === 'remove_tag') return `Remove tag: ${a.tag ?? '—'}`
+  if (a.type === 'webhook') return `Webhook: ${a.url ?? '—'}`
   return a.type
 }
 
@@ -314,11 +334,14 @@ function RuleCard({
         <div className="flex flex-wrap gap-1.5">
           {rule.actions.map((a, i) => (
             <span key={i} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
-              {a.type === 'send_email' && <Mail className="h-3 w-3" />}
+              {a.type === 'send_email'   && <Mail className="h-3 w-3" />}
               {a.type === 'create_alert' && <Bell className="h-3 w-3" />}
               {a.type === 'update_field' && <Settings2 className="h-3 w-3" />}
-              {a.type === 'notify_team' && <Bell className="h-3 w-3" />}
+              {a.type === 'notify_team'  && <Bell className="h-3 w-3" />}
               {a.type === 'log_activity' && <FileText className="h-3 w-3" />}
+              {a.type === 'assign_tag'   && <Tag className="h-3 w-3" />}
+              {a.type === 'remove_tag'   && <Tag className="h-3 w-3" />}
+              {a.type === 'webhook'      && <Webhook className="h-3 w-3" />}
               {actionSummary(a, templates)}
             </span>
           ))}
@@ -351,71 +374,105 @@ function ConditionEditor({
     <div className="space-y-2">
       {conditions.map((cond, i) => {
         const opt = CONDITION_TYPE_OPTIONS.find((o) => o.value === cond.type)
+        const isFieldEquals = cond.type === 'field_equals'
         return (
           <div key={i} className="flex gap-2 items-start">
-            <div className="flex-1 grid grid-cols-2 gap-2">
-              {/* Type select */}
-              <Select value={cond.type} onValueChange={(v) => {
-                // reset value when type changes
-                const next = v ?? cond.type
-                const defaultVal = next === 'contact_type' ? 'trial'
-                  : next === 'membership_status' ? 'active'
-                  : next === 'subscription' ? 'any'
-                  : next === 'portal_booking_no_show' ? ''
-                  : '7'
-                update(i, { type: next, value: defaultVal })
-              }}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONDITION_TYPE_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex-1 space-y-1">
+              {/* Row 1: type selector + inline value (all types except field_equals) */}
+              <div className={`grid gap-2 ${isFieldEquals ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                {/* Type select */}
+                <Select value={cond.type} onValueChange={(v) => {
+                  const next = v ?? cond.type
+                  const defaultVal = next === 'contact_type' ? 'trial'
+                    : next === 'membership_status' ? 'active'
+                    : next === 'subscription' ? 'any'
+                    : (next === 'portal_booking_no_show' || next === 'birthday_today') ? ''
+                    : next === 'tag' || next === 'field_equals' ? ''
+                    : '7'
+                  update(i, { type: next, value: defaultVal, condField: undefined })
+                }}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONDITION_TYPE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              {/* Value input */}
-              {opt?.input === 'contact_type_select' && (
-                <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CONTACT_TYPE_VALUES.map((v) => (
-                      <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Inline value input (all types except field_equals which gets its own row) */}
+                {!isFieldEquals && (
+                  <>
+                    {opt?.input === 'contact_type_select' && (
+                      <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {CONTACT_TYPE_VALUES.map((v) => (
+                            <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {opt?.input === 'membership_select' && (
+                      <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {MEMBERSHIP_STATUS_VALUES.map((v) => (
+                            <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {opt?.input === 'subscription_select' && (
+                      <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {SUBSCRIPTION_VALUES.map((sv) => (
+                            <SelectItem key={sv.value} value={sv.value} className="text-xs">{sv.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {opt?.input === 'number' && (
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-8 text-xs"
+                        value={cond.value}
+                        onChange={(e) => update(i, { value: e.target.value })}
+                      />
+                    )}
+                    {opt?.input === 'text' && (
+                      <Input
+                        className="h-8 text-xs"
+                        placeholder="tag name"
+                        value={cond.value}
+                        onChange={(e) => update(i, { value: e.target.value })}
+                      />
+                    )}
+                    {(opt?.input === 'none') && <div />}
+                  </>
+                )}
+              </div>
+
+              {/* Row 2: field_equals — field name + value on separate row */}
+              {isFieldEquals && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Field (e.g. type)"
+                    value={cond.condField ?? ''}
+                    onChange={(e) => update(i, { condField: e.target.value })}
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Value"
+                    value={cond.value}
+                    onChange={(e) => update(i, { value: e.target.value })}
+                  />
+                </div>
               )}
-              {opt?.input === 'membership_select' && (
-                <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MEMBERSHIP_STATUS_VALUES.map((v) => (
-                      <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {opt?.input === 'subscription_select' && (
-                <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SUBSCRIPTION_VALUES.map((sv) => (
-                      <SelectItem key={sv.value} value={sv.value} className="text-xs">{sv.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {opt?.input === 'number' && (
-                <Input
-                  type="number"
-                  min={0}
-                  className="h-8 text-xs"
-                  value={cond.value}
-                  onChange={(e) => update(i, { value: e.target.value })}
-                />
-              )}
-              {opt?.input === 'none' && <div />}
             </div>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => remove(i)}>
               <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
@@ -466,14 +523,19 @@ function ActionEditor({
                   subject: undefined,
                   body: undefined,
                   message: undefined,
+                  tag: undefined,
+                  url: undefined,
                 })}
               >
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="send_email"    className="text-xs">Send email</SelectItem>
                   <SelectItem value="update_field"  className="text-xs">Update contact field</SelectItem>
+                  <SelectItem value="assign_tag"    className="text-xs">Add tag to contact</SelectItem>
+                  <SelectItem value="remove_tag"    className="text-xs">Remove tag from contact</SelectItem>
                   <SelectItem value="notify_team"   className="text-xs">Notify team (email)</SelectItem>
                   <SelectItem value="log_activity"  className="text-xs">Log activity entry</SelectItem>
+                  <SelectItem value="webhook"       className="text-xs">Webhook (POST)</SelectItem>
                   <SelectItem value="create_alert"  className="text-xs">Create alert (coming soon)</SelectItem>
                 </SelectContent>
               </Select>
@@ -564,6 +626,24 @@ function ActionEditor({
                 onChange={(e) => update(i, { message: e.target.value })}
               />
             )}
+
+            {(action.type === 'assign_tag' || action.type === 'remove_tag') && (
+              <Input
+                className="h-8 text-xs"
+                placeholder="Tag name (e.g. vip, at-risk, converted)"
+                value={action.tag ?? ''}
+                onChange={(e) => update(i, { tag: e.target.value })}
+              />
+            )}
+
+            {action.type === 'webhook' && (
+              <Input
+                className="h-8 text-xs"
+                placeholder="https://hooks.zapier.com/…"
+                value={action.url ?? ''}
+                onChange={(e) => update(i, { url: e.target.value })}
+              />
+            )}
           </div>
 
           <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => remove(i)}>
@@ -624,6 +704,7 @@ function RuleDialog({
       setConditions(editing.conditions.map((c) => ({
         type: c.type,
         value: c.value ?? (c.delay_days != null ? String(c.delay_days) : ''),
+        condField: (c as { field?: string }).field,
       })))
       setActions(editing.actions.map((a) => ({
         type: a.type,
@@ -633,6 +714,8 @@ function RuleDialog({
         subject: a.subject,
         body: a.body,
         message: a.message,
+        tag: (a as { tag?: string }).tag,
+        url: (a as { url?: string }).url,
       })))
     } else {
       reset({ name: '', trigger_type: 'schedule_daily', delay_minutes: 0, active: true })
@@ -658,6 +741,7 @@ function RuleDialog({
           const opt = CONDITION_TYPE_OPTIONS.find((o) => o.value === c.type)
           if (opt?.input === 'number') return { type: c.type, value: Number(c.value) }
           if (opt?.input === 'none') return { type: c.type }
+          if (c.type === 'field_equals') return { type: 'field_equals', field: c.condField ?? '', value: c.value }
           return { type: c.type, value: c.value }
         }),
         actions: actions
@@ -667,6 +751,9 @@ function RuleDialog({
             if (a.type === 'update_field') return { type: 'update_field', field: a.field ?? '', value: a.fieldValue ?? '' }
             if (a.type === 'notify_team')  return { type: 'notify_team',  subject: a.subject ?? '', body: a.body ?? '' }
             if (a.type === 'log_activity') return { type: 'log_activity', message: a.message ?? '' }
+            if (a.type === 'assign_tag')   return { type: 'assign_tag',   tag: a.tag ?? '' }
+            if (a.type === 'remove_tag')   return { type: 'remove_tag',   tag: a.tag ?? '' }
+            if (a.type === 'webhook')      return { type: 'webhook',      url: a.url ?? '' }
             return { type: a.type }
           }),
         updated_at: serverTimestamp(),

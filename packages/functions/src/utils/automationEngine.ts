@@ -25,6 +25,7 @@ export type AutomationTriggerType =
   | 'contact_updated'
   | 'booking_confirmed'
   | 'booking_no_show'
+  | 'booking_cancelled'
   | 'membership_status_changed'
   | 'subscription_changed'
   // Tier 1+2 — event trigger + optional Cloud Tasks delay
@@ -42,15 +43,21 @@ export type AutomationCondition =
   | { type: 'contact_type'; value: string }
   | { type: 'membership_status'; value: string }
   | { type: 'subscription'; value: string }
-  | { type: 'subscription_missing' }   // legacy alias → subscription: none
-  | { type: 'subscription_set' }       // legacy alias → subscription: any
+  | { type: 'subscription_missing' }            // legacy alias → subscription: none
+  | { type: 'subscription_set' }                // legacy alias → subscription: any
   | { type: 'tag'; value: string }
   | { type: 'field_equals'; field: string; value: unknown }
+  // Subscription renewal
+  | { type: 'subscription_expires_in'; days: number }  // expires in ≤ N days (and not expired)
+  // Lifecycle
+  | { type: 'days_since_created'; value: number }       // created N+ days ago
+  | { type: 'birthday_today' }                          // birthdate day+month matches today
 
 export type AutomationAction =
   | { type: 'send_email'; templateId: string }
   | { type: 'create_alert'; presetId: string }
   | { type: 'assign_tag'; tag: string }
+  | { type: 'remove_tag'; tag: string }
   | { type: 'update_field'; field: string; value: string | number | boolean | null }
   | { type: 'notify_team'; subject: string; body: string }
   | { type: 'log_activity'; message: string }
@@ -88,6 +95,13 @@ export interface ContactData {
   archived_at?: Timestamp | null
   outreach_rules_sent?: Record<string, Timestamp>
   avatar_url?: string | null
+  // Tag-based filtering + assign_tag action
+  tags?: string[]
+  // Lifecycle conditions
+  created_at?: Timestamp | { seconds: number; nanoseconds: number } | null
+  birthdate?: Timestamp | { seconds: number; nanoseconds: number } | null
+  // Subscription renewal condition
+  membership_expiration?: Timestamp | { seconds: number; nanoseconds: number } | null
   [key: string]: unknown
 }
 
@@ -274,6 +288,45 @@ export function evaluateContactConditions(
         if (!contact.subscription_type_id) return false
         break
 
+      case 'tag':
+        if (!contact.tags?.includes(cond.value)) return false
+        break
+
+      case 'field_equals': {
+        const contactVal = (contact as Record<string, unknown>)[cond.field]
+        // eslint-disable-next-line eqeqeq
+        if (contactVal != cond.value) return false // loose equality to handle string↔number
+        break
+      }
+
+      case 'subscription_expires_in': {
+        // True only if membership expires in ≤ N days AND hasn't already expired
+        if (!contact.membership_expiration) return false
+        const expiresMs = resolveTimestampMs(contact.membership_expiration)
+        if (expiresMs === null) return false
+        const daysUntil = (expiresMs - now.getTime()) / 86400000
+        if (daysUntil < 0 || daysUntil > cond.days) return false
+        break
+      }
+
+      case 'days_since_created': {
+        if (!contact.created_at) return false
+        const createdMs = resolveTimestampMs(contact.created_at)
+        if (createdMs === null) return false
+        const daysSince = (now.getTime() - createdMs) / 86400000
+        if (daysSince < cond.value) return false
+        break
+      }
+
+      case 'birthday_today': {
+        if (!contact.birthdate) return false
+        const bdMs = resolveTimestampMs(contact.birthdate)
+        if (bdMs === null) return false
+        const bday = new Date(bdMs)
+        if (bday.getMonth() !== now.getMonth() || bday.getDate() !== now.getDate()) return false
+        break
+      }
+
       default:
         // unknown condition — pass (don't block)
         break
@@ -384,8 +437,9 @@ function hasResolvableActions(actions: AutomationAction[], resolved: ResolvedAct
     if (a.type === 'update_field') return true
     if (a.type === 'notify_team') return true
     if (a.type === 'log_activity') return true
-    // Phase 2+ not-yet-implemented — no-ops, not errors
-    if (a.type === 'assign_tag' || a.type === 'webhook') return true
+    if (a.type === 'assign_tag') return true
+    if (a.type === 'remove_tag') return true
+    if (a.type === 'webhook') return true
   }
   return false
 }
@@ -527,9 +581,91 @@ async function executeActionsForContact(
         executed++
       }
 
-      // Phase 2+ not-yet-implemented — log and skip, not an error
-      if (action.type === 'assign_tag' || action.type === 'webhook') {
-        console.log(`[automationEngine] Action type '${action.type}' not yet implemented, skipping`)
+      // assign_tag — add a tag to the contact's tags array
+      if (action.type === 'assign_tag') {
+        await admin.firestore().collection('contacts').doc(contactId).update({
+          tags: FieldValue.arrayUnion(action.tag),
+        })
+        await to(
+          logActivity(teamId, {
+            date: FieldValue.serverTimestamp(),
+            event: 'automation_assign_tag',
+            parameters: {
+              description: `Automation added tag '${action.tag}' to ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
+              tag: action.tag,
+              rule_id: ruleId,
+              automated: true,
+            },
+            refs: { contact: contactId, user: null },
+          })
+        )
+        executed++
+      }
+
+      // remove_tag — remove a tag from the contact's tags array
+      if (action.type === 'remove_tag') {
+        await admin.firestore().collection('contacts').doc(contactId).update({
+          tags: FieldValue.arrayRemove(action.tag),
+        })
+        await to(
+          logActivity(teamId, {
+            date: FieldValue.serverTimestamp(),
+            event: 'automation_remove_tag',
+            parameters: {
+              description: `Automation removed tag '${action.tag}' from ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
+              tag: action.tag,
+              rule_id: ruleId,
+              automated: true,
+            },
+            refs: { contact: contactId, user: null },
+          })
+        )
+        executed++
+      }
+
+      // webhook — POST a JSON payload to an external HTTPS endpoint
+      if (action.type === 'webhook') {
+        const url = action.url
+        if (!url?.startsWith('https://')) {
+          console.log(`[automationEngine] webhook: skipping non-HTTPS or empty URL for rule ${ruleId}`)
+        } else {
+          const payload = {
+            event: 'automation_rule_fired',
+            rule_id: ruleId,
+            team_id: teamId,
+            triggered_at: now.toISOString(),
+            contact: {
+              id: contactId,
+              firstname: contact.firstname,
+              lastname: contact.lastname,
+              email: contact.email,
+              type: contact.type,
+              membership_status: contact.membership_status,
+              total_sessions_count: contact.total_sessions_count,
+              tags: contact.tags ?? [],
+            },
+          }
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 10000)
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Lineup-Automation/1.0',
+              },
+              body: JSON.stringify(payload),
+              signal: controller.signal,
+            })
+            clearTimeout(timeoutId)
+            if (!response.ok) {
+              throw new Error(`Webhook returned HTTP ${response.status}`)
+            }
+            executed++
+          } finally {
+            clearTimeout(timeoutId)
+          }
+        }
       }
     } catch (err) {
       console.error(`[automationEngine] Action '${action.type}' failed for contact ${contactId}:`, (err as Error).message)

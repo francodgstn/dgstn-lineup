@@ -20,6 +20,7 @@ function resolveBookingTrigger(
 
   if (nextStatus === 'confirmed' && prevStatus !== 'confirmed') return 'booking_confirmed'
   if (nextStatus === 'no_show' && prevStatus !== 'no_show') return 'booking_no_show'
+  if (nextStatus === 'cancelled' && prevStatus !== 'cancelled') return 'booking_cancelled'
 
   return null
 }

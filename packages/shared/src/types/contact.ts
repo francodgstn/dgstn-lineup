@@ -75,6 +75,9 @@ export interface Contact {
   // Alerts (denormalized count)
   alerts_count?: number
 
+  // Tags — free-form labels attached by automations or manually
+  tags?: string[]
+
   // Ranking — keyed by RankingSystem.id (e.g. { "hmd": 5, "internal": 2 })
   ranks?: Record<string, number>
 
