@@ -259,6 +259,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `automation_logs` Firestore rules (manager/owner read; write only via Admin SDK)
 - ✅ Web UI — Automations page (`/automations`): RuleCard, RuleDialog (trigger + conditions + actions), TemplateDialog
 - ✅ Starter kit — `systemDefaults.ts` (4 templates + 8 rules); `StarterKitBanner` with idempotent seeder; banner auto-hides once all system_key templates are loaded
+- ✅ Automation Library — `automationLibrary.ts` (18 pre-built rules, 5 categories, 4-language templates); `LibraryDialog` (search, filter, multi-select, installed state); empty state quick-start replaces banner
 
 ---
 
