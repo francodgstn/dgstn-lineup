@@ -8,3 +8,6 @@ export { onBookingWrite } from './onBookingWrite'
 // Phase 3 — delayed execution (Cloud Tasks)
 export { onSessionWrite } from './onSessionWrite'
 export { executeDelayedRule } from './executeDelayedRule'
+
+// Inbound webhook trigger
+export { inboundWebhook } from './inboundWebhook'

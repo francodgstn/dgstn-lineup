@@ -30,6 +30,8 @@ export type AutomationTriggerType =
   | 'subscription_changed'
   // Tier 1+2 — event trigger + optional Cloud Tasks delay
   | 'session_ended'
+  // Inbound webhook — external system POSTs to a team's unique URL
+  | 'inbound_webhook'
   // Always available
   | 'manual'
 
@@ -70,6 +72,7 @@ export interface AutomationRule {
   trigger: {
     type: AutomationTriggerType
     delayMinutes?: number
+    webhook_endpoint_id?: string   // inbound_webhook: which endpoint fires this rule
   }
   conditions: AutomationCondition[]
   actions: AutomationAction[]
@@ -1021,6 +1024,13 @@ export async function fireEventRules(
   for (const ruleDoc of rulesSnap.docs) {
     const rule = normalizeRule(ruleDoc.id, ruleDoc.data() as Record<string, unknown>)
     if (rule.trigger.type !== triggerType) continue
+
+    // inbound_webhook rules are scoped to a specific endpoint
+    if (
+      triggerType === 'inbound_webhook' &&
+      rule.trigger.webhook_endpoint_id &&
+      rule.trigger.webhook_endpoint_id !== _context?.webhook_endpoint_id
+    ) continue
 
     const log = await runRule(rule, subjects, teamId, teamData, {
       triggerTier: 'event',

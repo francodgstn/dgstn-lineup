@@ -34,12 +34,14 @@ import {
 } from 'lucide-react'
 import { TEAMS_COLLECTION } from '@lineup/shared'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
+import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
 interface AutomationTrigger {
   type: string
   delayMinutes?: number
+  webhook_endpoint_id?: string  // inbound_webhook only
 }
 
 interface AutomationCondition {
@@ -116,6 +118,7 @@ const TRIGGER_OPTIONS = [
   { value: 'membership_status_changed', label: 'Membership status changed',      icon: ShieldCheck,    supportsDelay: true },
   { value: 'subscription_changed',      label: 'Subscription changed',           icon: CreditCard,     supportsDelay: true },
   { value: 'session_ended',             label: 'Session ended',                  icon: CalendarCheck,  supportsDelay: true },
+  { value: 'inbound_webhook',           label: 'Inbound webhook',                icon: Webhook,        supportsDelay: false },
   { value: 'manual',                    label: 'Manual only',                    icon: Play,           supportsDelay: false },
 ]
 
@@ -670,17 +673,19 @@ const ruleSchema = z.object({
 type RuleFormValues = z.infer<typeof ruleSchema>
 
 function RuleDialog({
-  open, onOpenChange, teamId, editing, templates, onSaved,
+  open, onOpenChange, teamId, editing, templates, webhookEndpoints, onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   teamId: string
   editing: AutomationRule | null
   templates: OutreachTemplate[]
+  webhookEndpoints: WebhookEndpoint[]
   onSaved: () => void
 }) {
   const [conditions, setConditions] = useState<FormCondition[]>([])
   const [actions, setActions] = useState<FormAction[]>([])
+  const [webhookEndpointId, setWebhookEndpointId] = useState('')
   const [submitError, setSubmitError] = useState('')
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors, isSubmitting } } = useForm<RuleFormValues>({
@@ -717,10 +722,12 @@ function RuleDialog({
         tag: (a as { tag?: string }).tag,
         url: (a as { url?: string }).url,
       })))
+      setWebhookEndpointId(editing.trigger.webhook_endpoint_id ?? '')
     } else {
       reset({ name: '', trigger_type: 'schedule_daily', delay_minutes: 0, active: true })
       setConditions([])
       setActions([])
+      setWebhookEndpointId('')
     }
     setSubmitError('')
   }, [open, editing, reset])
@@ -735,6 +742,9 @@ function RuleDialog({
           type: values.trigger_type,
           ...(supportsDelay && values.delay_minutes && values.delay_minutes > 0
             ? { delayMinutes: values.delay_minutes }
+            : {}),
+          ...(values.trigger_type === 'inbound_webhook' && webhookEndpointId
+            ? { webhook_endpoint_id: webhookEndpointId }
             : {}),
         },
         conditions: conditions.map((c) => {
@@ -831,6 +841,29 @@ function RuleDialog({
                 </div>
               )}
             </div>
+
+            {/* Inbound webhook — endpoint selector */}
+            {triggerType === 'inbound_webhook' && (
+              <div>
+                <Label className="text-xs">Webhook endpoint</Label>
+                {webhookEndpoints.length === 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    No endpoints yet — create one in the Webhooks dialog first.
+                  </p>
+                ) : (
+                  <Select value={webhookEndpointId} onValueChange={(v) => setWebhookEndpointId(v ?? '')}>
+                    <SelectTrigger className="mt-1 h-8 text-xs">
+                      <SelectValue placeholder="Select endpoint" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {webhookEndpoints.map((ep) => (
+                        <SelectItem key={ep.id} value={ep.id} className="text-xs">{ep.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
           </div>
 
           <Separator />
@@ -1020,11 +1053,23 @@ export default function AutomationsPage() {
 
   const { data: rules = [], isLoading: rulesLoading } = useRules(currentTeamId)
   const { data: templates = [] } = useTemplates(currentTeamId)
+  const { data: webhookEndpoints = [] } = useQuery<WebhookEndpoint[]>({
+    queryKey: ['webhook_endpoints', currentTeamId],
+    enabled: !!currentTeamId,
+    queryFn: async () => {
+      if (!currentTeamId) return []
+      const snap = await getDocs(
+        collection(db, TEAMS_COLLECTION, currentTeamId, 'webhook_endpoints')
+      )
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as WebhookEndpoint)
+    },
+  })
 
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [webhooksOpen, setWebhooksOpen] = useState(false)
   const [quickStarting, setQuickStarting] = useState(false)
 
   const invalidateRules     = () => qc.invalidateQueries({ queryKey: ['automation_rules', currentTeamId] })
@@ -1096,6 +1141,9 @@ export default function AutomationsPage() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
               <BookOpen className="h-4 w-4 mr-1.5" />Library
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setWebhooksOpen(true)}>
+              <Webhook className="h-4 w-4 mr-1.5" />Webhooks
             </Button>
             <Button size="sm" onClick={() => { setEditingRule(null); setRuleDialogOpen(true) }}>
               <Plus className="h-4 w-4 mr-1.5" />New automation
@@ -1191,6 +1239,7 @@ export default function AutomationsPage() {
             teamId={currentTeamId}
             editing={editingRule}
             templates={templates}
+            webhookEndpoints={webhookEndpoints}
             onSaved={invalidateRules}
           />
           <TemplateDialog
@@ -1204,6 +1253,11 @@ export default function AutomationsPage() {
             teamId={currentTeamId}
             rules={rules}
             onInstalled={invalidateAll}
+          />
+          <WebhookEndpointsDialog
+            open={webhooksOpen}
+            onOpenChange={setWebhooksOpen}
+            teamId={currentTeamId}
           />
         </>
       )}
