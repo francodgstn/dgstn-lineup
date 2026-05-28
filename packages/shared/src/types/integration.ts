@@ -19,6 +19,11 @@ export interface PayrexxGatewayConfig {
   // API secret stored in Firebase Secret Manager, not in Firestore
   api_secret_ref?: string
   currency: string
+  // Webhook signing secret (from Payrexx dashboard) — stored in Firestore, owners only.
+  // Used by handlePayrexxWebhook to verify X-Webhook-Signature (HMAC-SHA256, hex).
+  webhook_signing_secret?: string
+  // Fallback subscription_type_id when transaction.referenceId is blank.
+  default_subscription_type_id?: string
 }
 
 export type PaymentGatewayConfig = StripeGatewayConfig | PayrexxGatewayConfig

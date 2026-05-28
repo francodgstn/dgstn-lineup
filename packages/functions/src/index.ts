@@ -72,8 +72,11 @@ export { verifyMembershipCode, completeMembershipSignup } from './auth/completeM
 // Coaching (1:1 slots) — booking/cancellation handled by bookSession/cancelBooking
 export { generateCoachSlots, generateCoachSlotsScheduled, onCoachAvailabilityWritten } from './coaching'
 
-// SaaS billing
+// SaaS billing (Lineup's own platform subscriptions — Stripe)
 export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices } from './saas-billing'
+
+// Team-level billing (clubs charging their own students — Payrexx)
+export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'
 
 // Outreach
 export { sendOutreachEmail } from './outreach'
@@ -92,6 +95,7 @@ export {
   onBookingWrite,
   onSessionWrite,
   executeDelayedRule,
+  inboundWebhook,
 } from './automation'
 
 // --- Stubs (TODO: port from hmd-lineup) ---

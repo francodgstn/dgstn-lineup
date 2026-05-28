@@ -88,6 +88,9 @@ const gatewaySchema = z.object({
   gatewayType: z.enum(['stripe', 'payrexx']),
   identifier: z.string().min(1, 'Required'),
   currency: z.string().min(3).max(3).toUpperCase(),
+  // Payrexx-specific (optional — only submitted when gatewayType === 'payrexx')
+  webhookSigningSecret: z.string().optional(),
+  defaultSubscriptionTypeId: z.string().optional(),
 })
 type GatewayFormData = z.infer<typeof gatewaySchema>
 
@@ -1089,6 +1092,7 @@ function PaymentsTab({ teamId }: { teamId: string }) {
   const qc = useQueryClient()
   const { user } = useAuth()
   const { data: integrations = [], isLoading } = useGatewayIntegrations(teamId)
+  const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
 
   const [showDialog, setShowDialog] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -1121,6 +1125,8 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       gatewayType: cfg.type,
       identifier: cfg.type === 'stripe' ? cfg.publishable_key : cfg.instance_name,
       currency: cfg.currency,
+      webhookSigningSecret: cfg.type === 'payrexx' ? (cfg.webhook_signing_secret ?? '') : '',
+      defaultSubscriptionTypeId: cfg.type === 'payrexx' ? (cfg.default_subscription_type_id ?? '') : '',
     })
     setEditingId(item.id)
     setShowDialog(true)
@@ -1132,7 +1138,17 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       const config =
         values.gatewayType === 'stripe'
           ? { type: 'stripe' as const, publishable_key: values.identifier, currency: values.currency }
-          : { type: 'payrexx' as const, instance_name: values.identifier, currency: values.currency }
+          : {
+              type: 'payrexx' as const,
+              instance_name: values.identifier,
+              currency: values.currency,
+              ...(values.webhookSigningSecret?.trim()
+                ? { webhook_signing_secret: values.webhookSigningSecret.trim() }
+                : {}),
+              ...(values.defaultSubscriptionTypeId?.trim()
+                ? { default_subscription_type_id: values.defaultSubscriptionTypeId.trim() }
+                : {}),
+            }
 
       if (editingId) {
         await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', editingId), {
@@ -1248,6 +1264,54 @@ function PaymentsTab({ teamId }: { teamId: string }) {
               <Label>{t('paymentsCurrency')}</Label>
               <Input {...register('currency')} placeholder="CHF" maxLength={3} className="uppercase w-24" />
             </div>
+
+            {/* Payrexx-specific fields */}
+            {selectedType === 'payrexx' && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Webhook signing secret</Label>
+                  <Input
+                    {...register('webhookSigningSecret')}
+                    type="password"
+                    placeholder="Paste from Payrexx dashboard → Webhooks"
+                    autoComplete="off"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Used to verify <code className="bg-muted px-1 rounded">X-Webhook-Signature</code> on incoming payment webhooks.{' '}
+                    Leave blank to disable signature verification (not recommended).
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Default subscription type</Label>
+                  <Controller
+                    name="defaultSubscriptionTypeId"
+                    control={control}
+                    render={({ field }) => (
+                      <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                        <SelectTrigger>
+                          <span className="flex flex-1 text-left text-sm truncate">
+                            {subscriptionTypes.find(s => s.id === field.value)?.name ?? (
+                              <span className="text-muted-foreground">None — use Payrexx referenceId</span>
+                            )}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">None — use Payrexx referenceId</SelectItem>
+                          {subscriptionTypes.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Applied when the Payrexx payment link has no <code className="bg-muted px-1 rounded">referenceId</code>.
+                    Set <code className="bg-muted px-1 rounded">referenceId</code> to the subscription type ID on each Payrexx link for per-plan control.
+                  </p>
+                </div>
+              </>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
               <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>

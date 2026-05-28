@@ -129,7 +129,9 @@
       "PowerShell(Get-ChildItem \"C:\\\\git\\\\hmd\\\\hmd-lineup\\\\functions\\\\src\" | Where-Object { $_.Name -match \"syncSubscription|onSession|onContact\" } | Select-Object Name)",
       "PowerShell(Get-ChildItem -Path \"C:\\\\git\\\\hmd\\\\hmd-lineup\\\\src\" -Recurse -Depth 2 | Select-Object -ExpandProperty FullName | Where-Object { $_ -match \"booking|Booking\" })",
       "PowerShell(auth *)",
-      "PowerShell(Get-ChildItem \"C:\\\\git\\\\dgstn\\\\dgstn-lineup\\\\packages\\\\functions\\\\dist\\\\utils\" -Name | Where-Object { $_ -match \"referral\" })"
+      "PowerShell(Get-ChildItem \"C:\\\\git\\\\dgstn\\\\dgstn-lineup\\\\packages\\\\functions\\\\dist\\\\utils\" -Name | Where-Object { $_ -match \"referral\" })",
+      "Bash(xargs grep -l \"outreach_template\\\\|automation\")",
+      "Bash(xargs grep -l \"automation_rules\\\\|AutomationRule\")"
     ]
   }
 }

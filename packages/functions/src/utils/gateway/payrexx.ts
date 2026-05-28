@@ -8,7 +8,7 @@ import type { GatewayAdapter, CheckoutSession, Invoice, WebhookEvent } from './i
 //   POST /v1/Gateway/         — create a hosted payment gateway (checkout)
 //   DELETE /v1/Subscription/{id}/ — cancel a subscription
 //   GET /v1/Invoice/          — list invoices
-//   Webhook: validate HMAC-SHA256 signature in X-Payrexx-Signature header
+//   Webhook: validate HMAC-SHA256 signature in X-Webhook-Signature header (hex)
 
 export class PayrexxAdapter implements GatewayAdapter {
   constructor(private config: PayrexxGatewayConfig) {}

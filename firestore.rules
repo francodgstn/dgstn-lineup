@@ -307,6 +307,13 @@ service cloud.firestore {
         allow write:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
       }
 
+      // Payment events (Payrexx) — immutable audit trail written by handlePayrexxWebhook.
+      // Managers and owners can read; no client writes allowed.
+      match /payment_events/{eventId} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
       // Rebuild jobs subcollection (background score history rebuild tasks)
       match /rebuild_jobs/{jobId} {
         // Owners and managers can read their own job status (for onSnapshot polling)
