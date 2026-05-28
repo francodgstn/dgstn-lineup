@@ -29,10 +29,10 @@ import {
   Workflow, Plus, Pencil, Play, Trash2, MoreVertical,
   Clock, UserPlus, CheckCircle, XCircle,
   CalendarCheck, ShieldCheck, CreditCard, Mail, Bell,
-  FileText, Settings2, Zap, RefreshCw, Sparkles,
+  FileText, Settings2, Zap, RefreshCw, Sparkles, BookOpen,
 } from 'lucide-react'
 import { TEAMS_COLLECTION } from '@lineup/shared'
-import { SYSTEM_TEMPLATES, SYSTEM_RULES } from './systemDefaults'
+import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -224,185 +224,6 @@ function useTemplates(teamId: string | null) {
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as OutreachTemplate)
     },
   })
-}
-
-// ─── StarterKitBanner ─────────────────────────────────────────────────────────
-
-/**
- * Shows a one-time banner prompting the manager to load the system starter kit.
- * Hides permanently once all system-key templates are present in the team's data.
- * The seeding writes directly to Firestore (no cloud function needed) and is
- * idempotent — existing docs with matching system_key are skipped.
- */
-function StarterKitBanner({
-  teamId,
-  templates,
-  rules,
-  onSeeded,
-}: {
-  teamId: string
-  templates: OutreachTemplate[]
-  rules: AutomationRule[]
-  onSeeded: () => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [seeding, setSeeding] = useState(false)
-  const [error, setError] = useState('')
-
-  // Show the banner only when at least one system template is still missing
-  const hasAllSystemTemplates = SYSTEM_TEMPLATES.every((t) =>
-    templates.some((existing) => existing.system_key === t.system_key)
-  )
-  if (hasAllSystemTemplates) return null
-
-  // Count how many items are genuinely new (not already seeded)
-  const newTemplates = SYSTEM_TEMPLATES.filter(
-    (t) => !templates.some((existing) => existing.system_key === t.system_key)
-  )
-  const newRules = SYSTEM_RULES.filter(
-    (r) => !rules.some((existing) => existing.system_key === r.system_key)
-  )
-
-  async function handleSeed() {
-    setSeeding(true)
-    setError('')
-    try {
-      // 1. Create missing templates, build systemKey → docId map
-      const createdIds: Record<string, string> = {}
-
-      for (const tmpl of SYSTEM_TEMPLATES) {
-        const existing = templates.find((t) => t.system_key === tmpl.system_key)
-        if (existing) {
-          createdIds[tmpl.system_key] = existing.id
-          continue
-        }
-        const { system_key, ...tmplData } = tmpl
-        const ref = await addDoc(
-          collection(db, TEAMS_COLLECTION, teamId, 'outreach_templates'),
-          { ...tmplData, system_key, created_at: serverTimestamp() }
-        )
-        createdIds[tmpl.system_key] = ref.id
-      }
-
-      // 2. Create missing rules, resolve template IDs from the map
-      for (const rule of SYSTEM_RULES) {
-        if (rules.some((existing) => existing.system_key === rule.system_key)) continue
-        const templateId = createdIds[rule.template_system_key]
-        if (!templateId) continue
-
-        const { template_system_key, ...ruleData } = rule
-        await addDoc(
-          collection(db, TEAMS_COLLECTION, teamId, 'automation_rules'),
-          {
-            ...ruleData,
-            trigger: { type: 'schedule_daily' },
-            actions: [{ type: 'send_email', templateId }],
-            created_at: serverTimestamp(),
-            updated_at: serverTimestamp(),
-          }
-        )
-      }
-
-      setOpen(false)
-      onSeeded()
-    } catch (err) {
-      setError((err as Error).message || 'Failed to load starter kit')
-    } finally {
-      setSeeding(false)
-    }
-  }
-
-  return (
-    <>
-      {/* Banner */}
-      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-start gap-3">
-        <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-primary">Get started with a starter kit</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {SYSTEM_TEMPLATES.length} email templates and {SYSTEM_RULES.length} automation rules covering
-            trial recovery, post-trial conversion, student win-back, and milestone emails.
-            All rules are created inactive — review and activate when ready.
-          </p>
-        </div>
-        <Button size="sm" variant="outline" className="shrink-0 text-xs h-7 border-primary/30 text-primary hover:bg-primary/10" onClick={() => setOpen(true)}>
-          <Sparkles className="h-3 w-3 mr-1.5" />Load starter kit
-        </Button>
-      </div>
-
-      {/* Confirmation dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Automation starter kit
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-1">
-            <p className="text-xs text-muted-foreground">
-              The following will be added to your account. Items already present are skipped automatically.
-              All rules start as <strong>inactive</strong> — you control when they go live.
-            </p>
-
-            {newTemplates.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                  <Mail className="h-3 w-3" />{newTemplates.length} email template{newTemplates.length !== 1 ? 's' : ''}
-                </p>
-                <ul className="space-y-1">
-                  {newTemplates.map((t) => (
-                    <li key={t.system_key} className="text-xs text-foreground flex items-center gap-1.5">
-                      <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                      {t.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {newRules.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                  <Workflow className="h-3 w-3" />{newRules.length} automation rule{newRules.length !== 1 ? 's' : ''}
-                </p>
-                <ul className="space-y-1">
-                  {newRules.map((r) => (
-                    <li key={r.system_key} className="text-xs text-foreground flex items-center gap-1.5">
-                      <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                      {r.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {newTemplates.length === 0 && newRules.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-2">
-                All starter-kit items are already loaded.
-              </p>
-            )}
-
-            {error && <p className="text-xs text-destructive">{error}</p>}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={seeding}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSeed}
-              disabled={seeding || (newTemplates.length === 0 && newRules.length === 0)}
-            >
-              {seeding ? 'Applying…' : 'Apply'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
 }
 
 // ─── RuleCard ─────────────────────────────────────────────────────────────────
@@ -1116,10 +937,32 @@ export default function AutomationsPage() {
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [quickStarting, setQuickStarting] = useState(false)
 
   const invalidateRules     = () => qc.invalidateQueries({ queryKey: ['automation_rules', currentTeamId] })
   const invalidateTemplates = () => qc.invalidateQueries({ queryKey: ['outreach_templates', currentTeamId] })
-  const invalidateAll       = () => { invalidateRules(); invalidateTemplates() }
+  const invalidateAll       = () => {
+    invalidateRules()
+    invalidateTemplates()
+    qc.invalidateQueries({ queryKey: ['outreach_templates_for_library', currentTeamId] })
+  }
+
+  async function handleQuickStart() {
+    if (!currentTeamId) return
+    setQuickStarting(true)
+    try {
+      const snap = await getDocs(collection(db, TEAMS_COLLECTION, currentTeamId, 'outreach_templates'))
+      const allTmpl = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const installedRuleKeys = new Set(rules.flatMap(r => r.system_key ? [r.system_key] : []))
+      await installStarterBundle(currentTeamId, allTmpl, installedRuleKeys)
+      invalidateAll()
+    } catch (err) {
+      console.error('[QuickStart] failed:', err)
+    } finally {
+      setQuickStarting(false)
+    }
+  }
 
   async function handleToggle(rule: AutomationRule) {
     if (!currentTeamId) return
@@ -1164,21 +1007,14 @@ export default function AutomationsPage() {
             <Button variant="outline" size="sm" onClick={() => setTemplateDialogOpen(true)}>
               <FileText className="h-4 w-4 mr-1.5" />Templates
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
+              <BookOpen className="h-4 w-4 mr-1.5" />Library
+            </Button>
             <Button size="sm" onClick={() => { setEditingRule(null); setRuleDialogOpen(true) }}>
               <Plus className="h-4 w-4 mr-1.5" />New automation
             </Button>
           </div>
         </div>
-
-        {/* Starter kit banner — shown until all system templates are loaded */}
-        {!rulesLoading && currentTeamId && (
-          <StarterKitBanner
-            teamId={currentTeamId}
-            templates={templates}
-            rules={rules}
-            onSeeded={invalidateAll}
-          />
-        )}
 
         {/* Loading */}
         {rulesLoading && (
@@ -1189,19 +1025,25 @@ export default function AutomationsPage() {
 
         {/* Empty state */}
         {!rulesLoading && rules.length === 0 && (
-          <div className="flex flex-col items-center gap-4 py-16 text-center">
+          <div className="flex flex-col items-center gap-5 py-16 text-center">
             <div className="rounded-full bg-muted p-4">
               <Workflow className="h-8 w-8 text-muted-foreground" />
             </div>
             <div>
               <p className="font-semibold">No automations yet</p>
-              <p className="text-muted-foreground text-sm mt-1">
-                Create your first automation to automatically send emails or create alerts.
+              <p className="text-muted-foreground text-sm mt-1 max-w-xs">
+                Load a starter kit in one click, browse the library to pick individual rules, or build your own.
               </p>
             </div>
-            <Button onClick={() => { setEditingRule(null); setRuleDialogOpen(true) }}>
-              <Plus className="h-4 w-4 mr-2" />New automation
-            </Button>
+            <div className="flex gap-2 flex-wrap justify-center">
+              <Button variant="outline" onClick={handleQuickStart} disabled={quickStarting}>
+                <Sparkles className="h-4 w-4 mr-2" />
+                {quickStarting ? 'Installing…' : 'Quick-start (8 rules)'}
+              </Button>
+              <Button onClick={() => setLibraryOpen(true)}>
+                <BookOpen className="h-4 w-4 mr-2" />Browse library
+              </Button>
+            </div>
           </div>
         )}
 
@@ -1268,6 +1110,13 @@ export default function AutomationsPage() {
             open={templateDialogOpen}
             onOpenChange={setTemplateDialogOpen}
             teamId={currentTeamId}
+          />
+          <LibraryDialog
+            open={libraryOpen}
+            onOpenChange={setLibraryOpen}
+            teamId={currentTeamId}
+            rules={rules}
+            onInstalled={invalidateAll}
           />
         </>
       )}
