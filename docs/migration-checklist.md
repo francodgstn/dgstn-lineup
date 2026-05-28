@@ -40,14 +40,14 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `sendTeamInvitation`
 - ✅ `getTeamInvitationDetails`
 - ✅ `acceptTeamInvitation`
-- ❌ `manageTeamInvitation` (club+)
-- ❌ `manageTeamMember` (club+)
+- ✅ `manageTeamInvitation` (club+)
+- ✅ `manageTeamMember` (club+)
 - ✅ `generateAuthToken`
 - ✅ `sendMembershipVerificationCode`
 - ✅ `verifyMembershipCode`
 - ✅ `completeMembershipSignup`
-- ❌ `validateAuthToken`
-- ❌ `generateApiKey`
+- ✅ `validateAuthToken`
+- ✅ `generateApiKey`
 
 ### Sync Triggers
 - ✅ `syncTeamPublicProfile`
@@ -65,8 +65,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `selfCheckIn`
 - ✅ `generateCoachSlots` (callable) + `generateCoachSlotsScheduled` (daily cron)
 - ~~`generateCoachSlotsNow`~~ — merged into `generateCoachSlots` callable
-- ❌ `setSessionLocation`
-- ❌ `setSessionTags`
+- ✅ `setSessionLocation`
+- ✅ `setSessionTags`
 
 ### Bookings
 - ✅ `bookSession`
@@ -85,18 +85,18 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `restoreContact`
 - ✅ `checkInContact`
 - ✅ `moveContacts`
-- ❌ `generateContactQR`
+- ✅ `generateContactQR`
 - ~~`sendContactQrCodes`~~ — deprecated; QR code lives in the student mobile app instead
-- ❌ `getMembershipQR`
-- ❌ `manageContactUpdateRequest`
-- ❌ `requestContactUpdate`
-- ❌ `switchMembershipContact`
+- ✅ `getMembershipQR`
+- ✅ `manageContactUpdateRequest`
+- ✅ `requestContactUpdate`
+- ✅ `switchMembershipContact`
 
 ### Events (club+)
 - ✅ `sendEventInvitations`
 - ✅ `getEventInvitationDetails`
 - ✅ `handleEventInvitationResponse`
-- ❌ `trackEventAttendees`
+- ✅ `trackEventAttendees`
 
 ### Analytics & Tracking
 - ✅ `trackBookings`
@@ -105,27 +105,28 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `trackContacts`
 - ✅ `trackSessionParticipants`
 - ❌ `generateDashboardInsight` (AI/Gemini)
-- ✅ `dailyTasks` (scheduled cleanup)
-- ❌ `triggerAutomationRule`
-- ❌ `previewAutomationRule`
+- ✅ `dailyTasks` (scheduled cleanup + generic `runScheduledRules` scanner)
+- ✅ `triggerAutomationRule`
+- ✅ `previewAutomationRule`
 
 ### Gamification (club+)
 - ✅ `recalculateScores`
 - ✅ `resetScores`
-- ❌ `processScoresRebuildJob`
-- ❌ `triggerScoresRebuild`
-- ❌ `recalculateScoresFromDate`
+- ✅ `processScoresRebuildJob`
+- ✅ `triggerScoresRebuild`
+- ✅ `recalculateScoresFromDate`
 
 ### Outreach & Referrals
-- ❌ `sendOutreachEmail`
-- ❌ `generateReferralCodes`
-- ❌ `confirmReferral`
-- ❌ `getMyReferralCode`
-- ❌ `getMyReferralStats`
+- ~~`sendAutomationRuleEmails`~~ — superseded by the generalized automation engine (`runScheduledRules` + event triggers); the daily-only approach has been replaced
+- ✅ `sendOutreachEmail` — manual one-off email callable (retained)
+- ✅ `generateReferralCodes`
+- ✅ `confirmReferral`
+- ✅ `getMyReferralCode`
+- ✅ `getMyReferralStats`
 
 ### Portal
 - ✅ `portalPreview`
-- ❌ `getInTouchForm`
+- ✅ `getInTouchForm`
 
 ### SaaS Billing
 - ✅ `SaasSubscription` shared type (`packages/shared/src/types/saas.ts`)
@@ -237,10 +238,37 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 
 ---
 
+## Automation Engine (new in Lineup — supersedes hmd-lineup's daily-only outreach approach)
+
+> Replaces the simple `sendAutomationRuleEmails` daily job with a three-tier generalised engine.
+> Outreach emails are one possible action; the engine supports diverse triggers and multiple action types.
+
+- ✅ `utils/automationEngine.ts` — core engine: normalizeRule, evaluateContactConditions, runRule, fireEventRules, enqueueDelayedRule
+  - ✅ Backward-compat: normalizeRule() converts legacy hmd-lineup rule format at runtime (no data migration)
+  - ✅ 30-day dedup window for scheduled rules; 7-day for event-triggered rules
+  - ✅ Plan gate in fireEventRules (club+ only)
+  - ✅ Phase-2+ action types (assign_tag, update_field, webhook) are no-ops until implemented, not errors
+- ✅ `dailyTasks/runScheduledRules.ts` — Tier 3 generic scanner (`schedule_daily` rules, inactivity etc.)
+  - ✅ Plan gate per team (club+ only)
+- ✅ `automation/triggerAutomationRule` — onCall, manual trigger, bypasses dedup (club+)
+- ✅ `automation/previewAutomationRule` — onCall, dry-run preview, returns matched contacts (club+)
+- ✅ `automation/onContactWrite` — Tier 1 event trigger: contact_created, membership_status_changed, subscription_changed
+- ✅ `automation/onBookingWrite` — Tier 1 event trigger: booking_confirmed, booking_no_show
+- ✅ `automation/onSessionWrite` — Tier 1+2: session_ended detection + Cloud Tasks enqueue
+- ✅ `automation/executeDelayedRule` — Tier 2 Cloud Tasks handler; loads participants at execution time (not at enqueue); idempotency guard via automation_logs
+- ✅ `automation_logs` Firestore rules (manager/owner read; write only via Admin SDK)
+- ✅ Web UI — Automations page (`/automations`): RuleCard, RuleDialog (trigger + conditions + actions), TemplateDialog
+- ✅ Starter kit — `systemDefaults.ts` (4 templates + 8 rules); `StarterKitBanner` with idempotent seeder; banner auto-hides once all system_key templates are loaded
+
+---
+
 ## Security & Data Model
 
 - ✅ Firestore security rules — full port + teamId model
 - ✅ `public_profile` pattern enforced for all portal-facing data
 - ✅ Sync triggers for team, session, activity public profiles
 - ❌ `syncSubscriptionTypesToPublicProfile` trigger
-- ❌ Firestore indexes reviewed for all new queries added during migration
+- ⏳ Firestore indexes reviewed for all new queries added during migration
+  - automation_logs: `idempotency_key` equality query (single-field auto-indexed by Firestore ✅)
+  - automation_rules: collectionGroup + `active` filter (needs composite index in firestore.indexes.json ❌)
+  - sessions: `teamId`+`end` range query used in booking-condition path (check existing index ❌)

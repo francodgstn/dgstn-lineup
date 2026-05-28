@@ -15,10 +15,14 @@ export { validateTeamSlug } from './teams/validateTeamSlug'
 export { sendTeamInvitation } from './teams/sendTeamInvitation'
 export { getTeamInvitationDetails } from './teams/getTeamInvitationDetails'
 export { acceptTeamInvitation } from './teams/acceptTeamInvitation'
+export { manageTeamInvitation } from './teams/manageTeamInvitation'
+export { manageTeamMember } from './teams/manageTeamMember'
 
 // Auth
 export { generateAuthToken } from './auth/generateAuthToken'
 export { sendMembershipVerificationCode } from './auth/sendMembershipVerificationCode'
+export { validateAuthToken } from './auth/validateAuthToken'
+export { generateApiKey } from './auth/generateApiKey'
 
 // Sync triggers
 export { syncTeamPublicProfile } from './sync/syncTeamPublicProfile'
@@ -35,15 +39,26 @@ export { bookSession, sendBookingVerificationCode, verifyBookingCode, cancelBook
 
 // Gamification
 export { recalculateScores, resetScores } from './gamification'
+export { triggerScoresRebuild } from './gamification/triggerScoresRebuild'
+export { processScoresRebuildJob } from './gamification/processScoresRebuildJob'
+export { recalculateScoresFromDate } from './gamification/recalculateScoresFromDate'
 
 // Sessions
 export { generateRecurringSessions, cancelSession, updateRecurringSession, selfCheckIn } from './sessions'
+export { setSessionLocation } from './sessions/setSessionLocation'
+export { setSessionTags } from './sessions/setSessionTags'
 
 // Contacts
 export { deleteContact, restoreContact, checkInContact, moveContacts } from './contacts'
+export { generateContactQR } from './contacts/generateContactQR'
+export { getMembershipQR } from './contacts/getMembershipQR'
+export { requestContactUpdate } from './contacts/requestContactUpdate'
+export { manageContactUpdateRequest } from './contacts/manageContactUpdateRequest'
+export { switchMembershipContact } from './contacts/switchMembershipContact'
 
 // Events
 export { sendEventInvitations, getEventInvitationDetails, handleEventInvitationResponse } from './events'
+export { trackEventAttendees } from './events/trackEventAttendees'
 
 // Analytics
 export { trackBookings, trackSessions, weeklyReports, trackContacts, trackSessionParticipants } from './analytics'
@@ -60,6 +75,24 @@ export { generateCoachSlots, generateCoachSlotsScheduled, onCoachAvailabilityWri
 // SaaS billing
 export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices } from './saas-billing'
 
+// Outreach
+export { sendOutreachEmail } from './outreach'
+
+// Referrals
+export { generateReferralCodes, confirmReferral, getMyReferralCode, getMyReferralStats } from './referrals'
+
+// Portal
+export { getInTouchForm } from './portal/getInTouchForm'
+
+// Automation engine (Phase 1–3: scheduled, manual callables, event triggers, delayed via Cloud Tasks)
+export {
+  triggerAutomationRule,
+  previewAutomationRule,
+  onContactWrite,
+  onBookingWrite,
+  onSessionWrite,
+  executeDelayedRule,
+} from './automation'
+
 // --- Stubs (TODO: port from hmd-lineup) ---
-// export { generateContactQR } from './contacts'
 // export { generateDashboardInsight } from './analytics'

@@ -1,0 +1,118 @@
+// Ported from hmd-lineup/functions/src/manageTeamMember/index.js
+import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { to } from '../utils/async'
+import {
+  getTeamRole,
+  addTeamMember,
+  removeTeamMember,
+  updateTeamMemberRole,
+} from '../utils/teams'
+import type { TeamRole } from '@lineup/shared'
+
+const VALID_ROLES: TeamRole[] = ['owner', 'manager', 'viewer']
+const VALID_ACTIONS = ['add', 'remove', 'updateRole'] as const
+type Action = (typeof VALID_ACTIONS)[number]
+
+export const manageTeamMember = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated')
+
+  const callerId = request.auth.uid
+  const { teamId, action, userId, role } = request.data as {
+    teamId: string
+    action: Action
+    userId: string
+    role?: TeamRole
+  }
+
+  if (!teamId) throw new HttpsError('invalid-argument', 'teamId is required')
+  if (!action || !(VALID_ACTIONS as readonly string[]).includes(action)) {
+    throw new HttpsError('invalid-argument', 'action must be one of: add, remove, updateRole')
+  }
+
+  const [callerRoleErr, callerRole] = await to(getTeamRole(callerId, teamId))
+  if (callerRoleErr) {
+    console.error('Error getting caller role:', callerRoleErr)
+    throw new HttpsError('internal', 'Failed to verify permissions')
+  }
+  if (!callerRole) throw new HttpsError('permission-denied', 'You are not a member of this team')
+  if (!(['owner', 'manager'] as TeamRole[]).includes(callerRole)) {
+    throw new HttpsError('permission-denied', 'Only team owners and managers can manage members')
+  }
+
+  switch (action) {
+    case 'add': {
+      if (!userId) throw new HttpsError('invalid-argument', 'userId is required for add action')
+      if (!role || !VALID_ROLES.includes(role)) {
+        throw new HttpsError('invalid-argument', 'Valid role is required for add action')
+      }
+      if (role === 'owner' && callerRole !== 'owner') {
+        throw new HttpsError('permission-denied', 'Only team owners can add other owners')
+      }
+
+      const [addErr] = await to(addTeamMember(teamId, userId, role, callerId))
+      if (addErr) {
+        console.error('Error adding team member:', addErr)
+        throw new HttpsError('internal', `Failed to add team member: ${addErr.message}`)
+      }
+
+      return { success: true, message: 'Team member added successfully', userId, role }
+    }
+
+    case 'remove': {
+      if (!userId) throw new HttpsError('invalid-argument', 'userId is required for remove action')
+      if (userId === callerId) throw new HttpsError('failed-precondition', 'You cannot remove yourself from the team')
+
+      const [targetRoleErr, targetRole] = await to(getTeamRole(userId, teamId))
+      if (targetRoleErr) {
+        console.error('Error getting target user role:', targetRoleErr)
+        throw new HttpsError('internal', 'Failed to verify target user permissions')
+      }
+      if (!targetRole) throw new HttpsError('not-found', 'User is not a member of this team')
+      if ((['owner', 'manager'] as TeamRole[]).includes(targetRole) && callerRole !== 'owner') {
+        throw new HttpsError('permission-denied', 'Only team owners can remove owners or managers')
+      }
+
+      const [removeErr] = await to(removeTeamMember(teamId, userId))
+      if (removeErr) {
+        console.error('Error removing team member:', removeErr)
+        throw new HttpsError('internal', `Failed to remove team member: ${removeErr.message}`)
+      }
+
+      return { success: true, message: 'Team member removed successfully', userId }
+    }
+
+    case 'updateRole': {
+      if (!userId) throw new HttpsError('invalid-argument', 'userId is required for updateRole action')
+      if (!role || !VALID_ROLES.includes(role)) {
+        throw new HttpsError('invalid-argument', 'Valid role is required for updateRole action')
+      }
+      if (userId === callerId) throw new HttpsError('failed-precondition', 'You cannot change your own role')
+
+      const [targetRoleErr, targetRole] = await to(getTeamRole(userId, teamId))
+      if (targetRoleErr) {
+        console.error('Error getting target user role:', targetRoleErr)
+        throw new HttpsError('internal', 'Failed to verify target user permissions')
+      }
+      if (!targetRole) throw new HttpsError('not-found', 'User is not a member of this team')
+
+      // Only owners can change owner/manager roles or assign owner
+      if (
+        (targetRole === 'owner' || targetRole === 'manager' || role === 'owner') &&
+        callerRole !== 'owner'
+      ) {
+        throw new HttpsError('permission-denied', 'Only team owners can manage owner/manager roles')
+      }
+
+      const [updateErr] = await to(updateTeamMemberRole(teamId, userId, role))
+      if (updateErr) {
+        console.error('Error updating team member role:', updateErr)
+        throw new HttpsError('internal', `Failed to update team member role: ${updateErr.message}`)
+      }
+
+      return { success: true, message: 'Team member role updated successfully', userId, newRole: role }
+    }
+
+    default:
+      throw new HttpsError('invalid-argument', 'Invalid action')
+  }
+})

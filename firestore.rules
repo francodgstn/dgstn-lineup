@@ -294,6 +294,12 @@ service cloud.firestore {
         allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
       }
 
+      // Automation execution logs — managers can read; only functions write (Admin SDK bypasses rules)
+      match /automation_logs/{logId} {
+        allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
       // Rebuild jobs subcollection (background score history rebuild tasks)
       match /rebuild_jobs/{jobId} {
         // Owners and managers can read their own job status (for onSnapshot polling)

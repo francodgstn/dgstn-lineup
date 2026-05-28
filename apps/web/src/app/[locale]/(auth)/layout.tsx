@@ -14,6 +14,7 @@ import {
   CalendarRange,
   ClipboardList,
   Trophy,
+  Workflow,
   UserCog,
   Globe,
   Settings,
@@ -52,7 +53,8 @@ const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionEngage',
     items: [
-      { href: '/gamification', labelKey: 'gamification', icon: Trophy, minPlan: 'club' },
+      { href: '/gamification',  labelKey: 'gamification',  icon: Trophy,    minPlan: 'club' },
+      { href: '/automations',   labelKey: 'automations',   icon: Workflow,  minPlan: 'club' },
     ],
   },
   {

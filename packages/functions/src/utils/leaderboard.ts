@@ -83,6 +83,79 @@ export async function incrementLeaderboardCounters(leaderId: string | null, top5
   }
 }
 
+/**
+ * Returns the leader and top-5 contact IDs for a given team+month,
+ * derived from each contact's monthly_scores subcollection.
+ */
+export async function getMonthlyLeaderboardPositions(
+  teamId: string,
+  month: string
+): Promise<{ leaderId: string | null; top5Ids: string[] }> {
+  if (!teamId || !month) return { leaderId: null, top5Ids: [] }
+  const db = admin.firestore()
+
+  const [queryErr, contactsSnap] = await to(
+    db.collection(CONTACTS_COLLECTION).where('teamId', '==', teamId).where('deleted_at', '==', null).get()
+  )
+  if (queryErr || !contactsSnap || contactsSnap.empty) return { leaderId: null, top5Ids: [] }
+
+  const scored: Array<{ contactId: string; score: number }> = []
+  for (const contactDoc of contactsSnap.docs) {
+    const [msErr, msSnap] = await to(
+      contactDoc.ref.collection(MONTHLY_SCORES_SUBCOLLECTION).where('month', '==', month).where('team_id', '==', teamId).limit(1).get()
+    )
+    if (!msErr && msSnap && !msSnap.empty) {
+      const finalScore = (msSnap.docs[0].data().final_score as number) || 0
+      if (finalScore > 0) scored.push({ contactId: contactDoc.id, score: finalScore })
+    }
+  }
+
+  scored.sort((a, b) => b.score - a.score)
+  return {
+    leaderId: scored.length > 0 ? scored[0].contactId : null,
+    top5Ids: scored.slice(0, 5).map((e) => e.contactId),
+  }
+}
+
+/**
+ * Snapshots ranked leaderboard data for a month into
+ * teams/{teamId}/leaderboard_history/{YYYY-MM}.
+ * Safe to call multiple times — overwrites.
+ */
+export async function snapshotLeaderboardHistory(teamId: string, month: string): Promise<void> {
+  if (!teamId || !month) return
+  const db = admin.firestore()
+
+  const [queryErr, contactsSnap] = await to(
+    db.collection(CONTACTS_COLLECTION).where('teamId', '==', teamId).where('deleted_at', '==', null).get()
+  )
+  if (queryErr || !contactsSnap || contactsSnap.empty) return
+
+  const scored: Array<{ contact_id: string; score: number }> = []
+  for (const contactDoc of contactsSnap.docs) {
+    const [msErr, msSnap] = await to(
+      contactDoc.ref.collection(MONTHLY_SCORES_SUBCOLLECTION).where('month', '==', month).where('team_id', '==', teamId).limit(1).get()
+    )
+    if (!msErr && msSnap && !msSnap.empty) {
+      const finalScore = (msSnap.docs[0].data().final_score as number) || 0
+      if (finalScore > 0) scored.push({ contact_id: contactDoc.id, score: finalScore })
+    }
+  }
+
+  scored.sort((a, b) => b.score - a.score)
+  let currentRank = 1
+  const entries = scored.map((entry, index) => {
+    if (index > 0 && entry.score < scored[index - 1].score) currentRank = index + 1
+    return { ...entry, rank: currentRank }
+  })
+
+  const histRef = db.collection(TEAMS_COLLECTION).doc(teamId).collection('leaderboard_history').doc(month)
+  const [writeErr] = await to(
+    histRef.set({ month, entries, entries_count: entries.length, generated_at: FieldValue.serverTimestamp() })
+  )
+  if (writeErr) console.error(`snapshotLeaderboardHistory write error for ${teamId}/${month}:`, writeErr)
+}
+
 export async function clearTeamLeaderboard(teamId: string, month: string): Promise<void> {
   if (!teamId) return
   const db = admin.firestore()

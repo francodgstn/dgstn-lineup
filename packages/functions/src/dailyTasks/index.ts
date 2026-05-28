@@ -4,6 +4,7 @@ import { autoArchiveTrialContacts } from './autoArchiveTrialContacts'
 import { resetExpiredStreaks } from './resetExpiredStreaks'
 import { resetMonthlyScores } from './resetMonthlyScores'
 import { sendBookingReminders } from './sendBookingReminders'
+import { runScheduledRules } from './runScheduledRules'
 
 
 interface TaskResult {
@@ -25,6 +26,7 @@ export const dailyTasks = onSchedule(
       { name: 'resetExpiredStreaks', handler: resetExpiredStreaks },
       { name: 'resetMonthlyScores', handler: resetMonthlyScores },
       { name: 'sendBookingReminders', handler: sendBookingReminders },
+      { name: 'runScheduledRules', handler: runScheduledRules },
     ]
 
     const results: TaskResult[] = []

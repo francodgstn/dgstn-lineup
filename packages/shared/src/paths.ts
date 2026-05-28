@@ -16,6 +16,7 @@ export const ALERT_PRESETS_SUBCOLLECTION = 'alert_presets'
 export const SUBSCRIPTION_TYPES_SUBCOLLECTION = 'subscription_types'
 export const OUTREACH_TEMPLATES_SUBCOLLECTION = 'outreach_templates'
 export const AUTOMATION_RULES_SUBCOLLECTION = 'automation_rules'
+export const AUTOMATION_LOGS_SUBCOLLECTION = 'automation_logs'
 export const TEAM_REBUILD_JOBS_SUBCOLLECTION = 'rebuild_jobs'
 
 // SaaS-specific (new in Lineup)
