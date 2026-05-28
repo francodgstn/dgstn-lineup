@@ -76,7 +76,7 @@ function LibraryCard({
       onClick={installed ? undefined : onToggle}
       disabled={installed}
       className={[
-        'relative w-full text-left rounded-xl border p-3.5 transition-all',
+        'w-full text-left rounded-lg border px-4 py-3 transition-all flex items-center gap-4',
         installed
           ? 'bg-muted/40 border-transparent opacity-60 cursor-default'
           : selected
@@ -86,7 +86,7 @@ function LibraryCard({
     >
       {/* Checkbox / installed indicator */}
       <span className={[
-        'absolute top-3 right-3 h-4.5 w-4.5 rounded flex items-center justify-center border text-xs',
+        'shrink-0 h-4 w-4 rounded flex items-center justify-center border',
         installed
           ? 'border-transparent bg-muted text-muted-foreground'
           : selected
@@ -96,10 +96,14 @@ function LibraryCard({
         {(installed || selected) && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
       </span>
 
-      <p className="font-semibold text-sm leading-snug pr-6">{item.name}</p>
-      <p className="text-xs text-muted-foreground mt-1 leading-snug line-clamp-2">{item.description}</p>
+      {/* Text block */}
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm leading-snug">{item.name}</p>
+        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{item.description}</p>
+      </div>
 
-      <div className="flex gap-1.5 mt-2.5 flex-wrap">
+      {/* Chips + installed badge — right-aligned */}
+      <div className="shrink-0 flex items-center gap-1.5">
         <span className="inline-flex items-center gap-1 text-xs rounded-full border px-2 py-0.5 text-muted-foreground bg-muted">
           <TrigIcon className="h-2.5 w-2.5" />{trig.label}
           {item.rule.trigger.delayMinutes ? ` +${item.rule.trigger.delayMinutes}m` : ''}
@@ -318,7 +322,7 @@ export function LibraryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <BookOpen className="h-5 w-5 text-primary" />
@@ -393,7 +397,7 @@ export function LibraryDialog({
                     {meta.label}
                   </h3>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-2">
                   {items.map(item => (
                     <LibraryCard
                       key={item.library_key}
