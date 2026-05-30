@@ -266,6 +266,14 @@ service cloud.firestore {
         allow read, write: if hasTeamRole(teamId, 'owner');
       }
 
+      // Installed plugins — teams enable/configure add-on plugins here
+      // All members can read (needed by automation UI and nav display)
+      // Only owners can install, configure, or remove plugins
+      match /installed_plugins/{pluginId} {
+        allow read:  if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'owner');
+      }
+
       // Subscription types subcollection (team-defined subscription plans and aggregators)
       match /subscription_types/{subscriptionTypeId} {
         // Team members (and authenticated users viewing the public portal) can read.
@@ -314,6 +322,14 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Custom event types (club-level; org-level event types live under organizations/{orgId}/event_types)
+      match /event_types/{typeId} {
+        allow read:   if isTeamMember(teamId);
+        allow create: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow update: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow delete: if hasTeamRole(teamId, 'owner');
+      }
+
       // Rebuild jobs subcollection (background score history rebuild tasks)
       match /rebuild_jobs/{jobId} {
         // Owners and managers can read their own job status (for onSnapshot polling)
@@ -331,6 +347,22 @@ service cloud.firestore {
                         && request.auth.token.sessionExpires != null
                         && request.auth.token.sessionExpires >= request.time.toMillis());
         // Only cloud functions can write
+        allow write: if false;
+      }
+
+      // Historical leaderboard snapshots (one doc per YYYY-MM)
+      match /leaderboard_history/{month} {
+        allow read: if isTeamMember(teamId)
+                    || (request.auth != null
+                        && request.auth.token.teamId == teamId
+                        && request.auth.token.sessionExpires != null
+                        && request.auth.token.sessionExpires >= request.time.toMillis());
+        allow write: if false;
+      }
+
+      // Monthly session counters (written by trackSessions trigger)
+      match /session_counts/{month} {
+        allow read: if isTeamMember(teamId);
         allow write: if false;
       }
     }
@@ -442,31 +474,44 @@ service cloud.firestore {
 
     }
 
-    // Checkins
-    // Events are organization-wide, so all authenticated users can create/read checkins
+    // Checkins — team-scoped, created/updated by team managers
     match /checkins/{checkin} {
-      allow create: if isAuthed();
-      allow update, delete: if belongsToUserTeam(resource) || hasRole('admin');
-      allow read: if isAuthed();
+      allow create: if isAuthed() && (
+        request.resource.data.teamId == request.auth.token.teamId ||
+        isTeamMember(request.resource.data.teamId)
+      );
+      allow update: if belongsToUserTeam(resource) || hasRole('admin');
+      allow delete: if belongsToUserTeam(resource) || hasRole('admin');
+      allow read:   if belongsToUserTeam(resource) || hasRole('admin');
     }
 
-    // Events
-    // Events are organization-wide (not team-scoped)
-    // All authenticated users can read, only admins can create/modify
+    // Events — team-scoped
     match /events/{event} {
       allow create: if belongsToUserTeam(request.resource) || hasRole('admin');
-      allow read: if belongsToUserTeam(resource) || hasRole('admin');
+      allow read:   if belongsToUserTeam(resource) || hasRole('admin');
       allow update: if belongsToUserTeam(resource) || hasRole('admin');
       allow delete: if hasRole('admin');
 
-      // Invitations subcollection
+      // Per-event categories (used by fighting_cup and any plugin with hasCategories)
+      match /categories/{category} {
+        allow read:  if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)));
+        allow write: if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event))) || hasRole('admin');
+      }
+
+      // RSVP attendees — written by Cloud Functions
+      match /attendees/{attendee} {
+        allow read:  if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)));
+        allow write: if false;
+      }
+
+      // Invitations — written by Cloud Functions, readable by token holder (portal)
       match /invitations/{invitation} {
-        allow read: if isAuthed();
-        allow write: if false; // Only cloud functions can write
+        allow read:  if isAuthed();
+        allow write: if false;
       }
     }
 
-    // Categories
+    // Legacy global categories (HMD-only — read-only going forward)
     match /categories/{category} {
       allow read;
     }

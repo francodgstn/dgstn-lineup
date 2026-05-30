@@ -25,6 +25,7 @@ import { EVENTS_COLLECTION } from '@lineup/shared'
 import type { Event, EventType } from '@lineup/shared'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, Users, MapPin, CalendarDays } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -313,7 +314,12 @@ function EventCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-medium text-sm">{event.title}</p>
+              <Link
+                href={`/events/${event.id}`}
+                className="font-medium text-sm hover:underline hover:text-primary transition-colors"
+              >
+                {event.title}
+              </Link>
               <Badge variant="secondary" className="text-xs capitalize shrink-0">
                 {t(`type_${event.type}` as Parameters<typeof t>[0])}
               </Badge>

@@ -1339,9 +1339,115 @@ function PaymentsTab({ teamId }: { teamId: string }) {
   )
 }
 
+// ─── outreach tab ─────────────────────────────────────────────────────────────
+
+const KEY_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+
+function OutreachTab({ teamId }: { teamId: string }) {
+  const qc = useQueryClient()
+  const { data: team } = useTeam(teamId)
+
+  type VarRow = { key: string; value: string }
+  const [vars, setVars] = useState<VarRow[]>([])
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  // Initialise local state once team data arrives
+  useEffect(() => {
+    if (team?.outreach_placeholders) {
+      setVars(
+        Object.entries(team.outreach_placeholders).map(([key, value]) => ({ key, value: value as string })),
+      )
+    }
+  }, [team?.outreach_placeholders])
+
+  const addRow = () => setVars((prev) => [...prev, { key: '', value: '' }])
+
+  const removeRow = (idx: number) => setVars((prev) => prev.filter((_, i) => i !== idx))
+
+  const updateRow = (idx: number, field: 'key' | 'value', val: string) =>
+    setVars((prev) => prev.map((row, i) => (i === idx ? { ...row, [field]: val } : row)))
+
+  const onSave = async () => {
+    setSaveError('')
+    // Validate keys
+    const invalid = vars.filter((v) => v.key && !KEY_REGEX.test(v.key))
+    if (invalid.length > 0) {
+      setSaveError(`Invalid key names: ${invalid.map((v) => v.key).join(', ')}. Use letters, numbers and underscores only.`)
+      return
+    }
+    const payload = Object.fromEntries(vars.filter((v) => v.key.trim()).map((v) => [v.key.trim(), v.value]))
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { outreach_placeholders: payload })
+      await qc.invalidateQueries({ queryKey: ['team', teamId] })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setSaveError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="font-semibold text-sm">Custom variables</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Define key→value pairs you can use in email templates as{' '}
+          <code className="font-mono text-xs bg-muted px-1 rounded">{'{{key}}'}</code>. For example,{' '}
+          <code className="font-mono text-xs bg-muted px-1 rounded">discountCode</code> → <code className="font-mono text-xs bg-muted px-1 rounded">WELCOME20</code>.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {vars.map((row, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            {/* Key input with {{ }} adornment */}
+            <div className="flex items-center border rounded-md overflow-hidden flex-1">
+              <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-r select-none font-mono">{'{{'}</span>
+              <input
+                value={row.key}
+                onChange={(e) => updateRow(idx, 'key', e.target.value)}
+                placeholder="variableName"
+                className="flex-1 px-2 py-2 text-sm font-mono outline-none bg-background"
+              />
+              <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-l select-none font-mono">{'}}'}</span>
+            </div>
+            {/* Value input */}
+            <input
+              value={row.value}
+              onChange={(e) => updateRow(idx, 'value', e.target.value)}
+              placeholder="Substitution value"
+              className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+            />
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeRow(idx)}>
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <Button variant="outline" size="sm" onClick={addRow}>
+        <Plus className="h-4 w-4 mr-1.5" />Add variable
+      </Button>
+
+      {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+
+      <div className="flex justify-end">
+        <Button size="sm" onClick={onSave} disabled={saving}>
+          {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = 'general' | 'subscriptions' | 'alerts' | 'ranking' | 'payments'
+type SettingsTab = 'general' | 'subscriptions' | 'alerts' | 'ranking' | 'payments' | 'outreach'
 
 export default function TeamSettingsPage() {
   const { currentTeamId } = useAuth()
@@ -1368,6 +1474,7 @@ export default function TeamSettingsPage() {
     { id: 'alerts', label: t('tabAlerts') },
     { id: 'ranking', label: t('tabRanking') },
     { id: 'payments', label: t('tabPayments') },
+    { id: 'outreach', label: 'Outreach' },
   ]
 
   return (
@@ -1401,6 +1508,7 @@ export default function TeamSettingsPage() {
           {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
           {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
           {tab === 'payments' && <PaymentsTab teamId={currentTeamId} />}
+          {tab === 'outreach' && <OutreachTab teamId={currentTeamId} />}
         </CardContent>
       </Card>
     </div>

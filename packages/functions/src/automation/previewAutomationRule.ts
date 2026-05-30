@@ -105,7 +105,7 @@ export const previewAutomationRule = onCall(async (request) => {
           firstname: booking.firstname || '',
           lastname: booking.lastname || '',
           email: booking.email || '',
-          total_sessions_count: 0,
+          total_sessions: 0,
         }
         const contactId: string = booking.contactId || booking.contact || ''
         if (contactId) {

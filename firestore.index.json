@@ -2200,5 +2200,15 @@
         }
       ]
     }
+  ,{
+      "collectionGroup": "automation_rules",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "teamId",    "order": "ASCENDING" },
+        { "fieldPath": "active",    "order": "ASCENDING" },
+        { "fieldPath": "trigger",   "order": "ASCENDING" },
+        { "fieldPath": "__name__",  "order": "ASCENDING" }
+      ]
+    }
   ]
 }

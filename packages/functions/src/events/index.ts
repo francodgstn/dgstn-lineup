@@ -190,7 +190,7 @@ export const getEventInvitationDetails = onCall(async (request) => {
     event: {
       id: eventDoc.id,
       title: event.title,
-      description: event.desc,
+      description: (event.description ?? event.desc) as string | undefined,
       start: (event.start as Timestamp)?.toDate().toJSON(),
       end: (event.end as Timestamp)?.toDate().toJSON(),
       location: event.location,

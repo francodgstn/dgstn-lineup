@@ -64,10 +64,22 @@ export interface Contact {
   // Gamification
   current_month_score?: number
   current_streak?: number
+  streak_last_qualified_week?: string
   max_streak?: number
   total_sessions?: number
   last_session_at?: Timestamp
+  distinct_activities?: string[]
+  times_leader?: number
+  times_top5?: number
   custom_badges?: string[]
+
+  // Booking / portal counters (managed by Cloud Functions)
+  pending_bookings_count?: number
+  conversions_count?: number
+
+  // Portal login tracking
+  login_count?: number
+  last_login_at?: Timestamp
 
   // Activity tracking
   last_seen_at?: Timestamp

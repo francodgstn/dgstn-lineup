@@ -38,7 +38,7 @@ import {
   BookOpen, Award, ChevronDown, ChevronUp, Plus, Trash2, Trophy,
   Bell, Timer, Activity, ArchiveRestore, AlertTriangle,
   UserPlus, Archive, RotateCcw, ArrowRightLeft, CheckCircle, XCircle,
-  CalendarCheck, CalendarX, CreditCard, BarChart2, Lock, Flag,
+  CalendarCheck, CalendarX, CreditCard, BarChart2, Lock, Flag, Link2,
 } from 'lucide-react'
 import { LineChart, Line, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { GoalsTab } from './GoalsTab'
@@ -1750,7 +1750,7 @@ type TabId = 'profile' | 'notes' | 'activity' | 'bookings' | 'subscriptions' | '
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { currentTeamId } = useAuth()
+  const { currentTeamId, team } = useAuth()
   const { data: contact, isLoading } = useContact(id)
   const [tab, setTab] = useState<TabId>('profile')
   const router = useRouter()
@@ -1759,9 +1759,20 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const { hasFeature } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
 
+  const [linkCopied, setLinkCopied] = useState(false)
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['contact', id] })
     qc.invalidateQueries({ queryKey: ['contacts'] })
+  }
+
+  const handleCopyUpdateLink = () => {
+    if (!team?.slug) return
+    const url = `${window.location.origin}/portal/${team.slug}/contact-update?contactId=${id}`
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    })
   }
 
   if (isLoading) {
@@ -1859,6 +1870,17 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   </span>
                 )}
               </div>
+              {/* Copy update-request link */}
+              {team?.slug && !contact.archived_at && !contact.deleted_at && (
+                <button
+                  onClick={handleCopyUpdateLink}
+                  className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  title={t('copyUpdateLink')}
+                >
+                  <Link2 className="h-3.5 w-3.5 shrink-0" />
+                  {linkCopied ? t('updateLinkCopied') : t('copyUpdateLink')}
+                </button>
+              )}
             </div>
           </div>
 

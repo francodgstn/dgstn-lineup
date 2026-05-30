@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
-  collection, query, where, orderBy, getDocs,
+  collection, query, where, orderBy, getDocs, getDoc,
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -33,8 +33,10 @@ import {
   Tag, Webhook,
 } from 'lucide-react'
 import { TEAMS_COLLECTION } from '@lineup/shared'
+import { Link } from '@/i18n/navigation'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -172,7 +174,11 @@ function conditionSummary(c: AutomationCondition): string {
   return `${opt.label}: ${c.value ?? ''}`
 }
 
-function actionSummary(a: AutomationAction, templates: OutreachTemplate[]): string {
+function actionSummary(
+  a: AutomationAction,
+  templates: OutreachTemplate[],
+  pluginActionLabels?: Record<string, string>
+): string {
   if (a.type === 'send_email') {
     const tmpl = templates.find((t) => t.id === (a.templateId ?? ''))
     return `Email: ${tmpl?.name ?? a.templateId ?? '—'}`
@@ -184,6 +190,10 @@ function actionSummary(a: AutomationAction, templates: OutreachTemplate[]): stri
   if (a.type === 'assign_tag') return `Add tag: ${a.tag ?? '—'}`
   if (a.type === 'remove_tag') return `Remove tag: ${a.tag ?? '—'}`
   if (a.type === 'webhook') return `Webhook: ${a.url ?? '—'}`
+  // Plugin-contributed actions — use the label from the manifest if available
+  if (a.type.startsWith('plugin:')) {
+    return pluginActionLabels?.[a.type] ?? a.type
+  }
   return a.type
 }
 
@@ -515,8 +525,14 @@ const UPDATE_FIELD_OPTIONS = [
 ] as const
 
 function ActionEditor({
-  actions, templates, onChange,
-}: { actions: FormAction[]; templates: OutreachTemplate[]; onChange: (a: FormAction[]) => void }) {
+  actions, templates, onChange, actionTypeLabels: labelOverrides,
+}: {
+  actions: FormAction[]
+  templates: OutreachTemplate[]
+  onChange: (a: FormAction[]) => void
+  actionTypeLabels?: Record<string, string>
+}) {
+  const resolvedActionLabels = labelOverrides ?? ACTION_TYPE_LABELS
   function add() { onChange([...actions, { type: 'send_email', templateId: '' }]) }
   function remove(i: number) { onChange(actions.filter((_, idx) => idx !== i)) }
   function update(i: number, patch: Partial<FormAction>) {
@@ -549,7 +565,7 @@ function ActionEditor({
               >
                 <SelectTrigger className="h-8 text-xs">
                   <span className="flex flex-1 text-left text-xs truncate">
-                    {ACTION_TYPE_LABELS[action.type] ?? action.type}
+                    {resolvedActionLabels[action.type] ?? action.type}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -701,6 +717,7 @@ type RuleFormValues = z.infer<typeof ruleSchema>
 
 function RuleDialog({
   open, onOpenChange, teamId, editing, templates, webhookEndpoints, onSaved,
+  triggerOptions: triggerOptionsProp, actionTypeLabels: actionTypeLabelsProp,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -709,7 +726,10 @@ function RuleDialog({
   templates: OutreachTemplate[]
   webhookEndpoints: WebhookEndpoint[]
   onSaved: () => void
+  triggerOptions?: Array<{ value: string; label: string; icon: React.ElementType; supportsDelay: boolean }>
+  actionTypeLabels?: Record<string, string>
 }) {
+  const resolvedTriggerOptions = triggerOptionsProp ?? TRIGGER_OPTIONS
   const [conditions, setConditions] = useState<FormCondition[]>([])
   const [actions, setActions] = useState<FormAction[]>([])
   const [webhookEndpointId, setWebhookEndpointId] = useState('')
@@ -721,7 +741,7 @@ function RuleDialog({
   })
 
   const triggerType = watch('trigger_type')
-  const supportsDelay = TRIGGER_OPTIONS.find((t) => t.value === triggerType)?.supportsDelay ?? false
+  const supportsDelay = resolvedTriggerOptions.find((t) => t.value === triggerType)?.supportsDelay ?? false
 
   // Populate form when editing
   useEffect(() => {
@@ -846,11 +866,11 @@ function RuleDialog({
                 <Select value={triggerType} onValueChange={(v) => setValue('trigger_type', v ?? '')}>
                   <SelectTrigger className="mt-1 h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
-                      {TRIGGER_OPTIONS.find((t) => t.value === triggerType)?.label ?? triggerType}
+                      {resolvedTriggerOptions.find((t) => t.value === triggerType)?.label ?? triggerType}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {TRIGGER_OPTIONS.map((t) => (
+                    {resolvedTriggerOptions.map((t) => (
                       <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -913,7 +933,7 @@ function RuleDialog({
           {/* Actions */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</p>
-            <ActionEditor actions={actions} templates={templates} onChange={setActions} />
+            <ActionEditor actions={actions} templates={templates} onChange={setActions} actionTypeLabels={actionTypeLabelsProp} />
           </div>
 
           {submitError && <p className="text-xs text-destructive">{submitError}</p>}
@@ -927,6 +947,111 @@ function RuleDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── PlaceholderPanel ────────────────────────────────────────────────────────
+
+const PLACEHOLDER_GROUPS = [
+  {
+    label: 'Contact',
+    items: [
+      { key: 'firstname',         hint: 'First name' },
+      { key: 'lastname',          hint: 'Last name' },
+      { key: 'contact_type',      hint: 'Trial / Student / External' },
+      { key: 'membership_status', hint: 'Active / Expired / …' },
+      { key: 'sessions_count',    hint: 'Sessions attended' },
+    ],
+  },
+  {
+    label: 'Team',
+    items: [
+      { key: 'teamName',      hint: 'Team name' },
+      { key: 'bookingUrl',    hint: 'Trial booking page' },
+      { key: 'membershipUrl', hint: 'Membership signup' },
+      { key: 'portalUrl',     hint: 'Team portal' },
+      { key: 'websiteUrl',    hint: 'Website (if set)' },
+      { key: 'reviewUrl',     hint: 'Review page (if set)' },
+    ],
+  },
+  {
+    label: 'Dates',
+    items: [
+      { key: 'date',    hint: 'Today' },
+      { key: 'date+7',  hint: '+7 days (any N)' },
+      { key: 'date-7',  hint: '-7 days (any N)' },
+    ],
+  },
+]
+
+function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<string, string> }) {
+  const [copied, setCopied] = useState<string>('')
+
+  const copyToken = (key: string) => {
+    const token = `{{${key}}}`
+    navigator.clipboard.writeText(token).catch(() => {})
+    setCopied(key)
+    setTimeout(() => setCopied(''), 2000)
+  }
+
+  return (
+    <div className="w-56 shrink-0 border-l overflow-y-auto px-3 py-4 space-y-4">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Placeholders</p>
+      <p className="text-xs text-muted-foreground -mt-2">Click to copy</p>
+
+      {PLACEHOLDER_GROUPS.map((group) => (
+        <div key={group.label}>
+          <p className="text-xs font-medium text-foreground mb-1">{group.label}</p>
+          <div className="space-y-0.5">
+            {group.items.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => copyToken(item.key)}
+                className="w-full text-left px-2 py-1 rounded hover:bg-accent transition-colors group"
+              >
+                <span className="font-mono text-xs text-primary group-hover:underline">
+                  {copied === item.key ? '✓ Copied' : `{{${item.key}}}`}
+                </span>
+                <span className="block text-xs text-muted-foreground leading-tight">{item.hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* Custom variables */}
+      <div>
+        <p className="text-xs font-medium text-foreground mb-1">Custom</p>
+        {Object.keys(customPlaceholders).length === 0 ? (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground italic">No custom variables yet.</p>
+            <Link href="/team/settings" className="text-xs text-primary hover:underline" onClick={() => {}}>
+              Manage in Settings → Outreach
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-0.5">
+            {Object.entries(customPlaceholders).map(([key, value]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => copyToken(key)}
+                className="w-full text-left px-2 py-1 rounded hover:bg-accent transition-colors group"
+              >
+                <span className="font-mono text-xs text-primary group-hover:underline">
+                  {copied === key ? '✓ Copied' : `{{${key}}}`}
+                </span>
+                <span className="block text-xs text-muted-foreground leading-tight truncate">{value}</span>
+              </button>
+            ))}
+            <Link href="/team/settings" className="block text-xs text-muted-foreground hover:underline mt-1 px-2">
+              Manage in Settings → Outreach
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -957,6 +1082,18 @@ function TemplateDialog({
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as OutreachTemplate)
     },
   })
+
+  // Fetch team data for custom placeholders
+  const { data: teamDoc } = useQuery({
+    queryKey: ['team_for_templates', teamId],
+    enabled: open && !!teamId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, TEAMS_COLLECTION, teamId))
+      return snap.data() ?? {}
+    },
+  })
+  const customPlaceholders = (teamDoc?.outreach_placeholders as Record<string, string>) ?? {}
 
   const [editingTmpl, setEditingTmpl] = useState<OutreachTemplate | null>(null)
   const [formOpen, setFormOpen] = useState(false)
@@ -998,13 +1135,14 @@ function TemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className={`sm:max-w-[900px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden`}>
+        <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b">
           <DialogTitle>Email templates</DialogTitle>
         </DialogHeader>
 
         {!formOpen ? (
-          <div className="space-y-3">
+          /* ── List view — full width ── */
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
             {isLoading && <Skeleton className="h-20 w-full" />}
 
             {!isLoading && allTemplates.length === 0 && (
@@ -1036,41 +1174,46 @@ function TemplateDialog({
             </Button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit(onSaveTmpl)} className="space-y-4">
-            <div>
-              <Label className="text-xs">Template name</Label>
-              <Input {...register('name')} placeholder="e.g. No-show follow-up" className="mt-1" />
-              {errors.name && <p className="text-xs text-destructive mt-1">{errors.name.message}</p>}
-            </div>
-            <div>
-              <Label className="text-xs">Email subject</Label>
-              <Input {...register('subject')} placeholder="We missed you!" className="mt-1" />
-              {errors.subject && <p className="text-xs text-destructive mt-1">{errors.subject.message}</p>}
-            </div>
-            <div>
-              <Label className="text-xs">
-                Body <span className="font-normal text-muted-foreground">(markdown, use {'{{firstname}}'} etc.)</span>
-              </Label>
-              <Textarea {...register('body')} rows={6} placeholder="Hi {{firstname}},&#10;&#10;We noticed you missed our session…" className="mt-1 font-mono text-xs" />
-              {errors.body && <p className="text-xs text-destructive mt-1">{errors.body.message}</p>}
-            </div>
-            <div className="w-32">
-              <Label className="text-xs">Language</Label>
-              <select {...register('language')} className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
-                <option value="en">English</option>
-                <option value="de">Deutsch</option>
-                <option value="fr">Français</option>
-                <option value="it">Italiano</option>
-              </select>
-            </div>
-            {submitErr && <p className="text-xs text-destructive">{submitErr}</p>}
-            <div className="flex justify-between pt-1">
-              <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>← Back</Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving…' : editingTmpl ? 'Save changes' : 'Create template'}
-              </Button>
-            </div>
-          </form>
+          /* ── Form view — two-panel ── */
+          <div className="flex flex-1 min-h-0">
+            {/* Left: form */}
+            <form onSubmit={handleSubmit(onSaveTmpl)} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              <div>
+                <Label className="text-xs">Template name</Label>
+                <Input {...register('name')} placeholder="e.g. No-show follow-up" className="mt-1" />
+                {errors.name && <p className="text-xs text-destructive mt-1">{errors.name.message}</p>}
+              </div>
+              <div>
+                <Label className="text-xs">Email subject</Label>
+                <Input {...register('subject')} placeholder="We missed you!" className="mt-1" />
+                {errors.subject && <p className="text-xs text-destructive mt-1">{errors.subject.message}</p>}
+              </div>
+              <div>
+                <Label className="text-xs">Body</Label>
+                <Textarea {...register('body')} rows={12} placeholder="Hi {{firstname}},&#10;&#10;We noticed you missed our session…" className="mt-1 font-mono text-xs" />
+                {errors.body && <p className="text-xs text-destructive mt-1">{errors.body.message}</p>}
+              </div>
+              <div className="w-36">
+                <Label className="text-xs">Language</Label>
+                <select {...register('language')} className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
+                  <option value="en">English</option>
+                  <option value="de">Deutsch</option>
+                  <option value="fr">Français</option>
+                  <option value="it">Italiano</option>
+                </select>
+              </div>
+              {submitErr && <p className="text-xs text-destructive">{submitErr}</p>}
+              <div className="flex justify-between pt-1 pb-4">
+                <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>← Back</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving…' : editingTmpl ? 'Save changes' : 'Create template'}
+                </Button>
+              </div>
+            </form>
+
+            {/* Right: placeholder sidebar */}
+            <PlaceholderPanel customPlaceholders={customPlaceholders} />
+          </div>
         )}
       </DialogContent>
     </Dialog>
@@ -1082,6 +1225,36 @@ function TemplateDialog({
 export default function AutomationsPage() {
   const { currentTeamId, user } = useAuth()
   const qc = useQueryClient()
+
+  // Plugin-contributed triggers and actions
+  const { plugins: installedPlugins } = useInstalledPlugins()
+
+  const allTriggerOptions = [
+    ...TRIGGER_OPTIONS,
+    ...installedPlugins.flatMap((p) =>
+      (p.manifest.automationTriggers ?? []).map((tr) => ({
+        value: tr.id,
+        label: tr.labelKey.replace('Plugins.', '').replace(/([A-Z])/g, ' $1').trim(),
+        icon: Zap,
+        supportsDelay: tr.supportsDelay,
+        isPlugin: true,
+      }))
+    ),
+  ]
+
+  const pluginActionLabels: Record<string, string> = Object.fromEntries(
+    installedPlugins.flatMap((p) =>
+      (p.manifest.automationActions ?? []).map((ac) => [
+        ac.id,
+        ac.labelKey.replace('Plugins.', '').replace(/([A-Z])/g, ' $1').trim(),
+      ])
+    )
+  )
+
+  const allActionTypeLabels: Record<string, string> = {
+    ...ACTION_TYPE_LABELS,
+    ...pluginActionLabels,
+  }
 
   const { data: rules = [], isLoading: rulesLoading } = useRules(currentTeamId)
   const { data: templates = [] } = useTemplates(currentTeamId)
@@ -1273,6 +1446,8 @@ export default function AutomationsPage() {
             templates={templates}
             webhookEndpoints={webhookEndpoints}
             onSaved={invalidateRules}
+            triggerOptions={allTriggerOptions}
+            actionTypeLabels={allActionTypeLabels}
           />
           <TemplateDialog
             open={templateDialogOpen}

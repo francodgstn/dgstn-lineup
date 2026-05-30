@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Users,
   CalendarDays,
+  Calendar,
   Zap,
   CalendarRange,
   ClipboardList,
@@ -23,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
+  Puzzle,
 } from 'lucide-react'
 import type { Route } from 'next'
 import type { SaasPlan } from '@lineup/shared'
@@ -39,9 +41,11 @@ const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionSchedule',
     items: [
-      { href: '/sessions',  labelKey: 'sessions',  icon: CalendarDays },
-      { href: '/bookings',  labelKey: 'bookings',  icon: ClipboardList },
-      { href: '/events',    labelKey: 'events',    icon: CalendarRange, minPlan: 'club' },
+      { href: '/dashboard',  labelKey: 'dashboard',  icon: LayoutDashboard },
+      { href: '/calendar',   labelKey: 'calendar',   icon: Calendar },
+      { href: '/sessions',   labelKey: 'sessions',   icon: CalendarDays },
+      { href: '/bookings',   labelKey: 'bookings',   icon: ClipboardList },
+      { href: '/events',     labelKey: 'events',     icon: CalendarRange, minPlan: 'club' },
     ],
   },
   {
@@ -60,8 +64,10 @@ const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionConfigure',
     items: [
-      { href: '/activities',    labelKey: 'activities', icon: Zap },
-      { href: '/team/portal',   labelKey: 'portal',     icon: Globe },
+      { href: '/activities',         labelKey: 'activities',  icon: Zap },
+      { href: '/team/event-types',   labelKey: 'eventTypes',  icon: CalendarRange },
+      { href: '/team/portal',        labelKey: 'portal',      icon: Globe },
+      { href: '/plugins',            labelKey: 'plugins',     icon: Puzzle, minPlan: 'club' },
     ],
   },
   {
@@ -178,13 +184,6 @@ function SidebarContent({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
-        {/* Dashboard — standalone above sections */}
-        <NavLink
-          item={{ href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard }}
-          collapsed={collapsed}
-          onClick={onLinkClick}
-        />
-
         {NAV_SECTIONS.map((section) => (
           <div key={section.labelKey} className="mt-3">
             {collapsed ? (

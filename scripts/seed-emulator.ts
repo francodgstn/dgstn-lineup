@@ -748,18 +748,118 @@ async function seedTeam(opts: {
 
   // Events
   const eventDefs = [
-    { title: 'Regional BJJ Tournament', type: 'competition', startOffset: 45, durationH: 8,  fee: 25,  description: 'Annual regional championship — open to white and blue belts.' },
-    { title: 'Summer MMA Camp',          type: 'camp',        startOffset: 60, durationH: 72, fee: 180, description: '3-day intensive camp with guest instructors.' },
-    { title: 'Nutrition Workshop',        type: 'seminar',     startOffset: 14, durationH: 3,  fee: 0,   description: 'Practical guide to nutrition and recovery.' },
+    {
+      title: 'Regional BJJ Tournament',
+      type: 'competition', startOffset: 45, durationH: 8, fee: 25,
+      location: 'Sports Arena Geneva',
+      description: 'Annual regional championship — open to white and blue belts. Gi and No-Gi divisions available.',
+    },
+    {
+      title: 'Summer MMA Camp',
+      type: 'camp', startOffset: 60, durationH: 72, fee: 180,
+      location: 'High Performance Training Center',
+      description: '3-day intensive camp with guest instructors. All skill levels welcome. Accommodation included.',
+    },
+    {
+      title: 'Nutrition Workshop',
+      type: 'seminar', startOffset: 14, durationH: 3, fee: 0,
+      location: 'Team HQ — Conference Room',
+      description: 'Practical guide to sports nutrition and recovery for martial artists. Free for all members.',
+    },
   ]
+  const eventIds: string[] = []
   for (let i = 0; i < eventDefs.length; i++) {
     const e = eventDefs[i]
-    await db.collection('events').doc(`${teamId}-event-${i}`).set({
+    const eventId = `${teamId}-event-${i}`
+    eventIds.push(eventId)
+    await db.collection('events').doc(eventId).set({
       teamId,
       title: e.title, type: e.type, fee: e.fee, description: e.description,
-      start: ts(daysFromNow(e.startOffset)),
-      end:   ts(hoursOffset(daysFromNow(e.startOffset), e.durationH)),
-      status: 'open', createdBy: uid, created_at: ts(daysFromNow(-10)),
+      location: e.location,
+      start:  ts(daysFromNow(e.startOffset)),
+      end:    ts(hoursOffset(daysFromNow(e.startOffset), e.durationH)),
+      status: 'open',
+      participants_count: 0,
+      attendees_count: 0,
+      invitations_sent_count: 0,
+      deleted_at: null,
+      createdBy: uid,
+      created_at: ts(daysFromNow(-10)),
+    })
+  }
+
+  // Event invitations & attendees
+  // Realistic: a subset of contacts are invited per event, with varied RSVP status.
+  // Token format is deterministic so dev/test links work predictably.
+  const inviteSlices = [12, 8, 10]          // how many contacts to invite per event
+  // Status distribution per position j: 0-2 responded, 3-4 declined, 5-7 opened, rest sent
+  function inviteStatusForIdx(j: number): 'responded' | 'declined' | 'opened' | 'sent' {
+    if (j < 3) return 'responded'
+    if (j < 5) return 'declined'
+    if (j < 8) return 'opened'
+    return 'sent'
+  }
+
+  for (let ei = 0; ei < eventIds.length; ei++) {
+    const eventId   = eventIds[ei]
+    const maxInvite = inviteSlices[ei]
+    let sentCount  = 0
+    let attendeeCount = 0
+
+    // Pick contacts that have an email (all 18 do) — vary starting index per event
+    const startIdx = ei * 3
+    const inviteIndices = Array.from({ length: maxInvite }, (_, k) => (startIdx + k) % contactSeeds.length)
+
+    for (let j = 0; j < inviteIndices.length; j++) {
+      const cidx = inviteIndices[j]
+      const c = contactSeeds[cidx]
+      if (!c.email) continue
+
+      const contactId = `${teamId}-contact-${cidx.toString().padStart(3, '0')}`
+      const status    = inviteStatusForIdx(j)
+      // Deterministic token — 64-char hex-like string for test links
+      const token     = `seed${teamId}ev${ei}c${cidx}`.padEnd(32, '0').repeat(2).slice(0, 64)
+      const link      = `http://localhost:3000/portal/event-invitation?token=${token}`
+      const hasOpened = ['opened', 'responded', 'declined'].includes(status)
+      const hasRsvp   = ['responded', 'declined'].includes(status)
+
+      await db.collection('events').doc(eventId)
+        .collection('invitations').doc(contactId).set({
+          contactId,
+          firstname:    c.firstname,
+          lastname:     c.lastname,
+          email:        c.email,
+          status,
+          token,
+          link,
+          eventId,
+          sentBy:       uid,
+          sentAt:       ts(daysFromNow(-7)),
+          firstOpenedAt: hasOpened ? ts(daysFromNow(-5)) : null,
+          lastOpenedAt:  hasOpened ? ts(daysFromNow(-3)) : null,
+          respondedAt:   hasRsvp   ? ts(daysFromNow(-2)) : null,
+        })
+      sentCount++
+
+      if (status === 'responded') {
+        attendeeCount++
+        await db.collection('events').doc(eventId)
+          .collection('attendees').doc(contactId).set({
+            contactId,
+            firstname:   c.firstname,
+            lastname:    c.lastname,
+            email:       c.email,
+            notes:       j === 0 ? 'Really looking forward to this!' : null,
+            respondedAt: ts(daysFromNow(-2)),
+          })
+      }
+    }
+
+    // Update event-level counters
+    await db.collection('events').doc(eventId).update({
+      invitations_sent_count:  sentCount,
+      attendees_count:         attendeeCount,
+      last_invitation_sent_at: ts(daysFromNow(-7)),
     })
   }
 

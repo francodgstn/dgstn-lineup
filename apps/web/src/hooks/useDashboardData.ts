@@ -23,6 +23,8 @@ export interface WeeklyReport {
   trial_conversions_count?: number
   trial_dropouts_count?: number
   sessions_count?: number
+  bookings_count?: number
+  bookings_count_by_type?: Record<string, number>
 }
 
 export interface SessionDoc {

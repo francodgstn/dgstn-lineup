@@ -37,8 +37,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Booking } from '@lineup/shared'
-import { Search, MoreHorizontal, Check, X, UserX, Undo, Repeat } from 'lucide-react'
-import { Link } from '@/i18n/navigation'
+import { Search, MoreHorizontal, Check, X, UserX, Undo, Repeat, ExternalLink, User } from 'lucide-react'
+import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -378,8 +378,10 @@ function BookingRow({
   onRebook: (booking: Booking) => void
 }) {
   const t = useTranslations('Bookings')
+  const router = useRouter()
   const status: BookingStatus = (booking.status as BookingStatus) ?? 'pending'
   const sessionDate = sessionInfo?.start ? formatIso(sessionInfo.start) : null
+  const sessionTime = sessionInfo?.start ? formatTime(sessionInfo.start as unknown as { toDate(): Date }) : null
   const activityName = sessionInfo?.activityName
 
   const isPending = status === 'pending'
@@ -408,31 +410,11 @@ function BookingRow({
         </div>
         <p className="text-xs text-muted-foreground truncate">{booking.email ?? '—'}</p>
         {(activityName || sessionDate) && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
-            {activityName && <span className="font-medium">{activityName}</span>}
-            {activityName && sessionDate && ' · '}
-            {sessionDate}
-            {booking.session && (
-              <>
-                {' · '}
-                <Link
-                  href={`/sessions/${booking.session}` as Route}
-                  className="underline underline-offset-2 hover:text-foreground transition-colors"
-                >
-                  {t('viewSession')}
-                </Link>
-              </>
-            )}
-          </p>
-        )}
-        {booking.contact && (
-          <p className="text-xs text-muted-foreground mt-0.5">
-            <Link
-              href={`/contacts/${booking.contact}` as Route}
-              className="underline underline-offset-2 hover:text-foreground transition-colors"
-            >
-              {t('viewContact')}
-            </Link>
+          <p className="text-sm text-foreground/80 truncate mt-0.5 font-medium">
+            {activityName && <span>{activityName}</span>}
+            {activityName && sessionDate && <span className="text-muted-foreground font-normal"> · </span>}
+            {sessionDate && <span>{sessionDate}</span>}
+            {sessionTime && <span className="text-muted-foreground font-normal"> {sessionTime}</span>}
           </p>
         )}
       </div>
@@ -460,39 +442,27 @@ function BookingRow({
             <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent">
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-52">
               {isPending && (
-                <DropdownMenuItem
-                  onClick={() => onAction(booking, 'confirm')}
-                  className="gap-2"
-                >
+                <DropdownMenuItem onClick={() => onAction(booking, 'confirm')} className="gap-2">
                   <Check className="h-3.5 w-3.5 text-green-600" />
                   {t('actionConfirm')}
                 </DropdownMenuItem>
               )}
               {isConfirmed && (
-                <DropdownMenuItem
-                  onClick={() => onAction(booking, 'revert')}
-                  className="gap-2"
-                >
+                <DropdownMenuItem onClick={() => onAction(booking, 'revert')} className="gap-2">
                   <Undo className="h-3.5 w-3.5 text-orange-500" />
                   {t('actionRevert')}
                 </DropdownMenuItem>
               )}
               {(isPending || isNoShow) && (
-                <DropdownMenuItem
-                  onClick={() => onAction(booking, 'no_show')}
-                  className="gap-2"
-                >
+                <DropdownMenuItem onClick={() => onAction(booking, 'no_show')} className="gap-2">
                   <UserX className="h-3.5 w-3.5 text-orange-500" />
                   {t('actionNoShow')}
                 </DropdownMenuItem>
               )}
               {isPending && booking.booking_token && (
-                <DropdownMenuItem
-                  onClick={() => onRebook(booking)}
-                  className="gap-2"
-                >
+                <DropdownMenuItem onClick={() => onRebook(booking)} className="gap-2">
                   <Repeat className="h-3.5 w-3.5" />
                   {t('actionRebook')}
                 </DropdownMenuItem>
@@ -505,6 +475,25 @@ function BookingRow({
                 >
                   <X className="h-3.5 w-3.5" />
                   {t('actionCancel')}
+                </DropdownMenuItem>
+              )}
+              {(booking.session || booking.contact) && <DropdownMenuSeparator />}
+              {booking.session && (
+                <DropdownMenuItem
+                  onClick={() => router.push(`/sessions/${booking.session}` as Route)}
+                  className="gap-2"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  {t('viewSession')}
+                </DropdownMenuItem>
+              )}
+              {booking.contact && (
+                <DropdownMenuItem
+                  onClick={() => router.push(`/contacts/${booking.contact}` as Route)}
+                  className="gap-2"
+                >
+                  <User className="h-3.5 w-3.5" />
+                  {t('viewContact')}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>

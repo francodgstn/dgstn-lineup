@@ -4,7 +4,8 @@ import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { format } from 'date-fns'
 import { to } from '../utils/async'
-import { CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, PARTICIPANTS_SUBCOLLECTION } from '@lineup/shared'
+import { getActiveContacts, countByField } from '../utils/contacts'
+import { CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, PARTICIPANTS_SUBCOLLECTION, TEAM_WEEKLY_REPORTS_SUBCOLLECTION } from '@lineup/shared'
 
 
 const DATE_FORMAT = 'PPP'
@@ -157,6 +158,7 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
   // No logging after anonymization (GDPR)
   if (newData?.anonymized_at) return
 
+  const db = admin.firestore()
   const firstname = ((newData?.firstname || oldData?.firstname) as string | undefined) ?? ''
   const lastname = ((newData?.lastname || oldData?.lastname) as string | undefined) ?? ''
   const fullname = `${firstname} ${lastname}`.trim() || event.params.contactId
@@ -206,6 +208,16 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
       },
       refs: baseRefs,
     }))
+    // Trial dropout: trial contact archived without converting
+    if (oldData.type === 'trial') {
+      const weekLabel = format(new Date(), "R-'W'II")
+      promises.push(
+        db.collection('teams').doc(teamId).collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION).doc(weekLabel)
+          .set({ trial_dropouts_count: FieldValue.increment(1) }, { merge: true })
+          .then(() => undefined)
+          .catch(err => { console.error('trackContacts: trial_dropouts_count update failed', err) }),
+      )
+    }
   } else if (oldData.archived_at && !newData.archived_at) {
     promises.push(logActivity(teamId, {
       event: 'contact_unarchive',
@@ -230,6 +242,16 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
       },
       refs: baseRefs,
     }))
+    // Trial conversion: trial contact promoted to student
+    if (oldData.type === 'trial' && newData.type === 'student') {
+      const weekLabel = format(new Date(), "R-'W'II")
+      promises.push(
+        db.collection('teams').doc(teamId).collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION).doc(weekLabel)
+          .set({ trial_conversions_count: FieldValue.increment(1) }, { merge: true })
+          .then(() => undefined)
+          .catch(err => { console.error('trackContacts: trial_conversions_count update failed', err) }),
+      )
+    }
   }
 
   // Subscription change
@@ -308,6 +330,15 @@ export const trackSessionParticipants = onDocumentWritten(
     const sessionStart = session.start as Timestamp | undefined
     const sessionDateLabel = sessionStart ? format(sessionStart.toDate(), DATE_FORMAT) : 'unknown date'
 
+    // Update denormalized counters on the contact
+    const counterUpdate: Record<string, unknown> = {
+      total_sessions: FieldValue.increment(activityEvent === 'session_participant_add' ? 1 : -1),
+    }
+    if (activityEvent === 'session_participant_add' && sessionStart) {
+      counterUpdate.last_session_at = sessionStart
+    }
+    await to(db.collection('contacts').doc(contactId).update(counterUpdate))
+
     const description = activityEvent === 'session_participant_add'
       ? `${fullname} attended a session on ${sessionDateLabel}.`
       : `${fullname} was removed from a session on ${sessionDateLabel}.`
@@ -330,30 +361,7 @@ export const trackSessionParticipants = onDocumentWritten(
 // Only creates a report if one doesn't exist yet for the week — once created,
 // it is never overwritten, so incremental updates from event triggers are preserved.
 
-async function getActiveContacts(
-  db: admin.firestore.Firestore,
-  teamId: string,
-): Promise<admin.firestore.DocumentData[]> {
-  const [err, snap] = await to(
-    db.collection('contacts')
-      .where('teamId', '==', teamId)
-      .where('deleted_at', '==', null)
-      .where('archived_at', '==', null)
-      .get(),
-  )
-  if (err || !snap) return []
-  return snap.docs.map((d) => d.data())
-}
-
-function countByField(contacts: admin.firestore.DocumentData[], field: string): Record<string, number> {
-  const counts: Record<string, number> = {}
-  for (const c of contacts) {
-    const val = c[field] as string | undefined
-    if (!val) continue
-    counts[val] = (counts[val] ?? 0) + 1
-  }
-  return counts
-}
+// getActiveContacts and countByField are imported from '../utils/contacts'
 
 export const weeklyReports = onSchedule(
   { schedule: 'every monday 00:05', timeZone: 'UTC', timeoutSeconds: 300, memory: '512MiB' },
@@ -368,7 +376,7 @@ export const weeklyReports = onSchedule(
     for (const teamDoc of teamsSnap.docs) {
       const teamId = teamDoc.id
       try {
-        const reportRef = db.collection('teams').doc(teamId).collection('weekly_reports').doc(weekLabel)
+        const reportRef = db.collection('teams').doc(teamId).collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION).doc(weekLabel)
 
         // If a report already exists for this week, skip — never overwrite, to preserve
         // any increments applied mid-week by event triggers (trackContacts, trackSessions).

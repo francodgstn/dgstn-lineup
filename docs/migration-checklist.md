@@ -27,8 +27,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `secrets.ts` — secret access wrapper
 - ✅ `recurrence.ts` — DST-safe Europe/Zurich recurrence logic
 - ✅ `teams.ts` — `isTeamMember()`, `hasTeamRole()`
-- ❌ `contacts.ts` — count helpers (`countContactsByType`, etc.) — currently inline in `analytics/index.ts`
-- ❌ `users.ts` — `getUserWeeklyReport()`, `findUserWeeklyReportByDate()`
+- ✅ `contacts.ts` — count helpers (`getActiveContacts`, `countByField`) — extracted from `analytics/index.ts`
+- ✅ `users.ts` — `findTeamWeeklyReport()`, `getOrCreateTeamWeeklyReport()` — plus named count helpers in `contacts.ts`
 
 ---
 
@@ -97,6 +97,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `getEventInvitationDetails`
 - ✅ `handleEventInvitationResponse`
 - ✅ `trackEventAttendees`
+
 
 ### Analytics & Tracking
 - ✅ `trackBookings`
@@ -187,8 +188,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 
 ### Events (club+)
 - ✅ Events list page
-- ❌ Event detail page
-- ❌ Event invitation flow
+- ✅ Event detail page (`/events/[id]`) — overview stats, attendees tab, invitations tab, send/resend invitations, edit, delete
+- ✅ Event invitation flow (portal RSVP page — `/portal/event-invitation?token=…`) — greets contact by name, shows event details, attend/decline buttons, notes field, handles already-responded state, closed/past event notices
 
 ### Bookings
 - ✅ Bookings list page (basic)
@@ -204,13 +205,12 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ~~Admin `/coaching` page~~ — intentionally removed; coaching sessions live in the Sessions page
 
 ### Gamification (club+)
-- ⏳ Stub page only — no leaderboard or scoring UI
+- ✅ Leaderboard, badge award, score breakdown UI — full implementation
 
 ### Team
 - ✅ Team settings page
 - ✅ Team portal settings
-- ✅ Team members page (view only)
-- ❌ Invite / manage members UI (club+)
+- ✅ Team members page — full invite/manage UI (send invitations, change role, remove member, cancel invite)
 - ✅ Subscription types management (CRUD in team settings — name, description, source, active toggle)
 - ✅ Payment gateway config (Payments tab in team settings — add/edit/delete Stripe/Payrexx gateways)
 
@@ -222,8 +222,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ Public profile page
 - ✅ Session booking flow
 - ✅ Trial sign-up form
-- ❌ Contact update request form
-- ❌ Event RSVP page (club+)
+- ✅ Contact update request form (`/portal/[slug]/contact-update?contactId=…`) — email verify → 3-step form → `requestContactUpdate`; "Copy update link" button on contact detail page
+- ✅ Event RSVP page — `/portal/event-invitation?token=…` (club+)
 
 ---
 
@@ -268,8 +268,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ Firestore security rules — full port + teamId model
 - ✅ `public_profile` pattern enforced for all portal-facing data
 - ✅ Sync triggers for team, session, activity public profiles
-- ❌ `syncSubscriptionTypesToPublicProfile` trigger
-- ⏳ Firestore indexes reviewed for all new queries added during migration
+- ✅ `syncSubscriptionTypesToPublicProfile` trigger
+- ✅ Firestore indexes reviewed for all new queries added during migration
   - automation_logs: `idempotency_key` equality query (single-field auto-indexed by Firestore ✅)
-  - automation_rules: collectionGroup + `active` filter (needs composite index in firestore.indexes.json ❌)
-  - sessions: `teamId`+`end` range query used in booking-condition path (check existing index ❌)
+  - automation_rules: `teamId`+`active`+`trigger` composite index added ✅
+  - sessions: `teamId`+`end` composite index already present ✅

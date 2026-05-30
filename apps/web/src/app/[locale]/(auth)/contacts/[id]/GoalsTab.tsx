@@ -680,55 +680,57 @@ export function GoalsTab({ contact, teamId }: Props) {
   }
 
   return (
-    <div className="space-y-6 pb-24">
-      {/* Goals section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Flag className="h-4 w-4 text-violet-500" />
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('goalsTitle')}</h3>
+    <div className="pb-24">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Goals column */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Flag className="h-4 w-4 text-violet-500" />
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('goalsTitle')}</h3>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setAddGoalOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />{t('goalsAddGoal')}
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setAddGoalOpen(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1" />{t('goalsAddGoal')}
-          </Button>
+
+          {goalList.length === 0 ? (
+            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              {t('goalsEmpty')}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {goalList.map((g) => (
+                <GoalCard key={g.id} goal={g} contactId={contact.id} categories={categories} onChanged={invalidate} />
+              ))}
+            </div>
+          )}
         </div>
 
-        {goalList.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            {t('goalsEmpty')}
+        {/* Tasks column */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckSquare className="h-4 w-4 text-orange-500" />
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('tasksTitle')}</h3>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setAddTaskOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />{t('goalsAddTask')}
+            </Button>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {goalList.map((g) => (
-              <GoalCard key={g.id} goal={g} contactId={contact.id} categories={categories} onChanged={invalidate} />
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* Tasks section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckSquare className="h-4 w-4 text-orange-500" />
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('tasksTitle')}</h3>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setAddTaskOpen(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1" />{t('goalsAddTask')}
-          </Button>
+          {taskList.length === 0 ? (
+            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              {t('tasksEmpty')}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {taskList.map((g) => (
+                <TaskCard key={g.id} goal={g} contactId={contact.id} onChanged={invalidate} />
+              ))}
+            </div>
+          )}
         </div>
-
-        {taskList.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            {t('tasksEmpty')}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {taskList.map((g) => (
-              <TaskCard key={g.id} goal={g} contactId={contact.id} onChanged={invalidate} />
-            ))}
-          </div>
-        )}
       </div>
 
       <GoalFormDialog

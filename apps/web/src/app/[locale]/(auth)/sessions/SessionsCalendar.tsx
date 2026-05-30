@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import type { Route } from 'next'
 import { useRouter } from '@/i18n/navigation'
-import type { Session, Activity } from '@lineup/shared'
+import type { Session, Activity, Event } from '@lineup/shared'
 
 // ─── colour palette ───────────────────────────────────────────────────────────
 
@@ -71,13 +71,14 @@ function StatusBadge({ status }: { status: string }) {
 interface DayCellProps {
   day: Date
   sessions: Session[]
+  events: Event[]
   isSelected: boolean
   isToday: boolean
   onClick: (d: Date) => void
 }
 
-function DayCell({ day, sessions, isSelected, isToday, onClick }: DayCellProps) {
-  const count    = sessions.length
+function DayCell({ day, sessions, events, isSelected, isToday, onClick }: DayCellProps) {
+  const count    = sessions.length + events.length
   const dotColor = isSelected ? 'rgba(255,255,255,0.8)' : 'var(--primary)'
 
   return (
@@ -181,11 +182,62 @@ function SessionCard({ session, activities, onOpen, onEdit, onDelete }: SessionC
   )
 }
 
+// ─── EventCard ────────────────────────────────────────────────────────────────
+
+const EVENT_TYPE_COLOR: Record<string, string> = {
+  competition: '#EF4444',
+  camp:        '#F97316',
+  exam:        '#8B5CF6',
+  seminar:     '#3B82F6',
+  workshop:    '#10B981',
+}
+
+function EventCard({ event }: { event: Event }) {
+  const router = useRouter()
+  const color = EVENT_TYPE_COLOR[event.type] ?? '#6B7280'
+  const fmt = (ts?: { toDate(): Date } | null) =>
+    ts?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? ''
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => router.push(`/events/${event.id}` as Route)}
+      onKeyDown={(e) => e.key === 'Enter' && router.push(`/events/${event.id}` as Route)}
+      className="flex gap-3 rounded-xl border bg-card p-3.5 hover:bg-accent/20 transition-colors cursor-pointer"
+    >
+      <div className="w-1 rounded-full shrink-0 self-stretch" style={{ backgroundColor: color }} />
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-medium text-sm truncate">{event.title}</span>
+          <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground capitalize">
+            {event.type}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {fmt(event.start as unknown as { toDate(): Date })}
+            {event.end && ` – ${fmt(event.end as unknown as { toDate(): Date })}`}
+          </span>
+          {event.location && (
+            <span className="flex items-center gap-1 max-w-[200px] truncate">
+              <MapPin className="h-3 w-3 shrink-0" />
+              {event.location}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── SessionsCalendar ─────────────────────────────────────────────────────────
 
 interface SessionsCalendarProps {
   sessions: Session[]
   activities: Activity[]
+  events?: Event[]
   onEdit: (s: Session) => void
   onDelete: (s: Session) => void
 }
@@ -193,6 +245,7 @@ interface SessionsCalendarProps {
 export default function SessionsCalendar({
   sessions,
   activities,
+  events = [],
   onEdit,
   onDelete,
 }: SessionsCalendarProps) {
@@ -214,6 +267,17 @@ export default function SessionsCalendar({
     return map
   }, [sessions])
 
+  // Index events by date key
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, Event[]>()
+    for (const e of events) {
+      if (!e.start) continue
+      const k = dateKey((e.start as unknown as { toDate(): Date }).toDate())
+      map.set(k, [...(map.get(k) ?? []), e])
+    }
+    return map
+  }, [events])
+
   const daySessions = useMemo(() => {
     return (sessionsByDate.get(dateKey(selected)) ?? [])
       .slice()
@@ -223,6 +287,16 @@ export default function SessionsCalendar({
         return ta - tb
       })
   }, [sessionsByDate, selected])
+
+  const dayEvents = useMemo(() => {
+    return (eventsByDate.get(dateKey(selected)) ?? [])
+      .slice()
+      .sort((a, b) => {
+        const ta = (a.start as unknown as { toDate(): Date } | undefined)?.toDate().getTime() ?? 0
+        const tb = (b.start as unknown as { toDate(): Date } | undefined)?.toDate().getTime() ?? 0
+        return ta - tb
+      })
+  }, [eventsByDate, selected])
 
   const weeks = useMemo(() => buildMonthGrid(viewYear, viewMonth), [viewYear, viewMonth])
 
@@ -271,6 +345,7 @@ export default function SessionsCalendar({
                   key={di}
                   day={day}
                   sessions={sessionsByDate.get(dateKey(day)) ?? []}
+                  events={eventsByDate.get(dateKey(day)) ?? []}
                   isSelected={sameDay(day, selected)}
                   isToday={sameDay(day, today)}
                   onClick={setSelected}
@@ -291,13 +366,16 @@ export default function SessionsCalendar({
           })}
         </h3>
 
-        {daySessions.length === 0 ? (
+        {daySessions.length === 0 && dayEvents.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
             <CalendarDays className="h-8 w-8 opacity-30" />
-            <p className="text-sm">No sessions on this day</p>
+            <p className="text-sm">Nothing scheduled for this day</p>
           </div>
         ) : (
           <div className="space-y-2">
+            {dayEvents.map((e) => (
+              <EventCard key={e.id} event={e} />
+            ))}
             {daySessions.map((s) => (
               <SessionCard
                 key={s.id}

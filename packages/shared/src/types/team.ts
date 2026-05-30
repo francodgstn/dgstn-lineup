@@ -62,6 +62,8 @@ export interface Team {
   portalTheme?: PortalTheme
   portalAccentColor?: string
   portalBackground?: PortalBackground
+  // Outreach / email template custom variables
+  outreach_placeholders?: Record<string, string>
   // SaaS plan fields (new in Lineup)
   plan?: SaasPlan
   plan_status?: SaasStatus

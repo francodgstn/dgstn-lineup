@@ -337,13 +337,41 @@ function OverviewPanel({
 
 // ─── filter panel ─────────────────────────────────────────────────────────────
 
-interface Filters { types: string[]; statuses: string[] }
-const EMPTY_FILTERS: Filters = { types: [], statuses: [] }
+type InactivityPreset = 'never' | '30d' | '60d' | '90d'
 
-function FilterPanel({ filters, onChange }: { filters: Filters; onChange: (f: Filters) => void }) {
+interface Filters {
+  types: string[]
+  statuses: string[]
+  subscriptions: string[]    // subscription_type_id values; 'none' = no subscription
+  hasAlerts: boolean
+  sessionsMin: number | null
+  sessionsMax: number | null
+  inactivity: InactivityPreset | null
+}
+const EMPTY_FILTERS: Filters = {
+  types: [], statuses: [], subscriptions: [],
+  hasAlerts: false, sessionsMin: null, sessionsMax: null, inactivity: null,
+}
+
+function countActiveFilters(f: Filters): number {
+  return f.types.length + f.statuses.length + f.subscriptions.length
+    + (f.hasAlerts ? 1 : 0)
+    + (f.sessionsMin != null || f.sessionsMax != null ? 1 : 0)
+    + (f.inactivity ? 1 : 0)
+}
+
+function FilterPanel({
+  filters,
+  onChange,
+  subscriptionTypes,
+}: {
+  filters: Filters
+  onChange: (f: Filters) => void
+  subscriptionTypes: SubscriptionType[]
+}) {
   const t = useTranslations('Contacts')
   const [open, setOpen] = useState(false)
-  const hasFilters = filters.types.length > 0 || filters.statuses.length > 0
+  const activeCount = countActiveFilters(filters)
 
   const TYPE_OPTS = (['trial', 'student', 'external'] as ContactType[]).map((v) => ({
     value: v, label: t(`type_${v}`),
@@ -352,21 +380,33 @@ function FilterPanel({ filters, onChange }: { filters: Filters; onChange: (f: Fi
     ['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired'] as MembershipStatus[]
   ).map((v) => ({ value: v, label: t(`status_${v}`) }))
 
+  const SUBSCRIPTION_OPTS = [
+    { value: 'none', label: t('filterSubscriptionNone') },
+    ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name })),
+  ]
+
+  const INACTIVITY_OPTS: { value: InactivityPreset; label: string }[] = [
+    { value: 'never',  label: t('filterInactivityNever') },
+    { value: '30d',    label: t('filterInactivity30d') },
+    { value: '60d',    label: t('filterInactivity60d') },
+    { value: '90d',    label: t('filterInactivity90d') },
+  ]
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <button
           onClick={() => setOpen(!open)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-            hasFilters ? 'border-primary bg-primary/5 text-primary' : 'hover:bg-muted text-muted-foreground'
+            activeCount > 0 ? 'border-primary bg-primary/5 text-primary' : 'hover:bg-muted text-muted-foreground'
           }`}
         >
           <Filter className="h-3.5 w-3.5" />
           {t('filtersLabel')}
-          {hasFilters && <span className="text-xs font-bold">{filters.types.length + filters.statuses.length}</span>}
+          {activeCount > 0 && <span className="text-xs font-bold">{activeCount}</span>}
           {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </button>
-        {hasFilters && (
+        {activeCount > 0 && (
           <button onClick={() => onChange(EMPTY_FILTERS)}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <X className="h-3.5 w-3.5" />{t('clearFilters')}
@@ -374,7 +414,8 @@ function FilterPanel({ filters, onChange }: { filters: Filters; onChange: (f: Fi
         )}
       </div>
       {open && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border bg-muted/30">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 rounded-xl border bg-muted/30">
+          {/* Type */}
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">{t('filterType')}</p>
             <MultiSelect
@@ -383,6 +424,8 @@ function FilterPanel({ filters, onChange }: { filters: Filters; onChange: (f: Fi
               onChange={(types) => onChange({ ...filters, types })}
             />
           </div>
+
+          {/* Status */}
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">{t('filterStatus')}</p>
             <MultiSelect
@@ -390,6 +433,74 @@ function FilterPanel({ filters, onChange }: { filters: Filters; onChange: (f: Fi
               value={filters.statuses}
               onChange={(statuses) => onChange({ ...filters, statuses })}
             />
+          </div>
+
+          {/* Subscription */}
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">{t('filterSubscription')}</p>
+            <MultiSelect
+              options={SUBSCRIPTION_OPTS}
+              value={filters.subscriptions}
+              onChange={(subscriptions) => onChange({ ...filters, subscriptions })}
+            />
+          </div>
+
+          {/* Sessions count */}
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">{t('filterSessions')}</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                placeholder={t('filterSessionsMin')}
+                value={filters.sessionsMin ?? ''}
+                onChange={(e) => onChange({ ...filters, sessionsMin: e.target.value ? Number(e.target.value) : null })}
+                className="w-full rounded-md border px-2 py-1.5 text-sm"
+              />
+              <span className="text-muted-foreground text-xs shrink-0">–</span>
+              <input
+                type="number"
+                min={0}
+                placeholder={t('filterSessionsMax')}
+                value={filters.sessionsMax ?? ''}
+                onChange={(e) => onChange({ ...filters, sessionsMax: e.target.value ? Number(e.target.value) : null })}
+                className="w-full rounded-md border px-2 py-1.5 text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Last active */}
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">{t('filterLastActive')}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {INACTIVITY_OPTS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onChange({ ...filters, inactivity: filters.inactivity === opt.value ? null : opt.value })}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                    filters.inactivity === opt.value
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-border hover:bg-muted'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Alerts */}
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">{t('filterAlerts')}</p>
+            <button
+              onClick={() => onChange({ ...filters, hasAlerts: !filters.hasAlerts })}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                filters.hasAlerts ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'
+              }`}
+            >
+              <AlertCircle className="h-3.5 w-3.5" />
+              {t('filterAlertsLabel')}
+            </button>
           </div>
         </div>
       )}
@@ -932,16 +1043,50 @@ export default function ContactsPage() {
 
   const filteredActive = useMemo(() => {
     let result = active
+
     if (filters.types.length > 0)
       result = result.filter((c) => c.type && filters.types.includes(c.type))
+
     if (filters.statuses.length > 0)
       result = result.filter((c) => c.membership_status && filters.statuses.includes(c.membership_status))
+
+    if (filters.subscriptions.length > 0) {
+      result = result.filter((c) => {
+        if (filters.subscriptions.includes('none')) {
+          if (!c.subscription_type_id) return true
+        }
+        return c.subscription_type_id && filters.subscriptions.includes(c.subscription_type_id)
+      })
+    }
+
+    if (filters.hasAlerts)
+      result = result.filter((c) => (c.alerts_count ?? 0) > 0)
+
+    if (filters.sessionsMin != null)
+      result = result.filter((c) => (c.total_sessions ?? 0) >= filters.sessionsMin!)
+    if (filters.sessionsMax != null)
+      result = result.filter((c) => (c.total_sessions ?? 0) <= filters.sessionsMax!)
+
+    if (filters.inactivity) {
+      const now = Date.now()
+      result = result.filter((c) => {
+        const last = c.last_session_at
+          ? (c.last_session_at as { toDate(): Date }).toDate().getTime()
+          : null
+        if (filters.inactivity === 'never') return last === null
+        const days = filters.inactivity === '30d' ? 30 : filters.inactivity === '60d' ? 60 : 90
+        const cutoff = now - days * 86400000
+        return last === null || last < cutoff
+      })
+    }
+
     const q = search.trim().toLowerCase()
     if (q)
       result = result.filter((c) =>
         `${c.firstname} ${c.lastname}`.toLowerCase().includes(q) ||
         (c.email ?? '').toLowerCase().includes(q)
       )
+
     return result
   }, [active, filters, search])
 
@@ -1093,7 +1238,7 @@ export default function ContactsPage() {
       </div>
 
       {/* Filters (active tab only) */}
-      {tab === 'active' && <FilterPanel filters={filters} onChange={setFilters} />}
+      {tab === 'active' && <FilterPanel filters={filters} onChange={setFilters} subscriptionTypes={subscriptionTypes} />}
 
       {/* Tabs */}
       <div className="flex gap-0.5 border-b overflow-x-auto">

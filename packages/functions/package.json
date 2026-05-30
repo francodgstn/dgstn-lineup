@@ -20,6 +20,7 @@
     "firebase-functions": "^6.3.0",
     "marked": "^15.0.0",
     "nodemailer": "^6.9.16",
+    "posthog-node": "^5.35.6",
     "stripe": "^22.1.1",
     "zod": "^3.24.1"
   },

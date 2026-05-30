@@ -34,6 +34,9 @@ import { BookingsTrendCard } from '@/components/dashboard/BookingsTrendCard'
 import { SessionsHeatmapCard } from '@/components/dashboard/SessionsHeatmapCard'
 import { TopActivitiesCard } from '@/components/dashboard/TopActivitiesCard'
 import { TrialFunnelCard } from '@/components/dashboard/TrialFunnelCard'
+import { WeeklyTrendsCard } from '@/components/dashboard/WeeklyTrendsCard'
+import { CorrelationExplorerCard } from '@/components/dashboard/CorrelationExplorerCard'
+import { EngagementMatrixCard } from '@/components/dashboard/EngagementMatrixCard'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -205,34 +208,36 @@ function AgendaCard({ teamId }: { teamId: string | null }) {
           </Link>
         </div>
       </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-3 w-20" /></div>
-              </div>
-            ))}
-          </div>
-        ) : sessions?.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">{t('noUpcomingSessions')}</div>
-        ) : (
-          <div className="space-y-1">
-            {todaySessions.length > 0 && (
-              <>
-                <p className="text-xs font-medium text-muted-foreground px-1 pb-1">{tCommon('today')}</p>
-                {todaySessions.map((s) => <SessionRow key={s.id} session={s} dateLabels={dateLabels} />)}
-              </>
-            )}
-            {futureSessions.length > 0 && (
-              <>
-                <p className="text-xs font-medium text-muted-foreground px-1 pb-1 pt-3">{t('sectionUpcoming')}</p>
-                {futureSessions.map((s) => <SessionRow key={s.id} session={s} dateLabels={dateLabels} />)}
-              </>
-            )}
-          </div>
-        )}
+      <CardContent className="p-0">
+        <div className="max-h-[380px] overflow-y-auto px-6 pb-4">
+          {isLoading ? (
+            <div className="space-y-3 pt-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-3 w-20" /></div>
+                </div>
+              ))}
+            </div>
+          ) : sessions?.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">{t('noUpcomingSessions')}</div>
+          ) : (
+            <div className="space-y-1">
+              {todaySessions.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-muted-foreground px-1 pb-1 pt-2">{tCommon('today')}</p>
+                  {todaySessions.map((s) => <SessionRow key={s.id} session={s} dateLabels={dateLabels} />)}
+                </>
+              )}
+              {futureSessions.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-muted-foreground px-1 pb-1 pt-3">{t('sectionUpcoming')}</p>
+                  {futureSessions.map((s) => <SessionRow key={s.id} session={s} dateLabels={dateLabels} />)}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
@@ -501,15 +506,32 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
         />
       </div>
 
-      {/* Row 3: Trial funnel */}
+      {/* Row 3: Trial funnel + Weekly trends */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <TrialFunnelCard
           weeklyReports={data.weeklyReports}
           comparisonWeeklyReports={data.comparisonWeeklyReports}
           {...sharedProps}
         />
-        {/* placeholder for future card (engagement matrix, correlation, etc.) */}
-        <div />
+        <WeeklyTrendsCard
+          weeklyReports={data.weeklyReports}
+          trendsWeeks={trendsWeeks}
+        />
+      </div>
+
+      {/* Row 4: Correlation explorer + Engagement matrix */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <CorrelationExplorerCard
+          weeklyReports={data.weeklyReports}
+          sessions={data.sessions}
+          allBookings={data.allBookings}
+          newContactBookings={data.newContactBookings}
+          trendsWeeks={trendsWeeks}
+        />
+        <EngagementMatrixCard
+          weeklyReports={data.weeklyReports}
+          trendsWeeks={trendsWeeks}
+        />
       </div>
     </div>
   )

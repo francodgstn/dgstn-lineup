@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
+import { snapshotLeaderboardHistory } from '../utils/leaderboard'
 import { CONTACTS_COLLECTION, TEAMS_COLLECTION } from '@lineup/shared'
 
 const BATCH_SIZE = 400
@@ -14,6 +15,9 @@ export async function resetMonthlyScores(): Promise<{ skipped?: boolean; reset?:
 
   const db = admin.firestore()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  // The month being closed (the one that just ended)
+  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
 
   console.log(`resetMonthlyScores: running for new month ${currentMonth}`) // eslint-disable-line no-console
 
@@ -55,8 +59,13 @@ export async function resetMonthlyScores(): Promise<{ skipped?: boolean; reset?:
     await batch.commit()
   }
 
-  // Reset each team's leaderboard/current to empty for the new month
+  // Snapshot the just-closed month's leaderboard to history, then clear for the new month
   for (const teamId of affectedTeamIds) {
+    // Persist the previous month's final rankings before wiping the current leaderboard
+    await snapshotLeaderboardHistory(teamId, prevMonth).catch(err => {
+      console.error(`resetMonthlyScores: leaderboard history snapshot failed for ${teamId}/${prevMonth}`, err) // eslint-disable-line no-console
+    })
+
     const [lbErr] = await to(
       db
         .collection(TEAMS_COLLECTION)
@@ -67,6 +76,7 @@ export async function resetMonthlyScores(): Promise<{ skipped?: boolean; reset?:
           month: currentMonth,
           entries: [],
           entries_count: 0,
+          score_history: {},
           updated_at: FieldValue.serverTimestamp(),
         }),
     )

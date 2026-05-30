@@ -6,6 +6,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import QueryProvider from '@/contexts/QueryProvider'
 import { Toaster } from '@/components/ui/sonner'
 import { routing } from '@/i18n/routing'
+import { PostHogProvider } from '@/components/providers/PostHogProvider'
 
 export default async function LocaleLayout({
   children,
@@ -22,10 +23,12 @@ export default async function LocaleLayout({
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <NextIntlClientProvider locale={locale} messages={messages}>
-        <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </QueryProvider>
-        <Toaster richColors position="top-right" />
+        <PostHogProvider>
+          <QueryProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryProvider>
+          <Toaster richColors position="top-right" />
+        </PostHogProvider>
       </NextIntlClientProvider>
     </ThemeProvider>
   )

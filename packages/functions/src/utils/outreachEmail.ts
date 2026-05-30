@@ -61,7 +61,7 @@ export function substituteVariables(
       '{{membership_status}}',
       MEMBERSHIP_STATUS_LABELS[(contact.membership_status as string) || ''] || (contact.membership_status as string) || ''
     )
-    .replaceAll('{{sessions_count}}', String((contact.total_sessions_count as number) ?? 0))
+    .replaceAll('{{sessions_count}}', String((contact.total_sessions as number) ?? 0))
     .replace(/\{\{date([+-]\d+)?\}\}/g, (_, offset) => {
       const days = offset ? parseInt(offset, 10) : 0
       return format(addDays(now, days), 'd MMMM yyyy')

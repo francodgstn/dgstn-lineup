@@ -12,6 +12,8 @@ import { to } from './async'
 import { sendEmail } from './email'
 import { logActivity } from './users'
 import { substituteVariables, renderBody, buildOutreachEmail } from './outreachEmail'
+import { pluginActionHandlers } from '../plugins/index'
+import type { PluginActionId, PluginTriggerId } from '@lineup/shared'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +36,8 @@ export type AutomationTriggerType =
   | 'inbound_webhook'
   // Always available
   | 'manual'
+  // Plugin-contributed triggers (namespaced: 'plugin:{pluginId}:{name}')
+  | PluginTriggerId
 
 export type AutomationCondition =
   | { type: 'portal_booking_no_show'; delay_days?: number; delay_hours?: number }
@@ -64,6 +68,8 @@ export type AutomationAction =
   | { type: 'notify_team'; subject: string; body: string }
   | { type: 'log_activity'; message: string }
   | { type: 'webhook'; url: string }
+  // Plugin-contributed actions (namespaced: 'plugin:{pluginId}:{name}')
+  | { type: PluginActionId; config?: Record<string, unknown> }
 
 export interface AutomationRule {
   id: string
@@ -92,7 +98,7 @@ export interface ContactData {
   type?: string
   membership_status?: string
   subscription_type_id?: string
-  total_sessions_count?: number
+  total_sessions?: number
   last_session_at?: Timestamp | { seconds: number; nanoseconds: number } | null
   deleted_at?: Timestamp | null
   archived_at?: Timestamp | null
@@ -239,15 +245,15 @@ export function evaluateContactConditions(
         continue
 
       case 'sessions_attended_exactly':
-        if ((contact.total_sessions_count || 0) !== cond.value) return false
+        if ((contact.total_sessions || 0) !== cond.value) return false
         break
 
       case 'sessions_attended_min':
-        if ((contact.total_sessions_count || 0) < cond.value) return false
+        if ((contact.total_sessions || 0) < cond.value) return false
         break
 
       case 'sessions_attended_max':
-        if ((contact.total_sessions_count || 0) > cond.value) return false
+        if ((contact.total_sessions || 0) > cond.value) return false
         break
 
       case 'inactivity_days': {
@@ -626,6 +632,24 @@ async function executeActionsForContact(
         executed++
       }
 
+      // plugin action — dispatch to the plugin's registered handler
+      if ((action.type as string).startsWith('plugin:')) {
+        const handler = pluginActionHandlers[action.type as PluginActionId]
+        if (handler) {
+          await handler({
+            action: action as { type: PluginActionId; config?: Record<string, unknown> },
+            contact,
+            contactId,
+            teamId,
+            teamData,
+            ruleId,
+          })
+          executed++
+        } else {
+          console.log(`[automationEngine] No handler registered for plugin action '${action.type}', skipping`)
+        }
+      }
+
       // webhook — POST a JSON payload to an external HTTPS endpoint
       if (action.type === 'webhook') {
         const url = action.url
@@ -644,7 +668,7 @@ async function executeActionsForContact(
               email: contact.email,
               type: contact.type,
               membership_status: contact.membership_status,
-              total_sessions_count: contact.total_sessions_count,
+              total_sessions: contact.total_sessions,
               tags: contact.tags ?? [],
             },
           }
@@ -767,7 +791,7 @@ async function runBookingRule(
         firstname: booking.firstname || '',
         lastname: booking.lastname || '',
         email: booking.email || '',
-        total_sessions_count: 0,
+        total_sessions: 0,
       }
       const contactId: string = booking.contactId || booking.contact || ''
       if (contactId) {
