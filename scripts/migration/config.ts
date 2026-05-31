@@ -13,6 +13,8 @@ export const RANKING_KD  = 'kd'    // Korean Dragon
 export const EMULATOR_FIRESTORE_HOST = 'localhost:8080'
 export const EMULATOR_PROJECT_ID     = 'demo-lineup'
 
+export const DEFAULT_ORG_ADMIN_EMAIL = 'franco.dgstn@gmail.com'
+
 export interface MigrationConfig {
   sourceCredsPath: string
   targetCredsPath?: string   // omitted when targetEmulator is true

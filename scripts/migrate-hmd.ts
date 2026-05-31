@@ -18,7 +18,7 @@
  */
 
 import { parseArgs } from 'node:util'
-import { initApps } from './migration/config'
+import { initApps, DEFAULT_ORG_ADMIN_EMAIL } from './migration/config'
 import type { MigrationConfig } from './migration/config'
 import { pass00Setup }              from './migration/passes/00-setup'
 import { pass01Users }              from './migration/passes/01-users'
@@ -31,8 +31,6 @@ import { pass08Events }             from './migration/passes/08-events'
 import { pass10Referrals }          from './migration/passes/10-referrals'
 import { pass11TeamSubcollections } from './migration/passes/11-team-subcollections'
 import { verify }                   from './migration/verify'
-
-const DEFAULT_ORG_ADMIN_EMAIL = 'franco.dgstn@gmail.com'
 
 const { values } = parseArgs({
   options: {
