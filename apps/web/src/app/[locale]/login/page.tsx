@@ -74,7 +74,7 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-1">
+            <div className="space-y-1" suppressHydrationWarning>
               <label htmlFor="email" className="text-sm font-medium">
                 {t('email')}
               </label>
@@ -83,13 +83,12 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                suppressHydrationWarning
                 {...register('email')}
               />
               {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1" suppressHydrationWarning>
               <label htmlFor="password" className="text-sm font-medium">
                 {t('password')}
               </label>
@@ -98,7 +97,6 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                suppressHydrationWarning
                 {...register('password')}
               />
               {errors.password && <p className="text-destructive text-xs">{errors.password.message}</p>}
