@@ -1,5 +1,6 @@
 import type { App } from 'firebase-admin/app'
 import { initializeApp, cert, getApp } from 'firebase-admin/app'
+import type { CollectionReference, CollectionGroup, DocumentReference, Query, Firestore } from 'firebase-admin/firestore'
 import { getFirestore } from 'firebase-admin/firestore'
 
 export const ORG_ID = 'hmd'
@@ -22,6 +23,33 @@ export interface MigrationConfig {
   orgAdminEmail: string      // email of the user who becomes org creator + org_admin
 }
 
+// ─── read-only source type ────────────────────────────────────────────────────
+// Exposes only the Firestore query surface — no batch, no runTransaction, no writes.
+// This makes misuse a compile-time error and ensures no accidental writes to source.
+
+export interface ReadonlyFirestore {
+  collection(path: string): CollectionReference
+  collectionGroup(id: string): CollectionGroup
+  doc(path: string): DocumentReference
+  getAll(...refs: DocumentReference[]): Promise<FirebaseFirestore.DocumentSnapshot[]>
+}
+
+const WRITE_METHODS = ['batch', 'bulkWriter', 'runTransaction', 'recursiveDelete'] as const
+
+function asReadonly(db: Firestore): ReadonlyFirestore {
+  return new Proxy(db, {
+    get(target, prop) {
+      if (WRITE_METHODS.includes(prop as typeof WRITE_METHODS[number])) {
+        throw new Error(`[source] write operation '${String(prop)}' is not allowed on the source database`)
+      }
+      const value = target[prop as keyof Firestore]
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  }) as unknown as ReadonlyFirestore
+}
+
+// ─── app init ─────────────────────────────────────────────────────────────────
+
 let sourceApp: App
 let targetApp: App
 
@@ -38,5 +66,7 @@ export function initApps(cfg: MigrationConfig) {
   }
 }
 
-export function sourceDb() { return getFirestore(getApp('source')) }
-export function targetDb() { return getFirestore(getApp('target')) }
+// sourceDb() returns a read-only proxy — write methods throw at runtime,
+// and the return type exposes only the query surface for compile-time safety.
+export function sourceDb(): ReadonlyFirestore { return asReadonly(getFirestore(getApp('source'))) }
+export function targetDb(): Firestore         { return getFirestore(getApp('target')) }

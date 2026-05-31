@@ -1,9 +1,10 @@
 import type { Firestore } from 'firebase-admin/firestore'
+import type { ReadonlyFirestore } from './config'
 import { sourceDb, targetDb } from './config'
 
 interface CountResult { collection: string; src: number; tgt: number; ok: boolean }
 
-async function countCollection(db: Firestore, name: string): Promise<number> {
+async function countCollection(db: ReadonlyFirestore | Firestore, name: string): Promise<number> {
   const snap = await db.collection(name).count().get()
   return snap.data().count
 }
