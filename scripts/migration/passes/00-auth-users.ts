@@ -63,18 +63,13 @@ async function fetchSourceUsers(sourceCredsPath: string): Promise<{
   do {
     const { access_token } = await credential.getAccessToken()
 
-    const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:batchGet', {
-      method: 'POST',
-      headers: {
-        Authorization:  `Bearer ${access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        targetProjectId: projectId,
-        maxResults:      PAGE_SIZE,
-        ...(pageToken ? { nextPageToken: pageToken } : {}),
-      }),
-    })
+    const params = new URLSearchParams({ maxResults: String(PAGE_SIZE) })
+    if (pageToken) params.set('nextPageToken', pageToken)
+
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:batchGet?${params}`,
+      { headers: { Authorization: `Bearer ${access_token}` } },
+    )
 
     if (!res.ok) {
       throw new Error(`Identity Toolkit API ${res.status}: ${await res.text()}`)
