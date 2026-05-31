@@ -19,19 +19,17 @@ To generate the key: Firebase Console → select the `hmd-lineup` project → Pr
 **2. Confirm ranking system IDs** in `scripts/migration/config.ts` (`RANKING_HMD`, `RANKING_KD`).
 These map the old single `rank` field on contacts to the new `ranks` map.
 
-The organisation document and org_admin member entry are created automatically by the **setup pass**. The **auth-users pass** migrates Firebase Auth accounts automatically in both cases:
+The organisation document and org_admin member entry are created automatically by the **setup pass**. The **auth-users pass** migrates Firebase Auth accounts. To preserve original passwords, provide the Firebase auth export file:
 
-- **Emulator target** — fully automated. Users are imported with the same UIDs and assigned the test password `lineup123`, so every account is immediately usable.
-- **Real project target** — UIDs, emails, display names, and provider links are imported automatically. Passwords **cannot** be migrated via the Admin SDK (hashes are not exposed). To preserve passwords for a real project, run the CLI export/import after the script:
+**Export users + hash params from the source project first:**
 
 ```bash
 firebase --project hmd-lineup auth:export hmd-users.json
-firebase --project lineup-staging auth:import hmd-users.json \
-  --hash-algo=SCRYPT --hash-key=<key> --salt-separator=<sep> \
-  --rounds=<rounds> --mem-cost=<mem>
 ```
 
-Hash params are in Firebase Console → Authentication → Users → Export.
+Hash params (signer key, salt separator, rounds, mem cost) are shown in Firebase Console → Authentication → Users → Export users, or in the `hmd-users.json` file itself.
+
+**Then pass the export file to the migration script** (see Options below). If `--source-auth-export` is omitted, accounts are created without passwords — users would need to reset them.
 
 ---
 
@@ -94,6 +92,11 @@ pnpm migrate:hmd \
 | `--target-creds <path>` | Service account JSON for target project |
 | `--target-emulator` | Write to local Firestore emulator instead of a real project |
 | `--org-admin-email <email>` | Email of the org creator + org_admin (default: `franco.dgstn@gmail.com`) |
+| `--source-auth-export <path>` | Path to `firebase auth:export` JSON — preserves original passwords |
+| `--hash-key <base64>` | SCRYPT signer key (required with `--source-auth-export`) |
+| `--hash-salt-separator <base64>` | SCRYPT salt separator |
+| `--hash-rounds <n>` | SCRYPT rounds (default: 8) |
+| `--hash-mem-cost <n>` | SCRYPT memory cost (default: 14) |
 | `--dry-run` | Log writes without committing |
 | `--only <pass>` | Run a single pass (see pass names below) |
 | `--from-team <teamId>` | Resume contacts/sessions passes from a specific team |

@@ -28,6 +28,13 @@ export interface MigrationConfig {
   only?: string
   fromTeam?: string
   orgAdminEmail: string      // email of the user who becomes org creator + org_admin
+  // Optional: path to firebase auth:export JSON — enables password hash import
+  sourceAuthExport?: string
+  // SCRYPT hash params — required when sourceAuthExport is provided
+  hashKey?: string           // base64-encoded signer key
+  hashSaltSeparator?: string // base64-encoded salt separator
+  hashRounds?: number
+  hashMemCost?: number
 }
 
 // ─── read-only source type ────────────────────────────────────────────────────
