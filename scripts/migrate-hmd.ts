@@ -14,13 +14,14 @@
  *   --from-team <teamId>       Resume contacts/sessions from a specific team
  *   --verify                   Run verification after migration
  *
- * Passes: setup | users | teams | activities | session-series | contacts | sessions | events | referrals | team-subcollections | verify
+ * Passes: setup | auth-users | users | teams | activities | session-series | contacts | sessions | events | referrals | team-subcollections | verify
  */
 
 import { parseArgs } from 'node:util'
 import { initApps, DEFAULT_ORG_ADMIN_EMAIL } from './migration/config'
 import type { MigrationConfig } from './migration/config'
 import { pass00Setup }              from './migration/passes/00-setup'
+import { pass00AuthUsers }          from './migration/passes/00-auth-users'
 import { pass01Users }              from './migration/passes/01-users'
 import { pass02Teams }              from './migration/passes/02-teams'
 import { pass03Activities }         from './migration/passes/03-activities'
@@ -76,6 +77,7 @@ async function run() {
   const only = cfg.only
 
   if (!only || only === 'setup')               await pass00Setup(cfg)
+  if (!only || only === 'auth-users')          await pass00AuthUsers(cfg)
 
   let teamIds: string[] = []
   if (!only || only === 'users')               await pass01Users(cfg)

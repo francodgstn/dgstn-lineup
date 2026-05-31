@@ -19,8 +19,10 @@ To generate the key: Firebase Console → select the `hmd-lineup` project → Pr
 **2. Confirm ranking system IDs** in `scripts/migration/config.ts` (`RANKING_HMD`, `RANKING_KD`).
 These map the old single `rank` field on contacts to the new `ranks` map.
 
-**3. (Staging/prod only) Export Firebase Auth users** from hmd-lineup and import into the target.
-The hash params are in Firebase Console → Authentication → Users → Export.
+The organisation document and org_admin member entry are created automatically by the **setup pass**. The **auth-users pass** migrates Firebase Auth accounts automatically in both cases:
+
+- **Emulator target** — fully automated. Users are imported with the same UIDs and assigned the test password `lineup123`, so every account is immediately usable.
+- **Real project target** — UIDs, emails, display names, and provider links are imported automatically. Passwords **cannot** be migrated via the Admin SDK (hashes are not exposed). To preserve passwords for a real project, run the CLI export/import after the script:
 
 ```bash
 firebase --project hmd-lineup auth:export hmd-users.json
@@ -29,10 +31,7 @@ firebase --project lineup-staging auth:import hmd-users.json \
   --rounds=<rounds> --mem-cost=<mem>
 ```
 
-Auth UIDs must match between source and target — do this before any Firestore passes.
-Skip this step when targeting the emulator (users are seeded separately).
-
-The organisation document (`organizations/hmd`) and the org_admin member entry are created automatically by the **setup pass** (pass 0), which runs first in every full migration. The user with `--org-admin-email` (default: `franco.dgstn@gmail.com`) is looked up by email in the source `users` collection to resolve their UID, then set as `createdBy` and `org_admin`. Pass 0 is idempotent — safe to re-run.
+Hash params are in Firebase Console → Authentication → Users → Export.
 
 ---
 
@@ -41,8 +40,9 @@ The organisation document (`organizations/hmd`) and the org_admin member entry a
 Start the emulators first:
 
 ```bash
-firebase emulators:start --only auth,firestore --project demo-lineup
+pnpm emulators:start
 ```
+It will start all needed emulators, project `demo-lineup`.
 
 Then run against the emulator target — no target credentials needed:
 
@@ -99,7 +99,7 @@ pnpm migrate:hmd \
 | `--from-team <teamId>` | Resume contacts/sessions passes from a specific team |
 | `--verify` | Run verification after migration |
 
-Pass names: `setup` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `referrals` · `team-subcollections` · `verify`
+Pass names: `setup` · `auth-users` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `referrals` · `team-subcollections` · `verify`
 
 **Run a single pass** (e.g. after a failure mid-way):
 

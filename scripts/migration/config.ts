@@ -1,7 +1,9 @@
 import type { App } from 'firebase-admin/app'
-import { initializeApp, cert, getApp } from 'firebase-admin/app'
-import type { CollectionReference, CollectionGroup, DocumentReference, Query, Firestore } from 'firebase-admin/firestore'
+import { initializeApp, cert } from 'firebase-admin/app'
+import type { CollectionReference, CollectionGroup, DocumentReference, Firestore } from 'firebase-admin/firestore'
 import { getFirestore } from 'firebase-admin/firestore'
+import type { Auth } from 'firebase-admin/auth'
+import { getAuth } from 'firebase-admin/auth'
 
 export const ORG_ID = 'hmd'
 export const ORG_NAME = 'HMD'
@@ -11,9 +13,12 @@ export const RANKING_HMD = 'hmd'   // Hwal Moo Do
 export const RANKING_KD  = 'kd'    // Korean Dragon
 
 export const EMULATOR_FIRESTORE_HOST = 'localhost:8080'
+export const EMULATOR_AUTH_HOST      = 'localhost:9099'
 export const EMULATOR_PROJECT_ID     = 'demo-lineup'
 
 export const DEFAULT_ORG_ADMIN_EMAIL = 'franco.dgstn@gmail.com'
+// Password assigned to every user when migrating into the emulator (testing only)
+export const EMULATOR_TEST_PASSWORD  = 'lineup123'
 
 export interface MigrationConfig {
   sourceCredsPath: string
@@ -51,36 +56,42 @@ function asReadonly(db: Firestore): ReadonlyFirestore {
 }
 
 // ─── app init ─────────────────────────────────────────────────────────────────
-// Firestore instances are cached eagerly at init time.
-// The source instance MUST be obtained before FIRESTORE_EMULATOR_HOST is set,
-// otherwise the Admin SDK lazily picks up the env var and routes source reads
-// to the local emulator instead of the real Firebase project.
+// Auth and Firestore instances are cached eagerly at init time.
+// Source instances MUST be obtained before emulator env vars are set — the
+// Admin SDK reads those vars lazily (on first connection), so setting them
+// first would silently route source reads to the local emulator.
 
-let _sourceDb: ReadonlyFirestore
-let _targetDb: Firestore
+let _sourceDb:   ReadonlyFirestore
+let _targetDb:   Firestore
+let _sourceAuth: Auth
+let _targetAuth: Auth
 
 export function initApps(cfg: MigrationConfig) {
-  // 1. Init source app and immediately obtain its Firestore instance,
-  //    while FIRESTORE_EMULATOR_HOST is still unset.
+  // 1. Init source app and immediately lock in its Firestore + Auth instances
+  //    while emulator env vars are still unset.
   const sourceApp = initializeApp({ credential: cert(cfg.sourceCredsPath) }, 'source')
-  _sourceDb = asReadonly(getFirestore(sourceApp))
+  _sourceDb   = asReadonly(getFirestore(sourceApp))
+  _sourceAuth = getAuth(sourceApp)
 
-  // 2. Now it is safe to configure the emulator env var for the target.
+  // 2. Set emulator env vars, then init the target app.
   if (cfg.targetEmulator) {
-    process.env.FIRESTORE_EMULATOR_HOST = EMULATOR_FIRESTORE_HOST
+    process.env.FIRESTORE_EMULATOR_HOST  = EMULATOR_FIRESTORE_HOST
+    process.env.FIREBASE_AUTH_EMULATOR_HOST = EMULATOR_AUTH_HOST
     const targetApp = initializeApp({ projectId: EMULATOR_PROJECT_ID }, 'target')
-    _targetDb = getFirestore(targetApp)
-    console.log(`Target: Firestore emulator at ${EMULATOR_FIRESTORE_HOST} (project ${EMULATOR_PROJECT_ID})`)
+    _targetDb   = getFirestore(targetApp)
+    _targetAuth = getAuth(targetApp)
+    console.log(`Target: emulator — Firestore ${EMULATOR_FIRESTORE_HOST}, Auth ${EMULATOR_AUTH_HOST}`)
   } else {
     const targetApp = initializeApp({ credential: cert(cfg.targetCredsPath!) }, 'target')
-    _targetDb = getFirestore(targetApp)
+    _targetDb   = getFirestore(targetApp)
+    _targetAuth = getAuth(targetApp)
   }
+
   // Silently drop undefined fields from source docs rather than throwing.
-  // Source data may have missing optional fields that don't map to any value.
   _targetDb.settings({ ignoreUndefinedProperties: true })
 }
 
-// sourceDb() returns a read-only proxy — write methods throw at runtime,
-// and the return type exposes only the query surface for compile-time safety.
-export function sourceDb(): ReadonlyFirestore { return _sourceDb }
-export function targetDb(): Firestore         { return _targetDb }
+export function sourceDb():   ReadonlyFirestore { return _sourceDb }
+export function targetDb():   Firestore         { return _targetDb }
+export function sourceAuth(): Auth              { return _sourceAuth }
+export function targetAuth(): Auth              { return _targetAuth }
