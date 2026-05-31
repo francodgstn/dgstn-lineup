@@ -13,6 +13,7 @@ export interface UserProfile {
   firstname?: string
   lastname?: string
   currentTeam?: string
+  orgIds?: string[]          // org IDs where user is an org_admin
   roles?: UserRoles
   created_at?: Timestamp
   disabled_at?: Timestamp | null

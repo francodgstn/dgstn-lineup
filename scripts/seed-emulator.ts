@@ -411,10 +411,11 @@ async function seedTeam(opts: {
         allowBooking:     true,
       })
 
-    // Booking doc for full slots
+    // Booking doc for full slots — use session-scoped ID so the same contact
+    // booked into multiple sessions doesn't produce duplicate keys in collectionGroup queries
     if (isFull) {
       await db.collection('sessions').doc(sid)
-        .collection('bookings').doc(bookedContact.id).set({
+        .collection('bookings').doc(`${sid}-booking`).set({
           teamId,
           contactId:      bookedContact.id,
           session:        sid,
@@ -900,6 +901,112 @@ async function seedTeam(opts: {
   }
 }
 
+// ── org seed ──────────────────────────────────────────────────────────────────
+
+async function seedOrg() {
+  const ORG_ID    = 'seed-org'
+  const ORG_ADMIN = 'seed-org-uid'   // Rafael Torres (also owns seed-team-org)
+  const CLUB_A    = 'seed-team-club' // Iron Circle Gym (Anna Schmidt)
+  const CLUB_B    = 'seed-team-org'  // Titan Combat Sports (Rafael Torres)
+
+  const now        = ts(new Date())
+  const periodStart = ts(daysFromNow(-30))
+  const periodEnd   = ts(daysFromNow(1))
+
+  // BJJ Belt ranking system — shared across all clubs in this org
+  const bjjBelt = [{
+    id:         'bjj-belt',
+    name:       'BJJ Belt',
+    is_primary: true,
+    levels: [
+      { value: 0, label: 'White Belt',  color: '#e5e7eb' },
+      { value: 1, label: 'Blue Belt',   color: '#1d4ed8' },
+      { value: 2, label: 'Purple Belt', color: '#7e22ce' },
+      { value: 3, label: 'Brown Belt',  color: '#78350f' },
+      { value: 4, label: 'Black Belt',  color: '#111827' },
+    ],
+  }]
+
+  // ── Organization document ─────────────────────────────────────────────────
+  await db.collection('organizations').doc(ORG_ID).set({
+    name:            'Titan Martial Arts Association',
+    slug:            'titan-martial-arts',
+    description:     'The Titan organization — managing Iron Circle Gym and Titan Combat Sports.',
+    plan:            'organization',
+    plan_status:     'active',
+    ranking_systems: bjjBelt,
+    created:         ts(daysFromNow(-180)),
+    createdBy:       ORG_ADMIN,
+  })
+
+  // ── Org admin member ──────────────────────────────────────────────────────
+  await db.collection('organizations').doc(ORG_ID)
+    .collection('org_members').doc(ORG_ADMIN).set({
+      userId:  ORG_ADMIN,
+      orgId:   ORG_ID,
+      role:    'org_admin',
+      joined:  now,
+      addedBy: ORG_ADMIN,
+    })
+
+  // Record orgId on the admin's user profile so the sidebar finds it without collectionGroup
+  await db.collection('users').doc(ORG_ADMIN).update({
+    orgIds: [ORG_ID],
+  })
+
+  // ── Org teams ─────────────────────────────────────────────────────────────
+  for (const teamId of [CLUB_A, CLUB_B]) {
+    await db.collection('organizations').doc(ORG_ID)
+      .collection('org_teams').doc(teamId).set({
+        teamId,
+        orgId:   ORG_ID,
+        status:  'active',
+        joined:  now,
+        addedBy: ORG_ADMIN,
+      })
+
+    // Link team to org; clear team-level ranking_systems (org provides them)
+    await db.collection('teams').doc(teamId).update({
+      org_id:          ORG_ID,
+      ranking_systems: [],  // delegated to org
+    })
+  }
+
+  // ── SaaS subscription for the org ────────────────────────────────────────
+  await db.collection('saas_subscriptions').doc(ORG_ID).set({
+    entity_type:          'org',
+    entity_id:            ORG_ID,
+    teamId:               ORG_ID, // backwards-compat field
+    plan:                 'organization',
+    status:               'active',
+    trial_ends_at:        null,
+    current_period_start: periodStart,
+    current_period_end:   periodEnd,
+    cancel_at_period_end: false,
+    gateway_type:         null,
+    gateway_data:         null,
+    created_at:           ts(daysFromNow(-180)),
+    updated_at:           now,
+  })
+
+  // ── Org-wide event ────────────────────────────────────────────────────────
+  await db.collection('events').add({
+    orgId:       ORG_ID,
+    teamId:      null,
+    scope:       'org',
+    title:       'Titan Open Championship 2026',
+    type:        'competition',
+    start:       ts(daysFromNow(45)),
+    end:         ts(daysFromNow(46)),
+    location:    'Geneva Sports Arena',
+    description: 'Annual open championship — all Titan clubs are invited to participate.',
+    status:      'open',
+    deleted_at:  null,
+    createdBy:   ORG_ADMIN,
+    created_at:  now,
+  })
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -947,14 +1054,19 @@ async function main() {
     await seedTeam(account)
   }
 
+  console.log('\n🏢  Seeding organization (Titan Martial Arts Association)…')
+  await seedOrg()
+
   console.log('\n✅ Emulator seeded successfully!\n')
   console.log('   ┌─────────────────────┬──────────────────────┬──────────────┬────────────┐')
   console.log('   │ Plan                │ Email                │ Password     │ Status     │')
   console.log('   ├─────────────────────┼──────────────────────┼──────────────┼────────────┤')
   console.log('   │ coach               │ coach@lineup.dev     │ lineup123    │ trial      │')
-  console.log('   │ club                │ club@lineup.dev      │ lineup123    │ active     │')
-  console.log('   │ organization        │ org@lineup.dev       │ lineup123    │ active     │')
+  console.log('   │ club (in org)       │ club@lineup.dev      │ lineup123    │ active     │')
+  console.log('   │ org admin           │ org@lineup.dev       │ lineup123    │ active     │')
   console.log('   └─────────────────────┴──────────────────────┴──────────────┴────────────┘\n')
+  console.log('   Organization: Titan Martial Arts Association (org@lineup.dev is org admin)')
+  console.log('   Clubs in org: Iron Circle Gym + Titan Combat Sports\n')
   console.log('   Portals:')
   for (const a of accounts) {
     console.log(`   ${a.plan.padEnd(16)} →  http://localhost:3000/portal/${a.teamSlug}`)

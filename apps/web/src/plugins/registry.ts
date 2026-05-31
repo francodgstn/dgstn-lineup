@@ -7,12 +7,14 @@ import { aiInsightsManifest } from './ai-insights/manifest'
 import { whatsappManifest } from './whatsapp/manifest'
 import { clubWebsiteManifest } from './club-website/manifest'
 import { hmdFightingCupManifest } from './hmd-fighting-cup/manifest'
+import { referralsManifest } from './referrals/manifest'
 
 export const PLUGIN_REGISTRY: PluginManifest[] = [
   aiInsightsManifest,
   whatsappManifest,
   clubWebsiteManifest,
   hmdFightingCupManifest,
+  referralsManifest,
 ]
 
 /** All plugin-contributed event type IDs (built-in type IDs from installed plugins). */

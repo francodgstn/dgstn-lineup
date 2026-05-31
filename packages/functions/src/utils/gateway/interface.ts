@@ -9,6 +9,7 @@ export interface WebhookEvent {
   type: WebhookEventType
   eventId: string           // gateway's unique event ID — used for idempotency
   teamId?: string
+  orgId?: string
   customerId?: string
   subscriptionId?: string
   plan?: string
@@ -39,7 +40,8 @@ export interface Invoice {
 
 export interface GatewayAdapter {
   createCheckoutSession(params: {
-    teamId: string
+    teamId?: string
+    orgId?: string
     plan: string
     customerEmail: string
     successUrl: string

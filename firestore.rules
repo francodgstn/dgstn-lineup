@@ -71,6 +71,21 @@ service cloud.firestore {
              (role == 'viewer' && (userRole == 'owner' || userRole == 'manager' || userRole == 'viewer'));
     }
 
+    // Organization Helper functions
+    //-------------------------------------------------------
+
+    function isOrgMember(orgId) {
+      return exists(/databases/$(database)/documents/organizations/$(orgId)/org_members/$(request.auth.uid))
+    }
+
+    function hasOrgRole(orgId, role) {
+      let membership = get(/databases/$(database)/documents/organizations/$(orgId)/org_members/$(request.auth.uid)).data;
+      let userRole = membership.role;
+      // org_admin can do everything; org_viewer is read-only
+      return userRole == 'org_admin' ||
+             (role == 'org_viewer' && userRole == 'org_viewer');
+    }
+
     // Check if resource's teamId matches user's current team OR if teacher field matches user (backward compat)
     function belongsToUserTeam(res) {
       return (res.data.teamId != null && res.data.teamId == getUserCurrentTeam() && isTeamMember(res.data.teamId))
@@ -485,11 +500,27 @@ service cloud.firestore {
       allow read:   if belongsToUserTeam(resource) || hasRole('admin');
     }
 
-    // Events — team-scoped
+    // Events — team-scoped or org-scoped
+    // Org events (scope=='org') are visible to all clubs in that org.
     match /events/{event} {
-      allow create: if belongsToUserTeam(request.resource) || hasRole('admin');
-      allow read:   if belongsToUserTeam(resource) || hasRole('admin');
-      allow update: if belongsToUserTeam(resource) || hasRole('admin');
+      allow create: if belongsToUserTeam(request.resource)
+                    || (isAuthed() && request.resource.data.scope == 'org'
+                        && request.resource.data.orgId != null
+                        && hasOrgRole(request.resource.data.orgId, 'org_admin'))
+                    || hasRole('admin');
+      allow read:   if belongsToUserTeam(resource)
+                    || (isAuthed() && resource.data.scope == 'org'
+                        && resource.data.orgId != null
+                        && isOrgMember(resource.data.orgId))
+                    || (isAuthed() && resource.data.scope == 'org'
+                        && resource.data.orgId != null
+                        && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == resource.data.orgId)
+                    || hasRole('admin');
+      allow update: if belongsToUserTeam(resource)
+                    || (isAuthed() && resource.data.scope == 'org'
+                        && resource.data.orgId != null
+                        && hasOrgRole(resource.data.orgId, 'org_admin'))
+                    || hasRole('admin');
       allow delete: if hasRole('admin');
 
       // Per-event categories (used by fighting_cup and any plugin with hasCategories)
@@ -698,10 +729,12 @@ service cloud.firestore {
     // ----------------------------------------------
     // SaaS Subscriptions (Lineup-specific)
     // Billing state managed exclusively by Cloud Functions (Stripe webhook handler)
+    // entity_id may be a teamId or an orgId depending on entity_type
     // ----------------------------------------------
-    match /saas_subscriptions/{teamId} {
-      allow read: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
-      allow write: if false; // Stripe webhook Cloud Function only
+    match /saas_subscriptions/{entityId} {
+      allow read: if (isTeamMember(entityId) && hasTeamRole(entityId, 'owner'))
+                  || (isOrgMember(entityId) && hasOrgRole(entityId, 'org_admin'));
+      allow write: if false; // Cloud Functions only
     }
 
     // Rate-limit log written by createCheckoutSession Cloud Function
@@ -711,14 +744,35 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------
-    // Organizations (multi-club tier — Phase 2, not yet implemented)
+    // Organizations (multi-club tier)
     // ----------------------------------------------
     match /organizations/{orgId} {
-      allow read: if false;  // TODO: org members can read their org
-      allow write: if false; // TODO: cloud functions only
+      allow read: if isOrgMember(orgId);
+      allow create: if isAuthed() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasOrgRole(orgId, 'org_admin');
+      allow delete: if false; // Cloud Functions only
+
       match /org_members/{memberId} {
-        allow read: if false;  // TODO
-        allow write: if false; // TODO
+        // A user can always read their own membership doc (needed for collectionGroup sidebar query)
+        allow read: if isOrgMember(orgId) || memberId == request.auth.uid;
+        // org_admin can manage members; creator can self-provision as org_admin on org creation
+        allow write: if hasOrgRole(orgId, 'org_admin')
+                     || (isAuthed()
+                         && memberId == request.auth.uid
+                         && request.resource.data.role == 'org_admin'
+                         && request.resource.data.userId == request.auth.uid);
+        allow delete: if hasOrgRole(orgId, 'org_admin');
+      }
+
+      match /org_teams/{teamId} {
+        allow read: if isOrgMember(orgId) || isTeamMember(teamId);
+        allow write: if false; // Cloud Functions only
+      }
+
+      match /org_invitations/{invId} {
+        allow read: if isOrgMember(orgId)
+                    || (isAuthed() && resource.data.inviteeEmail == request.auth.token.email);
+        allow write: if false; // Cloud Functions only
       }
     }
 

@@ -27,8 +27,11 @@ import {
   TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, ALERT_PRESETS_SUBCOLLECTION,
 } from '@lineup/shared'
 import type { Team, SubscriptionType, AlertScheduleType, RankingSystem, RankLevel, TeamIntegration, PaymentGatewayType } from '@lineup/shared'
-import { CalendarDays, Timer, Plus, Pencil, Trash2, Star } from 'lucide-react'
+import { CalendarDays, Timer, Plus, Pencil, Trash2, Star, Building2 } from 'lucide-react'
 import { RANK_PRESETS } from '@/lib/rank-presets'
+import { useRankingSystems } from '@/hooks/useRankingSystems'
+import { Link } from '@/i18n/navigation'
+import type { Route } from 'next'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -931,7 +934,8 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const systems: RankingSystem[] = team.ranking_systems ?? []
+  const { rankingSystems: effectiveSystems, managedByOrg, orgId, loading: rankLoading } = useRankingSystems()
+  const systems: RankingSystem[] = managedByOrg ? effectiveSystems : (team.ranking_systems ?? [])
 
   const saveToFirestore = async (next: RankingSystem[]) => {
     setSaving(true)
@@ -981,14 +985,31 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
 
   return (
     <div className="space-y-4">
+      {managedByOrg && orgId && (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-muted/50 border text-sm">
+          <Building2 className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+          <span className="text-muted-foreground">
+            Ranking systems are managed by your organization.{' '}
+            <Link href={`/org/${orgId}/settings` as Route} className="text-primary hover:underline">
+              Edit in organization settings
+            </Link>
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{t('rankingSystems')}</p>
-        <Button size="sm" onClick={openAdd} disabled={saving}>
-          <Plus className="h-4 w-4 mr-1.5" />{t('addRankingSystem')}
-        </Button>
+        {!managedByOrg && (
+          <Button size="sm" onClick={openAdd} disabled={saving || rankLoading}>
+            <Plus className="h-4 w-4 mr-1.5" />{t('addRankingSystem')}
+          </Button>
+        )}
       </div>
 
-      {systems.length === 0 ? (
+      {rankLoading ? (
+        <div className="space-y-2">
+          {[1, 2].map((i) => <div key={i} className="h-12 rounded-lg border bg-muted/30 animate-pulse" />)}
+        </div>
+      ) : systems.length === 0 ? (
         <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
           {t('rankingNoSystems')}
         </div>
@@ -1009,7 +1030,7 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                     {t('rankingSystemLevels', { count: s.levels.length })}
                   </p>
                 </div>
-                {s.is_primary ? (
+                {!managedByOrg && (s.is_primary ? (
                   <button
                     onClick={handleClearPrimary}
                     disabled={saving}
@@ -1025,16 +1046,20 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                   >
                     {t('rankingSystemSetPrimary')}
                   </button>
+                ))}
+                {!managedByOrg && (
+                  <button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-muted transition-colors">
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
                 )}
-                <button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-muted transition-colors">
-                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-                <button
-                  onClick={() => setDeleting(s.id)}
-                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {!managedByOrg && (
+                  <button
+                    onClick={() => setDeleting(s.id)}
+                    className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* Level color strip */}

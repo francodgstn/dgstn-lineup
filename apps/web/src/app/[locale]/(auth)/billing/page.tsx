@@ -297,8 +297,33 @@ function InvoicesSection({ teamId, hasGateway }: { teamId: string; hasGateway: b
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
+function ManagedByOrgBanner({ orgId }: { orgId: string }) {
+  const { data: orgDoc } = useQuery<{ name: string } | null>({
+    queryKey: ['org-name', orgId],
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, 'organizations', orgId))
+      return snap.exists() ? { name: snap.data().name as string } : null
+    },
+  })
+
+  return (
+    <div className="rounded-lg border bg-muted/40 p-5 flex items-start gap-3">
+      <CreditCard className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+      <div>
+        <p className="font-medium text-sm">Billing managed by organization</p>
+        {orgDoc?.name && (
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Your plan is managed by <strong>{orgDoc.name}</strong>. Contact your organization
+            administrator for billing details or plan changes.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function BillingPage() {
-  const { user, currentTeamId } = useAuth()
+  const { user, currentTeamId, team } = useAuth()
   const t = useTranslations('Billing')
 
   const { data: isOwner, isLoading: roleLoading } = useIsOwner(currentTeamId, user?.uid ?? null)
@@ -321,6 +346,20 @@ export default function BillingPage() {
         <div className="rounded-lg border border-dashed py-12 text-center">
           <p className="text-sm font-medium text-muted-foreground">{t('ownerOnly')}</p>
         </div>
+      </div>
+    )
+  }
+
+  // When club is managed by an org, show a notice instead of the billing UI
+  const orgId = team?.org_id
+  if (orgId) {
+    return (
+      <div className="space-y-6 max-w-2xl">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t('subtitle')}</p>
+        </div>
+        <ManagedByOrgBanner orgId={orgId} />
       </div>
     )
   }

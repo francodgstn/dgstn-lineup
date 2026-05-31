@@ -13,6 +13,7 @@ interface AuthContextValue {
   team: Team | null
   loading: boolean
   currentTeamId: string | null
+  isOrgAdmin: boolean
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthContextValue>({
   team: null,
   loading: true,
   currentTeamId: null,
+  isOrgAdmin: false,
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -28,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [team, setTeam] = useState<Team | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isOrgAdmin, setIsOrgAdmin] = useState(false)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -58,16 +61,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const unsub = onSnapshot(doc(db, 'teams', currentTeamId), (snap) => {
       if (snap.exists()) {
-        setTeam({ id: snap.id, ...snap.data() } as Team)
+        const teamData = { id: snap.id, ...snap.data() } as Team
+        setTeam(teamData)
+        const orgId = teamData.org_id
+        const uid = user?.uid
+        if (orgId && uid) {
+          getDoc(doc(db, 'organizations', orgId, 'org_members', uid))
+            .then((m) => setIsOrgAdmin(m.exists() && m.data().role === 'org_admin'))
+            .catch(() => setIsOrgAdmin(false))
+        } else {
+          setIsOrgAdmin(false)
+        }
       } else {
         setTeam(null)
+        setIsOrgAdmin(false)
       }
     })
     return unsub
   }, [currentTeamId])
 
   return (
-    <AuthContext.Provider value={{ user, profile, team, loading, currentTeamId }}>
+    <AuthContext.Provider value={{ user, profile, team, loading, currentTeamId, isOrgAdmin }}>
       {children}
     </AuthContext.Provider>
   )

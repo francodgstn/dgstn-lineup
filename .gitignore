@@ -8,6 +8,9 @@ dist/
 out/
 build/
 
+# Service account keys — never commit
+keys/
+
 # Firebase
 .firebase/
 firebase-debug.log

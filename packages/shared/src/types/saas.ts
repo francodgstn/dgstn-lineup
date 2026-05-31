@@ -3,6 +3,9 @@ import type { SaasPlan, SaasStatus } from './team'
 import type { PaymentGatewayType } from './integration'
 
 export interface SaasSubscription {
+  entity_type: 'team' | 'org'
+  entity_id: string
+  /** @deprecated use entity_id instead */
   teamId: string
   plan: SaasPlan
   status: SaasStatus

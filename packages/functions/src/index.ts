@@ -75,6 +75,17 @@ export { generateCoachSlots, generateCoachSlotsScheduled, onCoachAvailabilityWri
 // SaaS billing (Lineup's own platform subscriptions — Stripe)
 export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices } from './saas-billing'
 
+// Organizations (multi-club tier)
+export {
+  createOrganization,
+  inviteClubToOrg,
+  acceptOrgInvitation,
+  declineOrgInvitation,
+  removeClubFromOrg,
+  createOrgCheckoutSession,
+  getOrgInvitationDetails,
+} from './orgs'
+
 // Team-level billing (clubs charging their own students — Payrexx)
 export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'
 

@@ -2,8 +2,8 @@ import type { PluginManifest } from '@lineup/shared'
 
 export const whatsappManifest: PluginManifest = {
   id: 'whatsapp',
-  nameKey: 'Plugins.whatsappName',
-  descriptionKey: 'Plugins.whatsappDescription',
+  nameKey: 'whatsappName',
+  descriptionKey: 'whatsappDescription',
   category: 'communications',
   minPlan: 'club',
   status: 'coming_soon',
@@ -11,7 +11,7 @@ export const whatsappManifest: PluginManifest = {
   automationTriggers: [
     {
       id: 'plugin:whatsapp:message_received',
-      labelKey: 'Plugins.whatsappTriggerMessageReceived',
+      labelKey: 'whatsappTriggerMessageReceived',
       icon: 'MessageCircle',
       supportsDelay: false,
     },
@@ -19,7 +19,7 @@ export const whatsappManifest: PluginManifest = {
   automationActions: [
     {
       id: 'plugin:whatsapp:send_message',
-      labelKey: 'Plugins.whatsappActionSendMessage',
+      labelKey: 'whatsappActionSendMessage',
       icon: 'MessageCircle',
       configFields: [
         {

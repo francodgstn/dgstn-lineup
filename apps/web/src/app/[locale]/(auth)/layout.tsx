@@ -9,7 +9,6 @@ import { TopBar } from '@/components/layout/TopBar'
 import {
   LayoutDashboard,
   Users,
-  CalendarDays,
   Calendar,
   Zap,
   CalendarRange,
@@ -25,11 +24,13 @@ import {
   ChevronRight,
   Lock,
   Puzzle,
+  Building2,
 } from 'lucide-react'
 import type { Route } from 'next'
 import type { SaasPlan } from '@lineup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
+import { useOrgLinks } from '@/hooks/useOrgLinks'
 
 // ─── nav config ───────────────────────────────────────────────────────────────
 
@@ -37,15 +38,16 @@ type NavItem = { href: string; labelKey: string; icon: React.ElementType; minPla
 
 type NavSection = { labelKey: string; items: NavItem[] }
 
+const DASHBOARD_ITEM: NavItem = { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard }
+
 const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionSchedule',
     items: [
-      { href: '/dashboard',  labelKey: 'dashboard',  icon: LayoutDashboard },
-      { href: '/calendar',   labelKey: 'calendar',   icon: Calendar },
-      { href: '/sessions',   labelKey: 'sessions',   icon: CalendarDays },
-      { href: '/bookings',   labelKey: 'bookings',   icon: ClipboardList },
-      { href: '/events',     labelKey: 'events',     icon: CalendarRange, minPlan: 'club' },
+      { href: '/calendar',         labelKey: 'calendar',    icon: Calendar },
+      { href: '/bookings',         labelKey: 'bookings',    icon: ClipboardList },
+      { href: '/activities',       labelKey: 'activities',  icon: Zap },
+      { href: '/team/event-types', labelKey: 'eventTypes',  icon: CalendarRange },
     ],
   },
   {
@@ -57,23 +59,21 @@ const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionEngage',
     items: [
-      { href: '/gamification',  labelKey: 'gamification',  icon: Trophy,    minPlan: 'club' },
-      { href: '/automations',   labelKey: 'automations',   icon: Workflow,  minPlan: 'club' },
+      { href: '/gamification', labelKey: 'gamification', icon: Trophy, minPlan: 'club' },
     ],
   },
   {
     labelKey: 'sectionConfigure',
     items: [
-      { href: '/activities',         labelKey: 'activities',  icon: Zap },
-      { href: '/team/event-types',   labelKey: 'eventTypes',  icon: CalendarRange },
-      { href: '/team/portal',        labelKey: 'portal',      icon: Globe },
-      { href: '/plugins',            labelKey: 'plugins',     icon: Puzzle, minPlan: 'club' },
+      { href: '/automations',    labelKey: 'automations', icon: Workflow, minPlan: 'club' },
+      { href: '/team/portal',    labelKey: 'portal',      icon: Globe },
+      { href: '/plugins',        labelKey: 'plugins',     icon: Puzzle, minPlan: 'club' },
     ],
   },
   {
     labelKey: 'sectionTeam',
     items: [
-      { href: '/team/managers', labelKey: 'managers', icon: UserCog },
+      { href: '/team/members',  labelKey: 'managers', icon: UserCog },
       { href: '/team/settings', labelKey: 'settings', icon: Settings },
       { href: '/billing',       labelKey: 'billing',  icon: CreditCard },
     ],
@@ -145,6 +145,46 @@ function NavLink({
 
 // ─── sidebar content ──────────────────────────────────────────────────────────
 
+function OrgLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?: () => void }) {
+  const pathname = usePathname()
+  const { data: orgs } = useOrgLinks()
+  if (!orgs || orgs.length === 0) return null
+
+  return (
+    <div className="mt-3">
+      {collapsed ? (
+        <div className="border-t mx-1 mb-1" />
+      ) : (
+        <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pb-1">
+          Organizations
+        </p>
+      )}
+      <div className="space-y-0.5">
+        {orgs.map((org) => {
+          const href = `/org/${org.id}/clubs`
+          const isActive = pathname.includes(`/org/${org.id}`)
+          return (
+            <Link
+              key={org.id}
+              href={href as Route}
+              onClick={onLinkClick}
+              title={collapsed ? org.name : undefined}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                isActive
+                  ? 'bg-primary/10 text-primary font-semibold'
+                  : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+              } ${collapsed ? 'justify-center px-2' : ''}`}
+            >
+              <Building2 className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+              {!collapsed && <span className="truncate">{org.name}</span>}
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function SidebarContent({
   collapsed,
   onToggleCollapse,
@@ -184,6 +224,10 @@ function SidebarContent({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
+        {/* Dashboard — standalone, no section header */}
+        <div className="mb-1 space-y-0.5">
+          <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
+        </div>
         {NAV_SECTIONS.map((section) => (
           <div key={section.labelKey} className="mt-3">
             {collapsed ? (
@@ -200,6 +244,7 @@ function SidebarContent({
             </div>
           </div>
         ))}
+        <OrgLinks collapsed={collapsed} onLinkClick={onLinkClick} />
       </nav>
 
       {/* Sign out at bottom */}
@@ -262,10 +307,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <UpgradeModalProvider>
-      <div className="flex min-h-screen bg-background">
-        {/* Desktop sidebar */}
+      <div className="flex bg-background">
+        {/* Desktop sidebar — fixed to viewport height, nav scrolls internally */}
         <aside
-          className={`hidden md:flex flex-col border-r bg-sidebar shrink-0 transition-[width] duration-200 ${
+          className={`hidden md:flex flex-col border-r bg-sidebar shrink-0 sticky top-0 h-screen transition-[width] duration-200 ${
             collapsed ? 'w-14' : 'w-60'
           }`}
         >
@@ -279,10 +324,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </SheetContent>
         </Sheet>
 
-        {/* Main column: topbar always visible + content */}
-        <div className="flex flex-col flex-1 min-w-0">
+        {/* Main column: topbar + scrollable content */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-screen">
           <TopBar onMobileMenu={() => setMobileOpen(true)} />
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-1">
             <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-8">
               {children}
             </div>

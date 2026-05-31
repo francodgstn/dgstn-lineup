@@ -21,15 +21,24 @@ import { Button } from '@/components/ui/button'
 import { DateTimePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { EVENTS_COLLECTION } from '@lineup/shared'
+import { EVENTS_COLLECTION, TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION } from '@lineup/shared'
 import type { Event, EventType } from '@lineup/shared'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, Users, MapPin, CalendarDays } from 'lucide-react'
+import { Plus, Pencil, Trash2, Users, MapPin, CalendarDays, User } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const EVENT_TYPES: EventType[] = ['competition', 'camp', 'exam', 'seminar', 'workshop']
+
+// ─── types ────────────────────────────────────────────────────────────────────
+
+interface MemberDoc {
+  id: string
+  userId: string
+  email?: string
+  displayName?: string
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +63,9 @@ function eventDuration(e: Event): string {
   return m ? `${h}h ${m}m` : `${h}h`
 }
 
+function memberLabel(m: MemberDoc): string {
+  return m.displayName ?? m.email ?? m.userId
+}
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
@@ -61,11 +73,14 @@ const eventSchema = z
   .object({
     title: z.string().min(1, 'Required').max(120),
     type: z.enum(['competition', 'camp', 'exam', 'seminar', 'workshop']),
+    scope: z.enum(['team', 'org']).default('team'),
     start: z.date({ required_error: 'Required' }),
     end: z.date({ required_error: 'Required' }),
     location: z.string().max(120).optional(),
     fee: z.string().optional(),
     description: z.string().max(1000).optional(),
+    coachId: z.string().optional(),
+    coachName: z.string().max(120).optional(),
   })
   .refine((d) => !d.start || !d.end || d.end > d.start, {
     message: 'End must be after start',
@@ -76,14 +91,16 @@ type EventFormData = z.infer<typeof eventSchema>
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
-function useEvents(teamId: string | null, upcoming: boolean) {
+function useEvents(teamId: string | null, orgId: string | null | undefined, upcoming: boolean) {
   return useQuery<Event[]>({
-    queryKey: ['events', upcoming ? 'upcoming' : 'past', teamId],
+    queryKey: ['events', upcoming ? 'upcoming' : 'past', teamId, orgId],
     enabled: !!teamId,
     queryFn: async () => {
       if (!teamId) return []
       const now = Timestamp.now()
-      const q = query(
+
+      // Team events
+      const teamQ = query(
         collection(db, EVENTS_COLLECTION),
         where('teamId', '==', teamId),
         where('deleted_at', '==', null),
@@ -91,8 +108,46 @@ function useEvents(teamId: string | null, upcoming: boolean) {
         orderBy('start', upcoming ? 'asc' : 'desc'),
         limit(50),
       )
-      const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Event)
+      const teamSnap = await getDocs(teamQ)
+      const teamEvents = teamSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Event)
+
+      // Org-wide events (only when team belongs to an org)
+      let orgEvents: Event[] = []
+      if (orgId) {
+        const orgQ = query(
+          collection(db, EVENTS_COLLECTION),
+          where('orgId', '==', orgId),
+          where('scope', '==', 'org'),
+          where('deleted_at', '==', null),
+          where('start', upcoming ? '>=' : '<', now),
+          orderBy('start', upcoming ? 'asc' : 'desc'),
+          limit(20),
+        )
+        const orgSnap = await getDocs(orgQ)
+        orgEvents = orgSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Event)
+      }
+
+      // Merge and re-sort
+      const all = [...teamEvents, ...orgEvents]
+      all.sort((a, b) => {
+        const at = (a.start as { toDate(): Date }).toDate().getTime()
+        const bt = (b.start as { toDate(): Date }).toDate().getTime()
+        return upcoming ? at - bt : bt - at
+      })
+      return all
+    },
+  })
+}
+
+function useTeamMembers(teamId: string | null) {
+  return useQuery<MemberDoc[]>({
+    queryKey: ['team-members', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(collection(db, TEAMS_COLLECTION, teamId!, TEAM_MEMBERS_SUBCOLLECTION), orderBy('joined'))
+      )
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MemberDoc))
     },
   })
 }
@@ -104,33 +159,43 @@ function EventDialog({
   onClose,
   teamId,
   userId,
+  orgId,
+  isOrgAdmin,
+  members,
   editing,
 }: {
   open: boolean
   onClose: () => void
   teamId: string
   userId: string
+  orgId: string | null | undefined
+  isOrgAdmin: boolean
+  members: MemberDoc[]
   editing: Event | null
 }) {
   const t = useTranslations('Events')
   const qc = useQueryClient()
 
-  const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm<EventFormData>({
+  const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
     defaultValues: editing
       ? {
           title: editing.title,
           type: editing.type as EventFormData['type'],
+          scope: (editing.scope ?? 'team') as 'team' | 'org',
           start: (editing.start as { toDate(): Date } | null | undefined)?.toDate() ?? undefined,
           end: (editing.end as { toDate(): Date } | null | undefined)?.toDate() ?? undefined,
           location: editing.location ?? '',
           fee: editing.fee != null ? String(editing.fee) : '',
           description: editing.description ?? '',
+          coachId: editing.coachId ?? undefined,
+          coachName: editing.coachName ?? '',
         }
-      : { title: '', type: 'competition', start: undefined, end: undefined, location: '', fee: '', description: '' },
+      : { title: '', type: 'competition', scope: 'team', start: undefined, end: undefined, location: '', fee: '', description: '', coachId: undefined, coachName: '' },
   })
 
   async function onSubmit(data: EventFormData) {
+    const isOrg = data.scope === 'org'
     const payload = {
       title: data.title,
       type: data.type,
@@ -139,13 +204,17 @@ function EventDialog({
       location: data.location ?? '',
       fee: data.fee ? Number(data.fee) : null,
       description: data.description ?? '',
+      coachId: data.coachId || null,
+      coachName: data.coachName || null,
     }
     if (editing) {
       await updateDoc(doc(db, EVENTS_COLLECTION, editing.id), payload)
     } else {
       await addDoc(collection(db, EVENTS_COLLECTION), {
         ...payload,
-        teamId,
+        ...(isOrg
+          ? { scope: 'org', orgId, teamId: null }
+          : { teamId, scope: 'team' }),
         createdBy: userId,
         status: 'open',
         participants_count: 0,
@@ -164,6 +233,38 @@ function EventDialog({
           <DialogTitle>{editing ? t('editEvent') : t('newEvent')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+
+          {/* Scope toggle — only for org admins creating a new event */}
+          {isOrgAdmin && !editing && (
+            <Controller
+              name="scope"
+              control={control}
+              render={({ field }) => (
+                <div className="space-y-1.5">
+                  <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+                    {(['team', 'org'] as const).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => field.onChange(s)}
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                          field.value === s
+                            ? 'bg-background shadow-sm text-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {t(s === 'team' ? 'scopeTeam' : 'scopeOrg')}
+                      </button>
+                    ))}
+                  </div>
+                  {field.value === 'org' && (
+                    <p className="text-xs text-muted-foreground">{t('scopeOrgHint')}</p>
+                  )}
+                </div>
+              )}
+            />
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="ev-title">{t('fieldTitle')}</Label>
             <Input id="ev-title" {...register('title')} autoFocus />
@@ -241,6 +342,53 @@ function EventDialog({
               rows={3}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
             />
+          </div>
+
+          {/* Coach / Instructor */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>{t('fieldCoachMember')}</Label>
+              <Controller
+                name="coachId"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? '__none__'}
+                    onValueChange={(val) => {
+                      if (val === '__none__') {
+                        field.onChange(undefined)
+                      } else {
+                        field.onChange(val)
+                        const m = members.find((m) => m.userId === val)
+                        if (m) setValue('coachName', memberLabel(m))
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <span className="flex flex-1 text-left text-sm truncate text-muted-foreground">
+                        {field.value
+                          ? (memberLabel(members.find((m) => m.userId === field.value) ?? { id: '', userId: field.value }))
+                          : t('fieldCoachMemberPlaceholder')}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{t('fieldCoachMemberPlaceholder')}</SelectItem>
+                      {members.map((m) => (
+                        <SelectItem key={m.userId} value={m.userId}>{memberLabel(m)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ev-coach-name">{t('fieldCoachName')}</Label>
+              <Input
+                id="ev-coach-name"
+                {...register('coachName')}
+                placeholder={t('fieldCoachName')}
+              />
+            </div>
           </div>
 
           <DialogFooter>
@@ -323,6 +471,9 @@ function EventCard({
               <Badge variant="secondary" className="text-xs capitalize shrink-0">
                 {t(`type_${event.type}` as Parameters<typeof t>[0])}
               </Badge>
+              {event.scope === 'org' && (
+                <Badge variant="outline" className="text-xs shrink-0">Org</Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {formatDate(event.start)}
@@ -356,6 +507,12 @@ function EventCard({
               {event.location}
             </span>
           )}
+          {event.coachName && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <User className="h-3 w-3 shrink-0" />
+              {event.coachName}
+            </span>
+          )}
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <Users className="h-3 w-3 shrink-0" />
             {event.participants_count ?? 0}
@@ -371,7 +528,7 @@ function EventCard({
 type Tab = 'upcoming' | 'past'
 
 export default function EventsPage() {
-  const { currentTeamId, user } = useAuth()
+  const { currentTeamId, user, team, isOrgAdmin } = useAuth()
   const qc = useQueryClient()
   const t = useTranslations('Events')
   const [tab, setTab] = useState<Tab>('upcoming')
@@ -379,8 +536,10 @@ export default function EventsPage() {
   const [editing, setEditing] = useState<Event | null>(null)
   const [deleting, setDeleting] = useState<Event | null>(null)
 
-  const upcoming = useEvents(currentTeamId, true)
-  const past = useEvents(currentTeamId, false)
+  const orgId = team?.org_id ?? null
+  const upcoming = useEvents(currentTeamId, orgId, true)
+  const past = useEvents(currentTeamId, orgId, false)
+  const { data: members = [] } = useTeamMembers(currentTeamId)
   const current = tab === 'upcoming' ? upcoming : past
 
   function openNew() { setEditing(null); setDialogOpen(true) }
@@ -484,6 +643,9 @@ export default function EventsPage() {
           onClose={closeDialog}
           teamId={currentTeamId}
           userId={user.uid}
+          orgId={orgId}
+          isOrgAdmin={isOrgAdmin}
+          members={members}
           editing={editing}
         />
       )}

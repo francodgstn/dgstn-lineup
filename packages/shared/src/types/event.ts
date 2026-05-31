@@ -10,7 +10,9 @@ export type EventStatus = 'open' | 'restricted' | 'closed' | 'cancelled'
 
 export interface Event {
   id: string
-  teamId: string
+  teamId?: string              // null for org-wide events
+  orgId?: string               // set for org-wide events
+  scope?: 'team' | 'org'      // defaults to 'team' when absent
   title: string
   type: EventType              // built-in slug or custom/plugin type ID
   start: Timestamp
@@ -24,6 +26,8 @@ export interface Event {
   attendees_count?: number
   invitations_sent_count?: number
   last_invitation_sent_at?: Timestamp
+  coachId?: string | null
+  coachName?: string | null
   created_at?: Timestamp
   createdBy?: string
   deleted_at?: Timestamp | null

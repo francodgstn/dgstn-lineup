@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import {
-  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2,
+  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
@@ -40,6 +40,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Zap,
   Puzzle,
   Settings2,
+  Gift,
 }
 
 function PluginIcon({ name, className }: { name: string; className?: string }) {

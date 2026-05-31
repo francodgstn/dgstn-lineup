@@ -70,6 +70,8 @@ export interface Team {
   trial_ends_at?: Timestamp
   stripe_customer_id?: string
   max_contacts?: number
+  // Organization membership
+  org_id?: string
   // Timestamps
   created: Timestamp
   createdBy: string

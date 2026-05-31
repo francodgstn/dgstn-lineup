@@ -139,14 +139,16 @@ export const handleStripeWebhook = onRequest(
       return
     }
 
-    // teamId must be present in the event metadata to route the update
-    if (!event.teamId) {
-      console.log(`Webhook event ${event.eventId} has no teamId — skipping`)
+    // Either teamId or orgId must be present in the event metadata to route the update
+    const entityId = event.teamId ?? event.orgId
+    const entityType = event.orgId ? 'org' : 'team'
+    if (!entityId) {
+      console.log(`Webhook event ${event.eventId} has no teamId or orgId — skipping`)
       res.status(200).send('ok')
       return
     }
 
-    const subRef = admin.firestore().collection('saas_subscriptions').doc(event.teamId)
+    const subRef = admin.firestore().collection('saas_subscriptions').doc(entityId)
 
     try {
       // Idempotency check
@@ -164,7 +166,9 @@ export const handleStripeWebhook = onRequest(
 
       // Map event to saas_subscriptions fields
       const update: Record<string, unknown> = {
-        teamId: event.teamId,
+        entity_type: entityType,
+        entity_id: entityId,
+        teamId: entityId, // kept for backwards compatibility
         updated_at: now,
         'gateway_data.last_event_id': event.eventId,
         gateway_type: 'stripe',
@@ -214,13 +218,34 @@ export const handleStripeWebhook = onRequest(
 
       await subRef.set(update, { merge: true })
 
-      // Also sync plan + status onto the team doc so usePlan() stays accurate
-      const teamUpdate: Record<string, unknown> = { updated_at: now }
-      if (update.plan) teamUpdate.plan = update.plan
-      if (update.status) teamUpdate.plan_status = update.status
-      await admin.firestore().collection('teams').doc(event.teamId).update(teamUpdate)
+      // Sync plan + status to the owning entity so usePlan() / useOrg() stays accurate
+      const entityUpdate: Record<string, unknown> = { updated_at: now }
+      if (update.plan) entityUpdate.plan = update.plan
+      if (update.status) entityUpdate.plan_status = update.status
 
-      console.log(`Processed webhook ${event.type} (${event.eventId}) for team ${event.teamId}`)
+      if (entityType === 'org') {
+        await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
+        // When org subscription lapses, propagate to linked teams
+        if (update.status === 'cancelled' || update.status === 'past_due') {
+          const orgTeamsSnap = await admin.firestore()
+            .collection('organizations').doc(entityId)
+            .collection('org_teams')
+            .where('status', '==', 'active')
+            .get()
+          const batch = admin.firestore().batch()
+          for (const doc of orgTeamsSnap.docs) {
+            batch.update(admin.firestore().collection('teams').doc(doc.id), {
+              plan_status: update.status,
+              updated_at: now,
+            })
+          }
+          await batch.commit()
+        }
+      } else {
+        await admin.firestore().collection('teams').doc(entityId).update(entityUpdate)
+      }
+
+      console.log(`Processed webhook ${event.type} (${event.eventId}) for ${entityType} ${entityId}`)
     } catch (err) {
       // Log but always return 200 so Stripe doesn't retry forever
       console.error(`Failed to process webhook event ${event.eventId}:`, err)

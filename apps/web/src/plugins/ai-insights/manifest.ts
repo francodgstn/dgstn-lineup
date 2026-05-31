@@ -2,8 +2,8 @@ import type { PluginManifest } from '@lineup/shared'
 
 export const aiInsightsManifest: PluginManifest = {
   id: 'ai-insights',
-  nameKey: 'Plugins.aiInsightsName',
-  descriptionKey: 'Plugins.aiInsightsDescription',
+  nameKey: 'aiInsightsName',
+  descriptionKey: 'aiInsightsDescription',
   category: 'ai',
   minPlan: 'club',
   status: 'coming_soon',
@@ -11,7 +11,7 @@ export const aiInsightsManifest: PluginManifest = {
   automationActions: [
     {
       id: 'plugin:ai-insights:generate_message',
-      labelKey: 'Plugins.aiInsightsActionGenerateMessage',
+      labelKey: 'aiInsightsActionGenerateMessage',
       icon: 'Sparkles',
       configFields: [],
     },

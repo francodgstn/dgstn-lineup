@@ -26,7 +26,8 @@ export class StripeAdapter implements GatewayAdapter {
   }
 
   async createCheckoutSession(params: {
-    teamId: string
+    teamId?: string
+    orgId?: string
     plan: string
     customerEmail: string
     successUrl: string
@@ -35,6 +36,10 @@ export class StripeAdapter implements GatewayAdapter {
   }): Promise<CheckoutSession> {
     const priceId = await this.resolvePriceId(params.plan)
 
+    const entityMeta: Record<string, string> = { plan: params.plan }
+    if (params.teamId) entityMeta.teamId = params.teamId
+    if (params.orgId) entityMeta.orgId = params.orgId
+
     const session = await this.stripe.checkout.sessions.create(
       {
         mode: 'subscription',
@@ -42,10 +47,8 @@ export class StripeAdapter implements GatewayAdapter {
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: params.successUrl,
         cancel_url: params.cancelUrl,
-        metadata: { teamId: params.teamId, plan: params.plan },
-        subscription_data: {
-          metadata: { teamId: params.teamId, plan: params.plan },
-        },
+        metadata: entityMeta,
+        subscription_data: { metadata: entityMeta },
       },
       { idempotencyKey: params.idempotencyKey }
     )
@@ -123,6 +126,7 @@ export class StripeAdapter implements GatewayAdapter {
           customerId: typeof obj.customer === 'string' ? obj.customer : obj.customer?.id,
           subscriptionId: obj.id as string,
           teamId: obj.metadata?.teamId as string | undefined,
+          orgId: obj.metadata?.orgId as string | undefined,
           plan: this.extractPlanFromSubscription(obj),
           currentPeriodStart: obj.current_period_start ? new Date((obj.current_period_start as number) * 1000) : undefined,
           currentPeriodEnd: obj.current_period_end ? new Date((obj.current_period_end as number) * 1000) : undefined,
@@ -136,6 +140,7 @@ export class StripeAdapter implements GatewayAdapter {
           customerId: typeof obj.customer === 'string' ? obj.customer : obj.customer?.id,
           subscriptionId: obj.id as string,
           teamId: obj.metadata?.teamId as string | undefined,
+          orgId: obj.metadata?.orgId as string | undefined,
           plan: this.extractPlanFromSubscription(obj),
           currentPeriodStart: obj.current_period_start ? new Date((obj.current_period_start as number) * 1000) : undefined,
           currentPeriodEnd: obj.current_period_end ? new Date((obj.current_period_end as number) * 1000) : undefined,
@@ -149,6 +154,7 @@ export class StripeAdapter implements GatewayAdapter {
           customerId: typeof obj.customer === 'string' ? obj.customer : obj.customer?.id,
           subscriptionId: obj.id as string,
           teamId: obj.metadata?.teamId as string | undefined,
+          orgId: obj.metadata?.orgId as string | undefined,
         }
 
       case 'invoice.payment_succeeded':

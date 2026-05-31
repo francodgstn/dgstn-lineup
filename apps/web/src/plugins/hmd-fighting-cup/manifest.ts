@@ -2,8 +2,8 @@ import type { PluginManifest } from '@lineup/shared'
 
 export const hmdFightingCupManifest: PluginManifest = {
   id: 'hmd-fighting-cup',
-  nameKey: 'Plugins.hmdFightingCupName',
-  descriptionKey: 'Plugins.hmdFightingCupDescription',
+  nameKey: 'hmdFightingCupName',
+  descriptionKey: 'hmdFightingCupDescription',
   category: 'analytics',
   minPlan: 'club',
   status: 'available',
@@ -12,14 +12,14 @@ export const hmdFightingCupManifest: PluginManifest = {
   navContributions: [
     {
       href: '/plugins/hmd-fighting-cup',
-      labelKey: 'Plugins.hmdFightingCupNavLabel',
+      labelKey: 'hmdFightingCupNavLabel',
       icon: 'Trophy',
       minPlan: 'club',
     },
   ],
   eventType: {
     id: 'hmd_fighting_cup',
-    nameKey: 'Plugins.hmdFightingCupEventTypeName',
+    nameKey: 'hmdFightingCupEventTypeName',
     icon: 'Trophy',
     hasCategories: true,
     hasCheckinForm: true,
