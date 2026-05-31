@@ -75,6 +75,9 @@ export function initApps(cfg: MigrationConfig) {
     const targetApp = initializeApp({ credential: cert(cfg.targetCredsPath!) }, 'target')
     _targetDb = getFirestore(targetApp)
   }
+  // Silently drop undefined fields from source docs rather than throwing.
+  // Source data may have missing optional fields that don't map to any value.
+  _targetDb.settings({ ignoreUndefinedProperties: true })
 }
 
 // sourceDb() returns a read-only proxy — write methods throw at runtime,

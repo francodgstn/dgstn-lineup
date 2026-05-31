@@ -2,20 +2,22 @@ export function transformSessionSeries(src: Record<string, unknown>): Record<str
   const out: Record<string, unknown> = { ...src }
   const rec = src.recurrence as Record<string, unknown> | undefined
   if (rec) {
-    out.recurrence = {
-      ...rec,
-      daysOfWeek: rec.days_of_week   ?? rec.daysOfWeek,
-      time:       rec.start_time     ?? rec.time,
-      duration:   rec.duration_minutes ?? rec.duration,
-      endDate:    rec.end_date       ?? rec.endDate,
-      frequency:  rec.frequency,
+    const mapped: Record<string, unknown> = { ...rec }
+
+    // Rename snake_case keys to camelCase, preferring the new name if both exist
+    const renames: Array<[string, string]> = [
+      ['days_of_week',      'daysOfWeek'],
+      ['start_time',        'time'],
+      ['duration_minutes',  'duration'],
+      ['end_date',          'endDate'],
+    ]
+    for (const [oldKey, newKey] of renames) {
+      const value = rec[oldKey] ?? rec[newKey]
+      if (value !== undefined) mapped[newKey] = value
+      delete mapped[oldKey]
     }
-    // Remove old snake_case keys
-    const r = out.recurrence as Record<string, unknown>
-    delete r.days_of_week
-    delete r.start_time
-    delete r.duration_minutes
-    delete r.end_date
+
+    out.recurrence = mapped
   }
   return out
 }
