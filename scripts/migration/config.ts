@@ -51,24 +51,33 @@ function asReadonly(db: Firestore): ReadonlyFirestore {
 }
 
 // ─── app init ─────────────────────────────────────────────────────────────────
+// Firestore instances are cached eagerly at init time.
+// The source instance MUST be obtained before FIRESTORE_EMULATOR_HOST is set,
+// otherwise the Admin SDK lazily picks up the env var and routes source reads
+// to the local emulator instead of the real Firebase project.
 
-let sourceApp: App
-let targetApp: App
+let _sourceDb: ReadonlyFirestore
+let _targetDb: Firestore
 
 export function initApps(cfg: MigrationConfig) {
-  sourceApp = initializeApp({ credential: cert(cfg.sourceCredsPath) }, 'source')
+  // 1. Init source app and immediately obtain its Firestore instance,
+  //    while FIRESTORE_EMULATOR_HOST is still unset.
+  const sourceApp = initializeApp({ credential: cert(cfg.sourceCredsPath) }, 'source')
+  _sourceDb = asReadonly(getFirestore(sourceApp))
 
+  // 2. Now it is safe to configure the emulator env var for the target.
   if (cfg.targetEmulator) {
-    // Must be set before initializeApp so the Admin SDK routes to the emulator
     process.env.FIRESTORE_EMULATOR_HOST = EMULATOR_FIRESTORE_HOST
-    targetApp = initializeApp({ projectId: EMULATOR_PROJECT_ID }, 'target')
+    const targetApp = initializeApp({ projectId: EMULATOR_PROJECT_ID }, 'target')
+    _targetDb = getFirestore(targetApp)
     console.log(`Target: Firestore emulator at ${EMULATOR_FIRESTORE_HOST} (project ${EMULATOR_PROJECT_ID})`)
   } else {
-    targetApp = initializeApp({ credential: cert(cfg.targetCredsPath!) }, 'target')
+    const targetApp = initializeApp({ credential: cert(cfg.targetCredsPath!) }, 'target')
+    _targetDb = getFirestore(targetApp)
   }
 }
 
 // sourceDb() returns a read-only proxy — write methods throw at runtime,
 // and the return type exposes only the query surface for compile-time safety.
-export function sourceDb(): ReadonlyFirestore { return asReadonly(getFirestore(getApp('source'))) }
-export function targetDb(): Firestore         { return getFirestore(getApp('target')) }
+export function sourceDb(): ReadonlyFirestore { return _sourceDb }
+export function targetDb(): Firestore         { return _targetDb }
