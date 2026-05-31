@@ -7,6 +7,7 @@ export class BatchWriter {
   private dryRun: boolean
   private batch: WriteBatch
   private opCount = 0
+  private pendingFlushes: Promise<void>[] = []
   totalWritten = 0
   totalSkipped = 0
 
@@ -20,21 +21,30 @@ export class BatchWriter {
     if (this.dryRun) { this.totalWritten++; return }
     this.batch.set(ref, data)
     this.opCount++
-    if (this.opCount >= BATCH_LIMIT) this.flush()
+    if (this.opCount >= BATCH_LIMIT) this.rotate()
   }
 
   skip() { this.totalSkipped++ }
 
-  async flush() {
-    if (this.dryRun || this.opCount === 0) return
-    await this.batch.commit()
-    this.totalWritten += this.opCount
-    this.opCount = 0
+  private rotate() {
+    const batch = this.batch
+    const count = this.opCount
+    // Swap to a fresh batch synchronously so the next set() call never touches
+    // the batch that is about to be committed.
     this.batch = this.db.batch()
+    this.opCount = 0
+    this.pendingFlushes.push(
+      batch.commit().then(() => { this.totalWritten += count })
+    )
   }
 
   async done() {
-    await this.flush()
+    if (!this.dryRun && this.opCount > 0) {
+      await this.batch.commit()
+      this.totalWritten += this.opCount
+      this.opCount = 0
+    }
+    await Promise.all(this.pendingFlushes)
     console.log(`  → wrote ${this.totalWritten}, skipped ${this.totalSkipped}`)
   }
 }
