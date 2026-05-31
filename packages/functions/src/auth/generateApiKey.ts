@@ -2,11 +2,13 @@
 // Generates API credentials for an authenticated user. The secret is returned once
 // and never stored plaintext — only the hash is persisted.
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
 import { generateSecureToken, hashVerificationCode } from '../utils/crypto'
 
 const USERS_COLLECTION = 'users'
+const KEY_COOLDOWN_MS = 60_000
 
 export const generateApiKey = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be authenticated to generate an API key.')
@@ -19,13 +21,24 @@ export const generateApiKey = onCall(async (request) => {
   const userData = userSnap && userSnap.exists ? userSnap.data()! : {}
   const currentTeam = (userData.currentTeam as string) || uid
 
+  // Rate limit: prevent rapid key overwrites that would silently destroy the previous secret.
+  const generatedAt = (userData.api_key_generated_at as admin.firestore.Timestamp | undefined)?.toMillis() ?? 0
+  if (Date.now() - generatedAt < KEY_COOLDOWN_MS) {
+    throw new HttpsError('resource-exhausted', 'Wait 60 seconds before generating a new API key.')
+  }
+
   const apiKey = generateSecureToken(16)
   const apiSecret = generateSecureToken(32)
   const apiSecretHash = hashVerificationCode(apiSecret, apiKey)
 
   const [writeErr] = await to(
     admin.firestore().collection(USERS_COLLECTION).doc(uid).set(
-      { api_key: apiKey, api_secret_hash: apiSecretHash, api_team_id: currentTeam },
+      {
+        api_key: apiKey,
+        api_secret_hash: apiSecretHash,
+        api_team_id: currentTeam,
+        api_key_generated_at: FieldValue.serverTimestamp(),
+      },
       { merge: true }
     )
   )

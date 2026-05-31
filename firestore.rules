@@ -291,9 +291,8 @@ service cloud.firestore {
 
       // Subscription types subcollection (team-defined subscription plans and aggregators)
       match /subscription_types/{subscriptionTypeId} {
-        // Team members (and authenticated users viewing the public portal) can read.
-        // Unauthenticated access removed: no need to expose plan structures without auth.
-        allow read: if isTeamMember(teamId) || isAuthed();
+        // Only team members can read — prevents other teams from enumerating pricing plans.
+        allow read: if isTeamMember(teamId);
 
         // Managers and owners can create, update, delete subscription types
         allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
@@ -535,9 +534,10 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // Invitations — written by Cloud Functions, readable by token holder (portal)
+      // Invitations — written and read exclusively by Cloud Functions (admin SDK).
+      // The portal uses getEventInvitationDetails() callable, not direct client reads.
       match /invitations/{invitation} {
-        allow read:  if isAuthed();
+        allow read:  if false;
         allow write: if false;
       }
     }
@@ -631,7 +631,9 @@ service cloud.firestore {
 
     // contact_weekly_reports
     match /{path=**}/contact_weekly_reports/{contactWeeklyReportId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && (
+        resource.data.teamId != null && isTeamMember(resource.data.teamId)
+      );
     }
 
     // contact_alerts
@@ -665,7 +667,9 @@ service cloud.firestore {
 
     // team_members (collection group for user membership queries)
     match /{path=**}/team_members/{memberId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && (
+        resource.data.teamId != null && isTeamMember(resource.data.teamId)
+      );
       allow write: if false;  // Must go through specific team path
     }
 

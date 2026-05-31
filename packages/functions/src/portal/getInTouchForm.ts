@@ -95,10 +95,14 @@ function buildNotificationEmail(fields: Record<string, string>, teamName: string
 }
 
 export const getInTouchForm = onRequest(async (req, res) => {
-  // Add CORS headers
   const origin = req.headers.origin as string | undefined
 
+  // Preflight: return CORS headers so browser proceeds with the POST.
+  // Origin allowlist is enforced on the POST below (returns 403 if not allowed).
   if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Origin', origin ?? '*')
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    res.set('Access-Control-Allow-Headers', 'Content-Type')
     res.status(204).send('')
     return
   }

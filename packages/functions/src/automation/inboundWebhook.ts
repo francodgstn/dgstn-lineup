@@ -95,6 +95,16 @@ export const inboundWebhook = onRequest(
       ...(contactDoc.data() as Omit<ContactData, 'id'>),
     }
 
+    // Dedup: external callers often retry on timeout. Skip if same email triggered this
+    // endpoint within the last 30 seconds to prevent duplicate automation rule firings.
+    const endpointData = endpointDoc.data()
+    const lastTriggeredMs = (endpointData.last_triggered_at as admin.firestore.Timestamp | undefined)?.toMillis() ?? 0
+    if (Date.now() - lastTriggeredMs < 30_000 && endpointData.last_triggered_email === email) {
+      console.log(`[inboundWebhook] deduplicated contact=${contact.id} endpoint=${endpointDoc.id}`) // eslint-disable-line no-console
+      res.status(200).json({ ok: false, reason: 'deduplicated' })
+      return
+    }
+
     console.log(`[inboundWebhook] contact=${contact.id} team=${teamId} endpoint=${endpointDoc.id}`) // eslint-disable-line no-console
 
     await fireEventRules(teamId, 'inbound_webhook', [contact], {
@@ -105,6 +115,7 @@ export const inboundWebhook = onRequest(
     await to(
       endpointDoc.ref.update({
         last_triggered_at: FieldValue.serverTimestamp(),
+        last_triggered_email: email,
         trigger_count: FieldValue.increment(1),
       })
     )
