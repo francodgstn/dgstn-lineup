@@ -171,7 +171,7 @@ service cloud.firestore {
       // Team members can read their own team. A user can also read a team they created
       // (needed during the signup flow before they are formally added as a member).
       allow read: if isTeamMember(teamId)
-               || (isAuthed() && resource.data.createdBy == request.auth.uid);
+               || (isAuthed() && resource.data.get('createdBy', null) == request.auth.uid);
 
       // Only team owners can update team details
       allow update: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
