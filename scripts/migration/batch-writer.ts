@@ -24,6 +24,13 @@ export class BatchWriter {
     if (this.opCount >= BATCH_LIMIT) this.rotate()
   }
 
+  merge(ref: DocumentReference, data: DocumentData) {
+    if (this.dryRun) { this.totalWritten++; return }
+    this.batch.set(ref, data, { merge: true })
+    this.opCount++
+    if (this.opCount >= BATCH_LIMIT) this.rotate()
+  }
+
   skip() { this.totalSkipped++ }
 
   private rotate() {
