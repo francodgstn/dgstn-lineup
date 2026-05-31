@@ -17,8 +17,6 @@ export const EMULATOR_AUTH_HOST      = 'localhost:9099'
 export const EMULATOR_PROJECT_ID     = 'demo-lineup'
 
 export const DEFAULT_ORG_ADMIN_EMAIL = 'franco.dgstn@gmail.com'
-// Password assigned to every user when migrating into the emulator (testing only)
-export const EMULATOR_TEST_PASSWORD  = 'lineup123'
 
 export interface MigrationConfig {
   sourceCredsPath: string
@@ -28,13 +26,6 @@ export interface MigrationConfig {
   only?: string
   fromTeam?: string
   orgAdminEmail: string      // email of the user who becomes org creator + org_admin
-  // Optional: path to firebase auth:export JSON — enables password hash import
-  sourceAuthExport?: string
-  // SCRYPT hash params — required when sourceAuthExport is provided
-  hashKey?: string           // base64-encoded signer key
-  hashSaltSeparator?: string // base64-encoded salt separator
-  hashRounds?: number
-  hashMemCost?: number
 }
 
 // ─── read-only source type ────────────────────────────────────────────────────

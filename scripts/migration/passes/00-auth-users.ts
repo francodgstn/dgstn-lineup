@@ -1,76 +1,146 @@
 import { readFileSync } from 'node:fs'
+import { getApp } from 'firebase-admin/app'
 import type { UserImportRecord, HashAlgorithmType } from 'firebase-admin/auth'
 import type { MigrationConfig } from '../config'
 import { sourceAuth, targetAuth } from '../config'
 
 const PAGE_SIZE = 1000
 
-// Shape of a record in the firebase auth:export JSON
-interface AuthExportUser {
-  localId:      string
-  email?:       string
-  passwordHash?: string
-  salt?:        string
+// ─── Identity Toolkit API types ───────────────────────────────────────────────
+
+interface IdentityUser {
+  localId:          string
+  email?:           string
+  emailVerified?:   boolean
+  displayName?:     string
+  phoneNumber?:     string
+  photoUrl?:        string
+  passwordHash?:    string   // base64
+  salt?:            string   // base64
+  providerUserInfo?: Array<{
+    providerId:   string
+    rawId:        string
+    email?:       string
+    displayName?: string
+    photoUrl?:    string
+  }>
+  customAttributes?: string
+  disabled?:        boolean
 }
-interface AuthExport { users?: AuthExportUser[] }
+
+interface HashConfig {
+  algorithm:     string
+  signerKey:     string   // base64
+  saltSeparator: string   // base64
+  rounds:        number
+  memoryCost:    number
+}
+
+interface BatchGetResponse {
+  users?:         IdentityUser[]
+  nextPageToken?: string
+  hashConfig?:    HashConfig
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+async function fetchSourceUsers(sourceCredsPath: string): Promise<{
+  users: IdentityUser[]
+  hashConfig: HashConfig | undefined
+}> {
+  const creds     = JSON.parse(readFileSync(sourceCredsPath, 'utf8')) as { project_id: string }
+  const projectId = creds.project_id
+
+  // Borrow the access token from the already-initialised source app credential
+  const credential = getApp('source').options.credential as {
+    getAccessToken(): Promise<{ access_token: string }>
+  }
+
+  const allUsers: IdentityUser[]   = []
+  let hashConfig: HashConfig | undefined
+  let pageToken:  string | undefined
+
+  do {
+    const { access_token } = await credential.getAccessToken()
+
+    const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:batchGet', {
+      method: 'POST',
+      headers: {
+        Authorization:  `Bearer ${access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        targetProjectId: projectId,
+        maxResults:      PAGE_SIZE,
+        ...(pageToken ? { nextPageToken: pageToken } : {}),
+      }),
+    })
+
+    if (!res.ok) {
+      throw new Error(`Identity Toolkit API ${res.status}: ${await res.text()}`)
+    }
+
+    const data = (await res.json()) as BatchGetResponse
+    allUsers.push(...(data.users ?? []))
+    if (data.hashConfig) hashConfig = data.hashConfig
+    pageToken = data.nextPageToken
+  } while (pageToken)
+
+  return { users: allUsers, hashConfig }
+}
+
+// ─── pass ─────────────────────────────────────────────────────────────────────
 
 export async function pass00AuthUsers(cfg: MigrationConfig): Promise<void> {
   console.log('Pass 0b: auth users')
 
-  // Build a hash lookup from the export file if provided
-  const hashMap = buildHashMap(cfg)
-  const hasHashes = hashMap.size > 0
-
-  if (!hasHashes) {
-    console.log('  No --source-auth-export provided — users will be created without passwords.')
-    console.log('  See MIGRATE-HMD.md for how to preserve original passwords.')
+  if (cfg.dryRun) {
+    console.log('  [dry-run] skipping Identity Toolkit API call')
+    return
   }
 
-  const src = sourceAuth()
-  const tgt = targetAuth()
+  const { users: sourceUsers, hashConfig } = await fetchSourceUsers(cfg.sourceCredsPath)
+  const active = sourceUsers.filter((u) => !u.disabled)
+  console.log(`  fetched ${active.length} active users from source (hashes: ${!!hashConfig})`)
 
-  let pageToken: string | undefined
+  const tgt = targetAuth()
   let totalImported = 0
   let totalSkipped  = 0
   let totalErrored  = 0
 
-  do {
-    const page = await src.listUsers(PAGE_SIZE, pageToken)
-    const active = page.users.filter((u) => !u.disabled)
+  // Chunk into batches of 1000 (importUsers limit)
+  for (let i = 0; i < active.length; i += PAGE_SIZE) {
+    const chunk = active.slice(i, i + PAGE_SIZE)
 
-    if (cfg.dryRun) {
-      console.log(`  [dry-run] would import ${active.length} auth users (hashes: ${hasHashes})`)
-      totalImported += active.length
-      pageToken = page.pageToken
-      continue
-    }
-
-    if (hasHashes) {
-      // importUsers() with SCRYPT — preserves original passwords
-      const records: UserImportRecord[] = active.map((u) => {
-        const h = hashMap.get(u.uid)
-        return {
-          uid:           u.uid,
-          email:         u.email,
-          emailVerified: u.emailVerified,
-          displayName:   u.displayName,
-          phoneNumber:   u.phoneNumber,
-          photoURL:      u.photoURL,
-          disabled:      false,
-          customClaims:  u.customClaims,
-          providerData:  u.providerData,
-          ...(h?.passwordHash ? { passwordHash: Buffer.from(h.passwordHash, 'base64') } : {}),
-          ...(h?.salt         ? { passwordSalt: Buffer.from(h.salt,         'base64') } : {}),
-        }
-      })
+    if (hashConfig) {
+      // Full import with SCRYPT hashes — preserves original passwords
+      const records: UserImportRecord[] = chunk.map((u) => ({
+        uid:           u.localId,
+        email:         u.email,
+        emailVerified: u.emailVerified ?? false,
+        displayName:   u.displayName,
+        phoneNumber:   u.phoneNumber,
+        photoURL:      u.photoUrl,
+        disabled:      false,
+        customClaims:  u.customAttributes ? JSON.parse(u.customAttributes) : undefined,
+        providerData:  u.providerUserInfo?.map((p) => ({
+          uid:         p.rawId,
+          providerId:  p.providerId,
+          email:       p.email,
+          displayName: p.displayName,
+          photoURL:    p.photoUrl,
+        })),
+        ...(u.passwordHash ? { passwordHash: Buffer.from(u.passwordHash, 'base64') } : {}),
+        ...(u.salt         ? { passwordSalt: Buffer.from(u.salt,         'base64') } : {}),
+      }))
 
       const result = await tgt.importUsers(records, {
         hash: {
-          algorithm:     'SCRYPT' as HashAlgorithmType,
-          key:           Buffer.from(cfg.hashKey!,           'base64'),
-          saltSeparator: Buffer.from(cfg.hashSaltSeparator!, 'base64'),
-          rounds:        cfg.hashRounds!,
-          memoryCost:    cfg.hashMemCost!,
+          algorithm:     hashConfig.algorithm as HashAlgorithmType,
+          key:           Buffer.from(hashConfig.signerKey,     'base64'),
+          saltSeparator: Buffer.from(hashConfig.saltSeparator, 'base64'),
+          rounds:        hashConfig.rounds,
+          memoryCost:    hashConfig.memoryCost,
         },
       })
       totalImported += records.length - result.errors.length
@@ -79,16 +149,16 @@ export async function pass00AuthUsers(cfg: MigrationConfig): Promise<void> {
         console.warn(`  WARN uid=${records[e.index]?.uid}: ${e.error.message}`)
       }
     } else {
-      // No hashes — createUser() one-by-one (definitely supported by emulator)
-      for (const u of active) {
+      // No hash config returned — fall back to createUser() without password
+      for (const u of chunk) {
         try {
           await tgt.createUser({
-            uid:           u.uid,
+            uid:           u.localId,
             email:         u.email,
-            emailVerified: u.emailVerified,
+            emailVerified: u.emailVerified ?? false,
             displayName:   u.displayName,
             phoneNumber:   u.phoneNumber,
-            photoURL:      u.photoURL,
+            photoURL:      u.photoUrl,
           })
           totalImported++
         } catch (e: unknown) {
@@ -96,24 +166,16 @@ export async function pass00AuthUsers(cfg: MigrationConfig): Promise<void> {
           if (code === 'auth/uid-already-exists' || code === 'auth/email-already-exists') {
             totalSkipped++
           } else {
-            console.warn(`  WARN uid=${u.uid}: ${(e as Error).message}`)
+            console.warn(`  WARN uid=${u.localId}: ${(e as Error).message}`)
             totalErrored++
           }
         }
       }
     }
-
-    pageToken = page.pageToken
-  } while (pageToken)
+  }
 
   console.log(`  → imported ${totalImported}, skipped ${totalSkipped}, errored ${totalErrored}`)
-}
-
-function buildHashMap(cfg: MigrationConfig): Map<string, AuthExportUser> {
-  if (!cfg.sourceAuthExport) return new Map()
-  const raw  = JSON.parse(readFileSync(cfg.sourceAuthExport, 'utf8')) as AuthExport
-  const map  = new Map<string, AuthExportUser>()
-  for (const u of raw.users ?? []) map.set(u.localId, u)
-  console.log(`  Loaded ${map.size} password hashes from ${cfg.sourceAuthExport}`)
-  return map
+  if (!hashConfig) {
+    console.warn('  WARN: source returned no hash config — users have no password and cannot sign in with email/password')
+  }
 }

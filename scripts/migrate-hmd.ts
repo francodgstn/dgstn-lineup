@@ -8,13 +8,8 @@
  *   pnpm migrate:hmd --source-creds <path> --target-emulator       [options]
  *
  * Options:
- *   --org-admin-email <email>      Email of the user who becomes org creator + org_admin (default: franco.dgstn@gmail.com)
- *   --source-auth-export <path>   Path to firebase auth:export JSON — enables password hash import
- *   --hash-key <base64>           SCRYPT signer key (required with --source-auth-export)
- *   --hash-salt-separator <base64> SCRYPT salt separator
- *   --hash-rounds <n>             SCRYPT rounds (default 8)
- *   --hash-mem-cost <n>           SCRYPT memory cost (default 14)
- *   --dry-run                     Log writes without committing
+ *   --org-admin-email <email>  Email of the user who becomes org creator + org_admin (default: franco.dgstn@gmail.com)
+ *   --dry-run                  Log writes without committing
  *   --only <pass>                 Run a single pass (see pass names below)
  *   --from-team <teamId>          Resume contacts/sessions from a specific team
  *   --verify                      Run verification after migration
@@ -40,19 +35,14 @@ import { verify }                   from './migration/verify'
 
 const { values } = parseArgs({
   options: {
-    'source-creds':         { type: 'string' },
-    'target-creds':         { type: 'string' },
-    'target-emulator':      { type: 'boolean', default: false },
-    'org-admin-email':      { type: 'string', default: DEFAULT_ORG_ADMIN_EMAIL },
-    'source-auth-export':   { type: 'string' },
-    'hash-key':             { type: 'string' },
-    'hash-salt-separator':  { type: 'string' },
-    'hash-rounds':          { type: 'string' },
-    'hash-mem-cost':        { type: 'string' },
-    'dry-run':              { type: 'boolean', default: false },
-    'only':                 { type: 'string' },
-    'from-team':            { type: 'string' },
-    'verify':               { type: 'boolean', default: false },
+    'source-creds':    { type: 'string' },
+    'target-creds':    { type: 'string' },
+    'target-emulator': { type: 'boolean', default: false },
+    'org-admin-email': { type: 'string', default: DEFAULT_ORG_ADMIN_EMAIL },
+    'dry-run':         { type: 'boolean', default: false },
+    'only':            { type: 'string' },
+    'from-team':       { type: 'string' },
+    'verify':          { type: 'boolean', default: false },
   },
   allowPositionals: false,
 })
@@ -68,22 +58,11 @@ if (!targetEmulator && !values['target-creds']) {
   process.exit(1)
 }
 
-const sourceAuthExport = values['source-auth-export']
-if (sourceAuthExport && (!values['hash-key'] || !values['hash-salt-separator'])) {
-  console.error('Error: --hash-key and --hash-salt-separator are required with --source-auth-export')
-  process.exit(1)
-}
-
 const cfg: MigrationConfig = {
-  sourceCredsPath:   values['source-creds']!,
-  targetCredsPath:   values['target-creds'],
+  sourceCredsPath: values['source-creds']!,
+  targetCredsPath: values['target-creds'],
   targetEmulator,
-  orgAdminEmail:     values['org-admin-email'] ?? DEFAULT_ORG_ADMIN_EMAIL,
-  sourceAuthExport,
-  hashKey:           values['hash-key'],
-  hashSaltSeparator: values['hash-salt-separator'],
-  hashRounds:        values['hash-rounds']   ? Number(values['hash-rounds'])   : 8,
-  hashMemCost:       values['hash-mem-cost'] ? Number(values['hash-mem-cost']) : 14,
+  orgAdminEmail:   values['org-admin-email'] ?? DEFAULT_ORG_ADMIN_EMAIL,
   dryRun:          values['dry-run'] ?? false,
   only:            values['only'],
   fromTeam:        values['from-team'],
