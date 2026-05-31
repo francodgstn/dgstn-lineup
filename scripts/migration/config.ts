@@ -19,6 +19,7 @@ export interface MigrationConfig {
   dryRun: boolean
   only?: string
   fromTeam?: string
+  orgAdminEmail: string      // email of the user who becomes org creator + org_admin
 }
 
 let sourceApp: App

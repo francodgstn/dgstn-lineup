@@ -19,16 +19,7 @@ To generate the key: Firebase Console → select the `hmd-lineup` project → Pr
 **2. Confirm ranking system IDs** in `scripts/migration/config.ts` (`RANKING_HMD`, `RANKING_KD`).
 These map the old single `rank` field on contacts to the new `ranks` map.
 
-**3. Create the HMD organisation document** in the target Firestore:
-
-```
-organizations/hmd  →  { name: "HMD", slug: "hmd", createdBy: <admin-uid>, created: <now> }
-```
-
-For the emulator, do this via the Firestore emulator UI at http://localhost:4000.
-For staging/prod, use Firebase Console or a one-off Admin SDK script.
-
-**4. (Staging/prod only) Export Firebase Auth users** from hmd-lineup and import into the target.
+**3. (Staging/prod only) Export Firebase Auth users** from hmd-lineup and import into the target.
 The hash params are in Firebase Console → Authentication → Users → Export.
 
 ```bash
@@ -40,6 +31,8 @@ firebase --project lineup-staging auth:import hmd-users.json \
 
 Auth UIDs must match between source and target — do this before any Firestore passes.
 Skip this step when targeting the emulator (users are seeded separately).
+
+The organisation document (`organizations/hmd`) and the org_admin member entry are created automatically by the **setup pass** (pass 0), which runs first in every full migration. The user with `--org-admin-email` (default: `franco.dgstn@gmail.com`) is looked up by email in the source `users` collection to resolve their UID, then set as `createdBy` and `org_admin`. Pass 0 is idempotent — safe to re-run.
 
 ---
 
@@ -100,12 +93,13 @@ pnpm migrate:hmd \
 | `--source-creds <path>` | Service account JSON for hmd-lineup source (required) |
 | `--target-creds <path>` | Service account JSON for target project |
 | `--target-emulator` | Write to local Firestore emulator instead of a real project |
+| `--org-admin-email <email>` | Email of the org creator + org_admin (default: `franco.dgstn@gmail.com`) |
 | `--dry-run` | Log writes without committing |
 | `--only <pass>` | Run a single pass (see pass names below) |
 | `--from-team <teamId>` | Resume contacts/sessions passes from a specific team |
 | `--verify` | Run verification after migration |
 
-Pass names: `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `referrals` · `team-subcollections` · `verify`
+Pass names: `setup` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `referrals` · `team-subcollections` · `verify`
 
 **Run a single pass** (e.g. after a failure mid-way):
 

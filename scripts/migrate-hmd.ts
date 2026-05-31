@@ -8,17 +8,19 @@
  *   pnpm migrate:hmd --source-creds <path> --target-emulator       [options]
  *
  * Options:
- *   --dry-run              Log writes without committing
- *   --only <pass>          Run a single pass (see pass names below)
- *   --from-team <teamId>   Resume contacts/sessions from a specific team
- *   --verify               Run verification after migration
+ *   --org-admin-email <email>  Email of the user who becomes org creator + org_admin (default: franco.dgstn@gmail.com)
+ *   --dry-run                  Log writes without committing
+ *   --only <pass>              Run a single pass (see pass names below)
+ *   --from-team <teamId>       Resume contacts/sessions from a specific team
+ *   --verify                   Run verification after migration
  *
- * Passes: users | teams | activities | session-series | contacts | sessions | events | referrals | team-subcollections | verify
+ * Passes: setup | users | teams | activities | session-series | contacts | sessions | events | referrals | team-subcollections | verify
  */
 
 import { parseArgs } from 'node:util'
 import { initApps } from './migration/config'
 import type { MigrationConfig } from './migration/config'
+import { pass00Setup }              from './migration/passes/00-setup'
 import { pass01Users }              from './migration/passes/01-users'
 import { pass02Teams }              from './migration/passes/02-teams'
 import { pass03Activities }         from './migration/passes/03-activities'
@@ -30,15 +32,18 @@ import { pass10Referrals }          from './migration/passes/10-referrals'
 import { pass11TeamSubcollections } from './migration/passes/11-team-subcollections'
 import { verify }                   from './migration/verify'
 
+const DEFAULT_ORG_ADMIN_EMAIL = 'franco.dgstn@gmail.com'
+
 const { values } = parseArgs({
   options: {
-    'source-creds':   { type: 'string' },
-    'target-creds':   { type: 'string' },
-    'target-emulator':{ type: 'boolean', default: false },
-    'dry-run':        { type: 'boolean', default: false },
-    'only':           { type: 'string' },
-    'from-team':      { type: 'string' },
-    'verify':         { type: 'boolean', default: false },
+    'source-creds':    { type: 'string' },
+    'target-creds':    { type: 'string' },
+    'target-emulator': { type: 'boolean', default: false },
+    'org-admin-email': { type: 'string', default: DEFAULT_ORG_ADMIN_EMAIL },
+    'dry-run':         { type: 'boolean', default: false },
+    'only':            { type: 'string' },
+    'from-team':       { type: 'string' },
+    'verify':          { type: 'boolean', default: false },
   },
   allowPositionals: false,
 })
@@ -58,6 +63,7 @@ const cfg: MigrationConfig = {
   sourceCredsPath: values['source-creds']!,
   targetCredsPath: values['target-creds'],
   targetEmulator,
+  orgAdminEmail:   values['org-admin-email'] ?? DEFAULT_ORG_ADMIN_EMAIL,
   dryRun:          values['dry-run'] ?? false,
   only:            values['only'],
   fromTeam:        values['from-team'],
@@ -66,9 +72,12 @@ const cfg: MigrationConfig = {
 initApps(cfg)
 
 if (cfg.dryRun) console.log('=== DRY RUN — no writes will be committed ===')
+console.log(`Org admin: ${cfg.orgAdminEmail}`)
 
 async function run() {
   const only = cfg.only
+
+  if (!only || only === 'setup')               await pass00Setup(cfg)
 
   let teamIds: string[] = []
   if (!only || only === 'users')               await pass01Users(cfg)
