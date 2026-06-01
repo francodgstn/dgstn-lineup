@@ -491,14 +491,14 @@ service cloud.firestore {
 
     }
 
-    // Checkins — team-scoped, created/updated by team managers
+    // Checkins — created and updated exclusively via addEventCheckin Cloud Function (admin SDK).
+    // Direct client creates are denied to prevent bypassing server-side confirmation logic.
+    // The manual confirm/unconfirm toggle (is_completed) is the only direct client write allowed,
+    // and only for team managers or owners.
     match /checkins/{checkin} {
-      allow create: if isAuthed() && (
-        request.resource.data.teamId == request.auth.token.teamId ||
-        isTeamMember(request.resource.data.teamId)
-      );
-      allow update: if belongsToUserTeam(resource) || hasRole('admin');
-      allow delete: if belongsToUserTeam(resource) || hasRole('admin');
+      allow create: if false; // addEventCheckin Cloud Function only
+      allow update: if hasTeamRole(resource.data.teamId, 'manager') || hasRole('admin');
+      allow delete: if hasTeamRole(resource.data.teamId, 'manager') || hasRole('admin');
       allow read:   if belongsToUserTeam(resource) || hasRole('admin');
     }
 

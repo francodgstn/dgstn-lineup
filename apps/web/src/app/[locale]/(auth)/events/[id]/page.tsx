@@ -617,6 +617,7 @@ export default function EventDetailPage() {
           eventTitle={event.title}
           eventType={event.type}
           rankingSystems={rankingSystems}
+          orgId={event.orgId}
         />
       )}
 
