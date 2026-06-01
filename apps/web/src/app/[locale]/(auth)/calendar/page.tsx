@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
@@ -105,18 +105,22 @@ type EventForm = z.infer<typeof eventSchema>
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
-function useAllSessions(teamId: string | null) {
+function useAllSessions(teamId: string | null, year: number, month: number) {
   return useQuery<Session[]>({
-    queryKey: ['sessions', 'all', teamId],
+    queryKey: ['sessions', 'calendar', teamId, year, month],
     enabled: !!teamId,
     staleTime: 60_000,
     queryFn: async () => {
       if (!teamId) return []
+      // Load prev + current + next month so navigation feels instant
+      const from = Timestamp.fromDate(new Date(year, month - 1, 1))
+      const to   = Timestamp.fromDate(new Date(year, month + 2, 1))
       const snap = await getDocs(query(
         collection(db, SESSIONS_COLLECTION),
         where('teamId', '==', teamId),
+        where('start', '>=', from),
+        where('start', '<',  to),
         orderBy('start', 'asc'),
-        limit(500),
       ))
       return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Session)
     },
@@ -608,6 +612,10 @@ export default function CalendarPage() {
   const t = useTranslations('Calendar')
   const orgId = team?.org_id ?? null
 
+  const today = useMemo(() => new Date(), [])
+  const [viewYear,  setViewYear ] = useState(() => today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(() => today.getMonth())
+
   const [view, setView] = useState<CalendarView>('calendar')
   const [tab, setTab] = useState<TimeTab>('upcoming')
   const [filter, setFilter] = useState<ItemFilter>('all')
@@ -615,7 +623,7 @@ export default function CalendarPage() {
   const [sessionDialog, setSessionDialog] = useState<{ open: boolean; editing: Session | null }>({ open: false, editing: null })
   const [eventDialog, setEventDialog] = useState<{ open: boolean; editing: Event | null }>({ open: false, editing: null })
 
-  const sessionsQ   = useAllSessions(currentTeamId)
+  const sessionsQ   = useAllSessions(currentTeamId, viewYear, viewMonth)
   const activitiesQ = useActivities(currentTeamId)
   const eventsQ     = useAllEvents(currentTeamId, orgId)
   const { data: members = [] } = useTeamMembers(currentTeamId)
@@ -714,6 +722,9 @@ export default function CalendarPage() {
           events={eventsQ.data ?? []}
           onEdit={s => setSessionDialog({ open: true, editing: s })}
           onDelete={handleDeleteSession}
+          viewYear={viewYear}
+          viewMonth={viewMonth}
+          onNavigate={(y, m) => { setViewYear(y); setViewMonth(m) }}
         />
       )}
 

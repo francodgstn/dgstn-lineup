@@ -240,6 +240,9 @@ interface SessionsCalendarProps {
   events?: Event[]
   onEdit: (s: Session) => void
   onDelete: (s: Session) => void
+  viewYear?: number
+  viewMonth?: number
+  onNavigate?: (year: number, month: number) => void
 }
 
 export default function SessionsCalendar({
@@ -248,13 +251,23 @@ export default function SessionsCalendar({
   events = [],
   onEdit,
   onDelete,
+  viewYear:  externalYear,
+  viewMonth: externalMonth,
+  onNavigate,
 }: SessionsCalendarProps) {
   const router = useRouter()
   const today = useMemo(() => new Date(), [])
 
-  const [viewYear,  setViewYear ] = useState(() => today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(() => today.getMonth())
-  const [selected,  setSelected ] = useState<Date>(() => new Date(today))
+  const [internalYear,  setInternalYear ] = useState(() => today.getFullYear())
+  const [internalMonth, setInternalMonth] = useState(() => today.getMonth())
+  const [selected,      setSelected     ] = useState<Date>(() => new Date(today))
+
+  const viewYear  = externalYear  ?? internalYear
+  const viewMonth = externalMonth ?? internalMonth
+
+  function navigate(y: number, m: number) {
+    if (onNavigate) { onNavigate(y, m) } else { setInternalYear(y); setInternalMonth(m) }
+  }
 
   // Index sessions by date key
   const sessionsByDate = useMemo(() => {
@@ -301,12 +314,12 @@ export default function SessionsCalendar({
   const weeks = useMemo(() => buildMonthGrid(viewYear, viewMonth), [viewYear, viewMonth])
 
   function prevMonth() {
-    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11) }
-    else setViewMonth((m) => m - 1)
+    if (viewMonth === 0) navigate(viewYear - 1, 11)
+    else navigate(viewYear, viewMonth - 1)
   }
   function nextMonth() {
-    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0) }
-    else setViewMonth((m) => m + 1)
+    if (viewMonth === 11) navigate(viewYear + 1, 0)
+    else navigate(viewYear, viewMonth + 1)
   }
 
   return (
