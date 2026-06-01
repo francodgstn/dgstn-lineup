@@ -3,6 +3,7 @@ import { sourceDb, targetDb } from '../config'
 import { BatchWriter } from '../batch-writer'
 
 const TEAM_SUBCOLLECTIONS = [
+  'team_members',          // must come first — rules depend on this for read access
   'subscription_types',
   'subscription_transitions',
   'outreach_templates',
