@@ -47,9 +47,16 @@ const STATUS_VARIANT: Record<MembershipStatus, 'default' | 'secondary' | 'destru
   almost_ready: 'outline', active: 'default', expired: 'destructive',
 }
 
-function daysUntilAnonymisation(deletedAt: { toDate(): Date } | null | undefined): number | null {
-  if (!deletedAt) return null
-  const deleted = deletedAt.toDate()
+function tsToDate(ts: unknown): Date | null {
+  if (!ts) return null
+  if (typeof (ts as { toDate?: unknown }).toDate === 'function') return (ts as { toDate(): Date }).toDate()
+  if (typeof (ts as { seconds?: unknown }).seconds === 'number') return new Date((ts as { seconds: number }).seconds * 1000)
+  return null
+}
+
+function daysUntilAnonymisation(deletedAt: unknown): number | null {
+  const deleted = tsToDate(deletedAt)
+  if (!deleted) return null
   const deadline = new Date(deleted.getTime() + 30 * 24 * 60 * 60 * 1000)
   return Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
 }
