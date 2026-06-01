@@ -324,7 +324,7 @@ type DetailTab = 'overview' | 'checkins' | 'categories' | 'attendees' | 'invitat
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { currentTeamId } = useAuth()
+  const { currentTeamId, team, teamRole, isOrgAdmin } = useAuth()
   const t = useTranslations('Events')
   const router = useRouter()
   const qc = useQueryClient()
@@ -440,17 +440,29 @@ export default function EventDetailPage() {
   const endTime = formatTime(event.end)
   const duration = eventDuration(event)
 
-  const rankingSystems: RankingSystem[] = (event as unknown as { ranking_systems?: RankingSystem[] }).ranking_systems ?? []
+  // Ranking systems come from the team config, not the event doc
+  const rankingSystems: RankingSystem[] = team?.ranking_systems ?? []
 
   // Detect if this event type is backed by a plugin that declares hasCategories
   const eventPlugin = PLUGIN_REGISTRY.find((p) => p.eventType?.id === event.type)
   const showCategoriesTab = !!eventPlugin?.eventType?.hasCategories
 
+  // Attendees tab: visible to org admins (cross-club events) and team owners/managers
+  const canSeeAttendees = isOrgAdmin || teamRole === 'owner' || teamRole === 'manager'
+
+  const checkinLabel = (() => {
+    const total = event.participants_count ?? 0
+    const confirmed = event.completed_checkins_count ?? 0
+    if (total === 0) return 'Checkins'
+    if (confirmed < total) return `Checkins (${confirmed}/${total})`
+    return `Checkins (${total})`
+  })()
+
   const TABS: { key: DetailTab; label: string }[] = [
     { key: 'overview',    label: t('detail_tabOverview') },
-    { key: 'checkins',    label: `Check-ins${event.participants_count ? ` (${event.participants_count})` : ''}` },
+    { key: 'checkins',    label: checkinLabel },
     ...(showCategoriesTab ? [{ key: 'categories' as DetailTab, label: 'Categories' }] : []),
-    { key: 'attendees',   label: `${t('detail_tabAttendees')}${event.attendees_count ? ` (${event.attendees_count})` : ''}` },
+    ...(canSeeAttendees ? [{ key: 'attendees' as DetailTab, label: `${t('detail_tabAttendees')}${event.attendees_count ? ` (${event.attendees_count})` : ''}` }] : []),
     { key: 'invitations', label: `${t('detail_tabInvitations')}${event.invitations_sent_count ? ` (${event.invitations_sent_count})` : ''}` },
   ]
 

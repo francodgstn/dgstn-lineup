@@ -59,6 +59,7 @@ export { switchMembershipContact } from './contacts/switchMembershipContact'
 // Events
 export { sendEventInvitations, getEventInvitationDetails, handleEventInvitationResponse } from './events'
 export { trackEventAttendees } from './events/trackEventAttendees'
+export { addEventCheckin } from './events/addEventCheckin'
 
 // Analytics
 export { trackBookings, trackSessions, weeklyReports, trackContacts, trackSessionParticipants } from './analytics'

@@ -3,10 +3,10 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  collection, query, where, getDocs, addDoc, updateDoc, doc,
-  serverTimestamp, orderBy,
+  collection, query, where, getDocs, updateDoc, doc, serverTimestamp, orderBy,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -15,10 +15,12 @@ import { Button } from '@/components/ui/button'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet'
-import { Check, Search, UserCheck, UserX, Download } from 'lucide-react'
 import {
-  CONTACTS_COLLECTION, CHECKINS_COLLECTION,
-  BUILTIN_EVENT_TYPES,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
+import { Check, Search, UserCheck, Download, UserPlus } from 'lucide-react'
+import {
+  CONTACTS_COLLECTION, CHECKINS_COLLECTION, BUILTIN_EVENT_TYPES,
 } from '@lineup/shared'
 import type { Contact, EventCheckin, RankingSystem, EventType } from '@lineup/shared'
 import { GenericCheckinForm } from './forms/GenericCheckinForm'
@@ -44,15 +46,13 @@ function initials(c: Contact) {
 }
 
 function exportCsv(checkins: EventCheckin[], eventTitle: string) {
-  const rows: string[][] = [
-    ['First name', 'Last name', 'Status', 'Checked in at'],
-  ]
+  const rows: string[][] = [['First name', 'Last name', 'Status', 'Checked in at']]
   for (const c of checkins) {
     const at = c.created_at ? new Date((c.created_at as { toDate(): Date }).toDate()).toLocaleString() : ''
     rows.push([
       c.contact.firstname,
       c.contact.lastname,
-      c.is_completed ? 'Completed' : 'Checked in',
+      c.is_completed ? 'Confirmed' : 'Pending',
       at,
     ])
   }
@@ -66,19 +66,18 @@ function exportCsv(checkins: EventCheckin[], eventTitle: string) {
   URL.revokeObjectURL(url)
 }
 
-// ─── check-in form router ─────────────────────────────────────────────────────
+// ─── form type router ─────────────────────────────────────────────────────────
 
 type FormType = 'generic' | 'camp' | 'exam' | { pluginId: string; eventTypeId: string }
 
 function resolveFormType(eventType: EventType): FormType {
-  // Check plugin registry first (plugin types take precedence)
   const plugin = PLUGIN_REGISTRY.find((p) => p.eventType?.id === eventType)
   if (plugin?.eventType?.hasCheckinForm) {
     return { pluginId: plugin.id, eventTypeId: plugin.eventType.id }
   }
   if (eventType === 'camp') return 'camp'
   if (eventType === 'exam') return 'exam'
-  return 'generic'  // competition, seminar, workshop, unknown custom types
+  return 'generic'
 }
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
@@ -116,6 +115,76 @@ function useCheckins(eventId: string) {
   })
 }
 
+// ─── add checkin dialog (contact picker for un-checked-in contacts) ───────────
+
+function AddCheckinDialog({
+  contacts,
+  checkinByContact,
+  onSelect,
+  onClose,
+}: {
+  contacts: Contact[]
+  checkinByContact: Map<string, EventCheckin>
+  onSelect: (contact: Contact) => void
+  onClose: () => void
+}) {
+  const [search, setSearch] = useState('')
+
+  const unchecked = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return contacts
+      .filter((c) => !checkinByContact.has(c.id))
+      .filter((c) =>
+        !q || `${c.firstname} ${c.lastname}`.toLowerCase().includes(q) ||
+        (c.email ?? '').toLowerCase().includes(q),
+      )
+  }, [contacts, checkinByContact, search])
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add checkin</DialogTitle>
+        </DialogHeader>
+
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Search contacts…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div className="max-h-72 overflow-y-auto rounded-lg border divide-y">
+          {unchecked.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {search ? 'No contacts match' : 'All contacts are already checked in'}
+            </p>
+          )}
+          {unchecked.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => { onSelect(c); onClose() }}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
+            >
+              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold shrink-0">
+                {initials(c)}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{c.firstname} {c.lastname}</p>
+                {c.email && <p className="text-xs text-muted-foreground truncate">{c.email}</p>}
+              </div>
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function CheckinPanel({
@@ -123,19 +192,18 @@ export function CheckinPanel({
   eventTitle,
   eventType,
   rankingSystems = [],
-  installedPluginIds = [],
 }: {
   eventId: string
   eventTitle: string
   eventType: EventType
   rankingSystems?: RankingSystem[]
-  installedPluginIds?: string[]
 }) {
   const { currentTeamId, user } = useAuth()
   const qc = useQueryClient()
 
   const [search, setSearch] = useState('')
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const { data: contacts = [], isLoading: contactsLoading } = useContacts(currentTeamId)
@@ -146,18 +214,23 @@ export function CheckinPanel({
     [checkins],
   )
 
-  const filteredContacts = useMemo(() => {
+  // Contacts list: checked-in contacts first (so managers see progress at a glance),
+  // then un-checked-in contacts. Within each group, ordering is by lastname (from query).
+  const sortedContacts = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return contacts
-    return contacts.filter((c) =>
-      `${c.firstname} ${c.lastname}`.toLowerCase().includes(q) ||
-      (c.email ?? '').toLowerCase().includes(q),
-    )
-  }, [contacts, search])
+    const filtered = q
+      ? contacts.filter((c) =>
+          `${c.firstname} ${c.lastname}`.toLowerCase().includes(q) ||
+          (c.email ?? '').toLowerCase().includes(q),
+        )
+      : contacts
+    const checked = filtered.filter((c) => checkinByContact.has(c.id))
+    const unchecked = filtered.filter((c) => !checkinByContact.has(c.id))
+    return [...checked, ...unchecked]
+  }, [contacts, checkinByContact, search])
 
   const formType = resolveFormType(eventType)
 
-  // Dynamically load plugin check-in form if needed
   const PluginCheckinForm = useMemo((): ComponentType<PluginCheckinFormProps> | null => {
     if (typeof formType === 'object') {
       const { pluginId } = formType
@@ -175,27 +248,15 @@ export function CheckinPanel({
     if (!selectedContact || !currentTeamId || !user) return
     setBusy(true)
     try {
-      const existing = checkinByContact.get(selectedContact.id)
-      if (existing) {
-        await updateDoc(doc(db, CHECKINS_COLLECTION, existing.id), {
-          checkin_data: data,
-          updated_at: serverTimestamp(),
-        })
-      } else {
-        await addDoc(collection(db, CHECKINS_COLLECTION), {
-          event: { id: eventId, title: eventTitle, type: eventType },
-          contact: {
-            id: selectedContact.id,
-            firstname: selectedContact.firstname,
-            lastname: selectedContact.lastname,
-          },
-          teamId: currentTeamId,
-          is_completed: false,
-          checkin_data: data,
-          checked_in_by: user.uid,
-          created_at: serverTimestamp(),
-        })
-      }
+      const fn = httpsCallable<unknown, { id: string; is_completed: boolean }>(
+        functions, 'addEventCheckin',
+      )
+      await fn({
+        eventId,
+        contactId: selectedContact.id,
+        contact: { firstname: selectedContact.firstname, lastname: selectedContact.lastname },
+        checkinData: data,
+      })
       await invalidate()
       setSelectedContact(null)
     } finally {
@@ -213,20 +274,31 @@ export function CheckinPanel({
 
   const selectedExisting = selectedContact ? checkinByContact.get(selectedContact.id) : undefined
 
-  const completedCount = checkins.filter((c) => c.is_completed).length
-  const checkedInCount = checkins.length
+  const confirmedCount = checkins.filter((c) => c.is_completed).length
+  const pendingCount = checkins.length - confirmedCount
 
   return (
     <div className="space-y-4">
-      {/* Summary + export */}
+      {/* Summary bar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <UserCheck className="h-4 w-4" />
-          <span><strong className="text-foreground">{checkedInCount}</strong> checked in</span>
-          <span>·</span>
-          <span><strong className="text-foreground">{completedCount}</strong> completed</span>
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span>
+            <strong className="text-foreground">{checkins.length}</strong> checkins
+          </span>
+          {confirmedCount > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+              <strong className="text-foreground">{confirmedCount}</strong> confirmed
+            </span>
+          )}
+          {pendingCount > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+              <strong className="text-foreground">{pendingCount}</strong> pending
+            </span>
+          )}
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -235,6 +307,10 @@ export function CheckinPanel({
           >
             <Download className="h-3.5 w-3.5 mr-1.5" />
             Export CSV
+          </Button>
+          <Button size="sm" onClick={() => setAddDialogOpen(true)}>
+            <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+            Add checkin
           </Button>
         </div>
       </div>
@@ -250,7 +326,7 @@ export function CheckinPanel({
         />
       </div>
 
-      {/* Contact list */}
+      {/* Contact list — checked-in first, then unchecked */}
       <div className="rounded-xl border overflow-hidden">
         {(contactsLoading || checkinsLoading) && (
           Array.from({ length: 6 }).map((_, i) => (
@@ -264,11 +340,11 @@ export function CheckinPanel({
           ))
         )}
 
-        {!contactsLoading && !checkinsLoading && filteredContacts.length === 0 && (
+        {!contactsLoading && !checkinsLoading && sortedContacts.length === 0 && (
           <div className="py-12 text-center text-sm text-muted-foreground">No contacts found</div>
         )}
 
-        {!contactsLoading && !checkinsLoading && filteredContacts.map((contact) => {
+        {!contactsLoading && !checkinsLoading && sortedContacts.map((contact) => {
           const checkin = checkinByContact.get(contact.id)
           return (
             <div
@@ -277,8 +353,12 @@ export function CheckinPanel({
               onClick={() => setSelectedContact(contact)}
             >
               {/* Avatar */}
-              <div className={`h-9 w-9 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0 ${
-                checkin ? 'bg-primary' : 'bg-muted text-muted-foreground'
+              <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
+                checkin?.is_completed
+                  ? 'bg-green-500 text-white'
+                  : checkin
+                    ? 'bg-amber-400 text-white'
+                    : 'bg-muted text-muted-foreground'
               }`}>
                 {checkin ? <UserCheck className="h-4 w-4" /> : initials(contact)}
               </div>
@@ -293,23 +373,23 @@ export function CheckinPanel({
                 </p>
               </div>
 
-              {/* Status */}
+              {/* Status + toggle */}
               <div className="shrink-0 flex items-center gap-2">
                 {checkin ? (
                   <>
                     {checkin.is_completed ? (
-                      <Badge variant="default" className="text-xs">Completed</Badge>
+                      <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-600">Confirmed</Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-xs">Checked in</Badge>
+                      <Badge variant="secondary" className="text-xs text-amber-600 border-amber-200 bg-amber-50">Pending</Badge>
                     )}
                     <button
                       onClick={(e) => { e.stopPropagation(); toggleComplete(checkin) }}
                       className={`p-1.5 rounded-full border transition-colors ${
                         checkin.is_completed
-                          ? 'bg-primary text-primary-foreground border-primary'
+                          ? 'bg-green-600 text-white border-green-600'
                           : 'border-border hover:bg-muted'
                       }`}
-                      title={checkin.is_completed ? 'Mark incomplete' : 'Mark complete'}
+                      title={checkin.is_completed ? 'Mark pending' : 'Mark confirmed'}
                     >
                       <Check className="h-3 w-3" />
                     </button>
@@ -325,13 +405,28 @@ export function CheckinPanel({
         })}
       </div>
 
-      {/* Check-in form sheet */}
+      {/* Add checkin dialog — shows only un-checked-in contacts */}
+      {addDialogOpen && (
+        <AddCheckinDialog
+          contacts={contacts}
+          checkinByContact={checkinByContact}
+          onSelect={(c) => setSelectedContact(c)}
+          onClose={() => setAddDialogOpen(false)}
+        />
+      )}
+
+      {/* Checkin form sheet */}
       <Sheet open={!!selectedContact} onOpenChange={(o) => { if (!o) setSelectedContact(null) }}>
         <SheetContent side="right" className="w-full sm:max-w-md">
           <SheetHeader className="mb-4">
             <SheetTitle>
-              {selectedExisting ? 'Update check-in' : 'Check in contact'}
+              {selectedExisting ? 'Update checkin' : 'Add checkin'}
             </SheetTitle>
+            {selectedContact && (
+              <p className="text-sm text-muted-foreground">
+                {selectedContact.firstname} {selectedContact.lastname}
+              </p>
+            )}
           </SheetHeader>
 
           {selectedContact && (
