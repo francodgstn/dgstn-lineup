@@ -525,7 +525,7 @@ function ContactRow({
 }) {
   const router = useRouter()
   const t = useTranslations('Contacts')
-  const isNew = !contact.acquisition?.acknowledged
+  const isNew = contact.acquisition?.acknowledged === false
   const rankColor = rankingSystems.length > 0
     ? getPrimaryRank(contact, rankingSystems)?.level.color
     : undefined

@@ -4,6 +4,7 @@ import { BatchWriter } from '../batch-writer'
 
 const TEAM_SUBCOLLECTIONS = [
   'team_members',          // must come first — rules depend on this for read access
+  'public_profile',        // portal booking settings (ctaLabel, ctaUrl, bookingSettings)
   'subscription_types',
   'subscription_transitions',
   'outreach_templates',
