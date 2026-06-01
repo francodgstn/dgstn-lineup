@@ -43,14 +43,23 @@ import type { Route } from 'next'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function formatDate(ts: { toDate(): Date } | null | undefined): string {
-  if (!ts) return '—'
-  return ts.toDate().toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
+function tsToDate(ts: unknown): Date | null {
+  if (!ts) return null
+  if (typeof (ts as { toDate?: unknown }).toDate === 'function') return (ts as { toDate(): Date }).toDate()
+  if (typeof (ts as { seconds?: unknown }).seconds === 'number') return new Date((ts as { seconds: number }).seconds * 1000)
+  return null
 }
 
-function formatTime(ts: { toDate(): Date } | null | undefined): string {
-  if (!ts) return ''
-  return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+function formatDate(ts: unknown): string {
+  const d = tsToDate(ts)
+  if (!d) return '—'
+  return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function formatTime(ts: unknown): string {
+  const d = tsToDate(ts)
+  if (!d) return ''
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function formatIso(iso: string | null | undefined): string {
@@ -132,8 +141,8 @@ function useSessionMap(bookings: Booking[]) {
           const data = d.data()
           map[d.id] = {
             activityName: data.activityName as string | undefined,
-            start: (data.start as { toDate(): Date } | undefined)?.toDate().toISOString(),
-            end: (data.end as { toDate(): Date } | undefined)?.toDate().toISOString(),
+            start: tsToDate(data.start)?.toISOString(),
+            end: tsToDate(data.end)?.toISOString(),
             allowBooking: data.allowBooking as boolean | undefined,
           }
         }
@@ -163,12 +172,12 @@ function useFutureSessions(teamId: string | null) {
       return snap.docs
         .map((d) => {
           const data = d.data()
-          const start = (data.start as { toDate(): Date } | undefined)?.toDate()
+          const start = tsToDate(data.start)
           return {
             id: d.id,
             activityName: data.activityName as string | undefined,
             start: start?.toISOString(),
-            end: (data.end as { toDate(): Date } | undefined)?.toDate().toISOString(),
+            end: tsToDate(data.end)?.toISOString(),
           }
         })
         .filter((s) => s.start && new Date(s.start) > now)
@@ -569,16 +578,16 @@ export default function BookingsPage() {
     if (dateFrom) {
       const from = new Date(dateFrom)
       result = result.filter((b) => {
-        const ts = b.joinedAt as { toDate(): Date } | undefined
-        return ts ? ts.toDate() >= from : false
+        const d = tsToDate(b.joinedAt)
+        return d ? d >= from : false
       })
     }
     if (dateTo) {
       const to = new Date(dateTo)
       to.setHours(23, 59, 59, 999)
       result = result.filter((b) => {
-        const ts = b.joinedAt as { toDate(): Date } | undefined
-        return ts ? ts.toDate() <= to : false
+        const d = tsToDate(b.joinedAt)
+        return d ? d <= to : false
       })
     }
     return result
@@ -705,7 +714,7 @@ export default function BookingsPage() {
         {!isLoading &&
           filtered.map((b) => (
             <BookingRow
-              key={b.id}
+              key={b.session ? `${b.session}_${b.id}` : b.id}
               booking={b}
               sessionInfo={b.session ? sessionMap[b.session] : undefined}
               statusLabel={statusLabel}
