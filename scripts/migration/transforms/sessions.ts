@@ -7,6 +7,7 @@ export function transformSession(
   // Field renames
   if ('activity_id' in out) { out.activityId = out.activity_id; delete out.activity_id }
   delete out.portal_bookings_count  // managed by triggers in new system
+  delete out.notes                  // session comments/descriptions excluded from migration
 
   // Enrich with activity name/type
   const actId = out.activityId as string | undefined
