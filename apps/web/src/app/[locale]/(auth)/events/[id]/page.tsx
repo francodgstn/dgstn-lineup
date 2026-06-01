@@ -32,7 +32,7 @@ import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { EVENTS_COLLECTION } from '@lineup/shared'
-import type { Event, EventType, RankingSystem } from '@lineup/shared'
+import type { Event, EventType, RankingSystem, Team } from '@lineup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { CheckinPanel } from '@/components/events/CheckinPanel'
 import dynamic from 'next/dynamic'
@@ -617,7 +617,7 @@ export default function EventDetailPage() {
           eventTitle={event.title}
           eventType={event.type}
           rankingSystems={rankingSystems}
-          orgId={event.orgId}
+          orgId={event.orgId ?? (team as Team & { org_id?: string })?.org_id}
         />
       )}
 
