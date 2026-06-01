@@ -41,13 +41,19 @@ export function transformBooking(
   src: Record<string, unknown>,
   teamId: string,
 ): Record<string, unknown> {
+  // In hmd-lineup the booking doc ID is the contactId, and the contact field
+  // stores the same value. dgstn-lineup queries bookings by contactId, so we
+  // need to surface both field names.
+  const contactId = (src.contact as string | undefined) ?? docId
+
   return {
     ...src,
     id:             docId,
-    contact:        null,   // old bookings not always linked to a contact doc
+    contact:        contactId,
+    contactId:      contactId,
     teamId,
-    is_new_contact: true,   // safe default — old bookings were always trial/new
-    joinedAt:       src.created_at ?? null,
-    booking_token:  null,
+    is_new_contact: src.is_new_contact ?? true,
+    joinedAt:       src.joinedAt ?? src.created_at ?? null,
+    booking_token:  src.booking_token ?? null,
   }
 }
