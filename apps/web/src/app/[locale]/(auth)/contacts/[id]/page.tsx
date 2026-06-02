@@ -42,6 +42,7 @@ import {
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, Tooltip, ResponsiveContainer,
+  AreaChart, Area,
   RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend,
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
@@ -1980,6 +1981,85 @@ function ArchivedContactView({ contact, onAction }: { contact: Contact; onAction
   )
 }
 
+// ─── header stats bar ────────────────────────────────────────────────────────
+
+function ContactHeaderStats({ contact }: { contact: Contact }) {
+  const t = useTranslations('Contacts')
+  const { data: weeklyReports = [], isLoading } = useContactWeeklyReports(contact.id)
+
+  const chartData = weeklyReports.map((r) => ({
+    label: isoWeekLabel(r.iso_week),
+    sessions: r.sessions_count,
+  }))
+
+  const tooltipStyle = {
+    fontSize: 11,
+    padding: '4px 8px',
+    borderRadius: 6,
+    border: '1px solid hsl(var(--border))',
+    backgroundColor: 'hsl(var(--card))',
+    color: 'hsl(var(--card-foreground))',
+  }
+
+  return (
+    <div className="border-t">
+      {/* 3 key stats */}
+      <div className="grid grid-cols-3 divide-x">
+        <div className="text-center px-4 py-3">
+          <p className="text-2xl font-bold tabular-nums">{contact.total_sessions ?? 0}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{t('statTotalSessions')}</p>
+        </div>
+        <div className="text-center px-4 py-3">
+          <p className="text-2xl font-bold tabular-nums">
+            {contact.current_streak ?? 0}<span className="text-sm font-normal">w</span>
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{t('statStreak')}</p>
+        </div>
+        <div className="text-center px-4 py-3">
+          <p className="text-2xl font-bold tabular-nums">{contact.current_month_score ?? 0}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{t('statMonthScore')}</p>
+        </div>
+      </div>
+
+      {/* Attendance sparkline — bleeds to card edges, no padding */}
+      <div className="h-[52px]">
+        {isLoading ? (
+          <div className="h-full bg-muted/40 animate-pulse" />
+        ) : chartData.length === 0 ? (
+          <div className="h-full bg-muted/20" />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="hdrSparkGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v) => [v, t('statTotalSessions')]}
+                labelFormatter={(label) => label}
+                labelStyle={{ fontSize: 10, color: 'hsl(var(--muted-foreground))' }}
+              />
+              <Area
+                type="monotone"
+                dataKey="sessions"
+                stroke="#6366f1"
+                strokeWidth={1.5}
+                fill="url(#hdrSparkGrad)"
+                dot={false}
+                activeDot={{ r: 3, fill: '#6366f1' }}
+                isAnimationActive={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 type TabId = 'profile' | 'notes' | 'stats' | 'activity' | 'bookings' | 'subscriptions' | 'goals' | 'gamification' | 'alerts'
@@ -2102,28 +2182,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   </span>
                 )}
               </div>
-              {/* Inline stat chips */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Activity className="h-3 w-3 shrink-0" />
-                  <span className="font-semibold text-foreground">{contact.total_sessions ?? 0}</span>
-                  {' '}{t('statTotalSessions').toLowerCase()}
-                </span>
-                {(contact.current_streak ?? 0) > 0 && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Flame className="h-3 w-3 shrink-0 text-orange-500" />
-                    <span className="font-semibold text-foreground">{contact.current_streak}w</span>
-                    {' '}{t('statStreak').toLowerCase()}
-                  </span>
-                )}
-                {(contact.current_month_score ?? 0) > 0 && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Star className="h-3 w-3 shrink-0 text-yellow-500" />
-                    <span className="font-semibold text-foreground">{contact.current_month_score}</span>
-                    {' '}{t('statMonthScore').toLowerCase()}
-                  </span>
-                )}
-              </div>
               {/* Copy update-request link */}
               {team?.slug && !contact.archived_at && !contact.deleted_at && (
                 <button
@@ -2139,6 +2197,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           </div>
 
         </div>
+
+        {/* Stats bar + sparkline — full-width, docked to bottom of header card */}
+        <ContactHeaderStats contact={contact} />
       </div>
 
       {/* Archived / deleted → read-only summary; active → full tabbed view */}
