@@ -1540,28 +1540,35 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
         </div>
       ) : (
         <>
-          <div className="space-y-4">
+          {/* Timeline feed — vertical connector line, no per-row borders */}
+          <div className="space-y-6">
             {groups.map((group) => (
               <div key={group.label}>
-                <p className="text-xs font-medium text-muted-foreground px-1 mb-2">{group.label}</p>
-                <div className="space-y-1.5">
-                  {group.items.map((entry) => {
-                    const meta = EVENT_META[entry.event] ?? { Icon: Activity, bg: 'bg-muted', fg: 'text-muted-foreground' }
-                    const { Icon, bg, fg } = meta
-                    return (
-                      <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border">
-                        <div className={`h-8 w-8 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
-                          <Icon className={`h-4 w-4 ${fg}`} />
+                <p className="text-xs font-semibold text-muted-foreground mb-3 sticky top-0 bg-background py-1">{group.label}</p>
+                <div className="relative pl-6">
+                  {/* Vertical connector */}
+                  <div className="absolute left-[9px] top-0 bottom-0 w-px bg-border" />
+                  <div className="space-y-0">
+                    {group.items.map((entry, idx) => {
+                      const meta = EVENT_META[entry.event] ?? { Icon: Activity, bg: 'bg-muted', fg: 'text-muted-foreground' }
+                      const { Icon, fg } = meta
+                      const isLast = idx === group.items.length - 1
+                      return (
+                        <div key={entry.id} className={`relative flex items-start gap-3 py-2.5 ${isLast ? '' : 'border-b border-border/40'}`}>
+                          {/* Dot on the line */}
+                          <div className="absolute -left-6 flex items-center justify-center w-[18px] h-[18px] rounded-full bg-background border-2 border-border mt-0.5 shrink-0">
+                            <Icon className={`h-2.5 w-2.5 ${fg}`} />
+                          </div>
+                          <div className="flex-1 min-w-0 flex items-baseline justify-between gap-4">
+                            <p className="text-sm leading-snug">{entry.parameters.description as string}</p>
+                            <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
+                              {formatActivityTimestamp(entry.created_at as { toDate(): Date } | null | undefined)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm">{entry.parameters.description as string}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {formatActivityTimestamp(entry.created_at as { toDate(): Date } | null | undefined)}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             ))}
