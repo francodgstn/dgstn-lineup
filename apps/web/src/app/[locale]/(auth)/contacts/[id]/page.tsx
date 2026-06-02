@@ -21,7 +21,7 @@ import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION,
   CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION, CONTACT_ALERTS_SUBCOLLECTION,
   ALERT_PRESETS_SUBCOLLECTION, TEAM_ACTIVITY_LOG_SUBCOLLECTION,
-  CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
+  CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION,
 } from '@lineup/shared'
 import type {
   Contact, MembershipStatus, ContactType, ContactGender,
@@ -35,12 +35,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   ArrowLeft, CalendarDays, Mail, Phone, StickyNote, Star, Flame,
-  BookOpen, Award, ChevronDown, ChevronUp, Plus, Trash2, Trophy,
+  BookOpen, Award, Plus, Trash2, Trophy,
   Bell, Timer, Activity, ArchiveRestore, AlertTriangle,
   UserPlus, Archive, RotateCcw, ArrowRightLeft, CheckCircle, XCircle,
   CalendarCheck, CalendarX, CreditCard, BarChart2, Lock, Flag, Link2,
 } from 'lucide-react'
-import { LineChart, Line, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  LineChart, Line, XAxis, Tooltip, ResponsiveContainer,
+  RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend,
+} from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab } from './NotesTab'
 
@@ -241,6 +244,61 @@ function useContactWeeklyReports(contactId: string) {
   })
 }
 
+// ─── training check-ins ───────────────────────────────────────────────────────
+
+interface TrainingCheckin {
+  id: string
+  scores: Record<string, number>
+  notes?: string
+  context?: string
+  filled_by?: 'coach' | 'student'
+  taken_at?: { toDate(): Date } | null
+  profile_key?: string
+}
+
+const DEFAULT_TRAINING_INDICATORS = [
+  { key: 'consistency' },
+  { key: 'effort' },
+  { key: 'focus' },
+  { key: 'recharge' },
+  { key: 'sense_of_progress' },
+]
+
+function detectTrainingProfile(scores: Record<string, number>) {
+  const C = scores['consistency'] ?? 3
+  const E = scores['effort'] ?? 3
+  const F = scores['focus'] ?? 3
+  const R = scores['recharge'] ?? 3
+  const P = scores['sense_of_progress'] ?? 3
+  const axes = { consistency: C, effort: E, focus: F, recharge: R, sense_of_progress: P }
+  const sorted = Object.entries(axes).sort(([, a], [, b]) => a - b)
+  let profile_key: string
+  if (C >= 3.5 && E <= 2.5 && F <= 2.5 && P <= 2.5) profile_key = 'burnout_risk'
+  else if (E >= 4 && R <= 2) profile_key = 'overreaching'
+  else if (C >= 3.5 && E >= 3.5 && P <= 2) profile_key = 'stuck'
+  else if (C >= 3.5 && E >= 3.5 && F <= 2.5) profile_key = 'coasting'
+  else if (C <= 2.5 && (E + F + P) / 3 >= 3) profile_key = 'inconsistent'
+  else if (C >= 3.5 && E >= 3.5 && F >= 3.5 && R >= 3.5 && P >= 3.5) profile_key = 'balanced'
+  else profile_key = 'default'
+  return { profile_key, primary_lever: sorted[0][0], anchor: sorted[sorted.length - 1][0] }
+}
+
+function useContactTrainingCheckins(contactId: string) {
+  return useQuery<TrainingCheckin[]>({
+    queryKey: ['contact-training-checkins', contactId],
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, CONTACTS_COLLECTION, contactId, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION),
+          orderBy('taken_at', 'desc'),
+          limit(20),
+        )
+      )
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TrainingCheckin)
+    },
+  })
+}
+
 function useContactAlerts(contactId: string) {
   return useQuery<ContactAlert[]>({
     queryKey: ['contact-alerts', contactId],
@@ -332,15 +390,134 @@ function FormBlock({ title, children }: { title: string; children: React.ReactNo
   )
 }
 
-// ─── header stats panel ───────────────────────────────────────────────────────
+// ─── chart helpers ────────────────────────────────────────────────────────────
+// CSS variables don't resolve in SVG *presentation* attributes — must use style prop
 
-type StatsPanelTab = 'attendance' | 'training'
+function LineXTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  if (!payload?.value) return null
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {/* fill="currentColor" reads CSS color prop, which resolves CSS vars reliably in SVG */}
+      <text
+        fill="currentColor"
+        textAnchor="middle"
+        dy={12}
+        style={{ fontSize: 9, color: 'hsl(var(--muted-foreground))', fontFamily: 'inherit' }}
+      >
+        {payload.value}
+      </text>
+    </g>
+  )
+}
+
+function RadarAngleTick({
+  x, y, cx, cy, payload,
+}: {
+  x?: number; y?: number; cx?: number; cy?: number; payload?: { value: string }
+}) {
+  if (!payload?.value) return null
+  const textAnchor = (x ?? 0) > (cx ?? 0) + 4 ? 'start' : (x ?? 0) < (cx ?? 0) - 4 ? 'end' : 'middle'
+  return (
+    <text
+      fill="currentColor"
+      x={x}
+      y={y}
+      textAnchor={textAnchor}
+      dy={4}
+      style={{ fontSize: 9, color: 'hsl(var(--muted-foreground))', fontFamily: 'inherit' }}
+    >
+      {payload.value}
+    </text>
+  )
+}
+
+// ─── add check-in dialog ─────────────────────────────────────────────────────
+
+function AddCheckinDialog({
+  open, onOpenChange, contactId, onSaved,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  contactId: string; onSaved: () => void
+}) {
+  const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
+  const [scores, setScores] = useState<Record<string, number>>({
+    consistency: 3, effort: 3, focus: 3, recharge: 3, sense_of_progress: 3,
+  })
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const profile = detectTrainingProfile(scores)
+      await addDoc(
+        collection(db, CONTACTS_COLLECTION, contactId, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION),
+        { scores, notes: notes.trim() || null, filled_by: 'coach', taken_at: serverTimestamp(), ...profile }
+      )
+      onSaved()
+      onOpenChange(false)
+      setScores({ consistency: 3, effort: 3, focus: 3, recharge: 3, sense_of_progress: 3 })
+      setNotes('')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{t('trainingCheckinTitle')}</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          {DEFAULT_TRAINING_INDICATORS.map((ind) => (
+            <div key={ind.key} className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">{t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0])}</label>
+                <span className="text-sm font-bold tabular-nums">{scores[ind.key] ?? 3}/5</span>
+              </div>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setScores((prev) => ({ ...prev, [ind.key]: v }))}
+                    className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                      (scores[ind.key] ?? 3) === v
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="space-y-1">
+            <label className="text-sm font-medium">{t('trainingCheckinNotes')}</label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+          </div>
+        </div>
+        <DialogFooter>
+          <button onClick={() => onOpenChange(false)}
+            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+            {t('cancel')}
+          </button>
+          <button onClick={save} disabled={saving}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
+            {saving ? tCommon('loading') : t('saveChanges')}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── stats tab (full-width attendance + training) ────────────────────────────
 
 function isoWeekLabel(isoWeek: string) {
-  // "2024-W03" → parse to a date and show "Jan 15"
   const [year, week] = isoWeek.split('-W').map(Number)
   if (!year || !week) return isoWeek
-  // ISO week 1 is the week containing Jan 4
   const jan4 = new Date(year, 0, 4)
   const dayOfWeek = jan4.getDay() || 7
   const weekStart = new Date(jan4)
@@ -348,138 +525,183 @@ function isoWeekLabel(isoWeek: string) {
   return weekStart.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-function StatsPanel({ contact, teamId }: { contact: Contact; teamId: string | null }) {
+function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
-  const [panelTab, setPanelTab] = useState<StatsPanelTab>('attendance')
+  const [addCheckinOpen, setAddCheckinOpen] = useState(false)
   const { data: weeklyReports = [], isLoading: reportsLoading } = useContactWeeklyReports(contact.id)
+  const { data: checkins = [], isLoading: checkinsLoading } = useContactTrainingCheckins(contact.id)
+  const { hasFeature } = usePlan()
+  const { openUpgradeModal } = useUpgradeModal()
+  const qc = useQueryClient()
 
   const chartData = weeklyReports.map((r) => ({
     label: isoWeekLabel(r.iso_week),
     sessions: r.sessions_count,
   }))
 
+  const latestCoach = checkins.find((c) => c.filled_by === 'coach') ?? null
+  const latestStudent = checkins.find((c) => c.filled_by === 'student') ?? null
+  const hasBoth = !!latestCoach && !!latestStudent
+
+  const radarData = DEFAULT_TRAINING_INDICATORS.map((ind) => hasBoth
+    ? { subject: t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0]), coach: latestCoach?.scores?.[ind.key] ?? 0, student: latestStudent?.scores?.[ind.key] ?? 0 }
+    : { subject: t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0]), value: (latestCoach || latestStudent)?.scores?.[ind.key] ?? 0 }
+  )
+
+  const trainingUnlocked = hasFeature('advanced_dashboard')
+
+  // Tooltip style — inline style prop resolves CSS vars; SVG attrs do not
+  const tooltipStyle = {
+    fontSize: 12,
+    padding: '6px 10px',
+    borderRadius: 8,
+    border: '1px solid hsl(var(--border))',
+    backgroundColor: 'hsl(var(--card))',
+    color: 'hsl(var(--card-foreground))',
+  }
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Tab strip */}
-      <div className="flex border-b shrink-0">
-        {(['attendance', 'training'] as StatsPanelTab[]).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setPanelTab(tab)}
-            className={`flex-1 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
-              panelTab === tab
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab === 'attendance' ? t('statsPanelAttendance') : t('statsPanelTraining')}
-          </button>
-        ))}
-      </div>
+    <div className="pb-16 space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-      <div className="flex-1 overflow-auto">
-        {panelTab === 'attendance' && (
-          <div>
-            {/* Trend chart */}
-            <div className="pt-3 px-1">
-              {reportsLoading ? (
-                <div className="h-[90px] rounded-md bg-muted animate-pulse" />
-              ) : chartData.length === 0 ? (
-                <div className="h-[90px] flex items-center justify-center">
-                  <p className="text-xs text-muted-foreground">{t('noActivity')}</p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={90}>
-                  <LineChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval="preserveStartEnd"
-                    />
-                    <Tooltip
-                      contentStyle={{ fontSize: 11, padding: '4px 8px', borderRadius: 6 }}
-                      formatter={(v) => [v, t('statTotalSessions')]}
-                      labelStyle={{ display: 'none' }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="sessions"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 3 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+        {/* ── Attendance ── */}
+        <div className="rounded-xl border bg-card p-5 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('statsPanelAttendance')}</p>
 
-            {/* Key stats */}
-            <div className="grid grid-cols-3 gap-2 text-center px-4 py-3 border-t">
-              <div>
-                <p className="text-xl font-bold tabular-nums">{contact.total_sessions ?? 0}</p>
-                <p className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t('statTotalSessions')}</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold tabular-nums">
-                  {contact.current_streak ?? 0}<span className="text-xs font-normal">w</span>
-                </p>
-                <p className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t('statStreak')}</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold tabular-nums">{contact.current_month_score ?? 0}</p>
-                <p className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t('statMonthScore')}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {panelTab === 'training' && (
-          <div className="flex flex-col items-center justify-center gap-3 h-full min-h-[160px] px-5 py-6 text-center">
-            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
-              <Lock className="h-4 w-4 text-muted-foreground" />
+          {/* Key numbers */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p className="text-3xl font-bold tabular-nums">{contact.total_sessions ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('statTotalSessions')}</p>
             </div>
             <div>
-              <p className="text-sm font-medium">{t('trainingProfileLockedTitle')}</p>
-              <p className="text-xs text-muted-foreground mt-1">{t('trainingProfileLockedDesc')}</p>
+              <p className="text-3xl font-bold tabular-nums">
+                {contact.current_streak ?? 0}<span className="text-base font-normal">w</span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{t('statStreak')}</p>
             </div>
-            <button
-              type="button"
-              className="mt-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
-            >
-              {t('upgradeToClub')}
-            </button>
+            <div>
+              <p className="text-3xl font-bold tabular-nums">{contact.current_month_score ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('statMonthScore')}</p>
+            </div>
           </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
-function MobileStatsToggle({ contact, teamId }: { contact: Contact; teamId: string | null }) {
-  const t = useTranslations('Contacts')
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="lg:hidden border-t">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-5 py-3 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-      >
-        <span className="flex items-center gap-2">
-          <BarChart2 className="h-4 w-4" />
-          {t('statsPanelTitle')}
-        </span>
-        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="px-4 pb-5">
-          <StatsPanel contact={contact} teamId={teamId} />
+          {/* Trend chart */}
+          {reportsLoading ? (
+            <div className="h-[180px] rounded-lg bg-muted animate-pulse" />
+          ) : chartData.length === 0 ? (
+            <div className="h-[100px] flex items-center justify-center rounded-lg border border-dashed">
+              <p className="text-sm text-muted-foreground">{t('noActivity')}</p>
+            </div>
+          ) : (
+            <div className="h-[180px]">
+              <ResponsiveContainer width="99%" height="100%">
+                <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <XAxis
+                    dataKey="label"
+                    tick={<LineXTick />}
+                    tickLine={false}
+                    axisLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v) => [v, t('statTotalSessions')]}
+                    labelStyle={{ display: 'none' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="sessions"
+                    stroke="#6366f1"
+                    strokeWidth={2.5}
+                    dot={false}
+                    activeDot={{ r: 4, fill: '#6366f1' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* ── Training profile ── */}
+        <div className="rounded-xl border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('statsPanelTraining')}</p>
+            {trainingUnlocked && checkins.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAddCheckinOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />{t('addTrainingCheckin')}
+              </button>
+            )}
+          </div>
+
+          {!trainingUnlocked ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                <Lock className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">{t('trainingProfileLockedTitle')}</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">{t('trainingProfileLockedDesc')}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => openUpgradeModal({ feature: 'advanced_dashboard' })}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+              >
+                {t('upgradeToClub')}
+              </button>
+            </div>
+          ) : checkinsLoading ? (
+            <div className="h-[260px] rounded-lg bg-muted animate-pulse" />
+          ) : checkins.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-10 text-center rounded-lg border border-dashed">
+              <p className="text-sm text-muted-foreground max-w-xs">{t('noTrainingCheckins')}</p>
+              <button
+                type="button"
+                onClick={() => setAddCheckinOpen(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+              >
+                <Plus className="h-4 w-4" />{t('addTrainingCheckin')}
+              </button>
+            </div>
+          ) : (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="99%" height="100%">
+                <RadarChart data={radarData} margin={{ top: 16, right: 36, left: 36, bottom: 16 }}>
+                  {/* stroke as rgba so it works on both themes without CSS vars in SVG attr */}
+                  <PolarGrid stroke="rgba(128,128,128,0.25)" />
+                  <PolarAngleAxis dataKey="subject" tick={<RadarAngleTick />} />
+                  {hasBoth ? (
+                    <>
+                      <Radar name="Coach" dataKey="coach" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
+                      <Radar name="Student" dataKey="student" stroke="#22c55e" fill="#22c55e" fillOpacity={0.25} />
+                      <Legend
+                        iconSize={10}
+                        wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'hsl(var(--foreground))' }}
+                      />
+                    </>
+                  ) : (
+                    <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.4} />
+                  )}
+                  <Tooltip contentStyle={tooltipStyle} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      <AddCheckinDialog
+        open={addCheckinOpen}
+        onOpenChange={setAddCheckinOpen}
+        contactId={contact.id}
+        onSaved={() => qc.invalidateQueries({ queryKey: ['contact-training-checkins', contact.id] })}
+      />
     </div>
   )
 }
@@ -931,6 +1153,9 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
                   <p className="text-xs text-muted-foreground">
                     {formatDate(entry.start_date)} – {entry.end_date ? formatDate(entry.end_date) : t('subscriptionEndNone')}
                   </p>
+                  {entry.termination_reason && (
+                    <p className="text-xs text-muted-foreground italic">{entry.termination_reason}</p>
+                  )}
                 </div>
                 <button
                   onClick={async () => {
@@ -970,6 +1195,7 @@ function AddSubscriptionDialog({
   const [recurrence, setRecurrence] = useState('')
   const [startDate, setStartDate] = useState<Date | undefined>(new Date())
   const [endDate, setEndDate] = useState<Date | undefined>()
+  const [terminationReason, setTerminationReason] = useState('')
   const [saving, setSaving] = useState(false)
 
   const RECURRENCES = ['per_class', 'weekly', 'biweekly', 'monthly', 'quarterly', 'annual']
@@ -986,6 +1212,7 @@ function AddSubscriptionDialog({
           recurrence: recurrence || null,
           start_date: startDate ? Timestamp.fromDate(startDate) : null,
           end_date: endDate ? Timestamp.fromDate(endDate) : null,
+          termination_reason: terminationReason.trim() || null,
           created_at: serverTimestamp(),
         }
       )
@@ -1027,6 +1254,15 @@ function AddSubscriptionDialog({
           <Field label={t('subscriptionEnd')}>
             <DatePicker value={endDate} onChange={setEndDate} placeholder={t('subscriptionEndNone')} />
           </Field>
+          {endDate && (
+            <Field label={t('subscriptionTerminationReason')}>
+              <Input
+                value={terminationReason}
+                onChange={(e) => setTerminationReason(e.target.value)}
+                placeholder="e.g. cancelled, payment issue"
+              />
+            </Field>
+          )}
         </div>
         <DialogFooter>
           <button onClick={() => onOpenChange(false)}
@@ -1746,7 +1982,7 @@ function ArchivedContactView({ contact, onAction }: { contact: Contact; onAction
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'profile' | 'notes' | 'activity' | 'bookings' | 'subscriptions' | 'goals' | 'gamification' | 'alerts'
+type TabId = 'profile' | 'notes' | 'stats' | 'activity' | 'bookings' | 'subscriptions' | 'goals' | 'gamification' | 'alerts'
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -1798,6 +2034,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const TABS: { id: TabId; label: string; icon: React.ElementType; feature?: PlanFeature }[] = [
     { id: 'profile',       label: t('tabProfile'),       icon: Mail },
     { id: 'notes',         label: t('tabNotes'),         icon: StickyNote },
+    { id: 'stats',         label: t('tabStats'),         icon: BarChart2 },
     { id: 'activity',      label: t('tabActivity'),      icon: Activity },
     { id: 'alerts',        label: t('tabAlerts'),        icon: Bell },
     { id: 'bookings',      label: t('tabBookings'),      icon: CalendarDays },
@@ -1842,7 +2079,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     {contact.type && (
                       <Badge variant="outline">{t(`type_${contact.type}`)}</Badge>
                     )}
-                    {!contact.acquisition?.acknowledged && (
+                    {contact.acquisition?.acknowledged === false && (
                       <Badge className="bg-blue-500 text-white border-blue-500">{t('newBadge')}</Badge>
                     )}
                   </>
@@ -1864,9 +2101,26 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     <CalendarDays className="h-3 w-3 shrink-0" /> {t('memberSince')} {formatDate(contact.created_at)}
                   </span>
                 )}
+              </div>
+              {/* Inline stat chips */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Activity className="h-3 w-3 shrink-0" />
+                  <span className="font-semibold text-foreground">{contact.total_sessions ?? 0}</span>
+                  {' '}{t('statTotalSessions').toLowerCase()}
+                </span>
                 {(contact.current_streak ?? 0) > 0 && (
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Flame className="h-3 w-3 shrink-0 text-orange-500" /> {contact.current_streak}w streak
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Flame className="h-3 w-3 shrink-0 text-orange-500" />
+                    <span className="font-semibold text-foreground">{contact.current_streak}w</span>
+                    {' '}{t('statStreak').toLowerCase()}
+                  </span>
+                )}
+                {(contact.current_month_score ?? 0) > 0 && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Star className="h-3 w-3 shrink-0 text-yellow-500" />
+                    <span className="font-semibold text-foreground">{contact.current_month_score}</span>
+                    {' '}{t('statMonthScore').toLowerCase()}
                   </span>
                 )}
               </div>
@@ -1884,14 +2138,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
 
-          {/* Desktop stats — right, always visible */}
-          <div className="hidden lg:flex flex-col border-l w-3/8 shrink-0">
-            <StatsPanel contact={contact} teamId={currentTeamId} />
-          </div>
         </div>
-
-        {/* Mobile stats — collapsible at bottom */}
-        <MobileStatsToggle contact={contact} teamId={currentTeamId} />
       </div>
 
       {/* Archived / deleted → read-only summary; active → full tabbed view */}
@@ -1928,6 +2175,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           <div>
             {tab === 'profile' && (
               <ProfileTab contact={contact} teamId={currentTeamId} onSaved={invalidate} />
+            )}
+            {tab === 'stats' && (
+              <StatsTab contact={contact} teamId={currentTeamId} />
             )}
             {tab === 'notes' && (
               <NotesTab contact={contact} />
