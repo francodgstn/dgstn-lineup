@@ -1455,11 +1455,105 @@ function dateDayLabel(ts: { toDate(): Date } | null | undefined, tCommon: (k: st
   return d.toLocaleDateString([], { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function formatEventType(event: ActivityEventType): string {
+  return event.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+}
+
+function ActivityDetailDialog({
+  entry, onClose,
+}: {
+  entry: ActivityLogEntry | null
+  onClose: () => void
+}) {
+  if (!entry) return null
+
+  const meta = EVENT_META[entry.event] ?? { Icon: Activity, bg: 'bg-muted', fg: 'text-muted-foreground' }
+  const { Icon, bg, fg } = meta
+
+  // Parameters: description first, then all other keys
+  const { description, ...rest } = entry.parameters
+  const extraParams = Object.entries(rest).filter(([, v]) => v !== null && v !== undefined)
+
+  const fullTimestamp = (() => {
+    const ts = entry.created_at as { toDate(): Date } | null | undefined
+    if (!ts) return '—'
+    return ts.toDate().toLocaleString([], {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    })
+  })()
+
+  const formatValue = (v: unknown): string => {
+    if (v === null || v === undefined) return '—'
+    if (typeof v === 'object') {
+      if ('toDate' in (v as object)) return (v as { toDate(): Date }).toDate().toLocaleString()
+      return JSON.stringify(v, null, 2)
+    }
+    return String(v)
+  }
+
+  return (
+    <Dialog open={!!entry} onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className={`h-9 w-9 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
+              <Icon className={`h-4 w-4 ${fg}`} />
+            </div>
+            <div>
+              <DialogTitle className="text-base">{formatEventType(entry.event)}</DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">{fullTimestamp}</p>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Description */}
+          <p className="text-sm leading-relaxed">{description as string}</p>
+
+          {/* Extra parameters */}
+          {extraParams.length > 0 && (
+            <div className="rounded-lg border divide-y text-sm">
+              {extraParams.map(([key, val]) => (
+                <div key={key} className="grid grid-cols-[140px_1fr] gap-2 px-3 py-2">
+                  <span className="text-xs text-muted-foreground font-medium self-start pt-px">
+                    {key.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-xs break-all font-mono">{formatValue(val)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Refs */}
+          {(entry.refs.session || entry.refs.contact) && (
+            <div className="rounded-lg border divide-y text-sm">
+              {entry.refs.session && (
+                <div className="grid grid-cols-[140px_1fr] gap-2 px-3 py-2">
+                  <span className="text-xs text-muted-foreground font-medium">session ref</span>
+                  <span className="text-xs break-all font-mono text-muted-foreground">{entry.refs.session}</span>
+                </div>
+              )}
+              {entry.refs.contact && (
+                <div className="grid grid-cols-[140px_1fr] gap-2 px-3 py-2">
+                  <span className="text-xs text-muted-foreground font-medium">contact ref</span>
+                  <span className="text-xs break-all font-mono text-muted-foreground">{entry.refs.contact}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const [period, setPeriod] = useState<ActivityPeriodKey>('30d')
   const [category, setCategory] = useState<ActivityCategory>('all')
+  const [selectedEntry, setSelectedEntry] = useState<ActivityLogEntry | null>(null)
 
   const selectedPeriod = ACTIVITY_PERIODS.find((p) => p.key === period)!
   const { data: entries = [], isLoading } = useContactActivityLog(contact.id, teamId, selectedPeriod.days)
@@ -1558,11 +1652,20 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
                           <div className="absolute -left-6 flex items-center justify-center w-[18px] h-[18px] rounded-full bg-background border-2 border-border mt-0.5 shrink-0">
                             <Icon className={`h-2.5 w-2.5 ${fg}`} />
                           </div>
-                          <div className="flex-1 min-w-0 flex items-baseline justify-between gap-4">
+                          <div className="flex-1 min-w-0 flex items-start justify-between gap-4">
                             <p className="text-sm leading-snug">{entry.parameters.description as string}</p>
-                            <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
-                              {formatActivityTimestamp(entry.created_at as { toDate(): Date } | null | undefined)}
-                            </span>
+                            <div className="flex flex-col items-end gap-0.5 shrink-0">
+                              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                                {formatActivityTimestamp(entry.created_at as { toDate(): Date } | null | undefined)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedEntry(entry)}
+                                className="text-[10px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors"
+                              >
+                                details
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )
@@ -1577,6 +1680,8 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
           )}
         </>
       )}
+
+      <ActivityDetailDialog entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
     </div>
   )
 }
