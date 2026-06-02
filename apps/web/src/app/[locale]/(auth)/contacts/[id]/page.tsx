@@ -227,15 +227,15 @@ function useContactRecentSessions(contactId: string, count: number) {
 
 interface WeeklyReport { iso_week: string; sessions_count: number }
 
-function useContactWeeklyReports(contactId: string) {
+function useContactWeeklyReports(contactId: string, weeks = 16) {
   return useQuery<WeeklyReport[]>({
-    queryKey: ['contact-weekly-reports', contactId],
+    queryKey: ['contact-weekly-reports', contactId, weeks],
     queryFn: async () => {
       const snap = await getDocs(
         query(
           collection(db, CONTACTS_COLLECTION, contactId, CONTACT_WEEKLY_REPORTS_SUBCOLLECTION),
           orderBy('iso_week', 'desc'),
-          limit(16),
+          limit(weeks),
         )
       )
       return snap.docs
@@ -526,10 +526,20 @@ function isoWeekLabel(isoWeek: string) {
   return weekStart.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
+const TREND_PERIODS = [
+  { key: '4w',  weeks: 4,  label: '1M' },
+  { key: '12w', weeks: 12, label: '3M' },
+  { key: '24w', weeks: 24, label: '6M' },
+  { key: '52w', weeks: 52, label: '1Y' },
+] as const
+type TrendPeriodKey = typeof TREND_PERIODS[number]['key']
+
 function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
   const [addCheckinOpen, setAddCheckinOpen] = useState(false)
-  const { data: weeklyReports = [], isLoading: reportsLoading } = useContactWeeklyReports(contact.id)
+  const [period, setPeriod] = useState<TrendPeriodKey>('12w')
+  const selectedPeriod = TREND_PERIODS.find((p) => p.key === period)!
+  const { data: weeklyReports = [], isLoading: reportsLoading } = useContactWeeklyReports(contact.id, selectedPeriod.weeks)
   const { data: checkins = [], isLoading: checkinsLoading } = useContactTrainingCheckins(contact.id)
   const { hasFeature } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
@@ -565,37 +575,37 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
     <div className="pb-16 space-y-4">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* ── Attendance ── */}
-        <div className="rounded-xl border bg-card p-5 space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('statsPanelAttendance')}</p>
-
-          {/* Key numbers */}
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p className="text-3xl font-bold tabular-nums">{contact.total_sessions ?? 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">{t('statTotalSessions')}</p>
-            </div>
-            <div>
-              <p className="text-3xl font-bold tabular-nums">
-                {contact.current_streak ?? 0}<span className="text-base font-normal">w</span>
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">{t('statStreak')}</p>
-            </div>
-            <div>
-              <p className="text-3xl font-bold tabular-nums">{contact.current_month_score ?? 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">{t('statMonthScore')}</p>
+        {/* ── Attendance trend ── */}
+        <div className="rounded-xl border bg-card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('statsPanelAttendance')}</p>
+            {/* Period selector */}
+            <div className="flex items-center rounded-lg border bg-background p-0.5 gap-0.5">
+              {TREND_PERIODS.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setPeriod(p.key)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
+                    period === p.key
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Trend chart */}
           {reportsLoading ? (
-            <div className="h-[180px] rounded-lg bg-muted animate-pulse" />
+            <div className="h-[200px] rounded-lg bg-muted animate-pulse" />
           ) : chartData.length === 0 ? (
-            <div className="h-[100px] flex items-center justify-center rounded-lg border border-dashed">
+            <div className="h-[120px] flex items-center justify-center rounded-lg border border-dashed">
               <p className="text-sm text-muted-foreground">{t('noActivity')}</p>
             </div>
           ) : (
-            <div className="h-[180px]">
+            <div className="h-[200px]">
               <ResponsiveContainer width="99%" height="100%">
                 <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <XAxis
