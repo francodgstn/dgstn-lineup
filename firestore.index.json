@@ -1,6 +1,23 @@
 {
   "indexes": [
     {
+      "collectionGroup": "contacts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "org_membership_active",     "order": "ASCENDING" },
+        { "fieldPath": "org_membership_expiration", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contacts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "teamId",                "order": "ASCENDING" },
+        { "fieldPath": "org_membership_status", "order": "ASCENDING" },
+        { "fieldPath": "lastname",              "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "org_members",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

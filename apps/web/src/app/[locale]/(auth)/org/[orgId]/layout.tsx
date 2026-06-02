@@ -5,7 +5,7 @@ import { Link, usePathname } from '@/i18n/navigation'
 import { useParams } from 'next/navigation'
 import { OrgProvider, useOrg } from '@/contexts/OrgContext'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Building2, Users, CreditCard, Settings, ChevronLeft, CalendarRange, Shield } from 'lucide-react'
+import { Building2, Users, CreditCard, Settings, ChevronLeft, CalendarRange, Shield, IdCard } from 'lucide-react'
 import type { Route } from 'next'
 
 function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNode }) {
@@ -14,12 +14,13 @@ function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNod
   const pathname = usePathname()
 
   const tabs = [
-    { href: `/org/${orgId}/clubs`,    label: t('tabClubs'),    icon: Building2 },
-    { href: `/org/${orgId}/events`,   label: t('tabEvents'),   icon: CalendarRange },
-    { href: `/org/${orgId}/ranking`,  label: t('tabRanking'),  icon: Shield },
-    { href: `/org/${orgId}/members`,  label: t('tabMembers'),  icon: Users },
-    { href: `/org/${orgId}/billing`,  label: t('tabBilling'),  icon: CreditCard },
-    { href: `/org/${orgId}/settings`, label: t('tabSettings'), icon: Settings },
+    { href: `/org/${orgId}/clubs`,       label: t('tabClubs'),       icon: Building2 },
+    { href: `/org/${orgId}/events`,      label: t('tabEvents'),      icon: CalendarRange },
+    { href: `/org/${orgId}/memberships`, label: t('tabMemberships'), icon: IdCard },
+    { href: `/org/${orgId}/ranking`,     label: t('tabRanking'),     icon: Shield },
+    { href: `/org/${orgId}/members`,     label: t('tabMembers'),     icon: Users },
+    { href: `/org/${orgId}/billing`,     label: t('tabBilling'),     icon: CreditCard },
+    { href: `/org/${orgId}/settings`,    label: t('tabSettings'),    icon: Settings },
   ]
 
   return (

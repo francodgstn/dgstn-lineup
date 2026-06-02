@@ -781,6 +781,12 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.inviteeEmail == request.auth.token.email);
         allow write: if false; // Cloud Functions only
       }
+
+      match /membership_statuses/{statusId} {
+        allow read:   if isOrgMember(orgId);
+        allow write:  if hasOrgRole(orgId, 'org_admin');
+        allow delete: if hasOrgRole(orgId, 'org_admin');
+      }
     }
 
   }

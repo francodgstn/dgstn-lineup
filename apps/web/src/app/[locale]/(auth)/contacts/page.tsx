@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import {
-  collection, query, where, orderBy, getDocs, addDoc, updateDoc,
+  collection, query, where, orderBy, getDocs, getDoc, addDoc, updateDoc,
   doc, serverTimestamp, Timestamp, deleteField,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -16,20 +16,21 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { MultiSelect } from '@/components/ui/multi-select'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, CONTACT_REQUESTS_SUBCOLLECTION,
-  SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION, ORGANIZATIONS_COLLECTION,
+  ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES,
 } from '@lineup/shared'
-import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType } from '@lineup/shared'
+import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef } from '@lineup/shared'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  Search, UserPlus, Filter, X, Flame,
-  Star, AlertCircle, ChevronDown, ChevronUp, Archive, Trash2, RotateCcw,
+  Search, UserPlus, X, Flame,
+  Star, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
   MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
+  Check, Bookmark, BookmarkPlus,
 } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
@@ -45,6 +46,16 @@ function initials(c: Contact) {
 const STATUS_VARIANT: Record<MembershipStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   guest: 'secondary', requested: 'outline', under_review: 'outline',
   almost_ready: 'outline', active: 'default', expired: 'destructive',
+}
+
+const MEMBERSHIP_COLOR_CLASSES: Record<string, string> = {
+  gray:   'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+  blue:   'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+  purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+  green:  'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  red:    'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+  orange: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
 }
 
 function tsToDate(ts: unknown): Date | null {
@@ -155,6 +166,40 @@ function useSubscriptionTypes(teamId: string | null) {
       if (!teamId) return []
       const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION))
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SubscriptionType)
+    },
+  })
+}
+
+function useOrgMembershipStatuses(orgId: string | null | undefined) {
+  return useQuery<OrgMembershipStatusDef[]>({
+    queryKey: ['org-membership-statuses', orgId ?? null],
+    enabled: !!orgId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      if (!orgId) return DEFAULT_ORG_MEMBERSHIP_STATUSES
+      const snap = await getDocs(
+        collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION),
+      )
+      if (snap.empty) return DEFAULT_ORG_MEMBERSHIP_STATUSES
+      const defs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as OrgMembershipStatusDef))
+      const byId = Object.fromEntries(DEFAULT_ORG_MEMBERSHIP_STATUSES.map((s) => [s.id, s]))
+      defs.forEach((d) => { byId[d.id] = d })
+      return Object.values(byId).sort((a, b) => a.order - b.order)
+    },
+  })
+}
+
+function useOrgRankingSystems(orgId: string | null | undefined) {
+  return useQuery<RankingSystem[] | null>({
+    queryKey: ['org-ranking-systems', orgId ?? null],
+    enabled: !!orgId,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      if (!orgId) return null
+      const snap = await getDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId))
+      if (!snap.exists()) return null
+      const systems = snap.data().ranking_systems as RankingSystem[] | undefined
+      return systems?.length ? systems : null
     },
   })
 }
@@ -312,31 +357,40 @@ function OverviewPanel({
   rankingSystems?: RankingSystem[]
 }) {
   const t = useTranslations('Contacts')
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
 
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Skeleton className="h-52 rounded-xl" />
-        <Skeleton className="h-52 rounded-xl" />
-      </div>
-    )
-  }
+  const activeCount = contacts.filter((c) => c.membership_status === 'active').length
+  const trialCount  = contacts.filter((c) => c.type === 'trial').length
 
   return (
     <div className="space-y-3">
       <button
+        type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+        className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border border-dashed border-border/50 hover:border-border hover:bg-muted/30 transition-colors group"
       >
-        {t('statsTitle')}
-        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground shrink-0 transition-transform duration-150 ${open ? 'rotate-90' : ''}`} />
+        <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">{t('statsTitle')}</span>
+        {!open && !loading && contacts.length > 0 && (
+          <div className="flex items-center gap-3 ml-1 text-xs text-muted-foreground/60">
+            <span>{contacts.length} contacts</span>
+            {activeCount > 0 && <span>{activeCount} active</span>}
+            {trialCount  > 0 && <span>{trialCount} trials</span>}
+          </div>
+        )}
       </button>
       {open && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <RosterCard contacts={contacts} />
-          <DemographicsCard contacts={contacts} rankingSystems={rankingSystems} />
-        </div>
+        loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Skeleton className="h-52 rounded-xl" />
+            <Skeleton className="h-52 rounded-xl" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <RosterCard contacts={contacts} />
+            <DemographicsCard contacts={contacts} rankingSystems={rankingSystems} />
+          </div>
+        )
       )}
     </div>
   )
@@ -346,6 +400,8 @@ function OverviewPanel({
 
 type InactivityPreset = 'never' | '30d' | '60d' | '90d'
 
+type RankFilter = Record<string, number[]> // systemId → selected level values
+
 interface Filters {
   types: string[]
   statuses: string[]
@@ -354,10 +410,12 @@ interface Filters {
   sessionsMin: number | null
   sessionsMax: number | null
   inactivity: InactivityPreset | null
+  rankFilter: RankFilter | null
 }
 const EMPTY_FILTERS: Filters = {
   types: [], statuses: [], subscriptions: [],
   hasAlerts: false, sessionsMin: null, sessionsMax: null, inactivity: null,
+  rankFilter: null,
 }
 
 function countActiveFilters(f: Filters): number {
@@ -365,152 +423,366 @@ function countActiveFilters(f: Filters): number {
     + (f.hasAlerts ? 1 : 0)
     + (f.sessionsMin != null || f.sessionsMax != null ? 1 : 0)
     + (f.inactivity ? 1 : 0)
+    + (f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0) ? 1 : 0)
 }
 
-function FilterPanel({
-  filters,
-  onChange,
-  subscriptionTypes,
-}: {
-  filters: Filters
-  onChange: (f: Filters) => void
-  subscriptionTypes: SubscriptionType[]
-}) {
-  const t = useTranslations('Contacts')
+// ─── filter chips ─────────────────────────────────────────────────────────────
+
+interface SavedQuery { id: string; name: string; filters: Filters }
+
+const FILTER_PRESETS: SavedQuery[] = [
+  { id: 'p-active', name: 'Active members',  filters: { ...EMPTY_FILTERS, statuses: ['active'] } },
+  { id: 'p-nosub',  name: 'No subscription', filters: { ...EMPTY_FILTERS, subscriptions: ['none'] } },
+  { id: 'p-trials', name: 'Trials',          filters: { ...EMPTY_FILTERS, types: ['trial'] } },
+  { id: 'p-alerts', name: 'Has alerts',      filters: { ...EMPTY_FILTERS, hasAlerts: true } },
+]
+
+function useScrollLockOnOpen() {
   const [open, setOpen] = useState(false)
-  const activeCount = countActiveFilters(filters)
+  const savedY = useRef(0)
+  function onOpenChange(v: boolean) {
+    if (v) savedY.current = window.scrollY
+    setOpen(v)
+  }
+  useLayoutEffect(() => {
+    if (!open) return
+    const y = savedY.current
+    window.scrollTo(0, y)
+    const restore = () => window.scrollTo(0, y)
+    window.addEventListener('scroll', restore)
+    let r2: number
+    const r1 = requestAnimationFrame(() => {
+      r2 = requestAnimationFrame(() => window.removeEventListener('scroll', restore))
+    })
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); window.removeEventListener('scroll', restore) }
+  }, [open])
+  return { open, onOpenChange }
+}
 
-  const TYPE_OPTS = (['trial', 'student', 'external'] as ContactType[]).map((v) => ({
-    value: v, label: t(`type_${v}`),
-  }))
-  const STATUS_OPTS = (
-    ['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired'] as MembershipStatus[]
-  ).map((v) => ({ value: v, label: t(`status_${v}`) }))
+function CheckOption({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" onClick={onToggle}
+      className="flex items-center gap-2.5 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left"
+    >
+      <span className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-primary border-primary' : 'border-input'}`}>
+        {checked && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+      </span>
+      <span className="truncate">{label}</span>
+    </button>
+  )
+}
 
-  const SUBSCRIPTION_OPTS = [
-    { value: 'none', label: t('filterSubscriptionNone') },
-    ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name })),
-  ]
+function FilterChip({ label, activeLabel, isActive, onClear, children }: {
+  label: string; activeLabel?: string; isActive: boolean; onClear?: () => void; children: React.ReactNode
+}) {
+  const { open, onOpenChange } = useScrollLockOnOpen()
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border outline-none transition-colors ${
+        isActive
+          ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
+          : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+      }`}>
+        <span>{isActive && activeLabel ? activeLabel : label}</span>
+        {isActive ? (
+          <span role="button" aria-label="Clear"
+            onClick={(e) => { e.stopPropagation(); onClear?.() }}
+            className="rounded-full p-0.5 hover:bg-primary/20 transition-colors -mr-0.5"
+          ><X className="h-3 w-3" /></span>
+        ) : (
+          <ChevronDown className="h-3 w-3 opacity-40" />
+        )}
+      </PopoverTrigger>
+      <PopoverContent align="start" side="bottom" className="w-auto min-w-[180px] p-1.5">
+        {children}
+      </PopoverContent>
+    </Popover>
+  )
+}
 
-  const INACTIVITY_OPTS: { value: InactivityPreset; label: string }[] = [
-    { value: 'never',  label: t('filterInactivityNever') },
-    { value: '30d',    label: t('filterInactivity30d') },
-    { value: '60d',    label: t('filterInactivity60d') },
-    { value: '90d',    label: t('filterInactivity90d') },
-  ]
+function useSavedQueries(teamId: string | null) {
+  const key = teamId ? `lineup-cf-${teamId}` : null
+  const [saved, setSaved] = useState<SavedQuery[]>(() => {
+    if (typeof window === 'undefined' || !key) return []
+    try { return JSON.parse(localStorage.getItem(key) ?? '[]') } catch { return [] }
+  })
+  function save(name: string, filters: Filters) {
+    const item: SavedQuery = { id: `u-${Date.now()}`, name, filters }
+    const next = [...saved, item]
+    setSaved(next)
+    if (key) localStorage.setItem(key, JSON.stringify(next))
+  }
+  function remove(id: string) {
+    const next = saved.filter((q) => q.id !== id)
+    setSaved(next)
+    if (key) localStorage.setItem(key, JSON.stringify(next))
+  }
+  return { saved, save, remove }
+}
+
+function SavedMenu({ filters, onChange, teamId }: {
+  filters: Filters; onChange: (f: Filters) => void; teamId: string | null
+}) {
+  const { open, onOpenChange } = useScrollLockOnOpen()
+  const { saved, save, remove } = useSavedQueries(teamId)
+  const [saveName, setSaveName] = useState('')
+  const hasActive = countActiveFilters(filters) > 0
+
+  function apply(q: SavedQuery) { onChange(q.filters); onOpenChange(false) }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setOpen(!open)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-            activeCount > 0 ? 'border-primary bg-primary/5 text-primary' : 'hover:bg-muted text-muted-foreground'
-          }`}
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-border/60 text-muted-foreground hover:text-foreground hover:border-border outline-none transition-colors">
+        <Bookmark className="h-3 w-3" />
+        Saved
+        <ChevronDown className="h-3 w-3 opacity-40" />
+      </PopoverTrigger>
+      <PopoverContent align="end" side="bottom" className="w-52 p-1.5">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pt-1 pb-0.5">Presets</p>
+        {FILTER_PRESETS.map((q) => (
+          <button key={q.id} type="button" onClick={() => apply(q)}
+            className="w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left"
+          >{q.name}</button>
+        ))}
+        {saved.length > 0 && (
+          <>
+            <div className="my-1 border-t mx-1" />
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pb-0.5">Saved</p>
+            {saved.map((q) => (
+              <div key={q.id} className="flex items-center gap-1 rounded hover:bg-accent group px-1">
+                <button type="button" onClick={() => apply(q)} className="flex-1 px-1 py-1.5 text-sm text-left truncate">{q.name}</button>
+                <button type="button" onClick={() => remove(q.id)}
+                  className="shrink-0 p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                ><X className="h-3 w-3" /></button>
+              </div>
+            ))}
+          </>
+        )}
+        {hasActive && (
+          <>
+            <div className="my-1 border-t mx-1" />
+            <div className="flex items-center gap-1.5 px-1 py-1">
+              <Input value={saveName} onChange={(e) => setSaveName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && saveName.trim()) { save(saveName.trim(), filters); setSaveName(''); onOpenChange(false) } }}
+                placeholder="Save as…" className="h-7 text-xs"
+              />
+              <button type="button" disabled={!saveName.trim()}
+                onClick={() => { if (saveName.trim()) { save(saveName.trim(), filters); setSaveName(''); onOpenChange(false) } }}
+                className="shrink-0 p-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
+              ><BookmarkPlus className="h-3.5 w-3.5" /></button>
+            </div>
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function RankFilterContent({ rankingSystems, rankFilter, onChange }: {
+  rankingSystems: RankingSystem[]
+  rankFilter: RankFilter | null
+  onChange: (rf: RankFilter | null) => void
+}) {
+  const firstActiveId = rankFilter ? Object.keys(rankFilter).find((id) => rankFilter[id].length > 0) : null
+  const defaultId = firstActiveId ?? rankingSystems.find((s) => s.is_primary)?.id ?? rankingSystems[0]?.id ?? ''
+  const [activeId, setActiveId] = useState(defaultId)
+  const system = rankingSystems.find((s) => s.id === activeId) ?? rankingSystems[0]
+  const selected = rankFilter?.[activeId] ?? []
+
+  function toggle(value: number) {
+    const next = selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]
+    const newFilter: RankFilter = { ...(rankFilter ?? {}), [activeId]: next }
+    // Remove empty entries
+    Object.keys(newFilter).forEach((k) => { if (!newFilter[k].length) delete newFilter[k] })
+    onChange(Object.keys(newFilter).length ? newFilter : null)
+  }
+
+  return (
+    <div className="min-w-[160px]">
+      {rankingSystems.length > 1 && (
+        <div className="flex gap-0.5 p-1 border-b mb-1">
+          {rankingSystems.map((s) => {
+            const count = rankFilter?.[s.id]?.length ?? 0
+            return (
+              <button key={s.id} type="button" onClick={() => setActiveId(s.id)}
+                className={`relative flex-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+                  activeId === s.id ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60'
+                }`}
+              >
+                {s.name}
+                {count > 0 && (
+                  <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {system?.levels.map((level) => (
+        <button key={level.value} type="button" onClick={() => toggle(level.value)}
+          className="flex items-center gap-2.5 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left"
         >
-          <Filter className="h-3.5 w-3.5" />
-          {t('filtersLabel')}
-          {activeCount > 0 && <span className="text-xs font-bold">{activeCount}</span>}
-          {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          <span className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+            selected.includes(level.value) ? 'bg-primary border-primary' : 'border-input'
+          }`}>
+            {selected.includes(level.value) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+          </span>
+          {level.color && (
+            <span className="h-3 w-3 rounded-full shrink-0 border border-border/30"
+              style={{ backgroundColor: level.color }} />
+          )}
+          <span>{level.label}</span>
         </button>
-        {activeCount > 0 && (
-          <button onClick={() => onChange(EMPTY_FILTERS)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-            <X className="h-3.5 w-3.5" />{t('clearFilters')}
+      ))}
+    </div>
+  )
+}
+
+function FilterChips({
+  filters, onChange, subscriptionTypes, teamId, rankingSystems,
+}: {
+  filters: Filters; onChange: (f: Filters) => void
+  subscriptionTypes: SubscriptionType[]; teamId: string | null
+  rankingSystems: RankingSystem[]
+}) {
+  const t = useTranslations('Contacts')
+
+  const TYPE_OPTS   = (['trial', 'student', 'external'] as ContactType[]).map((v) => ({ value: v, label: t(`type_${v}`) }))
+  const STATUS_OPTS = (['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired'] as MembershipStatus[]).map((v) => ({ value: v, label: t(`status_${v}`) }))
+  const SUB_OPTS    = [{ value: 'none', label: t('filterSubscriptionNone') }, ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name }))]
+  const INACTIVITY_OPTS: { value: InactivityPreset; label: string }[] = [
+    { value: 'never', label: t('filterInactivityNever') },
+    { value: '30d',   label: t('filterInactivity30d') },
+    { value: '60d',   label: t('filterInactivity60d') },
+    { value: '90d',   label: t('filterInactivity90d') },
+  ]
+
+  function chip(arr: string[], opts: { value: string; label: string }[], noun: string) {
+    if (!arr.length) return ''
+    return arr.length === 1 ? (opts.find((o) => o.value === arr[0])?.label ?? arr[0]) : `${arr.length} ${noun}`
+  }
+
+  const activityParts: string[] = []
+  if (filters.inactivity) activityParts.push(INACTIVITY_OPTS.find((o) => o.value === filters.inactivity)?.label ?? '')
+  if (filters.sessionsMin != null && filters.sessionsMax != null) activityParts.push(`${filters.sessionsMin}–${filters.sessionsMax} sessions`)
+  else if (filters.sessionsMin != null) activityParts.push(`${filters.sessionsMin}+ sessions`)
+  else if (filters.sessionsMax != null) activityParts.push(`≤${filters.sessionsMax} sessions`)
+
+  function toggle<T extends string>(arr: T[], v: T): T[] {
+    return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]
+  }
+
+  const activityIsActive = filters.inactivity !== null || filters.sessionsMin !== null || filters.sessionsMax !== null
+
+  const rankActiveLabel = (() => {
+    const rf = filters.rankFilter
+    if (!rf) return ''
+    const active = Object.entries(rf).filter(([, lvls]) => lvls.length > 0)
+    if (!active.length) return ''
+    const total = active.reduce((n, [, lvls]) => n + lvls.length, 0)
+    if (active.length === 1) {
+      const [systemId, levels] = active[0]
+      const sys = rankingSystems.find((s) => s.id === systemId)
+      if (sys && levels.length === 1)
+        return sys.levels.find((l) => l.value === levels[0])?.label ?? '1 rank'
+      const prefix = rankingSystems.length > 1 ? `${sys?.name ?? ''}: ` : ''
+      return `${prefix}${levels.length} ranks`
+    }
+    return `${total} ranks`
+  })()
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <SavedMenu filters={filters} onChange={onChange} teamId={teamId} />
+      <div className="h-5 w-px bg-border/50 shrink-0 mx-0.5" />
+      <FilterChip label={t('filterType')} activeLabel={chip(filters.types, TYPE_OPTS, 'types')}
+        isActive={filters.types.length > 0} onClear={() => onChange({ ...filters, types: [] })}>
+        {TYPE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.types.includes(o.value)}
+          onToggle={() => onChange({ ...filters, types: toggle(filters.types, o.value) })} />)}
+      </FilterChip>
+
+      <FilterChip label={t('filterStatus')} activeLabel={chip(filters.statuses, STATUS_OPTS, 'statuses')}
+        isActive={filters.statuses.length > 0} onClear={() => onChange({ ...filters, statuses: [] })}>
+        {STATUS_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.statuses.includes(o.value)}
+          onToggle={() => onChange({ ...filters, statuses: toggle(filters.statuses, o.value) })} />)}
+      </FilterChip>
+
+      {rankingSystems.length > 0 && (
+        <FilterChip label={t('filterRank')} activeLabel={rankActiveLabel}
+          isActive={!!filters.rankFilter && Object.values(filters.rankFilter).some((l) => l.length > 0)}
+          onClear={() => onChange({ ...filters, rankFilter: null })}>
+          <RankFilterContent
+            rankingSystems={rankingSystems}
+            rankFilter={filters.rankFilter}
+            onChange={(rf) => onChange({ ...filters, rankFilter: rf })}
+          />
+        </FilterChip>
+      )}
+
+      <FilterChip label={t('filterSubscription')} activeLabel={chip(filters.subscriptions, SUB_OPTS, 'subscriptions')}
+        isActive={filters.subscriptions.length > 0} onClear={() => onChange({ ...filters, subscriptions: [] })}>
+        {SUB_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.subscriptions.includes(o.value)}
+          onToggle={() => onChange({ ...filters, subscriptions: toggle(filters.subscriptions, o.value) })} />)}
+      </FilterChip>
+
+      <FilterChip label={t('filterActivity')} activeLabel={activityParts.join(' · ')}
+        isActive={activityIsActive}
+        onClear={() => onChange({ ...filters, inactivity: null, sessionsMin: null, sessionsMax: null })}>
+        <div className="p-1 space-y-0.5">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">{t('filterLastActive')}</p>
+          {INACTIVITY_OPTS.map((o) => (
+            <button key={o.value} type="button"
+              onClick={() => onChange({ ...filters, inactivity: filters.inactivity === o.value ? null : o.value })}
+              className={`flex items-center gap-2.5 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left ${filters.inactivity === o.value ? 'font-medium' : 'text-muted-foreground'}`}
+            >
+              <span className={`h-3.5 w-3.5 rounded-full border flex items-center justify-center shrink-0 ${filters.inactivity === o.value ? 'bg-primary border-primary' : 'border-input'}`}>
+                {filters.inactivity === o.value && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
+              </span>
+              {o.label}
+            </button>
+          ))}
+          <div className="border-t my-1.5 mx-1" />
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">{t('filterSessions')}</p>
+          <div className="flex items-center gap-1.5 px-1 pb-1">
+            <Input type="number" min="0" placeholder={t('filterSessionsMin')}
+              value={filters.sessionsMin ?? ''}
+              onChange={(e) => onChange({ ...filters, sessionsMin: e.target.value ? Number(e.target.value) : null })}
+              className="h-7 text-xs w-20" />
+            <span className="text-xs text-muted-foreground">–</span>
+            <Input type="number" min="0" placeholder={t('filterSessionsMax')}
+              value={filters.sessionsMax ?? ''}
+              onChange={(e) => onChange({ ...filters, sessionsMax: e.target.value ? Number(e.target.value) : null })}
+              className="h-7 text-xs w-20" />
+          </div>
+        </div>
+      </FilterChip>
+
+      <button type="button"
+        onClick={() => onChange({ ...filters, hasAlerts: !filters.hasAlerts })}
+        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+          filters.hasAlerts
+            ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
+            : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+        }`}>
+        <AlertCircle className="h-3 w-3" />
+        {t('filterAlertsLabel')}
+        {filters.hasAlerts && (
+          <span role="button" aria-label="Clear"
+            onClick={(e) => { e.stopPropagation(); onChange({ ...filters, hasAlerts: false }) }}
+            className="rounded-full p-0.5 hover:bg-primary/20 -mr-0.5">
+            <X className="h-3 w-3" />
+          </span>
+        )}
+      </button>
+
+      <div className="ml-auto">
+        {countActiveFilters(filters) > 0 && (
+          <button type="button" onClick={() => onChange(EMPTY_FILTERS)}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground rounded-full hover:bg-muted transition-colors">
+            <X className="h-3 w-3" />{t('clearFilters')}
           </button>
         )}
       </div>
-      {open && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 rounded-xl border bg-muted/30">
-          {/* Type */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">{t('filterType')}</p>
-            <MultiSelect
-              options={TYPE_OPTS}
-              value={filters.types}
-              onChange={(types) => onChange({ ...filters, types })}
-            />
-          </div>
-
-          {/* Status */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">{t('filterStatus')}</p>
-            <MultiSelect
-              options={STATUS_OPTS}
-              value={filters.statuses}
-              onChange={(statuses) => onChange({ ...filters, statuses })}
-            />
-          </div>
-
-          {/* Subscription */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">{t('filterSubscription')}</p>
-            <MultiSelect
-              options={SUBSCRIPTION_OPTS}
-              value={filters.subscriptions}
-              onChange={(subscriptions) => onChange({ ...filters, subscriptions })}
-            />
-          </div>
-
-          {/* Sessions count */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">{t('filterSessions')}</p>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0}
-                placeholder={t('filterSessionsMin')}
-                value={filters.sessionsMin ?? ''}
-                onChange={(e) => onChange({ ...filters, sessionsMin: e.target.value ? Number(e.target.value) : null })}
-                className="w-full rounded-md border px-2 py-1.5 text-sm"
-              />
-              <span className="text-muted-foreground text-xs shrink-0">–</span>
-              <input
-                type="number"
-                min={0}
-                placeholder={t('filterSessionsMax')}
-                value={filters.sessionsMax ?? ''}
-                onChange={(e) => onChange({ ...filters, sessionsMax: e.target.value ? Number(e.target.value) : null })}
-                className="w-full rounded-md border px-2 py-1.5 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Last active */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">{t('filterLastActive')}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {INACTIVITY_OPTS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => onChange({ ...filters, inactivity: filters.inactivity === opt.value ? null : opt.value })}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
-                    filters.inactivity === opt.value
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-border hover:bg-muted'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Alerts */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">{t('filterAlerts')}</p>
-            <button
-              onClick={() => onChange({ ...filters, hasAlerts: !filters.hasAlerts })}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm transition-colors ${
-                filters.hasAlerts ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'
-              }`}
-            >
-              <AlertCircle className="h-3.5 w-3.5" />
-              {t('filterAlertsLabel')}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -523,12 +795,14 @@ function ContactRow({
   selected,
   onSelect,
   rankingSystems = [],
+  statusDefs,
 }: {
   contact: Contact
   selectable: boolean
   selected: boolean
   onSelect: (id: string) => void
   rankingSystems?: RankingSystem[]
+  statusDefs?: OrgMembershipStatusDef[]
 }) {
   const router = useRouter()
   const t = useTranslations('Contacts')
@@ -577,17 +851,35 @@ function ContactRow({
               </span>
             )}
           </p>
-          {/* Line 3: type + status chips */}
-          <div className="flex items-center gap-1.5 pt-0.5">
-            {contact.type && (
-              <Badge variant="outline" className="text-xs">{t(`type_${contact.type}`)}</Badge>
-            )}
-            {contact.membership_status && (
-              <Badge variant={STATUS_VARIANT[contact.membership_status]} className="text-xs">
-                {t(`status_${contact.membership_status}`)}
-              </Badge>
-            )}
-          </div>
+          {/* Line 3: type + membership/subscription chips */}
+          {(() => {
+            // Prefer org_membership_status; fall back to legacy membership_status
+            const defs = statusDefs ?? DEFAULT_ORG_MEMBERSHIP_STATUSES
+            const orgDef = contact.org_membership_status
+              ? defs.find((s) => s.id === contact.org_membership_status) ?? null
+              : null
+            return (
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                {contact.type && (
+                  <Badge variant="outline" className="text-xs">{t(`type_${contact.type}`)}</Badge>
+                )}
+                {orgDef ? (
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${MEMBERSHIP_COLOR_CLASSES[orgDef.color] ?? MEMBERSHIP_COLOR_CLASSES.gray}`}>
+                    {orgDef.label}
+                  </span>
+                ) : contact.membership_status ? (
+                  <Badge variant={STATUS_VARIANT[contact.membership_status]} className="text-xs">
+                    {t(`status_${contact.membership_status}`)}
+                  </Badge>
+                ) : null}
+                {contact.subscription_type_name && (
+                  <Badge variant="secondary" className="text-xs font-normal">
+                    {contact.subscription_type_name}
+                  </Badge>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </button>
 
@@ -1022,6 +1314,8 @@ export default function ContactsPage() {
   const { data: deleted = [], isLoading: loadingDeleted } = useDeletedContacts(currentTeamId)
   const { data: requests = [] } = useContactRequests(currentTeamId)
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
+  const inOrg = !!team?.org_id
+  const { data: statusDefs } = useOrgMembershipStatuses(team?.org_id)
 
   const [tab, setTab] = useState<TabId>('active')
   const [search, setSearch] = useState('')
@@ -1087,6 +1381,15 @@ export default function ContactsPage() {
       })
     }
 
+    if (filters.rankFilter && Object.values(filters.rankFilter).some((l) => l.length > 0)) {
+      result = result.filter((c) =>
+        Object.entries(filters.rankFilter!).some(([systemId, levels]) => {
+          const rank = c.ranks?.[systemId]
+          return rank != null && levels.includes(rank)
+        })
+      )
+    }
+
     const q = search.trim().toLowerCase()
     if (q)
       result = result.filter((c) =>
@@ -1142,7 +1445,9 @@ export default function ContactsPage() {
     invalidateAll()
   }
 
-  const rankingSystems = team?.ranking_systems ?? []
+  const { data: orgRankingSystems } = useOrgRankingSystems(team?.org_id)
+  // Org-level ranking systems override team-level ones (per CLAUDE.md spec)
+  const rankingSystems = orgRankingSystems ?? team?.ranking_systems ?? []
 
   const bulkSetRank = async (systemId: string, value: number | null) => {
     const fieldKey = `ranks.${systemId}`
@@ -1224,28 +1529,45 @@ export default function ContactsPage() {
         </button>
       </div>
 
-      {/* Overview charts */}
-      {tab === 'active' && (
-        <OverviewPanel
-          contacts={active}
-          loading={loadingActive}
-          rankingSystems={team?.ranking_systems}
-        />
-      )}
+      {/* Overview — collapsed by default, always visible */}
+      <OverviewPanel
+        contacts={active}
+        loading={loadingActive}
+        rankingSystems={team?.ranking_systems}
+      />
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          placeholder={t('searchPlaceholder')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Search — sticky, clears with × */}
+      <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 backdrop-blur-sm border-b border-border/40">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder={t('searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 pr-9 h-11 bg-white dark:bg-zinc-900"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters (active tab only) */}
-      {tab === 'active' && <FilterPanel filters={filters} onChange={setFilters} subscriptionTypes={subscriptionTypes} />}
+      {tab === 'active' && (
+        <FilterChips
+          filters={filters}
+          onChange={setFilters}
+          subscriptionTypes={subscriptionTypes}
+          teamId={currentTeamId}
+          rankingSystems={rankingSystems}
+        />
+      )}
 
       {/* Tabs */}
       <div className="flex gap-0.5 border-b overflow-x-auto">
@@ -1317,6 +1639,7 @@ export default function ContactsPage() {
               selected={selected.has(c.id)}
               onSelect={toggleSelect}
               rankingSystems={rankingSystems}
+              statusDefs={statusDefs}
             />
           ))}
 

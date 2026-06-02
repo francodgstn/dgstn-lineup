@@ -45,11 +45,16 @@ export interface Contact {
   // Address
   address?: ContactAddress
 
-  // Membership & subscription
+  // Team-level membership (legacy / portal signup flow)
   type?: ContactType
   membership_status?: MembershipStatus
   membership_active?: boolean
   membership_expiration?: Timestamp
+
+  // Org-level membership (federation / affiliation)
+  org_membership_status?: string
+  org_membership_active?: boolean
+  org_membership_expiration?: Timestamp
   subscription_type_id?: string
   subscription_type_name?: string
   subscription_recurrence?: string

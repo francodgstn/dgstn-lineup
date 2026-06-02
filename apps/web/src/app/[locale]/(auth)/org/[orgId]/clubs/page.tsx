@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, getDocs, query, where, getDoc, doc, getCountFromServer, limit } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
@@ -32,12 +32,18 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Building2, Plus, Trash2 } from 'lucide-react'
 import { useParams } from 'next/navigation'
-import { ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION } from '@lineup/shared'
+import {
+  ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION,
+  TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION,
+  USERS_COLLECTION, CONTACTS_COLLECTION,
+} from '@lineup/shared'
 import type { OrgTeam } from '@lineup/shared'
 
 interface OrgTeamRow extends OrgTeam {
   id: string
   teamName?: string
+  ownerName?: string
+  activeMemberships?: number
 }
 
 function useOrgTeams(orgId: string) {
@@ -52,15 +58,38 @@ function useOrgTeams(orgId: string) {
       )
       const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() } as OrgTeamRow))
 
-      // Enrich with team names
       await Promise.all(
         rows.map(async (row) => {
-          const teamSnap = await getDocs(
-            query(collection(db, 'teams'), where('__name__', '==', row.teamId))
-          )
-          if (!teamSnap.empty) {
-            row.teamName = teamSnap.docs[0].data().name
+          const [teamDoc, ownerSnap, countSnap] = await Promise.all([
+            getDoc(doc(db, TEAMS_COLLECTION, row.teamId)),
+            getDocs(
+              query(
+                collection(db, TEAMS_COLLECTION, row.teamId, TEAM_MEMBERS_SUBCOLLECTION),
+                where('role', '==', 'owner'),
+                limit(1)
+              )
+            ),
+            getCountFromServer(
+              query(
+                collection(db, CONTACTS_COLLECTION),
+                where('teamId', '==', row.teamId),
+                where('org_membership_active', '==', true)
+              )
+            ),
+          ])
+
+          if (teamDoc.exists()) row.teamName = teamDoc.data().name
+
+          if (!ownerSnap.empty) {
+            const ownerId = ownerSnap.docs[0].data().userId as string
+            const userDoc = await getDoc(doc(db, USERS_COLLECTION, ownerId))
+            if (userDoc.exists()) {
+              const u = userDoc.data()
+              row.ownerName = u.displayName || u.email || ownerId
+            }
           }
+
+          row.activeMemberships = countSnap.data().count
         })
       )
       return rows
@@ -231,7 +260,9 @@ export default function OrgClubsPage() {
             <thead>
               <tr className="border-b bg-muted/40">
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colClub')}</th>
+                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">{t('colOwner')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colJoined')}</th>
+                <th className="text-right font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colActiveMembers')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colStatus')}</th>
                 {isAdmin && <th className="px-4 py-3 w-12" />}
               </tr>
@@ -240,8 +271,14 @@ export default function OrgClubsPage() {
               {teams.map((row) => (
                 <tr key={row.id} className="hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3 font-medium">{row.teamName ?? row.teamId}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-sm hidden md:table-cell">
+                    {row.ownerName ?? '—'}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
                     {formatDate(row.joined as { seconds: number } | null | undefined)}
+                  </td>
+                  <td className="px-4 py-3 text-right hidden sm:table-cell">
+                    {row.activeMemberships ?? '—'}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={statusVariant(row.status)}>{statusLabel(row.status)}</Badge>

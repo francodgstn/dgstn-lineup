@@ -34,7 +34,7 @@ import { useOrgLinks } from '@/hooks/useOrgLinks'
 
 // ─── nav config ───────────────────────────────────────────────────────────────
 
-type NavItem = { href: string; labelKey: string; icon: React.ElementType; minPlan?: SaasPlan }
+type NavItem = { href: string; labelKey: string; icon: React.ElementType; minPlan?: SaasPlan; requiresOrg?: boolean }
 
 type NavSection = { labelKey: string; items: NavItem[] }
 
@@ -42,32 +42,22 @@ const DASHBOARD_ITEM: NavItem = { href: '/dashboard', labelKey: 'dashboard', ico
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    labelKey: 'sectionSchedule',
+    labelKey: 'sectionOperations',
     items: [
-      { href: '/calendar',         labelKey: 'calendar',    icon: Calendar },
-      { href: '/bookings',         labelKey: 'bookings',    icon: ClipboardList },
-      { href: '/activities',       labelKey: 'activities',  icon: Zap },
-      { href: '/team/event-types', labelKey: 'eventTypes',  icon: CalendarRange },
-    ],
-  },
-  {
-    labelKey: 'sectionPeople',
-    items: [
-      { href: '/contacts', labelKey: 'contacts', icon: Users },
-    ],
-  },
-  {
-    labelKey: 'sectionEngage',
-    items: [
-      { href: '/gamification', labelKey: 'gamification', icon: Trophy, minPlan: 'club' },
+      { href: '/schedule',      labelKey: 'calendar',      icon: Calendar },
+      { href: '/bookings',      labelKey: 'bookings',      icon: ClipboardList },
+      { href: '/contacts',      labelKey: 'contacts',      icon: Users },
+      { href: '/gamification',  labelKey: 'gamification',  icon: Trophy, minPlan: 'club' },
     ],
   },
   {
     labelKey: 'sectionConfigure',
     items: [
-      { href: '/automations',    labelKey: 'automations', icon: Workflow, minPlan: 'club' },
-      { href: '/team/portal',    labelKey: 'portal',      icon: Globe },
-      { href: '/plugins',        labelKey: 'plugins',     icon: Puzzle, minPlan: 'club' },
+      { href: '/activities',       labelKey: 'activities',  icon: Zap },
+      { href: '/team/event-types', labelKey: 'eventTypes',  icon: CalendarRange },
+      { href: '/automations',      labelKey: 'automations', icon: Workflow },
+      { href: '/team/portal',      labelKey: 'portal',      icon: Globe },
+      { href: '/plugins',          labelKey: 'plugins',     icon: Puzzle, minPlan: 'club' },
     ],
   },
   {
@@ -196,6 +186,8 @@ function SidebarContent({
 }) {
   const t = useTranslations('Nav')
   const router = useRouter()
+  const { team } = useAuth()
+  const inOrg = !!team?.org_id
 
   async function handleSignOut() {
     const { signOut } = await import('@/lib/auth')
@@ -238,7 +230,7 @@ function SidebarContent({
               </p>
             )}
             <div className="space-y-0.5">
-              {section.items.map((item) => (
+              {section.items.filter((item) => !item.requiresOrg || inOrg).map((item) => (
                 <NavLink key={item.href} item={item} collapsed={collapsed} onClick={onLinkClick} />
               ))}
             </div>

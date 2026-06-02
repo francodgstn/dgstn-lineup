@@ -36,6 +36,38 @@ export function MultiSelect({
   maxDisplay = 2,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false)
+  const savedScrollY = React.useRef(0)
+
+  const handleOpenChange = (v: boolean) => {
+    if (v) savedScrollY.current = window.scrollY
+    setOpen(v)
+  }
+
+  // Base UI mounts the popup portal before positioning it. Any internal
+  // focus call fires async (useEffect / rAF) and scrolls the page to the
+  // portal's initial (0,0) position before the Positioner moves it.
+  // Strategy: lock the scroll position for 2 animation frames on open —
+  // long enough to absorb all async focus side-effects, short enough not
+  // to block deliberate user scrolling.
+  React.useLayoutEffect(() => {
+    if (!open) return
+    const y = savedScrollY.current
+    window.scrollTo(0, y)
+
+    const restore = () => window.scrollTo(0, y)
+    window.addEventListener('scroll', restore)
+
+    let raf2: number
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => window.removeEventListener('scroll', restore))
+    })
+
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+      window.removeEventListener('scroll', restore)
+    }
+  }, [open])
 
   const toggle = (val: string) => {
     onChange(value.includes(val) ? value.filter((v) => v !== val) : [...value, val])
@@ -49,7 +81,7 @@ export function MultiSelect({
   const labels = value.map((v) => options.find((o) => o.value === v)?.label ?? v)
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         disabled={disabled}
         className={cn(

@@ -25,6 +25,7 @@ export const ORGANIZATIONS_COLLECTION = 'organizations'
 export const ORG_MEMBERS_SUBCOLLECTION = 'org_members'
 export const ORG_TEAMS_SUBCOLLECTION = 'org_teams'
 export const ORG_INVITATIONS_SUBCOLLECTION = 'org_invitations'
+export const ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION = 'membership_statuses'
 export const TEAM_INTEGRATIONS_SUBCOLLECTION = 'integrations'
 export const INSTALLED_PLUGINS_SUBCOLLECTION = 'installed_plugins'
 
