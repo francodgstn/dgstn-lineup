@@ -2036,11 +2036,12 @@ function ContactHeaderStats({ contact }: { contact: Contact }) {
                   <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                 </linearGradient>
               </defs>
+              {/* Hidden XAxis gives tooltip access to the week label string */}
+              <XAxis dataKey="label" hide />
               <Tooltip
                 contentStyle={tooltipStyle}
-                formatter={(v) => [v, t('statTotalSessions')]}
-                labelFormatter={(label) => label}
-                labelStyle={{ fontSize: 10, color: 'hsl(var(--muted-foreground))' }}
+                formatter={(v) => [`${v} ${t('statTotalSessions').toLowerCase()}`, '']}
+                labelStyle={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}
               />
               <Area
                 type="monotone"
