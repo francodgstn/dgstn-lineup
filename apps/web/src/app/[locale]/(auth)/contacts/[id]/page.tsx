@@ -186,20 +186,27 @@ function useContactBookings(contactId: string, teamId: string | null) {
   })
 }
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 100
 
-function useContactActivityLog(contactId: string, teamId: string | null) {
+function useContactActivityLog(contactId: string, teamId: string | null, since?: Date) {
   return useQuery<ActivityLogEntry[]>({
-    queryKey: ['contact-activity-log', contactId],
+    queryKey: ['contact-activity-log', contactId, since?.toISOString() ?? 'all'],
     enabled: !!teamId,
     queryFn: async () => {
+      const constraints = since
+        ? [
+            where('refs.contact', '==', contactId),
+            where('created_at', '>=', Timestamp.fromDate(since)),
+            orderBy('created_at', 'desc'),
+            limit(PAGE_SIZE),
+          ]
+        : [
+            where('refs.contact', '==', contactId),
+            orderBy('created_at', 'desc'),
+            limit(PAGE_SIZE),
+          ]
       const snap = await getDocs(
-        query(
-          collection(db, TEAMS_COLLECTION, teamId!, TEAM_ACTIVITY_LOG_SUBCOLLECTION),
-          where('refs.contact', '==', contactId),
-          orderBy('created_at', 'desc'),
-          limit(PAGE_SIZE),
-        )
+        query(collection(db, TEAMS_COLLECTION, teamId!, TEAM_ACTIVITY_LOG_SUBCOLLECTION), ...constraints)
       )
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ActivityLogEntry)
     },
@@ -1378,6 +1385,24 @@ function GamificationTab({ contact, teamId }: { contact: Contact; teamId: string
 
 // ─── activity tab ─────────────────────────────────────────────────────────────
 
+const ACTIVITY_PERIODS = [
+  { key: '30d', days: 30,  label: '30d' },
+  { key: '3m',  days: 90,  label: '3M'  },
+  { key: '6m',  days: 180, label: '6M'  },
+  { key: 'all', days: null, label: 'All' },
+] as const
+type ActivityPeriodKey = typeof ACTIVITY_PERIODS[number]['key']
+
+type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach'
+
+const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventType[]> = {
+  sessions: ['session_participant_add', 'session_participant_delete'],
+  bookings: ['booking_created', 'booking_confirmed', 'booking_cancelled', 'booking_rebooked'],
+  profile:  ['contact_add', 'contact_type_change', 'rank_change', 'subscription_change',
+             'contact_archive', 'contact_unarchive', 'contact_delete', 'contact_login', 'contact_anonymized'],
+  outreach: ['outreach_email_sent'],
+}
+
 type EventMeta = { Icon: React.ElementType; bg: string; fg: string }
 
 const EVENT_META: Record<ActivityEventType, EventMeta> = {
@@ -1430,21 +1455,24 @@ function dateDayLabel(ts: { toDate(): Date } | null | undefined, tCommon: (k: st
 function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
-  const { data: entries = [], isLoading } = useContactActivityLog(contact.id, teamId)
+  const [period, setPeriod] = useState<ActivityPeriodKey>('30d')
+  const [category, setCategory] = useState<ActivityCategory>('all')
 
-  if (isLoading) return (
-    <div className="space-y-2">
-      {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
-    </div>
-  )
-  if (entries.length === 0) return (
-    <div className="py-12 text-center text-muted-foreground text-sm">{t('noActivity')}</div>
-  )
+  const selectedPeriod = ACTIVITY_PERIODS.find((p) => p.key === period)!
+  const since = selectedPeriod.days
+    ? new Date(Date.now() - selectedPeriod.days * 86_400_000)
+    : undefined
 
-  // Group by calendar day
+  const { data: entries = [], isLoading } = useContactActivityLog(contact.id, teamId, since)
+
+  const filtered = category === 'all'
+    ? entries
+    : entries.filter((e) => (CATEGORY_EVENTS[category] as string[]).includes(e.event))
+
+  // Group filtered entries by calendar day
   const groups: { label: string; items: ActivityLogEntry[] }[] = []
   let currentLabel = ''
-  for (const entry of entries) {
+  for (const entry of filtered) {
     const label = dateDayLabel(entry.created_at as { toDate(): Date } | null | undefined, tCommon)
     if (label !== currentLabel) {
       groups.push({ label, items: [] })
@@ -1453,34 +1481,95 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
     groups[groups.length - 1].items.push(entry)
   }
 
+  const CATEGORIES: { key: ActivityCategory; label: string }[] = [
+    { key: 'all',      label: t('activityFilterAll') },
+    { key: 'sessions', label: t('activityFilterSessions') },
+    { key: 'bookings', label: t('activityFilterBookings') },
+    { key: 'profile',  label: t('activityFilterProfile') },
+    { key: 'outreach', label: t('activityFilterOutreach') },
+  ]
+
   return (
-    <div className="space-y-4">
-      {groups.map((group) => (
-        <div key={group.label}>
-          <p className="text-xs font-medium text-muted-foreground px-1 mb-2">{group.label}</p>
-          <div className="space-y-1.5">
-            {group.items.map((entry) => {
-              const meta = EVENT_META[entry.event] ?? { Icon: Activity, bg: 'bg-muted', fg: 'text-muted-foreground' }
-              const { Icon, bg, fg } = meta
-              return (
-                <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border">
-                  <div className={`h-8 w-8 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
-                    <Icon className={`h-4 w-4 ${fg}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm">{entry.parameters.description as string}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatActivityTimestamp(entry.created_at as { toDate(): Date } | null | undefined)}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+    <div className="space-y-4 pb-16">
+      {/* Filter bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        {/* Category chips */}
+        <div className="flex flex-wrap gap-1.5 flex-1">
+          {CATEGORIES.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setCategory(c.key)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                category === c.key
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
-      ))}
-      {entries.length === PAGE_SIZE && (
-        <p className="text-center text-xs text-muted-foreground py-2">{t('activityLoadMore')}</p>
+        {/* Period selector */}
+        <div className="flex items-center rounded-lg border bg-background p-0.5 gap-0.5 shrink-0">
+          {ACTIVITY_PERIODS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => setPeriod(p.key)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
+                period === p.key
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-12 text-center text-muted-foreground text-sm">
+          {entries.length === 0 ? t('noActivity') : t('activityNoResults')}
+        </div>
+      ) : (
+        <>
+          <div className="space-y-4">
+            {groups.map((group) => (
+              <div key={group.label}>
+                <p className="text-xs font-medium text-muted-foreground px-1 mb-2">{group.label}</p>
+                <div className="space-y-1.5">
+                  {group.items.map((entry) => {
+                    const meta = EVENT_META[entry.event] ?? { Icon: Activity, bg: 'bg-muted', fg: 'text-muted-foreground' }
+                    const { Icon, bg, fg } = meta
+                    return (
+                      <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border">
+                        <div className={`h-8 w-8 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                          <Icon className={`h-4 w-4 ${fg}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm">{entry.parameters.description as string}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {formatActivityTimestamp(entry.created_at as { toDate(): Date } | null | undefined)}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          {entries.length === PAGE_SIZE && (
+            <p className="text-center text-xs text-muted-foreground py-2">{t('activityLoadMore')}</p>
+          )}
+        </>
       )}
     </div>
   )
