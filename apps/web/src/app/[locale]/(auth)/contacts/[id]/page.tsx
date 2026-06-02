@@ -188,11 +188,14 @@ function useContactBookings(contactId: string, teamId: string | null) {
 
 const PAGE_SIZE = 100
 
-function useContactActivityLog(contactId: string, teamId: string | null, since?: Date) {
+function useContactActivityLog(contactId: string, teamId: string | null, days?: number | null) {
   return useQuery<ActivityLogEntry[]>({
-    queryKey: ['contact-activity-log', contactId, since?.toISOString() ?? 'all'],
+    // key on stable `days` value — date is computed inside queryFn to avoid
+    // re-fetching on every render (new Date() changes every millisecond)
+    queryKey: ['contact-activity-log', contactId, days ?? 'all'],
     enabled: !!teamId,
     queryFn: async () => {
+      const since = days ? new Date(Date.now() - days * 86_400_000) : null
       const constraints = since
         ? [
             where('refs.contact', '==', contactId),
@@ -1459,11 +1462,7 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
   const [category, setCategory] = useState<ActivityCategory>('all')
 
   const selectedPeriod = ACTIVITY_PERIODS.find((p) => p.key === period)!
-  const since = selectedPeriod.days
-    ? new Date(Date.now() - selectedPeriod.days * 86_400_000)
-    : undefined
-
-  const { data: entries = [], isLoading } = useContactActivityLog(contact.id, teamId, since)
+  const { data: entries = [], isLoading } = useContactActivityLog(contact.id, teamId, selectedPeriod.days)
 
   const filtered = category === 'all'
     ? entries
