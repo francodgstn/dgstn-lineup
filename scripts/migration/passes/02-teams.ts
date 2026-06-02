@@ -20,9 +20,6 @@ export async function pass02Teams(cfg: MigrationConfig): Promise<string[]> {
   const bw     = new BatchWriter(tgt, cfg.dryRun)
   const teamIds: string[] = []
 
-  // Collect ranking_systems from source — we'll promote the first non-empty set to the org.
-  let orgRankingSystems: unknown[] | null = null
-
   const snap = await src.collection('teams').get()
   for (const d of snap.docs) {
     teamIds.push(d.id)
@@ -51,24 +48,9 @@ export async function pass02Teams(cfg: MigrationConfig): Promise<string[]> {
       joined:  FieldValue.serverTimestamp(),
       addedBy: 'migration',
     })
-
-    // Collect ranking systems for org promotion
-    if (!orgRankingSystems && Array.isArray(srcData.ranking_systems) && srcData.ranking_systems.length > 0) {
-      orgRankingSystems = srcData.ranking_systems
-    }
   }
 
   await bw.done()
-
-  // Promote ranking systems to the org doc so clubs inherit them and their
-  // individual ranking settings become read-only (managed by org).
-  if (orgRankingSystems && !cfg.dryRun) {
-    await tgt.collection('organizations').doc(ORG_ID).set(
-      { ranking_systems: orgRankingSystems },
-      { merge: true },
-    )
-    console.log(`  promoted ${orgRankingSystems.length} ranking system(s) to organizations/${ORG_ID}`)
-  }
 
   return teamIds
 }

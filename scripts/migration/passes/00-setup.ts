@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import type { MigrationConfig } from '../config'
-import { sourceDb, targetDb, ORG_ID, ORG_NAME } from '../config'
+import { sourceDb, targetDb, ORG_ID, ORG_NAME, HMD_ORG_RANKING_SYSTEMS } from '../config'
 
 export async function pass00Setup(cfg: MigrationConfig): Promise<void> {
   console.log('Pass 0: org setup')
@@ -25,19 +25,22 @@ export async function pass00Setup(cfg: MigrationConfig): Promise<void> {
     return
   }
 
-  // Create the org document (idempotent — skip if already exists)
+  // Create/update the org document with ranking systems (always merge so re-runs are safe)
   const orgRef = tgt.collection('organizations').doc(ORG_ID)
   const orgSnap = await orgRef.get()
   if (orgSnap.exists) {
-    console.log(`  organizations/${ORG_ID} already exists — skipping`)
+    // Always update ranking_systems even if org already existed
+    await orgRef.set({ ranking_systems: HMD_ORG_RANKING_SYSTEMS }, { merge: true })
+    console.log(`  organizations/${ORG_ID} updated — ranking systems applied`)
   } else {
     await orgRef.set({
-      name:      ORG_NAME,
-      slug:      ORG_ID,
-      createdBy: adminUid,
-      created:   FieldValue.serverTimestamp(),
+      name:             ORG_NAME,
+      slug:             ORG_ID,
+      createdBy:        adminUid,
+      created:          FieldValue.serverTimestamp(),
+      ranking_systems:  HMD_ORG_RANKING_SYSTEMS,
     })
-    console.log(`  created organizations/${ORG_ID}`)
+    console.log(`  created organizations/${ORG_ID} with ${HMD_ORG_RANKING_SYSTEMS.length} ranking systems`)
   }
 
   // Create the org_admin member doc (idempotent)

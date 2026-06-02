@@ -12,6 +12,32 @@ export const ORG_NAME = 'HMD'
 export const RANKING_HMD = 'hmd'   // Hwal Moo Do
 export const RANKING_KD  = 'kd'    // Korean Dragon
 
+// Belt levels — same scale for both HMD and KD disciplines (hardcoded in hmd-lineup)
+const HMD_BELT_LEVELS = [
+  { value:  0, label: 'No belt',       color: '#AAAAAA' },
+  { value:  1, label: 'White',         color: '#DDDDDD' },
+  { value:  2, label: 'Yellow',        color: '#FFDC00' },
+  { value:  3, label: 'Orange',        color: '#FF851B' },
+  { value:  4, label: 'Orange/Green',  color: '#FF851B' },
+  { value:  5, label: 'Green',         color: '#1c9c2b' },
+  { value:  6, label: 'Green/Blue',    color: '#1c9c2b' },
+  { value:  7, label: 'Blue',          color: '#0074D9' },
+  { value:  8, label: 'Blue/Red',      color: '#0074D9' },
+  { value:  9, label: 'Red',           color: '#d41010' },
+  { value: 10, label: 'Red/Black',     color: '#d41010' },
+  { value: 11, label: 'Black I Dan',   color: '#111111' },
+  { value: 12, label: 'Black II Dan',  color: '#111111' },
+  { value: 13, label: 'Black III Dan', color: '#111111' },
+  { value: 14, label: 'Master',        color: '#111111' },
+]
+
+// Ranking systems to write to organizations/hmd — hardcoded because hmd-lineup
+// never persisted these to Firestore; they lived only in the JS app config.
+export const HMD_ORG_RANKING_SYSTEMS = [
+  { id: RANKING_HMD, name: 'Hwal Moo Do',    is_primary: true,  levels: HMD_BELT_LEVELS },
+  { id: RANKING_KD,  name: 'Korean Dragon',  is_primary: false, levels: HMD_BELT_LEVELS },
+]
+
 export const EMULATOR_FIRESTORE_HOST = 'localhost:8080'
 export const EMULATOR_AUTH_HOST      = 'localhost:9099'
 export const EMULATOR_PROJECT_ID     = 'demo-lineup'
