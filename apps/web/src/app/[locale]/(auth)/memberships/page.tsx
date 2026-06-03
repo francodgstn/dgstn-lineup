@@ -6,12 +6,10 @@ import {
   collection, getDocs, query, where, doc, updateDoc, serverTimestamp, Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { useOrg } from '@/contexts/OrgContext'
+import { useAuth } from '@/contexts/AuthContext'
 import {
-  ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION,
-  CONTACTS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
+  CONTACTS_COLLECTION, ORGANIZATIONS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
   DEFAULT_ORG_MEMBERSHIP_STATUSES,
 } from '@lineup/shared'
 import type { Contact, OrgMembershipStatusDef } from '@lineup/shared'
@@ -26,9 +24,9 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
-import { Search } from 'lucide-react'
+import { Search, IdCard } from 'lucide-react'
 
-// ─── colour map ───────────────────────────────────────────────────────────────
+// ─── colour map (shared with org page) ────────────────────────────────────────
 
 const COLOR_CLASSES: Record<string, string> = {
   gray:   'bg-gray-100   text-gray-700   dark:bg-gray-800   dark:text-gray-300',
@@ -40,82 +38,43 @@ const COLOR_CLASSES: Record<string, string> = {
   orange: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
 }
 
-// ─── types ────────────────────────────────────────────────────────────────────
-
-interface TeamMeta { id: string; name: string }
-interface ContactRow extends Contact { teamName?: string }
-
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
-function useOrgTeamIds(orgId: string) {
-  return useQuery<TeamMeta[]>({
-    queryKey: ['org-teams-meta', orgId],
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_TEAMS_SUBCOLLECTION),
-          where('status', '==', 'active'),
-        ),
-      )
-      const rows = snap.docs.map((d) => ({ id: d.data().teamId as string, name: '' }))
-      await Promise.all(
-        rows.map(async (row) => {
-          const teamSnap = await getDocs(query(collection(db, 'teams'), where('__name__', '==', row.id)))
-          if (!teamSnap.empty) row.name = teamSnap.docs[0].data().name ?? row.id
-        }),
-      )
-      return rows
-    },
-    staleTime: 5 * 60_000,
-  })
-}
-
-function useOrgContacts(teams: TeamMeta[] | undefined) {
-  const teamIds = teams?.map((t) => t.id) ?? []
-  return useQuery<ContactRow[]>({
-    queryKey: ['org-contacts', teamIds],
-    enabled: teamIds.length > 0,
+function useTeamContacts(teamId: string | null) {
+  return useQuery<Contact[]>({
+    queryKey: ['team-contacts-membership', teamId],
+    enabled: !!teamId,
     staleTime: 2 * 60_000,
     queryFn: async () => {
-      const teamNameById = Object.fromEntries((teams ?? []).map((t) => [t.id, t.name]))
-      const results: ContactRow[] = []
-      // Firestore `in` supports up to 30 values; chunk if needed
-      const chunks: string[][] = []
-      for (let i = 0; i < teamIds.length; i += 30) chunks.push(teamIds.slice(i, i + 30))
-      await Promise.all(
-        chunks.map(async (chunk) => {
-          const snap = await getDocs(
-            query(
-              collection(db, CONTACTS_COLLECTION),
-              where('teamId', 'in', chunk),
-              where('deleted_at', '==', null),
-            ),
-          )
-          snap.docs.forEach((d) => {
-            const data = { ...d.data(), id: d.id } as ContactRow
-            data.teamName = teamNameById[data.teamId] ?? data.teamId
-            results.push(data)
-          })
-        }),
+      if (!teamId) return []
+      const snap = await getDocs(
+        query(
+          collection(db, CONTACTS_COLLECTION),
+          where('teamId', '==', teamId),
+          where('deleted_at', '==', null),
+        ),
       )
-      return results.sort((a, b) =>
-        `${a.lastname ?? ''} ${a.firstname ?? ''}`.localeCompare(`${b.lastname ?? ''} ${b.firstname ?? ''}`),
-      )
+      return snap.docs
+        .map((d) => ({ ...d.data(), id: d.id } as Contact))
+        .sort((a, b) =>
+          `${a.lastname ?? ''} ${a.firstname ?? ''}`.localeCompare(`${b.lastname ?? ''} ${b.firstname ?? ''}`),
+        )
     },
   })
 }
 
-function useStatusDefs(orgId: string) {
+function useStatusDefs(orgId: string | null | undefined) {
   return useQuery<OrgMembershipStatusDef[]>({
     queryKey: ['org-membership-statuses', orgId],
+    enabled: !!orgId,
     staleTime: 5 * 60_000,
     queryFn: async () => {
+      if (!orgId) return DEFAULT_ORG_MEMBERSHIP_STATUSES
       const snap = await getDocs(
         collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION),
       )
       if (snap.empty) return DEFAULT_ORG_MEMBERSHIP_STATUSES
       const defs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as OrgMembershipStatusDef))
-      // Merge: Firestore overrides defaults by id; append any extras
       const byId = Object.fromEntries(DEFAULT_ORG_MEMBERSHIP_STATUSES.map((s) => [s.id, s]))
       defs.forEach((d) => { byId[d.id] = d })
       return Object.values(byId).sort((a, b) => a.order - b.order)
@@ -146,7 +105,7 @@ function StatusBadge({ statusId, defs }: { statusId: string; defs: OrgMembership
   )
 }
 
-// ─── expiration dialog (shown when setting an "active" status) ────────────────
+// ─── expiration dialog ────────────────────────────────────────────────────────
 
 function ExpirationDialog({
   open,
@@ -157,17 +116,11 @@ function ExpirationDialog({
   onConfirm: (date: Date | null) => void
   onCancel: () => void
 }) {
-  const t = useTranslations('OrgMemberships')
+  const t = useTranslations('TeamMemberships')
   const [value, setValue] = useState('')
 
-  function handleConfirm() {
-    onConfirm(value ? new Date(value) : null)
-    setValue('')
-  }
-  function handleCancel() {
-    setValue('')
-    onCancel()
-  }
+  function handleConfirm() { onConfirm(value ? new Date(value) : null); setValue('') }
+  function handleCancel() { setValue(''); onCancel() }
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleCancel() }}>
@@ -177,13 +130,8 @@ function ExpirationDialog({
           <DialogDescription>{t('expirationDialogDesc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5 py-2">
-          <Label htmlFor="exp-date">{t('expirationLabel')}</Label>
-          <Input
-            id="exp-date"
-            type="date"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
+          <Label htmlFor="tm-exp-date">{t('expirationLabel')}</Label>
+          <Input id="tm-exp-date" type="date" value={value} onChange={(e) => setValue(e.target.value)} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel}>{t('cancel')}</Button>
@@ -199,17 +147,15 @@ function ExpirationDialog({
 function ContactRow({
   contact,
   defs,
-  isAdmin,
-  orgId,
+  canEdit,
   onUpdated,
 }: {
-  contact: ContactRow
+  contact: Contact
   defs: OrgMembershipStatusDef[]
-  isAdmin: boolean
-  orgId: string
+  canEdit: boolean
   onUpdated: () => void
 }) {
-  const t = useTranslations('OrgMemberships')
+  const t = useTranslations('TeamMemberships')
   const currentStatus = contact.org_membership_status ?? 'guest'
   const [pending, setPending] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -245,11 +191,6 @@ function ContactRow({
     }
   }
 
-  function handleExpiryConfirm(date: Date | null) {
-    setShowExpiry(false)
-    if (pending) applyStatus(pending, date)
-  }
-
   return (
     <>
       <tr className="border-b last:border-0 hover:bg-muted/20 transition-colors">
@@ -259,11 +200,8 @@ function ContactRow({
             <div className="text-xs text-muted-foreground truncate max-w-[200px]">{contact.email}</div>
           )}
         </td>
-        <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
-          {contact.teamName ?? '—'}
-        </td>
         <td className="px-4 py-3">
-          {isAdmin ? (
+          {canEdit ? (
             <Select value={currentStatus} onValueChange={handleStatusChange} disabled={saving}>
               <SelectTrigger className="h-7 w-[160px] text-xs border-0 bg-transparent p-0 shadow-none focus:ring-0 hover:bg-muted rounded px-2">
                 <SelectValue>
@@ -285,13 +223,13 @@ function ContactRow({
             <StatusBadge statusId={currentStatus} defs={defs} />
           )}
         </td>
-        <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
+        <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
           {formatExpiry(contact.org_membership_expiration as { toDate(): Date } | null | undefined, t('noExpiration'))}
         </td>
       </tr>
       <ExpirationDialog
         open={showExpiry}
-        onConfirm={handleExpiryConfirm}
+        onConfirm={(date) => { setShowExpiry(false); if (pending) applyStatus(pending, date) }}
         onCancel={() => { setShowExpiry(false); setPending(null) }}
       />
     </>
@@ -300,21 +238,22 @@ function ContactRow({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-export default function OrgMembershipsPage() {
-  const { orgId } = useParams<{ orgId: string }>()
-  const t = useTranslations('OrgMemberships')
-  const { isAdmin } = useOrg()
+export default function TeamMembershipsPage() {
+  const t = useTranslations('TeamMemberships')
+  const { currentTeamId, team, teamRole } = useAuth()
   const qc = useQueryClient()
+
+  const orgId = team?.org_id
+  const canEdit = teamRole === 'owner' || teamRole === 'manager'
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('__all__')
 
-  const { data: teams, isLoading: teamsLoading } = useOrgTeamIds(orgId)
-  const { data: contacts, isLoading: contactsLoading } = useOrgContacts(teams)
-  const { data: rawDefs } = useStatusDefs(orgId)
+  const { data: contacts, isLoading: contactsLoading } = useTeamContacts(currentTeamId)
+  const { data: rawDefs, isLoading: defsLoading } = useStatusDefs(orgId)
 
   const defs: OrgMembershipStatusDef[] = rawDefs ?? DEFAULT_ORG_MEMBERSHIP_STATUSES
-  const isLoading = teamsLoading || contactsLoading
+  const isLoading = contactsLoading || defsLoading
 
   const filtered = useMemo(() => {
     if (!contacts) return []
@@ -334,7 +273,6 @@ export default function OrgMembershipsPage() {
     [contacts],
   )
 
-  // Counts per status for filter pills
   const countsByStatus = useMemo(() => {
     const map: Record<string, number> = {}
     contacts?.forEach((c) => {
@@ -344,22 +282,25 @@ export default function OrgMembershipsPage() {
     return map
   }, [contacts])
 
-  function invalidate() {
-    qc.invalidateQueries({ queryKey: ['org-contacts'] })
+  if (!orgId) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
+        <IdCard className="h-10 w-10 opacity-30" />
+        <p className="text-sm">{t('noOrg')}</p>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">{t('title')}</h2>
-          {contacts && (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t('subtitle', { total: contacts.length, active: totalActive })}
-            </p>
-          )}
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+        {contacts && (
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {t('subtitle', { total: contacts.length, active: totalActive })}
+          </p>
+        )}
       </div>
 
       {/* Status filter pills */}
@@ -410,7 +351,7 @@ export default function OrgMembershipsPage() {
       <div className="rounded-md border overflow-hidden">
         {isLoading ? (
           <div className="p-4 space-y-3">
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+            {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center text-muted-foreground text-sm">{t('noContacts')}</div>
@@ -419,9 +360,8 @@ export default function OrgMembershipsPage() {
             <thead>
               <tr className="border-b bg-muted/40">
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colName')}</th>
-                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colClub')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colStatus')}</th>
-                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">{t('colExpires')}</th>
+                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colExpires')}</th>
               </tr>
             </thead>
             <tbody>
@@ -430,9 +370,8 @@ export default function OrgMembershipsPage() {
                   key={c.id}
                   contact={c}
                   defs={defs}
-                  isAdmin={isAdmin}
-                  orgId={orgId}
-                  onUpdated={invalidate}
+                  canEdit={canEdit}
+                  onUpdated={() => qc.invalidateQueries({ queryKey: ['team-contacts-membership', currentTeamId] })}
                 />
               ))}
             </tbody>

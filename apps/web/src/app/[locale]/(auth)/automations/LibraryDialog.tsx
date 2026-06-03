@@ -237,7 +237,7 @@ export function LibraryDialog({
       const snap = await getDocs(
         query(collection(db, TEAMS_COLLECTION, teamId, 'outreach_templates'), orderBy('name', 'asc'))
       )
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }) as InstalledTemplate)
+      return snap.docs.map(d => ({ ...d.data(), id: d.id }) as InstalledTemplate)
     },
     staleTime: 60000,
   })

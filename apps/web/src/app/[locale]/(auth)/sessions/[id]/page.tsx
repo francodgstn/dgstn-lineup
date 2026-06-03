@@ -187,7 +187,7 @@ function AddParticipantsDialog({
         orderBy('lastname'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Contact)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
     },
   })
 
@@ -473,7 +473,7 @@ export default function SessionDetailPage() {
     queryKey: ['session-participants', sessionId],
     queryFn: async () => {
       const snap = await getDocs(collection(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ParticipantDoc)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ParticipantDoc)
     },
   })
 
@@ -481,7 +481,7 @@ export default function SessionDetailPage() {
     queryKey: ['session-bookings', sessionId],
     queryFn: async () => {
       const snap = await getDocs(collection(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Booking)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Booking)
     },
   })
 
@@ -492,7 +492,7 @@ export default function SessionDetailPage() {
       if (!currentTeamId) return []
       const q = query(collection(db, ACTIVITIES_COLLECTION), where('teamId', '==', currentTeamId))
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Activity)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Activity)
     },
   })
 

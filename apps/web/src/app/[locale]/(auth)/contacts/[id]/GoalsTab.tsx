@@ -72,7 +72,7 @@ function useGoals(contactId: string) {
           orderBy('created_at', 'desc'),
         ),
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Goal))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as Goal))
     },
   })
 }
@@ -84,7 +84,7 @@ async function fetchEvaluations(contactId: string, goalId: string): Promise<Goal
       orderBy('evaluated_at', 'desc'),
     ),
   )
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as GoalEvaluation))
+  return snap.docs.map((d) => ({ ...d.data(), id: d.id } as GoalEvaluation))
 }
 
 // ─── StarDisplay + StarInput ───────────────────────────────────────────────────

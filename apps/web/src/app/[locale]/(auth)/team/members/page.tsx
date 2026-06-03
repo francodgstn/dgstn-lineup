@@ -318,7 +318,7 @@ export default function TeamMembersPage() {
           orderBy('joined', 'asc')
         )
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MemberDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as MemberDoc))
     },
   })
 
@@ -334,7 +334,7 @@ export default function TeamMembersPage() {
           orderBy('created', 'desc')
         )
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as InvitationDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as InvitationDoc))
     },
   })
 

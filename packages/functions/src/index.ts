@@ -85,6 +85,7 @@ export {
   removeClubFromOrg,
   createOrgCheckoutSession,
   getOrgInvitationDetails,
+  requestClubAccess,
 } from './orgs'
 
 // Team-level billing (clubs charging their own students — Payrexx)

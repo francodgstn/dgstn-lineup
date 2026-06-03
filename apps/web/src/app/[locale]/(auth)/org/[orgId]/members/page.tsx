@@ -56,7 +56,7 @@ function useOrgMembers(orgId: string) {
       const snap = await getDocs(
         firestoreQuery(collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERS_SUBCOLLECTION))
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as OrgMemberRow))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as OrgMemberRow))
     },
   })
 }

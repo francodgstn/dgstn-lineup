@@ -30,20 +30,38 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Building2, Plus, Trash2 } from 'lucide-react'
+import { Building2, Plus, Trash2, KeyRound } from 'lucide-react'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { useParams } from 'next/navigation'
 import {
   ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION,
   TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION,
   USERS_COLLECTION, CONTACTS_COLLECTION,
 } from '@lineup/shared'
-import type { OrgTeam } from '@lineup/shared'
+import type { OrgTeam, ClubAccessRequest, ClubAccessType } from '@lineup/shared'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface OrgTeamRow extends OrgTeam {
   id: string
   teamName?: string
   ownerName?: string
   activeMemberships?: number
+}
+
+function useClubAccessRequests(orgId: string) {
+  return useQuery<Record<string, ClubAccessRequest>>({
+    queryKey: ['club-access-requests', orgId],
+    queryFn: async () => {
+      const snap = await getDocs(
+        collection(db, ORGANIZATIONS_COLLECTION, orgId, 'club_access_requests'),
+      )
+      const result: Record<string, ClubAccessRequest> = {}
+      snap.docs.forEach((d) => { result[d.id] = { ...d.data() } as ClubAccessRequest })
+      return result
+    },
+  })
 }
 
 function useOrgTeams(orgId: string) {
@@ -56,7 +74,7 @@ function useOrgTeams(orgId: string) {
           where('status', 'in', ['active', 'invited'])
         )
       )
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() } as OrgTeamRow))
+      const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id } as OrgTeamRow))
 
       await Promise.all(
         rows.map(async (row) => {
@@ -95,6 +113,77 @@ function useOrgTeams(orgId: string) {
       return rows
     },
   })
+}
+
+// ─── RequestAccessDialog ──────────────────────────────────────────────────────
+
+function RequestAccessDialog({
+  open,
+  orgId,
+  team,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean
+  orgId: string
+  team: OrgTeamRow | null
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [accessType, setAccessType] = useState<ClubAccessType>('view')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      const fn = httpsCallable(functions, 'requestClubAccess')
+      await fn({ orgId, teamId: team?.teamId, accessType })
+      onSuccess()
+      onClose()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Request access</DialogTitle>
+          <DialogDescription>
+            Request direct access to <strong>{team?.teamName ?? team?.teamId}</strong>.
+            The club owner will be notified and can approve your request.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          <div className="space-y-1.5">
+            <Label>Access level</Label>
+            <Select value={accessType} onValueChange={(v) => setAccessType(v as ClubAccessType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="view">View — read contacts, sessions, events</SelectItem>
+                <SelectItem value="manage">Manage — full admin access</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Sending…' : 'Request access'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 // ─── InviteDialog ─────────────────────────────────────────────────────────────
@@ -173,10 +262,13 @@ export default function OrgClubsPage() {
   const { orgId } = useParams<{ orgId: string }>()
   const t = useTranslations('OrgClubs')
   const { isAdmin } = useOrg()
+  const { user } = useAuth()
   const qc = useQueryClient()
   const { data: teams, isLoading } = useOrgTeams(orgId)
+  const { data: accessRequests } = useClubAccessRequests(orgId)
 
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [requestAccessTarget, setRequestAccessTarget] = useState<OrgTeamRow | null>(null)
   const [removeTarget, setRemoveTarget] = useState<OrgTeamRow | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -188,6 +280,7 @@ export default function OrgClubsPage() {
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['org-teams', orgId] })
+    qc.invalidateQueries({ queryKey: ['club-access-requests', orgId] })
   }
 
   async function handleRemove() {
@@ -285,17 +378,48 @@ export default function OrgClubsPage() {
                   </td>
                   {isAdmin && (
                     <td className="px-4 py-3">
-                      {row.status === 'active' && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => setRemoveTarget(row)}
-                          title={t('removeButton')}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Request Access button — only show for active clubs */}
+                        {row.status === 'active' && (() => {
+                          const req = accessRequests?.[row.teamId]
+                          if (req?.status === 'pending' && req.requestedBy === user?.uid) {
+                            return (
+                              <Badge variant="secondary" className="text-xs font-normal">
+                                Access requested
+                              </Badge>
+                            )
+                          }
+                          if (req?.status === 'approved') {
+                            return (
+                              <Badge variant="default" className="text-xs font-normal">
+                                Access granted
+                              </Badge>
+                            )
+                          }
+                          return (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs text-muted-foreground"
+                              onClick={() => setRequestAccessTarget(row)}
+                            >
+                              <KeyRound className="h-3.5 w-3.5 mr-1" />
+                              Request access
+                            </Button>
+                          )
+                        })()}
+                        {row.status === 'active' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => setRemoveTarget(row)}
+                            title={t('removeButton')}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -310,6 +434,14 @@ export default function OrgClubsPage() {
         orgId={orgId}
         onClose={() => setInviteOpen(false)}
         onSuccess={() => { invalidate(); showToast(t('inviteSentSuccess')) }}
+      />
+
+      <RequestAccessDialog
+        open={!!requestAccessTarget}
+        orgId={orgId}
+        team={requestAccessTarget}
+        onClose={() => setRequestAccessTarget(null)}
+        onSuccess={() => { invalidate(); showToast('Access request sent to club owner') }}
       />
 
       <AlertDialog open={!!removeTarget} onOpenChange={(v) => !v && setRemoveTarget(null)}>

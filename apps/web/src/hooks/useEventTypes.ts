@@ -35,7 +35,7 @@ export function useEventTypes(teamId: string | null): {
       const snap = await getDocs(
         query(collection(db, TEAMS_COLLECTION, teamId, EVENT_TYPES_SUBCOLLECTION), orderBy('name')),
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as EventTypeConfig)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventTypeConfig)
     },
   })
 

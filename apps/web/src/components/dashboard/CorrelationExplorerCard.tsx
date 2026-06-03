@@ -178,7 +178,7 @@ export function CorrelationExplorerCard({
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <GitBranch className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="text-sm font-semibold">Correlation explorer</CardTitle>
+            <CardTitle className="font-bold">Correlation explorer</CardTitle>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Select value={metricX} onValueChange={(v) => setMetricX(v as MetricKey)}>

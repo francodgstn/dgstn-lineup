@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BarChart3 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -125,21 +125,23 @@ export function DemographicsCard({
 
   return (
     <Card>
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <BarChart3 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-base font-semibold leading-none">{t('demoTitle')}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{t('demoSubtitle', { count: active.length })}</p>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <CardTitle>{t('demoTitle')}</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('demoSubtitle', { count: active.length })}</p>
+          </div>
+          <Select value={view} onValueChange={(v) => { if (v) setView(v as 'age' | 'gender' | 'level') }}>
+            <SelectTrigger className="h-7 text-xs w-[90px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="age">{t('demoViewAge')}</SelectItem>
+              <SelectItem value="gender">{t('demoViewGender')}</SelectItem>
+              {hasRanking && <SelectItem value="level">{t('demoViewLevel')}</SelectItem>}
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={view} onValueChange={(v) => { if (v) setView(v as 'age' | 'gender' | 'level') }}>
-          <SelectTrigger className="h-7 text-xs w-[90px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="age">{t('demoViewAge')}</SelectItem>
-            <SelectItem value="gender">{t('demoViewGender')}</SelectItem>
-            {hasRanking && <SelectItem value="level">{t('demoViewLevel')}</SelectItem>}
-          </SelectContent>
-        </Select>
-      </div>
+      </CardHeader>
       <CardContent className="pt-0 pb-4">
         {currentData.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">

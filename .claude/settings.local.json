@@ -131,7 +131,31 @@
       "PowerShell(auth *)",
       "PowerShell(Get-ChildItem \"C:\\\\git\\\\dgstn\\\\dgstn-lineup\\\\packages\\\\functions\\\\dist\\\\utils\" -Name | Where-Object { $_ -match \"referral\" })",
       "Bash(xargs grep -l \"outreach_template\\\\|automation\")",
-      "Bash(xargs grep -l \"automation_rules\\\\|AutomationRule\")"
+      "Bash(xargs grep -l \"automation_rules\\\\|AutomationRule\")",
+      "Bash(grep \"//\")",
+      "Bash(xargs grep -l \"contact.*update\\\\|requestContactUpdate\")",
+      "Bash(xargs grep -l \"sendTeamInvitation\\\\|acceptTeamInvitation\\\\|manageTeamInvitation\")",
+      "Bash(xargs grep -l \"sendEventInvitations\\\\|EventInvitation\\\\|getEventInvitationDetails\")",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\git\\\\dgstn\\\\dgstn-lineup\\\\apps\\\\web\\\\src\\\\app\\\\[locale]\\\\\\(portal\\)\\\\portal\\\\[slug]\\\\contact-update\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(find C:\\\\git\\\\dgstn\\\\dgstn-lineup\\\\apps\\\\web\\\\src\\\\app *)",
+      "Bash(xargs grep -l \"useQuery\\\\|onSnapshot\")",
+      "Bash(grep -i \"js$\")",
+      "Bash(xargs grep -l \"firebasePaths\\\\|SESSIONS_COLLECTION\")",
+      "Bash(xargs grep -l \"addSession\\\\|createSession\\\\|generateSession\")",
+      "Bash(xargs grep -l \"PlanFeature\\\\|planHasFeature\")",
+      "Bash(xargs grep -l \"radar\\\\|RadarChart\\\\|training_profile\")",
+      "Bash(xargs grep -l \"membership\")",
+      "Bash(xargs ls -1)",
+      "Bash(xargs grep -l \"rank\")",
+      "Bash(Remove-Item -Recurse -Force \"C:\\\\git\\\\dgstn\\\\dgstn-lineup\\\\apps\\\\web\\\\src\\\\app\\\\[locale]\\\\\\(auth\\)\\\\subscriptions\")",
+      "Bash(Remove-Item -Recurse -Force \"C:\\\\git\\\\dgstn\\\\dgstn-lineup\\\\apps\\\\web\\\\src\\\\app\\\\[locale]\\\\\\(auth\\)\\\\memberships\")",
+      "Bash(grep -rl \"{ id: d\\\\.id, \\\\.\\\\.\\\\.d\\\\.data\\(\\) }\" apps/web/src/)",
+      "Bash(FIRESTORE_EMULATOR_HOST=localhost:8080 tsx *)",
+      "Bash(FIRESTORE_EMULATOR_HOST=localhost:8080 ./node_modules/.bin/tsx *)",
+      "Bash(./node_modules/.bin/tsx *)",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\git\\\\dgstn\\\\dgstn-lineup\\\\apps\\\\web\\\\src\\\\app\\\\[locale]\\\\\\(auth\\)\\\\org\\\\[orgId]\\\\events\\\\[id]\")",
+      "Bash(grep -E \"error TS|org/\\\\[orgId\\\\]|clubs|events\")"
     ]
   }
 }

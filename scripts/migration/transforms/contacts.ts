@@ -28,6 +28,23 @@ export function transformContact(src: Record<string, unknown>): Record<string, u
   // New required fields with safe defaults
   out.tags          = out.tags          ?? []
   out.anonymized_at = out.anonymized_at ?? null
+  // Ensure these fields always exist as null so Firestore equality queries work correctly
+  out.deleted_at    = out.deleted_at    ?? null
+  out.archived_at   = out.archived_at   ?? null
+
+  // HMD tracked membership at the club level via membership_status/membership_active/membership_expiration.
+  // In Lineup the membership relationship is contact↔org (the club is just the intermediary),
+  // so these fields rename to the org_membership_* namespace.
+  if ('membership_status' in out)     { out.org_membership_status     = out.membership_status;     delete out.membership_status }
+  if ('membership_active' in out)     { out.org_membership_active     = out.membership_active;     delete out.membership_active }
+  if ('membership_expiration' in out) { out.org_membership_expiration = out.membership_expiration; delete out.membership_expiration }
+
+  // Coerce org_membership for soft-deleted contacts — HMD sometimes left status as 'active'
+  // on contacts that were subsequently deleted, causing them to inflate active-member counts.
+  if (out.deleted_at != null) {
+    out.org_membership_status = 'expired'
+    out.org_membership_active = false
+  }
 
   return out
 }

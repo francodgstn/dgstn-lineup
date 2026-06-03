@@ -1,3 +1,4 @@
+import { FieldValue } from 'firebase-admin/firestore'
 import type { MigrationConfig } from '../config'
 import { sourceDb, targetDb } from '../config'
 import { BatchWriter } from '../batch-writer'
@@ -22,13 +23,33 @@ export async function pass11TeamSubcollections(
   cfg: MigrationConfig,
   teamIds: string[],
 ): Promise<void> {
-  console.log('Pass 11: team subcollections')
+  console.log('Pass 11: team subcollections (including managers) + org admin membership')
   const src = sourceDb()
   const tgt = targetDb()
+
+  // Resolve org admin UID from target (users were already migrated in pass01).
+  // The admin needs a manager team_members entry in every club they aren't already in.
+  let adminUid: string | null = null
+  const adminSnap = await tgt.collection('users')
+    .where('email', '==', cfg.orgAdminEmail)
+    .limit(1)
+    .get()
+  if (adminSnap.empty) {
+    console.warn(`  WARN: could not find user with email ${cfg.orgAdminEmail} in target — org admin will not be injected as manager`)
+  } else {
+    adminUid = adminSnap.docs[0].id
+    console.log(`  org admin: ${cfg.orgAdminEmail} → uid=${adminUid}`)
+  }
 
   for (const teamId of teamIds) {
     if (cfg.fromTeam && teamId < cfg.fromTeam) continue
     const bw = new BatchWriter(tgt, cfg.dryRun)
+
+    // Track whether the org admin already appeared in the source team_members.
+    // If so, their doc is already handled in the loop below (written or skipped
+    // because it existed in target) — we must not add a second set() to the same
+    // batch ref.
+    let adminHandledInSource = false
 
     for (const sub of TEAM_SUBCOLLECTIONS) {
       const snap = await src.collection('teams').doc(teamId).collection(sub).get()
@@ -39,7 +60,45 @@ export async function pass11TeamSubcollections(
           if (existing.exists) { bw.skip(); continue }
         }
         bw.set(tgtRef, d.data())
+
+        if (sub === 'team_members' && adminUid && d.id === adminUid) {
+          adminHandledInSource = true
+        }
       }
+    }
+
+    // Inject org admin as manager for clubs where they weren't already a member.
+    if (adminUid && !adminHandledInSource) {
+      const memberRef = tgt
+        .collection('teams').doc(teamId)
+        .collection('team_members').doc(adminUid)
+
+      if (!cfg.dryRun) {
+        const existing = await memberRef.get()
+        if (existing.exists) {
+          bw.skip()
+          console.log(`    ${teamId}: org admin already in team_members (role=${existing.data()?.role ?? '?'}) — skipping`)
+        } else {
+          bw.set(memberRef, {
+            userId:  adminUid,
+            teamId,
+            role:    'manager',
+            joined:  FieldValue.serverTimestamp(),
+            addedBy: 'migration',
+          })
+          console.log(`    ${teamId}: injected org admin as manager`)
+        }
+      } else {
+        bw.set(memberRef, {
+          userId:  adminUid,
+          teamId,
+          role:    'manager',
+          joined:  FieldValue.serverTimestamp(),
+          addedBy: 'migration',
+        })
+      }
+    } else if (adminUid && adminHandledInSource) {
+      console.log(`    ${teamId}: org admin found in source team_members — migrated as-is`)
     }
 
     await bw.done()

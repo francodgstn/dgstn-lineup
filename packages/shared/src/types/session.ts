@@ -27,8 +27,10 @@ export interface Session {
   coachName?: string
   /** Hard booking cap for coaching sessions. */
   max_participants?: number
-  /** Active booking count — maintained by trigger. */
+  /** Active booking count — maintained by trigger or set at migration time. */
   bookings_count?: number
+  /** Subset of bookings_count where is_new_contact === true. */
+  trial_bookings_count?: number
   /** Free trial flag — if false, members only (type !== 'trial'). */
   isFreeTrial?: boolean
   /** Booking status for coaching sessions; 'open' | 'full' | 'cancelled'. */

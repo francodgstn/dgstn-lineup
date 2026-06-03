@@ -36,6 +36,20 @@ export interface OrgTeam {
   addedBy: string
 }
 
+export type ClubAccessType = 'view' | 'manage'
+export type ClubAccessRequestStatus = 'pending' | 'approved' | 'denied'
+
+export interface ClubAccessRequest {
+  teamId: string
+  orgId: string
+  requestedBy: string
+  requestedAt: Timestamp
+  accessType: ClubAccessType
+  status: ClubAccessRequestStatus
+  processedBy?: string
+  processedAt?: Timestamp
+}
+
 export interface OrgInvitation {
   id: string
   orgId: string

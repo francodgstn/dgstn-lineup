@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -119,22 +119,24 @@ export function RosterCard({ contacts, subscriptionTypes = [] }: Props) {
 
   return (
     <Card>
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-base font-semibold leading-none">Overview</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{total} active contacts</p>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <CardTitle>Overview</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">{total} active contacts</p>
+          </div>
+          <Select value={view} onValueChange={(v) => { if (v) setView(v) }}>
+            <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="type">Type</SelectItem>
+              <SelectItem value="membership">Membership</SelectItem>
+              <SelectItem value="subscription">Subscription</SelectItem>
+              <SelectItem value="recurrence">Billing</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={view} onValueChange={(v) => { if (v) setView(v) }}>
-          <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="type">Type</SelectItem>
-            <SelectItem value="membership">Membership</SelectItem>
-            <SelectItem value="subscription">Subscription</SelectItem>
-            <SelectItem value="recurrence">Billing</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      </CardHeader>
       <CardContent className="pt-0 pb-4">
         {showEmptySubscriptions ? (
           <div className="flex flex-col items-center gap-2 py-6 text-center">

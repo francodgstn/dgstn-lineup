@@ -99,7 +99,7 @@ function useActiveContacts(teamId: string | null) {
         orderBy('lastname'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Contact)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
     },
   })
 }
@@ -118,7 +118,7 @@ function useArchivedContacts(teamId: string | null) {
         orderBy('archived_at', 'desc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Contact)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
     },
   })
 }
@@ -137,7 +137,7 @@ function useDeletedContacts(teamId: string | null) {
         orderBy('deleted_at', 'desc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Contact)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
     },
   })
 }
@@ -153,7 +153,7 @@ function useContactRequests(teamId: string | null) {
         orderBy('requested_at', 'desc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ContactRequest)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactRequest)
     },
   })
 }
@@ -165,7 +165,7 @@ function useSubscriptionTypes(teamId: string | null) {
     queryFn: async () => {
       if (!teamId) return []
       const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SubscriptionType)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as SubscriptionType)
     },
   })
 }
@@ -181,7 +181,7 @@ function useOrgMembershipStatuses(orgId: string | null | undefined) {
         collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION),
       )
       if (snap.empty) return DEFAULT_ORG_MEMBERSHIP_STATUSES
-      const defs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as OrgMembershipStatusDef))
+      const defs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as OrgMembershipStatusDef))
       const byId = Object.fromEntries(DEFAULT_ORG_MEMBERSHIP_STATUSES.map((s) => [s.id, s]))
       defs.forEach((d) => { byId[d.id] = d })
       return Object.values(byId).sort((a, b) => a.order - b.order)
@@ -381,12 +381,12 @@ function OverviewPanel({
       </button>
       {open && (
         loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Skeleton className="h-52 rounded-xl" />
             <Skeleton className="h-52 rounded-xl" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <RosterCard contacts={contacts} />
             <DemographicsCard contacts={contacts} rankingSystems={rankingSystems} />
           </div>
@@ -1506,7 +1506,7 @@ export default function ContactsPage() {
   const selectedList = [...selected]
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-6 pb-24">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

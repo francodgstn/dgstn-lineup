@@ -94,7 +94,7 @@ function useCheckins(eventId: string) {
         collection(db, CHECKINS_COLLECTION),
         where('event.id', '==', eventId),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as EventCheckin)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventCheckin)
     },
   })
 }
@@ -142,7 +142,7 @@ function AddCheckinDialog({
         where('archived_at', '==', null),
         orderBy('lastname'),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Contact)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
     },
   })
 

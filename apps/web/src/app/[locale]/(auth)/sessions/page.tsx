@@ -90,7 +90,7 @@ function useUpcomingSessions(teamId: string | null) {
         limit(50),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Session)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Session)
     },
   })
 }
@@ -109,7 +109,7 @@ function usePastSessions(teamId: string | null) {
         limit(50),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Session)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Session)
     },
   })
 }
@@ -127,7 +127,7 @@ function useActivities(teamId: string | null) {
         orderBy('name', 'asc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Activity)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Activity)
     },
   })
 }

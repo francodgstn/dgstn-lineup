@@ -74,7 +74,7 @@ function useStatusDefs(orgId: string) {
         return DEFAULT_ORG_MEMBERSHIP_STATUSES
       }
       return snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as OrgMembershipStatusDef))
+        .map((d) => ({ ...d.data(), id: d.id } as OrgMembershipStatusDef))
         .sort((a, b) => a.order - b.order)
     },
   })

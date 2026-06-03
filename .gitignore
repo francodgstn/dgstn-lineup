@@ -11,6 +11,9 @@ build/
 # Service account keys — never commit
 keys/
 
+# Emulator snapshots — machine-specific, may contain real data
+snapshots/
+
 # Firebase
 .firebase/
 firebase-debug.log

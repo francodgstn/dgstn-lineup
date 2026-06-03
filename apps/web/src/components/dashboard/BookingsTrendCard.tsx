@@ -4,8 +4,7 @@ import { useMemo, useState } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { Card, CardContent } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -164,24 +163,25 @@ export function BookingsTrendCard({
 
   return (
     <Card className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <TrendingUp className="h-4 w-4 text-primary flex-shrink-0" />
-        <p className="text-sm font-bold flex-1 truncate">{title || 'Sessions'}</p>
-        <Select value={source} onValueChange={(v) => { if (v) setSource(v) }}>
-          <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {SOURCE_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                <div>
-                  <div className="text-xs font-medium">{o.label}</div>
-                  <div className="text-xs text-muted-foreground">{o.sublabel}</div>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <Separator />
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-primary flex-shrink-0" />
+          <CardTitle className="flex-1 truncate">{title || 'Sessions'}</CardTitle>
+          <Select value={source} onValueChange={(v) => { if (v) setSource(v) }}>
+            <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {SOURCE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value} textValue={o.label}>
+                  <div>
+                    <div className="text-xs font-medium">{o.label}</div>
+                    <div className="text-xs text-muted-foreground">{o.sublabel}</div>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
       <CardContent className="flex-1 flex flex-col pb-4 pt-3">
         {!hasData ? (
           <div className="flex-1 flex items-center justify-center">

@@ -3,7 +3,7 @@
 import { useState, use, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import { useRouter } from '@/i18n/navigation'
+import { useRouter, Link } from '@/i18n/navigation'
 import {
   doc, getDoc, updateDoc, collection, query, where, orderBy, collectionGroup,
   getDocs, addDoc, deleteDoc, serverTimestamp, Timestamp, limit,
@@ -18,7 +18,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
-  CONTACTS_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  CONTACTS_COLLECTION, TEAMS_COLLECTION, ORGANIZATIONS_COLLECTION,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION,
   CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION, CONTACT_ALERTS_SUBCOLLECTION,
   ALERT_PRESETS_SUBCOLLECTION, TEAM_ACTIVITY_LOG_SUBCOLLECTION,
   CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION,
@@ -105,7 +106,7 @@ function useContact(id: string) {
     queryFn: async () => {
       const d = await getDoc(doc(db, CONTACTS_COLLECTION, id))
       if (!d.exists()) return null
-      return { id: d.id, ...d.data() } as Contact
+      return { ...d.data(), id: d.id } as Contact
     },
   })
 }
@@ -119,17 +120,23 @@ function useSubscriptionTypes(teamId: string | null) {
       const snap = await getDocs(
         collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION)
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SubscriptionType)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as SubscriptionType)
     },
   })
 }
 
-function useTeamRankingSystems(teamId: string | null) {
+function useTeamRankingSystems(teamId: string | null, orgId?: string | null) {
   return useQuery<RankingSystem[]>({
-    queryKey: ['team-ranking-systems', teamId],
+    queryKey: ['team-ranking-systems', teamId, orgId ?? null],
     enabled: !!teamId,
     queryFn: async () => {
       if (!teamId) return []
+      // Org-level ranking systems override individual team systems when present
+      if (orgId) {
+        const orgSnap = await getDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId))
+        const orgSystems = (orgSnap.data()?.ranking_systems as RankingSystem[] | undefined) ?? []
+        if (orgSystems.length > 0) return orgSystems
+      }
       const snap = await getDoc(doc(db, TEAMS_COLLECTION, teamId))
       return (snap.data()?.ranking_systems as RankingSystem[] | undefined) ?? []
     },
@@ -146,7 +153,7 @@ function useSubscriptionHistory(contactId: string) {
           orderBy('start_date', 'desc'),
         )
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SubscriptionHistoryEntry)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as SubscriptionHistoryEntry)
     },
   })
 }
@@ -211,7 +218,7 @@ function useContactActivityLog(contactId: string, teamId: string | null, days?: 
       const snap = await getDocs(
         query(collection(db, TEAMS_COLLECTION, teamId!, TEAM_ACTIVITY_LOG_SUBCOLLECTION), ...constraints)
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ActivityLogEntry)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ActivityLogEntry)
     },
   })
 }
@@ -305,7 +312,7 @@ function useContactTrainingCheckins(contactId: string) {
           limit(20),
         )
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TrainingCheckin)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TrainingCheckin)
     },
   })
 }
@@ -320,7 +327,7 @@ function useContactAlerts(contactId: string) {
           orderBy('created_at', 'desc'),
         )
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ContactAlert)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactAlert)
     },
   })
 }
@@ -341,7 +348,7 @@ function useAlertPresets(teamId: string | null) {
     queryFn: async () => {
       if (!teamId) return []
       const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AlertPresetRecord)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as AlertPresetRecord)
     },
   })
 }
@@ -394,7 +401,7 @@ function SectionDivider({ label }: { label: string }) {
 
 function FormBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border p-4 space-y-4">
+    <div className="rounded-xl border bg-card p-4 space-y-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
       {children}
     </div>
@@ -582,8 +589,8 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
   }
 
   return (
-    <div className="pb-16 space-y-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className="pb-16 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* ── Attendance trend ── */}
         <div className="rounded-xl border bg-card p-5 space-y-3">
@@ -730,14 +737,14 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
 // ─── profile tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({
-  contact, teamId, onSaved,
+  contact, teamId, orgId, onSaved,
 }: {
-  contact: Contact; teamId: string | null; onSaved: () => void
+  contact: Contact; teamId: string | null; orgId?: string | null; onSaved: () => void
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const { data: subTypes = [] } = useSubscriptionTypes(teamId)
-  const { data: rankingSystems = [] } = useTeamRankingSystems(teamId)
+  const { data: rankingSystems = [] } = useTeamRankingSystems(teamId, orgId)
 
   const TYPES: ContactType[] = ['trial', 'student', 'external']
   const STATUSES: MembershipStatus[] = ['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired']
@@ -831,7 +838,7 @@ function ProfileTab({
       </div>
 
       {/* 2-col section blocks on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* Subscription & membership */}
         <FormBlock title={t('sectionMembership')}>
@@ -905,8 +912,19 @@ function ProfileTab({
         </FormBlock>
 
         {/* Ranks */}
-        {rankingSystems.length > 0 && (
-          <FormBlock title={t('sectionRanks')}>
+        <FormBlock title={t('sectionRanks')}>
+          {rankingSystems.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-4 text-center">
+              <Award className="h-6 w-6 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">{t('rankNoSystemsPrompt')}</p>
+              <Link
+                href="/team/settings"
+                className="text-sm text-primary hover:underline underline-offset-2"
+              >
+                {t('rankNoSystemsLink')}
+              </Link>
+            </div>
+          ) : (
             <Controller
               control={control}
               name="ranks"
@@ -991,8 +1009,8 @@ function ProfileTab({
                 </div>
               )}
             />
-          </FormBlock>
-        )}
+          )}
+        </FormBlock>
 
         {/* Personal information */}
         <FormBlock title={t('sectionPersonalInfo')}>
@@ -2446,7 +2464,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           {/* Tab content */}
           <div>
             {tab === 'profile' && (
-              <ProfileTab contact={contact} teamId={currentTeamId} onSaved={invalidate} />
+              <ProfileTab contact={contact} teamId={currentTeamId} orgId={team?.org_id} onSaved={invalidate} />
             )}
             {tab === 'stats' && (
               <StatsTab contact={contact} teamId={currentTeamId} />

@@ -1,8 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
+import { useMemo, useState, Fragment } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -133,31 +132,32 @@ export function SessionsHeatmapCard({
 
   return (
     <Card className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <LayoutGrid className="h-4 w-4 text-primary flex-shrink-0" />
-        <p className="text-sm font-bold flex-1 truncate">{title || 'Attendance heatmap'}</p>
-        <button
-          onClick={() => setAutoHours((v) => !v)}
-          title={autoHours ? 'Showing hours with data — click to show all' : 'Adapt hours to data'}
-          className={`p-1 rounded transition-colors ${autoHours ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          <ChevronsUpDown className="h-4 w-4" />
-        </button>
-        <Select value={source} onValueChange={(v) => { if (v) setSource(v) }}>
-          <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {SOURCE_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                <div>
-                  <div className="text-xs font-medium">{o.label}</div>
-                  <div className="text-xs text-muted-foreground">{o.sublabel}</div>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <Separator />
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <LayoutGrid className="h-4 w-4 text-primary flex-shrink-0" />
+          <CardTitle className="flex-1 truncate">{title || 'Attendance heatmap'}</CardTitle>
+          <button
+            onClick={() => setAutoHours((v) => !v)}
+            title={autoHours ? 'Showing hours with data — click to show all' : 'Adapt hours to data'}
+            className={`p-1 rounded transition-colors ${autoHours ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <ChevronsUpDown className="h-4 w-4" />
+          </button>
+          <Select value={source} onValueChange={(v) => { if (v) setSource(v) }}>
+            <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {SOURCE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value} textValue={o.label}>
+                  <div>
+                    <div className="text-xs font-medium">{o.label}</div>
+                    <div className="text-xs text-muted-foreground">{o.sublabel}</div>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
       <CardContent className="flex-1 flex flex-col pb-4 pt-3 overflow-x-auto">
         <div
             className="flex-1"
@@ -180,9 +180,8 @@ export function SessionsHeatmapCard({
             {displayRows.map((i) => {
               const hour = HOUR_START + i
               return (
-                <>
+                <Fragment key={`row-${hour}`}>
                   <span
-                    key={`h${hour}`}
                     className="text-[10px] text-muted-foreground text-right pr-1 whitespace-nowrap"
                     style={{ lineHeight: `${CELL_SIZE}px`, height: CELL_SIZE }}
                   >
@@ -233,12 +232,12 @@ export function SessionsHeatmapCard({
                       </div>
                     )
                   })}
-                </>
+                </Fragment>
               )
             })}
           </div>
         {isComparing && (
-          <div className="flex items-center gap-4 justify-end mt-3">
+          <div className="flex items-center gap-6 justify-end mt-3">
             <div className="flex items-center gap-1">
               <div className="w-3.5 h-3.5 rounded-[3px] overflow-hidden"
                 style={{ background: `linear-gradient(135deg, ${alpha(COMPARISON_COLOR, 0.7)} 50%, transparent 50%)` }} />

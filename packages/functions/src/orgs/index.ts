@@ -410,6 +410,80 @@ export const createOrgCheckoutSession = onCall(async (request) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// requestClubAccess — org admin requests view/manage access to a sub-club
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const requestClubAccess = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+
+  const data = request.data as { orgId?: string; teamId?: string; accessType?: string }
+  if (!data?.orgId || !data?.teamId) throw new HttpsError('invalid-argument', 'orgId and teamId are required')
+  if (data.accessType !== 'view' && data.accessType !== 'manage') {
+    throw new HttpsError('invalid-argument', 'accessType must be "view" or "manage"')
+  }
+
+  await assertOrgAdmin(request.auth.uid, data.orgId)
+
+  const db = admin.firestore()
+
+  // Verify the team is in this org
+  const orgTeamDoc = await db.collection('organizations').doc(data.orgId)
+    .collection('org_teams').doc(data.teamId).get()
+  if (!orgTeamDoc.exists || orgTeamDoc.data()?.status !== 'active') {
+    throw new HttpsError('not-found', 'Club is not an active member of this organization')
+  }
+
+  // Idempotent: update or create the request document
+  const requestRef = db.collection('organizations').doc(data.orgId)
+    .collection('club_access_requests').doc(data.teamId)
+
+  const now = FieldValue.serverTimestamp()
+  await requestRef.set({
+    teamId: data.teamId,
+    orgId: data.orgId,
+    requestedBy: request.auth.uid,
+    requestedAt: now,
+    accessType: data.accessType,
+    status: 'pending',
+  }, { merge: false })
+
+  // Notify club owner by email
+  const orgDoc = await db.collection('organizations').doc(data.orgId).get()
+  const org = orgDoc.data()
+
+  const ownerSnap = await db.collection('teams').doc(data.teamId)
+    .collection('team_members').where('role', '==', 'owner').limit(1).get()
+
+  if (!ownerSnap.empty) {
+    const ownerUserDoc = await db.collection('users').doc(ownerSnap.docs[0].id).get()
+    const ownerEmail = ownerUserDoc.data()?.email as string | undefined
+
+    if (ownerEmail) {
+      const requesterDoc = await db.collection('users').doc(request.auth.uid).get()
+      const requesterName = (requesterDoc.data()?.displayName || requesterDoc.data()?.email || 'An org admin') as string
+      const team = await getTeam(data.teamId)
+      const teamName = team?.name ?? data.teamId
+      const accessLabel = data.accessType === 'manage' ? 'manage (admin)' : 'view'
+      const hostingUrl = getHostingUrl()
+
+      const { html, text } = buildEmailTemplate({
+        title: `Access request for ${teamName} on Lineup`,
+        body: `
+          <p><strong>${requesterName}</strong>, an admin of the organization <strong>${org?.name ?? data.orgId}</strong>,
+          has requested <strong>${accessLabel}</strong> access to your club <strong>${teamName}</strong> on Lineup.</p>
+          <p>You can review and manage this request in your club's Team Settings.</p>
+          <p><a href="${hostingUrl}/team/settings" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Review Request</a></p>
+        `,
+      })
+
+      await sendEmail({ to: ownerEmail, subject: `Access request for ${teamName} on Lineup`, html, text })
+    }
+  }
+
+  return { success: true }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // getOrgInvitationDetails — public: load invitation for the accept page
 // ─────────────────────────────────────────────────────────────────────────────
 

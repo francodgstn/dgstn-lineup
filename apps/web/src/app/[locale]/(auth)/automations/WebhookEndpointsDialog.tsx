@@ -99,7 +99,7 @@ export function WebhookEndpointsDialog({
       const snap = await getDocs(
         query(endpointsRef(), orderBy('name', 'asc'))
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as WebhookEndpoint)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as WebhookEndpoint)
     },
   })
 

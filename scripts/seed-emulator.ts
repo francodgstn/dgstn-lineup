@@ -631,6 +631,7 @@ async function seedTeam(opts: {
 
   // Bookings
   const bookingContacts = contactSeeds.slice(12, 16)
+  const sessionBookingCounts = new Map<string, { bookings_count: number; trial_bookings_count: number }>()
   for (let i = 0; i < bookingContacts.length; i++) {
     const b         = bookingContacts[i]
     const sessionId = sessionIds[pastCount + (i < 2 ? 1 : 3)]
@@ -649,6 +650,13 @@ async function seedTeam(opts: {
         status:         'pending',
         booking_token:  `tok-${teamId}-${i}`,
       })
+    const cur = sessionBookingCounts.get(sessionId) ?? { bookings_count: 0, trial_bookings_count: 0 }
+    cur.bookings_count++
+    cur.trial_bookings_count++ // all seeded bookings are is_new_contact: true
+    sessionBookingCounts.set(sessionId, cur)
+  }
+  for (const [sessionId, counts] of sessionBookingCounts) {
+    await db.collection('sessions').doc(sessionId).update(counts)
   }
 
   // ── weekly reports (feeds the trend chart in the contact header) ────────────

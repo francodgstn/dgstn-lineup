@@ -51,6 +51,14 @@ pnpm migrate:hmd \
 
 Inspect the result in the emulator UI at http://localhost:4000, then start the dev server and open `/contacts`, `/sessions`, and `/events` to confirm no rendering errors.
 
+**Save the migrated state as a reusable snapshot** (while the emulators are still running):
+
+```bash
+pnpm emulators:export:hmd
+```
+
+From then on, use `pnpm emulators:hmd` to reload this snapshot instead of re-running the migration.
+
 ---
 
 ## Migrating into staging / production

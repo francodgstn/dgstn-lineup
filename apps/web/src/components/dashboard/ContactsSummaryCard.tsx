@@ -5,8 +5,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { Card, CardContent } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -229,22 +228,21 @@ export function ContactsSummaryCard({
 
   return (
     <Card className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <Users className="h-4 w-4 text-primary flex-shrink-0" />
-        <p className="text-sm font-bold flex-1 truncate">{title || 'Contacts'}</p>
-        <Select value={dimension} onValueChange={(v) => { if (v) handleDimensionChange(v) }}>
-          <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {DIMENSIONS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      {valueOptions.length > 1 && (
-        <div className="px-4 pb-2">
-          <SeriesSelector options={valueOptions} selected={selectedValues} onToggle={handleToggle} />
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-primary flex-shrink-0" />
+          <CardTitle className="flex-1 truncate">{title || 'Contacts'}</CardTitle>
+          <Select value={dimension} onValueChange={(v) => { if (v) handleDimensionChange(v) }}>
+            <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {DIMENSIONS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
-      )}
-      <Separator />
+        {valueOptions.length > 1 && (
+          <SeriesSelector options={valueOptions} selected={selectedValues} onToggle={handleToggle} />
+        )}
+      </CardHeader>
       <CardContent className="flex-1 flex flex-col pb-4 pt-3">
         {!hasData ? (
           <div className="flex-1 flex items-center justify-center">

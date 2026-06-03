@@ -237,7 +237,7 @@ export function NotesTab({ contact }: { contact: Contact }) {
     queryKey: ['contact-notes', contact.id],
     queryFn: async () => {
       const snap = await getDocs(query(notesRef, orderBy('created_at', 'desc')))
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as ContactNote))
+      return snap.docs.map(d => ({ ...d.data(), id: d.id } as ContactNote))
     },
   })
 

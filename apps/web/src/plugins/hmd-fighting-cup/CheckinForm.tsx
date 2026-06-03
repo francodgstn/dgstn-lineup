@@ -21,7 +21,7 @@ function useFightingCupCategories(eventId: string) {
           orderBy('sort_order'),
         ),
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as EventCategory)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventCategory)
     },
   })
 }

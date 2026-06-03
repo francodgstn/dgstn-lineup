@@ -1,8 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -120,24 +119,25 @@ export function TopActivitiesCard({
 
   return (
     <Card className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <Dumbbell className="h-4 w-4 text-primary flex-shrink-0" />
-        <p className="text-sm font-bold flex-1 truncate">{title || 'Top activities'}</p>
-        <Select value={mode} onValueChange={(v) => { if (v) setMode(v) }}>
-          <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {MODES.map((m) => (
-              <SelectItem key={m.value} value={m.value}>
-                <div>
-                  <div className="text-xs font-medium">{m.label}</div>
-                  <div className="text-xs text-muted-foreground">{m.sublabel}</div>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <Separator />
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Dumbbell className="h-4 w-4 text-primary flex-shrink-0" />
+          <CardTitle className="flex-1 truncate">{title || 'Top activities'}</CardTitle>
+          <Select value={mode} onValueChange={(v) => { if (v) setMode(v) }}>
+            <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MODES.map((m) => (
+                <SelectItem key={m.value} value={m.value} textValue={m.label}>
+                  <div>
+                    <div className="text-xs font-medium">{m.label}</div>
+                    <div className="text-xs text-muted-foreground">{m.sublabel}</div>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
       <CardContent className="flex-1 py-2 pb-4">
         {ranked.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-2">

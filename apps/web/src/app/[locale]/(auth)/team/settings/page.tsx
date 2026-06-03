@@ -123,7 +123,7 @@ function useSubscriptionTypes(teamId: string | null) {
     queryFn: async () => {
       if (!teamId) return []
       const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SubscriptionType)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as SubscriptionType)
     },
   })
 }
@@ -135,7 +135,7 @@ function useAlertPresets(teamId: string | null) {
     queryFn: async () => {
       if (!teamId) return []
       const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AlertPreset)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as AlertPreset)
     },
   })
 }
@@ -149,7 +149,7 @@ function useGatewayIntegrations(teamId: string | null) {
       const snap = await getDocs(
         query(collection(db, TEAMS_COLLECTION, teamId, 'integrations'), where('type', '==', 'payment_gateway'))
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TeamIntegration)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TeamIntegration)
     },
   })
 }

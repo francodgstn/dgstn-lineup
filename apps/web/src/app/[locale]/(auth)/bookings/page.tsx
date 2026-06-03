@@ -118,7 +118,7 @@ function useBookings(teamId: string | null) {
         limit(200),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Booking)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Booking)
     },
   })
 }
@@ -621,7 +621,7 @@ export default function BookingsPage() {
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>

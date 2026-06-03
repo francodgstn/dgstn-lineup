@@ -265,7 +265,7 @@ function useTemplates(teamId: string | null) {
           orderBy('name', 'asc'),
         ),
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as OutreachTemplate)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as OutreachTemplate)
     },
   })
 }
@@ -1079,7 +1079,7 @@ function TemplateDialog({
           orderBy('name', 'asc'),
         ),
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as OutreachTemplate)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as OutreachTemplate)
     },
   })
 
@@ -1266,7 +1266,7 @@ export default function AutomationsPage() {
       const snap = await getDocs(
         collection(db, TEAMS_COLLECTION, currentTeamId, 'webhook_endpoints')
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as WebhookEndpoint)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as WebhookEndpoint)
     },
   })
 
@@ -1290,7 +1290,7 @@ export default function AutomationsPage() {
     setQuickStarting(true)
     try {
       const snap = await getDocs(collection(db, TEAMS_COLLECTION, currentTeamId, 'outreach_templates'))
-      const allTmpl = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const allTmpl = snap.docs.map(d => ({ ...d.data(), id: d.id }))
       const installedRuleKeys = new Set(rules.flatMap(r => r.system_key ? [r.system_key] : []))
       await installStarterBundle(currentTeamId, allTmpl, installedRuleKeys)
       invalidateAll()
@@ -1358,7 +1358,7 @@ export default function AutomationsPage() {
 
         {/* Loading */}
         {rulesLoading && (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-36 rounded-xl" />)}
           </div>
         )}
@@ -1391,7 +1391,7 @@ export default function AutomationsPage() {
         {activeRules.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Active</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-6 sm:grid-cols-2">
               {activeRules.map((rule) => (
                 <RuleCard
                   key={rule.id}
@@ -1411,7 +1411,7 @@ export default function AutomationsPage() {
         {pausedRules.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Paused</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-6 sm:grid-cols-2">
               {pausedRules.map((rule) => (
                 <RuleCard
                   key={rule.id}

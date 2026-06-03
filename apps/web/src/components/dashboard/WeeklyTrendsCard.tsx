@@ -69,7 +69,7 @@ export function WeeklyTrendsCard({
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-sm font-semibold">Weekly trends</CardTitle>
+          <CardTitle className="font-bold">Weekly trends</CardTitle>
         </div>
       </CardHeader>
       <CardContent>

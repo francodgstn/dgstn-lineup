@@ -457,7 +457,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         )
         const sessSnap = await getDocs(sessQ)
         const sessList: SessionProfile[] = sessSnap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as SessionProfile))
+          .map((d) => ({ ...d.data(), id: d.id } as SessionProfile))
           .filter((s) => s.start && s.end && s.start.toDate() <= windowEnd)
         setSessions(sessList)
 

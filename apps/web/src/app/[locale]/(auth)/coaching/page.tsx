@@ -70,7 +70,7 @@ function useUpcomingSlots(teamId: string | null) {
         limit(60),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Session & { id: string })
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Session & { id: string })
     },
   })
 }
@@ -87,7 +87,7 @@ function useTemplates(teamId: string | null) {
         orderBy('created_at', 'desc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as CoachAvailability & { id: string })
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as CoachAvailability & { id: string })
     },
   })
 }
@@ -387,7 +387,7 @@ function SlotDetailDialog({ slot, onClose, onCancelled }: {
       const snap = await getDocs(collection(db, SESSIONS_COLLECTION, slot.id, 'bookings'))
       setBookings(
         snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }) as CoachBooking & { id: string })
+          .map((d) => ({ ...d.data(), id: d.id }) as CoachBooking & { id: string })
           .filter((b) => b.status === 'confirmed')
       )
     } finally { setLoadingBookings(false) }

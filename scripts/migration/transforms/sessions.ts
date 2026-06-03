@@ -6,7 +6,10 @@ export function transformSession(
 
   // Field renames
   if ('activity_id' in out) { out.activityId = out.activity_id; delete out.activity_id }
-  delete out.portal_bookings_count  // managed by triggers in new system
+  delete out.id                     // let Firestore doc ID be the canonical id; avoid collisions in web app spread
+  // portal_bookings_count → bookings_count (pass06 overwrites this with the real subcollection count)
+  if (out.bookings_count == null) out.bookings_count = (out.portal_bookings_count as number | undefined) ?? 0
+  delete out.portal_bookings_count
   delete out.notes                  // session comments/descriptions excluded from migration
 
   // Enrich with activity name/type

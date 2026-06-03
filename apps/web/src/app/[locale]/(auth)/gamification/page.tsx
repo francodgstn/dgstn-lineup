@@ -120,7 +120,7 @@ function useLeaderboardContacts(teamId: string | null) {
         orderBy('current_month_score', 'desc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Contact)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
     },
   })
 }
@@ -138,7 +138,7 @@ function useActivities(teamId: string | null) {
         orderBy('name', 'asc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Activity)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Activity)
     },
   })
 }
@@ -399,7 +399,7 @@ function ScoringTab({
 
       <div className="border-t pt-4 space-y-4">
         <SectionHeader title={t('scoringGeneral')} />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <NumField
             label={t('defaultBaseScore')}
             help={t('defaultBaseScoreHelp')}
@@ -623,7 +623,7 @@ function BadgesTab({
         <p>{t('badgesAboutDesc')}</p>
       </InfoBox>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {BADGE_SECTIONS.map((section) => {
           const enabledPath = `badge_thresholds.${section.key}.enabled` as const
           const sectionKey = section.key as keyof GamificationSettings['badge_thresholds']

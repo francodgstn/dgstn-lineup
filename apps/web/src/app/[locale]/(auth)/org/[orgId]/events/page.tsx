@@ -33,9 +33,11 @@ import { DateTimePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, CalendarRange, MapPin, CalendarDays } from 'lucide-react'
+import { Plus, Pencil, Trash2, CalendarRange, MapPin, CalendarDays, ChevronRight } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
 import { EVENTS_COLLECTION } from '@lineup/shared'
 import type { Event, EventType } from '@lineup/shared'
+import type { Route } from 'next'
 
 const EVENT_TYPES: EventType[] = ['competition', 'camp', 'exam', 'seminar', 'workshop']
 
@@ -76,7 +78,7 @@ function useOrgEvents(orgId: string, upcoming: boolean) {
         orderBy('start', upcoming ? 'asc' : 'desc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Event)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Event)
     },
   })
 }
@@ -287,7 +289,10 @@ export default function OrgEventsPage() {
               <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <CalendarDays className="h-4 w-4 text-primary" />
               </div>
-              <div className="flex-1 min-w-0">
+              <Link
+                href={`/org/${orgId}/events/${event.id}` as Route}
+                className="flex-1 min-w-0 block"
+              >
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-sm">{event.title}</span>
                   <Badge variant="secondary" className="text-xs capitalize shrink-0">{event.type}</Badge>
@@ -300,17 +305,20 @@ export default function OrgEventsPage() {
                     </span>
                   )}
                 </p>
+              </Link>
+              <div className="flex items-center gap-1 shrink-0">
+                {isAdmin && (
+                  <>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(event); setDialogOpen(true) }}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setDeleting(event)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                )}
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </div>
-              {isAdmin && (
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(event); setDialogOpen(true) }}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setDeleting(event)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              )}
             </div>
           ))}
         </div>

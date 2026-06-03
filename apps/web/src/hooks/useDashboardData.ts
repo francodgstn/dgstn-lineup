@@ -122,7 +122,7 @@ export function useDashboardData(
         where('start', '<', Timestamp.fromDate(new Date())),
         orderBy('start', 'asc'),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SessionDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as SessionDoc))
         .filter((s) => !s.cancelled_at)
     },
   })
@@ -139,7 +139,7 @@ export function useDashboardData(
         where('start', '<', Timestamp.fromDate(compEnd!)),
         orderBy('start', 'asc'),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SessionDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as SessionDoc))
         .filter((s) => !s.cancelled_at)
     },
   })
@@ -155,7 +155,7 @@ export function useDashboardData(
         where('joinedAt', '>=', Timestamp.fromDate(mainStart)),
         orderBy('joinedAt', 'asc'),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as BookingDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as BookingDoc))
     },
   })
 
@@ -171,7 +171,7 @@ export function useDashboardData(
         where('joinedAt', '>=', Timestamp.fromDate(mainStart)),
         orderBy('joinedAt', 'asc'),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as BookingDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as BookingDoc))
     },
   })
 
@@ -187,7 +187,7 @@ export function useDashboardData(
         where('joinedAt', '<', Timestamp.fromDate(compEnd!)),
         orderBy('joinedAt', 'asc'),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as BookingDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as BookingDoc))
     },
   })
 
@@ -204,7 +204,7 @@ export function useDashboardData(
         where('joinedAt', '<', Timestamp.fromDate(compEnd!)),
         orderBy('joinedAt', 'asc'),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as BookingDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as BookingDoc))
     },
   })
 
@@ -217,7 +217,7 @@ export function useDashboardData(
         collection(db, ACTIVITIES_COLLECTION),
         where('teamId', '==', teamId),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ActivityDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as ActivityDoc))
     },
   })
 
@@ -230,7 +230,7 @@ export function useDashboardData(
         collection(db, TEAMS_COLLECTION, teamId!, 'subscription_types'),
         orderBy('name', 'asc'),
       ))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SubscriptionTypeDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as SubscriptionTypeDoc))
     },
   })
 

@@ -95,7 +95,7 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
         )
         const snap = await getDocs(q)
         const list: SessionPublicProfile[] = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as SessionPublicProfile))
+          .map((d) => ({ ...d.data(), id: d.id } as SessionPublicProfile))
           .filter((s) => s.start && s.end) // session public profiles have start/end
         setSessions(list)
       } catch (err) {

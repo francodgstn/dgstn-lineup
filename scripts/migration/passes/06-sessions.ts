@@ -41,16 +41,6 @@ export async function pass06Sessions(
 
     for (const [, d] of sessionDocs) {
       const tgtRef = tgt.collection('sessions').doc(d.id)
-      if (!cfg.dryRun) {
-        const existing = await tgtRef.get()
-        if (existing.exists) { bw.skip(); continue }
-      }
-
-      // Ensure teamId is always set (legacy sessions may only have teacher)
-      const data = d.data() as Record<string, unknown>
-      if (!data.teamId) data.teamId = teamId
-
-      bw.set(tgtRef, transformSession(data, activityMap))
 
       // Participants
       const partSnap = await sourceDb().collection('sessions').doc(d.id).collection('participants').get()
@@ -63,9 +53,13 @@ export async function pass06Sessions(
         bw.set(pRef, transformParticipant(pd.id, pd.data() as Record<string, unknown>, teamId))
       }
 
-      // Bookings
+      // Bookings — always walk subcollection so post-migration bookings are picked up on re-runs
       const bookSnap = await sourceDb().collection('sessions').doc(d.id).collection('bookings').get()
+      let bookingsCount = 0
+      let trialBookingsCount = 0
       for (const bd of bookSnap.docs) {
+        bookingsCount++
+        if (bd.data().is_new_contact !== false) trialBookingsCount++
         const bRef = tgt.collection('sessions').doc(d.id).collection('bookings').doc(bd.id)
         if (!cfg.dryRun) {
           const existing = await bRef.get()
@@ -73,6 +67,25 @@ export async function pass06Sessions(
         }
         bw.set(bRef, transformBooking(bd.id, bd.data() as Record<string, unknown>, teamId))
       }
+
+      // Write session doc — skip if already exists but still update counts via merge
+      if (!cfg.dryRun) {
+        const existing = await tgtRef.get()
+        if (existing.exists) {
+          bw.merge(tgtRef, { bookings_count: bookingsCount, trial_bookings_count: trialBookingsCount })
+          continue
+        }
+      }
+
+      // Ensure teamId is always set (legacy sessions may only have teacher)
+      const data = d.data() as Record<string, unknown>
+      if (!data.teamId) data.teamId = teamId
+
+      bw.set(tgtRef, {
+        ...transformSession(data, activityMap),
+        bookings_count: bookingsCount,
+        trial_bookings_count: trialBookingsCount,
+      })
     }
     await bw.done()
   }

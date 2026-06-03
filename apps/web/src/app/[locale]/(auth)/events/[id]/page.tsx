@@ -352,7 +352,7 @@ export default function EventDetailPage() {
     enabled: !!id && tab === 'attendees',
     queryFn: async () => {
       const snap = await getDocs(collection(db, EVENTS_COLLECTION, id, 'attendees'))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as EventAttendee)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventAttendee)
     },
   })
 
@@ -365,7 +365,7 @@ export default function EventDetailPage() {
         orderBy('sentAt', 'desc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as EventInvitation)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventInvitation)
     },
   })
 

@@ -104,7 +104,7 @@ function useActivities(teamId: string | null) {
         orderBy('name', 'asc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Activity)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Activity)
     },
   })
 }

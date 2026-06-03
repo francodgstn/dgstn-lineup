@@ -178,6 +178,18 @@ Start from repo root (Java required — use external terminal if VS Code's integ
 firebase emulators:start --only auth,firestore
 ```
 
+### Emulator data modes
+
+Two isolated datasets, never mixed:
+
+| Command | Dataset | Notes |
+|---|---|---|
+| `pnpm emulators:seed` | Fresh seed (wipes + re-seeds) | Three plan-tier demo accounts |
+| `pnpm emulators:demo` | `snapshots/demo/` | Persistent demo data for live demo; auto-saved on exit |
+| `pnpm emulators:hmd` | `snapshots/hmd-migration/` | Real HMD data after migration; auth+firestore only |
+
+`snapshots/` is gitignored. Bootstrap each snapshot once — see `scripts/MIGRATE-HMD.md` for the HMD snapshot and the inline docs in `scripts/emulators-demo.mjs` for the demo snapshot.
+
 ---
 
 ## Firestore security rules

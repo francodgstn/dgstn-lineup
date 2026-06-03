@@ -5,7 +5,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -109,27 +109,29 @@ export function TrialFunnelCard({
 
   return (
     <Card className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <TrendingUp className="h-4 w-4 text-primary flex-shrink-0" />
-        <p className="text-sm font-bold flex-1 truncate">{title || 'Trial Conversion'}</p>
-        {summaryRate !== null && (
-          <div className="flex items-baseline gap-1 flex-shrink-0">
-            <span className="text-lg font-black leading-none" style={{ color: COLOR_RATE }}>{summaryRate}%</span>
-            {rateDelta !== null && (
-              <span className={`text-xs ${rateDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {rateDelta >= 0 ? '+' : ''}{rateDelta}pp
-              </span>
-            )}
-          </div>
-        )}
-        <Select value={metric} onValueChange={(v) => { if (v) setMetric(v) }}>
-          <SelectTrigger className="h-7 text-xs w-[100px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="counts">Counts</SelectItem>
-            <SelectItem value="rate">Rate only</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-primary flex-shrink-0" />
+          <CardTitle className="flex-1 truncate">{title || 'Trial Conversion'}</CardTitle>
+          {summaryRate !== null && (
+            <div className="flex items-baseline gap-1 flex-shrink-0">
+              <span className="text-lg font-black leading-none" style={{ color: COLOR_RATE }}>{summaryRate}%</span>
+              {rateDelta !== null && (
+                <span className={`text-xs ${rateDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  {rateDelta >= 0 ? '+' : ''}{rateDelta}pp
+                </span>
+              )}
+            </div>
+          )}
+          <Select value={metric} onValueChange={(v) => { if (v) setMetric(v) }}>
+            <SelectTrigger className="h-7 text-xs w-[100px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="counts">Counts</SelectItem>
+              <SelectItem value="rate">Rate only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
       <Separator />
       <CardContent className="flex-1 flex flex-col pb-4 pt-3">
         {!hasData && metric !== 'rate' ? (

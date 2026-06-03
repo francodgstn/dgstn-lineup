@@ -107,7 +107,7 @@ export function EngagementMatrixCard({
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
             <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="text-sm font-semibold">Engagement matrix</CardTitle>
+            <CardTitle className="font-bold">Engagement matrix</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -125,7 +125,7 @@ export function EngagementMatrixCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="text-sm font-semibold">Engagement matrix</CardTitle>
+            <CardTitle className="font-bold">Engagement matrix</CardTitle>
           </div>
           <button
             onClick={() => setShowTrajectory((v) => !v)}

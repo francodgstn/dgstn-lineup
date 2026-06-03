@@ -109,7 +109,7 @@ function useEvents(teamId: string | null, orgId: string | null | undefined, upco
         limit(50),
       )
       const teamSnap = await getDocs(teamQ)
-      const teamEvents = teamSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Event)
+      const teamEvents = teamSnap.docs.map((d) => ({ ...d.data(), id: d.id }) as Event)
 
       // Org-wide events (only when team belongs to an org)
       let orgEvents: Event[] = []
@@ -124,7 +124,7 @@ function useEvents(teamId: string | null, orgId: string | null | undefined, upco
           limit(20),
         )
         const orgSnap = await getDocs(orgQ)
-        orgEvents = orgSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Event)
+        orgEvents = orgSnap.docs.map((d) => ({ ...d.data(), id: d.id }) as Event)
       }
 
       // Merge and re-sort
@@ -147,7 +147,7 @@ function useTeamMembers(teamId: string | null) {
       const snap = await getDocs(
         query(collection(db, TEAMS_COLLECTION, teamId!, TEAM_MEMBERS_SUBCOLLECTION), orderBy('joined'))
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MemberDoc))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as MemberDoc))
     },
   })
 }
@@ -562,7 +562,7 @@ export default function EventsPage() {
   const emptyText = tab === 'upcoming' ? t('emptyUpcoming') : t('emptyPast')
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

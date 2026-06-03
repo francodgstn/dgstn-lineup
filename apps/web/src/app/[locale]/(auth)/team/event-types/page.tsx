@@ -212,7 +212,7 @@ export default function EventTypesPage() {
       const snap = await getDocs(
         query(collection(db, TEAMS_COLLECTION, currentTeamId, EVENT_TYPES_SUBCOLLECTION), orderBy('name')),
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as EventTypeConfig)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventTypeConfig)
     },
   })
 
@@ -255,7 +255,7 @@ export default function EventTypesPage() {
       </div>
 
       {/* Built-in types */}
-      <section className="space-y-3">
+      <section className="space-y-5">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Built-in</h2>
         <div className="rounded-xl border overflow-hidden">
           {BUILTIN_EVENT_TYPES.map((type) => (
@@ -273,7 +273,7 @@ export default function EventTypesPage() {
 
       {/* Plugin-provided types */}
       {pluginTypes.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-5">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">From plugins</h2>
           <div className="rounded-xl border overflow-hidden">
             {pluginTypes.map((plugin) => (
@@ -291,7 +291,7 @@ export default function EventTypesPage() {
       )}
 
       {/* Custom types */}
-      <section className="space-y-3">
+      <section className="space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Custom</h2>
           <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true) }}>

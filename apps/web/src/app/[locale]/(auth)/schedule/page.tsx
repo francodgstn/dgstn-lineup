@@ -122,7 +122,7 @@ function useAllSessions(teamId: string | null, year: number, month: number) {
         where('start', '<',  to),
         orderBy('start', 'asc'),
       ))
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Session)
+      return snap.docs.map(d => ({ ...d.data(), id: d.id }) as Session)
     },
   })
 }
@@ -139,7 +139,7 @@ function useActivities(teamId: string | null) {
         where('teamId', '==', teamId),
         orderBy('name', 'asc'),
       ))
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Activity)
+      return snap.docs.map(d => ({ ...d.data(), id: d.id }) as Activity)
     },
   })
 }
@@ -157,7 +157,7 @@ function useAllEvents(teamId: string | null, orgId: string | null | undefined) {
         where('deleted_at', '==', null),
         orderBy('start', 'asc'),
       ))
-      const teamEvents = teamSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Event)
+      const teamEvents = teamSnap.docs.map(d => ({ ...d.data(), id: d.id }) as Event)
       let orgEvents: Event[] = []
       if (orgId) {
         const orgSnap = await getDocs(query(
@@ -167,7 +167,7 @@ function useAllEvents(teamId: string | null, orgId: string | null | undefined) {
           where('deleted_at', '==', null),
           orderBy('start', 'asc'),
         ))
-        orgEvents = orgSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Event)
+        orgEvents = orgSnap.docs.map(d => ({ ...d.data(), id: d.id }) as Event)
       }
       return [...teamEvents, ...orgEvents]
     },
@@ -183,7 +183,7 @@ function useTeamMembers(teamId: string | null) {
         collection(db, TEAMS_COLLECTION, teamId!, TEAM_MEMBERS_SUBCOLLECTION),
         orderBy('joined'),
       ))
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as MemberDoc))
+      return snap.docs.map(d => ({ ...d.data(), id: d.id } as MemberDoc))
     },
   })
 }

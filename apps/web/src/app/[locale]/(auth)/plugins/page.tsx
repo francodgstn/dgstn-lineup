@@ -268,7 +268,7 @@ export default function PluginsPage() {
           <Skeleton className="h-7 w-32" />
           <Skeleton className="h-4 w-72" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-6 sm:grid-cols-2">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
         </div>
       </div>
@@ -298,7 +298,7 @@ export default function PluginsPage() {
       </div>
 
       {/* Grid */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         {filteredPlugins.map((manifest) => (
           <PluginCard
             key={manifest.id}
