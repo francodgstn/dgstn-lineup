@@ -1,6 +1,6 @@
 {
   "site": {
-    "name": "Lineup",
+    "name": "Linyup",
     "description": "Das All-in-one-Verwaltungstool für Trainer und Vereine — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort."
   },
   "nav": {
@@ -12,13 +12,13 @@
   "hero": {
     "tagline": "Für Trainer, Fitnessstudios und Vereine",
     "title": "Lektionen planen. Schüler kennen. Verein wachsen lassen.",
-    "subtitle": "Lineup ist das All-in-one-Verwaltungstool für Trainer und Vereine — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort.",
+    "subtitle": "Linyup ist das All-in-one-Verwaltungstool für Trainer und Vereine — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort.",
     "cta": "Kostenlos starten",
     "ctaSecondary": "Funktionen ansehen"
   },
   "features": {
     "title": "Alles, was du für einen modernen Verein brauchst",
-    "subtitle": "Von der Einzelperson bis zur Mehrstandort-Organisation — Lineup passt sich deiner Arbeitsweise an.",
+    "subtitle": "Von der Einzelperson bis zur Mehrstandort-Organisation — Linyup passt sich deiner Arbeitsweise an.",
     "sessions": {
       "title": "Lektionen",
       "description": "Klassen mühelos planen und verfolgen. Wiederkehrende Lektionen einrichten, Anwesenheit verwalten und die gesamte Woche in der Kalenderansicht überblicken."
@@ -38,22 +38,26 @@
     "comingSoon": "Preise folgen bald",
     "earlyAccessCta": "Frühen Zugang sichern",
     "earlyAccessNote": "Kostenlos während des Early Access. Keine Kreditkarte erforderlich.",
+    "mostPopular": "Am beliebtesten",
     "coach": {
       "name": "Coach",
-      "audience": "Für Einzeltrainer und Privatcoaches."
+      "audience": "Für Einzeltrainer und Privatcoaches.",
+      "features": ["Lektionen & Anwesenheit", "Bis zu 50 Kontakte", "Schüler-App"]
     },
     "club": {
       "name": "Verein",
-      "audience": "Für Fitnessstudios und Vereine mit mehreren Trainern und Klassen."
+      "audience": "Für Fitnessstudios und Vereine mit mehreren Trainern und Klassen.",
+      "features": ["Alles aus Coach", "Unbegrenzte Kontakte", "Automatisierungen & Gamification", "Trends & Analysen"]
     },
     "org": {
       "name": "Organisation",
-      "audience": "Für Mehrstandort-Vereine, Verbände und Franchises."
+      "audience": "Für Mehrstandort-Vereine, Verbände und Franchises.",
+      "features": ["Alles aus Verein", "Mehr-Vereins-Hierarchie", "Organisationsweite Ranglisten & Events"]
     }
   },
   "cta": {
     "title": "Bereit loszulegen?",
-    "subtitle": "Schliess dich Trainern und Vereinen an, die Lineup bereits für ihr Business nutzen.",
+    "subtitle": "Schliess dich Trainern und Vereinen an, die Linyup bereits für ihr Business nutzen.",
     "button": "Kostenlos starten"
   },
   "footer": {
@@ -63,6 +67,6 @@
       "terms": "AGB",
       "contact": "Kontakt"
     },
-    "copyright": "© {year} Lineup. Alle Rechte vorbehalten."
+    "copyright": "© {year} Linyup. Alle Rechte vorbehalten."
   }
 }

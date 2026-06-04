@@ -9,7 +9,7 @@ interface Props {
 }
 
 const { title, description, lang, canonicalUrl } = Astro.props;
-const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? 'https://lineup.io';
+const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? 'https://linyup.com';
 const canonical = canonicalUrl ?? `${siteUrl}${Astro.url.pathname}`;
 ---
 
@@ -27,15 +27,26 @@ const canonical = canonicalUrl ?? `${siteUrl}${Astro.url.pathname}`;
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Lineup" />
+    <meta property="og:site_name" content="Linyup" />
 
     <!-- Favicon -->
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 
-    <!-- Preload font subset (system-ui, no external request) -->
-    <meta name="theme-color" content="#4f46e5" />
+    <!-- Brand fonts: Anton (display), Sora (section heads), Fredoka (logo/headings), Plus Jakarta Sans (body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Anton&family=Sora:wght@600;700;800&family=Fredoka:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <meta name="theme-color" content="#7c3aed" />
   </head>
   <body>
     <slot />
+
+    <!-- Lucide icons (renders all <i data-lucide> tags) -->
+    <script is:inline src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script is:inline>lucide.createIcons();</script>
   </body>
 </html>

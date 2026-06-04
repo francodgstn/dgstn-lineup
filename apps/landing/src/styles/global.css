@@ -58,3 +58,36 @@ h1, h2, h3 { color: var(--heading); margin: 0; }
 .logo { display: inline-flex; align-items: center; gap: 0.32em; }
 .logo-mark { display: block; overflow: visible; flex-shrink: 0; }
 .logo-word { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; line-height: 1; white-space: nowrap; }
+
+/* ---- Shared layout + UI primitives (used across landing components) ---- */
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+svg { display: block; }
+i[data-lucide] { display: inline-flex; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: var(--radius-lg); font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: all .15s; font-family: inherit; }
+.btn svg { width: 17px; height: 17px; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-primary:active { transform: translateY(1px); }
+.btn-ghost { color: var(--foreground); }
+.btn-ghost:hover { color: var(--primary); }
+.btn-outline { border-color: var(--border); background: var(--card); }
+.btn-outline:hover { background: var(--purple-50); }
+.btn-white { background: #fff; color: var(--purple-900); }
+.btn-white:hover { background: var(--purple-50); }
+.btn-lg { height: 48px; padding: 0 24px; font-size: 15px; }
+.btn-block { justify-content: center; }
+
+/* Eyebrow pill */
+.eyebrow { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--purple-700); background: var(--purple-50); border: 1px solid var(--purple-200); padding: 5px 12px; border-radius: var(--radius-pill); }
+.eyebrow svg { width: 13px; height: 13px; }
+
+/* Section header */
+.sec-head { text-align: center; max-width: 60ch; margin: 0 auto 48px; }
+.sec-head h2 { font-family: "Sora", var(--font-sans); font-weight: 700; font-size: 40px; letter-spacing: -0.01em; }
+.sec-head p { font-size: 17px; color: var(--muted-foreground); margin: 14px auto 0; }
+
+@media (max-width: 860px) {
+  .sec-head h2 { font-size: 30px; }
+}

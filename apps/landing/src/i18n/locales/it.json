@@ -1,6 +1,6 @@
 {
   "site": {
-    "name": "Lineup",
+    "name": "Linyup",
     "description": "Lo strumento di gestione all-in-one per coach e club — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto."
   },
   "nav": {
@@ -12,13 +12,13 @@
   "hero": {
     "tagline": "Per coach, palestre e club",
     "title": "Gestisci le tue lezioni. Conosci i tuoi studenti. Fai crescere il tuo club.",
-    "subtitle": "Lineup è lo strumento di gestione all-in-one per coach e club — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto.",
+    "subtitle": "Linyup è lo strumento di gestione all-in-one per coach e club — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto.",
     "cta": "Inizia gratis",
     "ctaSecondary": "Scopri le funzionalità"
   },
   "features": {
     "title": "Tutto ciò di cui hai bisogno per gestire un club moderno",
-    "subtitle": "Dal coach solo all'organizzazione multi-sede, Lineup si adatta al tuo modo di lavorare.",
+    "subtitle": "Dal coach solo all'organizzazione multi-sede, Linyup si adatta al tuo modo di lavorare.",
     "sessions": {
       "title": "Sessioni",
       "description": "Pianifica e monitora le lezioni senza sforzo. Crea sessioni ricorrenti, gestisci le presenze e vedi l'intera settimana in un colpo d'occhio."
@@ -38,22 +38,26 @@
     "comingSoon": "Prezzi in arrivo",
     "earlyAccessCta": "Accesso anticipato",
     "earlyAccessNote": "Gratuito durante l'accesso anticipato. Nessuna carta di credito richiesta.",
+    "mostPopular": "Il più popolare",
     "coach": {
       "name": "Coach",
-      "audience": "Per istruttori singoli e coach privati."
+      "audience": "Per istruttori singoli e coach privati.",
+      "features": ["Sessioni e presenze", "Fino a 50 contatti", "App mobile per studenti"]
     },
     "club": {
       "name": "Club",
-      "audience": "Per palestre e club con più coach e corsi."
+      "audience": "Per palestre e club con più coach e corsi.",
+      "features": ["Tutto di Coach", "Contatti illimitati", "Automazioni e gamification", "Tendenze e analisi"]
     },
     "org": {
       "name": "Organizzazione",
-      "audience": "Per club multi-sede, federazioni e franchising."
+      "audience": "Per club multi-sede, federazioni e franchising.",
+      "features": ["Tutto di Club", "Gerarchia multi-club", "Classifiche ed eventi a livello di organizzazione"]
     }
   },
   "cta": {
     "title": "Pronto per iniziare?",
-    "subtitle": "Unisciti ai coach e ai club che già usano Lineup per gestire la propria attività.",
+    "subtitle": "Unisciti ai coach e ai club che già usano Linyup per gestire la propria attività.",
     "button": "Inizia gratis"
   },
   "footer": {
@@ -63,6 +67,6 @@
       "terms": "Termini",
       "contact": "Contatto"
     },
-    "copyright": "© {year} Lineup. Tutti i diritti riservati."
+    "copyright": "© {year} Linyup. Tutti i diritti riservati."
   }
 }

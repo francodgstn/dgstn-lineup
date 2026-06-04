@@ -1,4 +1,5 @@
 ---
+import Logo from './Logo.astro';
 import LanguageSwitcher from './LanguageSwitcher.astro';
 import type { Language } from '~/i18n';
 import { useTranslations, getLocalizedPath } from '~/i18n';
@@ -13,40 +14,36 @@ const year = new Date().getFullYear();
 const copyright = t('footer.copyright').replace('{year}', String(year));
 ---
 
-<footer class="bg-gray-900 text-gray-400 py-12">
-  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex flex-col md:flex-row items-center md:items-start justify-between gap-8">
-      <!-- Brand -->
-      <div class="text-center md:text-left">
-        <a href={getLocalizedPath('/', lang)} class="inline-flex items-center gap-2 text-white font-bold text-lg mb-2">
-          <span class="text-brand-400">▲</span>
-          Lineup
-        </a>
-        <p class="text-sm text-gray-500 mt-1 max-w-xs">
-          {t('footer.tagline')}
-        </p>
-      </div>
-
-      <!-- Links -->
-      <div class="flex flex-col items-center md:items-end gap-4">
-        <div class="flex items-center gap-4 text-sm">
-          <a href={getLocalizedPath('/privacy', lang)} class="hover:text-white transition-colors">
-            {t('footer.links.privacy')}
-          </a>
-          <a href={getLocalizedPath('/terms', lang)} class="hover:text-white transition-colors">
-            {t('footer.links.terms')}
-          </a>
-          <a href="mailto:hello@lineup.io" class="hover:text-white transition-colors">
-            {t('footer.links.contact')}
-          </a>
-        </div>
-
-        <LanguageSwitcher currentLang={lang} variant="footer" />
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a href={getLocalizedPath('/', lang)} class="brand" aria-label={t('site.name')}>
+        <Logo size={18} />
+      </a>
+      <span class="tag">{t('footer.tagline')}</span>
+      <div class="foot-links">
+        <a href={getLocalizedPath('/privacy', lang)}>{t('footer.links.privacy')}</a>
+        <a href={getLocalizedPath('/terms', lang)}>{t('footer.links.terms')}</a>
+        <a href="mailto:hello@linyup.com">{t('footer.links.contact')}</a>
+        <LanguageSwitcher currentLang={lang} />
       </div>
     </div>
-
-    <div class="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-600">
-      {copyright}
-    </div>
+    <div class="copy">{copyright}</div>
   </div>
 </footer>
+
+<style>
+  footer { padding: 48px 0; border-top: 1px solid var(--border); }
+  .foot { display: flex; align-items: center; gap: 16px; }
+  .brand { display: inline-flex; align-items: center; }
+  .foot .tag { font-size: 13.5px; color: var(--muted-foreground); max-width: 36ch; }
+  .foot-links { margin-left: auto; display: flex; align-items: center; gap: 22px; }
+  .foot-links a { font-size: 13.5px; color: var(--muted-foreground); }
+  .foot-links a:hover { color: var(--foreground); }
+  .copy { font-size: 12.5px; color: var(--muted-foreground); margin-top: 22px; }
+
+  @media (max-width: 860px) {
+    .foot { flex-direction: column; align-items: flex-start; gap: 14px; }
+    .foot-links { margin-left: 0; flex-wrap: wrap; }
+  }
+</style>
