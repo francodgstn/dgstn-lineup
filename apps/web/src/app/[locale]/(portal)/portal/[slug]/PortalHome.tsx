@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import { resolveBackground, getTextColor } from '@/lib/portal'
-import type { TeamLink, SocialLink, PortalTheme, PortalBackground } from '@lineup/shared'
+import type { TeamLink, SocialLink, PortalTheme, PortalBackground } from '@linyup/shared'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -268,7 +268,7 @@ export default function PortalHome({ slug, team: teamProp, onLinkClick }: Props)
         <p className="mt-12 text-center text-[11px]" style={{ color: textMuted }}>
           Powered by{' '}
           <a href="/" className="hover:underline font-medium" style={{ color: textMuted }}>
-            Lineup
+            Linyup
           </a>
         </p>
       </div>

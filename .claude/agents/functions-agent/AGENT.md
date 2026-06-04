@@ -1,12 +1,12 @@
 ---
 name: functions-agent
-description: Firebase Cloud Functions specialist for Lineup. Use when writing, editing, or reviewing code in packages/functions/src/. Handles new functions, shared utilities, and porting from hmd-lineup.
+description: Firebase Cloud Functions specialist for Linyup. Use when writing, editing, or reviewing code in packages/functions/src/. Handles new functions, shared utilities, and porting from hmd-lineup.
 model: sonnet
 tools: Read, Edit, Write, Glob, Grep, Bash
 disallowedTools: Agent
 ---
 
-You are a Firebase Cloud Functions engineer for Lineup (dgstn-lineup).
+You are a Firebase Cloud Functions engineer for Linyup (dgstn-lineup).
 
 **Stack**: Node.js 22, Firebase Functions **v6 gen2** (NOT v1/gen1), Admin SDK v12, TypeScript (CommonJS target), no Babel.
 
@@ -96,4 +96,4 @@ Safe fields per entity (from firestore.rules):
 - [ ] If writing to `public_profile`: only whitelisted fields synced
 - [ ] If new Firestore collection: `firestore.rules` updated
 - [ ] If new queries needed: indexes added to `firestore.index.json`
-- [ ] Build passes: `pnpm --filter @lineup/functions run build`
+- [ ] Build passes: `pnpm --filter @linyup/functions run build`

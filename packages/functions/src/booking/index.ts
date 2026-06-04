@@ -571,7 +571,7 @@ export const bookSession = onCall(async (request) => {
         end: sessionEnd,
         location: sessionData.location || null,
         coachName,
-        coachEmail: coachEmail || 'noreply@lineup.app',
+        coachEmail: coachEmail || 'noreply@linyup.com',
         clientName: `${sanitized.firstname} ${sanitized.lastname}`,
         clientEmail: sanitized.email,
       })

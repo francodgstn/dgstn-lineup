@@ -12,7 +12,7 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'
-import { SESSIONS_COLLECTION, ACTIVITIES_COLLECTION } from '@lineup/shared'
+import { SESSIONS_COLLECTION, ACTIVITIES_COLLECTION } from '@linyup/shared'
 
 const BATCH_SIZE = 500
 

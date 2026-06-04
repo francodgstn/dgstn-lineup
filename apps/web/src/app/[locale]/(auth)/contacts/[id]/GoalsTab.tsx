@@ -8,8 +8,8 @@ import {
   doc, serverTimestamp, Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION } from '@lineup/shared'
-import type { Goal, GoalEvaluation, GoalStatus, GoalType, TrainingIndicator } from '@lineup/shared'
+import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION } from '@linyup/shared'
+import type { Goal, GoalEvaluation, GoalStatus, GoalType, TrainingIndicator } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'

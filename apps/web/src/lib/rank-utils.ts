@@ -1,4 +1,4 @@
-import type { Contact, RankingSystem, RankLevel } from '@lineup/shared'
+import type { Contact, RankingSystem, RankLevel } from '@linyup/shared'
 
 export function getPrimaryRank(
   contact: Contact,

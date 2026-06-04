@@ -3,8 +3,8 @@
 import { Lock } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
-import type { SaasPlan, PlanFeature } from '@lineup/shared'
-import { PLAN_ORDER } from '@lineup/shared'
+import type { SaasPlan, PlanFeature } from '@linyup/shared'
+import { PLAN_ORDER } from '@linyup/shared'
 
 interface PlanGateProps {
   /** Require at least this plan tier */

@@ -21,7 +21,7 @@ import {
 } from 'date-fns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PortalShell, PortalButton } from '../PortalShell'
-import type { BookingSettings } from '@lineup/shared'
+import type { BookingSettings } from '@linyup/shared'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 

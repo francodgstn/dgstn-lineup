@@ -3,8 +3,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { collection, getDocs, query, orderBy } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION, EVENT_TYPES_SUBCOLLECTION, BUILTIN_EVENT_TYPES } from '@lineup/shared'
-import type { EventTypeConfig } from '@lineup/shared'
+import { TEAMS_COLLECTION, EVENT_TYPES_SUBCOLLECTION, BUILTIN_EVENT_TYPES } from '@linyup/shared'
+import type { EventTypeConfig } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 
 export interface SelectableEventType {

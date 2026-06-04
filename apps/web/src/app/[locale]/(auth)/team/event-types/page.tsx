@@ -23,8 +23,8 @@ import { Plus, Pencil, Trash2, Lock, Package } from 'lucide-react'
 import {
   TEAMS_COLLECTION, EVENT_TYPES_SUBCOLLECTION,
   BUILTIN_EVENT_TYPES,
-} from '@lineup/shared'
-import type { EventTypeConfig, EventTypeField, EventTypeFieldType } from '@lineup/shared'
+} from '@linyup/shared'
+import type { EventTypeConfig, EventTypeField, EventTypeFieldType } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { useTranslations } from 'next-intl'
 

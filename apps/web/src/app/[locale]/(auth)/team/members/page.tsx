@@ -45,8 +45,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION, TEAM_INVITATIONS_SUBCOLLECTION } from '@lineup/shared'
-import type { TeamMember, TeamInvitation, TeamRole } from '@lineup/shared'
+import { TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION, TEAM_INVITATIONS_SUBCOLLECTION } from '@linyup/shared'
+import type { TeamMember, TeamInvitation, TeamRole } from '@linyup/shared'
 
 // ----- types ----------------------------------------------------------------
 

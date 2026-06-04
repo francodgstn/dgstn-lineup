@@ -8,8 +8,8 @@ import {
   doc, serverTimestamp, Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { CONTACTS_COLLECTION, CONTACT_NOTES_SUBCOLLECTION } from '@lineup/shared'
-import type { Contact } from '@lineup/shared'
+import { CONTACTS_COLLECTION, CONTACT_NOTES_SUBCOLLECTION } from '@linyup/shared'
+import type { Contact } from '@linyup/shared'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import {

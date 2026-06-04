@@ -1,4 +1,5 @@
 ---
+import Logo from './Logo.astro';
 import LanguageSwitcher from './LanguageSwitcher.astro';
 import type { Language } from '~/i18n';
 import { useTranslations, getLocalizedPath } from '~/i18n';
@@ -9,44 +10,46 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
-const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.lineup.io';
+const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
 ---
 
-<header class="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-100">
-  <nav class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-    <!-- Logo -->
-    <a href={getLocalizedPath('/', lang)} class="flex items-center gap-2 font-bold text-xl text-gray-900">
-      <span class="text-brand-600">▲</span>
-      Lineup
+<header>
+  <div class="wrap nav">
+    <a href={getLocalizedPath('/', lang)} class="brand" aria-label={t('site.name')}>
+      <Logo size={22} />
     </a>
 
-    <!-- Centre links (desktop) -->
-    <div class="hidden md:flex items-center gap-6">
-      <a href={getLocalizedPath('/#features', lang)} class="text-sm text-gray-600 hover:text-gray-900 transition-colors">
-        {t('nav.features')}
-      </a>
-      <a href={getLocalizedPath('/#pricing', lang)} class="text-sm text-gray-600 hover:text-gray-900 transition-colors">
-        {t('nav.pricing')}
-      </a>
-    </div>
+    <nav class="nav-links">
+      <a href={getLocalizedPath('/#features', lang)}>{t('nav.features')}</a>
+      <a href={getLocalizedPath('/#pricing', lang)}>{t('nav.pricing')}</a>
+    </nav>
 
-    <!-- Right side -->
-    <div class="flex items-center gap-3">
+    <div class="nav-right">
       <LanguageSwitcher currentLang={lang} />
-
-      <a
-        href={`${APP_URL}/login`}
-        class="hidden sm:inline-flex text-sm text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5"
-      >
-        {t('nav.login')}
-      </a>
-
-      <a
-        href={`${APP_URL}/signup`}
-        class="inline-flex items-center gap-1.5 text-sm font-semibold bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
-      >
-        {t('nav.cta')}
-      </a>
+      <a class="btn btn-ghost login" href={`${APP_URL}/login`}>{t('nav.login')}</a>
+      <a class="btn btn-primary" href={`${APP_URL}/signup`}>{t('nav.cta')}</a>
     </div>
-  </nav>
+  </div>
 </header>
+
+<style>
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in oklch, var(--background) 82%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav { display: flex; align-items: center; height: 64px; gap: 28px; }
+  .brand { display: inline-flex; align-items: center; }
+  .nav-links { display: flex; gap: 26px; margin-left: 8px; }
+  .nav-links a { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
+  .nav-links a:hover { color: var(--foreground); }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+
+  @media (max-width: 860px) {
+    .nav-links { display: none; }
+    .login { display: none; }
+  }
+</style>

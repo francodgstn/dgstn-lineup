@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
 import { snapshotLeaderboardHistory } from '../utils/leaderboard'
-import { CONTACTS_COLLECTION, TEAMS_COLLECTION } from '@lineup/shared'
+import { CONTACTS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 
 const BATCH_SIZE = 400
 

@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'
-import { CONTACTS_COLLECTION, TEAMS_COLLECTION } from '@lineup/shared'
+import { CONTACTS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 
 const BATCH_SIZE = 500
 

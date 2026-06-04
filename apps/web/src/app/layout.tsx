@@ -18,7 +18,7 @@ const barlow = Barlow_Condensed({
 })
 
 export const metadata: Metadata = {
-  title: 'Lineup',
+  title: 'Linyup',
   description: 'Team and session management for coaches, clubs, and organizations',
 }
 

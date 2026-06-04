@@ -28,8 +28,8 @@ import { deleteField } from 'firebase/firestore'
 import {
   ORGANIZATIONS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
   DEFAULT_ORG_MEMBERSHIP_STATUSES,
-} from '@lineup/shared'
-import type { OrgMembershipStatusDef, MembershipStatusColor, Organization } from '@lineup/shared'
+} from '@linyup/shared'
+import type { OrgMembershipStatusDef, MembershipStatusColor, Organization } from '@linyup/shared'
 
 // ─── colour config ────────────────────────────────────────────────────────────
 

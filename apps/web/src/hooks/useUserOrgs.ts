@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { collectionGroup, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import type { Organization } from '@lineup/shared'
+import type { Organization } from '@linyup/shared'
 
 interface UserOrg extends Organization {
   id: string

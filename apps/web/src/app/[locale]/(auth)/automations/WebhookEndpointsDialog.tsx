@@ -11,7 +11,7 @@ import {
   doc, orderBy, query, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION } from '@lineup/shared'
+import { TEAMS_COLLECTION } from '@linyup/shared'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,7 +45,7 @@ export interface WebhookEndpoint {
  */
 export function getWebhookBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true') {
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-lineup'
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-linyup'
     return `http://127.0.0.1:5001/${projectId}/europe-west6/inboundWebhook`
   }
   return process.env.NEXT_PUBLIC_INBOUND_WEBHOOK_URL ?? ''

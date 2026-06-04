@@ -99,9 +99,9 @@ as `STRIPE_WEBHOOK_SECRET` → restart Terminal 1.
 
 | Email                 | Password    | Plan         | Status  |
 |-----------------------|-------------|--------------|---------|
-| `coach@lineup.dev`    | `lineup123` | Coach        | Trial   |
-| `club@lineup.dev`     | `lineup123` | Club         | Active  |
-| `org@lineup.dev`      | `lineup123` | Organization | Active  |
+| `coach@linyup.com`    | `linyup123` | Coach        | Trial   |
+| `club@linyup.com`     | `linyup123` | Club         | Active  |
+| `org@linyup.com`      | `linyup123` | Organization | Active  |
 
 ---
 
@@ -109,7 +109,7 @@ as `STRIPE_WEBHOOK_SECRET` → restart Terminal 1.
 
 ### Successful subscription upgrade
 
-1. Sign in as `coach@lineup.dev`
+1. Sign in as `coach@linyup.com`
 2. Sidebar → **Billing** (or **Upgrade** → "Upgrade to this plan")
 3. Click **Select Plan: Club**
 4. Stripe Checkout opens — use test card:
@@ -135,7 +135,7 @@ Stripe shows a 3DS prompt → complete it → payment succeeds.
 
 ### Cancel subscription
 
-1. Sign in as `club@lineup.dev` (already active)
+1. Sign in as `club@linyup.com` (already active)
 2. Billing → "Cancel at end of period"
 3. Confirm → `cancel_at_period_end: true` set on subscription
 4. Badge shows: **Cancels on [date]**
@@ -189,6 +189,6 @@ functions have nothing to connect to.
 → The emulator requires a compiled build. `dev:billing` runs the build
 automatically, but if you change function code mid-session you need to rebuild:
 ```
-pnpm --filter @lineup/functions run build
+pnpm --filter @linyup/functions run build
 ```
 Then restart Terminal 1.

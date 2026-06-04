@@ -22,8 +22,8 @@ import {
   SUBSCRIPTION_TYPES_SUBCOLLECTION, ORGANIZATIONS_COLLECTION,
   ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES,
   CONTACT_FILTERS_SUBCOLLECTION,
-} from '@lineup/shared'
-import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef } from '@lineup/shared'
+} from '@linyup/shared'
+import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef } from '@linyup/shared'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'

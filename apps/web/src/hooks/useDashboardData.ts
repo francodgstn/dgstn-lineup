@@ -11,7 +11,7 @@ import { dateToIsoWeek } from '@/lib/isoWeek'
 import {
   TEAMS_COLLECTION, SESSIONS_COLLECTION, ACTIVITIES_COLLECTION,
   TEAM_WEEKLY_REPORTS_SUBCOLLECTION,
-} from '@lineup/shared'
+} from '@linyup/shared'
 
 export interface WeeklyReport {
   iso_week: string

@@ -56,6 +56,31 @@ export function useTranslations(lang: Language) {
   };
 }
 
+/**
+ * Returns a function that resolves an array-valued translation key
+ * (e.g. plans.coach.features), with English fallback. Non-array values
+ * resolve to an empty array.
+ */
+export function useTranslationList(lang: Language) {
+  return function tList(key: string): string[] {
+    const resolve = (locale: Language): unknown => {
+      let value: unknown = translations[locale];
+      for (const k of key.split('.')) {
+        if (value && typeof value === 'object' && k in (value as Record<string, unknown>)) {
+          value = (value as Record<string, unknown>)[k];
+        } else {
+          return undefined;
+        }
+      }
+      return value;
+    };
+
+    let value = resolve(lang);
+    if (!Array.isArray(value) && lang !== defaultLang) value = resolve(defaultLang);
+    return Array.isArray(value) ? (value as string[]) : [];
+  };
+}
+
 /** Build a locale-prefixed path. English keeps no prefix (prefixDefaultLocale: false). */
 export function getLocalizedPath(path: string, lang: Language): string {
   const clean = path.replace(/^\//, '').replace(/\/$/, '');

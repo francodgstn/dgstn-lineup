@@ -3,7 +3,7 @@ import { format, subWeeks, startOfISOWeek } from 'date-fns'
 import { to } from '../utils/async'
 import { resolveGamificationSettings } from '../utils/scoring'
 import { computeContactStreak } from '../utils/scoreComputation'
-import { CONTACTS_COLLECTION, TEAMS_COLLECTION } from '@lineup/shared'
+import { CONTACTS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 
 const ISO_WEEK_FORMAT = `R-'W'II`
 

@@ -1,4 +1,4 @@
-import type { PluginManifest } from '@lineup/shared'
+import type { PluginManifest } from '@linyup/shared'
 
 export const aiInsightsManifest: PluginManifest = {
   id: 'ai-insights',

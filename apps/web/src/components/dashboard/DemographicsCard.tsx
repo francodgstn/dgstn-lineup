@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BarChart3 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import type { Contact, RankingSystem } from '@lineup/shared'
+import type { Contact, RankingSystem } from '@linyup/shared'
 import { getPrimaryRank } from '@/lib/rank-utils'
 
 const AGE_GROUPS = [

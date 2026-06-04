@@ -26,7 +26,7 @@ import { toast } from 'sonner'
 import { Gift, RefreshCw, Info } from 'lucide-react'
 import {
   TEAMS_COLLECTION, CONTACTS_COLLECTION, REFERRALS_COLLECTION,
-} from '@lineup/shared'
+} from '@linyup/shared'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

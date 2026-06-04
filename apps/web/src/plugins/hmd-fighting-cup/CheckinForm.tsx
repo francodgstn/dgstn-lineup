@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { EVENT_CATEGORIES_SUBCOLLECTION, EVENTS_COLLECTION } from '@lineup/shared'
-import type { EventCategory, Contact } from '@lineup/shared'
+import { EVENT_CATEGORIES_SUBCOLLECTION, EVENTS_COLLECTION } from '@linyup/shared'
+import type { EventCategory, Contact } from '@linyup/shared'
 
 function useFightingCupCategories(eventId: string) {
   return useQuery<EventCategory[]>({

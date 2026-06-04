@@ -1,20 +1,20 @@
 {
   "projects": {
-    "default": "demo-lineup",
-    "staging": "lineup-staging",
-    "production": "lineup-prod"
+    "default": "demo-linyup",
+    "staging": "linyup-staging",
+    "production": "linyup-prod"
   },
   "targets": {
-    "lineup-staging": {
+    "linyup-staging": {
       "hosting": {
-        "app": ["lineup-staging"],
-        "landing": ["lineup-staging-landing"]
+        "app": ["linyup-staging"],
+        "landing": ["linyup-staging-landing"]
       }
     },
-    "lineup-prod": {
+    "linyup-prod": {
       "hosting": {
-        "app": ["lineup-prod"],
-        "landing": ["lineup-prod-landing"]
+        "app": ["linyup-prod"],
+        "landing": ["linyup-prod-landing"]
       }
     }
   }

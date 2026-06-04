@@ -23,12 +23,12 @@ import {
   CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION, CONTACT_ALERTS_SUBCOLLECTION,
   ALERT_PRESETS_SUBCOLLECTION, TEAM_ACTIVITY_LOG_SUBCOLLECTION,
   CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION,
-} from '@lineup/shared'
+} from '@linyup/shared'
 import type {
   Contact, MembershipStatus, ContactType, ContactGender,
   SubscriptionType, SubscriptionHistoryEntry, ContactAlert, AlertScheduleType,
   RankingSystem, ActivityLogEntry, ActivityEventType, PlanFeature,
-} from '@lineup/shared'
+} from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useMembershipTerm } from '@/hooks/useMembershipTerm'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'

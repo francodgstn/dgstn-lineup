@@ -14,8 +14,8 @@ const testEmail = defineString('TEST_EMAIL', {
 })
 
 const DEFAULT_SENDER = {
-  name: 'Lineup',
-  email: 'noreply@lineup.app',
+  name: 'Linyup',
+  email: 'noreply@linyup.com',
 }
 
 export async function getEmailTransporter() {
@@ -90,7 +90,7 @@ export async function sendBatchEmails(emails: SendEmailOptions[], stopOnError = 
 }
 
 export function buildEmailTemplate({ title, body, footer }: { title: string; body: string; footer?: string }) {
-  const defaultFooter = footer || 'This is an automated email from Lineup.<br>Please do not reply.'
+  const defaultFooter = footer || 'This is an automated email from Linyup.<br>Please do not reply.'
 
   const html = `<!DOCTYPE html>
 <html>

@@ -1,0 +1,25 @@
+---
+// linyup logo — swoosh mark (gradient) + two-tone "liny"+"up" wordmark.
+// Props: size (wordmark px), mark (show swoosh), dark (reverse for dark bg).
+const { size = 30, mark = true, dark = false } = Astro.props;
+const fg = dark ? '#ffffff' : 'var(--foreground)';
+const acc = dark ? '#c4b5fd' : 'var(--primary)';
+const gid = 'lg' + Math.random().toString(36).slice(2, 8);
+const markSize = Math.round(size * 1.05);
+---
+<span class="logo">
+  {mark && (
+    <svg class="logo-mark" width={markSize} height={markSize} viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stop-color="#a78bfa" />
+          <stop offset="1" stop-color="#5b21b6" />
+        </linearGradient>
+      </defs>
+      <path d="M16 82 Q42 80 58 52 T86 16" fill="none" stroke={`url(#${gid})`} stroke-width="14" stroke-linecap="round" />
+    </svg>
+  )}
+  <span class="logo-word" style={`font-size:${size}px`}>
+    <span style={`color:${fg}`}>liny</span><span style={`color:${acc}`}>up</span>
+  </span>
+</span>

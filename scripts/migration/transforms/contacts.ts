@@ -33,7 +33,7 @@ export function transformContact(src: Record<string, unknown>): Record<string, u
   out.archived_at   = out.archived_at   ?? null
 
   // HMD tracked membership at the club level via membership_status/membership_active/membership_expiration.
-  // In Lineup the membership relationship is contact↔org (the club is just the intermediary),
+  // In Linyup the membership relationship is contact↔org (the club is just the intermediary),
   // so these fields rename to the org_membership_* namespace.
   if ('membership_status' in out)     { out.org_membership_status     = out.membership_status;     delete out.membership_status }
   if ('membership_active' in out)     { out.org_membership_active     = out.membership_active;     delete out.membership_active }

@@ -18,7 +18,7 @@ import {
   CONTACTS_COLLECTION,
   PARTICIPANTS_SUBCOLLECTION,
   MONTHLY_SCORES_SUBCOLLECTION,
-} from '@lineup/shared'
+} from '@linyup/shared'
 
 
 const MONTH_FORMAT = 'yyyy-MM'

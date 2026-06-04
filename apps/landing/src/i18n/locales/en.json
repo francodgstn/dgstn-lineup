@@ -1,6 +1,6 @@
 {
   "site": {
-    "name": "Lineup",
+    "name": "Linyup",
     "description": "The all-in-one management tool for coaches and clubs — sessions, contacts, bookings, and a student mobile app."
   },
   "nav": {
@@ -12,13 +12,13 @@
   "hero": {
     "tagline": "For coaches, gyms, and clubs",
     "title": "Run your classes. Know your students. Grow your club.",
-    "subtitle": "Lineup is the all-in-one management tool for coaches and clubs — sessions, contacts, bookings, and a student mobile app, all in one place.",
+    "subtitle": "Linyup is the all-in-one management tool for coaches and clubs — sessions, contacts, bookings, and a student mobile app, all in one place.",
     "cta": "Start for free",
     "ctaSecondary": "See features"
   },
   "features": {
     "title": "Everything you need to run a modern club",
-    "subtitle": "From solo coach to multi-location organisation, Lineup adapts to the way you work.",
+    "subtitle": "From solo coach to multi-location organisation, Linyup adapts to the way you work.",
     "sessions": {
       "title": "Sessions",
       "description": "Schedule and track classes effortlessly. Set recurring sessions, manage attendance, and see your whole week at a glance in the calendar view."
@@ -38,22 +38,26 @@
     "comingSoon": "Pricing coming soon",
     "earlyAccessCta": "Join early access",
     "earlyAccessNote": "Free during early access. No credit card required.",
+    "mostPopular": "Most popular",
     "coach": {
       "name": "Coach",
-      "audience": "For solo instructors and private coaches."
+      "audience": "For solo instructors and private coaches.",
+      "features": ["Sessions & attendance", "Up to 50 contacts", "Student mobile app"]
     },
     "club": {
       "name": "Club",
-      "audience": "For gyms and clubs with multiple coaches and classes."
+      "audience": "For gyms and clubs with multiple coaches and classes.",
+      "features": ["Everything in Coach", "Unlimited contacts", "Automations & gamification", "Trends & analytics"]
     },
     "org": {
       "name": "Organisation",
-      "audience": "For multi-location clubs, federations, and franchises."
+      "audience": "For multi-location clubs, federations, and franchises.",
+      "features": ["Everything in Club", "Multi-club hierarchy", "Org-wide rankings & events"]
     }
   },
   "cta": {
     "title": "Ready to get started?",
-    "subtitle": "Join coaches and clubs already using Lineup to run their business.",
+    "subtitle": "Join coaches and clubs already using Linyup to run their business.",
     "button": "Start for free"
   },
   "footer": {
@@ -63,6 +67,6 @@
       "terms": "Terms",
       "contact": "Contact"
     },
-    "copyright": "© {year} Lineup. All rights reserved."
+    "copyright": "© {year} Linyup. All rights reserved."
   }
 }

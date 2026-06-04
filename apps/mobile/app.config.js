@@ -1,33 +1,33 @@
 /**
- * Expo dynamic configuration — Lineup mobile app
+ * Expo dynamic configuration — Linyup mobile app
  *
  * Firebase environment is determined by FIREBASE_PROJECT_ID.
  * Only FIREBASE_API_KEY needs to be provided via environment.
  *
  * Usage:
- *   pnpm start          -> loads .env.staging  (lineup-staging)
- *   pnpm run start:prod -> loads .env.production (lineup-prod)
+ *   pnpm start          -> loads .env.staging  (linyup-staging)
+ *   pnpm run start:prod -> loads .env.production (linyup-prod)
  */
 
 const environments = {
-  'lineup-staging': {
-    authDomain: 'lineup-staging.firebaseapp.com',
-    databaseURL: 'https://lineup-staging.firebaseio.com',
-    projectId: 'lineup-staging',
-    storageBucket: 'lineup-staging.appspot.com',
+  'linyup-staging': {
+    authDomain: 'linyup-staging.firebaseapp.com',
+    databaseURL: 'https://linyup-staging.firebaseio.com',
+    projectId: 'linyup-staging',
+    storageBucket: 'linyup-staging.appspot.com',
     messagingSenderId: '' // TODO: set from Firebase console
   },
-  'lineup-prod': {
-    authDomain: 'lineup-prod.firebaseapp.com',
-    databaseURL: 'https://lineup-prod.firebaseio.com',
-    projectId: 'lineup-prod',
-    storageBucket: 'lineup-prod.appspot.com',
+  'linyup-prod': {
+    authDomain: 'linyup-prod.firebaseapp.com',
+    databaseURL: 'https://linyup-prod.firebaseio.com',
+    projectId: 'linyup-prod',
+    storageBucket: 'linyup-prod.appspot.com',
     messagingSenderId: '' // TODO: set from Firebase console
   }
 }
 
 export default ({ config }) => {
-  const projectId = process.env.FIREBASE_PROJECT_ID || 'lineup-staging'
+  const projectId = process.env.FIREBASE_PROJECT_ID || 'linyup-staging'
   const envConfig = environments[projectId]
 
   if (!envConfig) {
@@ -41,14 +41,14 @@ export default ({ config }) => {
 
   return {
     ...config,
-    name: 'Lineup',
-    slug: 'lineup-student-app',
+    name: 'Linyup',
+    slug: 'linyup-student-app',
     version: '0.1.0',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
     newArchEnabled: true,
-    scheme: 'lineup',
+    scheme: 'linyup',
     runtimeVersion: {
       policy: 'appVersion'
     },
@@ -64,7 +64,7 @@ export default ({ config }) => {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.dgstn.lineup',
+      bundleIdentifier: 'com.dgstn.linyup',
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false
       }
@@ -74,7 +74,7 @@ export default ({ config }) => {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#ffffff'
       },
-      package: 'com.dgstn.lineup',
+      package: 'com.dgstn.linyup',
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       softwareKeyboardLayoutMode: 'resize'

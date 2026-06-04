@@ -1,5 +1,5 @@
 /**
- * HMD → Lineup SaaS data migration
+ * HMD → Linyup SaaS data migration
  *
  * See scripts/MIGRATE-HMD.md for full instructions.
  *

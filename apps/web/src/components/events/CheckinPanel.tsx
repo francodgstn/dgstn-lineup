@@ -22,8 +22,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Check, Search, Download, UserPlus, ClipboardList } from 'lucide-react'
-import { CONTACTS_COLLECTION, CHECKINS_COLLECTION } from '@lineup/shared'
-import type { Contact, EventCheckin, RankingSystem, EventType, Team } from '@lineup/shared'
+import { CONTACTS_COLLECTION, CHECKINS_COLLECTION } from '@linyup/shared'
+import type { Contact, EventCheckin, RankingSystem, EventType, Team } from '@linyup/shared'
 import { GenericCheckinForm } from './forms/GenericCheckinForm'
 import { CampCheckinForm } from './forms/CampCheckinForm'
 import { ExamCheckinForm } from './forms/ExamCheckinForm'

@@ -20,7 +20,7 @@ export const AUTOMATION_RULES_SUBCOLLECTION = 'automation_rules'
 export const AUTOMATION_LOGS_SUBCOLLECTION = 'automation_logs'
 export const TEAM_REBUILD_JOBS_SUBCOLLECTION = 'rebuild_jobs'
 
-// SaaS-specific (new in Lineup)
+// SaaS-specific (new in Linyup)
 export const SAAS_SUBSCRIPTIONS_COLLECTION = 'saas_subscriptions'
 export const ORGANIZATIONS_COLLECTION = 'organizations'
 export const ORG_MEMBERS_SUBCOLLECTION = 'org_members'

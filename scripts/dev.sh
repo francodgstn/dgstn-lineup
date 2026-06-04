@@ -12,12 +12,12 @@ echo "==> Ensuring apps/web/.env.local"
 bash scripts/write-env-local.sh
 
 echo "==> Building Cloud Functions (required for functions emulator)"
-pnpm --filter @lineup/functions run build
+pnpm --filter @linyup/functions run build
 
 echo "==> Starting Firebase emulators (auth, firestore, functions)"
 # Use pnpm exec so the firebase-tools binary resolves from node_modules/.bin
 # regardless of how this script is invoked.
-pnpm exec firebase emulators:start --only auth,firestore,functions --project demo-lineup &
+pnpm exec firebase emulators:start --only auth,firestore,functions --project demo-linyup &
 
 echo "==> Waiting for Firestore emulator on :8080"
 until curl -s http://127.0.0.1:8080 >/dev/null 2>&1; do sleep 1; done
@@ -35,4 +35,4 @@ echo "==> Seeding emulator data"
 pnpm exec tsx scripts/seed-emulator.ts || echo "    seed failed (continuing anyway)"
 
 echo "==> Starting Next.js dev server on :3000"
-pnpm --filter @lineup/web dev
+pnpm --filter @linyup/web dev

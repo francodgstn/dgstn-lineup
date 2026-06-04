@@ -5,7 +5,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { format } from 'date-fns'
 import { to } from '../utils/async'
 import { getActiveContacts, countByField } from '../utils/contacts'
-import { CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, PARTICIPANTS_SUBCOLLECTION, TEAM_WEEKLY_REPORTS_SUBCOLLECTION } from '@lineup/shared'
+import { CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, PARTICIPANTS_SUBCOLLECTION, TEAM_WEEKLY_REPORTS_SUBCOLLECTION } from '@linyup/shared'
 
 
 const DATE_FORMAT = 'PPP'

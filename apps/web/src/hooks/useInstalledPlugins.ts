@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { TEAMS_COLLECTION, INSTALLED_PLUGINS_SUBCOLLECTION } from '@lineup/shared'
-import type { InstalledPlugin, PluginId, PluginManifest } from '@lineup/shared'
+import { TEAMS_COLLECTION, INSTALLED_PLUGINS_SUBCOLLECTION } from '@linyup/shared'
+import type { InstalledPlugin, PluginId, PluginManifest } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 
 // ─── Types ────────────────────────────────────────────────────────────────────

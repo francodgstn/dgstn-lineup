@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import type { EventCheckin, EventCategory } from '@lineup/shared'
+import type { EventCheckin, EventCategory } from '@linyup/shared'
 
 interface CheckinWithCategory extends EventCheckin {
   categories?: EventCategory[]

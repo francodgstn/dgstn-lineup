@@ -18,8 +18,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, GripVertical } from 'lucide-react'
-import { EVENTS_COLLECTION, EVENT_CATEGORIES_SUBCOLLECTION } from '@lineup/shared'
-import type { EventCategory } from '@lineup/shared'
+import { EVENTS_COLLECTION, EVENT_CATEGORIES_SUBCOLLECTION } from '@linyup/shared'
+import type { EventCategory } from '@linyup/shared'
 
 const COLORS = [
   '#EF4444', '#F97316', '#EAB308', '#22C55E',

@@ -1,4 +1,4 @@
-import type { RankLevel } from '@lineup/shared'
+import type { RankLevel } from '@linyup/shared'
 
 export interface RankPreset {
   name: string

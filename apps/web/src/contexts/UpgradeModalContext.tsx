@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState } from 'react'
 import { UpgradeModal } from '@/components/plan/UpgradeModal'
-import type { PlanFeature, SaasPlan } from '@lineup/shared'
+import type { PlanFeature, SaasPlan } from '@linyup/shared'
 
 interface OpenOptions {
   minPlan?: SaasPlan

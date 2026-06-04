@@ -1,4 +1,4 @@
-import type { SocialPlatform } from '@lineup/shared'
+import type { SocialPlatform } from '@linyup/shared'
 
 export const PORTAL_GRADIENTS: Record<string, { label: string; css: string; dark: boolean }> = {
   'blue-violet': { label: 'Blue Violet', css: 'linear-gradient(135deg,#667eea 0%,#764ba2 100%)', dark: true },

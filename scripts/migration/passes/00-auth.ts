@@ -10,7 +10,7 @@
  *   #    (salt separator, signer key, rounds, mem cost)
  *
  *   # 3. Import into target project
- *   firebase --project lineup-staging auth:import hmd-users.json \
+ *   firebase --project linyup-staging auth:import hmd-users.json \
  *     --hash-algo=SCRYPT \
  *     --hash-key=<signerKey> \
  *     --salt-separator=<saltSeparator> \

@@ -40,7 +40,7 @@ export const HMD_ORG_RANKING_SYSTEMS = [
 
 export const EMULATOR_FIRESTORE_HOST = 'localhost:8080'
 export const EMULATOR_AUTH_HOST      = 'localhost:9099'
-export const EMULATOR_PROJECT_ID     = 'demo-lineup'
+export const EMULATOR_PROJECT_ID     = 'demo-linyup'
 
 export const DEFAULT_ORG_ADMIN_EMAIL = 'franco.dgstn@gmail.com'
 
