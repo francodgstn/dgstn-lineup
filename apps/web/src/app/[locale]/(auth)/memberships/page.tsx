@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
+import { useMembershipTerm } from '@/hooks/useMembershipTerm'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   CONTACTS_COLLECTION, ORGANIZATIONS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
@@ -241,6 +242,7 @@ function ContactRow({
 export default function TeamMembershipsPage() {
   const t = useTranslations('TeamMemberships')
   const { currentTeamId, team, teamRole } = useAuth()
+  const membershipTerm = useMembershipTerm()
   const qc = useQueryClient()
 
   const orgId = team?.org_id
@@ -295,7 +297,7 @@ export default function TeamMembershipsPage() {
     <div className="space-y-4">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{membershipTerm}</h1>
         {contacts && (
           <p className="text-sm text-muted-foreground mt-0.5">
             {t('subtitle', { total: contacts.length, active: totalActive })}

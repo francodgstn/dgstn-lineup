@@ -92,6 +92,16 @@ service cloud.firestore {
       return orgId != null && hasOrgRole(orgId, 'org_admin');
     }
 
+    // Returns true if writing org_membership_* fields is permitted for the current user.
+    // Short-circuits to true when the team has no org or the org has not enabled the lock.
+    // Triggered only when org_membership_* appear in the write diff — zero extra cost otherwise.
+    function orgMembershipWriteAllowed(teamId) {
+      let orgId = get(/databases/$(database)/documents/teams/$(teamId)).data.get('org_id', null);
+      if (orgId == null) return true;
+      if (!get(/databases/$(database)/documents/organizations/$(orgId)).data.get('lock_org_membership', false)) return true;
+      return get(/databases/$(database)/documents/organizations/$(orgId)/org_members/$(request.auth.uid)).data.get('role', '') == 'org_admin';
+    }
+
     // Check if resource's teamId matches user's current team OR if teacher field matches user (backward compat)
     function belongsToUserTeam(res) {
       return (res.data.teamId != null && res.data.teamId == getUserCurrentTeam() && isTeamMember(res.data.teamId))
@@ -331,6 +341,12 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Shared contact list filters — saved by managers, visible to all team members
+      match /contact_filters/{filterId} {
+        allow read:  if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+      }
+
       // Inbound webhook endpoints — manager/owner manage; the inboundWebhook function
       // reads via Admin SDK (collectionGroup query) so no client read rule needed there.
       match /webhook_endpoints/{endpointId} {
@@ -388,6 +404,14 @@ service cloud.firestore {
         allow read: if isTeamMember(teamId);
         allow write: if false;
       }
+
+      // Org access requests — org admins request view/manage access to this club.
+      // Owners and managers can read requests and approve/deny server-side;
+      // only cloud functions write (requestClubAccess creates, approveClubAccess updates).
+      match /org_access_requests/{orgId} {
+        allow read: if hasTeamRole(teamId, 'owner') || hasTeamRole(teamId, 'manager');
+        allow write: if false;
+      }
     }
 
     // Public user profiles (deprecated - now using users/{userId}/public_profile subcollection)
@@ -421,10 +445,16 @@ service cloud.firestore {
                    || hasRole('admin')
                    || isSelfContact(contactId)
                    || sharesContactEmail(resource);
-      allow update: if belongsToUserTeam(resource)
+      allow update: if (belongsToUserTeam(resource)
                        || hasRole('admin')
                        || (isSelfContact(contactId)
-                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at']));
+                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at'])))
+                      && (
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['org_membership_status', 'org_membership_active', 'org_membership_expiration'])
+                        || orgMembershipWriteAllowed(resource.data.teamId)
+                        || hasRole('admin')
+                      );
       allow delete: if belongsToUserTeam(resource) || hasRole('admin');
 
       // Subscription history subcollection — full CRUD for team members

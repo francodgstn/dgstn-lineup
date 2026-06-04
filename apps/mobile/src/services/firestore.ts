@@ -139,6 +139,26 @@ export const FirestoreService = {
     }
   },
 
+  async getOrgMembershipTerm(teamId: string): Promise<string> {
+    try {
+      const teamSnap = await getDoc(doc(db, 'teams', teamId));
+      const orgId = teamSnap.exists() ? (teamSnap.data().org_id as string | undefined) : undefined;
+      if (!orgId) return 'Membership';
+
+      const orgSnap = await getDoc(doc(db, 'organizations', orgId));
+      if (!orgSnap.exists()) return 'Membership';
+
+      const termObj = orgSnap.data().membership_term as Record<string, string> | undefined;
+      if (!termObj) return 'Membership';
+
+      // Resolve using device language (first 2 chars of locale, e.g. "de" from "de-CH")
+      const locale = (Intl.DateTimeFormat().resolvedOptions().locale ?? 'en').slice(0, 2);
+      return termObj[locale] ?? termObj['en'] ?? 'Membership';
+    } catch {
+      return 'Membership';
+    }
+  },
+
   async getSubscriptionTypeName(teamId: string, subscriptionTypeId: string): Promise<string | null> {
     try {
       const ref = doc(db, 'teams', teamId, 'subscription_types', subscriptionTypeId);

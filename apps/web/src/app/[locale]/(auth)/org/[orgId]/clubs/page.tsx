@@ -261,7 +261,7 @@ function InviteDialog({
 export default function OrgClubsPage() {
   const { orgId } = useParams<{ orgId: string }>()
   const t = useTranslations('OrgClubs')
-  const { isAdmin } = useOrg()
+  const { isAdmin, membershipTerm } = useOrg()
   const { user } = useAuth()
   const qc = useQueryClient()
   const { data: teams, isLoading } = useOrgTeams(orgId)
@@ -355,7 +355,7 @@ export default function OrgClubsPage() {
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colClub')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">{t('colOwner')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colJoined')}</th>
-                <th className="text-right font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colActiveMembers')}</th>
+                <th className="text-right font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">Active {membershipTerm.toLowerCase()}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colStatus')}</th>
                 {isAdmin && <th className="px-4 py-3 w-12" />}
               </tr>

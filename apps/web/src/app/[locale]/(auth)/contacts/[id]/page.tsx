@@ -30,6 +30,7 @@ import type {
   RankingSystem, ActivityLogEntry, ActivityEventType, PlanFeature,
 } from '@lineup/shared'
 import { usePlan } from '@/hooks/usePlan'
+import { useMembershipTerm } from '@/hooks/useMembershipTerm'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -371,10 +372,10 @@ function Field({ label, required, children, error }: {
 
 // ─── read-only detail row ─────────────────────────────────────────────────────
 
-function DetailRow({ label, value }: { label: string; value?: string | null }) {
+function DetailRow({ label, value }: { label: React.ReactNode; value?: string | null }) {
   return (
     <div className="grid grid-cols-[150px_1fr] gap-2 py-2 border-b last:border-0">
-      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm text-muted-foreground flex items-center gap-1">{label}</span>
       <span className="text-sm">{value || '—'}</span>
     </div>
   )
@@ -399,10 +400,10 @@ function SectionDivider({ label }: { label: string }) {
   )
 }
 
-function FormBlock({ title, children }: { title: string; children: React.ReactNode }) {
+function FormBlock({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border bg-card p-4 space-y-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">{title}</p>
       {children}
     </div>
   )
@@ -737,12 +738,14 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
 // ─── profile tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({
-  contact, teamId, orgId, onSaved,
+  contact, teamId, orgId, onSaved, membershipFieldLocked,
 }: {
   contact: Contact; teamId: string | null; orgId?: string | null; onSaved: () => void
+  membershipFieldLocked?: boolean
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
+  const membershipTerm = useMembershipTerm()
   const { data: subTypes = [] } = useSubscriptionTypes(teamId)
   const { data: rankingSystems = [] } = useTeamRankingSystems(teamId, orgId)
 
@@ -764,7 +767,7 @@ function ProfileTab({
       birthplace: contact.birthplace ?? '',
       weight: contact.weight,
       type: contact.type,
-      membership_status: contact.membership_status,
+      membership_status: (contact.org_membership_status ?? contact.membership_status) as typeof contact.membership_status,
       subscription_type_id: contact.subscription_type_id ?? '',
       subscription_recurrence: contact.subscription_recurrence ?? '',
       address_route: contact.address?.route ?? '',
@@ -788,7 +791,7 @@ function ProfileTab({
       birthplace: values.birthplace || null,
       weight: values.weight || null,
       type: values.type || null,
-      membership_status: values.membership_status || 'guest',
+      ...(membershipFieldLocked ? {} : { org_membership_status: values.membership_status || 'guest' }),
       subscription_type_id: values.subscription_type_id || null,
       subscription_recurrence: values.subscription_recurrence || null,
       address: {
@@ -841,26 +844,36 @@ function ProfileTab({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* Subscription & membership */}
-        <FormBlock title={t('sectionMembership')}>
+        <FormBlock title={<>
+          {t('sectionMembership', { term: membershipTerm })}
+          {membershipFieldLocked && <Lock className="h-3 w-3 text-muted-foreground/60 shrink-0" />}
+        </>}>
           <Field label={t('colStatus')}>
-            <Controller
-              control={control}
-              name="membership_status"
-              render={({ field }) => (
-                <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
-                  <SelectTrigger className="w-full">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value ? t(`status_${field.value}`) : <span className="text-muted-foreground">—</span>}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>{t(`status_${s}`)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
+            {membershipFieldLocked ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/40 text-sm text-muted-foreground border border-border/50">
+                <Lock className="h-3 w-3 shrink-0" />
+                <span>{contact.org_membership_status ? t(`status_${contact.org_membership_status}`) : '—'}</span>
+              </div>
+            ) : (
+              <Controller
+                control={control}
+                name="membership_status"
+                render={({ field }) => (
+                  <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
+                    <SelectTrigger className="w-full">
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {field.value ? t(`status_${field.value}`) : <span className="text-muted-foreground">—</span>}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>{t(`status_${s}`)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            )}
           </Field>
           {subTypes.length > 0 && (
             <Field label={t('subscriptionTypeName')}>
@@ -2025,7 +2038,7 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
 
 // ─── archived / deleted read-only view ───────────────────────────────────────
 
-function ArchivedContactView({ contact, onAction }: { contact: Contact; onAction: () => void }) {
+function ArchivedContactView({ contact, onAction, orgMembershipLocked }: { contact: Contact; onAction: () => void; orgMembershipLocked?: boolean }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const qc = useQueryClient()
@@ -2118,7 +2131,10 @@ function ArchivedContactView({ contact, onAction }: { contact: Contact; onAction
       <div className="rounded-xl border bg-card p-5">
         <SectionHeader>{t('sectionBasicInfo')}</SectionHeader>
         <DetailRow label={t('colType')} value={contact.type ? t(`type_${contact.type}`) : null} />
-        <DetailRow label={t('colStatus')} value={contact.membership_status ? t(`status_${contact.membership_status}`) : null} />
+        <DetailRow
+          label={<>{t('colStatus')}{orgMembershipLocked && <Lock className="h-3 w-3 text-muted-foreground/60 shrink-0" />}</>}
+          value={(contact.org_membership_status ?? contact.membership_status) ? t(`status_${contact.org_membership_status ?? contact.membership_status}`) : null}
+        />
         <DetailRow label={t('fieldGender')} value={contact.gender ? t(`gender_${contact.gender}`) : null} />
 
         <SectionHeader>{t('sectionContactInfo')}</SectionHeader>
@@ -2257,19 +2273,25 @@ function ContactHeaderStats({ contact }: { contact: Contact }) {
           <div className="h-full bg-muted/20" />
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="hdrSparkGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              {/* Hidden XAxis gives tooltip access to the week label string */}
               <XAxis dataKey="label" hide />
               <Tooltip
                 contentStyle={tooltipStyle}
-                formatter={(v) => [`${v} ${t('statTotalSessions').toLowerCase()}`, '']}
-                labelStyle={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  return (
+                    <div style={{ ...tooltipStyle, textAlign: 'center', lineHeight: 1.4 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#6366f1' }}>{payload[0].value}</div>
+                      <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))' }}>{label}</div>
+                    </div>
+                  )
+                }}
               />
               <Area
                 type="monotone"
@@ -2295,8 +2317,19 @@ type TabId = 'profile' | 'notes' | 'stats' | 'activity' | 'bookings' | 'subscrip
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { currentTeamId, team } = useAuth()
+  const { currentTeamId, team, isOrgAdmin } = useAuth()
   const { data: contact, isLoading } = useContact(id)
+
+  const { data: orgMembershipLocked = false } = useQuery({
+    queryKey: ['org-membership-lock', team?.org_id],
+    enabled: !!team?.org_id,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, ORGANIZATIONS_COLLECTION, team!.org_id!))
+      return snap.data()?.lock_org_membership === true
+    },
+  })
+  const membershipFieldLocked = orgMembershipLocked && !isOrgAdmin
   const [tab, setTab] = useState<TabId>('profile')
   const router = useRouter()
   const t = useTranslations('Contacts')
@@ -2380,9 +2413,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   <Badge variant="secondary">{t('archivedBadge')}</Badge>
                 ) : (
                   <>
-                    {contact.membership_status && (
-                      <Badge variant={STATUS_VARIANT[contact.membership_status]}>
-                        {t(`status_${contact.membership_status}`)}
+                    {(contact.org_membership_status ?? contact.membership_status) && (
+                      <Badge variant={STATUS_VARIANT[(contact.org_membership_status ?? contact.membership_status) as keyof typeof STATUS_VARIANT]}>
+                        {t(`status_${contact.org_membership_status ?? contact.membership_status}`)}
                       </Badge>
                     )}
                     {contact.type && (
@@ -2433,7 +2466,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Archived / deleted → read-only summary; active → full tabbed view */}
       {(contact.archived_at || contact.deleted_at) ? (
-        <ArchivedContactView contact={contact} onAction={invalidate} />
+        <ArchivedContactView contact={contact} onAction={invalidate} orgMembershipLocked={orgMembershipLocked} />
       ) : (
         <>
           {/* Tabs */}
@@ -2464,7 +2497,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           {/* Tab content */}
           <div>
             {tab === 'profile' && (
-              <ProfileTab contact={contact} teamId={currentTeamId} orgId={team?.org_id} onSaved={invalidate} />
+              <ProfileTab contact={contact} teamId={currentTeamId} orgId={team?.org_id} onSaved={invalidate} membershipFieldLocked={membershipFieldLocked} />
             )}
             {tab === 'stats' && (
               <StatsTab contact={contact} teamId={currentTeamId} />

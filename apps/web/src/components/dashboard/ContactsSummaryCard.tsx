@@ -12,6 +12,7 @@ import {
 import { Users } from 'lucide-react'
 import { buildWeekKeys, shortWeekLabel, formatTooltipWeek, formatAxisWeek } from '@/lib/isoWeek'
 import type { WeeklyReport, SubscriptionTypeDoc } from '@/hooks/useDashboardData'
+import { useMembershipTerm } from '@/hooks/useMembershipTerm'
 
 // ─── colors ──────────────────────────────────────────────────────────────────
 
@@ -26,13 +27,7 @@ function typeColor(t: string) { return TYPE_COLORS[t] ?? FALLBACK }
 function paletteColor(i: number) { return PALETTE[i % PALETTE.length] }
 
 // ─── dimensions ──────────────────────────────────────────────────────────────
-
-const DIMENSIONS = [
-  { value: 'type',                   label: 'Contact type' },
-  { value: 'membership_status',      label: 'Membership' },
-  { value: 'subscription_type',      label: 'Subscription' },
-  { value: 'subscription_recurrence',label: 'Billing recurrence' },
-]
+// Built dynamically inside the component so the membership term can be injected.
 
 function getField(dim: string): string {
   if (dim === 'membership_status')       return 'contacts_count_by_membership_status'
@@ -138,6 +133,14 @@ export function ContactsSummaryCard({
   weeklyReports, comparisonWeeklyReports = [], compareWith = 'none',
   trendsWeeks = 13, subscriptionTypes = [], title,
 }: Props) {
+  const membershipTerm = useMembershipTerm()
+  const DIMENSIONS = [
+    { value: 'type',                    label: 'Contact type' },
+    { value: 'membership_status',       label: membershipTerm },
+    { value: 'subscription_type',       label: 'Subscription' },
+    { value: 'subscription_recurrence', label: 'Billing recurrence' },
+  ]
+
   const [dimension, setDimension] = useState('type')
   const [selectedValues, setSelectedValues] = useState<string[]>(['all'])
 

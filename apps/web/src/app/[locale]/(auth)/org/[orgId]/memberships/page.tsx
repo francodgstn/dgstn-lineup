@@ -303,7 +303,7 @@ function ContactRow({
 export default function OrgMembershipsPage() {
   const { orgId } = useParams<{ orgId: string }>()
   const t = useTranslations('OrgMemberships')
-  const { isAdmin } = useOrg()
+  const { isAdmin, membershipTerm } = useOrg()
   const qc = useQueryClient()
 
   const [search, setSearch] = useState('')
@@ -353,7 +353,7 @@ export default function OrgMembershipsPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">{t('title')}</h2>
+          <h2 className="text-lg font-semibold">{membershipTerm}</h2>
           {contacts && (
             <p className="text-sm text-muted-foreground mt-0.5">
               {t('subtitle', { total: contacts.length, active: totalActive })}

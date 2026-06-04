@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import {
   collection, query, where, orderBy, getDocs, getDoc, addDoc, updateDoc,
-  doc, serverTimestamp, Timestamp, deleteField,
+  doc, serverTimestamp, Timestamp, deleteField, onSnapshot, deleteDoc, setDoc,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -21,6 +21,7 @@ import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, CONTACT_REQUESTS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION, ORGANIZATIONS_COLLECTION,
   ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES,
+  CONTACT_FILTERS_SUBCOLLECTION,
 } from '@lineup/shared'
 import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef } from '@lineup/shared'
 import { useForm } from 'react-hook-form'
@@ -30,7 +31,7 @@ import {
   Search, UserPlus, X, Flame,
   Star, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
   MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
-  Check, Bookmark, BookmarkPlus,
+  Check, Bookmark, BookmarkPlus, BarChart2, Pin,
 } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
@@ -359,7 +360,7 @@ function OverviewPanel({
   const t = useTranslations('Contacts')
   const [open, setOpen] = useState(false)
 
-  const activeCount = contacts.filter((c) => c.membership_status === 'active').length
+  const activeCount = contacts.filter((c) => (c.org_membership_status ?? c.membership_status) === 'active').length
   const trialCount  = contacts.filter((c) => c.type === 'trial').length
 
   return (
@@ -369,8 +370,9 @@ function OverviewPanel({
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border border-dashed border-border/50 hover:border-border hover:bg-muted/30 transition-colors group"
       >
-        <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground shrink-0 transition-transform duration-150 ${open ? 'rotate-90' : ''}`} />
+        <BarChart2 className="h-3.5 w-3.5 text-primary shrink-0" />
         <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">{t('statsTitle')}</span>
+        <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground shrink-0 transition-transform duration-150 ${open ? 'rotate-90' : ''}`} />
         {!open && !loading && contacts.length > 0 && (
           <div className="flex items-center gap-3 ml-1 text-xs text-muted-foreground/60">
             <span>{contacts.length} contacts</span>
@@ -428,7 +430,7 @@ function countActiveFilters(f: Filters): number {
 
 // ─── filter chips ─────────────────────────────────────────────────────────────
 
-interface SavedQuery { id: string; name: string; filters: Filters }
+interface SavedQuery { id: string; name: string; filters: Filters; pinned?: boolean }
 
 const FILTER_PRESETS: SavedQuery[] = [
   { id: 'p-active', name: 'Active members',  filters: { ...EMPTY_FILTERS, statuses: ['active'] } },
@@ -501,30 +503,65 @@ function FilterChip({ label, activeLabel, isActive, onClear, children }: {
 }
 
 function useSavedQueries(teamId: string | null) {
-  const key = teamId ? `lineup-cf-${teamId}` : null
-  const [saved, setSaved] = useState<SavedQuery[]>(() => {
-    if (typeof window === 'undefined' || !key) return []
-    try { return JSON.parse(localStorage.getItem(key) ?? '[]') } catch { return [] }
-  })
+  const { user } = useAuth()
+  const [saved, setSaved] = useState<SavedQuery[]>([])
+  const [pinnedPresets, setPinnedPresets] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!teamId) return
+    const colRef = collection(db, TEAMS_COLLECTION, teamId, CONTACT_FILTERS_SUBCOLLECTION)
+    return onSnapshot(colRef, (snap) => {
+      const presetPinsDoc = snap.docs.find((d) => d.id === '_preset_pins')
+      setPinnedPresets(presetPinsDoc?.data()?.ids ?? [])
+      setSaved(
+        snap.docs
+          .filter((d) => d.id !== '_preset_pins')
+          .map((d) => ({
+            id: d.id,
+            name: d.data().name as string,
+            filters: d.data().filters as Filters,
+            pinned: d.data().pinned ?? false,
+          }))
+      )
+    })
+  }, [teamId])
+
   function save(name: string, filters: Filters) {
-    const item: SavedQuery = { id: `u-${Date.now()}`, name, filters }
-    const next = [...saved, item]
-    setSaved(next)
-    if (key) localStorage.setItem(key, JSON.stringify(next))
+    if (!teamId || !user) return
+    addDoc(collection(db, TEAMS_COLLECTION, teamId, CONTACT_FILTERS_SUBCOLLECTION), {
+      name, filters, pinned: false,
+      created_at: serverTimestamp(),
+      created_by: user.uid,
+    })
   }
   function remove(id: string) {
-    const next = saved.filter((q) => q.id !== id)
-    setSaved(next)
-    if (key) localStorage.setItem(key, JSON.stringify(next))
+    if (!teamId) return
+    deleteDoc(doc(db, TEAMS_COLLECTION, teamId, CONTACT_FILTERS_SUBCOLLECTION, id))
   }
-  return { saved, save, remove }
+  function togglePin(id: string) {
+    if (!teamId) return
+    const current = saved.find((q) => q.id === id)
+    if (!current) return
+    updateDoc(doc(db, TEAMS_COLLECTION, teamId, CONTACT_FILTERS_SUBCOLLECTION, id), { pinned: !current.pinned })
+  }
+  function togglePresetPin(id: string) {
+    if (!teamId) return
+    const next = pinnedPresets.includes(id)
+      ? pinnedPresets.filter((p) => p !== id)
+      : [...pinnedPresets, id]
+    setDoc(doc(db, TEAMS_COLLECTION, teamId, CONTACT_FILTERS_SUBCOLLECTION, '_preset_pins'), { ids: next })
+  }
+
+  return { saved, save, remove, togglePin, pinnedPresets, togglePresetPin }
 }
 
-function SavedMenu({ filters, onChange, teamId }: {
-  filters: Filters; onChange: (f: Filters) => void; teamId: string | null
+function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPresets, togglePresetPin }: {
+  filters: Filters; onChange: (f: Filters) => void
+  saved: SavedQuery[]; save: (name: string, filters: Filters) => void
+  remove: (id: string) => void; togglePin: (id: string) => void
+  pinnedPresets: string[]; togglePresetPin: (id: string) => void
 }) {
   const { open, onOpenChange } = useScrollLockOnOpen()
-  const { saved, save, remove } = useSavedQueries(teamId)
   const [saveName, setSaveName] = useState('')
   const hasActive = countActiveFilters(filters) > 0
 
@@ -539,11 +576,18 @@ function SavedMenu({ filters, onChange, teamId }: {
       </PopoverTrigger>
       <PopoverContent align="end" side="bottom" className="w-52 p-1.5">
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pt-1 pb-0.5">Presets</p>
-        {FILTER_PRESETS.map((q) => (
-          <button key={q.id} type="button" onClick={() => apply(q)}
-            className="w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left"
-          >{q.name}</button>
-        ))}
+        {FILTER_PRESETS.map((q) => {
+          const isPinned = pinnedPresets.includes(q.id)
+          return (
+            <div key={q.id} className="flex items-center gap-1 rounded hover:bg-accent group px-1">
+              <button type="button" onClick={() => apply(q)} className="flex-1 px-1 py-1.5 text-sm text-left truncate">{q.name}</button>
+              <button type="button" onClick={() => togglePresetPin(q.id)}
+                className={`shrink-0 p-1 transition-all ${isPinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
+                title={isPinned ? 'Unpin' : 'Pin to filter bar'}
+              ><Pin className="h-3 w-3" /></button>
+            </div>
+          )
+        })}
         {saved.length > 0 && (
           <>
             <div className="my-1 border-t mx-1" />
@@ -551,6 +595,10 @@ function SavedMenu({ filters, onChange, teamId }: {
             {saved.map((q) => (
               <div key={q.id} className="flex items-center gap-1 rounded hover:bg-accent group px-1">
                 <button type="button" onClick={() => apply(q)} className="flex-1 px-1 py-1.5 text-sm text-left truncate">{q.name}</button>
+                <button type="button" onClick={() => togglePin(q.id)}
+                  className={`shrink-0 p-1 transition-all ${q.pinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
+                  title={q.pinned ? 'Unpin' : 'Pin to filter bar'}
+                ><Pin className="h-3 w-3" /></button>
                 <button type="button" onClick={() => remove(q.id)}
                   className="shrink-0 p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
                 ><X className="h-3 w-3" /></button>
@@ -646,6 +694,11 @@ function FilterChips({
   rankingSystems: RankingSystem[]
 }) {
   const t = useTranslations('Contacts')
+  const { saved, save, remove, togglePin, pinnedPresets, togglePresetPin } = useSavedQueries(teamId)
+  const pinnedQueries = [
+    ...FILTER_PRESETS.filter((q) => pinnedPresets.includes(q.id)),
+    ...saved.filter((q) => q.pinned),
+  ]
 
   const TYPE_OPTS   = (['trial', 'student', 'external'] as ContactType[]).map((v) => ({ value: v, label: t(`type_${v}`) }))
   const STATUS_OPTS = (['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired'] as MembershipStatus[]).map((v) => ({ value: v, label: t(`status_${v}`) }))
@@ -693,7 +746,33 @@ function FilterChips({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <SavedMenu filters={filters} onChange={onChange} teamId={teamId} />
+      <SavedMenu filters={filters} onChange={onChange} saved={saved} save={save} remove={remove} togglePin={togglePin} pinnedPresets={pinnedPresets} togglePresetPin={togglePresetPin} />
+      {pinnedQueries.length > 0 && (
+        <>
+          {pinnedQueries.map((q) => {
+            const isActive = JSON.stringify(filters) === JSON.stringify(q.filters)
+            return (
+              <button key={q.id} type="button"
+                onClick={() => onChange(isActive ? EMPTY_FILTERS : q.filters)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  isActive
+                    ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
+                    : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                <Pin className="h-3 w-3 opacity-50 shrink-0" />
+                {q.name}
+                {isActive && (
+                  <span role="button" aria-label="Clear"
+                    onClick={(e) => { e.stopPropagation(); onChange(EMPTY_FILTERS) }}
+                    className="rounded-full p-0.5 hover:bg-primary/20 -mr-0.5"
+                  ><X className="h-3 w-3" /></span>
+                )}
+              </button>
+            )
+          })}
+        </>
+      )}
       <div className="h-5 w-px bg-border/50 shrink-0 mx-0.5" />
       <FilterChip label={t('filterType')} activeLabel={chip(filters.types, TYPE_OPTS, 'types')}
         isActive={filters.types.length > 0} onClear={() => onChange({ ...filters, types: [] })}>
@@ -775,14 +854,15 @@ function FilterChips({
         )}
       </button>
 
-      <div className="ml-auto">
-        {countActiveFilters(filters) > 0 && (
+      {countActiveFilters(filters) > 0 && (
+        <>
+          <div className="h-5 w-px bg-border/50 shrink-0 mx-0.5" />
           <button type="button" onClick={() => onChange(EMPTY_FILTERS)}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground rounded-full hover:bg-muted transition-colors">
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border border-destructive/30 text-destructive/80 hover:text-destructive hover:bg-destructive/5 hover:border-destructive/50 transition-colors">
             <X className="h-3 w-3" />{t('clearFilters')}
           </button>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }
@@ -1340,82 +1420,72 @@ export default function ContactsPage() {
     })
   }
 
-  // ── filter + search active contacts ───────────────────────────────────────
+  // ── filter + search ───────────────────────────────────────────────────────
 
-  const filteredActive = useMemo(() => {
-    let result = active
+  function applyFiltersAndSearch(list: Contact[], f: Filters, q: string): Contact[] {
+    let result = list
 
-    if (filters.types.length > 0)
-      result = result.filter((c) => c.type && filters.types.includes(c.type))
+    if (f.types.length > 0)
+      result = result.filter((c) => c.type && f.types.includes(c.type))
 
-    if (filters.statuses.length > 0)
-      result = result.filter((c) => c.membership_status && filters.statuses.includes(c.membership_status))
-
-    if (filters.subscriptions.length > 0) {
+    if (f.statuses.length > 0)
       result = result.filter((c) => {
-        if (filters.subscriptions.includes('none')) {
+        const status = c.org_membership_status ?? c.membership_status
+        return status != null && f.statuses.includes(status)
+      })
+
+    if (f.subscriptions.length > 0) {
+      result = result.filter((c) => {
+        if (f.subscriptions.includes('none')) {
           if (!c.subscription_type_id) return true
         }
-        return c.subscription_type_id && filters.subscriptions.includes(c.subscription_type_id)
+        return c.subscription_type_id && f.subscriptions.includes(c.subscription_type_id)
       })
     }
 
-    if (filters.hasAlerts)
+    if (f.hasAlerts)
       result = result.filter((c) => (c.alerts_count ?? 0) > 0)
 
-    if (filters.sessionsMin != null)
-      result = result.filter((c) => (c.total_sessions ?? 0) >= filters.sessionsMin!)
-    if (filters.sessionsMax != null)
-      result = result.filter((c) => (c.total_sessions ?? 0) <= filters.sessionsMax!)
+    if (f.sessionsMin != null)
+      result = result.filter((c) => (c.total_sessions ?? 0) >= f.sessionsMin!)
+    if (f.sessionsMax != null)
+      result = result.filter((c) => (c.total_sessions ?? 0) <= f.sessionsMax!)
 
-    if (filters.inactivity) {
+    if (f.inactivity) {
       const now = Date.now()
       result = result.filter((c) => {
         const last = c.last_session_at
           ? (c.last_session_at as { toDate(): Date }).toDate().getTime()
           : null
-        if (filters.inactivity === 'never') return last === null
-        const days = filters.inactivity === '30d' ? 30 : filters.inactivity === '60d' ? 60 : 90
+        if (f.inactivity === 'never') return last === null
+        const days = f.inactivity === '30d' ? 30 : f.inactivity === '60d' ? 60 : 90
         const cutoff = now - days * 86400000
         return last === null || last < cutoff
       })
     }
 
-    if (filters.rankFilter && Object.values(filters.rankFilter).some((l) => l.length > 0)) {
+    if (f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0)) {
       result = result.filter((c) =>
-        Object.entries(filters.rankFilter!).some(([systemId, levels]) => {
+        Object.entries(f.rankFilter!).some(([systemId, levels]) => {
           const rank = c.ranks?.[systemId]
           return rank != null && levels.includes(rank)
         })
       )
     }
 
-    const q = search.trim().toLowerCase()
-    if (q)
+    const sq = q.trim().toLowerCase()
+    if (sq)
       result = result.filter((c) =>
-        `${c.firstname} ${c.lastname}`.toLowerCase().includes(q) ||
-        (c.email ?? '').toLowerCase().includes(q)
+        `${c.firstname} ${c.lastname}`.toLowerCase().includes(sq) ||
+        (c.email ?? '').toLowerCase().includes(sq)
       )
 
     return result
-  }, [active, filters, search])
+  }
 
-  const filteredArchived = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return archived
-    return archived.filter((c) =>
-      `${c.firstname} ${c.lastname}`.toLowerCase().includes(q) ||
-      (c.email ?? '').toLowerCase().includes(q)
-    )
-  }, [archived, search])
-
-  const filteredDeleted = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return deleted
-    return deleted.filter((c) =>
-      `${c.firstname} ${c.lastname}`.toLowerCase().includes(q)
-    )
-  }, [deleted, search])
+  const filteredActive   = useMemo(() => applyFiltersAndSearch(active,   filters, search), [active,   filters, search])
+  const filteredArchived = useMemo(() => applyFiltersAndSearch(archived, filters, search), [archived, filters, search])
+  const filteredDeleted  = useMemo(() => applyFiltersAndSearch(deleted,  filters, search), [deleted,  filters, search])
 
   // ── current list & loading state ──────────────────────────────────────────
 
@@ -1515,7 +1585,7 @@ export default function ContactsPage() {
             <p className="text-sm text-muted-foreground mt-0.5">
               {t('subtitle', {
                 total: active.length + archived.length,
-                active: active.filter((c) => c.membership_status === 'active').length,
+                active: active.filter((c) => (c.org_membership_status ?? c.membership_status) === 'active').length,
               })}
             </p>
           )}
@@ -1558,8 +1628,8 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      {/* Filters (active tab only) */}
-      {tab === 'active' && (
+      {/* Filters */}
+      {tab !== 'requests' && (
         <FilterChips
           filters={filters}
           onChange={setFilters}
@@ -1600,7 +1670,8 @@ export default function ContactsPage() {
           {/* Select-all header */}
           {!isLoading && currentList.length > 0 && selectable && (
             <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground flex items-center gap-2">
+                <span className="font-medium tabular-nums">{currentList.length}</span>
                 {selected.size > 0 ? t('selectAllCount', { count: selected.size, total: currentList.length }) : t('selectAll')}
               </span>
               <label className="cursor-pointer pr-0.5">

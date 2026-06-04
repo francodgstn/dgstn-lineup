@@ -5,7 +5,16 @@ import { useQuery } from '@tanstack/react-query'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLocale } from 'next-intl'
 import type { Organization, SaasSubscription, OrgRole } from '@lineup/shared'
+
+export function resolveOrgMembershipTerm(
+  termObj: Partial<Record<string, string>> | undefined,
+  locale: string,
+): string {
+  if (!termObj) return 'Membership'
+  return termObj[locale] ?? termObj['en'] ?? 'Membership'
+}
 
 interface OrgContextValue {
   org: Organization | null
@@ -13,6 +22,7 @@ interface OrgContextValue {
   userRole: OrgRole | null
   loading: boolean
   isAdmin: boolean
+  membershipTerm: string
 }
 
 const OrgContext = createContext<OrgContextValue>({
@@ -21,10 +31,12 @@ const OrgContext = createContext<OrgContextValue>({
   userRole: null,
   loading: true,
   isAdmin: false,
+  membershipTerm: 'Membership',
 })
 
 export function OrgProvider({ orgId, children }: { orgId: string; children: ReactNode }) {
   const { user } = useAuth()
+  const locale = useLocale()
 
   const { data: org, isLoading: orgLoading } = useQuery<Organization | null>({
     queryKey: ['org', orgId],
@@ -53,6 +65,7 @@ export function OrgProvider({ orgId, children }: { orgId: string; children: Reac
   })
 
   const loading = orgLoading || subLoading || roleLoading
+  const membershipTerm = resolveOrgMembershipTerm(org?.membership_term, locale)
 
   return (
     <OrgContext.Provider value={{
@@ -61,6 +74,7 @@ export function OrgProvider({ orgId, children }: { orgId: string; children: Reac
       userRole: userRole ?? null,
       loading,
       isAdmin: userRole === 'org_admin',
+      membershipTerm,
     }}>
       {children}
     </OrgContext.Provider>

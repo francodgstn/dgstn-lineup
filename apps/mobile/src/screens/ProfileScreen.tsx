@@ -125,6 +125,7 @@ export const ProfileScreen: React.FC = () => {
   const scrollRef = useRef<any>(null);
 
   const [teamProfile, setTeamProfile] = useState<TeamPublicProfile | null>(null);
+  const [membershipTerm, setMembershipTerm] = useState<string>('Membership');
   const [subscriptionTypeName, setSubscriptionTypeName] = useState<string | null>(null);
   const [membershipCollapsed, setMembershipCollapsed] = useState(true);
   const [teamCardCollapsed, setTeamCardCollapsed] = useState(true);
@@ -176,6 +177,8 @@ export const ProfileScreen: React.FC = () => {
       if (contact.teamId) {
         loadedProfile = await FirestoreService.getTeamPublicProfile(contact.teamId);
         setTeamProfile(loadedProfile);
+        const term = await FirestoreService.getOrgMembershipTerm(contact.teamId);
+        setMembershipTerm(term);
         if (contact.subscription_type_id) {
           const name = await FirestoreService.getSubscriptionTypeName(contact.teamId, contact.subscription_type_id);
           setSubscriptionTypeName(name);
@@ -415,6 +418,7 @@ export const ProfileScreen: React.FC = () => {
             onSaveWeight={handleUpdateWeight}
             onCancelWeightEdit={() => setIsEditingWeight(false)}
             isSavingWeight={isSavingWeight}
+            membershipTerm={membershipTerm}
           />
           {teamProfile && (
             <TeamCard
@@ -1025,6 +1029,7 @@ export const ProfileScreen: React.FC = () => {
         matchedContacts={matchedContacts}
         onSelectContact={handleSelectContact}
         isSwitchingContact={isSwitchingContact}
+        membershipTerm={membershipTerm}
       />
 
       <ProfileUpdateModal

@@ -27,6 +27,7 @@ import type { Route } from 'next'
 import type { Contact, Session, RankingSystem, SubscriptionType } from '@lineup/shared'
 import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@lineup/shared'
 import { useDashboardData } from '@/hooks/useDashboardData'
+import { useMembershipTerm } from '@/hooks/useMembershipTerm'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { ContactsSummaryCard } from '@/components/dashboard/ContactsSummaryCard'
@@ -499,6 +500,7 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
 export default function DashboardPage() {
   const { currentTeamId, profile, team } = useAuth()
   const t = useTranslations('Dashboard')
+  const membershipTerm = useMembershipTerm()
 
   const { data: contacts, isLoading: contactsLoading } = useContacts(currentTeamId)
   const { data: sessions, isLoading: sessionsLoading } = useUpcomingSessions(currentTeamId)
@@ -555,7 +557,7 @@ export default function DashboardPage() {
         <StatCard title={t('statSubscribed')} value={internalSubCount} subtitle={t('statSubscribedSub')}
           icon={CreditCard} loading={statsLoading} href="/contacts"
           secondary={aggregatorSubCount !== null ? { label: t('statSubscribedAgg'), value: aggregatorSubCount } : undefined} />
-        <StatCard title={t('statActiveMembers')} value={activeMembers} subtitle={t('statActiveMembersSub')}
+        <StatCard title={membershipTerm} value={activeMembers} subtitle={t('statActiveMembersSub')}
           icon={Users} loading={statsLoading} href="/contacts" />
       </div>
 

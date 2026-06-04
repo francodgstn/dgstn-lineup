@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -22,12 +23,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Settings, IdCard, Pencil, Trash2, Plus, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react'
+import { Settings, IdCard, Pencil, Trash2, Plus, ChevronUp, ChevronDown, RotateCcw, Languages, Lock } from 'lucide-react'
+import { deleteField } from 'firebase/firestore'
 import {
   ORGANIZATIONS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
   DEFAULT_ORG_MEMBERSHIP_STATUSES,
 } from '@lineup/shared'
-import type { OrgMembershipStatusDef, MembershipStatusColor } from '@lineup/shared'
+import type { OrgMembershipStatusDef, MembershipStatusColor, Organization } from '@lineup/shared'
 
 // ─── colour config ────────────────────────────────────────────────────────────
 
@@ -466,6 +468,154 @@ function MembershipStatusesCard({ orgId, isAdmin }: { orgId: string; isAdmin: bo
   )
 }
 
+// ─── terminology card ─────────────────────────────────────────────────────────
+
+const LOCALES: { key: 'en' | 'de' | 'fr' | 'it'; flag: string; label: string }[] = [
+  { key: 'en', flag: '🇬🇧', label: 'EN' },
+  { key: 'de', flag: '🇩🇪', label: 'DE' },
+  { key: 'fr', flag: '🇫🇷', label: 'FR' },
+  { key: 'it', flag: '🇮🇹', label: 'IT' },
+]
+
+function TerminologyCard({
+  orgId,
+  org,
+  isAdmin,
+  onSaved,
+}: {
+  orgId: string
+  org: Organization | null
+  isAdmin: boolean
+  onSaved: (msg: string) => void
+}) {
+  const t = useTranslations('OrgSettings')
+  const qc = useQueryClient()
+
+  const [terms, setTerms] = useState<Partial<Record<'en' | 'de' | 'fr' | 'it', string>>>({})
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setTerms(org?.membership_term ?? {})
+  }, [org])
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const cleaned: Partial<Record<string, string>> = {}
+      for (const { key } of LOCALES) {
+        const v = terms[key]?.trim()
+        if (v) cleaned[key] = v
+      }
+      await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), {
+        membership_term: Object.keys(cleaned).length > 0 ? cleaned : deleteField(),
+      })
+      qc.invalidateQueries({ queryKey: ['org', orgId] })
+      qc.invalidateQueries({ queryKey: ['org-membership-term'] })
+      onSaved(t('terminologySaveSuccess'))
+    } catch {
+      onSaved(t('terminologySaveError'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Languages className="h-4 w-4" />
+          {t('terminologyTitle')}
+        </CardTitle>
+        <CardDescription>{t('terminologyDescription')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {LOCALES.map(({ key, flag, label }) => (
+            <div key={key} className="space-y-1">
+              <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>{flag}</span>
+                <span>{label}</span>
+              </Label>
+              <Input
+                value={terms[key] ?? ''}
+                onChange={(e) => setTerms((prev) => ({ ...prev, [key]: e.target.value }))}
+                placeholder="Membership"
+                maxLength={30}
+                disabled={!isAdmin}
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">{t('membershipTermHint')}</p>
+        {isAdmin && (
+          <Button size="sm" onClick={handleSave} disabled={saving}>
+            {saving ? '…' : t('saveButton')}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── membership lock card ─────────────────────────────────────────────────────
+
+function MembershipLockCard({
+  orgId,
+  org,
+  isAdmin,
+  onSaved,
+}: {
+  orgId: string
+  org: Organization | null
+  isAdmin: boolean
+  onSaved: (msg: string, type?: 'success' | 'error') => void
+}) {
+  const t = useTranslations('OrgSettings')
+  const qc = useQueryClient()
+  const [saving, setSaving] = useState(false)
+  const locked = org?.lock_org_membership ?? false
+
+  async function handleToggle(next: boolean) {
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), { lock_org_membership: next })
+      qc.invalidateQueries({ queryKey: ['org', orgId] })
+      onSaved(t('lockMembershipSaved'))
+    } catch {
+      onSaved(t('lockMembershipError'), 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!isAdmin) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Lock className="h-4 w-4" />
+          {t('lockMembershipTitle')}
+        </CardTitle>
+        <CardDescription>{t('lockMembershipDescription')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
+            {locked ? t('lockMembershipEnabled') : t('lockMembershipDisabled')}
+          </p>
+          <Switch
+            checked={locked}
+            onCheckedChange={handleToggle}
+            disabled={saving}
+            aria-label={t('lockMembershipTitle')}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function OrgSettingsPage() {
@@ -549,6 +699,10 @@ export default function OrgSettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <TerminologyCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={(msg) => showToast(msg)} />
+
+      <MembershipLockCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={(msg, type) => showToast(msg, type)} />
 
       <MembershipStatusesCard orgId={orgId} isAdmin={isAdmin} />
 

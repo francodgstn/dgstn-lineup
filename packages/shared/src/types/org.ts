@@ -16,6 +16,12 @@ export interface Organization {
   // Ranking systems shared across all clubs in the org.
   // When set, overrides individual team ranking_systems for all linked clubs.
   ranking_systems?: RankingSystem[]
+  // Per-locale custom term for the membership concept (e.g. "Affiliation", "Lizenz").
+  // Resolved at render time: term[locale] ?? term['en'] ?? 'Membership'.
+  membership_term?: Partial<Record<'en' | 'de' | 'fr' | 'it', string>>
+  // When true, org_membership_* fields on contacts are read-only for club managers.
+  // Only org admins (and org-level automations when implemented) may write them.
+  lock_org_membership?: boolean
   created: Timestamp
   createdBy: string
 }

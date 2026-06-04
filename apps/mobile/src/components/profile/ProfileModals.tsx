@@ -26,6 +26,7 @@ interface ProfileModalsProps {
   matchedContacts: Contact[] | null;
   onSelectContact: (contactId: string) => void;
   isSwitchingContact: boolean;
+  membershipTerm?: string;
 }
 
 export const ProfileModals: React.FC<ProfileModalsProps> = ({
@@ -44,6 +45,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
   matchedContacts,
   onSelectContact,
   isSwitchingContact,
+  membershipTerm = 'Membership',
 }) => {
   const theme = useTheme();
 
@@ -109,7 +111,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
               <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>
-                Membership Status
+                {membershipTerm} Status
               </Text>
               <IconButton icon="close" size={24} onPress={onCloseStatus} />
             </View>

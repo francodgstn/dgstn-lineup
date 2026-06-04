@@ -433,51 +433,73 @@ export const requestClubAccess = onCall(async (request) => {
     throw new HttpsError('not-found', 'Club is not an active member of this organization')
   }
 
-  // Idempotent: update or create the request document
-  const requestRef = db.collection('organizations').doc(data.orgId)
-    .collection('club_access_requests').doc(data.teamId)
-
   const now = FieldValue.serverTimestamp()
-  await requestRef.set({
+  const requestPayload = {
     teamId: data.teamId,
     orgId: data.orgId,
     requestedBy: request.auth.uid,
     requestedAt: now,
     accessType: data.accessType,
     status: 'pending',
-  }, { merge: false })
+  }
 
-  // Notify club owner by email
-  const orgDoc = await db.collection('organizations').doc(data.orgId).get()
-  const org = orgDoc.data()
+  // Write to both sides atomically so the team can see the request in their own settings
+  // and the org admin can see it in the org's clubs view.
+  const batch = db.batch()
 
-  const ownerSnap = await db.collection('teams').doc(data.teamId)
-    .collection('team_members').where('role', '==', 'owner').limit(1).get()
+  // Org side: one doc per team, idempotent (org admin view)
+  batch.set(
+    db.collection('organizations').doc(data.orgId).collection('club_access_requests').doc(data.teamId),
+    requestPayload,
+    { merge: false }
+  )
 
-  if (!ownerSnap.empty) {
-    const ownerUserDoc = await db.collection('users').doc(ownerSnap.docs[0].id).get()
-    const ownerEmail = ownerUserDoc.data()?.email as string | undefined
+  // Team side: one doc per org, so team managers/owners can discover and approve it
+  batch.set(
+    db.collection('teams').doc(data.teamId).collection('org_access_requests').doc(data.orgId),
+    requestPayload,
+    { merge: false }
+  )
 
-    if (ownerEmail) {
-      const requesterDoc = await db.collection('users').doc(request.auth.uid).get()
-      const requesterName = (requesterDoc.data()?.displayName || requesterDoc.data()?.email || 'An org admin') as string
-      const team = await getTeam(data.teamId)
-      const teamName = team?.name ?? data.teamId
-      const accessLabel = data.accessType === 'manage' ? 'manage (admin)' : 'view'
-      const hostingUrl = getHostingUrl()
+  await batch.commit()
 
-      const { html, text } = buildEmailTemplate({
-        title: `Access request for ${teamName} on Lineup`,
-        body: `
-          <p><strong>${requesterName}</strong>, an admin of the organization <strong>${org?.name ?? data.orgId}</strong>,
-          has requested <strong>${accessLabel}</strong> access to your club <strong>${teamName}</strong> on Lineup.</p>
-          <p>You can review and manage this request in your club's Team Settings.</p>
-          <p><a href="${hostingUrl}/team/settings" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Review Request</a></p>
-        `,
-      })
+  // Email notification is best-effort — a failed send must not roll back the request.
+  try {
+    const [orgDoc, ownerSnap] = await Promise.all([
+      db.collection('organizations').doc(data.orgId).get(),
+      db.collection('teams').doc(data.teamId)
+        .collection('team_members').where('role', '==', 'owner').limit(1).get(),
+    ])
 
-      await sendEmail({ to: ownerEmail, subject: `Access request for ${teamName} on Lineup`, html, text })
+    if (!ownerSnap.empty) {
+      const ownerUserDoc = await db.collection('users').doc(ownerSnap.docs[0].id).get()
+      const ownerEmail = ownerUserDoc.data()?.email as string | undefined
+
+      if (ownerEmail) {
+        const [requesterDoc, team] = await Promise.all([
+          db.collection('users').doc(request.auth.uid).get(),
+          getTeam(data.teamId),
+        ])
+        const requesterName = (requesterDoc.data()?.displayName || requesterDoc.data()?.email || 'An org admin') as string
+        const teamName = team?.name ?? data.teamId
+        const accessLabel = data.accessType === 'manage' ? 'manage (admin)' : 'view'
+        const hostingUrl = getHostingUrl()
+
+        const { html, text } = buildEmailTemplate({
+          title: `Access request for ${teamName} on Lineup`,
+          body: `
+            <p><strong>${requesterName}</strong>, an admin of the organization <strong>${orgDoc.data()?.name ?? data.orgId}</strong>,
+            has requested <strong>${accessLabel}</strong> access to your club <strong>${teamName}</strong> on Lineup.</p>
+            <p>You can review and approve or deny this request in your club's Team Settings.</p>
+            <p><a href="${hostingUrl}/settings" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Review Request</a></p>
+          `,
+        })
+
+        await sendEmail({ to: ownerEmail, subject: `Access request for ${teamName} on Lineup`, html, text })
+      }
     }
+  } catch (err) {
+    console.error('requestClubAccess: email notification failed (non-fatal):', err)
   }
 
   return { success: true }
