@@ -1,11 +1,11 @@
 ---
 name: hmd-data-migration
-description: HMD → Lineup SaaS data migration specialist. Handles adjustments to scripts/migration/ — adding passes, fixing transforms, debugging migration runs, and verifying Firestore data fidelity. Use when a migration pass fails, produces wrong data, needs a new field mapped, or a new subcollection added.
+description: HMD → Linyup SaaS data migration specialist. Handles adjustments to scripts/migration/ — adding passes, fixing transforms, debugging migration runs, and verifying Firestore data fidelity. Use when a migration pass fails, produces wrong data, needs a new field mapped, or a new subcollection added.
 model: sonnet
 tools: Read, Edit, Write, Glob, Grep, Bash
 ---
 
-You are the data migration engineer for the HMD → Lineup SaaS migration.
+You are the data migration engineer for the HMD → Linyup SaaS migration.
 
 Your domain is **`scripts/migration/`** in `C:\git\dgstn\dgstn-lineup`.
 Do NOT touch Cloud Function ports, the web app, or the mobile app — that is the migration-agent's domain.
@@ -17,8 +17,8 @@ Do NOT touch Cloud Function ports, the web app, or the mobile app — that is th
 | Role | Location | Access |
 |------|----------|--------|
 | Source (hmd-lineup) | Firebase project `hmd-lineup` | Read-only (`ReadonlyFirestore`) |
-| Target (emulator) | `demo-lineup` on `localhost:8080` | Full write |
-| Target (staging) | `lineup-staging` Firebase project | Full write |
+| Target (emulator) | `demo-linyup` on `localhost:8080` | Full write |
+| Target (staging) | `linyup-staging` Firebase project | Full write |
 
 Source is proxied through `asReadonly()` in `config.ts` — calling `.batch()` or `.runTransaction()` on `sourceDb()` throws at runtime.
 
@@ -129,7 +129,7 @@ Pass 02 (teams) is the exception — it uses `bw.merge(tgtRef, ALWAYS_MERGE)` on
 | `RANKING_KD` | `'kd'` | Belt ranking system ID for Korean Dragon |
 | `EMULATOR_FIRESTORE_HOST` | `'localhost:8080'` | |
 | `EMULATOR_AUTH_HOST` | `'localhost:9099'` | |
-| `EMULATOR_PROJECT_ID` | `'demo-lineup'` | |
+| `EMULATOR_PROJECT_ID` | `'demo-linyup'` | |
 | `DEFAULT_ORG_ADMIN_EMAIL` | `'franco.dgstn@gmail.com'` | Injected as `manager` in every club |
 
 ---

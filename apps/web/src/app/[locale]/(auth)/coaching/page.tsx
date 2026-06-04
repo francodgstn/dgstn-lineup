@@ -28,8 +28,8 @@ import {
   PARTICIPANTS_SUBCOLLECTION,
   TEAMS_COLLECTION,
   TEAM_MEMBERS_SUBCOLLECTION,
-} from '@lineup/shared'
-import type { CoachAvailability, CoachBooking, Session } from '@lineup/shared'
+} from '@linyup/shared'
+import type { CoachAvailability, CoachBooking, Session } from '@linyup/shared'
 import { CalendarClock, Pause, Play, Pencil, Plus, MapPin, Video, Users, Dumbbell } from 'lucide-react'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────

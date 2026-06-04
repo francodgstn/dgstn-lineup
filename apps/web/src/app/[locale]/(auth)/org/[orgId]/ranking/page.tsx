@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, Shield } from 'lucide-react'
-import type { RankingSystem, RankLevel } from '@lineup/shared'
+import type { RankingSystem, RankLevel } from '@linyup/shared'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────

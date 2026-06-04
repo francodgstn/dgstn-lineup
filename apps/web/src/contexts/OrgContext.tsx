@@ -6,7 +6,7 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLocale } from 'next-intl'
-import type { Organization, SaasSubscription, OrgRole } from '@lineup/shared'
+import type { Organization, SaasSubscription, OrgRole } from '@linyup/shared'
 
 export function resolveOrgMembershipTerm(
   termObj: Partial<Record<string, string>> | undefined,

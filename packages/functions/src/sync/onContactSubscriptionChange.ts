@@ -13,7 +13,7 @@ import {
   CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION,
   SUBSCRIPTION_TRANSITIONS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
-} from '@lineup/shared'
+} from '@linyup/shared'
 
 
 export const onContactSubscriptionChange = onDocumentUpdated(

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import type { RankingSystem, Organization } from '@lineup/shared'
+import type { RankingSystem, Organization } from '@linyup/shared'
 
 interface RankingSystemsResult {
   rankingSystems: RankingSystem[]

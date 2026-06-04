@@ -19,8 +19,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { IconPicker } from '@/components/ui/icon-picker'
 import PortalHome from '../../../(portal)/portal/[slug]/PortalHome'
 import { toast } from 'sonner'
-import { TEAMS_COLLECTION } from '@lineup/shared'
-import type { Team, SocialPlatform, BookingSettings } from '@lineup/shared'
+import { TEAMS_COLLECTION } from '@linyup/shared'
+import type { Team, SocialPlatform, BookingSettings } from '@linyup/shared'
 import {
   PORTAL_GRADIENTS, SOCIAL_PLATFORMS, SOCIAL_LABELS,
 } from '@/lib/portal'

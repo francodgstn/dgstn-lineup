@@ -13,8 +13,8 @@ import {
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   TEAM_MEMBERS_SUBCOLLECTION,
-} from '@lineup/shared'
-import type { PluginManifest, InstalledPlugin, PluginCategory } from '@lineup/shared'
+} from '@linyup/shared'
+import type { PluginManifest, InstalledPlugin, PluginCategory } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'

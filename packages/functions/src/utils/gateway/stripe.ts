@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Stripe from 'stripe'
-import type { StripeGatewayConfig } from '@lineup/shared'
+import type { StripeGatewayConfig } from '@linyup/shared'
 import type { GatewayAdapter, CheckoutSession, Invoice, WebhookEvent } from './interface'
 
 // InstanceType extracts the instance type from the callable constructor
 type StripeInstance = InstanceType<typeof Stripe>
 
-// Price lookup key convention: `lineup_${plan}_monthly`
+// Price lookup key convention: `linyup_${plan}_monthly`
 // Configure these lookup keys in your Stripe dashboard.
 function priceKeyForPlan(plan: string): string {
-  return `lineup_${plan}_monthly`
+  return `linyup_${plan}_monthly`
 }
 
 export class StripeAdapter implements GatewayAdapter {
@@ -99,14 +99,14 @@ export class StripeAdapter implements GatewayAdapter {
    * portal, which changes the price but does NOT update subscription metadata.
    * Falls back to metadata.plan (set at checkout creation) for backwards compat.
    *
-   * Lookup key convention: lineup_{plan}_monthly  →  plan = 'coach' | 'club' | 'organization'
+   * Lookup key convention: linyup_{plan}_monthly  →  plan = 'coach' | 'club' | 'organization'
    */
   private extractPlanFromSubscription(sub: any): string | undefined {
     const items: any[] = sub.items?.data ?? []
     if (items.length > 0) {
       const lookupKey = items[0]?.price?.lookup_key as string | undefined
       if (lookupKey) {
-        const match = lookupKey.match(/^lineup_(.+)_monthly$/)
+        const match = lookupKey.match(/^linyup_(.+)_monthly$/)
         if (match) return match[1]
       }
     }

@@ -3,7 +3,7 @@
 // The automation engine dispatches plugin actions through this map.
 
 import type { ContactData } from '../utils/automationEngine'
-import type { PluginActionId } from '@lineup/shared'
+import type { PluginActionId } from '@linyup/shared'
 
 import { aiInsightsGenerateMessage } from './aiInsights'
 import { whatsappSendMessage } from './whatsapp'

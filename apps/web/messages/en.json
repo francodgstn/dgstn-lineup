@@ -37,7 +37,7 @@
     "submit": "Sign in",
     "submitting": "Signing in…",
     "forgotPassword": "Forgot your password?",
-    "noAccount": "New to Lineup?",
+    "noAccount": "New to Linyup?",
     "createAccount": "Create an account",
     "resetSent": "Password reset email sent. Check your inbox.",
     "errorInvalidCredentials": "Invalid email or password. Please try again.",
@@ -1030,7 +1030,7 @@
     "upgradeCta": "Coming soon — contact us to upgrade",
     "upgradeCtaButton": "Upgrade to this plan",
     "downgradeCta": "Contact us to downgrade",
-    "contactNote": "To change your plan, get in touch with the Lineup team."
+    "contactNote": "To change your plan, get in touch with the Linyup team."
   },
   "Plugins": {
     "title": "Plugins",

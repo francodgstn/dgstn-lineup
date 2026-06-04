@@ -2,16 +2,16 @@
 
 > **Scope:** this document covers **team-level payment gateways** — the gateway
 > a club uses to charge its own members and students. This is entirely separate
-> from Lineup's SaaS billing (Lineup charging clubs for using the platform),
+> from Linyup's SaaS billing (Linyup charging clubs for using the platform),
 > which is documented in `docs/testing-billing.md`.
 
 ---
 
 ## What this is
 
-Lineup lets each team plug in their own payment gateway so they can:
+Linyup lets each team plug in their own payment gateway so they can:
 
-- Accept membership or subscription payments directly inside Lineup
+- Accept membership or subscription payments directly inside Linyup
 - Have the contact record automatically updated when a payment is confirmed
   (`membership_expiration`, `subscription_type_id`, `last_payment_at`)
 - Keep an immutable audit trail of every payment event in Firestore
@@ -70,7 +70,7 @@ Firestore writes:
 ### 2. Find your team ID
 
 You need the Firestore team ID for the webhook URL. Fastest way: open any
-authenticated page in Lineup, open browser DevTools → Application → Local
+authenticated page in Linyup, open browser DevTools → Application → Local
 Storage → look for `teamId`, or copy it from the URL of the Settings page.
 
 ### 3. Configure the webhook in Payrexx
@@ -79,18 +79,18 @@ Go to your Payrexx dashboard → **Settings → Webhooks → Add webhook**.
 
 | Field | Value |
 |-------|-------|
-| URL | `https://europe-west6-lineup-prod.cloudfunctions.net/handlePayrexxWebhook?teamId=YOUR_TEAM_ID` |
+| URL | `https://europe-west6-linyup-prod.cloudfunctions.net/handlePayrexxWebhook?teamId=YOUR_TEAM_ID` |
 | Events | `Transaction` (covers payment confirmed, subscription renewed) |
-| Secret | Generate or type a random string — you'll paste this into Lineup next |
+| Secret | Generate or type a random string — you'll paste this into Linyup next |
 
-> **Staging:** replace `lineup-prod` with `lineup-staging` and use the staging
+> **Staging:** replace `linyup-prod` with `linyup-staging` and use the staging
 > team ID.
 >
 > **Local dev:** see [Testing locally](#testing-locally) below.
 
 Copy the **signing secret** you set. You'll need it in the next step.
 
-### 4. Add the gateway in Lineup settings
+### 4. Add the gateway in Linyup settings
 
 1. Open **Settings → Payments** (team owner only)
 2. Click **Add gateway** → select **Payrexx**
@@ -107,14 +107,14 @@ Copy the **signing secret** you set. You'll need it in the next step.
 
 ### 5. Set up subscription type mapping
 
-Each incoming payment needs to be associated with a Lineup **subscription
+Each incoming payment needs to be associated with a Linyup **subscription
 type** so the contact gets the right `membership_expiration` and plan.
 There are two approaches — you can use both together:
 
 #### A. Per-payment-link mapping (recommended)
 
 In your Payrexx payment form/link settings, set the **Reference ID**
-(`referenceId`) field to the Firestore ID of the Lineup subscription type.
+(`referenceId`) field to the Firestore ID of the Linyup subscription type.
 
 To find a subscription type ID: Settings → Subscription types → copy the ID
 shown under the type name (it is the Firestore document ID).
@@ -126,7 +126,7 @@ subscription type.
 
 #### B. Gateway-level default
 
-In the Lineup gateway settings dialog, select a **Default subscription type**.
+In the Linyup gateway settings dialog, select a **Default subscription type**.
 This is applied when `transaction.referenceId` is blank (e.g. for payment
 links that don't have it set, or one-off payments).
 
@@ -137,7 +137,7 @@ subscription type change, only `last_payment_at` updated).
 
 The contact's `membership_expiration` is set from `transaction.subscription.valid_until`
 — a date string Payrexx includes for subscription payments (e.g. `"2026-12-31"`).
-Lineup interprets this as end-of-day UTC (`2026-12-31T23:59:59Z`).
+Linyup interprets this as end-of-day UTC (`2026-12-31T23:59:59Z`).
 
 For one-off (non-subscription) payments, `valid_until` is absent and
 `membership_expiration` is not touched — only `last_payment_at` is set.
@@ -199,7 +199,7 @@ environment variable `ALLOW_TEST_PAYREXX=true`.
    ngrok prints a public URL like `https://abc123.ngrok.io`.
 4. Set the Payrexx webhook URL to:
    ```
-   https://abc123.ngrok.io/demo-lineup/europe-west6/handlePayrexxWebhook?teamId=YOUR_TEAM_ID
+   https://abc123.ngrok.io/demo-linyup/europe-west6/handlePayrexxWebhook?teamId=YOUR_TEAM_ID
    ```
 5. Use Payrexx test mode — trigger a test payment. The emulator receives it.
 
@@ -211,12 +211,12 @@ Skip the Payrexx dashboard entirely and POST a signed payload directly:
 # Build the raw body
 BODY='{"transaction":{"id":99999,"status":"confirmed","mode":"LIVE","referenceId":"YOUR_SUB_TYPE_ID","contact":{"email":"student@example.com"},"subscription":{"valid_until":"2027-01-31"}}}'
 
-# Compute signature (replace YOUR_SECRET with what's in the Lineup settings)
+# Compute signature (replace YOUR_SECRET with what's in the Linyup settings)
 SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "YOUR_SECRET" | awk '{print $2}')
 
 # POST to local emulator
 curl -X POST \
-  "http://localhost:5001/demo-lineup/europe-west6/handlePayrexxWebhook?teamId=YOUR_TEAM_ID" \
+  "http://localhost:5001/demo-linyup/europe-west6/handlePayrexxWebhook?teamId=YOUR_TEAM_ID" \
   -H "Content-Type: application/json" \
   -H "X-Webhook-Signature: $SIG" \
   -d "$BODY"
@@ -298,7 +298,7 @@ Check the Cloud Function logs for `[handlePayrexxWebhook]` lines. Common causes:
 |-------------|-----|
 | `No Payrexx integration for team=…` | Gateway not configured in Settings, or wrong `teamId` in the webhook URL |
 | `Missing X-Webhook-Signature` | Payrexx is not sending the header — check webhook config in Payrexx dashboard |
-| `Signature mismatch` | `webhook_signing_secret` in Lineup doesn't match what's in Payrexx. Re-copy it. |
+| `Signature mismatch` | `webhook_signing_secret` in Linyup doesn't match what's in Payrexx. Re-copy it. |
 | `Contact not found email=…` | The email in the Payrexx contact doesn't match any contact in this team |
 | `skipped_status:waiting` | Payment not yet confirmed — normal, Payrexx sends events at each status change |
 | `test_mode` | `mode: "TEST"` — set `ALLOW_TEST_PAYREXX=true` on staging or trigger a live payment |

@@ -32,7 +32,7 @@ import {
   FileText, Settings2, Zap, RefreshCw, Sparkles, BookOpen,
   Tag, Webhook,
 } from 'lucide-react'
-import { TEAMS_COLLECTION } from '@lineup/shared'
+import { TEAMS_COLLECTION } from '@linyup/shared'
 import { Link } from '@/i18n/navigation'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'

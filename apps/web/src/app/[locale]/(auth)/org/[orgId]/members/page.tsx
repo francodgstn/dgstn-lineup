@@ -40,8 +40,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { UserPlus, Trash2 } from 'lucide-react'
 import { useParams } from 'next/navigation'
-import { ORGANIZATIONS_COLLECTION, ORG_MEMBERS_SUBCOLLECTION } from '@lineup/shared'
-import type { OrgMember, OrgRole } from '@lineup/shared'
+import { ORGANIZATIONS_COLLECTION, ORG_MEMBERS_SUBCOLLECTION } from '@linyup/shared'
+import type { OrgMember, OrgRole } from '@linyup/shared'
 
 interface OrgMemberRow extends OrgMember {
   id: string

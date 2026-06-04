@@ -1,8 +1,8 @@
-# CLAUDE.md — dgstn-lineup (Lineup SaaS)
+# CLAUDE.md — dgstn-lineup (Linyup SaaS)
 
 ## What this project is
 
-Lineup is a generalised SaaS version of **hmd-lineup** — a martial-arts school
+Linyup is a generalised SaaS version of **hmd-lineup** — a martial-arts school
 management platform. The goal is to strip out sport-specific logic and offer the
 same feature set (sessions, contacts, bookings, trial forms, team management,
 student mobile app) to any type of coach, club, or multi-club organisation.
@@ -51,14 +51,14 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - `packages/functions`: utils ported, ~12 functions fully implemented, rest stubbed
 - Firebase config: `firestore.rules`, `firestore.index.json`, `storage.rules`, `database.rules.json`, `firebase.json`, `.firebaserc`
 - `apps/web`: Next.js 15 scaffold with `(auth)` route group, `(portal)` route group, login page, AuthContext, TanStack Query
-- `apps/mobile`: full port of `hmd-lineup/student-app/` with Lineup branding
+- `apps/mobile`: full port of `hmd-lineup/student-app/` with Linyup branding
 - CI/CD: `.github/workflows/verify.yml` + `deploy.yml`
 - shadcn/ui component library installed in `apps/web/src/components/ui/`
 - Build + typecheck clean across all packages; dev server runs at port 3000
 - `firebase-auth.ts` split from `firebase.ts` to prevent SSG crash (auth/invalid-api-key)
 - Portal routes tagged `force-dynamic`; `apps/web/.env.local` created with placeholders
 - Self-service signup wizard (`app/signup/page.tsx`) — 2-step: account → team → dashboard
-- Firebase emulator wired up for local dev (`demo-lineup` project, no real Firebase project needed)
+- Firebase emulator wired up for local dev (`demo-linyup` project, no real Firebase project needed)
 
 ---
 
@@ -90,7 +90,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 | State: auth | AuthContext (React context) | Simpler than Redux for auth-only state |
 | Firebase SDK | Modular v12 (no compat) | Tree-shakeable, future-proof |
 | Functions | TypeScript, CommonJS target, **firebase-functions v6 (gen2)** | No Babel, type-safe, already on latest |
-| Branding | "Lineup" (one word) | Clean, universal, connects to discipline of aligning |
+| Branding | "Linyup" (coined word, linyup.com) | Energetic, invented, domain available |
 | Multi-tenancy | `teamId` as tenant boundary | Matches existing Firestore rules pattern |
 | Functions region | `europe-west6` | Same as hmd-lineup; change only if customer base shifts |
 
@@ -157,9 +157,9 @@ type SaasPlan = 'coach' | 'club' | 'org' | 'enterprise'
 
 | Alias | Project ID |
 |---|---|
-| default (local) | `demo-lineup` (emulator only — `demo-` prefix bypasses project validation) |
-| staging | `lineup-staging` |
-| production | `lineup-prod` |
+| default (local) | `demo-linyup` (emulator only — `demo-` prefix bypasses project validation) |
+| staging | `linyup-staging` |
+| production | `linyup-prod` |
 
 Staging and production need to be created in Firebase Console (not done yet).
 For local development use the Firebase emulators — no real project needed.
@@ -202,7 +202,7 @@ Two isolated datasets, never mixed:
 
 ## Internationalisation (i18n)
 
-**Library:** `next-intl` — installed in `@lineup/web`.
+**Library:** `next-intl` — installed in `@linyup/web`.
 
 **Locales:** `en` (default), `de`, `fr`, `it` — all four national languages of Switzerland.
 
@@ -250,10 +250,10 @@ apps/web/
 
 ```bash
 pnpm install                                    # root — installs all workspaces
-pnpm --filter @lineup/web dev                   # Next.js dev server (port 3000)
-pnpm --filter @lineup/functions run build       # compile functions TypeScript
-pnpm --filter @lineup/functions run test        # run function tests (needs emulator)
-pnpm --filter @lineup/mobile start              # Expo dev server
+pnpm --filter @linyup/web dev                   # Next.js dev server (port 3000)
+pnpm --filter @linyup/functions run build       # compile functions TypeScript
+pnpm --filter @linyup/functions run test        # run function tests (needs emulator)
+pnpm --filter @linyup/mobile start              # Expo dev server
 pnpm typecheck                                  # typecheck all packages
 pnpm lint                                       # lint all packages
 ```

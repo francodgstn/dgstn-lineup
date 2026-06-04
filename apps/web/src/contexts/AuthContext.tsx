@@ -5,7 +5,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth'
 import { doc, getDoc, onSnapshot } from 'firebase/firestore'
 import { auth } from '@/lib/firebase-auth'
 import { db } from '@/lib/firebase'
-import type { UserProfile, Team, TeamRole } from '@lineup/shared'
+import type { UserProfile, Team, TeamRole } from '@linyup/shared'
 
 interface AuthContextValue {
   user: User | null

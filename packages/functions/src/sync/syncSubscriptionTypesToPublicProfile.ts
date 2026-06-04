@@ -12,7 +12,7 @@ import { to } from '../utils/async'
 import {
   TEAMS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
-} from '@lineup/shared'
+} from '@linyup/shared'
 
 
 export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(

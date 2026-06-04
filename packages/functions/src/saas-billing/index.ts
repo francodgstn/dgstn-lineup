@@ -6,7 +6,7 @@ import { getSecret } from '../utils/secrets'
 import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
 import { StripeAdapter } from '../utils/gateway/stripe'
-import type { SaasPlan } from '@lineup/shared'
+import type { SaasPlan } from '@linyup/shared'
 
 
 const VALID_PLANS: SaasPlan[] = ['coach', 'club', 'organization']
@@ -14,8 +14,8 @@ const VALID_PLANS: SaasPlan[] = ['coach', 'club', 'organization']
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Returns a StripeAdapter using Lineup's platform Stripe secret key.
- * SaaS billing always uses Lineup's own Stripe account — never a team-level
+ * Returns a StripeAdapter using Linyup's platform Stripe secret key.
+ * SaaS billing always uses Linyup's own Stripe account — never a team-level
  * payment gateway integration (those are for teams charging their own clients).
  */
 async function getPlatformStripeAdapter(): Promise<StripeAdapter> {

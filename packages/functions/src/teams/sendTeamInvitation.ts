@@ -1,5 +1,5 @@
 // Port from hmd-lineup/functions/src/sendTeamInvitation/index.js
-// TODO: copy email template HTML from hmd-lineup and update branding to "Lineup"
+// TODO: copy email template HTML from hmd-lineup and update branding to "Linyup"
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
@@ -36,11 +36,11 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
       expires_at: expiresAt,
     })
 
-    const hostingUrl = process.env.HOSTING_URL || 'https://lineup.app'
+    const hostingUrl = process.env.HOSTING_URL || 'https://linyup.com'
     const invitationUrl = `${hostingUrl}/portal/team-invitation/${token}`
 
     const { html, text } = buildEmailTemplate({
-      title: `You've been invited to join ${team.name} on Lineup`,
+      title: `You've been invited to join ${team.name} on Linyup`,
       body: `
         <p>You have been invited to join <strong>${team.name}</strong> as a <strong>${role}</strong>.</p>
         <p><a href="${invitationUrl}" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p>
@@ -49,7 +49,7 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
       `,
     })
 
-    await sendEmail({ to: email, subject: `Invitation to join ${team.name} on Lineup`, html, text })
+    await sendEmail({ to: email, subject: `Invitation to join ${team.name} on Linyup`, html, text })
 
     return { invitationId: invRef.id }
   }

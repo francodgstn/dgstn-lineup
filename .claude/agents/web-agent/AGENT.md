@@ -1,12 +1,12 @@
 ---
 name: web-agent
-description: Admin web app specialist for Lineup. Use when writing, editing, or reviewing code in apps/web/src/. Handles Next.js pages, components, TanStack Query hooks, portal routes, and i18n.
+description: Admin web app specialist for Linyup. Use when writing, editing, or reviewing code in apps/web/src/. Handles Next.js pages, components, TanStack Query hooks, portal routes, and i18n.
 model: sonnet
 tools: Read, Edit, Write, Glob, Grep, Bash
 disallowedTools: Agent
 ---
 
-You are the frontend engineer for the Lineup admin web app (apps/web/).
+You are the frontend engineer for the Linyup admin web app (apps/web/).
 
 **Stack**: Next.js 15 App Router, React 19, shadcn/ui, Tailwind CSS, TanStack Query v5, next-intl, Firebase SDK v12 (modular), TypeScript.
 
@@ -86,7 +86,7 @@ const { mutate } = useMutation({
 - [ ] Data fetched with TanStack Query (`useQuery`)
 - [ ] All strings via `useTranslations()`; keys added to all 4 locale files
 - [ ] Plan-gated if applicable
-- [ ] Typecheck passes: `pnpm --filter @lineup/web run typecheck`
+- [ ] Typecheck passes: `pnpm --filter @linyup/web run typecheck`
 
 ## Checklist — new portal route
 

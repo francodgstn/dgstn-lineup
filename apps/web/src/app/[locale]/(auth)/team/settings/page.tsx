@@ -25,8 +25,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import {
   TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, ALERT_PRESETS_SUBCOLLECTION,
-} from '@lineup/shared'
-import type { Team, SubscriptionType, AlertScheduleType, RankingSystem, RankLevel, TeamIntegration, PaymentGatewayType } from '@lineup/shared'
+} from '@linyup/shared'
+import type { Team, SubscriptionType, AlertScheduleType, RankingSystem, RankLevel, TeamIntegration, PaymentGatewayType } from '@linyup/shared'
 import { CalendarDays, Timer, Plus, Pencil, Trash2, Star, Building2 } from 'lucide-react'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'

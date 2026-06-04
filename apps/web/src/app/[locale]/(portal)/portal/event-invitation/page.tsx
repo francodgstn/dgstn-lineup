@@ -140,7 +140,7 @@ export default function EventInvitationPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Minimal top bar */}
       <div className="border-b bg-white px-5 py-3.5">
-        <span className="text-sm font-bold tracking-tight text-foreground">Lineup</span>
+        <span className="text-sm font-bold tracking-tight text-foreground">Linyup</span>
       </div>
 
       <div className="flex-1 flex flex-col items-center px-5 pt-8 pb-12">

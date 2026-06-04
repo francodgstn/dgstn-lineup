@@ -1,4 +1,4 @@
-import type { PaymentGatewayConfig } from '@lineup/shared'
+import type { PaymentGatewayConfig } from '@linyup/shared'
 import type { GatewayAdapter } from './interface'
 import { StripeAdapter } from './stripe'
 import { PayrexxAdapter } from './payrexx'

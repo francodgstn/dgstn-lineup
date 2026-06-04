@@ -2,7 +2,7 @@
 // Manifests are code (bundled); only installation state lives in Firestore.
 // To add a new plugin: create a manifest file and add it here.
 
-import type { PluginManifest } from '@lineup/shared'
+import type { PluginManifest } from '@linyup/shared'
 import { aiInsightsManifest } from './ai-insights/manifest'
 import { whatsappManifest } from './whatsapp/manifest'
 import { clubWebsiteManifest } from './club-website/manifest'

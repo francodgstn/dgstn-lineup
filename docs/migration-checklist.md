@@ -15,7 +15,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `storage.rules`
 - ✅ `database.rules.json`
 - ✅ `firebase.json` + `.firebaserc`
-- ✅ Firebase emulator config (demo-lineup project)
+- ✅ Firebase emulator config (demo-linyup project)
 - ✅ CI/CD — `.github/workflows/verify.yml` + `deploy.yml`
 
 ---
@@ -229,7 +229,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 
 ## apps/mobile (Student App)
 
-- ✅ Full port of hmd-lineup student-app with Lineup branding
+- ✅ Full port of hmd-lineup student-app with Linyup branding
 - ✅ Auth (membership token, `student_auth_tokens`)
 - ✅ Home screen / welcome messages
 - ✅ Session check-in (QR scan + self check-in)
@@ -238,7 +238,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 
 ---
 
-## Automation Engine (new in Lineup — supersedes hmd-lineup's daily-only outreach approach)
+## Automation Engine (new in Linyup — supersedes hmd-lineup's daily-only outreach approach)
 
 > Replaces the simple `sendAutomationRuleEmails` daily job with a three-tier generalised engine.
 > Outreach emails are one possible action; the engine supports diverse triggers and multiple action types.

@@ -1,4 +1,4 @@
-import type { PayrexxGatewayConfig } from '@lineup/shared'
+import type { PayrexxGatewayConfig } from '@linyup/shared'
 import type { GatewayAdapter, CheckoutSession, Invoice, WebhookEvent } from './interface'
 
 // Payrexx adapter — stub pending implementation.

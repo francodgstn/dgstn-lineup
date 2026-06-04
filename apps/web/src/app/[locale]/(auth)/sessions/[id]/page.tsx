@@ -23,8 +23,8 @@ import {
 import {
   SESSIONS_COLLECTION, ACTIVITIES_COLLECTION, CONTACTS_COLLECTION,
   PARTICIPANTS_SUBCOLLECTION,
-} from '@lineup/shared'
-import type { Session, Booking, Contact, Activity } from '@lineup/shared'
+} from '@linyup/shared'
+import type { Session, Booking, Contact, Activity } from '@linyup/shared'
 import { Controller, useForm } from 'react-hook-form'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DateTimePicker } from '@/components/ui/date-picker'

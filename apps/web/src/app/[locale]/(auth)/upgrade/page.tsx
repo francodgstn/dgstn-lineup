@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl'
 import { Check, ChevronRight, Zap } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
-import { PLAN_ORDER, type SaasPlan } from '@lineup/shared'
+import { PLAN_ORDER, type SaasPlan } from '@linyup/shared'
 import { Link } from '@/i18n/navigation'
 
 // ─── feature data (sourced from docs/product-strategy.md) ────────────────────

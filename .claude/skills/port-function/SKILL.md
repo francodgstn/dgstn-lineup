@@ -32,7 +32,7 @@ Port a Cloud Function from hmd-lineup. Usage: `/port-function <functionName>`
    ```
    Remove the stub comment if one existed.
 
-7. **Build check**: `pnpm --filter @lineup/functions run build`
+7. **Build check**: `pnpm --filter @linyup/functions run build`
    Fix any type errors before finishing.
 
 8. **Update migration checklist** — mark the function as ✅ in `docs/migration-checklist.md`.

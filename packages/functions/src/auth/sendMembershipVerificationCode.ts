@@ -50,7 +50,7 @@ export const sendMembershipVerificationCode = onCall(async (request) => {
   })
 
   const { html, text } = buildEmailTemplate({
-    title: 'Your Lineup verification code',
+    title: 'Your Linyup verification code',
     body: `
       <p>Your verification code for <strong>${team.name}</strong> is:</p>
       <p style="font-size:32px;font-weight:bold;letter-spacing:8px;text-align:center;padding:20px;background:#f8f9fa;border-radius:8px;">${code}</p>
@@ -59,7 +59,7 @@ export const sendMembershipVerificationCode = onCall(async (request) => {
     `,
   })
 
-  await sendEmail({ to: normalizedEmail, subject: `Your Lineup verification code: ${code}`, html, text })
+  await sendEmail({ to: normalizedEmail, subject: `Your Linyup verification code: ${code}`, html, text })
   console.log(`Membership verification code sent to ${normalizedEmail} for team ${teamId}`)
 
   return { success: true, codeId: docRef.id }

@@ -7,7 +7,7 @@ import {
   removeTeamMember,
   updateTeamMemberRole,
 } from '../utils/teams'
-import type { TeamRole } from '@lineup/shared'
+import type { TeamRole } from '@linyup/shared'
 
 const VALID_ROLES: TeamRole[] = ['owner', 'manager', 'viewer']
 const VALID_ACTIONS = ['add', 'remove', 'updateRole'] as const

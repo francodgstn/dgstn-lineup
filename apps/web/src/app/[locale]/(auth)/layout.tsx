@@ -27,7 +27,7 @@ import {
   Building2,
 } from 'lucide-react'
 import type { Route } from 'next'
-import type { SaasPlan } from '@lineup/shared'
+import type { SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
@@ -201,7 +201,7 @@ function SidebarContent({
       <div className={`flex items-center border-b h-14 shrink-0 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
         {!collapsed && (
           <Link href={'/dashboard' as Route} className="font-heading text-xl font-bold tracking-widest uppercase hover:opacity-80 transition-opacity">
-            Lineup
+            Linyup
           </Link>
         )}
         {onToggleCollapse && (

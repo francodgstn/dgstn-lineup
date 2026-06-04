@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Booking } from '@lineup/shared'
+import type { Booking } from '@linyup/shared'
 import { Search, MoreHorizontal, Check, X, UserX, Undo, Repeat, ExternalLink, User } from 'lucide-react'
 import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'

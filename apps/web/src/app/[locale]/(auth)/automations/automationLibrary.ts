@@ -1,4 +1,4 @@
-// Automation Library — curated pre-built automation rules for Lineup.
+// Automation Library — curated pre-built automation rules for Linyup.
 //
 // Each LibraryItem represents one automation rule (and an optional email template)
 // that can be browsed and installed from the Library dialog.
@@ -1027,7 +1027,7 @@ Il team {{teamName}}`,
 
 **Name:** {{firstname}} {{lastname}}
 
-Check the contact in your Lineup dashboard to follow up.`,
+Check the contact in your Linyup dashboard to follow up.`,
       }],
     },
   },

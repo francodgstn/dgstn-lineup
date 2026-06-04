@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { setGlobalOptions } from 'firebase-functions/v2'
-import { isCheckinCompleted } from '@lineup/shared'
+import { isCheckinCompleted } from '@linyup/shared'
 
 setGlobalOptions({ region: 'europe-west6' })
 

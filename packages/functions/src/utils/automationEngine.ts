@@ -1,4 +1,4 @@
-// Generalized workflow automation engine for Lineup.
+// Generalized workflow automation engine for Linyup.
 // Handles condition evaluation, action dispatch, and rule execution
 // across all three trigger tiers: scheduled (Tier 3), event-based (Tier 1),
 // and delayed via Cloud Tasks (Tier 2 — Phase 3).
@@ -13,7 +13,7 @@ import { sendEmail } from './email'
 import { logActivity } from './users'
 import { substituteVariables, renderBody, buildOutreachEmail } from './outreachEmail'
 import { pluginActionHandlers } from '../plugins/index'
-import type { PluginActionId, PluginTriggerId } from '@lineup/shared'
+import type { PluginActionId, PluginTriggerId } from '@linyup/shared'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -679,7 +679,7 @@ async function executeActionsForContact(
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'User-Agent': 'Lineup-Automation/1.0',
+                'User-Agent': 'Linyup-Automation/1.0',
               },
               body: JSON.stringify(payload),
               signal: controller.signal,

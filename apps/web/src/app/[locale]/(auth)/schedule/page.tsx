@@ -12,8 +12,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   SESSIONS_COLLECTION, ACTIVITIES_COLLECTION, EVENTS_COLLECTION,
   TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION,
-} from '@lineup/shared'
-import type { Session, Activity, Event, EventType } from '@lineup/shared'
+} from '@linyup/shared'
+import type { Session, Activity, Event, EventType } from '@linyup/shared'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'

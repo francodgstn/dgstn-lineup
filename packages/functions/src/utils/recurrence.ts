@@ -1,7 +1,7 @@
 // Ported verbatim from hmd-lineup/functions/src/utils/recurrence.js — converted to TypeScript
 // DST-safe recurrence calculation for Europe/Zurich timezone
 import { addDays, addWeeks, addMonths, addYears, isBefore, isAfter, getDay, differenceInDays, startOfDay } from 'date-fns'
-import type { RecurrencePattern, Timestamp } from '@lineup/shared'
+import type { RecurrencePattern, Timestamp } from '@linyup/shared'
 
 const TIMEZONE = 'Europe/Zurich'
 

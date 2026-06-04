@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin'
 import { HttpsError } from 'firebase-functions/v2/https'
-import { planIsAtLeast, type SaasPlan } from '@lineup/shared'
+import { planIsAtLeast, type SaasPlan } from '@linyup/shared'
 
 /**
  * Throws HttpsError('permission-denied') if the team's plan is below minPlan.

@@ -1,6 +1,6 @@
-# HMD → Lineup SaaS Migration
+# HMD → Linyup SaaS Migration
 
-Migrates all data from `hmd-lineup` (Firebase prod) into `dgstn-lineup` (Lineup SaaS).
+Migrates all data from `hmd-lineup` (Firebase prod) into `dgstn-lineup` (Linyup SaaS).
 
 ---
 
@@ -30,7 +30,7 @@ Start the emulators first:
 ```bash
 pnpm emulators:start
 ```
-It will start all needed emulators, project `demo-lineup`.
+It will start all needed emulators, project `demo-linyup`.
 
 Then run against the emulator target — no target credentials needed:
 
@@ -68,7 +68,7 @@ From then on, use `pnpm emulators:hmd` to reload this snapshot instead of re-run
 ```bash
 pnpm migrate:hmd \
   --source-creds ./keys/hmd-prod-sa.json \
-  --target-creds ./keys/lineup-staging-sa.json \
+  --target-creds ./keys/linyup-staging-sa.json \
   --dry-run
 ```
 
@@ -77,7 +77,7 @@ pnpm migrate:hmd \
 ```bash
 pnpm migrate:hmd \
   --source-creds ./keys/hmd-prod-sa.json \
-  --target-creds ./keys/lineup-staging-sa.json
+  --target-creds ./keys/linyup-staging-sa.json
 ```
 
 ---

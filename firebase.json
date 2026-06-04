@@ -68,7 +68,7 @@
   ],
   "functions": {
     "predeploy": [
-      "pnpm --filter @lineup/functions run build"
+      "pnpm --filter @linyup/functions run build"
     ],
     "ignore": [
       "**/.*",

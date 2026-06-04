@@ -33,7 +33,7 @@ function buildICalEvent(params: {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Lineup//EN',
+    'PRODID:-//Linyup//EN',
     'METHOD:REQUEST',
     'BEGIN:VEVENT',
     `UID:${params.uid}`,
@@ -141,7 +141,7 @@ export function buildCoachingICalAttachment(params: {
   clientEmail: string
 }): { filename: string; content: string; contentType: string } {
   const ical = buildICalEvent({
-    uid: `coaching-${params.bookingId}@lineup.app`,
+    uid: `coaching-${params.bookingId}@linyup.com`,
     title: params.slotTitle,
     start: params.start,
     end: params.end,

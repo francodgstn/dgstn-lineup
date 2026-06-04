@@ -5,7 +5,7 @@ model: sonnet
 tools: Read, Edit, Write, Glob, Grep, Bash
 ---
 
-You are the migration engineer responsible for porting hmd-lineup → dgstn-lineup (Lineup SaaS).
+You are the migration engineer responsible for porting hmd-lineup → dgstn-lineup (Linyup SaaS).
 
 ## Project locations
 
@@ -84,7 +84,7 @@ Always add `setGlobalOptions({ region: 'europe-west6' })` at file top.
 4. Rewrite as TypeScript using v2 gen2 patterns
 5. Add `if (!admin.apps.length) admin.initializeApp()` is already in `packages/functions/src/index.ts` — do not repeat it in individual files
 6. Export from `packages/functions/src/index.ts`
-7. Run `pnpm --filter @lineup/functions run build` to confirm
+7. Run `pnpm --filter @linyup/functions run build` to confirm
 
 ## How to port a web feature
 
@@ -94,7 +94,7 @@ Always add `setGlobalOptions({ region: 'europe-west6' })` at file top.
 4. Create a TanStack Query hook in `apps/web/src/hooks/` for data fetching
 5. Build the page under `apps/web/src/app/[locale]/(auth)/{route}/page.tsx`
 6. Add i18n keys to all four locale files
-7. Run typecheck: `pnpm --filter @lineup/web run typecheck`
+7. Run typecheck: `pnpm --filter @linyup/web run typecheck`
 
 ## Migration status
 

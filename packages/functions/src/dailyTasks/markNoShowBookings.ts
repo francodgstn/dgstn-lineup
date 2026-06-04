@@ -1,7 +1,7 @@
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
-import { SESSIONS_COLLECTION, CONTACTS_COLLECTION } from '@lineup/shared'
+import { SESSIONS_COLLECTION, CONTACTS_COLLECTION } from '@linyup/shared'
 
 export async function markNoShowBookings(): Promise<{ sessions: number; updated: number; errors: number }> {
   console.log('markNoShowBookings task started') // eslint-disable-line no-console

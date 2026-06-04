@@ -35,8 +35,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, CalendarRange, MapPin, CalendarDays, ChevronRight } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
-import { EVENTS_COLLECTION } from '@lineup/shared'
-import type { Event, EventType } from '@lineup/shared'
+import { EVENTS_COLLECTION } from '@linyup/shared'
+import type { Event, EventType } from '@linyup/shared'
 import type { Route } from 'next'
 
 const EVENT_TYPES: EventType[] = ['competition', 'camp', 'exam', 'seminar', 'workshop']

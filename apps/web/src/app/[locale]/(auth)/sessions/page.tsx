@@ -30,8 +30,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   SESSIONS_COLLECTION,
   ACTIVITIES_COLLECTION,
-} from '@lineup/shared'
-import type { Session, Activity } from '@lineup/shared'
+} from '@linyup/shared'
+import type { Session, Activity } from '@linyup/shared'
 import { CalendarPlus, MapPin, Pencil, Trash2, Users, List } from 'lucide-react'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────

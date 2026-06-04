@@ -6,7 +6,7 @@
 // If the key is absent the function is a no-op — telemetry is optional.
 
 import { PostHog } from 'posthog-node'
-import type { AnalyticsEvent } from '@lineup/shared'
+import type { AnalyticsEvent } from '@linyup/shared'
 
 let _client: PostHog | null = null
 

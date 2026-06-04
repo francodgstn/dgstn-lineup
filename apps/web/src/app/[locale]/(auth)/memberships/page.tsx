@@ -12,8 +12,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   CONTACTS_COLLECTION, ORGANIZATIONS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
   DEFAULT_ORG_MEMBERSHIP_STATUSES,
-} from '@lineup/shared'
-import type { Contact, OrgMembershipStatusDef } from '@lineup/shared'
+} from '@linyup/shared'
+import type { Contact, OrgMembershipStatusDef } from '@linyup/shared'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

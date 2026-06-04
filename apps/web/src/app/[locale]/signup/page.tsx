@@ -300,7 +300,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm space-y-6">
         {/* Header */}
         <div className="text-center space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">Lineup</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Linyup</h1>
           <p className="text-muted-foreground text-sm">
             {step === 'account' && t('stepAccount')}
             {step === 'team' && t('stepTeam')}

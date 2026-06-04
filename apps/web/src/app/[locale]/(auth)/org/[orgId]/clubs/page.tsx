@@ -39,8 +39,8 @@ import {
   ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION,
   TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION,
   USERS_COLLECTION, CONTACTS_COLLECTION,
-} from '@lineup/shared'
-import type { OrgTeam, ClubAccessRequest, ClubAccessType } from '@lineup/shared'
+} from '@linyup/shared'
+import type { OrgTeam, ClubAccessRequest, ClubAccessType } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface OrgTeamRow extends OrgTeam {

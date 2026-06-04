@@ -7,9 +7,9 @@
  * What it creates:
  *   Three plan-tier accounts, each with full data:
  *
- *   coach@lineup.dev  / lineup123  →  plan: coach  (trial)
- *   club@lineup.dev   / lineup123  →  plan: club   (active)
- *   org@lineup.dev    / lineup123  →  plan: organization (active)
+ *   coach@linyup.com  / linyup123  →  plan: coach  (trial)
+ *   club@linyup.com   / linyup123  →  plan: club   (active)
+ *   org@linyup.com    / linyup123  →  plan: organization (active)
  *
  *   Per team:
  *   - 4 group-class activities + 1 coaching activity (type='coaching')
@@ -25,7 +25,7 @@ process.env.FIRESTORE_EMULATOR_HOST     = 'localhost:8080'
 
 import admin from 'firebase-admin'
 
-admin.initializeApp({ projectId: 'demo-lineup' })
+admin.initializeApp({ projectId: 'demo-linyup' })
 
 const auth = admin.auth()
 const db   = admin.firestore()
@@ -63,11 +63,11 @@ function mondayOfWeeksAgo(n: number): Date {
 
 async function clearEmulator() {
   await fetch(
-    'http://localhost:8080/emulator/v1/projects/demo-lineup/databases/(default)/documents',
+    'http://localhost:8080/emulator/v1/projects/demo-linyup/databases/(default)/documents',
     { method: 'DELETE' }
   ).catch(() => {})
   await fetch(
-    'http://localhost:9099/emulator/v1/projects/demo-lineup/accounts',
+    'http://localhost:9099/emulator/v1/projects/demo-linyup/accounts',
     { method: 'DELETE' }
   ).catch(() => {})
 }
@@ -205,13 +205,13 @@ async function seedTeam(opts: {
     : { 0: 1, 1: 1, 2: 2, 3: 0, 4: 1, 5: 0, 6: 1, 7: 0, 8: 0, 9: 1, 10: 0, 11: 1, 16: 2, 17: 1 }
 
   // Auth user
-  await auth.createUser({ uid, email, password: 'lineup123', displayName, emailVerified: true })
+  await auth.createUser({ uid, email, password: 'linyup123', displayName, emailVerified: true })
 
   // Team doc
   const trialEndsAt = plan === 'coach' ? ts(daysFromNow(14)) : undefined
   await db.collection('teams').doc(teamId).set({
     name:        teamName,
-    description: `${teamName} — managed with Lineup.`,
+    description: `${teamName} — managed with Linyup.`,
     slug:        teamSlug,
     sport_type:  'Martial arts',
     createdBy:   uid,
@@ -238,7 +238,7 @@ async function seedTeam(opts: {
     .collection('public_profile').doc(teamId).set({
       type:              'team',
       name:              teamName,
-      description:       `${teamName} — managed with Lineup.`,
+      description:       `${teamName} — managed with Linyup.`,
       slug:              teamSlug,
       sport_type:        'Martial arts',
       profileImage:      null,
@@ -1024,7 +1024,7 @@ async function main() {
   const accounts = [
     {
       uid:         'seed-coach-uid',
-      email:       'coach@lineup.dev',
+      email:       'coach@linyup.com',
       displayName: 'Marco Rossi',
       teamId:      'seed-team-coach',
       teamName:    'Samurai Fight Academy',
@@ -1035,7 +1035,7 @@ async function main() {
     },
     {
       uid:         'seed-club-uid',
-      email:       'club@lineup.dev',
+      email:       'club@linyup.com',
       displayName: 'Anna Schmidt',
       teamId:      'seed-team-club',
       teamName:    'Iron Circle Gym',
@@ -1046,7 +1046,7 @@ async function main() {
     },
     {
       uid:         'seed-org-uid',
-      email:       'org@lineup.dev',
+      email:       'org@linyup.com',
       displayName: 'Rafael Torres',
       teamId:      'seed-team-org',
       teamName:    'Titan Combat Sports',
@@ -1069,11 +1069,11 @@ async function main() {
   console.log('   ┌─────────────────────┬──────────────────────┬──────────────┬────────────┐')
   console.log('   │ Plan                │ Email                │ Password     │ Status     │')
   console.log('   ├─────────────────────┼──────────────────────┼──────────────┼────────────┤')
-  console.log('   │ coach               │ coach@lineup.dev     │ lineup123    │ trial      │')
-  console.log('   │ club (in org)       │ club@lineup.dev      │ lineup123    │ active     │')
-  console.log('   │ org admin           │ org@lineup.dev       │ lineup123    │ active     │')
+  console.log('   │ coach               │ coach@linyup.com     │ linyup123    │ trial      │')
+  console.log('   │ club (in org)       │ club@linyup.com      │ linyup123    │ active     │')
+  console.log('   │ org admin           │ org@linyup.com       │ linyup123    │ active     │')
   console.log('   └─────────────────────┴──────────────────────┴──────────────┴────────────┘\n')
-  console.log('   Organization: Titan Martial Arts Association (org@lineup.dev is org admin)')
+  console.log('   Organization: Titan Martial Arts Association (org@linyup.com is org admin)')
   console.log('   Clubs in org: Iron Circle Gym + Titan Combat Sports\n')
   console.log('   Portals:')
   for (const a of accounts) {

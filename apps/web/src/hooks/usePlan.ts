@@ -7,7 +7,7 @@ import {
   minimumPlanForFeature,
   type SaasPlan,
   type PlanFeature,
-} from '@lineup/shared'
+} from '@linyup/shared'
 
 export interface UsePlanResult {
   plan: SaasPlan | null

@@ -64,7 +64,7 @@ export interface Team {
   portalBackground?: PortalBackground
   // Outreach / email template custom variables
   outreach_placeholders?: Record<string, string>
-  // SaaS plan fields (new in Lineup)
+  // SaaS plan fields (new in Linyup)
   plan?: SaasPlan
   plan_status?: SaasStatus
   trial_ends_at?: Timestamp

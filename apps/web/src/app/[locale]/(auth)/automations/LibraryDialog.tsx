@@ -16,7 +16,7 @@ import {
   Clock, UserPlus, CalendarCheck, ShieldCheck, CreditCard, Play,
   Check, Plus,
 } from 'lucide-react'
-import { TEAMS_COLLECTION } from '@lineup/shared'
+import { TEAMS_COLLECTION } from '@linyup/shared'
 import {
   AUTOMATION_LIBRARY, CATEGORY_META, STARTER_BUNDLE_KEYS,
   type LibraryCategory, type LibraryItem, type LibraryAction, type SupportedLanguage,

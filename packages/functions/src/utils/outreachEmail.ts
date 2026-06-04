@@ -112,7 +112,7 @@ export function renderBody(template: { body_mode?: string }, rawBody: string): s
 }
 
 /**
- * Wraps a rendered body in the full Lineup email layout with team branding.
+ * Wraps a rendered body in the full Linyup email layout with team branding.
  */
 export function buildOutreachEmail({
   body,
@@ -128,7 +128,7 @@ export function buildOutreachEmail({
   const html = wrapInLayout({
     language: language || 'en',
     headerGradient: gradients.primary,
-    headerTitle: teamName || 'Lineup',
+    headerTitle: teamName || 'Linyup',
     content: body,
     footerContent: buildTeamFooter(teamData, language),
   })

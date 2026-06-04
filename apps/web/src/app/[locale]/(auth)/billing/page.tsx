@@ -12,8 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { TEAMS_COLLECTION } from '@lineup/shared'
-import type { SaasSubscription } from '@lineup/shared'
+import { TEAMS_COLLECTION } from '@linyup/shared'
+import type { SaasSubscription } from '@linyup/shared'
 import { CreditCard, FileText, ExternalLink, AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
 
 // ─── types ────────────────────────────────────────────────────────────────────

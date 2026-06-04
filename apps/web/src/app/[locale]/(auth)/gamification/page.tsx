@@ -13,8 +13,8 @@ import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { CONTACTS_COLLECTION, ACTIVITIES_COLLECTION, TEAMS_COLLECTION } from '@lineup/shared'
-import type { Contact, Activity, Team } from '@lineup/shared'
+import { CONTACTS_COLLECTION, ACTIVITIES_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
+import type { Contact, Activity, Team } from '@linyup/shared'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Trophy, Flame, Star, Plus, Trash2, Save, ChevronDown, ChevronRight, Info,

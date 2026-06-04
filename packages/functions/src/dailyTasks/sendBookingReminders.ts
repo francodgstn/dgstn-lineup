@@ -9,7 +9,7 @@ import {
   TEAMS_COLLECTION,
   ACTIVITIES_COLLECTION,
   TEAM_PLACES_SUBCOLLECTION,
-} from '@lineup/shared'
+} from '@linyup/shared'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 

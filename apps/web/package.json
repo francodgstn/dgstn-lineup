@@ -1,5 +1,5 @@
 {
-  "name": "@lineup/web",
+  "name": "@linyup/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -12,7 +12,7 @@
   "dependencies": {
     "@base-ui/react": "^1.4.1",
     "@hookform/resolvers": "^3.9.1",
-    "@lineup/shared": "workspace:*",
+    "@linyup/shared": "workspace:*",
     "@radix-ui/react-avatar": "^1.1.2",
     "@radix-ui/react-dialog": "^1.1.4",
     "@radix-ui/react-dropdown-menu": "^2.1.4",

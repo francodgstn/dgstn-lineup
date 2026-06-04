@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import type { Route } from 'next'
 import { useRouter } from '@/i18n/navigation'
-import type { Session, Activity, Event } from '@lineup/shared'
+import type { Session, Activity, Event } from '@linyup/shared'
 
 // ─── colour palette ───────────────────────────────────────────────────────────
 

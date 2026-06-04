@@ -66,10 +66,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build functions
-        run: pnpm --filter @lineup/functions run build
+        run: pnpm --filter @linyup/functions run build
 
       - name: Run function tests
-        run: pnpm --filter @lineup/functions run test
+        run: pnpm --filter @linyup/functions run test
         env:
           FIRESTORE_EMULATOR_HOST: localhost:8080
 
@@ -92,7 +92,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web app
-        run: pnpm --filter @lineup/web run build
+        run: pnpm --filter @linyup/web run build
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: placeholder
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: placeholder.firebaseapp.com
@@ -120,7 +120,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build landing site
-        run: pnpm --filter @lineup/landing run build
+        run: pnpm --filter @linyup/landing run build
         env:
           PUBLIC_APP_URL: https://app.lineup.io
           PUBLIC_SITE_URL: https://lineup.io

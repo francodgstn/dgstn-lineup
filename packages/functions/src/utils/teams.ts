@@ -1,7 +1,7 @@
 // Ported from hmd-lineup/functions/src/utils/teams.js — converted to TypeScript
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
-import type { Team, TeamMember, TeamRole } from '@lineup/shared'
+import type { Team, TeamMember, TeamRole } from '@linyup/shared'
 
 export async function isAdmin(userId: string): Promise<boolean> {
   const userDoc = await admin.firestore().collection('users').doc(userId).get()

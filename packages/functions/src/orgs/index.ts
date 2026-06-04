@@ -7,7 +7,7 @@ import { getHostingUrl } from '../utils/env'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { getTeam } from '../utils/teams'
 import { StripeAdapter } from '../utils/gateway/stripe'
-import type { OrgRole } from '@lineup/shared'
+import type { OrgRole } from '@linyup/shared'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -180,9 +180,9 @@ export const inviteClubToOrg = onCall(async (request) => {
   const clubLabel = teamName ? `<strong>${teamName}</strong>` : 'your club'
 
   const { html, text } = buildEmailTemplate({
-    title: `Invitation to join ${org.name} on Lineup`,
+    title: `Invitation to join ${org.name} on Linyup`,
     body: `
-      <p>You have been invited to join ${clubLabel} to the organization <strong>${org.name}</strong> on Lineup.</p>
+      <p>You have been invited to join ${clubLabel} to the organization <strong>${org.name}</strong> on Linyup.</p>
       <p>By accepting, your club's billing will be managed by the organization and you'll get access to all organization plan features.</p>
       <p><a href="${acceptUrl}" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p>
       <p>This invitation expires in 7 days. If you did not expect this, you can safely ignore this email.</p>
@@ -191,7 +191,7 @@ export const inviteClubToOrg = onCall(async (request) => {
 
   await sendEmail({
     to: inviteeEmail,
-    subject: `Invitation to join ${org.name} on Lineup`,
+    subject: `Invitation to join ${org.name} on Linyup`,
     html,
     text,
   })
@@ -486,16 +486,16 @@ export const requestClubAccess = onCall(async (request) => {
         const hostingUrl = getHostingUrl()
 
         const { html, text } = buildEmailTemplate({
-          title: `Access request for ${teamName} on Lineup`,
+          title: `Access request for ${teamName} on Linyup`,
           body: `
             <p><strong>${requesterName}</strong>, an admin of the organization <strong>${orgDoc.data()?.name ?? data.orgId}</strong>,
-            has requested <strong>${accessLabel}</strong> access to your club <strong>${teamName}</strong> on Lineup.</p>
+            has requested <strong>${accessLabel}</strong> access to your club <strong>${teamName}</strong> on Linyup.</p>
             <p>You can review and approve or deny this request in your club's Team Settings.</p>
             <p><a href="${hostingUrl}/settings" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Review Request</a></p>
           `,
         })
 
-        await sendEmail({ to: ownerEmail, subject: `Access request for ${teamName} on Lineup`, html, text })
+        await sendEmail({ to: ownerEmail, subject: `Access request for ${teamName} on Linyup`, html, text })
       }
     }
   } catch (err) {

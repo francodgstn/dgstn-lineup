@@ -37,7 +37,7 @@
     "submit": "Accedi",
     "submitting": "Accesso in corso…",
     "forgotPassword": "Hai dimenticato la password?",
-    "noAccount": "Nuovo su Lineup?",
+    "noAccount": "Nuovo su Linyup?",
     "createAccount": "Crea un account",
     "resetSent": "Email di reimpostazione inviata. Controlla la tua casella di posta.",
     "errorInvalidCredentials": "Email o password non validi. Riprova.",
@@ -1015,7 +1015,7 @@
     "upgradeCta": "Prossimamente — contattaci per aggiornare",
     "upgradeCtaButton": "Passa a questo piano",
     "downgradeCta": "Contattaci per il downgrade",
-    "contactNote": "Per cambiare piano, contatta il team di Lineup."
+    "contactNote": "Per cambiare piano, contatta il team di Linyup."
   },
   "Plugins": {
     "title": "Plugin",

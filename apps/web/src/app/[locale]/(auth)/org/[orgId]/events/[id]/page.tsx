@@ -14,8 +14,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ArrowLeft, CalendarDays, MapPin, Users, Check, X } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
-import { EVENTS_COLLECTION, CHECKINS_COLLECTION } from '@lineup/shared'
-import type { Event, EventCheckin } from '@lineup/shared'
+import { EVENTS_COLLECTION, CHECKINS_COLLECTION } from '@linyup/shared'
+import type { Event, EventCheckin } from '@linyup/shared'
 import type { Route } from 'next'
 
 interface Team { id: string; name: string }

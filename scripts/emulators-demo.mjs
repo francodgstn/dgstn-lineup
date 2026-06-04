@@ -59,19 +59,19 @@ function runToCompletion(cmd, args) {
   })
 }
 
-console.log('==> Building @lineup/shared…')
-const sharedCode = await runToCompletion('pnpm', ['--filter', '@lineup/shared', 'run', 'build'])
+console.log('==> Building @linyup/shared…')
+const sharedCode = await runToCompletion('pnpm', ['--filter', '@linyup/shared', 'run', 'build'])
 if (sharedCode !== 0) { console.error('❌ Shared build failed'); process.exit(1) }
 
 console.log('==> Building Cloud Functions…')
-const fnCode = await runToCompletion('pnpm', ['--filter', '@lineup/functions', 'run', 'build'])
+const fnCode = await runToCompletion('pnpm', ['--filter', '@linyup/functions', 'run', 'build'])
 if (fnCode !== 0) { console.error('❌ Functions build failed'); process.exit(1) }
 
 console.log(`==> Starting Firebase emulators with demo snapshot (${SNAPSHOT})`)
 const emulators = run('pnpm', [
   'exec', 'firebase', 'emulators:start',
   '--only', 'auth,firestore,functions',
-  '--project', 'demo-lineup',
+  '--project', 'demo-linyup',
   `--import=${SNAPSHOT}`,
   `--export-on-exit=${SNAPSHOT}`,
 ])

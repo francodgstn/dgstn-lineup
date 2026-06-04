@@ -73,7 +73,7 @@ export { verifyMembershipCode, completeMembershipSignup } from './auth/completeM
 // Coaching (1:1 slots) — booking/cancellation handled by bookSession/cancelBooking
 export { generateCoachSlots, generateCoachSlotsScheduled, onCoachAvailabilityWritten } from './coaching'
 
-// SaaS billing (Lineup's own platform subscriptions — Stripe)
+// SaaS billing (Linyup's own platform subscriptions — Stripe)
 export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices } from './saas-billing'
 
 // Organizations (multi-club tier)

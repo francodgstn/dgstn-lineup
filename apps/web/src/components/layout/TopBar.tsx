@@ -8,8 +8,8 @@ import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from 'next-themes'
 import { QRCodeCanvas } from 'qrcode.react'
-import { TEAMS_COLLECTION } from '@lineup/shared'
-import type { Team } from '@lineup/shared'
+import { TEAMS_COLLECTION } from '@linyup/shared'
+import type { Team } from '@linyup/shared'
 import type { Route } from 'next'
 import {
   Menu, QrCode, Bell, Sun, Moon, Settings, Users, LogOut,
@@ -185,9 +185,9 @@ function QRDialog({ open, onClose, team }: { open: boolean; onClose: () => void;
     // ── Footer ────────────────────────────────────────────────────────────────
     doc.setFontSize(8)
     doc.setTextColor(160, 160, 160)
-    doc.text('Powered by Lineup', centerX, pageH - 10, { align: 'center' })
+    doc.text('Powered by Linyup', centerX, pageH - 10, { align: 'center' })
 
-    doc.save(`lineup-checkin-${team.slug ?? 'poster'}.pdf`)
+    doc.save(`linyup-checkin-${team.slug ?? 'poster'}.pdf`)
   }
 
   async function copyUrl() {
@@ -261,7 +261,7 @@ function QRDialog({ open, onClose, team }: { open: boolean; onClose: () => void;
                 variant="outline"
                 size="sm"
                 className="flex-1 gap-1.5"
-                onClick={() => download(`lineup-qr-${tab}.png`)}
+                onClick={() => download(`linyup-qr-${tab}.png`)}
               >
                 <Download className="h-3.5 w-3.5" />
                 {t('qrDownloadPng')}
@@ -271,7 +271,7 @@ function QRDialog({ open, onClose, team }: { open: boolean; onClose: () => void;
                 variant="outline"
                 size="sm"
                 className="flex-1 gap-1.5"
-                onClick={() => downloadBranded(team?.name ?? 'Lineup', `lineup-qr-${tab}-branded.png`)}
+                onClick={() => downloadBranded(team?.name ?? 'Linyup', `linyup-qr-${tab}-branded.png`)}
               >
                 <Download className="h-3.5 w-3.5" />
                 {t('qrDownloadBranded')}
@@ -345,7 +345,7 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
           <span className="hidden md:block text-sm font-medium text-muted-foreground truncate">
             {team?.name ?? ''}
           </span>
-          <span className="md:hidden text-base font-bold tracking-tight">Lineup</span>
+          <span className="md:hidden text-base font-bold tracking-tight">Linyup</span>
         </div>
 
         {/* QR codes */}

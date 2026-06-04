@@ -4,7 +4,7 @@ import { Lock, Check } from 'lucide-react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Link } from '@/i18n/navigation'
 import { usePlan } from '@/hooks/usePlan'
-import type { PlanFeature, SaasPlan } from '@lineup/shared'
+import type { PlanFeature, SaasPlan } from '@linyup/shared'
 
 interface UpgradeModalProps {
   open: boolean

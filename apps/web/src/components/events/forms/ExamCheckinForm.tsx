@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import type { RankingSystem } from '@lineup/shared'
+import type { RankingSystem } from '@linyup/shared'
 
 export function ExamCheckinForm({
   contact,

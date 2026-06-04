@@ -2,7 +2,7 @@
 // handlePayrexxWebhook — receives signed payment notifications from Payrexx.
 //
 // This is the TEAM-LEVEL payment webhook (clubs charging their students).
-// It is separate from handleStripeWebhook, which handles Lineup's own SaaS billing.
+// It is separate from handleStripeWebhook, which handles Linyup's own SaaS billing.
 //
 // URL: POST /handlePayrexxWebhook?teamId={teamId}
 //
@@ -30,8 +30,8 @@ import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { to } from '../utils/async'
-import { TEAMS_COLLECTION } from '@lineup/shared'
-import type { PayrexxGatewayConfig } from '@lineup/shared'
+import { TEAMS_COLLECTION } from '@linyup/shared'
+import type { PayrexxGatewayConfig } from '@linyup/shared'
 
 export const handlePayrexxWebhook = onRequest(
   { invoker: 'public' },
@@ -143,7 +143,7 @@ export const handlePayrexxWebhook = onRequest(
 
     // ── 6. Resolve subscription_type_id ───────────────────────────────────────
     // referenceId is set by the merchant on the Payrexx payment link — use it as
-    // the Lineup subscription_type_id. Fall back to the gateway-level default.
+    // the Linyup subscription_type_id. Fall back to the gateway-level default.
     const referenceId = transaction.referenceId as string | undefined
     const subscriptionTypeId =
       (referenceId && referenceId.trim()) || cfg.default_subscription_type_id || null

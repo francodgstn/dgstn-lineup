@@ -7,7 +7,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Users } from 'lucide-react'
-import type { Contact } from '@lineup/shared'
+import type { Contact } from '@linyup/shared'
 import type { SubscriptionTypeDoc } from '@/hooks/useDashboardData'
 
 const TYPE_CONFIG = [
