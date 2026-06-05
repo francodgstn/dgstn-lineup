@@ -5,7 +5,7 @@ output "tf_state_bucket" {
 
 output "wif_provider" {
   description = "Full resource name of the WIF provider. Set as GitHub secret GCP_WIF_PROVIDER."
-  value       = google_iam_workload_identity_pool_provider.github.name
+  value       = "https://iam.googleapis.com/${google_iam_workload_identity_pool_provider.github.name}"
 }
 
 output "ci_deploy_sa_email" {
