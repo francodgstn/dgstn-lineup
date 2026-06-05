@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+
+project_id      = "linyup-prod"
+billing_account = "XXXXXX-XXXXXX-XXXXXX"
+
+# This account has NO GCP Organization (personal Google account), so leave both
+# org_id and folder_id unset — the project is created under "No organization".
+# Only set ONE of these if you later create a Cloud Identity / Workspace org:
+# org_id    = "000000000000"
+# folder_id = "000000000000"
+
+# From the bootstrap stack output `ci_deploy_sa_email`.
+deploy_sa_email = "linyup-ci-deploy@linyup-admin.iam.gserviceaccount.com"
+
+# Optional overrides:
+# create_project     = true
+# region             = "europe-west6"
+# firestore_location = "europe-west6"
+# budget_amount      = 500

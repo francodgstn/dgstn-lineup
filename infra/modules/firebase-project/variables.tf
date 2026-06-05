@@ -1,0 +1,19 @@
+variable "project_id" {
+  type        = string
+  description = "Project to initialise Firebase on."
+}
+
+variable "env" {
+  type        = string
+  description = "Environment label used in display names (e.g. staging, prod)."
+}
+
+variable "app_site_id" {
+  type        = string
+  description = "Hosting site ID for the web app. MUST match .firebaserc (e.g. linyup-staging)."
+}
+
+variable "landing_site_id" {
+  type        = string
+  description = "Hosting site ID for the landing site. MUST match .firebaserc (e.g. linyup-staging-landing)."
+}

@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+
+# Project that hosts the shared bootstrap resources. Create it once by hand
+# (e.g. `gcloud projects create linyup-admin --billing-project=...`) or reuse one.
+bootstrap_project_id = "linyup-admin"
+
+# Short unique suffix → state bucket becomes linyup-tfstate-<suffix> (must be
+# globally unique across all of GCS).
+org_suffix = "dgstn"
+
+# Repository allowed to deploy via WIF (default already set, override if needed).
+# github_repo = "francodgstn/dgstn-linyup"
+
+# region                = "europe-west6"
+# state_bucket_location = "EU"
