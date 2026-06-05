@@ -43,6 +43,18 @@ Thumbs.db
 # Testing
 coverage/
 
+# Terraform (infra/)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+# Never commit real variable values (may hold billing/org IDs); keep the examples
+infra/**/terraform.tfvars
+infra/**/*.auto.tfvars
+# NOTE: .terraform.lock.hcl IS committed on purpose (pins provider versions).
+
 # Expo / React Native
 apps/mobile/.expo/
 apps/mobile/android/
