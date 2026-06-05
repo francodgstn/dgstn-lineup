@@ -58,11 +58,24 @@ State lives in **one GCS bucket** with per-stack prefixes (`bootstrap`,
 ## Prerequisites
 
 - Terraform >= 1.7, `gcloud`, and the GitHub CLI (`gh`).
-- A GCP **Organization** (or folder) and a **billing account** ID.
+- A **billing account** ID (`gcloud billing accounts list`).
 - A bootstrap/admin project (e.g. `linyup-admin`) created by hand once.
-- The bootstrap operator needs, at the org/folder level:
-  `roles/resourcemanager.projectCreator`, `roles/billing.user`, and Owner on the
-  bootstrap project.
+
+### Organization?
+
+A GCP **Organization** is optional and only exists if you use Google Workspace
+or Cloud Identity on a domain. A **personal Google account has no org**
+(`gcloud organizations list` returns empty) — that is the assumed setup here:
+
+- Leave `org_id` and `folder_id` **unset** in `terraform.tfvars`; projects are
+  created under "No organization".
+- The operator who runs the bootstrap/apply just needs to be able to create
+  projects (default for the account that owns billing) and `roles/billing.user`
+  on the billing account. There is no org-level IAM to grant.
+- Note the per-account **project-creation quota** is low (~12–30); fine for a
+  two-project SaaS. For production hardening, consider a free Cloud Identity org
+  on `linyup.com` later so ownership isn't tied to a personal Gmail — then set
+  `org_id` and re-apply.
 
 ---
 
@@ -96,7 +109,7 @@ terraform output            # tf_state_bucket, wif_provider, ci_deploy_sa_email
 ```bash
 cd infra/environments/staging
 # Edit backend.tf: set bucket = <tf_state_bucket>
-cp terraform.tfvars.example terraform.tfvars   # project_id, billing_account, org_id, deploy_sa_email
+cp terraform.tfvars.example terraform.tfvars   # project_id, billing_account, deploy_sa_email
 terraform init
 terraform plan
 terraform apply

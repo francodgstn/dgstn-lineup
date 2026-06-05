@@ -3,8 +3,10 @@
 project_id      = "linyup-prod"
 billing_account = "XXXXXX-XXXXXX-XXXXXX"
 
-# Exactly one of org_id / folder_id is required when create_project = true.
-org_id = "000000000000"
+# This account has NO GCP Organization (personal Google account), so leave both
+# org_id and folder_id unset — the project is created under "No organization".
+# Only set ONE of these if you later create a Cloud Identity / Workspace org:
+# org_id    = "000000000000"
 # folder_id = "000000000000"
 
 # From the bootstrap stack output `ci_deploy_sa_email`.
