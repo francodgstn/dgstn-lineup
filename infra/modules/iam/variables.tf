@@ -23,5 +23,6 @@ variable "deploy_sa_roles" {
     "roles/eventarc.developer",
     "roles/secretmanager.viewer",
     "roles/serviceusage.serviceUsageConsumer",
+    "roles/resourcemanager.projectIamAdmin",
   ]
 }
