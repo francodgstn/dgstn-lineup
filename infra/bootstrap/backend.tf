@@ -9,9 +9,9 @@
 #   3. run `terraform init -migrate-state` to move local state into GCS.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# terraform {
-#   backend "gcs" {
-#     bucket = "<STATE_BUCKET>" # linyup-tfstate-<suffix>
-#     prefix = "bootstrap"
-#   }
-# }
+terraform {
+  backend "gcs" {
+    bucket = "linyup-tfstate-dgstn"
+    prefix = "bootstrap"
+  }
+}

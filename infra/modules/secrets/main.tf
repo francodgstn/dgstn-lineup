@@ -19,10 +19,12 @@ resource "google_secret_manager_secret" "secret" {
 
 # Functions runtime SA may read every secret container.
 resource "google_secret_manager_secret_iam_member" "accessor" {
-  for_each = google_secret_manager_secret.secret
+  for_each = toset(var.secret_ids)
 
   project   = var.project_id
-  secret_id = each.value.secret_id
+  secret_id = each.value
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${var.runtime_sa_email}"
+
+  depends_on = [google_secret_manager_secret.secret]
 }
