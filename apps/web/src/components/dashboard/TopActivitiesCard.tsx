@@ -127,7 +127,7 @@ export function TopActivitiesCard({
             <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {MODES.map((m) => (
-                <SelectItem key={m.value} value={m.value} textValue={m.label}>
+                <SelectItem key={m.value} value={m.value}>
                   <div>
                     <div className="text-xs font-medium">{m.label}</div>
                     <div className="text-xs text-muted-foreground">{m.sublabel}</div>
