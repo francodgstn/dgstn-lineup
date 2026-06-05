@@ -171,7 +171,7 @@ export function BookingsTrendCard({
             <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {SOURCE_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value} textValue={o.label}>
+                <SelectItem key={o.value} value={o.value}>
                   <div>
                     <div className="text-xs font-medium">{o.label}</div>
                     <div className="text-xs text-muted-foreground">{o.sublabel}</div>
