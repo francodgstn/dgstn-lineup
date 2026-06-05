@@ -15,6 +15,11 @@ variable "deploy_sa_roles" {
     "roles/firebase.admin",
     "roles/cloudfunctions.developer",
     "roles/run.admin",
+    # Scheduled functions (onSchedule) create/update Cloud Scheduler jobs;
+    # task-queue functions (onTaskDispatched) create/update Cloud Tasks queues.
+    # Without these the deploy 403s on dailyTasks/weeklyReports/executeDelayedRule.
+    "roles/cloudscheduler.admin",
+    "roles/cloudtasks.admin",
     "roles/cloudbuild.builds.editor",
     "roles/artifactregistry.admin",
     "roles/iam.serviceAccountUser",
