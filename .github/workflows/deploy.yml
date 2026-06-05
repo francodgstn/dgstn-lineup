@@ -43,6 +43,14 @@ jobs:
       - name: Build functions
         run: pnpm --filter @linyup/functions run build
 
+      # Cloud Build (run by `firebase deploy`) only sees packages/functions and
+      # uses plain `npm install`, which cannot resolve pnpm's `workspace:*`
+      # protocol for @linyup/shared. Vendor the built shared package into
+      # packages/functions and rewrite the dep to file:./vendor/shared so npm
+      # can install it. Mutates the ephemeral CI checkout only.
+      - name: Vendor @linyup/shared for Cloud Build
+        run: node scripts/vendor-shared-for-deploy.mjs
+
       - name: Build web app
         run: pnpm --filter @linyup/web run build
         env:

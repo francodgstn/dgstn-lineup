@@ -15,6 +15,9 @@ keys/
 snapshots/
 
 # Firebase
+# Vendored @linyup/shared injected into functions at deploy time (see
+# scripts/vendor-shared-for-deploy.mjs) — generated, never committed.
+packages/functions/vendor/
 .firebase/
 firebase-debug.log
 firestore-debug.log
