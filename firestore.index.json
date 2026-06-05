@@ -33,16 +33,6 @@
       ]
     },
     {
-      "collectionGroup": "org_members",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "events",
       "queryScope": "COLLECTION",
       "fields": [
