@@ -65,5 +65,9 @@ jobs:
 
       # ADC from the auth step is detected automatically — do NOT pass any
       # GOOGLE_APPLICATION_CREDENTIALS* env var here.
+      # --force: required in CI so firebase-tools sets up the Artifact Registry
+      # cleanup policy non-interactively (otherwise it prompts and exits 1 after a
+      # successful deploy) and skips the confirmation prompt when functions are
+      # removed from source.
       - name: Deploy to Firebase (Staging)
-        run: npx firebase-tools deploy --project staging --only functions,hosting:app,hosting:landing,firestore --non-interactive
+        run: npx firebase-tools deploy --project staging --only functions,hosting:app,hosting:landing,firestore --non-interactive --force
