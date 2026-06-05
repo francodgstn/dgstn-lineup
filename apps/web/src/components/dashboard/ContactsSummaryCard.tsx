@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Users } from 'lucide-react'
 import { buildWeekKeys, shortWeekLabel, formatTooltipWeek, formatAxisWeek } from '@/lib/isoWeek'
 import type { WeeklyReport, SubscriptionTypeDoc } from '@/hooks/useDashboardData'
 import { useMembershipTerm } from '@/hooks/useMembershipTerm'
@@ -233,10 +232,10 @@ export function ContactsSummaryCard({
     <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-primary flex-shrink-0" />
-          <CardTitle className="flex-1 truncate">{title || 'Contacts'}</CardTitle>
+
+          <CardTitle className="flex-1">{title || 'Contacts'}</CardTitle>
           <Select value={dimension} onValueChange={(v) => { if (v) handleDimensionChange(v) }}>
-            <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               {DIMENSIONS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
             </SelectContent>

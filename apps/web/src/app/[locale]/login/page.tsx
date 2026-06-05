@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { signIn, resetPassword } from '@/lib/auth'
+import { Logo } from '@/components/Logo'
 
 const schema = z.object({
   email: z.string().email(),
@@ -56,7 +57,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Linyup</h1>
+          <div className="flex justify-center"><Logo size={32} /></div>
           <p className="text-muted-foreground text-sm">{t('subtitle')}</p>
         </div>
 

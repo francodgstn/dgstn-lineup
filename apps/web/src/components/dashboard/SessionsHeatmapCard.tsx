@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { LayoutGrid, ChevronsUpDown } from 'lucide-react'
+import { ChevronsUpDown } from 'lucide-react'
 import { getDay, getHours } from 'date-fns'
 import type { SessionDoc, BookingDoc } from '@/hooks/useDashboardData'
 
@@ -134,8 +134,8 @@ export function SessionsHeatmapCard({
     <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <LayoutGrid className="h-4 w-4 text-primary flex-shrink-0" />
-          <CardTitle className="flex-1 truncate">{title || 'Attendance heatmap'}</CardTitle>
+
+          <CardTitle className="flex-1">{title || 'Attendance heatmap'}</CardTitle>
           <button
             onClick={() => setAutoHours((v) => !v)}
             title={autoHours ? 'Showing hours with data — click to show all' : 'Adapt hours to data'}
@@ -144,14 +144,11 @@ export function SessionsHeatmapCard({
             <ChevronsUpDown className="h-4 w-4" />
           </button>
           <Select value={source} onValueChange={(v) => { if (v) setSource(v) }}>
-            <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               {SOURCE_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value} textValue={o.label}>
-                  <div>
-                    <div className="text-xs font-medium">{o.label}</div>
-                    <div className="text-xs text-muted-foreground">{o.sublabel}</div>
-                  </div>
+                <SelectItem key={o.value} value={o.value} label={o.label}>
+                  {o.sublabel}
                 </SelectItem>
               ))}
             </SelectContent>

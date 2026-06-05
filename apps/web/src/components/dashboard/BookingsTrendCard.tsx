@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { TrendingUp } from 'lucide-react'
 import { buildWeekKeys, shortWeekLabel, formatTooltipWeek, formatAxisWeek, dateToIsoWeek } from '@/lib/isoWeek'
 import type { SessionDoc, BookingDoc, WeeklyReport } from '@/hooks/useDashboardData'
 
@@ -165,17 +164,14 @@ export function BookingsTrendCard({
     <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-primary flex-shrink-0" />
-          <CardTitle className="flex-1 truncate">{title || 'Sessions'}</CardTitle>
+
+          <CardTitle className="flex-1">{title || 'Sessions'}</CardTitle>
           <Select value={source} onValueChange={(v) => { if (v) setSource(v) }}>
-            <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-[140px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               {SOURCE_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value} textValue={o.label}>
-                  <div>
-                    <div className="text-xs font-medium">{o.label}</div>
-                    <div className="text-xs text-muted-foreground">{o.sublabel}</div>
-                  </div>
+                <SelectItem key={o.value} value={o.value} label={o.label}>
+                  {o.sublabel}
                 </SelectItem>
               ))}
             </SelectContent>

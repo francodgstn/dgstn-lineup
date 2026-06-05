@@ -6,7 +6,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceArea, ReferenceLine,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { LayoutGrid, AlertTriangle } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { buildWeekKeys } from '@/lib/isoWeek'
 import { formatTooltipWeek } from '@/lib/isoWeek'
 import type { WeeklyReport } from '@/hooks/useDashboardData'
@@ -105,10 +105,7 @@ export function EngagementMatrixCard({
     return (
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center gap-2">
-            <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="font-bold">Engagement matrix</CardTitle>
-          </div>
+          <CardTitle>Engagement matrix</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
@@ -123,10 +120,7 @@ export function EngagementMatrixCard({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="font-bold">Engagement matrix</CardTitle>
-          </div>
+          <CardTitle>Engagement matrix</CardTitle>
           <button
             onClick={() => setShowTrajectory((v) => !v)}
             className={`text-xs px-2 py-1 rounded-md border transition-colors ${

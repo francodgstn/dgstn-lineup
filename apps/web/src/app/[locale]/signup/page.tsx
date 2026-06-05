@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Logo } from '@/components/Logo'
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
@@ -300,7 +301,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm space-y-6">
         {/* Header */}
         <div className="text-center space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">Linyup</h1>
+          <div className="flex justify-center"><Logo size={32} /></div>
           <p className="text-muted-foreground text-sm">
             {step === 'account' && t('stepAccount')}
             {step === 'team' && t('stepTeam')}

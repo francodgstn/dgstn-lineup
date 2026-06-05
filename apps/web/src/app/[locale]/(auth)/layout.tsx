@@ -31,6 +31,7 @@ import type { SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
+import { Logo } from '@/components/Logo'
 
 // ─── nav config ───────────────────────────────────────────────────────────────
 
@@ -200,8 +201,8 @@ function SidebarContent({
       {/* Logo + collapse toggle */}
       <div className={`flex items-center border-b h-14 shrink-0 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
         {!collapsed && (
-          <Link href={'/dashboard' as Route} className="font-heading text-xl font-bold tracking-widest uppercase hover:opacity-80 transition-opacity">
-            Linyup
+          <Link href={'/dashboard' as Route} className="hover:opacity-80 transition-opacity">
+            <Logo size={22} />
           </Link>
         )}
         {onToggleCollapse && (

@@ -97,9 +97,9 @@ service cloud.firestore {
     // Triggered only when org_membership_* appear in the write diff — zero extra cost otherwise.
     function orgMembershipWriteAllowed(teamId) {
       let orgId = get(/databases/$(database)/documents/teams/$(teamId)).data.get('org_id', null);
-      if (orgId == null) return true;
-      if (!get(/databases/$(database)/documents/organizations/$(orgId)).data.get('lock_org_membership', false)) return true;
-      return get(/databases/$(database)/documents/organizations/$(orgId)/org_members/$(request.auth.uid)).data.get('role', '') == 'org_admin';
+      return orgId == null
+        || !get(/databases/$(database)/documents/organizations/$(orgId)).data.get('lock_org_membership', false)
+        || get(/databases/$(database)/documents/organizations/$(orgId)/org_members/$(request.auth.uid)).data.get('role', '') == 'org_admin';
     }
 
     // Check if resource's teamId matches user's current team OR if teacher field matches user (backward compat)

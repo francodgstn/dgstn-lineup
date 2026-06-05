@@ -41,6 +41,16 @@ const canonical = canonicalUrl ?? `${siteUrl}${Astro.url.pathname}`;
     />
 
     <meta name="theme-color" content="#7c3aed" />
+
+    <!-- Prevent flash of wrong theme — runs synchronously before paint -->
+    <script is:inline>
+      (function () {
+        var s = localStorage.getItem('theme');
+        var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (s === 'dark' || (!s && d)) document.documentElement.setAttribute('data-theme', 'dark');
+        else if (s === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      })();
+    </script>
   </head>
   <body>
     <slot />

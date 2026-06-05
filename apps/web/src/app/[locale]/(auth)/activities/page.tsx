@@ -384,11 +384,19 @@ function ActivityCard({
           {activity.type === 'coaching' && (
             <Badge variant="secondary" className="text-xs">{t('type_coaching')}</Badge>
           )}
-          {activity.level && activity.level !== 'all' && (
-            <Badge variant="secondary" className="text-xs">
-              {t(`level_${activity.level}` as const)}
-            </Badge>
-          )}
+          {(() => {
+            const raw = activity.level
+            if (!raw) return null
+            const key = raw.toLowerCase().replace(/\s+/g, '_')
+            if (key === 'all' || key === 'all_levels') return null
+            const known = ['beginners', 'intermediate', 'advanced'] as const
+            const match = known.find((k) => k === key)
+            return match ? (
+              <Badge variant="secondary" className="text-xs">
+                {t(`level_${match}` as const)}
+              </Badge>
+            ) : null
+          })()}
           {activity.isFreeTrial && (
             <Badge variant="outline" className="text-xs">{t('freeTrialBadge')}</Badge>
           )}

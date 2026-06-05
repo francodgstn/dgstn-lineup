@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Users } from 'lucide-react'
 import type { Contact } from '@linyup/shared'
 import type { SubscriptionTypeDoc } from '@/hooks/useDashboardData'
 
@@ -121,13 +120,13 @@ export function RosterCard({ contacts, subscriptionTypes = [] }: Props) {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+
           <div className="flex-1 min-w-0">
             <CardTitle>Overview</CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">{total} active contacts</p>
           </div>
           <Select value={view} onValueChange={(v) => { if (v) setView(v) }}>
-            <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-[120px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="type">Type</SelectItem>
               <SelectItem value="membership">Membership</SelectItem>

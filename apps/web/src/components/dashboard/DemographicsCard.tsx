@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { BarChart3 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { Contact, RankingSystem } from '@linyup/shared'
 import { getPrimaryRank } from '@/lib/rank-utils'
@@ -127,13 +126,13 @@ export function DemographicsCard({
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+
           <div className="flex-1 min-w-0">
             <CardTitle>{t('demoTitle')}</CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">{t('demoSubtitle', { count: active.length })}</p>
           </div>
           <Select value={view} onValueChange={(v) => { if (v) setView(v as 'age' | 'gender' | 'level') }}>
-            <SelectTrigger className="h-7 text-xs w-[90px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-[90px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="age">{t('demoViewAge')}</SelectItem>
               <SelectItem value="gender">{t('demoViewGender')}</SelectItem>

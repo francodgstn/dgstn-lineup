@@ -19,7 +19,7 @@ import { PlanGate } from '@/components/plan/PlanGate'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import {
   Users, TrendingUp, BookOpen, CreditCard,
-  Plus, UserPlus, ArrowRight, Clock, Bell, Lock,
+  Plus, UserPlus, ArrowRight, Clock, Lock,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
@@ -319,9 +319,7 @@ function TriggeredAlertsCard({ contacts }: { contacts: Contact[] }) {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />{t('snapshotAlerts')}
-          </CardTitle>
+          <CardTitle>{t('snapshotAlerts')}</CardTitle>
           <Link href="/contacts" className="text-xs text-primary hover:underline flex items-center gap-0.5">
             <ArrowRight className="h-3 w-3" />
           </Link>
