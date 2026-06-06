@@ -1,5 +1,4 @@
 # Firebase App Hosting — Next.js SSR on Cloud Run
-# Backend must be pre-created in Firebase Console before first deploy.
 # Node version is read from package.json engines.node.
 
 runConfig:
@@ -10,32 +9,39 @@ runConfig:
   concurrency: 80
 
 env:
+  # Firebase web config — these are public values (embedded in the JS bundle)
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: linyup-staging
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: linyup-staging.firebaseapp.com
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_DATABASE_URL
+    value: https://linyup-staging.firebaseio.com
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: linyup-staging.firebasestorage.app
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "157648925506"
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:157648925506:web:5e3aa70930d777f8374edb
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    secret: firebase-api-key
+    value: AIzaSyAuMHWbGKmyL78xVfrStkIctShzqrd4zcg
     availability:
       - BUILD
       - RUNTIME
