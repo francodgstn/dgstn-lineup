@@ -405,7 +405,7 @@ function ConditionEditor({
               {/* Row 1: type selector + inline value (all types except field_equals) */}
               <div className={`grid gap-2 ${isFieldEquals ? 'grid-cols-1' : 'grid-cols-2'}`}>
                 {/* Type select */}
-                <Select value={cond.type} onValueChange={(v) => {
+                <Select value={cond.type} onValueChange={(v: string | null) => {
                   const next = v ?? cond.type
                   const defaultVal = next === 'contact_type' ? 'trial'
                     : next === 'membership_status' ? 'active'

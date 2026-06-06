@@ -32,7 +32,9 @@ function extractEntries(children: React.ReactNode): SelectEntry[] {
   return out
 }
 
-function Select(props: SelectPrimitive.Root.Props) {
+function Select<Value, Multiple extends boolean | undefined = false>(
+  props: SelectPrimitive.Root.Props<Value, Multiple>,
+) {
   const [items, setItems] = React.useState<SelectEntry[]>([])
   return (
     <SetItemsCtx.Provider value={setItems}>
