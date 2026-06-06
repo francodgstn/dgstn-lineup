@@ -80,8 +80,8 @@ jobs:
       - name: Deploy to Firebase (Staging)
         run: npx firebase-tools deploy --project staging --only functions,hosting:landing,firestore --non-interactive --force
 
-      # App Hosting builds the Next.js app server-side in Cloud Build (pnpm, so
-      # workspace deps resolve natively). No-op until the backend is created in
-      # the Firebase Console.
       - name: Deploy web app (App Hosting)
-        run: npx firebase-tools deploy --only apphosting --project staging --non-interactive --force
+        run: npx firebase-tools apphosting:rollouts:create linyup-web --git-branch main --project linyup-staging --force --non-interactive
+
+
+
