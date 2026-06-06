@@ -6,7 +6,6 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp } from 'lucide-react'
 import { buildWeekKeys, formatAxisWeek, formatTooltipWeek } from '@/lib/isoWeek'
 import type { WeeklyReport } from '@/hooks/useDashboardData'
 
@@ -67,10 +66,7 @@ export function WeeklyTrendsCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="font-bold">Weekly trends</CardTitle>
-        </div>
+        <CardTitle>Weekly trends</CardTitle>
       </CardHeader>
       <CardContent>
         {!hasData ? (

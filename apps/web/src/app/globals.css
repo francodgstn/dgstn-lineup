@@ -47,15 +47,17 @@
   --radius-xl: calc(var(--radius) + 4px);
 
   --font-sans: var(--font-jakarta);
-  --font-heading: var(--font-barlow);
+  --font-heading: var(--font-sora);
+  --font-subheading: var(--font-sora);
+  --font-display: var(--font-fredoka);
   --color-heading: var(--heading);
 }
 
 /* ─── Light mode ──────────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    /* Warm violet purple as brand color */
-    --primary:            oklch(0.52 0.24 288);
+    /* Brand violet — matches landing design system */
+    --primary:            oklch(0.556 0.237 292);
     --primary-foreground: oklch(0.985 0.003 288);
 
     /* Backgrounds: barely-there lavender tint for depth */
@@ -85,20 +87,20 @@
     /* Borders: barely-visible lavender lines */
     --border:             oklch(0.905 0.013 288);
     --input:              oklch(0.905 0.013 288);
-    --ring:               oklch(0.52 0.24 288);
+    --ring:               oklch(0.556 0.237 292);
 
     /* Sidebar — slightly more saturated tint to feel distinct */
     --sidebar:            oklch(0.972 0.006 288);
     --sidebar-foreground: oklch(0.155 0.022 288);
-    --sidebar-primary:    oklch(0.52 0.24 288);
+    --sidebar-primary:    oklch(0.556 0.237 292);
     --sidebar-primary-foreground: oklch(0.985 0.003 288);
     --sidebar-accent:     oklch(0.945 0.014 288);
     --sidebar-accent-foreground: oklch(0.28 0.05 288);
     --sidebar-border:     oklch(0.905 0.013 288);
-    --sidebar-ring:       oklch(0.52 0.24 288);
+    --sidebar-ring:       oklch(0.556 0.237 292);
 
     /* Charts */
-    --chart-1: oklch(0.52 0.24 288);
+    --chart-1: oklch(0.556 0.237 292);
     --chart-2: oklch(0.62 0.18 200);
     --chart-3: oklch(0.72 0.16 150);
     --chart-4: oklch(0.65 0.20 30);
@@ -113,57 +115,61 @@
 
 /* ─── Dark mode ───────────────────────────────────────────────────────────── */
   .dark {
-    /* Deep purple-tinted darks — not pure black */
-    --background:         oklch(0.128 0.028 288);
+    /* Purple-tinted dark — lifted to be easier on the eyes */
+    --background:         oklch(0.168 0.026 288);
     --foreground:         oklch(0.955 0.006 288);
 
-    --card:               oklch(0.175 0.025 288);
+    --card:               oklch(0.215 0.026 288);
     --card-foreground:    oklch(0.955 0.006 288);
 
-    --popover:            oklch(0.175 0.025 288);
+    --popover:            oklch(0.215 0.026 288);
     --popover-foreground: oklch(0.955 0.006 288);
 
-    /* Primary is lighter in dark mode for contrast */
-    --primary:            oklch(0.70 0.20 288);
-    --primary-foreground: oklch(0.128 0.028 288);
+    /* Primary lighter for contrast on dark surfaces */
+    --primary:            oklch(0.72 0.18 292);
+    --primary-foreground: oklch(0.168 0.026 288);
 
-    --secondary:          oklch(0.235 0.028 288);
+    --secondary:          oklch(0.268 0.026 288);
     --secondary-foreground: oklch(0.88 0.008 288);
 
-    --muted:              oklch(0.235 0.028 288);
+    --muted:              oklch(0.268 0.026 288);
     --muted-foreground:   oklch(0.62 0.04 288);
 
-    --accent:             oklch(0.235 0.028 288);
+    --accent:             oklch(0.268 0.026 288);
     --accent-foreground:  oklch(0.88 0.008 288);
 
     --destructive:        oklch(0.704 0.191 22.216);
     --destructive-foreground: oklch(0.985 0 0);
 
-    --border:             oklch(1 0 0 / 9%);
-    --input:              oklch(1 0 0 / 13%);
-    --ring:               oklch(0.70 0.20 288);
+    --border:             oklch(1 0 0 / 10%);
+    --input:              oklch(1 0 0 / 14%);
+    --ring:               oklch(0.72 0.18 292);
 
-    --sidebar:            oklch(0.155 0.027 288);
+    --sidebar:            oklch(0.192 0.026 288);
     --sidebar-foreground: oklch(0.955 0.006 288);
-    --sidebar-primary:    oklch(0.70 0.20 288);
-    --sidebar-primary-foreground: oklch(0.128 0.028 288);
-    --sidebar-accent:     oklch(0.235 0.028 288);
+    --sidebar-primary:    oklch(0.72 0.18 292);
+    --sidebar-primary-foreground: oklch(0.168 0.026 288);
+    --sidebar-accent:     oklch(0.268 0.026 288);
     --sidebar-accent-foreground: oklch(0.88 0.008 288);
-    --sidebar-border:     oklch(1 0 0 / 9%);
-    --sidebar-ring:       oklch(0.70 0.20 288);
+    --sidebar-border:     oklch(1 0 0 / 10%);
+    --sidebar-ring:       oklch(0.72 0.18 292);
 
-    --chart-1: oklch(0.70 0.20 288);
+    --chart-1: oklch(0.72 0.18 292);
     --chart-2: oklch(0.68 0.15 200);
     --chart-3: oklch(0.72 0.14 150);
     --chart-4: oklch(0.70 0.18 30);
     --chart-5: oklch(0.65 0.20 350);
 
-    --heading: oklch(0.88 0.08 288);
+    --heading: oklch(0.90 0.06 288);
   }
 
 /* ─── Base styles ─────────────────────────────────────────────────────────── */
   * {
     @apply border-border outline-ring/50;
+  }
+
+  html {
+    scrollbar-gutter: stable;
   }
 
   body {
@@ -173,17 +179,15 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Headings: condensed sport font */
-  h1, h2, h3, h4 {
-    font-family: var(--font-barlow), var(--font-jakarta), sans-serif;
-    letter-spacing: 0.01em;
-    font-weight: 700;
-  }
-  h5, h6 {
-    font-family: var(--font-barlow), var(--font-jakarta), sans-serif;
-    letter-spacing: 0.01em;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-sora), var(--font-jakarta), sans-serif;
+    letter-spacing: -0.01em;
     font-weight: 600;
   }
+  h1 { font-size: 1.375rem; }
+  h2 { font-size: 1.125rem; }
+  h3 { font-size: 0.9375rem; }
+  h4, h5, h6 { font-size: 0.875rem; }
 
   button:not(:disabled),
   a[href],

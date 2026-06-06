@@ -121,17 +121,14 @@ export function TopActivitiesCard({
     <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Dumbbell className="h-4 w-4 text-primary flex-shrink-0" />
-          <CardTitle className="flex-1 truncate">{title || 'Top activities'}</CardTitle>
+
+          <CardTitle className="flex-1">{title || 'Top activities'}</CardTitle>
           <Select value={mode} onValueChange={(v) => { if (v) setMode(v) }}>
-            <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               {MODES.map((m) => (
-                <SelectItem key={m.value} value={m.value}>
-                  <div>
-                    <div className="text-xs font-medium">{m.label}</div>
-                    <div className="text-xs text-muted-foreground">{m.sublabel}</div>
-                  </div>
+                <SelectItem key={m.value} value={m.value} label={m.label}>
+                  {m.sublabel}
                 </SelectItem>
               ))}
             </SelectContent>

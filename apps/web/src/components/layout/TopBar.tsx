@@ -29,6 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { useRouter, usePathname } from '@/i18n/navigation'
+import { Logo } from '@/components/Logo'
 
 // ─── team data hook ───────────────────────────────────────────────────────────
 
@@ -345,7 +346,7 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
           <span className="hidden md:block text-sm font-medium text-muted-foreground truncate">
             {team?.name ?? ''}
           </span>
-          <span className="md:hidden text-base font-bold tracking-tight">Linyup</span>
+          <span className="md:hidden"><Logo size={20} /></span>
         </div>
 
         {/* QR codes */}

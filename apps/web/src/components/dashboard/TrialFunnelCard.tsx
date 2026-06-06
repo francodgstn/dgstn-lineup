@@ -10,7 +10,6 @@ import { Separator } from '@/components/ui/separator'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { TrendingUp } from 'lucide-react'
 import { buildWeekKeys, shortWeekLabel, formatTooltipWeek, formatAxisWeek } from '@/lib/isoWeek'
 import type { WeeklyReport } from '@/hooks/useDashboardData'
 
@@ -111,8 +110,8 @@ export function TrialFunnelCard({
     <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-primary flex-shrink-0" />
-          <CardTitle className="flex-1 truncate">{title || 'Trial Conversion'}</CardTitle>
+
+          <CardTitle className="flex-1">{title || 'Trial Conversion'}</CardTitle>
           {summaryRate !== null && (
             <div className="flex items-baseline gap-1 flex-shrink-0">
               <span className="text-lg font-black leading-none" style={{ color: COLOR_RATE }}>{summaryRate}%</span>
@@ -124,7 +123,7 @@ export function TrialFunnelCard({
             </div>
           )}
           <Select value={metric} onValueChange={(v) => { if (v) setMetric(v) }}>
-            <SelectTrigger className="h-7 text-xs w-[100px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-[100px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="counts">Counts</SelectItem>
               <SelectItem value="rate">Rate only</SelectItem>

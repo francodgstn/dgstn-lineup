@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { GitBranch } from 'lucide-react'
 import { buildWeekKeys, dateToIsoWeek, formatTooltipWeek } from '@/lib/isoWeek'
 import type { WeeklyReport, SessionDoc, BookingDoc } from '@/hooks/useDashboardData'
 
@@ -174,30 +173,26 @@ export function CorrelationExplorerCard({
 
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="font-bold">Correlation explorer</CardTitle>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Select value={metricX} onValueChange={(v) => setMetricX(v as MetricKey)}>
-              <SelectTrigger className="h-6 text-xs w-[130px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {METRICS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <span className="text-xs text-muted-foreground">vs</span>
-            <Select value={metricY} onValueChange={(v) => setMetricY(v as MetricKey)}>
-              <SelectTrigger className="h-6 text-xs w-[130px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {METRICS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+      <CardHeader>
+        <div className="flex items-center gap-2 flex-wrap">
+
+          <CardTitle className="flex-1">Correlation explorer</CardTitle>
+          <Select value={metricX} onValueChange={(v) => setMetricX(v as MetricKey)}>
+            <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {METRICS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-muted-foreground">vs</span>
+          <Select value={metricY} onValueChange={(v) => setMetricY(v as MetricKey)}>
+            <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {METRICS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
         {regression && (
-          <p className="text-[11px] text-muted-foreground mt-1">{rLabel(regression.r)}</p>
+          <p className="text-[11px] text-muted-foreground">{rLabel(regression.r)}</p>
         )}
       </CardHeader>
       <CardContent>
