@@ -9,6 +9,7 @@ locals {
     "firebase.googleapis.com",
     "firebaserules.googleapis.com",
     "firebasehosting.googleapis.com",
+    "firebaseapphosting.googleapis.com",
     "firestore.googleapis.com",
     "firebasestorage.googleapis.com",
     "storage.googleapis.com",

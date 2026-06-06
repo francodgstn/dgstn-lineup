@@ -11,32 +11,6 @@
   },
   "hosting": [
     {
-      "target": "app",
-      "public": "apps/web/.next",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
-      "rewrites": [
-        {
-          "source": "**",
-          "destination": "/index.html"
-        }
-      ],
-      "headers": [
-        {
-          "source": "**/*.@(js|css)",
-          "headers": [
-            {
-              "key": "Cache-Control",
-              "value": "max-age=31536000"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "target": "landing",
       "public": "apps/landing/dist",
       "ignore": [

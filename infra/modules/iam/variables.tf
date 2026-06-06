@@ -13,6 +13,7 @@ variable "deploy_sa_roles" {
   description = "Project-level roles granted to the deploy SA so firebase deploy succeeds."
   default = [
     "roles/firebase.admin",
+    "roles/firebaseapphosting.admin",
     "roles/cloudfunctions.developer",
     "roles/run.admin",
     # Scheduled functions (onSchedule) create/update Cloud Scheduler jobs;
