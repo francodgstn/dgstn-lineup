@@ -80,8 +80,6 @@ jobs:
       - name: Deploy to Firebase (Staging)
         run: npx firebase-tools deploy --project staging --only functions,hosting:landing,firestore --non-interactive --force
 
-      - name: Deploy web app (App Hosting)
-        run: npx firebase-tools apphosting:rollouts:create linyup-web --git-branch main --project linyup-staging --force --non-interactive
 
 
 
