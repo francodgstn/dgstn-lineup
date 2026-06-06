@@ -68,8 +68,8 @@ jobs:
       - name: Build landing site
         run: pnpm --filter @linyup/landing run build
         env:
-          PUBLIC_APP_URL: https://app.lineup.io
-          PUBLIC_SITE_URL: https://lineup.io
+          PUBLIC_APP_URL: https://app.linyup.com
+          PUBLIC_SITE_URL: https://linyup.com
 
       # ADC from the auth step is detected automatically — do NOT pass any
       # GOOGLE_APPLICATION_CREDENTIALS* env var here.
