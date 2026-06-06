@@ -24,6 +24,7 @@ CLI fills it.**
 | Secret Manager **containers** (no values) | Storage **rules** (`storage.rules`) |
 | Firestore **database instance** (not rules/indexes) | Realtime DB **rules** (deny-all, unused) |
 | Firebase project init + Web App + Hosting **sites** | **Cloud Tasks queue** `executeDelayedRule` (auto-created on deploy) |
+| App Hosting API + deploy SA role (`roles/firebaseapphosting.admin`) | App Hosting **backend** creation (CLI, once) + GitHub repo connection (Console, once) |
 | WIF pool/provider + CI deploy SA | |
 | Budgets/alerts + TF state bucket | |
 
@@ -161,6 +162,44 @@ firebase target:apply hosting app     linyup-staging         --project staging
 firebase target:apply hosting landing linyup-staging-landing --project staging
 ```
 
+
+### 5b. Set up Firebase App Hosting backend (once, per env)
+
+The Next.js web app runs on **Firebase App Hosting** (Cloud Run-backed SSR),
+not Firebase Hosting (static). A backend must be created once per environment.
+
+#### Create the backend via CLI
+
+```bash
+# Staging -- firebaseapphosting.googleapis.com must be enabled first (terraform apply)
+npx firebase-tools apphosting:backends:create \\
+  --project linyup-staging \\
+  --app 1:157648925506:web:5e3aa70930d777f8374edb \\
+  --backend linyup-web \\
+  --primary-region us-central1 \\
+  --root-dir apps/web \\
+  --non-interactive
+```
+
+> **Note:** App Hosting is not available in europe-west6. Use us-central1.
+
+#### Connect the GitHub repo (Firebase Console -- one-time manual step)
+
+1. Go to **Firebase Console** -> select linyup-staging -> **App Hosting**
+2. Click the linyup-web backend -> **Connect repository**
+3. Authorize the Firebase GitHub App and select **francodgstn/dgstn-linyup**
+4. Set **Branch**: main, **Root directory**: apps/web
+
+Once connected, every push to main **auto-deploys** the web app -- no CI step required.
+The apps/web/apphosting.yaml file controls the Cloud Run instance (CPU, memory, scaling, env vars).
+
+#### Grant the App Hosting backend access to secrets
+
+```bash
+npx firebase-tools apphosting:secrets:grantaccess firebase-api-key \\
+  --project linyup-staging --backend linyup-web
+```
+
 ### 6. Enable CI
 
 Merge to `main` → `.github/workflows/deploy.yml` runs a keyless deploy. Production
@@ -184,6 +223,8 @@ or a `v*` tag), gated on the `production` GitHub environment's required reviewer
 ## Gotchas
 
 - Every `google_firebase_*` resource uses the **google-beta** provider.
+- **App Hosting region** is immutable after backend creation. europe-west6 is unsupported -- use us-central1. The firebaseapphosting.googleapis.com API must be enabled (via terraform apply) before creating the backend.
+- **App Hosting vs Hosting**: apps/landing uses Firebase Hosting (static, deployed by CI); apps/web uses App Hosting (SSR, auto-deployed via GitHub integration on push to main).
 - Firestore **location is immutable** — `europe-west6` is locked on first apply
   (`prevent_destroy` + `deletion_policy = ABANDON`). Choose deliberately.
 - API enablement is **async** — re-run apply if Firebase resources fail once.
