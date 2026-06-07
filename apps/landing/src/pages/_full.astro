@@ -1,0 +1,30 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Nav from '~/components/Nav.astro';
+import Hero from '~/components/Hero.astro';
+import Features from '~/components/Features.astro';
+import Pricing from '~/components/Pricing.astro';
+import CTA from '~/components/CTA.astro';
+import Footer from '~/components/Footer.astro';
+import { defaultLang, useTranslations } from '~/i18n';
+
+// Root page = default locale (English). Other locales are served from
+// /[lang]/index.astro via getStaticPaths. Both share the same components.
+const lang = defaultLang;
+const t = useTranslations(lang);
+---
+
+<BaseLayout
+  title={`${t('site.name')} — ${t('hero.tagline')}`}
+  description={t('site.description')}
+  lang={lang}
+>
+  <Nav lang={lang} />
+  <main>
+    <Hero lang={lang} />
+    <Features lang={lang} />
+    <Pricing lang={lang} />
+    <CTA lang={lang} />
+  </main>
+  <Footer lang={lang} />
+</BaseLayout>
