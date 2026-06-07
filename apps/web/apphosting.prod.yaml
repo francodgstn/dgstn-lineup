@@ -1,0 +1,48 @@
+# Firebase App Hosting — Next.js SSR on Cloud Run (production)
+# Node version is read from package.json engines.node.
+# App Hosting picks this file automatically when the backend ID is "prod".
+
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+
+env:
+  # Firebase web config — these are public values (embedded in the JS bundle)
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: linyup-prod
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: linyup-prod.firebaseapp.com
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_DATABASE_URL
+    value: https://linyup-prod-default-rtdb.europe-west1.firebasedatabase.app
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: linyup-prod.firebasestorage.app
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "576514050360"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:576514050360:web:f85b1c9c1dc0d7efbc99cd
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyCAYQcDgB9wBXylM33jbCfHfR7uQpw3tUE
+    availability:
+      - BUILD
+      - RUNTIME
