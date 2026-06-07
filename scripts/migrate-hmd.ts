@@ -18,6 +18,8 @@
  */
 
 import { parseArgs } from 'node:util'
+import { readFileSync } from 'node:fs'
+import { getApp } from 'firebase-admin/app'
 import { initApps, DEFAULT_ORG_ADMIN_EMAIL } from './migration/config'
 import type { MigrationConfig } from './migration/config'
 import { pass00Setup }              from './migration/passes/00-setup'
@@ -73,7 +75,32 @@ initApps(cfg)
 if (cfg.dryRun) console.log('=== DRY RUN — no writes will be committed ===')
 console.log(`Org admin: ${cfg.orgAdminEmail}`)
 
+async function enableEmailPasswordSignIn(): Promise<void> {
+  if (cfg.targetEmulator) return
+  if (cfg.dryRun) { console.log('[dry-run] would enable email/password sign-in'); return }
+  const sa = JSON.parse(readFileSync(cfg.targetCredsPath!, 'utf-8')) as { project_id: string }
+  const projectId = sa.project_id
+  const app = getApp('target')
+  const credential = app.options.credential as { getAccessToken(): Promise<{ access_token: string }> }
+  const token = await credential.getAccessToken()
+  const url =
+    `https://identitytoolkit.googleapis.com/v2/projects/${projectId}/config` +
+    `?updateMask=signIn.email.enabled,signIn.email.passwordRequired`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token.access_token}`,
+      'Content-Type': 'application/json',
+      'X-Goog-User-Project': projectId,
+    },
+    body: JSON.stringify({ signIn: { email: { enabled: true, passwordRequired: true } } }),
+  })
+  if (!res.ok) throw new Error(`Failed to enable email/password sign-in: ${res.status} ${await res.text()}`)
+  console.log('✓ Email/password sign-in enabled')
+}
+
 async function run() {
+  await enableEmailPasswordSignIn()
   const only = cfg.only
 
   if (!only || only === 'setup')               await pass00Setup(cfg)

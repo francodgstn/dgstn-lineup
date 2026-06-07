@@ -158,7 +158,18 @@
       "Bash(grep -E \"error TS|org/\\\\[orgId\\\\]|clubs|events\")",
       "Bash(grep -E \"error TS|useMembership|sectionMembership|org/\\\\[orgId\\\\]|contacts/\\\\[id\\\\]|dashboard\")",
       "Bash(grep \"contacts/\\\\[id\\\\]\")",
-      "Bash(grep \"contacts/\\\\[id\\\\]\\\\|org/\\\\[orgId\\\\]/settings\")"
+      "Bash(grep \"contacts/\\\\[id\\\\]\\\\|org/\\\\[orgId\\\\]/settings\")",
+      "Bash(gh run *)",
+      "Bash(gh secret *)",
+      "Bash(gcloud services list *)",
+      "Bash(npx firebase-tools *)",
+      "Bash(mv \"C:\\\\git\\\\dgstn\\\\dgstn-linyup\\\\apps\\\\landing\\\\src\\\\pages\\\\index.astro\" \"C:\\\\git\\\\dgstn\\\\dgstn-linyup\\\\apps\\\\landing\\\\src\\\\pages\\\\_full.astro\")",
+      "Bash(mv \"C:\\\\git\\\\dgstn\\\\dgstn-linyup\\\\apps\\\\landing\\\\src\\\\pages\\\\[lang]\\\\index.astro\" \"C:\\\\git\\\\dgstn\\\\dgstn-linyup\\\\apps\\\\landing\\\\src\\\\pages\\\\[lang]\\\\_full.astro\")",
+      "Bash(gcloud builds *)",
+      "Bash(cat /tmp/buildid.txt 2>/dev/null && echo \"found\" || echo \"still running\")",
+      "Bash(gcloud functions *)",
+      "Bash(cat)",
+      "Bash(rm -f .git/COMMIT_MSG_TMP)"
     ]
   }
 }

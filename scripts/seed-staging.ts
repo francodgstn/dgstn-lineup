@@ -529,6 +529,7 @@ async function seedTeam(opts: TeamSeed) {
       gender: c.gender, birthplace: c.birthplace,
       birthdate: birthdate ? ts(birthdate) : null,
       type: c.type, membership_status: c.status, membership_active: c.status === 'active',
+      ...(orgId ? { org_membership_active: c.status === 'active', org_membership_status: c.status } : {}),
       total_sessions: c.totalSessions,
       last_session_at: c.totalSessions > 0 ? ts(daysFromNow(-Math.floor(seededRand(seed + 'ls') * 14))) : null,
       notes: c.type === 'student' && c.totalSessions > 20
@@ -987,10 +988,39 @@ function slugEmail(c: PoolEntry): string {
     .replace(/^\.|\.$/g, '')
 }
 
+// ── enable email/password sign-in provider ─────────────────────────────────────
+// A freshly-initialized Firebase project has the email/password provider disabled.
+// The Admin SDK can create users but the client SDK cannot sign them in until the
+// provider is enabled. We patch it via the Identity Platform v2 REST API using the
+// same ADC credential the Admin SDK is already using.
+
+async function enableEmailPasswordSignIn() {
+  const credential = admin.app().options.credential!
+  const token = await (credential as { getAccessToken(): Promise<{ access_token: string }> }).getAccessToken()
+  const url =
+    `https://identitytoolkit.googleapis.com/v2/projects/${PROJECT_ID}/config` +
+    `?updateMask=signIn.email.enabled,signIn.email.passwordRequired`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token.access_token}`,
+      'Content-Type': 'application/json',
+      'X-Goog-User-Project': PROJECT_ID,
+    },
+    body: JSON.stringify({ signIn: { email: { enabled: true, passwordRequired: true } } }),
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to enable email/password sign-in: ${res.status} ${await res.text()}`)
+  }
+  console.log('   ✓ Email/password sign-in enabled')
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log(`\n🌱 Seeding Firebase project: ${PROJECT_ID}\n`)
+
+  await enableEmailPasswordSignIn()
 
   // 1. Coach plan — solo coach
   await seedTeam({

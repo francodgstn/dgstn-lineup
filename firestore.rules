@@ -444,7 +444,8 @@ service cloud.firestore {
       allow read: if belongsToUserTeam(resource)
                    || hasRole('admin')
                    || isSelfContact(contactId)
-                   || sharesContactEmail(resource);
+                   || sharesContactEmail(resource)
+                   || isOrgAdminOfTeam(resource.data.teamId);
       allow update: if (belongsToUserTeam(resource)
                        || hasRole('admin')
                        || (isSelfContact(contactId)

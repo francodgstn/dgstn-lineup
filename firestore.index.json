@@ -23,6 +23,20 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "org_membership_active",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contacts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "org_membership_status",
           "order": "ASCENDING"
         },

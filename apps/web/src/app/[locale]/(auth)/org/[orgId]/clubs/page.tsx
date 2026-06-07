@@ -78,20 +78,13 @@ function useOrgTeams(orgId: string) {
 
       await Promise.all(
         rows.map(async (row) => {
-          const [teamDoc, ownerSnap, countSnap] = await Promise.all([
+          const [teamDoc, ownerSnap] = await Promise.all([
             getDoc(doc(db, TEAMS_COLLECTION, row.teamId)),
             getDocs(
               query(
                 collection(db, TEAMS_COLLECTION, row.teamId, TEAM_MEMBERS_SUBCOLLECTION),
                 where('role', '==', 'owner'),
                 limit(1)
-              )
-            ),
-            getCountFromServer(
-              query(
-                collection(db, CONTACTS_COLLECTION),
-                where('teamId', '==', row.teamId),
-                where('org_membership_active', '==', true)
               )
             ),
           ])
@@ -107,7 +100,18 @@ function useOrgTeams(orgId: string) {
             }
           }
 
-          row.activeMemberships = countSnap.data().count
+          try {
+            const countSnap = await getCountFromServer(
+              query(
+                collection(db, CONTACTS_COLLECTION),
+                where('teamId', '==', row.teamId),
+                where('org_membership_active', '==', true)
+              )
+            )
+            row.activeMemberships = countSnap.data().count
+          } catch {
+            row.activeMemberships = null
+          }
         })
       )
       return rows
