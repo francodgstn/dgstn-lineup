@@ -190,18 +190,22 @@ function OrgLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?
   )
 }
 
-// Renders nav links contributed by installed plugins (manifest.navContributions).
-// Labels live in the 'Plugins' namespace. An installed plugin is always usable —
-// installation is the gate (the install limit is enforced on the plugins page),
-// so these links are never locked here.
-function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?: () => void }) {
+// A labelled group of plugin-contributed nav links.
+type PluginNavEntry = { href: string; labelKey: string; icon: string; pluginId: string }
+
+function PluginNavGroup({
+  label,
+  contributions,
+  collapsed,
+  onLinkClick,
+}: {
+  label: string
+  contributions: PluginNavEntry[]
+  collapsed: boolean
+  onLinkClick?: () => void
+}) {
   const pathname = usePathname()
   const t = useTranslations('Plugins')
-  const { plugins } = useInstalledPlugins()
-
-  const contributions = plugins.flatMap((p) =>
-    (p.manifest.navContributions ?? []).map((nav) => ({ ...nav, pluginId: p.manifest.id })),
-  )
   if (contributions.length === 0) return null
 
   return (
@@ -210,13 +214,13 @@ function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLink
         <div className="border-t mx-1 mb-1" />
       ) : (
         <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pb-1">
-          {t('navSectionPlugins')}
+          {label}
         </p>
       )}
       <div className="space-y-0.5">
         {contributions.map((nav) => {
           const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
-          const label = t(nav.labelKey as Parameters<typeof t>[0])
+          const linkLabel = t(nav.labelKey as Parameters<typeof t>[0])
           const isActive = pathname.startsWith(nav.href)
 
           return (
@@ -224,7 +228,7 @@ function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLink
               key={nav.pluginId + nav.href}
               href={nav.href as Route}
               onClick={onLinkClick}
-              title={collapsed ? label : undefined}
+              title={collapsed ? linkLabel : undefined}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
                 isActive
                   ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
@@ -232,12 +236,40 @@ function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLink
               } ${collapsed ? 'justify-center px-2' : ''}`}
             >
               <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-              {!collapsed && <span>{label}</span>}
+              {!collapsed && <span>{linkLabel}</span>}
             </Link>
           )
         })}
       </div>
     </div>
+  )
+}
+
+// Renders nav links contributed by installed plugins, grouped by category:
+// engagement-category plugins (gamification, referrals) go under "Engage";
+// everything else under "Plugins". Installation is the gate, so links are
+// never plan-locked here.
+function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?: () => void }) {
+  const t = useTranslations('Plugins')
+  const { plugins } = useInstalledPlugins()
+
+  const contributions = plugins.flatMap((p) =>
+    (p.manifest.navContributions ?? []).map((nav) => ({
+      ...nav,
+      pluginId: p.manifest.id,
+      category: p.manifest.category,
+    })),
+  )
+  if (contributions.length === 0) return null
+
+  const engage = contributions.filter((c) => c.category === 'engagement')
+  const others = contributions.filter((c) => c.category !== 'engagement')
+
+  return (
+    <>
+      <PluginNavGroup label={t('navSectionPlugins')} contributions={others} collapsed={collapsed} onLinkClick={onLinkClick} />
+      <PluginNavGroup label={t('navSectionEngage')} contributions={engage} collapsed={collapsed} onLinkClick={onLinkClick} />
+    </>
   )
 }
 

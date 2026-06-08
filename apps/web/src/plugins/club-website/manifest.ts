@@ -4,7 +4,7 @@ export const clubWebsiteManifest: PluginManifest = {
   id: 'club-website',
   nameKey: 'clubWebsiteName',
   descriptionKey: 'clubWebsiteDescription',
-  category: 'website',
+  category: 'content',
   minPlan: 'club',
   status: 'coming_soon',
   iconName: 'Globe',
