@@ -63,7 +63,7 @@ export interface Lesson {
   type: LessonType
   order: number
   // type === 'text'
-  body?: string // markdown
+  body?: string // rich text (HTML, produced by the shared RichTextEditor)
   // type === 'audio' | 'video'
   mediaSource?: MediaSource
   mediaUrl?: string // external URL or Storage download URL

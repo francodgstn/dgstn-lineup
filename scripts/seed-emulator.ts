@@ -964,7 +964,7 @@ async function seedCourses(teamId: string, uid: string) {
             {
               title: 'Welcome & how this course works',
               type:  'text',
-              body:  '# Welcome\n\nThis course takes you from your very first class to a confident understanding of the fundamentals.\n\n**What you will need**\n\n- A gi (or rashguard for no-gi classes)\n- A water bottle\n- An open mind\n\nWork through the modules in order — each one builds on the last.',
+              body:  '<h2>Welcome</h2><p>This course takes you from your very first class to a confident understanding of the fundamentals.</p><p><strong>What you will need</strong></p><ul><li>A gi (or rashguard for no-gi classes)</li><li>A water bottle</li><li>An open mind</li></ul><p>Work through the modules in order — each one builds on the last.</p>',
             },
             {
               title:           'Mat etiquette & safety',
@@ -996,7 +996,7 @@ async function seedCourses(teamId: string, uid: string) {
             {
               title: 'Positional hierarchy cheat sheet',
               type:  'text',
-              body:  '## Positional hierarchy\n\nFrom worst to best for you:\n\n1. Mounted / back taken (escape!)\n2. Side control bottom\n3. Guard (neutral)\n4. Side control top\n5. Mount\n6. Back control (best)\n\nAlways fight to improve your position before hunting for a submission.',
+              body:  '<h3>Positional hierarchy</h3><p>From worst to best for you:</p><ol><li>Mounted / back taken (escape!)</li><li>Side control bottom</li><li>Guard (neutral)</li><li>Side control top</li><li>Mount</li><li>Back control (best)</li></ol><p>Always fight to improve your position before hunting for a submission.</p>',
             },
           ],
         },
@@ -1021,7 +1021,7 @@ async function seedCourses(teamId: string, uid: string) {
             {
               title: 'Warm-up principles',
               type:  'text',
-              body:  '## Warm-up principles\n\nA good warm-up raises your core temperature, primes your nervous system and reduces injury risk.\n\n- 3–5 min easy movement\n- Joint circles (ankles, hips, shoulders, neck)\n- Sport-specific drills at increasing intensity\n\nNever roll or spar cold.',
+              body:  '<h3>Warm-up principles</h3><p>A good warm-up raises your core temperature, primes your nervous system and reduces injury risk.</p><ul><li>3–5 min easy movement</li><li>Joint circles (ankles, hips, shoulders, neck)</li><li>Sport-specific drills at increasing intensity</li></ul><p>Never roll or spar cold.</p>',
             },
           ],
         },

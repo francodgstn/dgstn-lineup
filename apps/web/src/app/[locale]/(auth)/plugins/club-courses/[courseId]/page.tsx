@@ -26,9 +26,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { RichTextEditor } from '@/components/RichTextEditor'
 import { toast } from 'sonner'
 import {
-  ChevronLeft, Plus, Pencil, Trash2, FileText, Video, Music, GraduationCap, Upload,
+  ChevronLeft, Plus, Pencil, Trash2, FileText, Video, Music, GraduationCap, Upload, X,
 } from 'lucide-react'
 import type { Lesson, LessonType, MediaSource, CourseStatus } from '@linyup/shared'
 import {
@@ -53,42 +54,30 @@ async function uploadFile(file: File, path: string): Promise<string> {
   return getDownloadURL(sRef)
 }
 
-// ─── Lesson editor ────────────────────────────────────────────────────────────
+// ─── Lesson editor panel ────────────────────────────────────────────────────
+// Rendered inline to the right of the course structure (not a modal). The parent
+// remounts it via `key` when the selected lesson changes, so form state resets.
 
-function LessonEditorDialog({
-  open, onClose, onSave, initial, teamId, courseId,
+function LessonPanel({
+  initial, moduleId, newOrder, teamId, courseId, onSaved, onClose,
 }: {
-  open: boolean
-  onClose: () => void
-  onSave: (data: LessonInput) => Promise<void>
   initial: Lesson | null
+  moduleId: string
+  newOrder: number
   teamId: string
   courseId: string
+  onSaved: (lessonId: string) => void
+  onClose: () => void
 }) {
   const t = useTranslations('Courses')
-  const [title, setTitle] = useState('')
-  const [type, setType] = useState<LessonType>('text')
-  const [body, setBody] = useState('')
-  const [mediaSource, setMediaSource] = useState<MediaSource>('youtube')
-  const [mediaUrl, setMediaUrl] = useState('')
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [type, setType] = useState<LessonType>(initial?.type ?? 'text')
+  const [body, setBody] = useState(initial?.body ?? '')
+  const [mediaSource, setMediaSource] = useState<MediaSource>(initial?.mediaSource ?? 'youtube')
+  const [mediaUrl, setMediaUrl] = useState(initial?.mediaUrl ?? '')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-
-  // Sync form when the dialog opens for a new/edited lesson
-  const [syncedFor, setSyncedFor] = useState<string | null>(null)
-  const key = initial?.id ?? 'new'
-  if (open && syncedFor !== key) {
-    setTitle(initial?.title ?? '')
-    setType(initial?.type ?? 'text')
-    setBody(initial?.body ?? '')
-    setMediaSource(initial?.mediaSource ?? 'youtube')
-    setMediaUrl(initial?.mediaUrl ?? '')
-    setSyncedFor(key)
-  }
-  if (!open && syncedFor !== null) setSyncedFor(null)
-
-  const isMedia = type === 'audio' || type === 'video'
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -116,8 +105,13 @@ function LessonEditorDialog({
         data.mediaSource = mediaSource
         data.mediaUrl = mediaUrl.trim()
       }
-      await onSave(data)
-      onClose()
+      let lessonId = initial?.id
+      if (initial) {
+        await updateLesson(courseId, initial.id, data)
+      } else {
+        lessonId = await createLesson({ courseId, teamId, moduleId, order: newOrder, data })
+      }
+      onSaved(lessonId!)
     } catch {
       toast.error(t('errorSaveLesson'))
     } finally {
@@ -129,91 +123,94 @@ function LessonEditorDialog({
   const canSave = !!title.trim() && (type === 'text' || !!mediaUrl.trim()) && !saving && !uploading
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{initial ? t('editLesson') : t('addLesson')}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="lesson-title">{t('fieldTitle')}</Label>
-            <Input id="lesson-title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
-          </div>
+    <div className="rounded-lg border bg-card lg:sticky lg:top-4">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b">
+        <span className="text-sm font-medium">{initial ? t('editLesson') : t('addLesson')}</span>
+        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose} title={t('cancel')}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
 
-          <div className="space-y-1.5">
-            <Label>{t('fieldType')}</Label>
-            <Select value={type} onValueChange={(v) => setType(v as LessonType)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="text">{t('typeText')}</SelectItem>
-                <SelectItem value="video">{t('typeVideo')}</SelectItem>
-                <SelectItem value="audio">{t('typeAudio')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {type === 'text' ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="lesson-body">{t('fieldBody')}</Label>
-              <Textarea
-                id="lesson-body"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={8}
-                placeholder={t('bodyPlaceholder')}
-              />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>{t('fieldMediaSource')}</Label>
-                <Select value={mediaSource} onValueChange={(v) => setMediaSource(v as MediaSource)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="youtube">YouTube</SelectItem>
-                    <SelectItem value="vimeo">Vimeo</SelectItem>
-                    <SelectItem value="url">{t('sourceUrl')}</SelectItem>
-                    <SelectItem value="upload">{t('sourceUpload')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {mediaSource === 'upload' ? (
-                <div className="space-y-1.5">
-                  <Label>{t('fieldFile')}</Label>
-                  <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                      <Upload className="h-4 w-4 mr-1.5" />
-                      {uploading ? t('uploading') : t('chooseFile')}
-                    </Button>
-                    {mediaUrl && !uploading && <span className="text-xs text-green-600">{t('fileReady')}</span>}
-                  </div>
-                  <input ref={fileRef} type="file" accept={acceptFor} onChange={handleUpload} className="hidden" />
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <Label htmlFor="lesson-url">{t('fieldMediaUrl')}</Label>
-                  <Input
-                    id="lesson-url"
-                    value={mediaUrl}
-                    onChange={(e) => setMediaUrl(e.target.value)}
-                    placeholder="https://…"
-                  />
-                </div>
-              )}
-            </div>
-          )}
+      <div className="p-4 space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="lesson-title">{t('fieldTitle')}</Label>
+          <Input id="lesson-title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('cancel')}</Button>
-          <Button onClick={handleSave} disabled={!canSave}>{saving ? t('saving') : t('save')}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
+        <div className="space-y-1.5">
+          <Label>{t('fieldType')}</Label>
+          <Select value={type} onValueChange={(v) => setType(v as LessonType)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="text">{t('typeText')}</SelectItem>
+              <SelectItem value="video">{t('typeVideo')}</SelectItem>
+              <SelectItem value="audio">{t('typeAudio')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {type === 'text' ? (
+          <div className="space-y-1.5">
+            <Label>{t('fieldBody')}</Label>
+            <RichTextEditor value={initial?.body ?? ''} onChange={setBody} minHeight={240} />
+            <p className="text-xs text-muted-foreground">{t('contentHint')}</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>{t('fieldMediaSource')}</Label>
+              <Select value={mediaSource} onValueChange={(v) => setMediaSource(v as MediaSource)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="youtube">YouTube</SelectItem>
+                  <SelectItem value="vimeo">Vimeo</SelectItem>
+                  <SelectItem value="url">{t('sourceUrl')}</SelectItem>
+                  <SelectItem value="upload">{t('sourceUpload')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {mediaSource === 'upload' ? (
+              <div className="space-y-1.5">
+                <Label>{t('fieldFile')}</Label>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                    <Upload className="h-4 w-4 mr-1.5" />
+                    {uploading ? t('uploading') : t('chooseFile')}
+                  </Button>
+                  {mediaUrl && !uploading && <span className="text-xs text-green-600">{t('fileReady')}</span>}
+                </div>
+                <input ref={fileRef} type="file" accept={acceptFor} onChange={handleUpload} className="hidden" />
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="lesson-url">{t('fieldMediaUrl')}</Label>
+                <Input
+                  id="lesson-url"
+                  value={mediaUrl}
+                  onChange={(e) => setMediaUrl(e.target.value)}
+                  placeholder="https://…"
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-2 px-4 py-3 border-t bg-muted/30">
+        <Button variant="outline" size="sm" onClick={onClose}>{t('cancel')}</Button>
+        <Button size="sm" onClick={handleSave} disabled={!canSave}>{saving ? t('saving') : t('save')}</Button>
+      </div>
+    </div>
   )
 }
 
 // ─── Content tab ────────────────────────────────────────────────────────────
+
+type Selection =
+  | { kind: 'lesson'; moduleId: string; lessonId: string }
+  | { kind: 'new'; moduleId: string }
 
 function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) {
   const t = useTranslations('Courses')
@@ -227,10 +224,9 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
   const [moduleTitle, setModuleTitle] = useState('')
   const [editingModuleId, setEditingModuleId] = useState<string | null>(null)
   const [deleteModuleId, setDeleteModuleId] = useState<string | null>(null)
-
-  const [lessonModuleId, setLessonModuleId] = useState<string | null>(null)
-  const [editingLesson, setEditingLesson] = useState<Lesson | null>(null)
   const [deleteLessonId, setDeleteLessonId] = useState<string | null>(null)
+
+  const [selection, setSelection] = useState<Selection | null>(null)
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['course-modules', courseId] })
@@ -257,15 +253,11 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
     }
   }
 
-  async function saveLesson(data: LessonInput) {
-    if (editingLesson) {
-      await updateLesson(courseId, editingLesson.id, data)
-    } else if (lessonModuleId) {
-      const order = lessons.filter((l) => l.moduleId === lessonModuleId).length
-      await createLesson({ courseId, teamId, moduleId: lessonModuleId, order, data })
-    }
-    invalidate()
-  }
+  const selectedLesson =
+    selection?.kind === 'lesson' ? lessons.find((l) => l.id === selection.lessonId) ?? null : null
+  const selectionKey =
+    selection?.kind === 'lesson' ? `l-${selection.lessonId}` :
+    selection?.kind === 'new' ? `new-${selection.moduleId}` : 'none'
 
   if (modulesLoading || lessonsLoading) {
     return <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-24 rounded-lg" />)}</div>
@@ -294,60 +286,88 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
           <p className="text-sm text-muted-foreground">{t('emptyModules')}</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {modules.map((mod) => {
-            const modLessons = lessons.filter((l) => l.moduleId === mod.id)
-            return (
-              <div key={mod.id} className="rounded-lg border bg-card">
-                <div className="flex items-center justify-between gap-2 px-4 py-3 border-b">
-                  <span className="font-medium text-sm">{mod.title}</span>
-                  <div className="flex items-center gap-1">
-                    <Button size="icon" variant="ghost" className="h-7 w-7"
-                      onClick={() => { setEditingModuleId(mod.id); setModuleTitle(mod.title); setModuleDialogOpen(true) }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => setDeleteModuleId(mod.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+        <div className="grid gap-4 lg:grid-cols-[minmax(260px,340px)_1fr] items-start">
+          {/* ── Left: course structure ── */}
+          <div className="space-y-3">
+            {modules.map((mod) => {
+              const modLessons = lessons.filter((l) => l.moduleId === mod.id)
+              return (
+                <div key={mod.id} className="rounded-lg border bg-card">
+                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-b">
+                    <span className="font-medium text-sm truncate">{mod.title}</span>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Button size="icon" variant="ghost" className="h-7 w-7"
+                        onClick={() => { setEditingModuleId(mod.id); setModuleTitle(mod.title); setModuleDialogOpen(true) }}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => setDeleteModuleId(mod.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <div className="divide-y">
-                  {modLessons.map((lesson) => {
-                    const Icon = LESSON_ICON[lesson.type]
-                    return (
-                      <div key={lesson.id} className="flex items-center justify-between gap-2 px-4 py-2.5">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="text-sm truncate">{lesson.title}</span>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button size="icon" variant="ghost" className="h-7 w-7"
-                            onClick={() => { setEditingLesson(lesson); setLessonModuleId(mod.id) }}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => setDeleteLessonId(lesson.id)}>
+                  <div className="p-1.5 space-y-0.5">
+                    {modLessons.map((lesson) => {
+                      const Icon = LESSON_ICON[lesson.type]
+                      const active = selection?.kind === 'lesson' && selection.lessonId === lesson.id
+                      return (
+                        <div
+                          key={lesson.id}
+                          className={`group flex items-center justify-between gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors ${
+                            active ? 'bg-primary/10 text-primary' : 'hover:bg-accent'
+                          }`}
+                          onClick={() => setSelection({ kind: 'lesson', moduleId: mod.id, lessonId: lesson.id })}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+                            <span className="text-sm truncate">{lesson.title}</span>
+                          </div>
+                          <Button
+                            size="icon" variant="ghost"
+                            className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+                            onClick={(e) => { e.stopPropagation(); setDeleteLessonId(lesson.id) }}
+                          >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                      </div>
-                    )
-                  })}
-                  <div className="px-4 py-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
+                      )
+                    })}
+                    <button
+                      type="button"
                       disabled={atLessonCap}
-                      onClick={() => { setEditingLesson(null); setLessonModuleId(mod.id) }}
+                      onClick={() => setSelection({ kind: 'new', moduleId: mod.id })}
+                      className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40"
                     >
-                      <Plus className="h-4 w-4 mr-1.5" />{t('addLesson')}
-                    </Button>
+                      <Plus className="h-4 w-4" />{t('addLesson')}
+                    </button>
                   </div>
                 </div>
+              )
+            })}
+          </div>
+
+          {/* ── Right: lesson editor panel ── */}
+          <div>
+            {selection ? (
+              <LessonPanel
+                key={selectionKey}
+                initial={selectedLesson}
+                moduleId={selection.moduleId}
+                newOrder={lessons.filter((l) => l.moduleId === selection.moduleId).length}
+                teamId={teamId}
+                courseId={courseId}
+                onClose={() => setSelection(null)}
+                onSaved={(lessonId) => {
+                  invalidate()
+                  setSelection({ kind: 'lesson', moduleId: selection.moduleId, lessonId })
+                }}
+              />
+            ) : (
+              <div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground h-full flex items-center justify-center">
+                {t('selectLessonHint')}
               </div>
-            )
-          })}
+            )}
+          </div>
         </div>
       )}
 
@@ -369,16 +389,6 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
         </DialogContent>
       </Dialog>
 
-      {/* Lesson editor */}
-      <LessonEditorDialog
-        open={lessonModuleId !== null}
-        onClose={() => { setLessonModuleId(null); setEditingLesson(null) }}
-        onSave={saveLesson}
-        initial={editingLesson}
-        teamId={teamId}
-        courseId={courseId}
-      />
-
       {/* Delete module confirm */}
       <AlertDialog open={deleteModuleId !== null} onOpenChange={(v) => { if (!v) setDeleteModuleId(null) }}>
         <AlertDialogContent>
@@ -390,7 +400,10 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={async () => {
-                if (deleteModuleId) { await deleteModule(courseId, deleteModuleId); invalidate() }
+                if (deleteModuleId) {
+                  if (selection?.moduleId === deleteModuleId) setSelection(null)
+                  await deleteModule(courseId, deleteModuleId); invalidate()
+                }
                 setDeleteModuleId(null)
               }}
             >{t('delete')}</AlertDialogAction>
@@ -409,7 +422,10 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={async () => {
-                if (deleteLessonId) { await deleteLesson(courseId, deleteLessonId); invalidate() }
+                if (deleteLessonId) {
+                  if (selection?.kind === 'lesson' && selection.lessonId === deleteLessonId) setSelection(null)
+                  await deleteLesson(courseId, deleteLessonId); invalidate()
+                }
                 setDeleteLessonId(null)
               }}
             >{t('delete')}</AlertDialogAction>
@@ -614,7 +630,7 @@ export default function CourseBuilderPage() {
   }
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="max-w-5xl space-y-5">
       <Link href={'/plugins/club-courses' as Route} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
         <ChevronLeft className="h-4 w-4" />{t('backToCourses')}
       </Link>

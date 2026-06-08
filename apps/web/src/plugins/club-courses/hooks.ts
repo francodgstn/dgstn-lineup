@@ -186,7 +186,7 @@ export async function createLesson(input: {
   moduleId: string
   order: number
   data: LessonInput
-}): Promise<void> {
+}): Promise<string> {
   const ref = doc(lessonsCol(input.courseId))
   const batch = writeBatch(db)
   batch.set(ref, {
@@ -203,6 +203,7 @@ export async function createLesson(input: {
     updated_at: serverTimestamp(),
   })
   await batch.commit()
+  return ref.id
 }
 
 export async function updateLesson(

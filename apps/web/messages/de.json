@@ -1314,6 +1314,8 @@
     "archiveTitle": "Kurs archivieren?",
     "archiveDesc": "Archivierte Kurse werden ausgeblendet, aber nicht gelöscht. Du kannst sie später wiederherstellen.",
     "deleteCourseTitle": "Kurs löschen?",
-    "deleteCourseDesc": "Dadurch werden der Kurs und alle seine Module und Lektionen dauerhaft gelöscht."
+    "deleteCourseDesc": "Dadurch werden der Kurs und alle seine Module und Lektionen dauerhaft gelöscht.",
+    "contentHint": "Formatiere deine Lektion mit der Symbolleiste — Überschriften, Listen und Hervorhebungen.",
+    "selectLessonHint": "Wähle links eine Lektion zum Bearbeiten aus oder füge eine neue hinzu."
   }
 }

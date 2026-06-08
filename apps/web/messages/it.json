@@ -1304,6 +1304,8 @@
     "archiveTitle": "Archiviare il corso?",
     "archiveDesc": "I corsi archiviati vengono nascosti ma non eliminati. Puoi ripristinarli in seguito.",
     "deleteCourseTitle": "Eliminare il corso?",
-    "deleteCourseDesc": "Il corso e tutti i suoi moduli e lezioni verranno eliminati definitivamente."
+    "deleteCourseDesc": "Il corso e tutti i suoi moduli e lezioni verranno eliminati definitivamente.",
+    "contentHint": "Usa la barra degli strumenti per formattare la lezione — titoli, elenchi ed enfasi.",
+    "selectLessonHint": "Seleziona una lezione a sinistra per modificarla, oppure aggiungine una nuova."
   }
 }

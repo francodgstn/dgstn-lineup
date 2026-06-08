@@ -1314,6 +1314,8 @@
     "archiveTitle": "Archiver le cours ?",
     "archiveDesc": "Les cours archivés sont masqués mais non supprimés. Vous pourrez les restaurer plus tard.",
     "deleteCourseTitle": "Supprimer le cours ?",
-    "deleteCourseDesc": "Le cours et tous ses modules et leçons seront définitivement supprimés."
+    "deleteCourseDesc": "Le cours et tous ses modules et leçons seront définitivement supprimés.",
+    "contentHint": "Utilisez la barre d’outils pour mettre en forme votre leçon — titres, listes et emphase.",
+    "selectLessonHint": "Sélectionnez une leçon à gauche pour la modifier, ou ajoutez-en une nouvelle."
   }
 }

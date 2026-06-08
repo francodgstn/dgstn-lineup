@@ -1319,6 +1319,8 @@
     "archiveTitle": "Archive course?",
     "archiveDesc": "Archived courses are hidden but not deleted. You can restore them later.",
     "deleteCourseTitle": "Delete course?",
-    "deleteCourseDesc": "This will permanently delete the course and all its modules and lessons."
+    "deleteCourseDesc": "This will permanently delete the course and all its modules and lessons.",
+    "contentHint": "Use the toolbar to format your lesson — add headings, lists and emphasis.",
+    "selectLessonHint": "Select a lesson on the left to edit it, or add a new one."
   }
 }
