@@ -7,6 +7,7 @@ export const clubCoursesManifest: PluginManifest = {
   category: 'content',
   minPlan: 'club',
   status: 'available',
+  recommended: true,
   iconName: 'GraduationCap',
   navContributions: [
     {

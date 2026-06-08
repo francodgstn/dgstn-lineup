@@ -7,6 +7,7 @@ export const gamificationManifest: PluginManifest = {
   category: 'engagement',
   minPlan: 'club',
   status: 'available',
+  recommended: true,
   iconName: 'Trophy',
   navContributions: [
     {

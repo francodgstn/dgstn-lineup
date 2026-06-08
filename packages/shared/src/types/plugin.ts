@@ -57,6 +57,8 @@ export interface PluginManifest {
   category: PluginCategory
   minPlan: SaasPlan
   status: PluginStatus
+  recommended?: boolean    // surfaced with a "Recommended" tag and floated to the top
+
   iconName: string         // lucide icon name resolved at runtime
   automationTriggers?: PluginAutomationTrigger[]
   automationActions?: PluginAutomationAction[]

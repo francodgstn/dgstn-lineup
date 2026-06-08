@@ -128,6 +128,11 @@ function PluginCard({
             <span className="font-medium text-sm leading-tight">
               {t(manifest.nameKey as Parameters<typeof t>[0])}
             </span>
+            {manifest.recommended && (
+              <Badge variant="secondary" className="text-xs border-primary/30 bg-primary/10 text-primary">
+                {t('recommended')}
+              </Badge>
+            )}
             {statusBadge}
           </div>
           <div className="flex items-center gap-1.5">
@@ -279,9 +284,10 @@ export default function PluginsPage() {
     { key: 'engagement',     label: t('categoryEngagement') },
   ]
 
-  const filteredPlugins = PLUGIN_REGISTRY.filter(
-    (m) => categoryFilter === 'all' || m.category === categoryFilter
-  )
+  const filteredPlugins = PLUGIN_REGISTRY
+    .filter((m) => categoryFilter === 'all' || m.category === categoryFilter)
+    // Recommended plugins float to the top for prominence.
+    .sort((a, b) => Number(b.recommended ?? false) - Number(a.recommended ?? false))
 
   if (isLoading) {
     return (
