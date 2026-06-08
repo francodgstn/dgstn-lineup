@@ -1,25 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import {
-  collection,
-  doc,
-  setDoc,
-  serverTimestamp,
-} from 'firebase/firestore'
-import { db } from '@/lib/firebase'
 import { signUp } from '@/lib/auth'
+import { provisionTeam, userHasTeam } from '@/lib/provisioning'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/Logo'
+import { SocialAuthButtons, AuthDivider } from '@/components/auth/SocialAuthButtons'
+
+// ─── shared shape of the authenticated user we carry into the team step ───────
+
+interface AuthedUser {
+  uid: string
+  email: string | null
+  displayName: string | null
+  photoURL: string | null
+}
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
@@ -42,65 +47,6 @@ const teamSchema = z.object({
 type AccountData = z.infer<typeof accountSchema>
 type TeamData = z.infer<typeof teamSchema>
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 50)
-}
-
-async function provisionAccount(
-  uid: string,
-  email: string,
-  teamName: string,
-  sportType: string | undefined
-): Promise<void> {
-  const teamRef = doc(collection(db, 'teams'))
-  const teamId = teamRef.id
-  const slug = slugify(teamName)
-  const now = serverTimestamp()
-
-  const defaultLinks = [
-    { label: 'Book a Trial Class', description: "Try a class and see if it's right for you", url: '', showInPortal: true, isBookingLink: true },
-    { label: 'Membership Signup', description: 'Join our community and become a member', url: '', showInPortal: true, isMembershipLink: true },
-  ]
-
-  // Team document
-  await setDoc(teamRef, {
-    name: teamName.trim(),
-    slug,
-    description: '',
-    sport_type: sportType || '',
-    links: defaultLinks,
-    settings: {},
-    created: now,
-    createdBy: uid,
-    primaryContact: uid,
-  })
-
-  // Owner membership
-  await setDoc(doc(db, 'teams', teamId, 'team_members', uid), {
-    userId: uid,
-    teamId,
-    role: 'owner',
-    joined: now,
-    addedBy: uid,
-  })
-
-  // User profile
-  await setDoc(doc(db, 'users', uid), {
-    email,
-    currentTeam: teamId,
-    created_at: now,
-  })
-}
-
 // ─── step indicator ───────────────────────────────────────────────────────────
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
@@ -120,13 +66,10 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 // ─── step 1: account ─────────────────────────────────────────────────────────
 
-function StepAccount({
-  onNext,
-}: {
-  onNext: (data: AccountData & { uid: string }) => void
-}) {
+function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
   const [error, setError] = useState<string | null>(null)
   const t = useTranslations('Signup')
+  const tAuth = useTranslations('Auth')
   const {
     register,
     handleSubmit,
@@ -137,7 +80,12 @@ function StepAccount({
     setError(null)
     try {
       const cred = await signUp(data.email, data.password)
-      onNext({ ...data, uid: cred.user.uid })
+      onNext({
+        uid: cred.user.uid,
+        email: cred.user.email,
+        displayName: cred.user.displayName,
+        photoURL: cred.user.photoURL,
+      })
     } catch (err) {
       const e = err as { code?: string }
       if (e.code === 'auth/email-already-in-use') {
@@ -149,37 +97,58 @@ function StepAccount({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="email">{t('email')}</Label>
-        <Input id="email" type="email" autoComplete="email" {...register('email')} />
-        {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
-      </div>
+    <div className="space-y-4">
+      <SocialAuthButtons
+        onAuthed={async (cred) => {
+          const hasTeam = await userHasTeam(cred.user.uid)
+          if (hasTeam) {
+            // Returning user signed in via a provider — straight to the app.
+            window.location.assign('/dashboard')
+            return
+          }
+          onNext({
+            uid: cred.user.uid,
+            email: cred.user.email,
+            displayName: cred.user.displayName,
+            photoURL: cred.user.photoURL,
+          })
+        }}
+      />
 
-      <div className="space-y-1.5">
-        <Label htmlFor="password">{t('password')}</Label>
-        <Input id="password" type="password" autoComplete="new-password" {...register('password')} />
-        {errors.password && <p className="text-destructive text-xs">{errors.password.message}</p>}
-      </div>
+      <AuthDivider label={tAuth('orWithEmail')} />
 
-      <div className="space-y-1.5">
-        <Label htmlFor="confirmPassword">{t('confirmPassword')}</Label>
-        <Input id="confirmPassword" type="password" autoComplete="new-password" {...register('confirmPassword')} />
-        {errors.confirmPassword && (
-          <p className="text-destructive text-xs">{errors.confirmPassword.message}</p>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="email">{t('email')}</Label>
+          <Input id="email" type="email" autoComplete="email" {...register('email')} />
+          {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="password">{t('password')}</Label>
+          <Input id="password" type="password" autoComplete="new-password" {...register('password')} />
+          {errors.password && <p className="text-destructive text-xs">{errors.password.message}</p>}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="confirmPassword">{t('confirmPassword')}</Label>
+          <Input id="confirmPassword" type="password" autoComplete="new-password" {...register('confirmPassword')} />
+          {errors.confirmPassword && (
+            <p className="text-destructive text-xs">{errors.confirmPassword.message}</p>
+          )}
+        </div>
+
+        {error && (
+          <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+            {error}
+          </p>
         )}
-      </div>
 
-      {error && (
-        <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-          {error}
-        </p>
-      )}
-
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? t('creating') : t('continue')}
-      </Button>
-    </form>
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? t('creating') : t('continue')}
+        </Button>
+      </form>
+    </div>
   )
 }
 
@@ -202,15 +171,7 @@ const SPORT_TYPES = [
   'Other',
 ]
 
-function StepTeam({
-  uid,
-  email,
-  onComplete,
-}: {
-  uid: string
-  email: string
-  onComplete: () => void
-}) {
+function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const t = useTranslations('Signup')
   const {
@@ -223,7 +184,7 @@ function StepTeam({
   async function onSubmit(data: TeamData) {
     setError(null)
     try {
-      await provisionAccount(uid, email, data.name, data.sport_type)
+      await provisionTeam(user, data.name, data.sport_type)
       onComplete()
     } catch {
       setError(t('errorTeamGeneric'))
@@ -281,11 +242,30 @@ type Step = 'account' | 'team' | 'done'
 export default function SignupPage() {
   const router = useRouter()
   const t = useTranslations('Signup')
+  const { user, profile, loading } = useAuth()
   const [step, setStep] = useState<Step>('account')
-  const [accountData, setAccountData] = useState<{ uid: string; email: string } | null>(null)
+  const [authedUser, setAuthedUser] = useState<AuthedUser | null>(null)
 
-  function handleAccountDone(data: AccountData & { uid: string }) {
-    setAccountData({ uid: data.uid, email: data.email })
+  // A user who authenticated elsewhere (social button, magic link) but never
+  // finished signup lands here already logged in — skip straight to the team
+  // step. If they already have a team, send them to the app.
+  useEffect(() => {
+    if (loading || !user || authedUser) return
+    if (profile?.currentTeam) {
+      router.replace('/dashboard')
+      return
+    }
+    setAuthedUser({
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+    })
+    setStep('team')
+  }, [loading, user, profile, authedUser, router])
+
+  function handleAccountDone(u: AuthedUser) {
+    setAuthedUser(u)
     setStep('team')
   }
 
@@ -314,12 +294,8 @@ export default function SignupPage() {
         <Card>
           <CardContent className="pt-6">
             {step === 'account' && <StepAccount onNext={handleAccountDone} />}
-            {step === 'team' && accountData && (
-              <StepTeam
-                uid={accountData.uid}
-                email={accountData.email}
-                onComplete={handleTeamDone}
-              />
+            {step === 'team' && authedUser && (
+              <StepTeam user={authedUser} onComplete={handleTeamDone} />
             )}
             {step === 'done' && (
               <div className="py-4 text-center space-y-2">

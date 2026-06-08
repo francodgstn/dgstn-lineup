@@ -7,7 +7,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { signIn, resetPassword } from '@/lib/auth'
+import { userHasTeam } from '@/lib/provisioning'
 import { Logo } from '@/components/Logo'
+import { SocialAuthButtons, AuthDivider } from '@/components/auth/SocialAuthButtons'
 
 const schema = z.object({
   email: z.string().email(),
@@ -19,6 +21,7 @@ type FormData = z.infer<typeof schema>
 export default function LoginPage() {
   const router = useRouter()
   const t = useTranslations('Login')
+  const tAuth = useTranslations('Auth')
   const [error, setError] = useState<string | null>(null)
   const [resetSent, setResetSent] = useState(false)
 
@@ -73,6 +76,15 @@ export default function LoginPage() {
               {error}
             </div>
           )}
+
+          <SocialAuthButtons
+            onAuthed={async (cred) => {
+              const hasTeam = await userHasTeam(cred.user.uid)
+              router.replace(hasTeam ? '/dashboard' : '/signup')
+            }}
+          />
+
+          <AuthDivider label={tAuth('orWithEmail')} />
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-1" suppressHydrationWarning>
