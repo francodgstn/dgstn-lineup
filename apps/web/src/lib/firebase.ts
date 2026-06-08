@@ -4,7 +4,7 @@ import {
   initializeFirestore,
   type Firestore,
 } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
+import { getStorage, connectStorageEmulator } from 'firebase/storage'
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions'
 
 const firebaseConfig = {
@@ -65,9 +65,12 @@ if (
   useEmulators &&
   !(globalThis as { _emulatorConnected?: boolean })._emulatorConnected
 ) {
-  // The functions emulator isn't started by scripts/dev.sh; only wire it up
-  // for direct (non-proxied) local dev.
-  if (!emulatorProxy) connectFunctionsEmulator(functions, 'localhost', 5001)
+  // The functions and storage emulators aren't reachable through the dev-server
+  // proxy, so only wire them up for direct (non-proxied) local dev.
+  if (!emulatorProxy) {
+    connectFunctionsEmulator(functions, 'localhost', 5001)
+    connectStorageEmulator(storage, 'localhost', 9199)
+  }
   ;(globalThis as { _emulatorConnected?: boolean })._emulatorConnected = true
 }
 

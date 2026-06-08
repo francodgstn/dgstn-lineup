@@ -774,6 +774,32 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------
+    // Club Courses plugin (lightweight LMS) — authoring only (admin web)
+    // Team members read; managers+ write. Org-scope read added in a later slice.
+    // ----------------------------------------------
+    match /courses/{courseId} {
+      // Single document GET: resource.data is available, verify team membership directly
+      allow get: if isAuthed() && isTeamMember(resource.data.teamId);
+      // Collection LIST: resource.data is NOT available for query rules.
+      // Security relies on the app always filtering by teamId == user's team.
+      allow list: if isAuthed();
+      allow create: if hasTeamRole(request.resource.data.teamId, 'manager');
+      allow update, delete: if hasTeamRole(resource.data.teamId, 'manager');
+
+      // modules + lessons inherit the parent course's team
+      match /modules/{moduleId} {
+        allow read: if isAuthed()
+          && isTeamMember(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId);
+        allow write: if hasTeamRole(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId, 'manager');
+      }
+      match /lessons/{lessonId} {
+        allow read: if isAuthed()
+          && isTeamMember(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId);
+        allow write: if hasTeamRole(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId, 'manager');
+      }
+    }
+
+    // ----------------------------------------------
     // SaaS Subscriptions (Lineup-specific)
     // Billing state managed exclusively by Cloud Functions (Stripe webhook handler)
     // entity_id may be a teamId or an orgId depending on entity_type

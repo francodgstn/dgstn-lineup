@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import {
-  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift,
+  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift, GraduationCap,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
@@ -41,6 +41,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Puzzle,
   Settings2,
   Gift,
+  GraduationCap,
 }
 
 function PluginIcon({ name, className }: { name: string; className?: string }) {
@@ -102,6 +103,7 @@ function PluginCard({
     ai: t('categoryAi'),
     communications: t('categoryCommunications'),
     website: t('categoryWebsite'),
+    content: t('categoryContent'),
     payments: 'Payments',
     analytics: 'Analytics',
   }
@@ -255,6 +257,7 @@ export default function PluginsPage() {
     { key: 'ai',             label: t('categoryAi') },
     { key: 'communications', label: t('categoryCommunications') },
     { key: 'website',        label: t('categoryWebsite') },
+    { key: 'content',        label: t('categoryContent') },
   ]
 
   const filteredPlugins = PLUGIN_REGISTRY.filter(

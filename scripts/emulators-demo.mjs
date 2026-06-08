@@ -70,7 +70,7 @@ if (fnCode !== 0) { console.error('❌ Functions build failed'); process.exit(1)
 console.log(`==> Starting Firebase emulators with demo snapshot (${SNAPSHOT})`)
 const emulators = run('pnpm', [
   'exec', 'firebase', 'emulators:start',
-  '--only', 'auth,firestore,functions',
+  '--only', 'auth,firestore,functions,storage',
   '--project', 'demo-linyup',
   `--import=${SNAPSHOT}`,
   `--export-on-exit=${SNAPSHOT}`,
@@ -87,6 +87,8 @@ console.log('==> Waiting for Auth emulator on :9099')
 await waitForPort(9099)
 console.log('==> Waiting for Functions emulator on :5001')
 await waitForPort(5001)
+console.log('==> Waiting for Storage emulator on :9199')
+await waitForPort(9199)
 
 console.log('\n✅ Demo snapshot loaded — start the web app: pnpm dev:web')
 console.log('   State will be auto-saved to snapshots/demo/ on exit.\n')

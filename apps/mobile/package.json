@@ -7,6 +7,8 @@
     "start:clear": "dotenv -e .env.staging -- expo start --clear",
     "start:vpn": "REACT_NATIVE_PACKAGER_HOSTNAME=100.73.218.136 dotenv -e .env.staging -- expo start",
     "start:prod": "dotenv -e .env.production -- expo start --clear",
+    "emulators": "FIREBASE_PROJECT_ID=demo-linyup EXPO_PUBLIC_USE_EMULATORS=true expo start --clear",
+    "emulators:web": "FIREBASE_PROJECT_ID=demo-linyup EXPO_PUBLIC_USE_EMULATORS=true expo start --web --clear",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web"

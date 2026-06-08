@@ -27,6 +27,7 @@ export type PlanFeature =
   | 'ai_insights'
   | 'multiple_managers'
   | 'referral_program'
+  | 'courses'
   // Organization
   | 'multi_team'
   | 'central_admin'
@@ -73,6 +74,7 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'ai_insights',
     'multiple_managers',
     'referral_program',
+    'courses',
   ],
   organization: [
     'contacts',
@@ -96,6 +98,7 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'ai_insights',
     'multiple_managers',
     'referral_program',
+    'courses',
     'multi_team',
     'central_admin',
     'unified_data',
