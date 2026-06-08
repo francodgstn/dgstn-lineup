@@ -17,7 +17,8 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
     <div class="orb orb-2" aria-hidden="true"></div>
     <div class="orb orb-3" aria-hidden="true"></div>
 
-    <div class="content">
+    <!-- ── Hero ─────────────────────────────────────────────────────── -->
+    <section class="hero">
       <div class="logo-wrap">
         <Logo size={52} dark={true} />
       </div>
@@ -55,7 +56,161 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
       </form>
 
       <p class="form-status" id="form-status" aria-live="polite"></p>
-    </div>
+    </section>
+
+    <!-- ── Feature highlights ────────────────────────────────────────── -->
+    <section class="features">
+      <div class="feature">
+        <div class="ficon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
+        </div>
+        <div class="ftext">
+          <h3>Sessions & scheduling</h3>
+          <p>Recurring classes, attendance tracking, and a full calendar view — your whole week at a glance.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="ficon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="ftext">
+          <h3>Contacts & memberships</h3>
+          <p>Every student's profile, notes, activity history, and subscription status — all in one place.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="ficon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+        </div>
+        <div class="ftext">
+          <h3>Student mobile app</h3>
+          <p>Students book sessions and check in on iOS and Android. No more WhatsApp chaos.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── UI sneak peek ─────────────────────────────────────────────── -->
+    <section class="preview-wrap">
+      <p class="preview-label">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        Sneak peek
+      </p>
+
+      <div class="browser">
+        <!-- browser chrome -->
+        <div class="browser-bar">
+          <span class="dot dot-r"></span>
+          <span class="dot dot-y"></span>
+          <span class="dot dot-g"></span>
+          <div class="browser-url">app.linyup.com/dashboard</div>
+        </div>
+
+        <!-- mock dashboard -->
+        <div class="mock-ui">
+          <!-- sidebar -->
+          <aside class="mock-sidebar">
+            <div class="mock-logo">
+              <div class="mock-logo-icon"></div>
+              <span>Linyup</span>
+            </div>
+            <nav class="mock-nav">
+              <div class="mock-nav-item active">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Dashboard
+              </div>
+              <div class="mock-nav-item">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                Sessions
+              </div>
+              <div class="mock-nav-item">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Contacts
+              </div>
+              <div class="mock-nav-item">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+                Mobile app
+              </div>
+            </nav>
+            <div class="mock-user">
+              <div class="mock-avatar">FC</div>
+              <div class="mock-user-info">
+                <div class="mock-user-name">Franco C.</div>
+                <div class="mock-user-role">Club owner</div>
+              </div>
+            </div>
+          </aside>
+
+          <!-- main content -->
+          <div class="mock-main">
+            <div class="mock-header">
+              <div>
+                <div class="mock-greeting">Good morning, Franco 👋</div>
+                <div class="mock-date">Monday, 9 June · City Judo Club</div>
+              </div>
+              <div class="mock-new-btn">+ New session</div>
+            </div>
+
+            <!-- stats row -->
+            <div class="mock-stats">
+              <div class="mock-stat">
+                <div class="mock-stat-label">Active members</div>
+                <div class="mock-stat-value">142</div>
+                <div class="mock-stat-change up">+4 this month</div>
+              </div>
+              <div class="mock-stat">
+                <div class="mock-stat-label">Sessions this week</div>
+                <div class="mock-stat-value">8</div>
+                <div class="mock-stat-change">3 upcoming</div>
+              </div>
+              <div class="mock-stat">
+                <div class="mock-stat-label">Attendance rate</div>
+                <div class="mock-stat-value">87%</div>
+                <div class="mock-stat-change up">↑ vs last week</div>
+              </div>
+            </div>
+
+            <!-- upcoming sessions -->
+            <div class="mock-section-title">Upcoming sessions</div>
+            <div class="mock-sessions">
+              <div class="mock-session">
+                <div class="mock-session-time">09:00</div>
+                <div class="mock-session-info">
+                  <div class="mock-session-name">Beginners — Judo</div>
+                  <div class="mock-session-meta">Dojo A · 12 registered</div>
+                </div>
+                <div class="mock-chip green">Confirmed</div>
+              </div>
+              <div class="mock-session">
+                <div class="mock-session-time">11:30</div>
+                <div class="mock-session-info">
+                  <div class="mock-session-name">Advanced — Judo</div>
+                  <div class="mock-session-meta">Dojo B · 8 registered</div>
+                </div>
+                <div class="mock-chip green">Confirmed</div>
+              </div>
+              <div class="mock-session">
+                <div class="mock-session-time">18:00</div>
+                <div class="mock-session-info">
+                  <div class="mock-session-name">Evening — Mixed level</div>
+                  <div class="mock-session-meta">Dojo A · 6 registered</div>
+                </div>
+                <div class="mock-chip purple">Open</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- fade out bottom to suggest more below -->
+        <div class="preview-fade" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <!-- ── Footer note ───────────────────────────────────────────────── -->
+    <footer class="pre-footer">
+      <p>© 2025 Linyup · All rights reserved</p>
+    </footer>
   </main>
 </BaseLayout>
 
@@ -94,7 +249,6 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        // Duplicate emails are fine — treat as success
         if (res.status === 409) {
           showSuccess();
         } else {
@@ -120,13 +274,14 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
 </script>
 
 <style>
+  /* ── Base ───────────────────────────────────────────────────────────── */
   .prelaunch {
     min-height: 100dvh;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
     position: relative;
-    overflow: hidden;
+    overflow-x: hidden;
     background:
       linear-gradient(160deg,
         oklch(0.10 0.05 280) 0%,
@@ -134,13 +289,12 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
         oklch(0.11 0.07 305) 100%);
   }
 
-  /* Glow orbs */
+  /* ── Orbs ───────────────────────────────────────────────────────────── */
   .orb {
     position: absolute;
     border-radius: 50%;
     pointer-events: none;
     filter: blur(80px);
-    opacity: 0.55;
   }
   .orb-1 {
     width: 700px; height: 500px;
@@ -151,32 +305,32 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
   }
   .orb-2 {
     width: 400px; height: 400px;
-    bottom: -100px; right: -80px;
+    bottom: 30%; right: -80px;
     background: radial-gradient(ellipse, oklch(0.42 0.22 315 / 0.6), transparent 70%);
+    opacity: 0.55;
   }
   .orb-3 {
     width: 300px; height: 300px;
-    bottom: 10%; left: -60px;
+    bottom: 20%; left: -60px;
     background: radial-gradient(ellipse, oklch(0.40 0.20 270 / 0.5), transparent 70%);
     opacity: 0.40;
   }
 
-  .content {
+  /* ── Hero ───────────────────────────────────────────────────────────── */
+  .hero {
     position: relative;
     z-index: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    padding: 40px 24px;
+    padding: 80px 24px 64px;
     max-width: 680px;
+    width: 100%;
   }
 
-  .logo-wrap {
-    margin-bottom: 32px;
-  }
+  .logo-wrap { margin-bottom: 32px; }
 
-  /* Coming soon badge */
   .badge {
     display: inline-flex;
     align-items: center;
@@ -194,8 +348,7 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
     backdrop-filter: blur(8px);
   }
   .badge-dot {
-    width: 6px;
-    height: 6px;
+    width: 6px; height: 6px;
     border-radius: 50%;
     background: oklch(0.72 0.20 292);
     box-shadow: 0 0 8px oklch(0.72 0.20 292 / 0.8);
@@ -245,9 +398,7 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
     transition: border-color 0.18s ease, background 0.18s ease;
     backdrop-filter: blur(8px);
   }
-  .email-input::placeholder {
-    color: oklch(0.70 0.04 288);
-  }
+  .email-input::placeholder { color: oklch(0.70 0.04 288); }
   .email-input:focus {
     border-color: oklch(0.62 0.22 292 / 0.8);
     background: oklch(1 0 0 / 0.12);
@@ -276,20 +427,10 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
     box-shadow: 0 0 40px oklch(0.62 0.22 292 / 0.60), 0 4px 16px oklch(0 0 0 / 0.3);
     transform: translateY(-1px);
   }
-  .btn-cta:active:not(:disabled) {
-    transform: translateY(0);
-  }
-  .btn-cta:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .btn-cta svg {
-    transition: transform 0.18s ease;
-    flex-shrink: 0;
-  }
-  .btn-cta:hover:not(:disabled) svg {
-    transform: translateX(3px);
-  }
+  .btn-cta:active:not(:disabled) { transform: translateY(0); }
+  .btn-cta:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-cta svg { transition: transform 0.18s ease; flex-shrink: 0; }
+  .btn-cta:hover:not(:disabled) svg { transform: translateX(3px); }
 
   .form-status {
     margin-top: 16px;
@@ -297,21 +438,305 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
     min-height: 20px;
     color: oklch(0.80 0.04 288);
   }
-  .form-status.success {
-    color: oklch(0.78 0.18 152);
-  }
-  .form-status.error {
-    color: oklch(0.72 0.20 25);
+  .form-status.success { color: oklch(0.78 0.18 152); }
+  .form-status.error   { color: oklch(0.72 0.20 25); }
+
+  /* ── Features ───────────────────────────────────────────────────────── */
+  .features {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%;
+    max-width: 900px;
+    padding: 0 24px 72px;
   }
 
+  .feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    background: oklch(1 0 0 / 0.05);
+    border: 1px solid oklch(1 0 0 / 0.10);
+    border-radius: 16px;
+    padding: 24px;
+    backdrop-filter: blur(12px);
+    transition: background 0.2s;
+  }
+  .feature:hover { background: oklch(1 0 0 / 0.08); }
+
+  .ficon {
+    flex-shrink: 0;
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    background: oklch(0.48 0.22 292 / 0.25);
+    border: 1px solid oklch(0.60 0.20 292 / 0.30);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: oklch(0.78 0.18 292);
+  }
+
+  .ftext h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 6px;
+    letter-spacing: 0.01em;
+  }
+  .ftext p {
+    font-size: 13px;
+    line-height: 1.6;
+    color: oklch(0.72 0.05 288);
+    margin: 0;
+  }
+
+  /* ── Preview ────────────────────────────────────────────────────────── */
+  .preview-wrap {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 960px;
+    padding: 0 24px 80px;
+  }
+
+  .preview-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: oklch(0.72 0.14 292);
+    margin: 0 0 16px;
+  }
+
+  .browser {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid oklch(1 0 0 / 0.12);
+    box-shadow:
+      0 0 0 1px oklch(0 0 0 / 0.4),
+      0 32px 80px oklch(0 0 0 / 0.5),
+      0 0 60px oklch(0.48 0.22 292 / 0.12);
+  }
+
+  .browser-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: oklch(0.16 0.04 292);
+    border-bottom: 1px solid oklch(1 0 0 / 0.08);
+  }
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+  .dot-r { background: #ff5f57; }
+  .dot-y { background: #febc2e; }
+  .dot-g { background: #28c840; }
+  .browser-url {
+    flex: 1;
+    text-align: center;
+    font-size: 11px;
+    color: oklch(0.55 0.04 288);
+    background: oklch(0.12 0.03 292);
+    border-radius: 6px;
+    padding: 3px 12px;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  /* ── Mock dashboard ─────────────────────────────────────────────────── */
+  .mock-ui {
+    display: flex;
+    background: oklch(0.11 0.04 292);
+    min-height: 380px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  .mock-sidebar {
+    width: 180px;
+    flex-shrink: 0;
+    background: oklch(0.13 0.05 292);
+    border-right: 1px solid oklch(1 0 0 / 0.07);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+  }
+
+  .mock-logo {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 16px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    border-bottom: 1px solid oklch(1 0 0 / 0.07);
+    margin-bottom: 12px;
+  }
+  .mock-logo-icon {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: oklch(0.62 0.22 292);
+  }
+
+  .mock-nav { flex: 1; padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
+  .mock-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: oklch(0.60 0.04 288);
+    cursor: default;
+  }
+  .mock-nav-item.active {
+    background: oklch(0.48 0.22 292 / 0.20);
+    color: oklch(0.85 0.12 292);
+  }
+  .mock-nav-item svg { flex-shrink: 0; }
+
+  .mock-user {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 12px 16px 0;
+    border-top: 1px solid oklch(1 0 0 / 0.07);
+    margin-top: 12px;
+  }
+  .mock-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: oklch(0.48 0.22 292 / 0.50);
+    font-size: 9px;
+    font-weight: 700;
+    color: oklch(0.85 0.12 292);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .mock-user-name { font-size: 11px; font-weight: 600; color: #fff; }
+  .mock-user-role { font-size: 10px; color: oklch(0.55 0.04 288); }
+
+  .mock-main {
+    flex: 1;
+    padding: 20px 24px;
+    overflow: hidden;
+  }
+
+  .mock-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+  .mock-greeting { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 3px; }
+  .mock-date     { font-size: 11px; color: oklch(0.55 0.04 288); }
+  .mock-new-btn  {
+    font-size: 11px;
+    font-weight: 600;
+    color: oklch(0.82 0.12 292);
+    background: oklch(0.48 0.22 292 / 0.20);
+    border: 1px solid oklch(0.55 0.18 292 / 0.30);
+    border-radius: 7px;
+    padding: 5px 12px;
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  .mock-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .mock-stat {
+    background: oklch(0.16 0.05 292);
+    border: 1px solid oklch(1 0 0 / 0.07);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .mock-stat-label { font-size: 10px; color: oklch(0.55 0.04 288); margin-bottom: 6px; }
+  .mock-stat-value { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; line-height: 1; }
+  .mock-stat-change { font-size: 10px; color: oklch(0.55 0.04 288); }
+  .mock-stat-change.up { color: oklch(0.72 0.18 152); }
+
+  .mock-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: oklch(0.55 0.04 288);
+    margin-bottom: 10px;
+  }
+
+  .mock-sessions { display: flex; flex-direction: column; gap: 6px; }
+  .mock-session {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: oklch(0.16 0.05 292);
+    border: 1px solid oklch(1 0 0 / 0.07);
+    border-radius: 9px;
+    padding: 10px 14px;
+  }
+  .mock-session-time { font-size: 11px; font-weight: 700; color: oklch(0.65 0.08 292); width: 36px; flex-shrink: 0; }
+  .mock-session-info { flex: 1; min-width: 0; }
+  .mock-session-name { font-size: 12px; font-weight: 600; color: #fff; margin-bottom: 2px; }
+  .mock-session-meta { font-size: 10px; color: oklch(0.55 0.04 288); }
+  .mock-chip {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+  }
+  .mock-chip.green  { background: oklch(0.30 0.10 152); color: oklch(0.78 0.18 152); }
+  .mock-chip.purple { background: oklch(0.28 0.12 292); color: oklch(0.78 0.16 292); }
+
+  .preview-fade {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 100px;
+    background: linear-gradient(to bottom, transparent, oklch(0.11 0.04 292));
+    pointer-events: none;
+  }
+
+  /* ── Footer ─────────────────────────────────────────────────────────── */
+  .pre-footer {
+    position: relative;
+    z-index: 1;
+    padding: 0 24px 32px;
+    font-size: 12px;
+    color: oklch(0.45 0.04 288);
+    text-align: center;
+  }
+
+  /* ── Animations ─────────────────────────────────────────────────────── */
   @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.85); }
+    50%       { opacity: 0.5; transform: scale(0.85); }
+  }
+
+  /* ── Responsive ─────────────────────────────────────────────────────── */
+  @media (max-width: 720px) {
+    .features { grid-template-columns: 1fr; }
+    .mock-sidebar { display: none; }
+    .mock-stats { grid-template-columns: repeat(2, 1fr); }
   }
 
   @media (max-width: 540px) {
     h1 { font-size: 38px; }
     .cta-form { flex-direction: column; }
     .email-input, .btn-cta { width: 100%; justify-content: center; }
+    .mock-stats { grid-template-columns: 1fr 1fr; }
   }
 </style>
