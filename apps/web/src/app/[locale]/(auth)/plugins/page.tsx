@@ -15,7 +15,9 @@ import {
   TEAM_MEMBERS_SUBCOLLECTION,
 } from '@linyup/shared'
 import type { PluginManifest, InstalledPlugin, PluginCategory } from '@linyup/shared'
+import { pluginInstallLimit } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { usePlan } from '@/hooks/usePlan'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -24,7 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import {
-  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift, GraduationCap,
+  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift, GraduationCap, Trophy,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
@@ -42,6 +44,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Settings2,
   Gift,
   GraduationCap,
+  Trophy,
 }
 
 function PluginIcon({ name, className }: { name: string; className?: string }) {
@@ -77,6 +80,7 @@ function PluginCard({
   onRemove,
   onConfigure,
   installing,
+  blockedByLimit,
 }: {
   manifest: PluginManifest
   isInstalled: boolean
@@ -85,6 +89,7 @@ function PluginCard({
   onRemove: () => void
   onConfigure: () => void
   installing: boolean
+  blockedByLimit: boolean
 }) {
   const t = useTranslations('Plugins')
 
@@ -108,7 +113,7 @@ function PluginCard({
     analytics: 'Analytics',
   }
 
-  const canInstall = isOwner && manifest.status !== 'coming_soon'
+  const canInstall = isOwner && manifest.status !== 'coming_soon' && !blockedByLimit
 
   return (
     <div className="rounded-lg border bg-card p-5 flex flex-col gap-3">
@@ -151,14 +156,19 @@ function PluginCard({
               </Button>
             </>
           ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onInstall}
-              disabled={!canInstall || installing}
-            >
-              {installing ? t('installing') : t('install')}
-            </Button>
+            <div className="flex flex-col gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onInstall}
+                disabled={!canInstall || installing}
+              >
+                {installing ? t('installing') : t('install')}
+              </Button>
+              {blockedByLimit && (
+                <span className="text-xs text-muted-foreground">{t('limitReachedHint')}</span>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -213,6 +223,13 @@ export default function PluginsPage() {
   const { user, currentTeamId } = useAuth()
   const { plugins: installedPlugins, isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
   const { data: isOwner, isLoading: roleLoading } = useIsOwner(currentTeamId, user?.uid ?? null)
+  const { plan } = usePlan()
+
+  // Plan-based install limit. Coaches get a single slot so they can try one
+  // club-tier plugin; higher plans are unlimited.
+  const installLimit = plan ? pluginInstallLimit(plan) : Infinity
+  const atLimit = installedPlugins.length >= installLimit
+  const showLimitBanner = atLimit && Number.isFinite(installLimit)
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
   const [installingId, setInstallingId] = useState<string | null>(null)
@@ -286,6 +303,14 @@ export default function PluginsPage() {
         <p className="text-sm text-muted-foreground mt-1">{t('subtitle')}</p>
       </div>
 
+      {/* Plan install-limit banner (e.g. coach: 1 plugin to explore) */}
+      {showLimitBanner && (
+        <div className="rounded-lg border border-primary/30 bg-primary/[0.04] px-4 py-3 text-sm">
+          <p className="font-medium">{t('limitBannerTitle', { limit: installLimit })}</p>
+          <p className="text-muted-foreground">{t('limitBannerBody')}</p>
+        </div>
+      )}
+
       {/* Category filter */}
       <div className="flex flex-wrap gap-2">
         {CATEGORIES.map(({ key, label }) => (
@@ -309,6 +334,7 @@ export default function PluginsPage() {
             isInstalled={isInstalled(manifest.id)}
             isOwner={!!isOwner}
             installing={installingId === manifest.id}
+            blockedByLimit={atLimit && !isInstalled(manifest.id)}
             onInstall={() => installMutation.mutate(manifest)}
             onRemove={() => removeMutation.mutate(manifest.id)}
             onConfigure={() => setConfigPlugin(manifest)}

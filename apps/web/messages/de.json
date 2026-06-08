@@ -850,7 +850,10 @@
     "badgeSectionLeaderboard": "Ranglisten-Abzeichen",
     "badgeSectionLeaderboardDesc": "Wird für Top-Positionen in der Rangliste vergeben.",
     "badgeSectionExplorer": "Aktivitäts-Abzeichen",
-    "badgeSectionExplorerDesc": "Wird für die Teilnahme an verschiedenen Aktivitäten vergeben."
+    "badgeSectionExplorerDesc": "Wird für die Teilnahme an verschiedenen Aktivitäten vergeben.",
+    "notInstalledTitle": "Gamification ist ein Plugin",
+    "notInstalledBody": "Installiere das Gamification-Plugin, um Punkte, Abzeichen und Bestenlisten einzurichten.",
+    "goToPlugins": "Zu den Plugins"
   },
   "TopBar": {
     "qrTitle": "QR-Codes",
@@ -1072,7 +1075,13 @@
     "clubCoursesDescription": "Erstelle und veröffentliche Online-Kurse mit Text-, Audio- und Videolektionen für deine Mitglieder.",
     "clubCoursesNavLabel": "Kurse",
     "categoryContent": "Inhalte",
-    "navSectionPlugins": "Plugins"
+    "navSectionPlugins": "Plugins",
+    "gamificationName": "Gamification",
+    "gamificationDescription": "Punkte, Serien, Abzeichen und Bestenlisten, um Mitglieder zu motivieren.",
+    "gamificationNavLabel": "Gamification",
+    "limitReachedHint": "Plugin-Limit erreicht",
+    "limitBannerTitle": "{limit, plural, one {Dein Plan enthält # Plugin} other {Dein Plan enthält # Plugins}}",
+    "limitBannerBody": "Entferne dein aktuelles Plugin, um ein anderes auszuprobieren, oder upgrade für unbegrenzten Zugriff."
   },
   "Org": {
     "title": "Organisation",

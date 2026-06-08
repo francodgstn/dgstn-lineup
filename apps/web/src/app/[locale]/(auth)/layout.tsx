@@ -43,6 +43,7 @@ const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
   GraduationCap,
   Gift,
   Puzzle,
+  Trophy,
 }
 
 // ─── nav config ───────────────────────────────────────────────────────────────
@@ -60,7 +61,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/schedule',      labelKey: 'calendar',      icon: Calendar },
       { href: '/bookings',      labelKey: 'bookings',      icon: ClipboardList },
       { href: '/contacts',      labelKey: 'contacts',      icon: Users },
-      { href: '/gamification',  labelKey: 'gamification',  icon: Trophy, minPlan: 'club' },
     ],
   },
   {
@@ -70,7 +70,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/team/event-types', labelKey: 'eventTypes',  icon: CalendarRange },
       { href: '/automations',      labelKey: 'automations', icon: Workflow },
       { href: '/team/portal',      labelKey: 'portal',      icon: Globe },
-      { href: '/plugins',          labelKey: 'plugins',     icon: Puzzle, minPlan: 'club' },
+      { href: '/plugins',          labelKey: 'plugins',     icon: Puzzle },
     ],
   },
   {
@@ -191,12 +191,12 @@ function OrgLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?
 }
 
 // Renders nav links contributed by installed plugins (manifest.navContributions).
-// Labels live in the 'Plugins' namespace; locked items open the upgrade modal.
+// Labels live in the 'Plugins' namespace. An installed plugin is always usable —
+// installation is the gate (the install limit is enforced on the plugins page),
+// so these links are never locked here.
 function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?: () => void }) {
   const pathname = usePathname()
   const t = useTranslations('Plugins')
-  const { isAtLeast } = usePlan()
-  const { openUpgradeModal } = useUpgradeModal()
   const { plugins } = useInstalledPlugins()
 
   const contributions = plugins.flatMap((p) =>
@@ -217,30 +217,7 @@ function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLink
         {contributions.map((nav) => {
           const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
           const label = t(nav.labelKey as Parameters<typeof t>[0])
-          const isLocked = !!nav.minPlan && !isAtLeast(nav.minPlan)
-          const isActive = !isLocked && pathname.startsWith(nav.href)
-
-          if (isLocked) {
-            return (
-              <button
-                key={nav.pluginId + nav.href}
-                type="button"
-                onClick={() => { openUpgradeModal({ minPlan: nav.minPlan }); onLinkClick?.() }}
-                title={collapsed ? label : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${
-                  collapsed ? 'justify-center px-2' : ''
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-left">{label}</span>
-                    <Lock className="h-3 w-3 shrink-0 text-muted-foreground/30" />
-                  </>
-                )}
-              </button>
-            )
-          }
+          const isActive = pathname.startsWith(nav.href)
 
           return (
             <Link

@@ -855,7 +855,10 @@
     "badgeSectionLeaderboard": "Leaderboard badges",
     "badgeSectionLeaderboardDesc": "Earned based on finishing in top positions.",
     "badgeSectionExplorer": "Activities badges",
-    "badgeSectionExplorerDesc": "Earned for attending multiple distinct activities."
+    "badgeSectionExplorerDesc": "Earned for attending multiple distinct activities.",
+    "notInstalledTitle": "Gamification is a plugin",
+    "notInstalledBody": "Install the Gamification plugin to set up points, badges and leaderboards.",
+    "goToPlugins": "Go to plugins"
   },
   "TopBar": {
     "qrTitle": "QR Codes",
@@ -1077,7 +1080,13 @@
     "clubCoursesDescription": "Create and publish online courses with text, audio and video lessons for your members.",
     "clubCoursesNavLabel": "Courses",
     "categoryContent": "Content",
-    "navSectionPlugins": "Plugins"
+    "navSectionPlugins": "Plugins",
+    "gamificationName": "Gamification",
+    "gamificationDescription": "Points, streaks, badges and leaderboards to keep members engaged.",
+    "gamificationNavLabel": "Gamification",
+    "limitReachedHint": "Plugin limit reached",
+    "limitBannerTitle": "{limit, plural, one {Your plan includes # plugin} other {Your plan includes # plugins}}",
+    "limitBannerBody": "Remove your current plugin to try another, or upgrade for unlimited access."
   },
   "Org": {
     "title": "Organization",

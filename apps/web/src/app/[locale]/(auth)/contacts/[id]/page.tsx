@@ -30,6 +30,7 @@ import type {
   RankingSystem, ActivityLogEntry, ActivityEventType, PlanFeature,
 } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useMembershipTerm } from '@/hooks/useMembershipTerm'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { useForm, Controller } from 'react-hook-form'
@@ -2336,6 +2337,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const qc = useQueryClient()
   const { hasFeature } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
+  const { isInstalled } = useInstalledPlugins()
 
   const [linkCopied, setLinkCopied] = useState(false)
 
@@ -2382,7 +2384,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'bookings',      label: t('tabBookings'),      icon: CalendarDays },
     { id: 'subscriptions', label: t('tabSubscriptions'), icon: BookOpen,  feature: 'subscriptions' },
     { id: 'goals',         label: t('tabGoals'),         icon: Flag,      feature: 'goals' },
-    { id: 'gamification',  label: t('tabGamification'),  icon: Star,      feature: 'gamification' },
+    // Gamification is a plugin — the tab appears only when it's installed (filtered below).
+    { id: 'gamification',  label: t('tabGamification'),  icon: Star },
   ]
 
   return (
@@ -2471,7 +2474,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         <>
           {/* Tabs */}
           <div className="flex gap-0.5 border-b overflow-x-auto">
-            {TABS.map((tb) => {
+            {TABS.filter((tb) => tb.id !== 'gamification' || isInstalled('gamification')).map((tb) => {
               const locked = tb.feature ? !hasFeature(tb.feature) : false
               const Icon = tb.icon
               return (

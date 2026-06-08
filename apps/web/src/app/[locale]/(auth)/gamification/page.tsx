@@ -15,6 +15,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CONTACTS_COLLECTION, ACTIVITIES_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 import type { Contact, Activity, Team } from '@linyup/shared'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { Link } from '@/i18n/navigation'
+import { buttonVariants } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Trophy, Flame, Star, Plus, Trash2, Save, ChevronDown, ChevronRight, Info,
@@ -726,6 +729,7 @@ export default function GamificationPage() {
   const [tab, setTab] = useState<TabId>('leaderboard')
   const [pendingBaseScores, setPendingBaseScores] = useState<Record<string, number | null>>({})
 
+  const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
   const { data: team } = useTeam(currentTeamId)
   const { data: activities = [] } = useActivities(currentTeamId)
 
@@ -774,6 +778,18 @@ export default function GamificationPage() {
     { id: 'scoring', label: t('tabScoring') },
     { id: 'badges', label: t('tabBadges') },
   ]
+
+  // Gamification is delivered as a plugin — show an install prompt if it isn't on.
+  if (!pluginsLoading && !isInstalled('gamification')) {
+    return (
+      <div className="max-w-md mx-auto text-center py-16 space-y-3">
+        <Trophy className="mx-auto h-10 w-10 text-muted-foreground/40" />
+        <h1 className="text-xl font-semibold">{t('notInstalledTitle')}</h1>
+        <p className="text-sm text-muted-foreground">{t('notInstalledBody')}</p>
+        <Link href="/plugins" className={buttonVariants()}>{t('goToPlugins')}</Link>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">

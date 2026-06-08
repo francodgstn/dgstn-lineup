@@ -850,7 +850,10 @@
     "badgeSectionLeaderboard": "Badge classifica",
     "badgeSectionLeaderboardDesc": "Ottenuti per le migliori posizioni in classifica.",
     "badgeSectionExplorer": "Badge attività",
-    "badgeSectionExplorerDesc": "Ottenuti per la partecipazione a più attività distinte."
+    "badgeSectionExplorerDesc": "Ottenuti per la partecipazione a più attività distinte.",
+    "notInstalledTitle": "La gamification è un plugin",
+    "notInstalledBody": "Installa il plugin Gamification per configurare punti, badge e classifiche.",
+    "goToPlugins": "Vai ai plugin"
   },
   "TopBar": {
     "qrTitle": "Codici QR",
@@ -1062,7 +1065,13 @@
     "clubCoursesDescription": "Crea e pubblica corsi online con lezioni di testo, audio e video per i tuoi membri.",
     "clubCoursesNavLabel": "Corsi",
     "categoryContent": "Contenuti",
-    "navSectionPlugins": "Plugin"
+    "navSectionPlugins": "Plugin",
+    "gamificationName": "Gamification",
+    "gamificationDescription": "Punti, serie, badge e classifiche per coinvolgere i membri.",
+    "gamificationNavLabel": "Gamification",
+    "limitReachedHint": "Limite di plugin raggiunto",
+    "limitBannerTitle": "{limit, plural, one {Il tuo piano include # plugin} other {Il tuo piano include # plugin}}",
+    "limitBannerBody": "Rimuovi il plugin attuale per provarne un altro o esegui l'upgrade per accesso illimitato."
   },
   "Org": {
     "title": "Organizzazione",

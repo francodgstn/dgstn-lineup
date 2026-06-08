@@ -109,6 +109,19 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
   ],
 }
 
+// How many plugins each plan may have installed at once. The coach plan gets a
+// single slot so coaches can explore one club-tier plugin at a time; higher
+// plans are unlimited.
+export const PLUGIN_INSTALL_LIMIT: Record<SaasPlan, number> = {
+  coach: 1,
+  club: Infinity,
+  organization: Infinity,
+}
+
+export function pluginInstallLimit(plan: SaasPlan): number {
+  return PLUGIN_INSTALL_LIMIT[plan] ?? 0
+}
+
 export function planIsAtLeast(current: SaasPlan, minimum: SaasPlan): boolean {
   return PLAN_ORDER.indexOf(current) >= PLAN_ORDER.indexOf(minimum)
 }
