@@ -25,13 +25,24 @@ import {
   Lock,
   Puzzle,
   Building2,
+  Gift,
+  GraduationCap,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
 import type { SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { Logo } from '@/components/Logo'
+
+// Icons referenced by string name in plugin manifest navContributions
+const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
+  GraduationCap,
+  Gift,
+  Puzzle,
+}
 
 // ─── nav config ───────────────────────────────────────────────────────────────
 
@@ -176,6 +187,80 @@ function OrgLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?
   )
 }
 
+// Renders nav links contributed by installed plugins (manifest.navContributions).
+// Labels live in the 'Plugins' namespace; locked items open the upgrade modal.
+function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?: () => void }) {
+  const pathname = usePathname()
+  const t = useTranslations('Plugins')
+  const { isAtLeast } = usePlan()
+  const { openUpgradeModal } = useUpgradeModal()
+  const { plugins } = useInstalledPlugins()
+
+  const contributions = plugins.flatMap((p) =>
+    (p.manifest.navContributions ?? []).map((nav) => ({ ...nav, pluginId: p.manifest.id })),
+  )
+  if (contributions.length === 0) return null
+
+  return (
+    <div className="mt-3">
+      {collapsed ? (
+        <div className="border-t mx-1 mb-1" />
+      ) : (
+        <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pb-1">
+          {t('navSectionPlugins')}
+        </p>
+      )}
+      <div className="space-y-0.5">
+        {contributions.map((nav) => {
+          const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
+          const label = t(nav.labelKey as Parameters<typeof t>[0])
+          const isLocked = !!nav.minPlan && !isAtLeast(nav.minPlan)
+          const isActive = !isLocked && pathname.startsWith(nav.href)
+
+          if (isLocked) {
+            return (
+              <button
+                key={nav.pluginId + nav.href}
+                type="button"
+                onClick={() => { openUpgradeModal({ minPlan: nav.minPlan }); onLinkClick?.() }}
+                title={collapsed ? label : undefined}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${
+                  collapsed ? 'justify-center px-2' : ''
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && (
+                  <>
+                    <span className="flex-1 text-left">{label}</span>
+                    <Lock className="h-3 w-3 shrink-0 text-muted-foreground/30" />
+                  </>
+                )}
+              </button>
+            )
+          }
+
+          return (
+            <Link
+              key={nav.pluginId + nav.href}
+              href={nav.href as Route}
+              onClick={onLinkClick}
+              title={collapsed ? label : undefined}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                isActive
+                  ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+                  : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+              } ${collapsed ? 'justify-center px-2' : ''}`}
+            >
+              <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+              {!collapsed && <span>{label}</span>}
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function SidebarContent({
   collapsed,
   onToggleCollapse,
@@ -237,6 +322,7 @@ function SidebarContent({
             </div>
           </div>
         ))}
+        <PluginNavLinks collapsed={collapsed} onLinkClick={onLinkClick} />
         <OrgLinks collapsed={collapsed} onLinkClick={onLinkClick} />
       </nav>
 
