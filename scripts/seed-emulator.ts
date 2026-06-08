@@ -17,6 +17,10 @@
  *   - 1 coach_availability template per team
  *   - 18 contacts, 3 events, 4 group bookings + 2 coaching bookings
  *   - Past-session participants, weekly reports, goals
+ *
+ *   Club tier only:
+ *   - Club Courses plugin installed + 2 courses (published + draft) with
+ *     modules and text/audio/video lessons
  */
 
 // emulator env vars must be set BEFORE admin.initializeApp()
@@ -907,6 +911,179 @@ async function seedTeam(opts: {
       updated_at:            now,
     })
   }
+
+  // ── club courses (Club Courses LMS plugin) ─────────────────────────────────
+  // Only the club-tier account showcases the plugin (courses is a club+ feature).
+  if (plan === 'club') {
+    await seedCourses(teamId, uid)
+  }
+}
+
+// ── club courses seed ───────────────────────────────────────────────────────────
+
+async function seedCourses(teamId: string, uid: string) {
+  // Install the Club Courses plugin for this team so it appears in the sidebar.
+  await db.collection('teams').doc(teamId)
+    .collection('installed_plugins').doc('club-courses').set({
+      pluginId:    'club-courses',
+      teamId,
+      installedAt: ts(daysFromNow(-20)),
+      installedBy: uid,
+      status:      'active',
+      config:      {},
+    })
+
+  type LessonSeed = {
+    title: string
+    type: 'text' | 'audio' | 'video'
+    body?: string
+    mediaSource?: 'youtube' | 'vimeo' | 'url' | 'upload'
+    mediaUrl?: string
+    durationSeconds?: number
+  }
+  type ModuleSeed = { title: string; summary?: string; lessons: LessonSeed[] }
+  type CourseSeed = {
+    title: string
+    summary: string
+    status: 'draft' | 'published'
+    accessType: 'free' | 'members'
+    modules: ModuleSeed[]
+  }
+
+  const courseSeeds: CourseSeed[] = [
+    {
+      title:      'BJJ Fundamentals',
+      summary:    'A beginner-friendly path through the core positions, escapes and submissions of Brazilian Jiu-Jitsu.',
+      status:     'published',
+      accessType: 'members',
+      modules: [
+        {
+          title:   'Getting Started',
+          summary: 'Orientation and your first day on the mats.',
+          lessons: [
+            {
+              title: 'Welcome & how this course works',
+              type:  'text',
+              body:  '# Welcome\n\nThis course takes you from your very first class to a confident understanding of the fundamentals.\n\n**What you will need**\n\n- A gi (or rashguard for no-gi classes)\n- A water bottle\n- An open mind\n\nWork through the modules in order — each one builds on the last.',
+            },
+            {
+              title:           'Mat etiquette & safety',
+              type:            'video',
+              mediaSource:     'youtube',
+              mediaUrl:        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+              durationSeconds: 420,
+            },
+          ],
+        },
+        {
+          title:   'Core Positions',
+          summary: 'Guard, mount, side control and the positional hierarchy.',
+          lessons: [
+            {
+              title:           'Understanding the guard',
+              type:            'video',
+              mediaSource:     'youtube',
+              mediaUrl:        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+              durationSeconds: 600,
+            },
+            {
+              title:           'Escaping side control',
+              type:            'video',
+              mediaSource:     'vimeo',
+              mediaUrl:        'https://vimeo.com/76979871',
+              durationSeconds: 540,
+            },
+            {
+              title: 'Positional hierarchy cheat sheet',
+              type:  'text',
+              body:  '## Positional hierarchy\n\nFrom worst to best for you:\n\n1. Mounted / back taken (escape!)\n2. Side control bottom\n3. Guard (neutral)\n4. Side control top\n5. Mount\n6. Back control (best)\n\nAlways fight to improve your position before hunting for a submission.',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      title:      'Strength & Conditioning for Fighters',
+      summary:    'Build the engine: mobility, strength and recovery routines tailored for grapplers and strikers.',
+      status:     'draft',
+      accessType: 'members',
+      modules: [
+        {
+          title:   'Mobility Foundations',
+          lessons: [
+            {
+              title:           'Daily mobility flow (guided audio)',
+              type:            'audio',
+              mediaSource:     'url',
+              mediaUrl:        'https://download.samplelib.com/mp3/sample-12s.mp3',
+              durationSeconds: 720,
+            },
+            {
+              title: 'Warm-up principles',
+              type:  'text',
+              body:  '## Warm-up principles\n\nA good warm-up raises your core temperature, primes your nervous system and reduces injury risk.\n\n- 3–5 min easy movement\n- Joint circles (ankles, hips, shoulders, neck)\n- Sport-specific drills at increasing intensity\n\nNever roll or spar cold.',
+            },
+          ],
+        },
+      ],
+    },
+  ]
+
+  for (let ci = 0; ci < courseSeeds.length; ci++) {
+    const cs       = courseSeeds[ci]
+    const courseId = `${teamId}-course-${ci}`
+    const slug     = cs.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    const lessonCount = cs.modules.reduce((n, m) => n + m.lessons.length, 0)
+
+    await db.collection('courses').doc(courseId).set({
+      scope:       'team',
+      teamId,
+      title:       cs.title,
+      slug:        `${slug}-${ci}`,
+      summary:     cs.summary,
+      status:      cs.status,
+      accessRule:  { type: cs.accessType },
+      moduleCount: cs.modules.length,
+      lessonCount,
+      order:       ci,
+      created_at:  ts(daysFromNow(-18 + ci)),
+      updated_at:  ts(daysFromNow(-2)),
+      createdBy:   uid,
+      archived_at: null,
+    })
+
+    for (let mi = 0; mi < cs.modules.length; mi++) {
+      const m        = cs.modules[mi]
+      const moduleId = `${courseId}-module-${mi}`
+      await db.collection('courses').doc(courseId)
+        .collection('modules').doc(moduleId).set({
+          courseId, teamId,
+          title:      m.title,
+          ...(m.summary ? { summary: m.summary } : {}),
+          order:      mi,
+          created_at: ts(daysFromNow(-18 + ci)),
+          updated_at: ts(daysFromNow(-2)),
+        })
+
+      for (let li = 0; li < m.lessons.length; li++) {
+        const l        = m.lessons[li]
+        const lessonId = `${moduleId}-lesson-${li}`
+        await db.collection('courses').doc(courseId)
+          .collection('lessons').doc(lessonId).set({
+            courseId, moduleId, teamId,
+            title: l.title,
+            type:  l.type,
+            order: li,
+            ...(l.body            !== undefined ? { body: l.body }                       : {}),
+            ...(l.mediaSource     !== undefined ? { mediaSource: l.mediaSource }         : {}),
+            ...(l.mediaUrl        !== undefined ? { mediaUrl: l.mediaUrl }               : {}),
+            ...(l.durationSeconds !== undefined ? { durationSeconds: l.durationSeconds } : {}),
+            created_at: ts(daysFromNow(-18 + ci)),
+            updated_at: ts(daysFromNow(-2)),
+          })
+      }
+    }
+  }
 }
 
 // ── org seed ──────────────────────────────────────────────────────────────────
@@ -1075,6 +1252,7 @@ async function main() {
   console.log('   └─────────────────────┴──────────────────────┴──────────────┴────────────┘\n')
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com is org admin)')
   console.log('   Clubs in org: Iron Circle Gym + Titan Combat Sports\n')
+  console.log('   Club Courses: 2 courses seeded for club@linyup.com → /plugins/club-courses\n')
   console.log('   Portals:')
   for (const a of accounts) {
     console.log(`   ${a.plan.padEnd(16)} →  http://localhost:3000/portal/${a.teamSlug}`)
