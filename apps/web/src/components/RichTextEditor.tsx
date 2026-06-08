@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react'
 import type { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
@@ -172,7 +172,7 @@ function makeSlashRenderer() {
 
 // ─── Editor ─────────────────────────────────────────────────────────────────
 
-export function RichTextEditor({
+export const RichTextEditor = memo(function RichTextEditor({
   value,
   onChange,
   placeholder,
@@ -255,7 +255,7 @@ export function RichTextEditor({
       )}
     </div>
   )
-}
+})
 
 export function RichTextContent({ html, className }: { html: string; className?: string }) {
   return (

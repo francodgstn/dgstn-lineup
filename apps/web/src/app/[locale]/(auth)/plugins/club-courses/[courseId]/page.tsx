@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -87,10 +87,12 @@ function LessonPanel({
   const mediaFileRef = useRef<HTMLInputElement>(null)
   const attachFileRef = useRef<HTMLInputElement>(null)
 
-  // Image uploads for the rich-text body
-  async function uploadBodyImage(file: File): Promise<string> {
-    return uploadFile(file, `teams/${teamId}/courses/${courseId}/lessons/images/${Date.now()}`)
-  }
+  // Image uploads for the rich-text body. Stable identity so the memoized
+  // RichTextEditor doesn't re-render (and steal focus) on other state changes.
+  const uploadBodyImage = useCallback(
+    (file: File) => uploadFile(file, `teams/${teamId}/courses/${courseId}/lessons/images/${Date.now()}`),
+    [teamId, courseId],
+  )
 
   async function handleMediaUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
