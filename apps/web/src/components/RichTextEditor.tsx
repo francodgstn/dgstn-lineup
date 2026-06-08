@@ -46,49 +46,52 @@ function ToolbarButton({
 
 function Toolbar({ editor, onImage }: { editor: Editor | null; onImage?: () => void }) {
   if (!editor) return null
-  const C = editor.chain().focus()
+  // Start a fresh chain on every click — a cached chain captures a stale state
+  // and throws "Applying a mismatched transaction" on the second use.
+  const run = (fn: (c: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) =>
+    fn(editor.chain().focus()).run()
   return (
     <div className="flex items-center gap-0.5 flex-wrap px-2 py-1.5 border-b">
-      <ToolbarButton title="Bold" active={editor.isActive('bold')} onClick={() => C.toggleBold().run()}>
+      <ToolbarButton title="Bold" active={editor.isActive('bold')} onClick={() => run((c) => c.toggleBold())}>
         <Bold className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton title="Italic" active={editor.isActive('italic')} onClick={() => C.toggleItalic().run()}>
+      <ToolbarButton title="Italic" active={editor.isActive('italic')} onClick={() => run((c) => c.toggleItalic())}>
         <Italic className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton title="Strikethrough" active={editor.isActive('strike')} onClick={() => C.toggleStrike().run()}>
+      <ToolbarButton title="Strikethrough" active={editor.isActive('strike')} onClick={() => run((c) => c.toggleStrike())}>
         <Strikethrough className="h-3.5 w-3.5" />
       </ToolbarButton>
 
       <div className="w-px h-4 bg-border mx-1" />
 
-      <ToolbarButton title="Heading 1" active={editor.isActive('heading', { level: 1 })} onClick={() => C.toggleHeading({ level: 1 }).run()}>
+      <ToolbarButton title="Heading 1" active={editor.isActive('heading', { level: 1 })} onClick={() => run((c) => c.toggleHeading({ level: 1 }))}>
         <Heading1 className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton title="Heading 2" active={editor.isActive('heading', { level: 2 })} onClick={() => C.toggleHeading({ level: 2 }).run()}>
+      <ToolbarButton title="Heading 2" active={editor.isActive('heading', { level: 2 })} onClick={() => run((c) => c.toggleHeading({ level: 2 }))}>
         <Heading2 className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton title="Heading 3" active={editor.isActive('heading', { level: 3 })} onClick={() => C.toggleHeading({ level: 3 }).run()}>
+      <ToolbarButton title="Heading 3" active={editor.isActive('heading', { level: 3 })} onClick={() => run((c) => c.toggleHeading({ level: 3 }))}>
         <Heading3 className="h-3.5 w-3.5" />
       </ToolbarButton>
 
       <div className="w-px h-4 bg-border mx-1" />
 
-      <ToolbarButton title="Bullet list" active={editor.isActive('bulletList')} onClick={() => C.toggleBulletList().run()}>
+      <ToolbarButton title="Bullet list" active={editor.isActive('bulletList')} onClick={() => run((c) => c.toggleBulletList())}>
         <List className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton title="Numbered list" active={editor.isActive('orderedList')} onClick={() => C.toggleOrderedList().run()}>
+      <ToolbarButton title="Numbered list" active={editor.isActive('orderedList')} onClick={() => run((c) => c.toggleOrderedList())}>
         <ListOrdered className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton title="To-do list" active={editor.isActive('taskList')} onClick={() => C.toggleTaskList().run()}>
+      <ToolbarButton title="To-do list" active={editor.isActive('taskList')} onClick={() => run((c) => c.toggleTaskList())}>
         <ListChecks className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton title="Quote" active={editor.isActive('blockquote')} onClick={() => C.toggleBlockquote().run()}>
+      <ToolbarButton title="Quote" active={editor.isActive('blockquote')} onClick={() => run((c) => c.toggleBlockquote())}>
         <Quote className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton title="Code block" active={editor.isActive('codeBlock')} onClick={() => C.toggleCodeBlock().run()}>
+      <ToolbarButton title="Code block" active={editor.isActive('codeBlock')} onClick={() => run((c) => c.toggleCodeBlock())}>
         <Code className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton title="Divider" onClick={() => C.setHorizontalRule().run()}>
+      <ToolbarButton title="Divider" onClick={() => run((c) => c.setHorizontalRule())}>
         <Minus className="h-3.5 w-3.5" />
       </ToolbarButton>
       {onImage && (
