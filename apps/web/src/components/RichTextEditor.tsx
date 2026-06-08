@@ -5,7 +5,6 @@ import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react'
 import type { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import Image from '@tiptap/extension-image'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { DragHandle } from '@tiptap/extension-drag-handle-react'
@@ -15,6 +14,7 @@ import {
 } from 'lucide-react'
 import { SlashCommand } from './editor/SlashCommand'
 import { SlashCommandList, type SlashItem, type SlashCommandListRef } from './editor/SlashCommandList'
+import { ResizableImage } from './editor/ResizableImage'
 
 type Range = { from: number; to: number }
 
@@ -203,7 +203,7 @@ export const RichTextEditor = memo(function RichTextEditor({
       Placeholder.configure({
         placeholder: placeholder ?? 'Write something, or press “/” for commands…',
       }),
-      Image,
+      ResizableImage,
       TaskList,
       TaskItem.configure({ nested: true }),
       SlashCommand.configure({
