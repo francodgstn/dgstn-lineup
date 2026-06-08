@@ -23,13 +23,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Settings, IdCard, Pencil, Trash2, Plus, ChevronUp, ChevronDown, RotateCcw, Languages, Lock } from 'lucide-react'
+import { Settings, IdCard, Pencil, Trash2, Plus, ChevronUp, ChevronDown, RotateCcw, Languages, Lock, Mail, Eye, EyeOff } from 'lucide-react'
 import { deleteField } from 'firebase/firestore'
 import {
   ORGANIZATIONS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
   DEFAULT_ORG_MEMBERSHIP_STATUSES,
 } from '@linyup/shared'
 import type { OrgMembershipStatusDef, MembershipStatusColor, Organization } from '@linyup/shared'
+import { useSmtpSettings } from '@/hooks/useSmtpSettings'
+import { Separator } from '@/components/ui/separator'
 
 // ─── colour config ────────────────────────────────────────────────────────────
 
@@ -616,6 +618,208 @@ function MembershipLockCard({
   )
 }
 
+// ─── org smtp card ────────────────────────────────────────────────────────────
+
+function OrgSmtpCard({ orgId, isAdmin }: { orgId: string; isAdmin: boolean }) {
+  const { data: smtpData, isLoading, save, test, isSaving, isTesting } = useSmtpSettings('org', orgId)
+
+  const [host, setHost] = useState('')
+  const [port, setPort] = useState(587)
+  const [secure, setSecure] = useState(false)
+  const [user, setUser] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [fromName, setFromName] = useState('')
+  const [fromEmail, setFromEmail] = useState('')
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  useEffect(() => {
+    if (!smtpData) return
+    setHost(smtpData.host ?? '')
+    setPort(smtpData.port ?? 587)
+    setSecure(smtpData.secure ?? false)
+    setUser(smtpData.user ?? '')
+    setFromName(smtpData.from_name ?? '')
+    setFromEmail(smtpData.from_email ?? '')
+  }, [smtpData])
+
+  function showToastMsg(msg: string, ok: boolean) {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  async function handleSave() {
+    try {
+      const payload: Parameters<typeof save>[0] = {
+        host,
+        port,
+        secure,
+        user,
+        from_name: fromName,
+        from_email: fromEmail,
+      }
+      if (password.trim()) payload.password = password.trim()
+      await save(payload)
+      setPassword('')
+      showToastMsg('Settings saved.', true)
+    } catch (err) {
+      showToastMsg((err as Error).message ?? 'Save failed.', false)
+    }
+  }
+
+  async function handleTest() {
+    try {
+      const result = await test()
+      showToastMsg(result.success ? 'Test email sent successfully.' : (result.message ?? 'Test failed.'), result.success)
+    } catch (err) {
+      showToastMsg((err as Error).message ?? 'Test failed.', false)
+    }
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Mail className="h-4 w-4" />
+            Outbound email (SMTP)
+          </CardTitle>
+          <CardDescription>
+            Configure a shared SMTP server for all clubs in this organisation. Club-level SMTP settings override this.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                  <Label htmlFor="org-smtp-host">Host</Label>
+                  <Input
+                    id="org-smtp-host"
+                    value={host}
+                    onChange={(e) => setHost(e.target.value)}
+                    placeholder="smtp.example.com"
+                    disabled={!isAdmin}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="org-smtp-port">Port</Label>
+                  <Input
+                    id="org-smtp-port"
+                    type="number"
+                    value={port}
+                    onChange={(e) => setPort(Number(e.target.value))}
+                    placeholder="587"
+                    disabled={!isAdmin}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  id="org-smtp-secure"
+                  type="checkbox"
+                  checked={secure}
+                  onChange={(e) => setSecure(e.target.checked)}
+                  className="h-4 w-4 rounded border-input accent-primary"
+                  disabled={!isAdmin}
+                />
+                <Label htmlFor="org-smtp-secure" className="cursor-pointer">Use TLS (port 465)</Label>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="org-smtp-user">Username</Label>
+                <Input
+                  id="org-smtp-user"
+                  value={user}
+                  onChange={(e) => setUser(e.target.value)}
+                  placeholder="user@example.com"
+                  autoComplete="off"
+                  disabled={!isAdmin}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="org-smtp-password">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="org-smtp-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Leave blank to keep existing password"
+                    autoComplete="new-password"
+                    className="pr-9"
+                    disabled={!isAdmin}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-1.5">
+                <Label htmlFor="org-smtp-from-name">From name</Label>
+                <Input
+                  id="org-smtp-from-name"
+                  value={fromName}
+                  onChange={(e) => setFromName(e.target.value)}
+                  placeholder="My Organisation"
+                  disabled={!isAdmin}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="org-smtp-from-email">From email</Label>
+                <Input
+                  id="org-smtp-from-email"
+                  type="email"
+                  value={fromEmail}
+                  onChange={(e) => setFromEmail(e.target.value)}
+                  placeholder="noreply@example.com"
+                  disabled={!isAdmin}
+                />
+              </div>
+
+              {isAdmin && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Button size="sm" onClick={handleSave} disabled={isSaving || isTesting}>
+                    {isSaving ? 'Saving…' : 'Save settings'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleTest} disabled={isSaving || isTesting}>
+                    {isTesting ? 'Sending…' : 'Send test email'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white z-50 ${
+          toast.ok ? 'bg-green-600' : 'bg-destructive'
+        }`}>
+          {toast.msg}
+        </div>
+      )}
+    </>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function OrgSettingsPage() {
@@ -705,6 +909,8 @@ export default function OrgSettingsPage() {
       <MembershipLockCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={(msg, type) => showToast(msg, type)} />
 
       <MembershipStatusesCard orgId={orgId} isAdmin={isAdmin} />
+
+      <OrgSmtpCard orgId={orgId} isAdmin={isAdmin} />
 
       {toast && (
         <div className={`fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white z-50 ${

@@ -28,7 +28,20 @@ export interface PayrexxGatewayConfig {
 
 export type PaymentGatewayConfig = StripeGatewayConfig | PayrexxGatewayConfig
 
-export type IntegrationType = 'payment_gateway'
+export type IntegrationType = 'payment_gateway' | 'email_smtp'
+
+export interface SmtpIntegration {
+  type: 'email_smtp'
+  host: string
+  port: number
+  secure: boolean        // true = TLS on connect (port 465), false = STARTTLS (port 587)
+  user: string
+  password_enc: string   // AES-256-GCM encrypted ciphertext (base64)
+  from_name: string
+  from_email: string
+  use_org_smtp?: boolean // team-level only: if true, ignore above and use org config
+  updatedAt: Timestamp
+}
 
 export interface TeamIntegration {
   id: string

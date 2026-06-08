@@ -834,6 +834,13 @@ service cloud.firestore {
         // Only org admin can create/update requests (approval done server-side)
         allow write: if hasOrgRole(orgId, 'org_admin');
       }
+
+      // SMTP and other org-level integrations (password stored encrypted)
+      match /integrations/{integrationId} {
+        allow read:   if isOrgMember(orgId);
+        allow write:  if hasOrgRole(orgId, 'org_admin');
+        allow delete: if hasOrgRole(orgId, 'org_admin');
+      }
     }
 
     // ── Early access requests (pre-launch landing page) ───────────────────────
