@@ -29,9 +29,9 @@ import {
 import { RichTextEditor } from '@/components/RichTextEditor'
 import { toast } from 'sonner'
 import {
-  ChevronLeft, Plus, Pencil, Trash2, FileText, Video, Music, GraduationCap, Upload, X,
+  ChevronLeft, Plus, Pencil, Trash2, FileText, Video, Music, GraduationCap, Upload, X, Paperclip,
 } from 'lucide-react'
-import type { Lesson, LessonType, MediaSource, CourseStatus } from '@linyup/shared'
+import type { Lesson, LessonType, MediaSource, CourseStatus, LessonAttachment } from '@linyup/shared'
 import {
   useCourse, useModules, useLessons,
   updateCourse, deleteCourse,
@@ -58,6 +58,8 @@ async function uploadFile(file: File, path: string): Promise<string> {
 // Rendered inline to the right of the course structure (not a modal). The parent
 // remounts it via `key` when the selected lesson changes, so form state resets.
 
+type FeaturedKind = 'none' | 'video' | 'audio'
+
 function LessonPanel({
   initial, moduleId, newOrder, teamId, courseId, onSaved, onClose,
 }: {
@@ -70,38 +72,73 @@ function LessonPanel({
   onClose: () => void
 }) {
   const t = useTranslations('Courses')
+  const limits = getClubCoursesLimits()
   const [title, setTitle] = useState(initial?.title ?? '')
-  const [type, setType] = useState<LessonType>(initial?.type ?? 'text')
   const [body, setBody] = useState(initial?.body ?? '')
+  const [featured, setFeatured] = useState<FeaturedKind>(
+    initial?.type === 'video' ? 'video' : initial?.type === 'audio' ? 'audio' : 'none',
+  )
   const [mediaSource, setMediaSource] = useState<MediaSource>(initial?.mediaSource ?? 'youtube')
   const [mediaUrl, setMediaUrl] = useState(initial?.mediaUrl ?? '')
+  const [attachments, setAttachments] = useState<LessonAttachment[]>(initial?.attachments ?? [])
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploadingMedia, setUploadingMedia] = useState(false)
+  const [uploadingAttach, setUploadingAttach] = useState(false)
+  const mediaFileRef = useRef<HTMLInputElement>(null)
+  const attachFileRef = useRef<HTMLInputElement>(null)
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // Image uploads for the rich-text body
+  async function uploadBodyImage(file: File): Promise<string> {
+    return uploadFile(file, `teams/${teamId}/courses/${courseId}/lessons/images/${Date.now()}`)
+  }
+
+  async function handleMediaUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setUploading(true)
+    setUploadingMedia(true)
     try {
-      const url = await uploadFile(file, `teams/${teamId}/courses/${courseId}/lessons/${Date.now()}`)
+      const url = await uploadFile(file, `teams/${teamId}/courses/${courseId}/lessons/media/${Date.now()}`)
       setMediaUrl(url)
       setMediaSource('upload')
     } catch {
       toast.error(t('errorUpload'))
     } finally {
-      setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
+      setUploadingMedia(false)
+      if (mediaFileRef.current) mediaFileRef.current.value = ''
+    }
+  }
+
+  async function handleAttachUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (attachments.length >= limits.maxAttachmentsPerLesson) {
+      toast.error(t('limitAttachments', { max: limits.maxAttachmentsPerLesson }))
+      if (attachFileRef.current) attachFileRef.current.value = ''
+      return
+    }
+    if (file.size > limits.maxAttachmentSizeMB * 1024 * 1024) {
+      toast.error(t('limitAttachmentSize', { max: limits.maxAttachmentSizeMB }))
+      if (attachFileRef.current) attachFileRef.current.value = ''
+      return
+    }
+    setUploadingAttach(true)
+    try {
+      const url = await uploadFile(file, `teams/${teamId}/courses/${courseId}/lessons/attachments/${Date.now()}`)
+      setAttachments((prev) => [...prev, { name: file.name, url, size: file.size, contentType: file.type }])
+    } catch {
+      toast.error(t('errorUpload'))
+    } finally {
+      setUploadingAttach(false)
+      if (attachFileRef.current) attachFileRef.current.value = ''
     }
   }
 
   async function handleSave() {
     setSaving(true)
     try {
-      const data: LessonInput = { title: title.trim(), type }
-      if (type === 'text') {
-        data.body = body
-      } else {
+      const type: LessonType = featured === 'none' ? 'text' : featured
+      const data: LessonInput = { title: title.trim(), type, body, attachments }
+      if (featured !== 'none') {
         data.mediaSource = mediaSource
         data.mediaUrl = mediaUrl.trim()
       }
@@ -119,8 +156,9 @@ function LessonPanel({
     }
   }
 
-  const acceptFor = type === 'video' ? 'video/*' : 'audio/*'
-  const canSave = !!title.trim() && (type === 'text' || !!mediaUrl.trim()) && !saving && !uploading
+  const acceptFor = featured === 'video' ? 'video/*' : 'audio/*'
+  const mediaIncomplete = featured !== 'none' && !mediaUrl.trim()
+  const canSave = !!title.trim() && !mediaIncomplete && !saving && !uploadingMedia && !uploadingAttach
 
   return (
     <div className="rounded-lg border bg-card lg:sticky lg:top-4">
@@ -132,70 +170,111 @@ function LessonPanel({
         </Button>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-5">
+        {/* Title */}
         <div className="space-y-1.5">
           <Label htmlFor="lesson-title">{t('fieldTitle')}</Label>
           <Input id="lesson-title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
         </div>
 
+        {/* Content (always available) */}
         <div className="space-y-1.5">
-          <Label>{t('fieldType')}</Label>
-          <Select value={type} onValueChange={(v) => setType(v as LessonType)}>
+          <Label>{t('fieldContent')}</Label>
+          <RichTextEditor
+            value={initial?.body ?? ''}
+            onChange={setBody}
+            minHeight={240}
+            placeholder={t('contentPlaceholder')}
+            onUploadImage={uploadBodyImage}
+          />
+          <p className="text-xs text-muted-foreground">{t('contentHint')}</p>
+        </div>
+
+        {/* Featured media (optional) */}
+        <div className="space-y-2">
+          <Label>{t('fieldFeaturedMedia')}</Label>
+          <Select value={featured} onValueChange={(v) => setFeatured(v as FeaturedKind)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="text">{t('typeText')}</SelectItem>
+              <SelectItem value="none">{t('featuredNone')}</SelectItem>
               <SelectItem value="video">{t('typeVideo')}</SelectItem>
               <SelectItem value="audio">{t('typeAudio')}</SelectItem>
             </SelectContent>
           </Select>
+
+          {featured !== 'none' && (
+            <div className="space-y-3 rounded-md border bg-muted/30 p-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">{t('fieldMediaSource')}</Label>
+                <Select value={mediaSource} onValueChange={(v) => setMediaSource(v as MediaSource)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {featured === 'video' && <SelectItem value="youtube">YouTube</SelectItem>}
+                    {featured === 'video' && <SelectItem value="vimeo">Vimeo</SelectItem>}
+                    <SelectItem value="url">{t('sourceUrl')}</SelectItem>
+                    <SelectItem value="upload">{t('sourceUpload')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {mediaSource === 'upload' ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">{t('fieldFile')}</Label>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => mediaFileRef.current?.click()} disabled={uploadingMedia}>
+                      <Upload className="h-4 w-4 mr-1.5" />
+                      {uploadingMedia ? t('uploading') : t('chooseFile')}
+                    </Button>
+                    {mediaUrl && !uploadingMedia && <span className="text-xs text-green-600">{t('fileReady')}</span>}
+                  </div>
+                  <input ref={mediaFileRef} type="file" accept={acceptFor} onChange={handleMediaUpload} className="hidden" />
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">{t('fieldMediaUrl')}</Label>
+                  <Input value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="https://…" />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {type === 'text' ? (
-          <div className="space-y-1.5">
-            <Label>{t('fieldBody')}</Label>
-            <RichTextEditor value={initial?.body ?? ''} onChange={setBody} minHeight={240} />
-            <p className="text-xs text-muted-foreground">{t('contentHint')}</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>{t('fieldMediaSource')}</Label>
-              <Select value={mediaSource} onValueChange={(v) => setMediaSource(v as MediaSource)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="youtube">YouTube</SelectItem>
-                  <SelectItem value="vimeo">Vimeo</SelectItem>
-                  <SelectItem value="url">{t('sourceUrl')}</SelectItem>
-                  <SelectItem value="upload">{t('sourceUpload')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {mediaSource === 'upload' ? (
-              <div className="space-y-1.5">
-                <Label>{t('fieldFile')}</Label>
-                <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                    <Upload className="h-4 w-4 mr-1.5" />
-                    {uploading ? t('uploading') : t('chooseFile')}
+        {/* Attachments (optional) */}
+        <div className="space-y-2">
+          <Label>{t('fieldAttachments')}</Label>
+          {attachments.length > 0 && (
+            <ul className="space-y-1">
+              {attachments.map((a, i) => (
+                <li key={a.url} className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
+                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-w-0 text-sm hover:underline">
+                    <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{a.name}</span>
+                  </a>
+                  <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 text-destructive hover:text-destructive"
+                    onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}>
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
-                  {mediaUrl && !uploading && <span className="text-xs text-green-600">{t('fileReady')}</span>}
-                </div>
-                <input ref={fileRef} type="file" accept={acceptFor} onChange={handleUpload} className="hidden" />
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <Label htmlFor="lesson-url">{t('fieldMediaUrl')}</Label>
-                <Input
-                  id="lesson-url"
-                  value={mediaUrl}
-                  onChange={(e) => setMediaUrl(e.target.value)}
-                  placeholder="https://…"
-                />
-              </div>
-            )}
-          </div>
-        )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Button
+            type="button" variant="outline" size="sm"
+            disabled={uploadingAttach || attachments.length >= limits.maxAttachmentsPerLesson}
+            onClick={() => attachFileRef.current?.click()}
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            {uploadingAttach ? t('uploading') : t('addAttachment')}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            {t('attachmentsHint', { count: attachments.length, max: limits.maxAttachmentsPerLesson, size: limits.maxAttachmentSizeMB })}
+          </p>
+          <input
+            ref={attachFileRef} type="file"
+            accept="application/pdf,image/*"
+            onChange={handleAttachUpload} className="hidden"
+          />
+        </div>
       </div>
 
       <div className="flex justify-end gap-2 px-4 py-3 border-t bg-muted/30">
@@ -321,6 +400,9 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
                           <div className="flex items-center gap-2 min-w-0">
                             <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
                             <span className="text-sm truncate">{lesson.title}</span>
+                            {!!lesson.attachments?.length && (
+                              <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+                            )}
                           </div>
                           <Button
                             size="icon" variant="ghost"

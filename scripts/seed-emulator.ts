@@ -940,6 +940,7 @@ async function seedCourses(teamId: string, uid: string) {
     mediaSource?: 'youtube' | 'vimeo' | 'url' | 'upload'
     mediaUrl?: string
     durationSeconds?: number
+    attachments?: { name: string; url: string; size?: number; contentType?: string }[]
   }
   type ModuleSeed = { title: string; summary?: string; lessons: LessonSeed[] }
   type CourseSeed = {
@@ -997,6 +998,9 @@ async function seedCourses(teamId: string, uid: string) {
               title: 'Positional hierarchy cheat sheet',
               type:  'text',
               body:  '<h3>Positional hierarchy</h3><p>From worst to best for you:</p><ol><li>Mounted / back taken (escape!)</li><li>Side control bottom</li><li>Guard (neutral)</li><li>Side control top</li><li>Mount</li><li>Back control (best)</li></ol><p>Always fight to improve your position before hunting for a submission.</p>',
+              attachments: [
+                { name: 'positional-hierarchy.pdf', url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', size: 13264, contentType: 'application/pdf' },
+              ],
             },
           ],
         },
@@ -1078,6 +1082,7 @@ async function seedCourses(teamId: string, uid: string) {
             ...(l.mediaSource     !== undefined ? { mediaSource: l.mediaSource }         : {}),
             ...(l.mediaUrl        !== undefined ? { mediaUrl: l.mediaUrl }               : {}),
             ...(l.durationSeconds !== undefined ? { durationSeconds: l.durationSeconds } : {}),
+            ...(l.attachments     !== undefined ? { attachments: l.attachments }         : {}),
             created_at: ts(daysFromNow(-18 + ci)),
             updated_at: ts(daysFromNow(-2)),
           })

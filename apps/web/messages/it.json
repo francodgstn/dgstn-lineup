@@ -1306,6 +1306,15 @@
     "deleteCourseTitle": "Eliminare il corso?",
     "deleteCourseDesc": "Il corso e tutti i suoi moduli e lezioni verranno eliminati definitivamente.",
     "contentHint": "Usa la barra degli strumenti per formattare la lezione — titoli, elenchi ed enfasi.",
-    "selectLessonHint": "Seleziona una lezione a sinistra per modificarla, oppure aggiungine una nuova."
+    "selectLessonHint": "Seleziona una lezione a sinistra per modificarla, oppure aggiungine una nuova.",
+    "fieldContent": "Contenuto",
+    "contentPlaceholder": "Scrivi la lezione, oppure premi “/” per i blocchi…",
+    "fieldFeaturedMedia": "Media principale",
+    "featuredNone": "Nessuno",
+    "fieldAttachments": "Allegati",
+    "addAttachment": "Aggiungi file",
+    "attachmentsHint": "{count}/{max} file · PDF o immagine, fino a {size} MB ciascuno",
+    "limitAttachments": "Puoi allegare al massimo {max} file per lezione.",
+    "limitAttachmentSize": "I file devono essere al massimo {max} MB."
   }
 }

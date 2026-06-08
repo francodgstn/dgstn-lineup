@@ -1316,6 +1316,15 @@
     "deleteCourseTitle": "Kurs löschen?",
     "deleteCourseDesc": "Dadurch werden der Kurs und alle seine Module und Lektionen dauerhaft gelöscht.",
     "contentHint": "Formatiere deine Lektion mit der Symbolleiste — Überschriften, Listen und Hervorhebungen.",
-    "selectLessonHint": "Wähle links eine Lektion zum Bearbeiten aus oder füge eine neue hinzu."
+    "selectLessonHint": "Wähle links eine Lektion zum Bearbeiten aus oder füge eine neue hinzu.",
+    "fieldContent": "Inhalt",
+    "contentPlaceholder": "Schreibe die Lektion oder drücke „/“ für Blöcke …",
+    "fieldFeaturedMedia": "Hauptmedium",
+    "featuredNone": "Keines",
+    "fieldAttachments": "Anhänge",
+    "addAttachment": "Datei hinzufügen",
+    "attachmentsHint": "{count}/{max} Dateien · PDF oder Bild, je max. {size} MB",
+    "limitAttachments": "Du kannst höchstens {max} Dateien pro Lektion anhängen.",
+    "limitAttachmentSize": "Dateien dürfen höchstens {max} MB groß sein."
   }
 }

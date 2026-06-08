@@ -177,7 +177,7 @@ export async function deleteModule(courseId: string, moduleId: string): Promise<
 
 export type LessonInput = Pick<
   Lesson,
-  'title' | 'type' | 'body' | 'mediaSource' | 'mediaUrl' | 'durationSeconds'
+  'title' | 'type' | 'body' | 'mediaSource' | 'mediaUrl' | 'durationSeconds' | 'attachments'
 >
 
 export async function createLesson(input: {

@@ -53,7 +53,20 @@ export interface CourseModule {
   updated_at: Timestamp
 }
 
+// A downloadable resource attached to a lesson (PDF, image, etc.).
+export interface LessonAttachment {
+  name: string
+  url: string
+  size?: number // bytes
+  contentType?: string
+}
+
 // Subcollection: courses/{courseId}/lessons
+//
+// A lesson is mixed content (as in most LMS): a rich-text body is always
+// available, an optional "featured" media clip (video/audio) can sit alongside
+// it, and any number of downloadable attachments can be added. `type` is the
+// primary format, derived from the featured media — used for the list icon.
 export interface Lesson {
   id: string
   courseId: string
@@ -62,14 +75,14 @@ export interface Lesson {
   title: string
   type: LessonType
   order: number
-  // type === 'text'
+  // rich body — always available regardless of type
   body?: string // rich text (HTML, produced by the shared RichTextEditor)
-  // type === 'audio' | 'video'
+  // optional featured media (when type is 'audio' | 'video')
   mediaSource?: MediaSource
   mediaUrl?: string // external URL or Storage download URL
   durationSeconds?: number
-  // shared
-  attachmentUrls?: string[] // PDFs etc. (Storage)
+  // downloadable resources
+  attachments?: LessonAttachment[]
   isPreview?: boolean // reserved for future gated preview
   created_at: Timestamp
   updated_at: Timestamp

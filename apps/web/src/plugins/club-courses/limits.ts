@@ -10,6 +10,8 @@ export const CLUB_COURSES_DEFAULT_LIMITS = {
   maxCoursesPerTeam: 20,
   maxModulesPerCourse: 30,
   maxLessonsPerCourse: 100,
+  maxAttachmentsPerLesson: 10,
+  maxAttachmentSizeMB: 25,
 } as const
 
 export type ClubCoursesLimits = typeof CLUB_COURSES_DEFAULT_LIMITS

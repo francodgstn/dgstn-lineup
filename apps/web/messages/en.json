@@ -1321,6 +1321,15 @@
     "deleteCourseTitle": "Delete course?",
     "deleteCourseDesc": "This will permanently delete the course and all its modules and lessons.",
     "contentHint": "Use the toolbar to format your lesson — add headings, lists and emphasis.",
-    "selectLessonHint": "Select a lesson on the left to edit it, or add a new one."
+    "selectLessonHint": "Select a lesson on the left to edit it, or add a new one.",
+    "fieldContent": "Content",
+    "contentPlaceholder": "Write the lesson, or press “/” for blocks…",
+    "fieldFeaturedMedia": "Featured media",
+    "featuredNone": "None",
+    "fieldAttachments": "Attachments",
+    "addAttachment": "Add file",
+    "attachmentsHint": "{count}/{max} files · PDF or image, up to {size} MB each",
+    "limitAttachments": "You can attach at most {max} files per lesson.",
+    "limitAttachmentSize": "Files must be {max} MB or smaller."
   }
 }
