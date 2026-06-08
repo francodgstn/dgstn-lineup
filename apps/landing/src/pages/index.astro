@@ -56,6 +56,11 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
       </form>
 
       <p class="form-status" id="form-status" aria-live="polite"></p>
+
+      <p class="price-nudge">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        Priced for real coaches and clubs. Plans you will love.
+      </p>
     </section>
 
     <!-- ── Feature highlights ────────────────────────────────────────── -->
@@ -440,6 +445,16 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
   }
   .form-status.success { color: oklch(0.78 0.18 152); }
   .form-status.error   { color: oklch(0.72 0.20 25); }
+
+  .price-nudge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 20px;
+    font-size: 13px;
+    color: oklch(0.60 0.06 288);
+  }
+  .price-nudge svg { flex-shrink: 0; color: oklch(0.68 0.16 292); }
 
   /* ── Features ───────────────────────────────────────────────────────── */
   .features {
