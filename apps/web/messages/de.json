@@ -1328,5 +1328,29 @@
     "limitAttachmentSize": "Dateien dürfen höchstens {max} MB groß sein.",
     "limitImageSize": "Bilder dürfen höchstens {max} MB groß sein.",
     "optional": "optional"
+  },
+  "Auth": {
+    "orWithEmail": "oder mit E-Mail",
+    "continueWith": {
+      "google": "Mit Google fortfahren",
+      "apple": "Mit Apple fortfahren",
+      "facebook": "Mit Facebook fortfahren"
+    },
+    "continueWithEmailLink": "Mit Anmeldelink fortfahren",
+    "emailLinkLabel": "E-Mail-Adresse",
+    "emailLinkPlaceholder": "du@beispiel.com",
+    "sendEmailLink": "Anmeldelink per E-Mail senden",
+    "backToOptions": "Zurück zu allen Optionen",
+    "magicSentTitle": "Posteingang prüfen",
+    "magicSentBody": "Wir haben einen Anmeldelink an {email} gesendet. Öffne ihn auf diesem Gerät, um fortzufahren.",
+    "finishing": "Anmeldung läuft…",
+    "confirmEmailBody": "Bestätige die E-Mail-Adresse, an die dieser Link gesendet wurde.",
+    "confirmEmailButton": "Weiter",
+    "linkExpired": "Dieser Anmeldelink ist ungültig oder abgelaufen.",
+    "backToLogin": "Zurück zur Anmeldung",
+    "errorProvider": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
+    "errorAccountExists": "Mit dieser E-Mail besteht bereits ein Konto mit einer anderen Anmeldemethode.",
+    "errorInvalidEmail": "Gib eine gültige E-Mail-Adresse ein.",
+    "errorMagicLink": "Anmeldelink konnte nicht gesendet werden. Bitte versuche es erneut."
   }
 }

@@ -1328,5 +1328,29 @@
     "limitAttachmentSize": "Les fichiers doivent faire {max} Mo ou moins.",
     "limitImageSize": "Les images doivent faire {max} Mo ou moins.",
     "optional": "facultatif"
+  },
+  "Auth": {
+    "orWithEmail": "ou avec un e-mail",
+    "continueWith": {
+      "google": "Continuer avec Google",
+      "apple": "Continuer avec Apple",
+      "facebook": "Continuer avec Facebook"
+    },
+    "continueWithEmailLink": "Continuer avec un lien de connexion",
+    "emailLinkLabel": "Adresse e-mail",
+    "emailLinkPlaceholder": "vous@exemple.com",
+    "sendEmailLink": "M'envoyer un lien de connexion",
+    "backToOptions": "Retour à toutes les options",
+    "magicSentTitle": "Vérifiez votre boîte de réception",
+    "magicSentBody": "Nous avons envoyé un lien de connexion à {email}. Ouvrez-le sur cet appareil pour continuer.",
+    "finishing": "Connexion en cours…",
+    "confirmEmailBody": "Confirmez l'adresse e-mail à laquelle ce lien a été envoyé.",
+    "confirmEmailButton": "Continuer",
+    "linkExpired": "Ce lien de connexion est invalide ou a expiré.",
+    "backToLogin": "Retour à la connexion",
+    "errorProvider": "Échec de la connexion. Veuillez réessayer.",
+    "errorAccountExists": "Un compte existe déjà avec cet e-mail via une autre méthode de connexion.",
+    "errorInvalidEmail": "Saisissez une adresse e-mail valide.",
+    "errorMagicLink": "Impossible d'envoyer le lien de connexion. Veuillez réessayer."
   }
 }

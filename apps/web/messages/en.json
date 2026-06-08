@@ -1333,5 +1333,29 @@
     "limitAttachmentSize": "Files must be {max} MB or smaller.",
     "limitImageSize": "Images must be {max} MB or smaller.",
     "optional": "optional"
+  },
+  "Auth": {
+    "orWithEmail": "or with email",
+    "continueWith": {
+      "google": "Continue with Google",
+      "apple": "Continue with Apple",
+      "facebook": "Continue with Facebook"
+    },
+    "continueWithEmailLink": "Continue with a sign-in link",
+    "emailLinkLabel": "Email address",
+    "emailLinkPlaceholder": "you@example.com",
+    "sendEmailLink": "Email me a sign-in link",
+    "backToOptions": "Back to all options",
+    "magicSentTitle": "Check your inbox",
+    "magicSentBody": "We sent a sign-in link to {email}. Open it on this device to continue.",
+    "finishing": "Signing you in…",
+    "confirmEmailBody": "Confirm the email address this link was sent to.",
+    "confirmEmailButton": "Continue",
+    "linkExpired": "This sign-in link is invalid or has expired.",
+    "backToLogin": "Back to sign in",
+    "errorProvider": "Could not sign in. Please try again.",
+    "errorAccountExists": "An account already exists with this email using a different sign-in method.",
+    "errorInvalidEmail": "Enter a valid email address.",
+    "errorMagicLink": "Could not send the sign-in link. Please try again."
   }
 }

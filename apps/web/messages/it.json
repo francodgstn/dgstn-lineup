@@ -1318,5 +1318,29 @@
     "limitAttachmentSize": "I file devono essere al massimo {max} MB.",
     "limitImageSize": "Le immagini devono essere al massimo {max} MB.",
     "optional": "facoltativo"
+  },
+  "Auth": {
+    "orWithEmail": "o con l'e-mail",
+    "continueWith": {
+      "google": "Continua con Google",
+      "apple": "Continua con Apple",
+      "facebook": "Continua con Facebook"
+    },
+    "continueWithEmailLink": "Continua con un link di accesso",
+    "emailLinkLabel": "Indirizzo e-mail",
+    "emailLinkPlaceholder": "tu@esempio.com",
+    "sendEmailLink": "Inviami un link di accesso",
+    "backToOptions": "Torna a tutte le opzioni",
+    "magicSentTitle": "Controlla la tua casella",
+    "magicSentBody": "Abbiamo inviato un link di accesso a {email}. Aprilo su questo dispositivo per continuare.",
+    "finishing": "Accesso in corso…",
+    "confirmEmailBody": "Conferma l'indirizzo e-mail a cui è stato inviato questo link.",
+    "confirmEmailButton": "Continua",
+    "linkExpired": "Questo link di accesso non è valido o è scaduto.",
+    "backToLogin": "Torna all'accesso",
+    "errorProvider": "Accesso non riuscito. Riprova.",
+    "errorAccountExists": "Esiste già un account con questa e-mail tramite un altro metodo di accesso.",
+    "errorInvalidEmail": "Inserisci un indirizzo e-mail valido.",
+    "errorMagicLink": "Impossibile inviare il link di accesso. Riprova."
   }
 }
