@@ -1071,7 +1071,8 @@
     "gamificationNavLabel": "Gamification",
     "limitReachedHint": "Limite di plugin raggiunto",
     "limitBannerTitle": "{limit, plural, one {Il tuo piano include # plugin} other {Il tuo piano include # plugin}}",
-    "limitBannerBody": "Rimuovi il plugin attuale per provarne un altro o esegui l'upgrade per accesso illimitato."
+    "limitBannerBody": "Rimuovi il plugin attuale per provarne un altro o esegui l'upgrade per accesso illimitato.",
+    "categoryEngagement": "Coinvolgimento"
   },
   "Org": {
     "title": "Organizzazione",

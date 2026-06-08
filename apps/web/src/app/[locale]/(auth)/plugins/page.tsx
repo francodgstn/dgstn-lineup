@@ -109,6 +109,7 @@ function PluginCard({
     communications: t('categoryCommunications'),
     website: t('categoryWebsite'),
     content: t('categoryContent'),
+    engagement: t('categoryEngagement'),
     payments: 'Payments',
     analytics: 'Analytics',
   }
@@ -275,6 +276,7 @@ export default function PluginsPage() {
     { key: 'communications', label: t('categoryCommunications') },
     { key: 'website',        label: t('categoryWebsite') },
     { key: 'content',        label: t('categoryContent') },
+    { key: 'engagement',     label: t('categoryEngagement') },
   ]
 
   const filteredPlugins = PLUGIN_REGISTRY.filter(

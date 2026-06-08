@@ -4,7 +4,7 @@ export const gamificationManifest: PluginManifest = {
   id: 'gamification',
   nameKey: 'gamificationName',
   descriptionKey: 'gamificationDescription',
-  category: 'analytics',
+  category: 'engagement',
   minPlan: 'club',
   status: 'available',
   iconName: 'Trophy',

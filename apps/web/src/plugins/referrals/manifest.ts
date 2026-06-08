@@ -4,7 +4,7 @@ export const referralsManifest: PluginManifest = {
   id: 'referrals',
   nameKey: 'referralsName',
   descriptionKey: 'referralsDescription',
-  category: 'analytics',
+  category: 'engagement',
   minPlan: 'club',
   status: 'available',
   iconName: 'Gift',
