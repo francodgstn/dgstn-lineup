@@ -74,6 +74,20 @@ export class StripeAdapter implements GatewayAdapter {
     })
   }
 
+  async reactivateSubscription(params: { subscriptionId: string }): Promise<void> {
+    await this.stripe.subscriptions.update(params.subscriptionId, {
+      cancel_at_period_end: false,
+    })
+  }
+
+  async createBillingPortalSession(params: { customerId: string; returnUrl: string }): Promise<{ url: string }> {
+    const session = await this.stripe.billingPortal.sessions.create({
+      customer: params.customerId,
+      return_url: params.returnUrl,
+    })
+    return { url: session.url }
+  }
+
   async parseWebhook(params: {
     payload: string | Buffer
     signature: string

@@ -294,6 +294,79 @@ export const cancelSaasSubscription = onCall(async (request) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// reactivateSaasSubscription — removes cancel_at_period_end flag
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const reactivateSaasSubscription = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+
+  const data = request.data as { teamId?: string }
+  if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
+
+  await assertOwner(request.auth.uid, data.teamId)
+
+  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
+  if (!subDoc.exists) throw new HttpsError('not-found', 'No subscription found')
+
+  const subData = subDoc.data()!
+  const subscriptionId = subData.gateway_data?.subscription_id as string | undefined
+  if (!subscriptionId) throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
+
+  const adapter = await getPlatformStripeAdapter()
+
+  try {
+    await adapter.reactivateSubscription({ subscriptionId })
+  } catch (err) {
+    console.error('reactivateSubscription failed:', err)
+    throw new HttpsError('internal', 'Failed to reactivate subscription')
+  }
+
+  await admin.firestore().collection('saas_subscriptions').doc(data.teamId).update({
+    cancel_at_period_end: false,
+    updated_at: FieldValue.serverTimestamp(),
+  })
+
+  return { success: true }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getBillingPortalUrl — creates a Stripe billing portal session for payment management
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getBillingPortalUrl = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+
+  const data = request.data as { teamId?: string; returnUrl?: string }
+  if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
+
+  await assertOwner(request.auth.uid, data.teamId)
+
+  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
+  if (!subDoc.exists) throw new HttpsError('not-found', 'No subscription found')
+
+  const customerId = subDoc.data()?.gateway_data?.customer_id as string | undefined
+  if (!customerId) throw new HttpsError('failed-precondition', 'No Stripe customer found — contact support')
+
+  const adapter = await getPlatformStripeAdapter()
+  const hostingUrl = getHostingUrl()
+  const returnUrl = data.returnUrl ?? `${hostingUrl}/billing`
+
+  let session: { url: string }
+  try {
+    session = await adapter.createBillingPortalSession({ customerId, returnUrl })
+  } catch (err) {
+    console.error('createBillingPortalSession failed:', err)
+    throw new HttpsError('internal', 'Failed to open billing portal')
+  }
+
+  if (!session.url.startsWith('https://billing.stripe.com/')) {
+    throw new HttpsError('internal', 'Unexpected billing portal URL')
+  }
+
+  return { url: session.url }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // getSaasInvoices — fetches invoice list live from Stripe (not stored in Firestore)
 // ─────────────────────────────────────────────────────────────────────────────
 

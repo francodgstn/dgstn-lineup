@@ -74,7 +74,7 @@ export { verifyMembershipCode, completeMembershipSignup } from './auth/completeM
 export { generateCoachSlots, generateCoachSlotsScheduled, onCoachAvailabilityWritten } from './coaching'
 
 // SaaS billing (Linyup's own platform subscriptions — Stripe)
-export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices } from './saas-billing'
+export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices, reactivateSaasSubscription, getBillingPortalUrl } from './saas-billing'
 
 // Organizations (multi-club tier)
 export {
