@@ -58,6 +58,10 @@ export interface PluginManifest {
   minPlan: SaasPlan
   status: PluginStatus
   recommended?: boolean    // surfaced with a "Recommended" tag and floated to the top
+  // When set, this plugin is available to the Coach plan as a paid monthly
+  // add-on (à la carte). Club/Org include all plugins regardless. Plugins
+  // without `addon` are upgrade-locked for coaches.
+  addon?: { coachPriceMonthly: number; stripeLookupKey: string }
 
   iconName: string         // lucide icon name resolved at runtime
   automationTriggers?: PluginAutomationTrigger[]

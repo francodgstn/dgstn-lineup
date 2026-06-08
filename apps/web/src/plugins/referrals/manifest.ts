@@ -7,6 +7,7 @@ export const referralsManifest: PluginManifest = {
   category: 'engagement',
   minPlan: 'club',
   status: 'available',
+  addon: { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_referrals_monthly' },
   iconName: 'Gift',
   hasOwnerConfig: false,
   navContributions: [

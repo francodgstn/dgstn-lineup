@@ -14,10 +14,11 @@ import {
   INSTALLED_PLUGINS_SUBCOLLECTION,
   TEAM_MEMBERS_SUBCOLLECTION,
 } from '@linyup/shared'
-import type { PluginManifest, InstalledPlugin, PluginCategory } from '@linyup/shared'
-import { pluginInstallLimit } from '@linyup/shared'
+import type { PluginManifest, InstalledPlugin, PluginCategory, PluginAccess } from '@linyup/shared'
+import { pluginAccessForPlan } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { usePlan } from '@/hooks/usePlan'
+import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -74,22 +75,24 @@ type CategoryFilter = 'all' | PluginCategory
 
 function PluginCard({
   manifest,
+  access,
   isInstalled,
   isOwner,
   onInstall,
   onRemove,
   onConfigure,
+  onUpgrade,
   installing,
-  blockedByLimit,
 }: {
   manifest: PluginManifest
+  access: PluginAccess
   isInstalled: boolean
   isOwner: boolean
   onInstall: () => void
   onRemove: () => void
   onConfigure: () => void
+  onUpgrade: () => void
   installing: boolean
-  blockedByLimit: boolean
 }) {
   const t = useTranslations('Plugins')
 
@@ -114,7 +117,16 @@ function PluginCard({
     analytics: 'Analytics',
   }
 
-  const canInstall = isOwner && manifest.status !== 'coming_soon' && !blockedByLimit
+  const accessBadge =
+    access.kind === 'included' ? (
+      <Badge variant="outline" className="text-xs border-green-500/50 text-green-600">
+        {t('accessIncluded')}
+      </Badge>
+    ) : access.kind === 'addon' ? (
+      <Badge variant="secondary" className="text-xs border-primary/30 bg-primary/10 text-primary">
+        {t('addonPrice', { price: access.priceMonthly })}
+      </Badge>
+    ) : null
 
   return (
     <div className="rounded-lg border bg-card p-5 flex flex-col gap-3">
@@ -133,10 +145,13 @@ function PluginCard({
                 {t('recommended')}
               </Badge>
             )}
+            {accessBadge}
             {statusBadge}
           </div>
           <div className="flex items-center gap-1.5">
-            <Badge variant="outline" className="text-xs py-0">{manifest.minPlan}</Badge>
+            {access.kind === 'upgrade' && (
+              <Badge variant="outline" className="text-xs py-0">{access.minPlan}</Badge>
+            )}
             <span className="text-xs text-muted-foreground">{categoryLabel[manifest.category]}</span>
           </div>
         </div>
@@ -149,9 +164,9 @@ function PluginCard({
 
       {/* Actions */}
       {isOwner && (
-        <div className="flex gap-2 mt-auto pt-1">
+        <div className="mt-auto pt-1">
           {isInstalled ? (
-            <>
+            <div className="flex gap-2">
               {manifest.hasOwnerConfig && (
                 <Button size="sm" variant="outline" onClick={onConfigure}>
                   {t('configure')}
@@ -160,21 +175,29 @@ function PluginCard({
               <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
                 {t('remove')}
               </Button>
-            </>
-          ) : (
-            <div className="flex flex-col gap-1">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onInstall}
-                disabled={!canInstall || installing}
-              >
-                {installing ? t('installing') : t('install')}
-              </Button>
-              {blockedByLimit && (
-                <span className="text-xs text-muted-foreground">{t('limitReachedHint')}</span>
-              )}
             </div>
+          ) : access.kind === 'upgrade' ? (
+            <Button size="sm" variant="outline" onClick={onUpgrade}>
+              {t('upgradeCta')}
+            </Button>
+          ) : access.kind === 'addon' ? (
+            // Phase 1: add-on billing not wired yet — show price, disable activation.
+            <div className="flex flex-col gap-1">
+              <Button size="sm" variant="outline" disabled>
+                {t('addonAdd', { price: access.priceMonthly })}
+              </Button>
+              <span className="text-xs text-muted-foreground">{t('addonComingSoon')}</span>
+            </div>
+          ) : (
+            // included (club/org)
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onInstall}
+              disabled={manifest.status === 'coming_soon' || installing}
+            >
+              {installing ? t('installing') : t('install')}
+            </Button>
           )}
         </div>
       )}
@@ -227,15 +250,10 @@ function PluginConfigDialog({
 export default function PluginsPage() {
   const t = useTranslations('Plugins')
   const { user, currentTeamId } = useAuth()
-  const { plugins: installedPlugins, isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
+  const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
   const { data: isOwner, isLoading: roleLoading } = useIsOwner(currentTeamId, user?.uid ?? null)
   const { plan } = usePlan()
-
-  // Plan-based install limit. Coaches get a single slot so they can try one
-  // club-tier plugin; higher plans are unlimited.
-  const installLimit = plan ? pluginInstallLimit(plan) : Infinity
-  const atLimit = installedPlugins.length >= installLimit
-  const showLimitBanner = atLimit && Number.isFinite(installLimit)
+  const { openUpgradeModal } = useUpgradeModal()
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
   const [installingId, setInstallingId] = useState<string | null>(null)
@@ -311,11 +329,11 @@ export default function PluginsPage() {
         <p className="text-sm text-muted-foreground mt-1">{t('subtitle')}</p>
       </div>
 
-      {/* Plan install-limit banner (e.g. coach: 1 plugin to explore) */}
-      {showLimitBanner && (
+      {/* Coach add-on hint: plugins are included on Club, paid add-ons on Coach */}
+      {plan === 'coach' && (
         <div className="rounded-lg border border-primary/30 bg-primary/[0.04] px-4 py-3 text-sm">
-          <p className="font-medium">{t('limitBannerTitle', { limit: installLimit })}</p>
-          <p className="text-muted-foreground">{t('limitBannerBody')}</p>
+          <p className="font-medium">{t('coachAddonBannerTitle')}</p>
+          <p className="text-muted-foreground">{t('coachAddonBannerBody')}</p>
         </div>
       )}
 
@@ -339,13 +357,14 @@ export default function PluginsPage() {
           <PluginCard
             key={manifest.id}
             manifest={manifest}
+            access={pluginAccessForPlan(manifest, plan)}
             isInstalled={isInstalled(manifest.id)}
             isOwner={!!isOwner}
             installing={installingId === manifest.id}
-            blockedByLimit={atLimit && !isInstalled(manifest.id)}
             onInstall={() => installMutation.mutate(manifest)}
             onRemove={() => removeMutation.mutate(manifest.id)}
             onConfigure={() => setConfigPlugin(manifest)}
+            onUpgrade={() => openUpgradeModal({ minPlan: manifest.minPlan })}
           />
         ))}
       </div>

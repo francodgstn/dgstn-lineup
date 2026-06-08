@@ -8,6 +8,7 @@ export const gamificationManifest: PluginManifest = {
   minPlan: 'club',
   status: 'available',
   recommended: true,
+  addon: { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_gamification_monthly' },
   iconName: 'Trophy',
   navContributions: [
     {

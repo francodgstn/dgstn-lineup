@@ -37,6 +37,10 @@ export type PlanFeature =
   | 'api_access'
   | 'advanced_permissions'
 
+// NOTE: features delivered by plugins (gamification, referral_program, courses,
+// ai_insights) are now gated by plugin INSTALL state, not these flags — see
+// pluginAccessForPlan + useInstalledPlugins. The flags remain for reference /
+// non-UI logic; do not re-introduce feature-flag gates for plugin features.
 export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
   coach: [
     'contacts',
@@ -109,17 +113,27 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
   ],
 }
 
-// How many plugins each plan may have installed at once. The coach plan gets a
-// single slot so coaches can explore one club-tier plugin at a time; higher
-// plans are unlimited.
-export const PLUGIN_INSTALL_LIMIT: Record<SaasPlan, number> = {
-  coach: 1,
-  club: Infinity,
-  organization: Infinity,
+// ─── Plugin packaging ─────────────────────────────────────────────────────────
+// Club/Org include all internal plugins. Coach can activate a curated subset
+// (plugins with an `addon`) as paid monthly add-ons; non-curated plugins are
+// upgrade-locked for coaches. See docs/product-strategy-addons-proposal.md.
+
+export type PluginAccess =
+  | { kind: 'included' }
+  | { kind: 'addon'; priceMonthly: number }
+  | { kind: 'upgrade'; minPlan: SaasPlan }
+
+// Minimal shape needed to decide access — satisfied by PluginManifest.
+interface PluginAccessInput {
+  minPlan: SaasPlan
+  addon?: { coachPriceMonthly: number; stripeLookupKey: string }
 }
 
-export function pluginInstallLimit(plan: SaasPlan): number {
-  return PLUGIN_INSTALL_LIMIT[plan] ?? 0
+export function pluginAccessForPlan(manifest: PluginAccessInput, plan: SaasPlan | null): PluginAccess {
+  if (plan === 'club' || plan === 'organization') return { kind: 'included' }
+  // Coach (or unknown/trialing coach): paid add-on if curated, else upgrade.
+  if (manifest.addon) return { kind: 'addon', priceMonthly: manifest.addon.coachPriceMonthly }
+  return { kind: 'upgrade', minPlan: manifest.minPlan }
 }
 
 export function planIsAtLeast(current: SaasPlan, minimum: SaasPlan): boolean {

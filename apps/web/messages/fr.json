@@ -1079,12 +1079,16 @@
     "gamificationName": "Gamification",
     "gamificationDescription": "Points, séries, badges et classements pour motiver vos membres.",
     "gamificationNavLabel": "Gamification",
-    "limitReachedHint": "Limite de plugins atteinte",
-    "limitBannerTitle": "{limit, plural, one {Votre offre inclut # plugin} other {Votre offre inclut # plugins}}",
-    "limitBannerBody": "Supprimez votre plugin actuel pour en essayer un autre, ou passez à une offre supérieure pour un accès illimité.",
     "categoryEngagement": "Engagement",
     "navSectionEngage": "Engagement",
-    "recommended": "Recommandé"
+    "recommended": "Recommandé",
+    "accessIncluded": "Inclus",
+    "addonPrice": "+ CHF {price}/mois",
+    "addonAdd": "Ajouter · CHF {price}/mois",
+    "addonComingSoon": "Activation bientôt disponible",
+    "upgradeCta": "Passer à l'offre supérieure",
+    "coachAddonBannerTitle": "Étendez votre offre Coach",
+    "coachAddonBannerBody": "Ajoutez des fonctionnalités en options payantes — ou obtenez-les toutes incluses avec l'offre Club."
   },
   "Org": {
     "title": "Organisation",

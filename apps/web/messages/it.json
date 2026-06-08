@@ -1069,12 +1069,16 @@
     "gamificationName": "Gamification",
     "gamificationDescription": "Punti, serie, badge e classifiche per coinvolgere i membri.",
     "gamificationNavLabel": "Gamification",
-    "limitReachedHint": "Limite di plugin raggiunto",
-    "limitBannerTitle": "{limit, plural, one {Il tuo piano include # plugin} other {Il tuo piano include # plugin}}",
-    "limitBannerBody": "Rimuovi il plugin attuale per provarne un altro o esegui l'upgrade per accesso illimitato.",
     "categoryEngagement": "Coinvolgimento",
     "navSectionEngage": "Coinvolgi",
-    "recommended": "Consigliato"
+    "recommended": "Consigliato",
+    "accessIncluded": "Incluso",
+    "addonPrice": "+ CHF {price}/mese",
+    "addonAdd": "Aggiungi · CHF {price}/mese",
+    "addonComingSoon": "Attivazione in arrivo",
+    "upgradeCta": "Esegui l'upgrade per sbloccare",
+    "coachAddonBannerTitle": "Estendi il piano Coach",
+    "coachAddonBannerBody": "Aggiungi funzionalità come componenti aggiuntivi a pagamento — o ottienile tutte incluse nel piano Club."
   },
   "Org": {
     "title": "Organizzazione",

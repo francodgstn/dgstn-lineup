@@ -8,6 +8,7 @@ export const clubCoursesManifest: PluginManifest = {
   minPlan: 'club',
   status: 'available',
   recommended: true,
+  addon: { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_club-courses_monthly' },
   iconName: 'GraduationCap',
   navContributions: [
     {

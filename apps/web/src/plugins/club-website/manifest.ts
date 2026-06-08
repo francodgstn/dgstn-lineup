@@ -7,6 +7,7 @@ export const clubWebsiteManifest: PluginManifest = {
   category: 'content',
   minPlan: 'club',
   status: 'coming_soon',
+  addon: { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_club-website_monthly' },
   iconName: 'Globe',
   hasOwnerConfig: true,
 }

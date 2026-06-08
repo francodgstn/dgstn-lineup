@@ -1084,12 +1084,16 @@
     "gamificationName": "Gamification",
     "gamificationDescription": "Points, streaks, badges and leaderboards to keep members engaged.",
     "gamificationNavLabel": "Gamification",
-    "limitReachedHint": "Plugin limit reached",
-    "limitBannerTitle": "{limit, plural, one {Your plan includes # plugin} other {Your plan includes # plugins}}",
-    "limitBannerBody": "Remove your current plugin to try another, or upgrade for unlimited access.",
     "categoryEngagement": "Engagement",
     "navSectionEngage": "Engage",
-    "recommended": "Recommended"
+    "recommended": "Recommended",
+    "accessIncluded": "Included",
+    "addonPrice": "+ CHF {price}/mo",
+    "addonAdd": "Add · CHF {price}/mo",
+    "addonComingSoon": "Activation coming soon",
+    "upgradeCta": "Upgrade to unlock",
+    "coachAddonBannerTitle": "Extend your Coach plan",
+    "coachAddonBannerBody": "Add features as paid add-ons — or get them all included on the Club plan."
   },
   "Org": {
     "title": "Organization",
