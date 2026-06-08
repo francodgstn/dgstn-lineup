@@ -1316,6 +1316,7 @@
     "attachmentsHint": "{count}/{max} file · PDF o immagine, fino a {size} MB ciascuno",
     "limitAttachments": "Puoi allegare al massimo {max} file per lezione.",
     "limitAttachmentSize": "I file devono essere al massimo {max} MB.",
-    "limitImageSize": "Le immagini devono essere al massimo {max} MB."
+    "limitImageSize": "Le immagini devono essere al massimo {max} MB.",
+    "optional": "facoltativo"
   }
 }

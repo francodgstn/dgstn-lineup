@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { storage } from '@/lib/firebase'
 import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15,10 +17,17 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { GraduationCap, Plus } from 'lucide-react'
+import { GraduationCap, Plus, ImageIcon, X } from 'lucide-react'
 import type { Course, CourseStatus } from '@linyup/shared'
-import { useCourses, createCourse, countCourses } from '@/plugins/club-courses/hooks'
+import { useCourses, createCourse, updateCourse, countCourses } from '@/plugins/club-courses/hooks'
 import { getClubCoursesLimits } from '@/plugins/club-courses/limits'
+
+async function uploadFile(file: File, path: string): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg'
+  const sRef = storageRef(storage, `${path}.${ext}`)
+  await uploadBytes(sRef, file)
+  return getDownloadURL(sRef)
+}
 
 type StatusFilter = 'all' | CourseStatus
 
@@ -72,24 +81,58 @@ export default function ClubCoursesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [createOpen, setCreateOpen] = useState(false)
   const [newTitle, setNewTitle] = useState('')
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
 
   const limits = getClubCoursesLimits()
   const atCourseCap = courses.length >= limits.maxCoursesPerTeam
 
+  function clearCover() {
+    if (coverPreview) URL.revokeObjectURL(coverPreview)
+    setCoverFile(null)
+    setCoverPreview(null)
+  }
+
+  function pickCover(file: File) {
+    if (file.size > limits.maxImageSizeMB * 1024 * 1024) {
+      toast.error(t('limitImageSize', { max: limits.maxImageSizeMB }))
+      return
+    }
+    if (coverPreview) URL.revokeObjectURL(coverPreview)
+    setCoverFile(file)
+    setCoverPreview(URL.createObjectURL(file))
+  }
+
+  function closeCreate() {
+    setCreateOpen(false)
+    setNewTitle('')
+    clearCover()
+  }
+
   const createMutation = useMutation({
-    mutationFn: async (title: string) => {
+    mutationFn: async () => {
       if (!currentTeamId || !user) throw new Error('Not authenticated')
       // Re-check against the live count to avoid racing a stale cached list.
       const live = await countCourses(currentTeamId)
       if (live >= limits.maxCoursesPerTeam) {
         throw new Error('LIMIT')
       }
-      return createCourse({ teamId: currentTeamId, userId: user.uid, title })
+      const courseId = await createCourse({ teamId: currentTeamId, userId: user.uid, title: newTitle.trim() })
+      if (coverFile) {
+        // Non-fatal: the course exists either way; cover can still be set in Settings.
+        try {
+          const url = await uploadFile(coverFile, `teams/${currentTeamId}/courses/${courseId}/cover`)
+          await updateCourse(courseId, { coverImageUrl: url })
+        } catch {
+          toast.error(t('errorUpload'))
+        }
+      }
+      return courseId
     },
     onSuccess: (courseId) => {
       queryClient.invalidateQueries({ queryKey: ['courses', currentTeamId] })
-      setCreateOpen(false)
-      setNewTitle('')
+      closeCreate()
       router.push(`/plugins/club-courses/${courseId}` as Route)
     },
     onError: (err: unknown) => {
@@ -165,28 +208,56 @@ export default function ClubCoursesPage() {
       )}
 
       {/* Create dialog */}
-      <Dialog open={createOpen} onOpenChange={(v) => { if (!v) { setCreateOpen(false); setNewTitle('') } }}>
+      <Dialog open={createOpen} onOpenChange={(v) => { if (!v) closeCreate() }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t('newCourse')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="course-title">{t('fieldTitle')}</Label>
-            <Input
-              id="course-title"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder={t('titlePlaceholder')}
-              autoFocus
-              onKeyDown={(e) => { if (e.key === 'Enter' && newTitle.trim()) createMutation.mutate(newTitle.trim()) }}
-            />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="course-title">{t('fieldTitle')}</Label>
+              <Input
+                id="course-title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder={t('titlePlaceholder')}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter' && newTitle.trim()) createMutation.mutate() }}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{t('fieldCover')} <span className="font-normal text-muted-foreground">({t('optional')})</span></Label>
+              <div className="flex items-center gap-3">
+                <div className="h-14 w-24 rounded-md bg-muted overflow-hidden flex items-center justify-center shrink-0">
+                  {coverPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={coverPreview} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
+                  )}
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => coverInputRef.current?.click()}>
+                  {t('uploadCover')}
+                </Button>
+                {coverPreview && (
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={clearCover} title={t('cancel')}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+                <input
+                  ref={coverInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) pickCover(f); e.target.value = '' }}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setCreateOpen(false); setNewTitle('') }}>
+            <Button variant="outline" onClick={closeCreate}>
               {t('cancel')}
             </Button>
             <Button
-              onClick={() => createMutation.mutate(newTitle.trim())}
+              onClick={() => createMutation.mutate()}
               disabled={!newTitle.trim() || createMutation.isPending}
             >
               {createMutation.isPending ? t('creating') : t('create')}
