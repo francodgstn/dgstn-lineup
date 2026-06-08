@@ -90,8 +90,14 @@ function LessonPanel({
   // Image uploads for the rich-text body. Stable identity so the memoized
   // RichTextEditor doesn't re-render (and steal focus) on other state changes.
   const uploadBodyImage = useCallback(
-    (file: File) => uploadFile(file, `teams/${teamId}/courses/${courseId}/lessons/images/${Date.now()}`),
-    [teamId, courseId],
+    async (file: File) => {
+      if (file.size > limits.maxImageSizeMB * 1024 * 1024) {
+        toast.error(t('limitImageSize', { max: limits.maxImageSizeMB }))
+        throw new Error('IMAGE_TOO_LARGE')
+      }
+      return uploadFile(file, `teams/${teamId}/courses/${courseId}/lessons/images/${Date.now()}`)
+    },
+    [teamId, courseId, limits.maxImageSizeMB, t],
   )
 
   async function handleMediaUpload(e: React.ChangeEvent<HTMLInputElement>) {

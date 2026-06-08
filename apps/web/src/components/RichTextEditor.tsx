@@ -235,6 +235,8 @@ export const RichTextEditor = memo(function RichTextEditor({
     try {
       const url = await onUploadImage(file)
       editor.chain().focus().setImage({ src: url }).run()
+    } catch {
+      // onUploadImage surfaces its own error (e.g. file too large); abort insert.
     } finally {
       if (fileRef.current) fileRef.current.value = ''
     }

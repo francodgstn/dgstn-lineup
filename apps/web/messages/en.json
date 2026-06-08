@@ -1330,6 +1330,7 @@
     "addAttachment": "Add file",
     "attachmentsHint": "{count}/{max} files · PDF or image, up to {size} MB each",
     "limitAttachments": "You can attach at most {max} files per lesson.",
-    "limitAttachmentSize": "Files must be {max} MB or smaller."
+    "limitAttachmentSize": "Files must be {max} MB or smaller.",
+    "limitImageSize": "Images must be {max} MB or smaller."
   }
 }
