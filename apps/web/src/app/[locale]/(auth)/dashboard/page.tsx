@@ -29,6 +29,7 @@ import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@lin
 import { useDashboardData } from '@/hooks/useDashboardData'
 import { useMembershipTerm } from '@/hooks/useMembershipTerm'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
+import { SetupChecklist } from '@/components/onboarding/SetupChecklist'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { ContactsSummaryCard } from '@/components/dashboard/ContactsSummaryCard'
@@ -536,11 +537,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* ── 0. Setup checklist (new teams only; auto-hides when done/dismissed) ── */}
+      <SetupChecklist />
+
       {/* ── 1. Agenda ── */}
       <section className="space-y-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <SectionHeading>{t('sectionAgenda')}</SectionHeading>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <SectionIntro sectionKey="dashboard" />
           </div>
           <QuickActions teamSlug={teamSlug} />

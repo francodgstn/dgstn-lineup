@@ -64,6 +64,9 @@ export interface Team {
   portalBackground?: PortalBackground
   // Outreach / email template custom variables
   outreach_placeholders?: Record<string, string>
+  // Onboarding: team-level dismissal of the setup checklist (data-driven; the
+  // steps themselves auto-complete from collection contents)
+  setup_dismissed?: boolean
   // SaaS plan fields (new in Linyup)
   plan?: SaasPlan
   plan_status?: SaasStatus

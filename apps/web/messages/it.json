@@ -1388,6 +1388,39 @@
           "Evento — camp, esami e seminari"
         ]
       }
+    },
+    "setup": {
+      "title": "Configurazione",
+      "subtitle": "Pochi passaggi per avviare la tua attività.",
+      "progress": "{done} di {total} completati",
+      "dismiss": "Nascondi",
+      "optional": "facoltativo",
+      "steps": {
+        "activities": {
+          "label": "Aggiungi le attività",
+          "desc": "Definisci le lezioni o il coaching che offri."
+        },
+        "sessions": {
+          "label": "Pianifica una sessione",
+          "desc": "Aggiungi la prima lezione o slot al calendario."
+        },
+        "subscriptions": {
+          "label": "Crea gli abbonamenti",
+          "desc": "Imposta i piani a cui i membri possono iscriversi."
+        },
+        "portal": {
+          "label": "Pubblica il portale",
+          "desc": "Rendi attiva la tua pagina di prenotazione pubblica."
+        },
+        "contacts": {
+          "label": "Aggiungi un contatto",
+          "desc": "Aggiungi il tuo primo membro o potenziale cliente."
+        },
+        "ranks": {
+          "label": "Configura i gradi",
+          "desc": "Configura un sistema di gradi se ne usi uno."
+        }
+      }
     }
   }
 }

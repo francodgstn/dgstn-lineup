@@ -1398,6 +1398,39 @@
           "Event – Camps, Prüfungen und Seminare"
         ]
       }
+    },
+    "setup": {
+      "title": "Einrichtung",
+      "subtitle": "Ein paar Schritte, bis dein Betrieb läuft.",
+      "progress": "{done} von {total} erledigt",
+      "dismiss": "Ausblenden",
+      "optional": "optional",
+      "steps": {
+        "activities": {
+          "label": "Aktivitäten hinzufügen",
+          "desc": "Lege fest, welche Kurse oder Coachings du anbietest."
+        },
+        "sessions": {
+          "label": "Session planen",
+          "desc": "Trage deinen ersten Kurs oder Slot in den Kalender ein."
+        },
+        "subscriptions": {
+          "label": "Abos erstellen",
+          "desc": "Richte die Tarife ein, die Mitglieder buchen können."
+        },
+        "portal": {
+          "label": "Portal veröffentlichen",
+          "desc": "Schalte deine öffentliche Buchungsseite live."
+        },
+        "contacts": {
+          "label": "Kontakt hinzufügen",
+          "desc": "Füge dein erstes Mitglied oder einen Interessenten hinzu."
+        },
+        "ranks": {
+          "label": "Ränge einrichten",
+          "desc": "Richte ein Rangsystem ein, falls du eines nutzt."
+        }
+      }
     }
   }
 }

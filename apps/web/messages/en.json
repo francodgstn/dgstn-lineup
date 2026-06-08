@@ -1403,6 +1403,39 @@
           "Event — camps, exams and seminars"
         ]
       }
+    },
+    "setup": {
+      "title": "Get set up",
+      "subtitle": "A few steps to get your operations running.",
+      "progress": "{done} of {total} done",
+      "dismiss": "Dismiss",
+      "optional": "optional",
+      "steps": {
+        "activities": {
+          "label": "Add your activities",
+          "desc": "Define the classes or coaching you offer."
+        },
+        "sessions": {
+          "label": "Schedule a session",
+          "desc": "Put your first class or slot on the calendar."
+        },
+        "subscriptions": {
+          "label": "Create subscriptions",
+          "desc": "Set up the plans members can join."
+        },
+        "portal": {
+          "label": "Publish your portal",
+          "desc": "Make your public booking page live."
+        },
+        "contacts": {
+          "label": "Add a contact",
+          "desc": "Add your first member or lead."
+        },
+        "ranks": {
+          "label": "Set up ranks",
+          "desc": "Configure a ranking system if you use one."
+        }
+      }
     }
   }
 }

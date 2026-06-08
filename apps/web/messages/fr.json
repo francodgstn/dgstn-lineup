@@ -1398,6 +1398,39 @@
           "Événement — stages, examens et séminaires"
         ]
       }
+    },
+    "setup": {
+      "title": "Configuration",
+      "subtitle": "Quelques étapes pour lancer votre activité.",
+      "progress": "{done} sur {total} terminé",
+      "dismiss": "Masquer",
+      "optional": "facultatif",
+      "steps": {
+        "activities": {
+          "label": "Ajouter vos activités",
+          "desc": "Définissez les cours ou le coaching que vous proposez."
+        },
+        "sessions": {
+          "label": "Planifier une séance",
+          "desc": "Ajoutez votre premier cours ou créneau au calendrier."
+        },
+        "subscriptions": {
+          "label": "Créer des abonnements",
+          "desc": "Configurez les formules que les membres peuvent rejoindre."
+        },
+        "portal": {
+          "label": "Publier votre portail",
+          "desc": "Mettez en ligne votre page de réservation publique."
+        },
+        "contacts": {
+          "label": "Ajouter un contact",
+          "desc": "Ajoutez votre premier membre ou prospect."
+        },
+        "ranks": {
+          "label": "Configurer les rangs",
+          "desc": "Configurez un système de rangs si vous en utilisez un."
+        }
+      }
     }
   }
 }
