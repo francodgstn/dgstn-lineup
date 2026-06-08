@@ -168,14 +168,14 @@ For local development use the Firebase emulators — no real project needed.
 
 ## Firebase emulators
 
-Auth: `localhost:9099` | Firestore: `localhost:8080` | UI: `localhost:4000`
+Auth: `localhost:9099` | Firestore: `localhost:8080` | Storage: `localhost:9199` | UI: `localhost:4000`
 
-`.env.local` sets `NEXT_PUBLIC_USE_EMULATORS=true`. Emulator connections are guarded by this flag + a `globalThis` flag to prevent HMR double-connect.
+`.env.local` sets `NEXT_PUBLIC_USE_EMULATORS=true`. Emulator connections are guarded by this flag + a `globalThis` flag to prevent HMR double-connect. Storage is wired up in `firebase.ts` (`connectStorageEmulator`, port 9199) — needed for file/image uploads (e.g. Club Courses media + attachments).
 
-Start from repo root (Java required — use external terminal if VS Code's integrated terminal can't find Java):
+Start from repo root (Java required — use external terminal if VS Code's integrated terminal can't find Java). Include `storage` whenever you need uploads:
 
 ```
-firebase emulators:start --only auth,firestore
+firebase emulators:start --only auth,firestore,storage
 ```
 
 ### Emulator data modes
