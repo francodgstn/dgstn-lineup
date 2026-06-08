@@ -91,6 +91,9 @@ export {
 // Team-level billing (clubs charging their own students — Payrexx)
 export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'
 
+// SMTP configuration (team / org-level outbound email settings)
+export { saveSmtpConfig, testSmtpConfig } from './smtp-settings'
+
 // Outreach
 export { sendOutreachEmail } from './outreach'
 

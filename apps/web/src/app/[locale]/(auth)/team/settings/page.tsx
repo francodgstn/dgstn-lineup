@@ -27,11 +27,13 @@ import {
   TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, ALERT_PRESETS_SUBCOLLECTION,
 } from '@linyup/shared'
 import type { Team, SubscriptionType, AlertScheduleType, RankingSystem, RankLevel, TeamIntegration, PaymentGatewayType } from '@linyup/shared'
-import { CalendarDays, Timer, Plus, Pencil, Trash2, Star, Building2 } from 'lucide-react'
+import { CalendarDays, Timer, Plus, Pencil, Trash2, Star, Building2, Eye, EyeOff, Mail } from 'lucide-react'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
+import { useSmtpSettings } from '@/hooks/useSmtpSettings'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
+import { Separator } from '@/components/ui/separator'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -1368,9 +1370,223 @@ function PaymentsTab({ teamId }: { teamId: string }) {
 
 const KEY_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
-function OutreachTab({ teamId }: { teamId: string }) {
+function SmtpForm({ teamId, orgId }: { teamId: string; orgId?: string }) {
+  const { data: smtpData, isLoading, save, test, isSaving, isTesting } = useSmtpSettings('team', teamId)
+
+  const [host, setHost] = useState('')
+  const [port, setPort] = useState(587)
+  const [secure, setSecure] = useState(false)
+  const [user, setUser] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [fromName, setFromName] = useState('')
+  const [fromEmail, setFromEmail] = useState('')
+  const [useOrgSmtp, setUseOrgSmtp] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  useEffect(() => {
+    if (!smtpData) return
+    setUseOrgSmtp(smtpData.use_org_smtp ?? false)
+    setHost(smtpData.host ?? '')
+    setPort(smtpData.port ?? 587)
+    setSecure(smtpData.secure ?? false)
+    setUser(smtpData.user ?? '')
+    setFromName(smtpData.from_name ?? '')
+    setFromEmail(smtpData.from_email ?? '')
+  }, [smtpData])
+
+  function showToast(msg: string, ok: boolean) {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  async function handleSave() {
+    try {
+      const payload: Parameters<typeof save>[0] = {
+        host,
+        port,
+        secure,
+        user,
+        from_name: fromName,
+        from_email: fromEmail,
+        use_org_smtp: useOrgSmtp,
+      }
+      if (password.trim()) payload.password = password.trim()
+      await save(payload)
+      setPassword('')
+      showToast('Settings saved.', true)
+    } catch (err) {
+      showToast((err as Error).message ?? 'Save failed.', false)
+    }
+  }
+
+  async function handleTest() {
+    try {
+      const result = await test()
+      showToast(result.success ? 'Test email sent successfully.' : (result.message ?? 'Test failed.'), result.success)
+    } catch (err) {
+      showToast((err as Error).message ?? 'Test failed.', false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <Mail className="h-4 w-4" />
+          Outbound email (SMTP)
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Configure a custom SMTP server for outreach emails. When not set, Linyup uses its own email infrastructure.
+        </p>
+      </div>
+
+      {orgId && (
+        <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="use-org-smtp" className="text-sm font-medium">Use organisation SMTP</Label>
+            <p className="text-xs text-muted-foreground">Inherit email configuration from your organisation.</p>
+          </div>
+          <Switch
+            id="use-org-smtp"
+            checked={useOrgSmtp}
+            onCheckedChange={setUseOrgSmtp}
+          />
+        </div>
+      )}
+
+      {useOrgSmtp && orgId ? (
+        <div className="rounded-lg border border-dashed px-4 py-5 text-center text-sm text-muted-foreground">
+          Using your organisation&apos;s email configuration.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5 col-span-2 sm:col-span-1">
+              <Label htmlFor="smtp-host">Host</Label>
+              <Input
+                id="smtp-host"
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                placeholder="smtp.example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="smtp-port">Port</Label>
+              <Input
+                id="smtp-port"
+                type="number"
+                value={port}
+                onChange={(e) => setPort(Number(e.target.value))}
+                placeholder="587"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="smtp-secure"
+              type="checkbox"
+              checked={secure}
+              onChange={(e) => setSecure(e.target.checked)}
+              className="h-4 w-4 rounded border-input accent-primary"
+            />
+            <Label htmlFor="smtp-secure" className="cursor-pointer">Use TLS (port 465)</Label>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="smtp-user">Username</Label>
+            <Input
+              id="smtp-user"
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+              placeholder="user@example.com"
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="smtp-password">Password</Label>
+            <div className="relative">
+              <Input
+                id="smtp-password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Leave blank to keep existing password"
+                autoComplete="new-password"
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-1.5">
+            <Label htmlFor="smtp-from-name">From name</Label>
+            <Input
+              id="smtp-from-name"
+              value={fromName}
+              onChange={(e) => setFromName(e.target.value)}
+              placeholder="My Club"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="smtp-from-email">From email</Label>
+            <Input
+              id="smtp-from-email"
+              type="email"
+              value={fromEmail}
+              onChange={(e) => setFromEmail(e.target.value)}
+              placeholder="noreply@example.com"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <Button size="sm" onClick={handleSave} disabled={isSaving || isTesting}>
+          {isSaving ? 'Saving…' : 'Save settings'}
+        </Button>
+        {!useOrgSmtp && (
+          <Button size="sm" variant="outline" onClick={handleTest} disabled={isSaving || isTesting}>
+            {isTesting ? 'Sending…' : 'Send test email'}
+          </Button>
+        )}
+      </div>
+
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white z-50 ${
+          toast.ok ? 'bg-green-600' : 'bg-destructive'
+        }`}>
+          {toast.msg}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
   const qc = useQueryClient()
-  const { data: team } = useTeam(teamId)
 
   type VarRow = { key: string; value: string }
   const [vars, setVars] = useState<VarRow[]>([])
@@ -1378,7 +1594,8 @@ function OutreachTab({ teamId }: { teamId: string }) {
   const [saveError, setSaveError] = useState('')
   const [saved, setSaved] = useState(false)
 
-  // Initialise local state once team data arrives
+  const orgId = (team as unknown as { org_id?: string }).org_id
+
   useEffect(() => {
     if (team?.outreach_placeholders) {
       setVars(
@@ -1396,7 +1613,6 @@ function OutreachTab({ teamId }: { teamId: string }) {
 
   const onSave = async () => {
     setSaveError('')
-    // Validate keys
     const invalid = vars.filter((v) => v.key && !KEY_REGEX.test(v.key))
     if (invalid.length > 0) {
       setSaveError(`Invalid key names: ${invalid.map((v) => v.key).join(', ')}. Use letters, numbers and underscores only.`)
@@ -1417,54 +1633,58 @@ function OutreachTab({ teamId }: { teamId: string }) {
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="font-semibold text-sm">Custom variables</h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          Define key→value pairs you can use in email templates as{' '}
-          <code className="font-mono text-xs bg-muted px-1 rounded">{'{{key}}'}</code>. For example,{' '}
-          <code className="font-mono text-xs bg-muted px-1 rounded">discountCode</code> → <code className="font-mono text-xs bg-muted px-1 rounded">WELCOME20</code>.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <SmtpForm teamId={teamId} orgId={orgId} />
 
-      <div className="space-y-2">
-        {vars.map((row, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            {/* Key input with {{ }} adornment */}
-            <div className="flex items-center border rounded-md overflow-hidden flex-1">
-              <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-r select-none font-mono">{'{{'}</span>
+      <Separator />
+
+      <div className="space-y-5">
+        <div>
+          <h3 className="font-semibold text-sm">Custom variables</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Define key→value pairs you can use in email templates as{' '}
+            <code className="font-mono text-xs bg-muted px-1 rounded">{'{{key}}'}</code>. For example,{' '}
+            <code className="font-mono text-xs bg-muted px-1 rounded">discountCode</code> → <code className="font-mono text-xs bg-muted px-1 rounded">WELCOME20</code>.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {vars.map((row, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <div className="flex items-center border rounded-md overflow-hidden flex-1">
+                <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-r select-none font-mono">{'{{'}</span>
+                <input
+                  value={row.key}
+                  onChange={(e) => updateRow(idx, 'key', e.target.value)}
+                  placeholder="variableName"
+                  className="flex-1 px-2 py-2 text-sm font-mono outline-none bg-background"
+                />
+                <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-l select-none font-mono">{'}}'}</span>
+              </div>
               <input
-                value={row.key}
-                onChange={(e) => updateRow(idx, 'key', e.target.value)}
-                placeholder="variableName"
-                className="flex-1 px-2 py-2 text-sm font-mono outline-none bg-background"
+                value={row.value}
+                onChange={(e) => updateRow(idx, 'value', e.target.value)}
+                placeholder="Substitution value"
+                className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
               />
-              <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-l select-none font-mono">{'}}'}</span>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeRow(idx)}>
+                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
             </div>
-            {/* Value input */}
-            <input
-              value={row.value}
-              onChange={(e) => updateRow(idx, 'value', e.target.value)}
-              placeholder="Substitution value"
-              className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
-            />
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeRow(idx)}>
-              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-            </Button>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      <Button variant="outline" size="sm" onClick={addRow}>
-        <Plus className="h-4 w-4 mr-1.5" />Add variable
-      </Button>
-
-      {saveError && <p className="text-xs text-destructive">{saveError}</p>}
-
-      <div className="flex justify-end">
-        <Button size="sm" onClick={onSave} disabled={saving}>
-          {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
+        <Button variant="outline" size="sm" onClick={addRow}>
+          <Plus className="h-4 w-4 mr-1.5" />Add variable
         </Button>
+
+        {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+
+        <div className="flex justify-end">
+          <Button size="sm" onClick={onSave} disabled={saving}>
+            {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -1533,7 +1753,7 @@ export default function TeamSettingsPage() {
           {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
           {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
           {tab === 'payments' && <PaymentsTab teamId={currentTeamId} />}
-          {tab === 'outreach' && <OutreachTab teamId={currentTeamId} />}
+          {tab === 'outreach' && <OutreachTab teamId={currentTeamId} team={team} />}
         </CardContent>
       </Card>
     </div>

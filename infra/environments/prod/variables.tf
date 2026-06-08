@@ -66,6 +66,7 @@ variable "secret_ids" {
     "stripe-secret-key",
     "stripe-webhook-secret",
     "smtp-password",
+    "smtp-encryption-key",
     "posthog-api-key",
   ]
 }

@@ -1,7 +1,10 @@
+import * as admin from 'firebase-admin'
 import nodemailer from 'nodemailer'
 import { defineString } from 'firebase-functions/params'
 import { getSMTPConfig } from './secrets'
+import { decryptPassword } from './crypto'
 import { getAppSettings } from './app_settings'
+import type { SmtpIntegration } from '@linyup/shared'
 
 const testModeEnabled = defineString('TEST_MODE', {
   description: 'Redirect all emails to a single test address',
@@ -22,6 +25,83 @@ export async function getEmailTransporter() {
   const appSettings = await getAppSettings()
   const smtpConfig = await getSMTPConfig(appSettings)
   return nodemailer.createTransport(smtpConfig as nodemailer.TransportOptions)
+}
+
+/**
+ * Resolves the SMTP transporter using a three-level hierarchy:
+ *   1. Team-level config (teams/{teamId}/integrations/email_smtp)
+ *      — unless use_org_smtp === true, in which case fall through to org
+ *   2. Org-level config (organizations/{orgId}/integrations/email_smtp)
+ *      — uses teams/{teamId}.org_id to find the org
+ *   3. Global fallback (app_settings/global_settings + smtp-password secret)
+ *
+ * @param teamId  Optional. When omitted, falls back directly to global config.
+ */
+export async function getSmtpTransporter(teamId?: string): Promise<nodemailer.Transporter> {
+  const db = admin.firestore()
+
+  if (teamId) {
+    // ── Step 1: Team-level SMTP ──────────────────────────────────────────────
+    const teamSmtpDoc = await db
+      .collection('teams').doc(teamId)
+      .collection('integrations').doc('email_smtp')
+      .get()
+
+    if (teamSmtpDoc.exists) {
+      const cfg = teamSmtpDoc.data() as SmtpIntegration
+
+      if (cfg.use_org_smtp !== true) {
+        const password = await decryptPassword(cfg.password_enc)
+        return nodemailer.createTransport({
+          host: cfg.host,
+          port: cfg.port,
+          secure: cfg.secure,
+          auth: { user: cfg.user, pass: password },
+        })
+      }
+
+      // use_org_smtp === true: look up the team's org_id and fall through
+      const teamDoc = await db.collection('teams').doc(teamId).get()
+      const orgId = teamDoc.data()?.org_id as string | undefined
+      if (orgId) {
+        const orgTransporter = await resolveOrgSmtpTransporter(orgId)
+        if (orgTransporter) return orgTransporter
+      }
+    }
+  }
+
+  // ── Step 2: Try org-level config when no teamId-specific config was found ──
+  // (covers the case where no team doc exists but team has an org_id)
+  if (teamId) {
+    const teamDoc = await db.collection('teams').doc(teamId).get()
+    const orgId = teamDoc.data()?.org_id as string | undefined
+    if (orgId) {
+      const orgTransporter = await resolveOrgSmtpTransporter(orgId)
+      if (orgTransporter) return orgTransporter
+    }
+  }
+
+  // ── Step 3: Global fallback ──────────────────────────────────────────────
+  return getEmailTransporter()
+}
+
+async function resolveOrgSmtpTransporter(orgId: string): Promise<nodemailer.Transporter | null> {
+  const db = admin.firestore()
+  const orgSmtpDoc = await db
+    .collection('organizations').doc(orgId)
+    .collection('integrations').doc('email_smtp')
+    .get()
+
+  if (!orgSmtpDoc.exists) return null
+
+  const cfg = orgSmtpDoc.data() as SmtpIntegration
+  const password = await decryptPassword(cfg.password_enc)
+  return nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure,
+    auth: { user: cfg.user, pass: password },
+  })
 }
 
 export function isTestModeEnabled() {
