@@ -154,19 +154,41 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
 
             <!-- stats row -->
             <div class="mock-stats">
+              <!-- sparkline: member growth -->
               <div class="mock-stat">
                 <div class="mock-stat-label">Active members</div>
-                <div class="mock-stat-value">142</div>
-                <div class="mock-stat-change up">+4 this month</div>
+                <div class="mock-sparkline">
+                  <div class="spark-bar" style="height:38%"></div>
+                  <div class="spark-bar" style="height:52%"></div>
+                  <div class="spark-bar" style="height:45%"></div>
+                  <div class="spark-bar" style="height:63%"></div>
+                  <div class="spark-bar" style="height:57%"></div>
+                  <div class="spark-bar" style="height:74%"></div>
+                  <div class="spark-bar hi" style="height:90%"></div>
+                </div>
+                <div class="mock-stat-change up">142 members · +4 this month</div>
               </div>
+
+              <!-- bar chart: sessions per day -->
               <div class="mock-stat">
                 <div class="mock-stat-label">Sessions this week</div>
-                <div class="mock-stat-value">8</div>
-                <div class="mock-stat-change">3 upcoming</div>
+                <div class="mock-barchart">
+                  <div class="bc-col"><div class="bc-bar" style="height:50%"></div><span class="bc-lbl">M</span></div>
+                  <div class="bc-col"><div class="bc-bar" style="height:80%"></div><span class="bc-lbl">T</span></div>
+                  <div class="bc-col"><div class="bc-bar hi" style="height:65%"></div><span class="bc-lbl hi">W</span></div>
+                  <div class="bc-col"><div class="bc-bar" style="height:40%"></div><span class="bc-lbl">T</span></div>
+                  <div class="bc-col"><div class="bc-bar" style="height:55%"></div><span class="bc-lbl">F</span></div>
+                </div>
+                <div class="mock-stat-change">8 sessions · 3 upcoming</div>
               </div>
+
+              <!-- donut: attendance rate -->
               <div class="mock-stat">
                 <div class="mock-stat-label">Attendance rate</div>
-                <div class="mock-stat-value">87%</div>
+                <div class="mock-donut-wrap">
+                  <div class="mock-donut"></div>
+                  <span class="mock-donut-label">87%</span>
+                </div>
                 <div class="mock-stat-change up">↑ vs last week</div>
               </div>
             </div>
@@ -664,10 +686,77 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
     border-radius: 10px;
     padding: 14px;
   }
-  .mock-stat-label { font-size: 10px; color: oklch(0.55 0.04 288); margin-bottom: 6px; }
-  .mock-stat-value { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; line-height: 1; }
-  .mock-stat-change { font-size: 10px; color: oklch(0.55 0.04 288); }
+  .mock-stat-label { font-size: 10px; color: oklch(0.55 0.04 288); margin-bottom: 8px; }
+  .mock-stat-change { font-size: 10px; color: oklch(0.55 0.04 288); margin-top: 8px; }
   .mock-stat-change.up { color: oklch(0.72 0.18 152); }
+
+  /* sparkline */
+  .mock-sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 44px;
+  }
+  .spark-bar {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    background: oklch(0.48 0.22 292 / 0.35);
+    transition: height 0.3s;
+  }
+  .spark-bar.hi { background: oklch(0.62 0.22 292); }
+
+  /* bar chart */
+  .mock-barchart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 44px;
+  }
+  .bc-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .bc-bar {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    background: oklch(0.48 0.22 292 / 0.35);
+  }
+  .bc-bar.hi { background: oklch(0.62 0.22 292); }
+  .bc-lbl { font-size: 8px; color: oklch(0.50 0.04 288); }
+  .bc-lbl.hi { color: oklch(0.72 0.14 292); }
+
+  /* donut */
+  .mock-donut-wrap {
+    position: relative;
+    width: 56px;
+    height: 56px;
+  }
+  .mock-donut {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: conic-gradient(
+      oklch(0.68 0.20 152) 0% 87%,
+      oklch(0.22 0.05 292) 87% 100%
+    );
+    -webkit-mask: radial-gradient(circle, transparent 42%, black 43%);
+    mask: radial-gradient(circle, transparent 42%, black 43%);
+  }
+  .mock-donut-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+  }
 
   .mock-section-title {
     font-size: 11px;
