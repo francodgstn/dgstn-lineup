@@ -110,7 +110,7 @@ function useOrgTeams(orgId: string) {
             )
             row.activeMemberships = countSnap.data().count
           } catch {
-            row.activeMemberships = null
+            row.activeMemberships = undefined
           }
         })
       )
