@@ -1357,5 +1357,52 @@
     "errorAccountExists": "An account already exists with this email using a different sign-in method.",
     "errorInvalidEmail": "Enter a valid email address.",
     "errorMagicLink": "Could not send the sign-in link. Please try again."
+  },
+  "Onboarding": {
+    "replayTour": "Replay tour",
+    "tour": {
+      "welcomeTitle": "Welcome to Linyup 👋",
+      "welcomeBody": "Here's a quick tour of the essentials. You can replay it anytime from the account menu.",
+      "contactsTitle": "Contacts",
+      "contactsBody": "Your members, leads and trial-goers live here — with status, subscriptions and activity.",
+      "calendarTitle": "Calendar",
+      "calendarBody": "Schedule classes and 1-on-1 sessions, and see bookings in list or calendar view.",
+      "portalTitle": "Your public portal",
+      "portalBody": "Share this page so people can book trials and sign up — no login needed.",
+      "next": "Next",
+      "prev": "Back",
+      "done": "Got it"
+    },
+    "intro": {
+      "open": "About this section",
+      "termsLabel": "Key terms",
+      "dashboard": {
+        "title": "Dashboard",
+        "body": "Your at-a-glance overview: today's agenda, weekly highlights and a snapshot of your roster.",
+        "terms": [
+          "Agenda — today's and upcoming sessions",
+          "Engaged — members active this week",
+          "Roster — your active member base"
+        ]
+      },
+      "contacts": {
+        "title": "Contacts",
+        "body": "Everyone connected to your team — members, leads and trial-goers — with their status and history.",
+        "terms": [
+          "Membership status — active, almost-ready, expired…",
+          "Subscription — the plan a contact is on",
+          "Trial — a prospect trying a class"
+        ]
+      },
+      "calendar": {
+        "title": "Calendar & sessions",
+        "body": "Plan group classes and coaching slots, and switch between list and calendar views.",
+        "terms": [
+          "Session — a single class or coaching slot",
+          "Booking — a contact reserving a spot",
+          "Event — camps, exams and seminars"
+        ]
+      }
+    }
   }
 }

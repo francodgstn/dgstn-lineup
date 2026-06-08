@@ -28,6 +28,7 @@ import type { Contact, Session, RankingSystem, SubscriptionType } from '@linyup/
 import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 import { useDashboardData } from '@/hooks/useDashboardData'
 import { useMembershipTerm } from '@/hooks/useMembershipTerm'
+import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { ContactsSummaryCard } from '@/components/dashboard/ContactsSummaryCard'
@@ -538,7 +539,10 @@ export default function DashboardPage() {
       {/* ── 1. Agenda ── */}
       <section className="space-y-5">
         <div className="flex items-center justify-between">
-          <SectionHeading>{t('sectionAgenda')}</SectionHeading>
+          <div className="flex items-center gap-1.5">
+            <SectionHeading>{t('sectionAgenda')}</SectionHeading>
+            <SectionIntro sectionKey="dashboard" />
+          </div>
           <QuickActions teamSlug={teamSlug} />
         </div>
         <AgendaCard teamId={currentTeamId} />

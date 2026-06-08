@@ -1352,5 +1352,52 @@
     "errorAccountExists": "Mit dieser E-Mail besteht bereits ein Konto mit einer anderen Anmeldemethode.",
     "errorInvalidEmail": "Gib eine gültige E-Mail-Adresse ein.",
     "errorMagicLink": "Anmeldelink konnte nicht gesendet werden. Bitte versuche es erneut."
+  },
+  "Onboarding": {
+    "replayTour": "Tour erneut ansehen",
+    "tour": {
+      "welcomeTitle": "Willkommen bei Linyup 👋",
+      "welcomeBody": "Hier ist eine kurze Tour durch die wichtigsten Funktionen. Du kannst sie jederzeit über das Kontomenü erneut starten.",
+      "contactsTitle": "Kontakte",
+      "contactsBody": "Deine Mitglieder, Interessenten und Probetrainierenden findest du hier – mit Status, Abos und Aktivität.",
+      "calendarTitle": "Kalender",
+      "calendarBody": "Plane Kurse und Einzeltrainings und sieh Buchungen in der Listen- oder Kalenderansicht.",
+      "portalTitle": "Dein öffentliches Portal",
+      "portalBody": "Teile diese Seite, damit Interessenten Probetrainings buchen und sich anmelden können – ohne Login.",
+      "next": "Weiter",
+      "prev": "Zurück",
+      "done": "Verstanden"
+    },
+    "intro": {
+      "open": "Über diesen Bereich",
+      "termsLabel": "Wichtige Begriffe",
+      "dashboard": {
+        "title": "Dashboard",
+        "body": "Dein Überblick auf einen Blick: heutige Agenda, wöchentliche Highlights und eine Übersicht deiner Mitglieder.",
+        "terms": [
+          "Agenda – heutige und kommende Sessions",
+          "Aktiv – diese Woche aktive Mitglieder",
+          "Mitgliederbasis – deine aktiven Mitglieder"
+        ]
+      },
+      "contacts": {
+        "title": "Kontakte",
+        "body": "Alle Personen rund um dein Team – Mitglieder, Interessenten und Probetrainierende – mit Status und Verlauf.",
+        "terms": [
+          "Mitgliedsstatus – aktiv, fast bereit, abgelaufen …",
+          "Abo – der Tarif eines Kontakts",
+          "Probe – ein Interessent, der eine Stunde testet"
+        ]
+      },
+      "calendar": {
+        "title": "Kalender & Sessions",
+        "body": "Plane Gruppenkurse und Coaching-Slots und wechsle zwischen Listen- und Kalenderansicht.",
+        "terms": [
+          "Session – ein einzelner Kurs oder Coaching-Slot",
+          "Buchung – ein Kontakt reserviert einen Platz",
+          "Event – Camps, Prüfungen und Seminare"
+        ]
+      }
+    }
   }
 }

@@ -34,6 +34,7 @@ import {
   MapPin, Users, Pencil, Trash2, User,
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
+import { SectionIntro } from '@/components/onboarding/SectionIntro'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -676,7 +677,10 @@ export default function CalendarPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <SectionIntro sectionKey="calendar" />
+          </div>
           <p className="text-sm text-muted-foreground mt-0.5">{t('subtitle', { count: upcomingCount })}</p>
         </div>
         <div className="flex items-center gap-2">

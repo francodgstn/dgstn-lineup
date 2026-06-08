@@ -1342,5 +1342,52 @@
     "errorAccountExists": "Esiste già un account con questa e-mail tramite un altro metodo di accesso.",
     "errorInvalidEmail": "Inserisci un indirizzo e-mail valido.",
     "errorMagicLink": "Impossibile inviare il link di accesso. Riprova."
+  },
+  "Onboarding": {
+    "replayTour": "Rivedi il tour",
+    "tour": {
+      "welcomeTitle": "Benvenuto su Linyup 👋",
+      "welcomeBody": "Ecco un breve tour delle funzioni essenziali. Puoi rivederlo quando vuoi dal menu account.",
+      "contactsTitle": "Contatti",
+      "contactsBody": "Qui trovi i tuoi membri, potenziali clienti e chi è in prova — con stato, abbonamenti e attività.",
+      "calendarTitle": "Calendario",
+      "calendarBody": "Pianifica lezioni e sessioni individuali e vedi le prenotazioni in elenco o nel calendario.",
+      "portalTitle": "Il tuo portale pubblico",
+      "portalBody": "Condividi questa pagina così le persone possono prenotare una prova e iscriversi — senza login.",
+      "next": "Avanti",
+      "prev": "Indietro",
+      "done": "Capito"
+    },
+    "intro": {
+      "open": "Informazioni su questa sezione",
+      "termsLabel": "Termini chiave",
+      "dashboard": {
+        "title": "Dashboard",
+        "body": "La tua panoramica immediata: l'agenda di oggi, i momenti salienti della settimana e un riepilogo dei membri.",
+        "terms": [
+          "Agenda — sessioni di oggi e future",
+          "Attivi — membri attivi questa settimana",
+          "Base membri — i tuoi membri attivi"
+        ]
+      },
+      "contacts": {
+        "title": "Contatti",
+        "body": "Tutte le persone collegate al tuo team — membri, potenziali clienti e prove — con stato e cronologia.",
+        "terms": [
+          "Stato iscrizione — attivo, quasi pronto, scaduto…",
+          "Abbonamento — il piano di un contatto",
+          "Prova — un potenziale cliente che prova una lezione"
+        ]
+      },
+      "calendar": {
+        "title": "Calendario e sessioni",
+        "body": "Pianifica lezioni di gruppo e slot di coaching e passa dalla vista elenco a quella calendario.",
+        "terms": [
+          "Sessione — una singola lezione o slot di coaching",
+          "Prenotazione — un contatto che riserva un posto",
+          "Evento — camp, esami e seminari"
+        ]
+      }
+    }
   }
 }

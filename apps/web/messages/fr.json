@@ -1352,5 +1352,52 @@
     "errorAccountExists": "Un compte existe déjà avec cet e-mail via une autre méthode de connexion.",
     "errorInvalidEmail": "Saisissez une adresse e-mail valide.",
     "errorMagicLink": "Impossible d'envoyer le lien de connexion. Veuillez réessayer."
+  },
+  "Onboarding": {
+    "replayTour": "Revoir la visite",
+    "tour": {
+      "welcomeTitle": "Bienvenue sur Linyup 👋",
+      "welcomeBody": "Voici une visite rapide de l'essentiel. Vous pouvez la revoir à tout moment depuis le menu du compte.",
+      "contactsTitle": "Contacts",
+      "contactsBody": "Vos membres, prospects et personnes en essai sont ici — avec statut, abonnements et activité.",
+      "calendarTitle": "Calendrier",
+      "calendarBody": "Planifiez des cours et des séances individuelles, et voyez les réservations en liste ou en calendrier.",
+      "portalTitle": "Votre portail public",
+      "portalBody": "Partagez cette page pour que les gens réservent un essai et s'inscrivent — sans connexion.",
+      "next": "Suivant",
+      "prev": "Retour",
+      "done": "Compris"
+    },
+    "intro": {
+      "open": "À propos de cette section",
+      "termsLabel": "Termes clés",
+      "dashboard": {
+        "title": "Tableau de bord",
+        "body": "Votre vue d'ensemble : l'agenda du jour, les points forts de la semaine et un aperçu de vos membres.",
+        "terms": [
+          "Agenda — séances du jour et à venir",
+          "Actifs — membres actifs cette semaine",
+          "Effectif — votre base de membres actifs"
+        ]
+      },
+      "contacts": {
+        "title": "Contacts",
+        "body": "Toutes les personnes liées à votre équipe — membres, prospects et essais — avec leur statut et leur historique.",
+        "terms": [
+          "Statut d'adhésion — actif, presque prêt, expiré…",
+          "Abonnement — la formule d'un contact",
+          "Essai — un prospect qui teste un cours"
+        ]
+      },
+      "calendar": {
+        "title": "Calendrier et séances",
+        "body": "Planifiez des cours collectifs et des créneaux de coaching, et basculez entre liste et calendrier.",
+        "terms": [
+          "Séance — un cours ou un créneau de coaching",
+          "Réservation — un contact qui réserve une place",
+          "Événement — stages, examens et séminaires"
+        ]
+      }
+    }
   }
 }

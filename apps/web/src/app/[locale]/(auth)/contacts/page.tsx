@@ -36,6 +36,7 @@ import {
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
+import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { getPrimaryRank } from '@/lib/rank-utils'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -1580,7 +1581,10 @@ export default function ContactsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <SectionIntro sectionKey="contacts" />
+          </div>
           {!loadingActive && (
             <p className="text-sm text-muted-foreground mt-0.5">
               {t('subtitle', {

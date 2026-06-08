@@ -13,8 +13,9 @@ import type { Team } from '@linyup/shared'
 import type { Route } from 'next'
 import {
   Menu, QrCode, Bell, Sun, Moon, Settings, Users, LogOut,
-  Copy, Download, Check, ExternalLink,
+  Copy, Download, Check, ExternalLink, Compass,
 } from 'lucide-react'
+import { START_TOUR_EVENT } from '@/components/onboarding/ProductTour'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -315,6 +316,7 @@ function UserAvatar({ email }: { email: string | null }) {
 export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
   const t = useTranslations('TopBar')
   const tNav = useTranslations('Nav')
+  const tOnb = useTranslations('Onboarding')
   const { user, currentTeamId } = useAuth()
   const { data: team } = useTeam(currentTeamId)
   const { resolvedTheme, setTheme } = useTheme()
@@ -446,6 +448,10 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
             <DropdownMenuItem onClick={() => router.push('/team/managers' as Route)}>
               <Users className="h-4 w-4 mr-2" />
               {tNav('managers')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(START_TOUR_EVENT))}>
+              <Compass className="h-4 w-4 mr-2" />
+              {tOnb('replayTour')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
 
