@@ -2,7 +2,7 @@ import type { Timestamp } from './common'
 import type { SaasPlan } from './team'
 
 export type PluginId = string
-export type PluginCategory = 'ai' | 'communications' | 'website' | 'payments' | 'analytics'
+export type PluginCategory = 'ai' | 'communications' | 'website' | 'payments' | 'analytics' | 'content'
 export type PluginStatus = 'available' | 'coming_soon' | 'beta'
 
 // Template literal union — enables type-safe namespaced IDs like 'plugin:whatsapp:send_message'

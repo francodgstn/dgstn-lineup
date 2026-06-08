@@ -12,10 +12,12 @@ service firebase.storage {
       // Only members of this specific team may access its files
       allow read: if request.auth != null
         && firestore.exists(/databases/(default)/documents/teams/$(teamId)/team_members/$(request.auth.uid));
+      // Course media (audio/video) lives under teams/{teamId}/courses/... so we allow
+      // larger files and audio/video content types here, scoped to team members.
       allow write: if request.auth != null
         && firestore.exists(/databases/(default)/documents/teams/$(teamId)/team_members/$(request.auth.uid))
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|application/pdf');
+        && request.resource.size < 50 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|audio/.*|video/.*|application/pdf');
     }
 
     match /contacts/{contactId}/{allPaths=**} {
