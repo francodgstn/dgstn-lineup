@@ -836,5 +836,16 @@ service cloud.firestore {
       }
     }
 
+    // ── Early access requests (pre-launch landing page) ───────────────────────
+    // Public unauthenticated write — only email, createdAt, source allowed.
+    // Read/update/delete only via Admin SDK (operator console).
+    match /early_access_requests/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'createdAt', 'source'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 0
+        && request.resource.data.email.size() <= 320;
+      allow read, update, delete: if false;
+    }
+
   }
 }

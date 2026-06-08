@@ -56,6 +56,8 @@ jobs:
         env:
           PUBLIC_APP_URL: https://app.linyup.com
           PUBLIC_SITE_URL: https://linyup.com
+          PUBLIC_FIREBASE_PROJECT_ID: linyup-staging
+          PUBLIC_FIREBASE_API_KEY: AIzaSyAuMHWbGKmyL78xVfrStkIctShzqrd4zcg
 
       # ADC from the auth step is detected automatically — do NOT pass any
       # GOOGLE_APPLICATION_CREDENTIALS* env var here.

@@ -2,7 +2,8 @@
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Logo from '~/components/Logo.astro';
 
-const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
+const FIREBASE_PROJECT_ID = import.meta.env.PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-linyup';
+const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
 ---
 
 <BaseLayout
@@ -37,15 +38,86 @@ const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
         sessions, contacts, bookings, and a student mobile app, all in one place.
       </p>
 
-      <div class="cta-row">
-        <a class="btn-cta" href={`${APP_URL}/signup`}>
+      <form class="cta-form" id="early-access-form" novalidate>
+        <input
+          class="email-input"
+          type="email"
+          id="email-input"
+          name="email"
+          placeholder="Your email address"
+          autocomplete="email"
+          required
+        />
+        <button class="btn-cta" type="submit" id="submit-btn">
           Get early access
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-        </a>
-      </div>
+        </button>
+      </form>
+
+      <p class="form-status" id="form-status" aria-live="polite"></p>
     </div>
   </main>
 </BaseLayout>
+
+<script define:vars={{ FIREBASE_PROJECT_ID, FIREBASE_API_KEY }}>
+  const form = document.getElementById('early-access-form');
+  const input = document.getElementById('email-input');
+  const btn = document.getElementById('submit-btn');
+  const status = document.getElementById('form-status');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = input.value.trim();
+    if (!email) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    status.textContent = '';
+    status.className = 'form-status';
+
+    try {
+      const url = FIREBASE_PROJECT_ID === 'demo-linyup'
+        ? `http://localhost:8080/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/early_access_requests`
+        : `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/early_access_requests?key=${FIREBASE_API_KEY}`;
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fields: {
+            email:     { stringValue: email },
+            createdAt: { timestampValue: new Date().toISOString() },
+            source:    { stringValue: 'landing' },
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        // Duplicate emails are fine — treat as success
+        if (res.status === 409) {
+          showSuccess();
+        } else {
+          throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
+        }
+      } else {
+        showSuccess();
+      }
+    } catch (err) {
+      console.error('Early access submit error:', err);
+      status.textContent = 'Something went wrong — please try again.';
+      status.className = 'form-status error';
+      btn.disabled = false;
+      btn.innerHTML = 'Get early access <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
+    }
+  });
+
+  function showSuccess() {
+    form.style.display = 'none';
+    status.textContent = "You're on the list! We'll be in touch soon.";
+    status.className = 'form-status success';
+  }
+</script>
 
 <style>
   .prelaunch {
@@ -151,10 +223,34 @@ const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
     text-wrap: pretty;
   }
 
-  .cta-row {
+  .cta-form {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .email-input {
+    flex: 1;
+    height: 52px;
+    padding: 0 18px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    background: oklch(1 0 0 / 0.08);
+    border: 1px solid oklch(1 0 0 / 0.18);
+    color: #fff;
+    outline: none;
+    transition: border-color 0.18s ease, background 0.18s ease;
+    backdrop-filter: blur(8px);
+  }
+  .email-input::placeholder {
+    color: oklch(0.70 0.04 288);
+  }
+  .email-input:focus {
+    border-color: oklch(0.62 0.22 292 / 0.8);
+    background: oklch(1 0 0 / 0.12);
   }
 
   .btn-cta {
@@ -162,7 +258,7 @@ const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
     align-items: center;
     gap: 9px;
     height: 52px;
-    padding: 0 28px;
+    padding: 0 24px;
     border-radius: 10px;
     font-size: 15px;
     font-weight: 700;
@@ -171,23 +267,41 @@ const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
     color: #fff;
     border: 1px solid oklch(0.70 0.22 292 / 0.5);
     box-shadow: 0 0 28px oklch(0.62 0.22 292 / 0.45), 0 2px 8px oklch(0 0 0 / 0.3);
-    text-decoration: none;
-    transition: all 0.18s ease;
     cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.18s ease;
   }
-  .btn-cta:hover {
+  .btn-cta:hover:not(:disabled) {
     background: oklch(0.68 0.22 292);
     box-shadow: 0 0 40px oklch(0.62 0.22 292 / 0.60), 0 4px 16px oklch(0 0 0 / 0.3);
     transform: translateY(-1px);
   }
-  .btn-cta:active {
+  .btn-cta:active:not(:disabled) {
     transform: translateY(0);
+  }
+  .btn-cta:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
   .btn-cta svg {
     transition: transform 0.18s ease;
+    flex-shrink: 0;
   }
-  .btn-cta:hover svg {
+  .btn-cta:hover:not(:disabled) svg {
     transform: translateX(3px);
+  }
+
+  .form-status {
+    margin-top: 16px;
+    font-size: 14px;
+    min-height: 20px;
+    color: oklch(0.80 0.04 288);
+  }
+  .form-status.success {
+    color: oklch(0.78 0.18 152);
+  }
+  .form-status.error {
+    color: oklch(0.72 0.20 25);
   }
 
   @keyframes pulse {
@@ -197,7 +311,7 @@ const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
 
   @media (max-width: 540px) {
     h1 { font-size: 38px; }
-    .cta-row { flex-direction: column; width: 100%; }
-    .btn-cta { width: 100%; justify-content: center; }
+    .cta-form { flex-direction: column; }
+    .email-input, .btn-cta { width: 100%; justify-content: center; }
   }
 </style>
