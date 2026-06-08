@@ -52,10 +52,24 @@ This file is gitignored. Open it and replace the placeholders:
 STRIPE_SECRET_KEY=sk_test_YOUR_KEY_HERE
 STRIPE_WEBHOOK_SECRET=whsec_FILL_AFTER_STEP_5
 HOSTING_URL=http://localhost:3000
+SMTP_ENCRYPTION_KEY=FILL_FROM_STEP_4B
 ```
 
 `STRIPE_WEBHOOK_SECRET` comes from `stripe listen` (step 5 below). You only
 know it after starting the CLI the first time, so fill it in then.
+
+### 4b. Generate the SMTP encryption key (local dev)
+
+The SMTP settings feature encrypts stored passwords with AES-256-GCM. For
+local dev you need a 32-byte key in hex:
+
+```
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Paste the output as `SMTP_ENCRYPTION_KEY` in `packages/functions/.env.local`.
+Any random 64-char hex string works locally — it does not need to match staging
+or prod (each environment has its own key).
 
 ---
 
@@ -163,6 +177,36 @@ stripe trigger customer.subscription.deleted
 | Stripe dashboard (test) | [dashboard.stripe.com/test](https://dashboard.stripe.com/test) | Customers, subscriptions, events |
 | Terminal 2 (stripe listen) | — | Forwarded events + HTTP response codes |
 | Next.js dev server logs | Terminal 1 | Function errors surfaced as console output |
+
+---
+
+## Provisioning secrets in staging / prod
+
+After `terraform apply` creates the secret containers, load the values:
+
+```bash
+# 1. Generate a key for staging (run once — keep the value, it encrypts all staging SMTP passwords)
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# 2. Add the version to staging
+echo -n "<hex-key>" | gcloud secrets versions add smtp-encryption-key \
+  --data-file=- --project linyup-staging
+
+# 3. Generate a SEPARATE key for prod (never reuse the staging key)
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# 4. Add the version to prod
+echo -n "<different-hex-key>" | gcloud secrets versions add smtp-encryption-key \
+  --data-file=- --project linyup-prod
+```
+
+> If you get `NOT_FOUND: Secret ... not found`, the Terraform secret container
+> hasn't been applied yet. Run `terraform apply` in `infra/environments/staging`
+> (or `prod`) first, then retry.
+
+Store the generated keys somewhere safe (e.g. a password manager). If the key
+is ever lost, existing encrypted SMTP passwords cannot be decrypted and all
+teams will need to re-enter them.
 
 ---
 
