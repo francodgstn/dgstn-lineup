@@ -1071,23 +1071,45 @@ function slugEmail(c: PoolEntry): string {
     .replace(/^\.|\.$/g, '')
 }
 
-// Enable email/password sign-in on a freshly-initialized real project (the Auth
-// emulator already has it enabled). Uses the same ADC credential as the Admin SDK.
+// Provision Identity Platform + enable email/password sign-in on a fresh real
+// project (the Auth emulator already has it enabled). Uses the same ADC
+// credential as the Admin SDK.
 async function enableEmailPasswordSignIn() {
   const credential = admin.app().options.credential!
   const token = await (credential as { getAccessToken(): Promise<{ access_token: string }> }).getAccessToken()
-  const url =
+  const headers = {
+    Authorization: `Bearer ${token.access_token}`,
+    'Content-Type': 'application/json',
+    'X-Goog-User-Project': PROJECT_ID,
+  }
+
+  // 1. Initialize the Identity Platform config on the project. On a fresh project
+  //    the /config resource doesn't exist yet, so the PATCH below 404s with
+  //    CONFIGURATION_NOT_FOUND until this runs. Idempotent — re-running returns an
+  //    ALREADY_INITIALIZED-style error, which we tolerate.
+  const initRes = await fetch(
+    `https://identitytoolkit.googleapis.com/v2/projects/${PROJECT_ID}/identityPlatform:initializeAuth`,
+    { method: 'POST', headers, body: '{}' }
+  )
+  if (!initRes.ok) {
+    const body = await initRes.text()
+    if (initRes.status !== 409 && !/ALREADY/i.test(body)) {
+      throw new Error(`Failed to initialize Identity Platform: ${initRes.status} ${body}`)
+    }
+  } else {
+    console.log('   ✓ Identity Platform initialized')
+  }
+
+  // 2. Enable email/password sign-in.
+  const res = await fetch(
     `https://identitytoolkit.googleapis.com/v2/projects/${PROJECT_ID}/config` +
-    `?updateMask=signIn.email.enabled,signIn.email.passwordRequired`
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token.access_token}`,
-      'Content-Type': 'application/json',
-      'X-Goog-User-Project': PROJECT_ID,
-    },
-    body: JSON.stringify({ signIn: { email: { enabled: true, passwordRequired: true } } }),
-  })
+      `?updateMask=signIn.email.enabled,signIn.email.passwordRequired`,
+    {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ signIn: { email: { enabled: true, passwordRequired: true } } }),
+    }
+  )
   if (!res.ok) {
     throw new Error(`Failed to enable email/password sign-in: ${res.status} ${await res.text()}`)
   }

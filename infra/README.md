@@ -230,14 +230,16 @@ echo -n "<value>" | gcloud secrets versions add stripe-secret-key --project=liny
 firebase target:apply hosting app     linyup-sandbox         --project sandbox
 firebase target:apply hosting landing linyup-sandbox-landing --project sandbox
 
-# 4. App Hosting backend — set Environment name to `sandbox` so
-#    apps/web/apphosting.sandbox.yaml applies (NEXT_PUBLIC_DEMO_MODE=true + sandbox
-#    Firebase config). Fill its REPLACE_WITH_* values from:
+# 4. App Hosting backend. Fill apphosting.sandbox.yaml's REPLACE_WITH_* values
+#    (and pass the web app id to --app) from:
 cd infra/environments/sandbox && terraform output -json firebase_web_config
+#    NOTE: firebase-tools has no --environment flag on create; set the backend's
+#    "Environment name" to `sandbox` afterwards in the Console (App Hosting →
+#    linyup-web → ⚙ Settings → Environment name) so apphosting.sandbox.yaml
+#    applies (NEXT_PUBLIC_DEMO_MODE=true + sandbox Firebase config).
 npx firebase-tools apphosting:backends:create \
-  --project linyup-sandbox --backend linyup-web \
-  --primary-region us-central1 --root-dir apps/web \
-  --environment sandbox --non-interactive
+  --project linyup-sandbox --app <WEB_APP_ID> --backend linyup-web \
+  --primary-region us-central1 --root-dir apps/web --non-interactive
 
 # 5. Seed the six demo Club tenants (ADC; idempotent — reset:sandbox to wipe first)
 pnpm seed:sandbox
