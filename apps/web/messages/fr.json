@@ -42,7 +42,20 @@
     "resetSent": "E-mail de réinitialisation envoyé. Vérifiez votre boîte de réception.",
     "errorInvalidCredentials": "E-mail ou mot de passe incorrect. Veuillez réessayer.",
     "errorEmailRequired": "Veuillez d'abord saisir votre adresse e-mail",
-    "errorResetFailed": "Impossible d'envoyer l'e-mail de réinitialisation. Vérifiez votre adresse e-mail."
+    "errorResetFailed": "Impossible d'envoyer l'e-mail de réinitialisation. Vérifiez votre adresse e-mail.",
+    "tryDemo": "Découvrir une démo en direct →"
+  },
+  "Try": {
+    "title": "Découvrez Linyup avec des clubs de démonstration",
+    "subtitle": "Choisissez un club et entrez directement dans un compte entièrement rempli — sans inscription. Chacun est un exemple réel dans le sport et le bien-être.",
+    "sportLabel": "Sport",
+    "wellnessLabel": "Bien-être",
+    "enterAs": "Entrer en tant que {team}",
+    "entering": "Ouverture…",
+    "error": "Impossible d'ouvrir la démo {team}. Veuillez réessayer.",
+    "ownAccount": "Vous voulez votre propre compte ?",
+    "signUp": "S'inscrire",
+    "logIn": "Se connecter"
   },
   "Signup": {
     "stepAccount": "Créer votre compte gratuit",

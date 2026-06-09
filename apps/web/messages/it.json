@@ -42,7 +42,20 @@
     "resetSent": "Email di reimpostazione inviata. Controlla la tua casella di posta.",
     "errorInvalidCredentials": "Email o password non validi. Riprova.",
     "errorEmailRequired": "Inserisci prima il tuo indirizzo email",
-    "errorResetFailed": "Impossibile inviare l'email di reimpostazione. Controlla il tuo indirizzo email."
+    "errorResetFailed": "Impossibile inviare l'email di reimpostazione. Controlla il tuo indirizzo email.",
+    "tryDemo": "Esplora una demo dal vivo →"
+  },
+  "Try": {
+    "title": "Esplora Linyup con club demo dal vivo",
+    "subtitle": "Scegli un club ed entra subito in un account completo — senza registrazione. Ognuno è un esempio reale tra sport e benessere.",
+    "sportLabel": "Sport",
+    "wellnessLabel": "Benessere",
+    "enterAs": "Entra come {team}",
+    "entering": "Apertura…",
+    "error": "Impossibile aprire la demo di {team}. Riprova.",
+    "ownAccount": "Vuoi un account tuo?",
+    "signUp": "Registrati",
+    "logIn": "Accedi"
   },
   "Signup": {
     "stepAccount": "Crea il tuo account gratuito",

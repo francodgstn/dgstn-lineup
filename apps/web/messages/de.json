@@ -42,7 +42,20 @@
     "resetSent": "E-Mail zum Zurücksetzen des Passworts gesendet. Prüfen Sie Ihren Posteingang.",
     "errorInvalidCredentials": "Ungültige E-Mail-Adresse oder falsches Passwort.",
     "errorEmailRequired": "Bitte zuerst E-Mail-Adresse eingeben",
-    "errorResetFailed": "Zurücksetz-E-Mail konnte nicht gesendet werden. Prüfen Sie Ihre E-Mail-Adresse."
+    "errorResetFailed": "Zurücksetz-E-Mail konnte nicht gesendet werden. Prüfen Sie Ihre E-Mail-Adresse.",
+    "tryDemo": "Live-Demo ansehen →"
+  },
+  "Try": {
+    "title": "Entdecken Sie Linyup mit Live-Demo-Clubs",
+    "subtitle": "Wählen Sie einen Club und steigen Sie direkt in ein voll gefülltes Konto ein — ohne Anmeldung. Jeder ist ein echtes Beispiel aus Sport und Wellness.",
+    "sportLabel": "Sport",
+    "wellnessLabel": "Wellness",
+    "enterAs": "Als {team} eintreten",
+    "entering": "Wird geöffnet…",
+    "error": "Die Demo für {team} konnte nicht geöffnet werden. Bitte erneut versuchen.",
+    "ownAccount": "Möchten Sie Ihr eigenes Konto?",
+    "signUp": "Registrieren",
+    "logIn": "Anmelden"
   },
   "Signup": {
     "stepAccount": "Kostenloses Konto erstellen",

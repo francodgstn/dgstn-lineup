@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { signIn, resetPassword } from '@/lib/auth'
 import { userHasTeam } from '@/lib/provisioning'
+import { isDemoMode } from '@/lib/demo'
 import { Logo } from '@/components/Logo'
 import { SocialAuthButtons, AuthDivider } from '@/components/auth/SocialAuthButtons'
 
@@ -141,6 +142,14 @@ export default function LoginPage() {
             {t('createAccount')}
           </Link>
         </p>
+
+        {isDemoMode() && (
+          <p className="text-center text-xs text-muted-foreground">
+            <Link href="/try" className="text-primary hover:underline">
+              {t('tryDemo')}
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   )

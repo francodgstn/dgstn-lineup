@@ -1,0 +1,61 @@
+# Firebase App Hosting — environment-specific overrides for the SANDBOX backend.
+#
+# App Hosting merges this over the base apphosting.yaml when the backend's
+# "Environment name" is set to `sandbox` (Console → App Hosting → backend →
+# settings, or `apphosting:backends:create --environment sandbox`). Values here
+# take precedence over the base file.
+#
+# This points the demo playground web app at the linyup-sandbox project and turns
+# on NEXT_PUBLIC_DEMO_MODE so the public /try page is reachable. The base
+# apphosting.yaml does NOT set NEXT_PUBLIC_DEMO_MODE, so staging/prod never expose
+# the demo logins.
+#
+# Fill the NEXT_PUBLIC_FIREBASE_* values from the sandbox stack outputs:
+#   cd infra/environments/sandbox && terraform output -json firebase_web_config
+
+env:
+  # Demo playground — exposes the public /try page (sandbox only).
+  - variable: NEXT_PUBLIC_DEMO_MODE
+    value: "true"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # Firebase web config — public values (embedded in the JS bundle).
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: linyup-sandbox
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: linyup-sandbox.firebaseapp.com
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_DATABASE_URL
+    value: https://linyup-sandbox.firebaseio.com
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: linyup-sandbox.firebasestorage.app
+    availability:
+      - BUILD
+      - RUNTIME
+  # TODO: replace the three generated values below from `terraform output
+  # -json firebase_web_config` after the sandbox project is created.
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "REPLACE_WITH_SANDBOX_MESSAGING_SENDER_ID"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: REPLACE_WITH_SANDBOX_APP_ID
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: REPLACE_WITH_SANDBOX_API_KEY
+    availability:
+      - BUILD
+      - RUNTIME

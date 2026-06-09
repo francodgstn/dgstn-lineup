@@ -42,7 +42,20 @@
     "resetSent": "Password reset email sent. Check your inbox.",
     "errorInvalidCredentials": "Invalid email or password. Please try again.",
     "errorEmailRequired": "Enter your email address first",
-    "errorResetFailed": "Could not send reset email. Check your email address."
+    "errorResetFailed": "Could not send reset email. Check your email address.",
+    "tryDemo": "Explore a live demo →"
+  },
+  "Try": {
+    "title": "Explore Linyup with live demo clubs",
+    "subtitle": "Pick a club and step straight into a fully-loaded account — no signup. Each one is a real example across sport and wellness.",
+    "sportLabel": "Sport",
+    "wellnessLabel": "Wellness",
+    "enterAs": "Enter as {team}",
+    "entering": "Entering…",
+    "error": "Could not open the {team} demo. Please try again.",
+    "ownAccount": "Want your own account?",
+    "signUp": "Sign up",
+    "logIn": "Log in"
   },
   "Signup": {
     "stepAccount": "Create your free account",

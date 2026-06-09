@@ -1,10 +1,17 @@
 {
   "projects": {
     "default": "demo-linyup",
+    "sandbox": "linyup-sandbox",
     "staging": "linyup-staging",
     "production": "linyup-prod"
   },
   "targets": {
+    "linyup-sandbox": {
+      "hosting": {
+        "app": ["linyup-sandbox"],
+        "landing": ["linyup-sandbox-landing"]
+      }
+    },
     "linyup-staging": {
       "hosting": {
         "app": ["linyup-staging"],

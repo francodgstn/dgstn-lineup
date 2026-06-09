@@ -32,7 +32,9 @@
     "stripe:sync": "tsx scripts/stripe-sync.ts",
     "migrate:hmd": "tsx --tsconfig tsconfig.scripts.json scripts/migrate-hmd.ts",
     "seed:staging": "tsx scripts/seed-staging.ts",
-    "reset:staging": "tsx scripts/reset-staging-db.ts --confirm"
+    "reset:staging": "tsx scripts/reset-staging-db.ts --confirm",
+    "seed:sandbox": "tsx scripts/seed-sandbox.ts",
+    "reset:sandbox": "tsx scripts/reset-sandbox-db.ts --confirm"
   },
   "devDependencies": {
     "firebase-admin": "^13.0.0",
