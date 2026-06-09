@@ -20,6 +20,8 @@ export interface SaasSubscription {
     last_invoice_id?: string
     last_payment_status?: string
     last_event_id?: string               // idempotency: last processed webhook event ID
+    // Active paid plugin add-ons (Coach plan) → their Stripe subscription items.
+    activeAddOns?: Array<{ pluginId: string; itemId: string }>
   } | null
   created_at: Timestamp
   updated_at: Timestamp

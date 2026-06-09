@@ -33,8 +33,15 @@ export class StripeAdapter implements GatewayAdapter {
     successUrl: string
     cancelUrl: string
     idempotencyKey: string
+    // Add-on price lookup keys to bill alongside the plan (e.g. Coach carrying
+    // trial add-ons into the paid subscription).
+    addonLookupKeys?: string[]
   }): Promise<CheckoutSession> {
-    const priceId = await this.resolvePriceId(params.plan)
+    const priceId = await this.resolvePriceByLookupKey(priceKeyForPlan(params.plan))
+
+    const addonPriceIds = await Promise.all(
+      (params.addonLookupKeys ?? []).map((k) => this.resolvePriceByLookupKey(k)),
+    )
 
     const entityMeta: Record<string, string> = { plan: params.plan }
     if (params.teamId) entityMeta.teamId = params.teamId
@@ -44,7 +51,10 @@ export class StripeAdapter implements GatewayAdapter {
       {
         mode: 'subscription',
         customer_email: params.customerEmail,
-        line_items: [{ price: priceId, quantity: 1 }],
+        line_items: [
+          { price: priceId, quantity: 1 },
+          ...addonPriceIds.map((id) => ({ price: id, quantity: 1 })),
+        ],
         success_url: params.successUrl,
         cancel_url: params.cancelUrl,
         metadata: entityMeta,
@@ -57,15 +67,31 @@ export class StripeAdapter implements GatewayAdapter {
     return { url: session.url, sessionId: session.id }
   }
 
-  private async resolvePriceId(plan: string): Promise<string> {
-    const prices = await this.stripe.prices.list({
-      lookup_keys: [priceKeyForPlan(plan)],
-      limit: 1,
-    })
+  private async resolvePriceByLookupKey(lookupKey: string): Promise<string> {
+    const prices = await this.stripe.prices.list({ lookup_keys: [lookupKey], limit: 1 })
     if (!prices.data.length) {
-      throw new Error(`No Stripe price found for lookup key: ${priceKeyForPlan(plan)}`)
+      throw new Error(`No Stripe price found for lookup key: ${lookupKey}`)
     }
     return prices.data[0].id
+  }
+
+  /** Add a plugin add-on as a subscription item on an existing subscription. */
+  async addSubscriptionItem(params: { subscriptionId: string; lookupKey: string }): Promise<{ itemId: string }> {
+    const priceId = await this.resolvePriceByLookupKey(params.lookupKey)
+    const item = await this.stripe.subscriptionItems.create({
+      subscription: params.subscriptionId,
+      price: priceId,
+      quantity: 1,
+      proration_behavior: 'create_prorations',
+    })
+    return { itemId: item.id }
+  }
+
+  /** Remove a subscription item (plugin add-on deactivation). */
+  async removeSubscriptionItem(params: { itemId: string }): Promise<void> {
+    await this.stripe.subscriptionItems.del(params.itemId, {
+      proration_behavior: 'create_prorations',
+    })
   }
 
   async cancelSubscription(params: { subscriptionId: string }): Promise<void> {
@@ -128,6 +154,14 @@ export class StripeAdapter implements GatewayAdapter {
     return sub.metadata?.plan as string | undefined
   }
 
+  private extractItems(sub: any): Array<{ itemId: string; lookupKey?: string }> {
+    const items: any[] = sub.items?.data ?? []
+    return items.map((it) => ({
+      itemId: it.id as string,
+      lookupKey: (it.price?.lookup_key as string | undefined) ?? undefined,
+    }))
+  }
+
   private mapStripeEvent(event: any): WebhookEvent {
     const base = { eventId: event.id as string, raw: event }
     const obj = event.data?.object ?? {}
@@ -142,6 +176,7 @@ export class StripeAdapter implements GatewayAdapter {
           teamId: obj.metadata?.teamId as string | undefined,
           orgId: obj.metadata?.orgId as string | undefined,
           plan: this.extractPlanFromSubscription(obj),
+          items: this.extractItems(obj),
           currentPeriodStart: obj.current_period_start ? new Date((obj.current_period_start as number) * 1000) : undefined,
           currentPeriodEnd: obj.current_period_end ? new Date((obj.current_period_end as number) * 1000) : undefined,
           cancelAtPeriodEnd: obj.cancel_at_period_end as boolean | undefined,
@@ -156,6 +191,7 @@ export class StripeAdapter implements GatewayAdapter {
           teamId: obj.metadata?.teamId as string | undefined,
           orgId: obj.metadata?.orgId as string | undefined,
           plan: this.extractPlanFromSubscription(obj),
+          items: this.extractItems(obj),
           currentPeriodStart: obj.current_period_start ? new Date((obj.current_period_start as number) * 1000) : undefined,
           currentPeriodEnd: obj.current_period_end ? new Date((obj.current_period_end as number) * 1000) : undefined,
           cancelAtPeriodEnd: obj.cancel_at_period_end as boolean | undefined,

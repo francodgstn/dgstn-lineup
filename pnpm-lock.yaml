@@ -17,6 +17,9 @@ importers:
       prettier:
         specifier: ^3.4.2
         version: 3.8.3
+      stripe:
+        specifier: ^22.1.1
+        version: 22.1.1(@types/node@22.19.18)
       tsx:
         specifier: ^4.19.2
         version: 4.21.0

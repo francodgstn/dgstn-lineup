@@ -1,4 +1,5 @@
 import type { PluginManifest } from '@linyup/shared'
+import { PLUGIN_ADDONS } from '@linyup/shared'
 
 export const gamificationManifest: PluginManifest = {
   id: 'gamification',
@@ -8,7 +9,7 @@ export const gamificationManifest: PluginManifest = {
   minPlan: 'club',
   status: 'available',
   recommended: true,
-  addon: { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_gamification_monthly' },
+  addon: PLUGIN_ADDONS['gamification'],
   iconName: 'Trophy',
   navContributions: [
     {

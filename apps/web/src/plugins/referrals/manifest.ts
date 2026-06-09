@@ -1,4 +1,5 @@
 import type { PluginManifest } from '@linyup/shared'
+import { PLUGIN_ADDONS } from '@linyup/shared'
 
 export const referralsManifest: PluginManifest = {
   id: 'referrals',
@@ -7,7 +8,7 @@ export const referralsManifest: PluginManifest = {
   category: 'engagement',
   minPlan: 'club',
   status: 'available',
-  addon: { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_referrals_monthly' },
+  addon: PLUGIN_ADDONS['referrals'],
   iconName: 'Gift',
   hasOwnerConfig: false,
   navContributions: [

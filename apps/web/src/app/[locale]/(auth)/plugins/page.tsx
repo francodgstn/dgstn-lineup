@@ -6,7 +6,8 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import {
   doc, setDoc, deleteDoc, getDoc, serverTimestamp,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import {
@@ -181,13 +182,14 @@ function PluginCard({
               {t('upgradeCta')}
             </Button>
           ) : access.kind === 'addon' ? (
-            // Phase 1: add-on billing not wired yet — show price, disable activation.
-            <div className="flex flex-col gap-1">
-              <Button size="sm" variant="outline" disabled>
-                {t('addonAdd', { price: access.priceMonthly })}
-              </Button>
-              <span className="text-xs text-muted-foreground">{t('addonComingSoon')}</span>
-            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onInstall}
+              disabled={manifest.status === 'coming_soon' || installing}
+            >
+              {installing ? t('installing') : t('addonAdd', { price: access.priceMonthly })}
+            </Button>
           ) : (
             // included (club/org)
             <Button
@@ -252,12 +254,13 @@ export default function PluginsPage() {
   const { user, currentTeamId } = useAuth()
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
   const { data: isOwner, isLoading: roleLoading } = useIsOwner(currentTeamId, user?.uid ?? null)
-  const { plan } = usePlan()
+  const { plan, isTrialing } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
   const [installingId, setInstallingId] = useState<string | null>(null)
   const [configPlugin, setConfigPlugin] = useState<PluginManifest | null>(null)
+  const [confirmAddon, setConfirmAddon] = useState<PluginManifest | null>(null)
 
   // ── Install mutation ──
   const installMutation = useMutation({
@@ -280,7 +283,7 @@ export default function PluginsPage() {
     onSuccess: (_, manifest) => toast.success(t(manifest.nameKey as Parameters<typeof t>[0]) + ' installed'),
   })
 
-  // ── Remove mutation ──
+  // ── Remove mutation (Club/Org included plugins — client-side) ──
   const removeMutation = useMutation({
     mutationFn: async (pluginId: string) => {
       if (!currentTeamId) throw new Error('Not authenticated')
@@ -289,6 +292,45 @@ export default function PluginsPage() {
     },
     onError: () => toast.error(t('errorRemove')),
   })
+
+  // ── Coach add-on mutations (go through Cloud Functions: Stripe item if paid,
+  //    free during trial). Install state syncs back via useInstalledPlugins. ──
+  const activateAddonMutation = useMutation({
+    mutationFn: async (manifest: PluginManifest) => {
+      if (!currentTeamId) throw new Error('Not authenticated')
+      await httpsCallable(functions, 'activatePluginAddon')({ teamId: currentTeamId, pluginId: manifest.id })
+    },
+    onMutate: (manifest) => setInstallingId(manifest.id),
+    onSettled: () => setInstallingId(null),
+    onError: () => toast.error(t('errorInstall')),
+    onSuccess: (_, manifest) => toast.success(t(manifest.nameKey as Parameters<typeof t>[0]) + ' activated'),
+  })
+
+  const deactivateAddonMutation = useMutation({
+    mutationFn: async (pluginId: string) => {
+      if (!currentTeamId) throw new Error('Not authenticated')
+      await httpsCallable(functions, 'deactivatePluginAddon')({ teamId: currentTeamId, pluginId })
+    },
+    onError: () => toast.error(t('errorRemove')),
+  })
+
+  // Route install/remove by access kind: add-ons → functions (with a price
+  // confirm when the coach is already paying), included plugins → client-side.
+  function handleInstall(manifest: PluginManifest) {
+    const access = pluginAccessForPlan(manifest, plan)
+    if (access.kind === 'addon') {
+      if (isTrialing) activateAddonMutation.mutate(manifest)
+      else setConfirmAddon(manifest)
+    } else {
+      installMutation.mutate(manifest)
+    }
+  }
+
+  function handleRemove(manifest: PluginManifest) {
+    const access = pluginAccessForPlan(manifest, plan)
+    if (access.kind === 'addon') deactivateAddonMutation.mutate(manifest.id)
+    else removeMutation.mutate(manifest.id)
+  }
 
   const isLoading = pluginsLoading || roleLoading
 
@@ -361,8 +403,8 @@ export default function PluginsPage() {
             isInstalled={isInstalled(manifest.id)}
             isOwner={!!isOwner}
             installing={installingId === manifest.id}
-            onInstall={() => installMutation.mutate(manifest)}
-            onRemove={() => removeMutation.mutate(manifest.id)}
+            onInstall={() => handleInstall(manifest)}
+            onRemove={() => handleRemove(manifest)}
             onConfigure={() => setConfigPlugin(manifest)}
             onUpgrade={() => openUpgradeModal({ minPlan: manifest.minPlan })}
           />
@@ -381,6 +423,35 @@ export default function PluginsPage() {
         open={!!configPlugin}
         onClose={() => setConfigPlugin(null)}
       />
+
+      {/* Add-on price confirmation (paid coach) */}
+      <Dialog open={!!confirmAddon} onOpenChange={(v) => { if (!v) setConfirmAddon(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('addonConfirmTitle')}</DialogTitle>
+          </DialogHeader>
+          {confirmAddon && (
+            <p className="text-sm text-muted-foreground">
+              {t('addonConfirmBody', {
+                name: t(confirmAddon.nameKey as Parameters<typeof t>[0]),
+                price: confirmAddon.addon?.coachPriceMonthly ?? 0,
+              })}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAddon(null)}>{t('cancel')}</Button>
+            <Button
+              onClick={() => {
+                const m = confirmAddon
+                setConfirmAddon(null)
+                if (m) activateAddonMutation.mutate(m)
+              }}
+            >
+              {t('addonConfirmCta')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

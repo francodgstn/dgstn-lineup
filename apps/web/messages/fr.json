@@ -1085,10 +1085,12 @@
     "accessIncluded": "Inclus",
     "addonPrice": "+ CHF {price}/mois",
     "addonAdd": "Ajouter · CHF {price}/mois",
-    "addonComingSoon": "Activation bientôt disponible",
     "upgradeCta": "Passer à l'offre supérieure",
     "coachAddonBannerTitle": "Étendez votre offre Coach",
-    "coachAddonBannerBody": "Ajoutez des fonctionnalités en options payantes — ou obtenez-les toutes incluses avec l'offre Club."
+    "coachAddonBannerBody": "Ajoutez des fonctionnalités en options payantes — ou obtenez-les toutes incluses avec l'offre Club.",
+    "addonConfirmTitle": "Ajouter ce plugin ?",
+    "addonConfirmBody": "{name} sera ajouté à votre abonnement pour CHF {price}/mois.",
+    "addonConfirmCta": "Ajouter à l'abonnement"
   },
   "Org": {
     "title": "Organisation",

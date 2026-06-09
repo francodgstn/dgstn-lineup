@@ -29,6 +29,7 @@
     "dev:billing": "node scripts/dev-billing.mjs",
     "dev:codespace": "bash scripts/dev.sh",
     "stripe:listen": "stripe listen --forward-to localhost:5001/demo-linyup/europe-west6/handleStripeWebhook",
+    "stripe:sync": "tsx scripts/stripe-sync.ts",
     "migrate:hmd": "tsx --tsconfig tsconfig.scripts.json scripts/migrate-hmd.ts",
     "seed:staging": "tsx scripts/seed-staging.ts",
     "reset:staging": "tsx scripts/reset-staging-db.ts --confirm"
@@ -37,6 +38,7 @@
     "firebase-admin": "^13.0.0",
     "firebase-tools": "^15.18.0",
     "prettier": "^3.4.2",
+    "stripe": "^22.1.1",
     "tsx": "^4.19.2",
     "turbo": "^2.3.3",
     "typescript": "^5.7.3"

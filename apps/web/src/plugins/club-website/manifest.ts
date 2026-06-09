@@ -1,4 +1,5 @@
 import type { PluginManifest } from '@linyup/shared'
+import { PLUGIN_ADDONS } from '@linyup/shared'
 
 export const clubWebsiteManifest: PluginManifest = {
   id: 'club-website',
@@ -7,7 +8,7 @@ export const clubWebsiteManifest: PluginManifest = {
   category: 'content',
   minPlan: 'club',
   status: 'coming_soon',
-  addon: { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_club-website_monthly' },
+  addon: PLUGIN_ADDONS['club-website'],
   iconName: 'Globe',
   hasOwnerConfig: true,
 }

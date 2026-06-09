@@ -1090,10 +1090,12 @@
     "accessIncluded": "Included",
     "addonPrice": "+ CHF {price}/mo",
     "addonAdd": "Add · CHF {price}/mo",
-    "addonComingSoon": "Activation coming soon",
     "upgradeCta": "Upgrade to unlock",
     "coachAddonBannerTitle": "Extend your Coach plan",
-    "coachAddonBannerBody": "Add features as paid add-ons — or get them all included on the Club plan."
+    "coachAddonBannerBody": "Add features as paid add-ons — or get them all included on the Club plan.",
+    "addonConfirmTitle": "Add this plugin?",
+    "addonConfirmBody": "{name} will be added to your subscription for CHF {price}/mo.",
+    "addonConfirmCta": "Add to subscription"
   },
   "Org": {
     "title": "Organization",

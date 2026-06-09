@@ -1,4 +1,5 @@
 import type { PluginManifest } from '@linyup/shared'
+import { PLUGIN_ADDONS } from '@linyup/shared'
 
 export const clubCoursesManifest: PluginManifest = {
   id: 'club-courses',
@@ -8,7 +9,7 @@ export const clubCoursesManifest: PluginManifest = {
   minPlan: 'club',
   status: 'available',
   recommended: true,
-  addon: { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_club-courses_monthly' },
+  addon: PLUGIN_ADDONS['club-courses'],
   iconName: 'GraduationCap',
   navContributions: [
     {

@@ -300,12 +300,16 @@ service cloud.firestore {
         allow read, write: if hasTeamRole(teamId, 'owner');
       }
 
-      // Installed plugins — teams enable/configure add-on plugins here
-      // All members can read (needed by automation UI and nav display)
-      // Only owners can install, configure, or remove plugins
+      // Installed plugins — teams enable/configure add-on plugins here.
+      // All members can read (needed by automation UI and nav display).
+      // Club/Org owners install client-side (plugins are included). Coach plans
+      // activate plugins as PAID add-ons via the activatePluginAddon Cloud
+      // Function (admin SDK), so client writes are denied on Coach — this stops
+      // a coach self-granting a paid plugin for free.
       match /installed_plugins/{pluginId} {
         allow read:  if isTeamMember(teamId);
-        allow write: if hasTeamRole(teamId, 'owner');
+        allow write: if hasTeamRole(teamId, 'owner')
+                     && get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', '') in ['club', 'organization'];
       }
 
       // Subscription types subcollection (team-defined subscription plans and aggregators)

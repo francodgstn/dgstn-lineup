@@ -20,6 +20,9 @@ export interface WebhookEvent {
   currency?: string
   lastInvoiceId?: string
   lastPaymentStatus?: string
+  // Subscription line items (present on subscription.created/updated) — used to
+  // reconcile plugin add-ons. Each carries its Stripe item id + price lookup key.
+  items?: Array<{ itemId: string; lookupKey?: string }>
   raw: unknown
 }
 

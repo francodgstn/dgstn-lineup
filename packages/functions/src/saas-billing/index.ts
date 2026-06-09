@@ -7,6 +7,12 @@ import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
 import { StripeAdapter } from '../utils/gateway/stripe'
 import type { SaasPlan } from '@linyup/shared'
+import {
+  PLUGIN_ADDONS,
+  pluginIdForAddonLookupKey,
+  TEAMS_COLLECTION,
+  INSTALLED_PLUGINS_SUBCOLLECTION,
+} from '@linyup/shared'
 
 
 const VALID_PLANS: SaasPlan[] = ['coach', 'club', 'organization']
@@ -29,6 +35,22 @@ async function getPlatformStripeAdapter(): Promise<StripeAdapter> {
 async function assertOwner(uid: string, teamId: string): Promise<void> {
   const isOwner = await hasTeamRole(uid, teamId, 'owner')
   if (!isOwner) throw new HttpsError('permission-denied', 'Owner access required')
+}
+
+/** Stripe lookup keys for a team's currently-active add-on plugins (carried
+ * into checkout so trial add-ons keep working once the coach pays). */
+async function activeAddonLookupKeys(teamId: string): Promise<string[]> {
+  const snap = await admin.firestore()
+    .collection(TEAMS_COLLECTION).doc(teamId)
+    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+    .where('status', '==', 'active')
+    .get()
+  const keys: string[] = []
+  for (const d of snap.docs) {
+    const addon = PLUGIN_ADDONS[d.id]
+    if (addon) keys.push(addon.stripeLookupKey)
+  }
+  return keys
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,6 +92,10 @@ export const createCheckoutSession = onCall(async (request) => {
   const hostingUrl = getHostingUrl()
   const idempotencyKey = `checkout:${teamId}:${plan}:${Math.floor(Date.now() / 60000)}` // 1-minute window
 
+  // Coach carries any active (trial) add-ons into the paid subscription; Club/Org
+  // include all plugins, so no add-on line items are needed for them.
+  const addonLookupKeys = plan === 'coach' ? await activeAddonLookupKeys(teamId) : []
+
   let session: { url: string; sessionId: string }
   try {
     session = await adapter.createCheckoutSession({
@@ -79,6 +105,7 @@ export const createCheckoutSession = onCall(async (request) => {
       successUrl: `${hostingUrl}/${locale}/billing?checkout=success`,
       cancelUrl: `${hostingUrl}/${locale}/billing?checkout=cancelled`,
       idempotencyKey,
+      addonLookupKeys,
     })
   } catch (err) {
     console.error('Checkout session creation failed:', err)
@@ -164,6 +191,14 @@ export const handleStripeWebhook = onRequest(
 
       const now = FieldValue.serverTimestamp()
 
+      // Add-on subscription items present on this subscription (Coach plugins).
+      const addonActive = (event.items ?? [])
+        .map((it) => ({
+          itemId: it.itemId,
+          pluginId: it.lookupKey ? pluginIdForAddonLookupKey(it.lookupKey) : undefined,
+        }))
+        .filter((x): x is { itemId: string; pluginId: string } => !!x.pluginId)
+
       // Map event to saas_subscriptions fields
       const update: Record<string, unknown> = {
         entity_type: entityType,
@@ -184,6 +219,7 @@ export const handleStripeWebhook = onRequest(
           if (event.currentPeriodEnd) update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
           update.cancel_at_period_end = false
           update.trial_ends_at = null
+          update['gateway_data.activeAddOns'] = addonActive
           if (!existing.exists) {
             update.created_at = now
           }
@@ -196,6 +232,7 @@ export const handleStripeWebhook = onRequest(
           if (event.cancelAtPeriodEnd !== undefined) update.cancel_at_period_end = event.cancelAtPeriodEnd
           if (event.subscriptionId) update['gateway_data.subscription_id'] = event.subscriptionId
           if (event.customerId) update['gateway_data.customer_id'] = event.customerId
+          update['gateway_data.activeAddOns'] = addonActive
           break
 
         case 'subscription.cancelled':
@@ -243,6 +280,29 @@ export const handleStripeWebhook = onRequest(
         }
       } else {
         await admin.firestore().collection('teams').doc(entityId).update(entityUpdate)
+      }
+
+      // Reconcile plugin add-on installs against the subscription's items.
+      // Handles trial→paid conversion (carried add-ons become paid items) and
+      // external removals. Only touches paid add-on installs (config.addonItemId).
+      if (entityType === 'team' && (event.type === 'subscription.created' || event.type === 'subscription.updated')) {
+        const installsCol = admin.firestore()
+          .collection(TEAMS_COLLECTION).doc(entityId)
+          .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+        const activeIds = new Set(addonActive.map((a) => a.pluginId))
+        for (const a of addonActive) {
+          await installsCol.doc(a.pluginId).set(
+            { pluginId: a.pluginId, teamId: entityId, status: 'active', config: { addonItemId: a.itemId }, updated_at: now },
+            { merge: true },
+          )
+        }
+        const installsSnap = await installsCol.get()
+        for (const d of installsSnap.docs) {
+          const cfg = (d.data().config ?? {}) as { addonItemId?: string }
+          if (cfg.addonItemId && !activeIds.has(d.id)) {
+            await installsCol.doc(d.id).delete()
+          }
+        }
       }
 
       console.log(`Processed webhook ${event.type} (${event.eventId}) for ${entityType} ${entityId}`)
@@ -393,4 +453,116 @@ export const getSaasInvoices = onCall(async (request) => {
     console.error('getSaasInvoices failed:', err)
     throw new HttpsError('internal', 'Failed to fetch invoices')
   }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// activatePluginAddon — Coach activates a paid add-on plugin
+//   • paid coach → adds a Stripe subscription item + writes the install
+//   • trialing / no subscription → writes the install free (exploration)
+// Club/Org include all plugins and install client-side, not via this function.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const activatePluginAddon = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+
+  const data = request.data as { teamId?: string; pluginId?: string }
+  if (!data?.teamId || !data?.pluginId) {
+    throw new HttpsError('invalid-argument', 'teamId and pluginId are required')
+  }
+  const { teamId, pluginId } = data
+
+  const addon = PLUGIN_ADDONS[pluginId]
+  if (!addon) throw new HttpsError('invalid-argument', `${pluginId} is not an add-on plugin`)
+
+  await assertOwner(request.auth.uid, teamId)
+
+  const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(teamId).get()
+  const plan = teamSnap.data()?.plan as SaasPlan | undefined
+  if (plan !== 'coach') {
+    throw new HttpsError('failed-precondition', 'Add-ons apply to the Coach plan; Club/Org include all plugins')
+  }
+
+  const installRef = admin.firestore()
+    .collection(TEAMS_COLLECTION).doc(teamId)
+    .collection(INSTALLED_PLUGINS_SUBCOLLECTION).doc(pluginId)
+
+  const subSnap = await admin.firestore().collection('saas_subscriptions').doc(teamId).get()
+  const sub = subSnap.exists ? subSnap.data()! : null
+  const subscriptionId = sub?.gateway_data?.subscription_id as string | undefined
+  const status = sub?.status as string | undefined
+  const isPaid = !!subscriptionId && (status === 'active' || status === 'past_due')
+
+  if (isPaid) {
+    const adapter = await getPlatformStripeAdapter()
+    let itemId: string
+    try {
+      const res = await adapter.addSubscriptionItem({ subscriptionId: subscriptionId!, lookupKey: addon.stripeLookupKey })
+      itemId = res.itemId
+    } catch (err) {
+      console.error('addSubscriptionItem failed:', err)
+      throw new HttpsError('internal', 'Failed to add the add-on to your subscription')
+    }
+    const current = ((sub?.gateway_data?.activeAddOns ?? []) as Array<{ pluginId: string; itemId: string }>)
+      .filter((a) => a.pluginId !== pluginId)
+    await admin.firestore().collection('saas_subscriptions').doc(teamId).set(
+      { gateway_data: { activeAddOns: [...current, { pluginId, itemId }] }, updated_at: FieldValue.serverTimestamp() },
+      { merge: true },
+    )
+    await installRef.set(
+      { pluginId, teamId, installedAt: FieldValue.serverTimestamp(), installedBy: request.auth.uid, status: 'active', config: { addonItemId: itemId } },
+      { merge: true },
+    )
+    return { success: true, billed: true }
+  }
+
+  // Trial / no subscription → free during the trial.
+  await installRef.set(
+    { pluginId, teamId, installedAt: FieldValue.serverTimestamp(), installedBy: request.auth.uid, status: 'active', config: { addonFreeTrial: true } },
+    { merge: true },
+  )
+  return { success: true, billed: false }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// deactivatePluginAddon — removes the add-on (and its Stripe item if billed)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const deactivatePluginAddon = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+
+  const data = request.data as { teamId?: string; pluginId?: string }
+  if (!data?.teamId || !data?.pluginId) {
+    throw new HttpsError('invalid-argument', 'teamId and pluginId are required')
+  }
+  const { teamId, pluginId } = data
+
+  await assertOwner(request.auth.uid, teamId)
+
+  const installRef = admin.firestore()
+    .collection(TEAMS_COLLECTION).doc(teamId)
+    .collection(INSTALLED_PLUGINS_SUBCOLLECTION).doc(pluginId)
+  const installSnap = await installRef.get()
+  if (!installSnap.exists) return { success: true }
+
+  const itemId = (installSnap.data()?.config as { addonItemId?: string } | undefined)?.addonItemId
+
+  if (itemId) {
+    const adapter = await getPlatformStripeAdapter()
+    try {
+      await adapter.removeSubscriptionItem({ itemId })
+    } catch (err) {
+      console.error('removeSubscriptionItem failed:', err)
+      throw new HttpsError('internal', 'Failed to remove the add-on from your subscription')
+    }
+    const subSnap = await admin.firestore().collection('saas_subscriptions').doc(teamId).get()
+    const current = ((subSnap.data()?.gateway_data?.activeAddOns ?? []) as Array<{ pluginId: string; itemId: string }>)
+      .filter((a) => a.pluginId !== pluginId)
+    await admin.firestore().collection('saas_subscriptions').doc(teamId).set(
+      { gateway_data: { activeAddOns: current }, updated_at: FieldValue.serverTimestamp() },
+      { merge: true },
+    )
+  }
+
+  await installRef.delete()
+  return { success: true }
 })
