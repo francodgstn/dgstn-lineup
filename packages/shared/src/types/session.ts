@@ -18,6 +18,12 @@ export interface Session {
   notes?: string
   created_at?: Timestamp
   createdBy?: string
+  // ── Recurring session fields ──
+  seriesId?: string
+  isException?: boolean
+  exceptionType?: 'modified' | 'cancelled' | null
+  instructorName?: string
+  instructorId?: string
   // ── Coaching-specific fields (only populated when activityType === 'coaching') ──
   /** Back-link to the coach_availability template that generated this session. */
   templateId?: string
