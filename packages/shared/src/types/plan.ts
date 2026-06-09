@@ -3,6 +3,23 @@ import type { SaasPlan } from './team'
 // Ordered from lowest to highest — used for >= comparisons
 export const PLAN_ORDER: SaasPlan[] = ['coach', 'club', 'organization']
 
+// Base subscription pricing per plan. Declarative source for scripts/stripe-sync.ts
+// (the whole Stripe catalogue — plans + add-ons — lives in the repo).
+// Amounts are INDICATIVE base prices in CHF/month; the authoritative amount is the
+// Stripe Price for the lookup key. `stripe:sync` only *creates* missing prices —
+// it never repriced an existing one unless run with --reprice.
+// Lookup-key convention matches the gateway: `linyup_<plan>_monthly`.
+export interface PlanPrice {
+  baseMonthly: number
+  stripeLookupKey: string
+}
+
+export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
+  coach:        { baseMonthly: 19,  stripeLookupKey: 'linyup_coach_monthly' },
+  club:         { baseMonthly: 39,  stripeLookupKey: 'linyup_club_monthly' },
+  organization: { baseMonthly: 149, stripeLookupKey: 'linyup_organization_monthly' },
+}
+
 export type PlanFeature =
   // Coach
   | 'contacts'

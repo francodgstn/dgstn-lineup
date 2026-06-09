@@ -1,28 +1,33 @@
 /**
  * Declarative Stripe catalog sync.
  *
- * Source of truth lives IN THE REPO: the add-on catalog is `PLUGIN_ADDONS`
- * (packages/shared/src/plugin-addons.ts). This script idempotently provisions a
- * Stripe Product + recurring monthly Price (with a stable `lookup_key`) for each
- * add-on, so the same definition can be applied to test and prod.
+ * The whole catalogue lives IN THE REPO:
+ *   - plan prices  → PLAN_PRICING   (packages/shared/src/types/plan.ts)
+ *   - add-on prices → PLUGIN_ADDONS (packages/shared/src/plugin-addons.ts)
+ *
+ * This script idempotently provisions a Stripe Product + recurring monthly Price
+ * (with a stable `lookup_key`) for each entry, so the same definition can be
+ * applied to test and prod.
  *
  * Idempotency: keyed by `lookup_key`.
- *   - missing            → create Product + Price
+ *   - missing             → create Product + Price            (with --apply)
  *   - present, same price → no-op
- *   - present, different  → create a NEW Price and `transfer_lookup_key` (Stripe
- *                           Prices are immutable; this re-points the key)
- *
- * Plan prices (linyup_<plan>_monthly) are managed separately and NOT touched.
+ *   - present, different  → drift WARNING only, unless --reprice is also passed,
+ *                           which creates a NEW Price + `transfer_lookup_key`
+ *                           (Stripe Prices are immutable). Repricing affects only
+ *                           NEW checkouts; existing subscriptions keep their price.
  *
  * Usage:
- *   STRIPE_SECRET_KEY=sk_test_... pnpm tsx scripts/stripe-sync.ts          # dry-run
- *   STRIPE_SECRET_KEY=sk_test_... pnpm tsx scripts/stripe-sync.ts --apply  # write
+ *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync                     # dry-run
+ *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply             # create missing
+ *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply --reprice   # also reprice drift
  */
 import Stripe from 'stripe'
-import { PLUGIN_ADDONS } from '@linyup/shared'
+import { PLAN_PRICING, PLUGIN_ADDONS } from '@linyup/shared'
 
 const CURRENCY = 'chf'
 const APPLY = process.argv.includes('--apply')
+const REPRICE = process.argv.includes('--reprice')
 
 const secretKey = process.env.STRIPE_SECRET_KEY
 if (!secretKey) {
@@ -31,34 +36,61 @@ if (!secretKey) {
 }
 const stripe = new Stripe(secretKey)
 
+interface CatalogEntry { kind: 'plan' | 'addon'; name: string; lookupKey: string; chf: number }
+
+const catalog: CatalogEntry[] = [
+  ...Object.entries(PLAN_PRICING).map(([plan, p]): CatalogEntry => ({
+    kind: 'plan',
+    name: `Linyup ${plan.charAt(0).toUpperCase()}${plan.slice(1)}`,
+    lookupKey: p.stripeLookupKey,
+    chf: p.baseMonthly,
+  })),
+  ...Object.entries(PLUGIN_ADDONS).map(([id, a]): CatalogEntry => ({
+    kind: 'addon',
+    name: `Linyup add-on: ${id}`,
+    lookupKey: a.stripeLookupKey,
+    chf: a.coachPriceMonthly,
+  })),
+]
+
 function chfToRappen(chf: number): number {
   return Math.round(chf * 100)
 }
 
-async function syncAddon(pluginId: string, lookupKey: string, unitAmount: number) {
-  const existing = await stripe.prices.list({ lookup_keys: [lookupKey], limit: 1, expand: ['data.product'] })
+async function syncEntry(entry: CatalogEntry) {
+  const unitAmount = chfToRappen(entry.chf)
+  const existing = await stripe.prices.list({
+    lookup_keys: [entry.lookupKey],
+    limit: 1,
+    expand: ['data.product'],
+  })
   const current = existing.data[0]
 
   if (!current) {
-    console.log(`+ create  ${lookupKey}  (CHF ${unitAmount / 100})`)
+    console.log(`+ create   ${entry.lookupKey}  (CHF ${entry.chf})`)
     if (!APPLY) return
-    const product = await stripe.products.create({ name: `Linyup add-on: ${pluginId}` })
+    const product = await stripe.products.create({ name: entry.name })
     await stripe.prices.create({
       product: product.id,
       currency: CURRENCY,
       unit_amount: unitAmount,
       recurring: { interval: 'month' },
-      lookup_key: lookupKey,
+      lookup_key: entry.lookupKey,
     })
     return
   }
 
   if (current.unit_amount === unitAmount && current.currency === CURRENCY) {
-    console.log(`= ok      ${lookupKey}`)
+    console.log(`= ok       ${entry.lookupKey}`)
     return
   }
 
-  console.log(`~ reprice ${lookupKey}  ${current.unit_amount} → ${unitAmount}`)
+  if (!REPRICE) {
+    console.log(`! drift    ${entry.lookupKey}  live=${current.unit_amount} repo=${unitAmount}  (kept — pass --reprice to change)`)
+    return
+  }
+
+  console.log(`~ reprice  ${entry.lookupKey}  ${current.unit_amount} → ${unitAmount}`)
   if (!APPLY) return
   const productId = typeof current.product === 'string' ? current.product : current.product.id
   await stripe.prices.create({
@@ -66,15 +98,15 @@ async function syncAddon(pluginId: string, lookupKey: string, unitAmount: number
     currency: CURRENCY,
     unit_amount: unitAmount,
     recurring: { interval: 'month' },
-    lookup_key: lookupKey,
+    lookup_key: entry.lookupKey,
     transfer_lookup_key: true,
   })
 }
 
 async function main() {
-  console.log(`Stripe add-on sync (${APPLY ? 'APPLY' : 'dry-run'})\n`)
-  for (const [pluginId, { coachPriceMonthly, stripeLookupKey }] of Object.entries(PLUGIN_ADDONS)) {
-    await syncAddon(pluginId, stripeLookupKey, chfToRappen(coachPriceMonthly))
+  console.log(`Stripe catalog sync (${APPLY ? 'APPLY' : 'dry-run'}${REPRICE ? ', reprice ON' : ''})\n`)
+  for (const entry of catalog) {
+    await syncEntry(entry)
   }
   console.log(`\nDone.${APPLY ? '' : ' Re-run with --apply to write changes.'}`)
 }
