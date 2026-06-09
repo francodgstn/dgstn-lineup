@@ -249,6 +249,7 @@ The system is structured around **business maturity**, not arbitrary feature gro
 
 1. Base subscription fee (per tier)
 2. Variable fee per active student
+3. Optional per-plugin add-ons (Coach plan — see *Plugin add-ons* below)
 
 ### Pricing Logic
 
@@ -263,6 +264,37 @@ The system is structured around **business maturity**, not arbitrary feature gro
 | Coach        | CHF 5–19    | ~20               | CHF 0.5–1 / student |
 | Club         | CHF 19–39   | ~100              | CHF 0.5–1 / student |
 | Organization | CHF 99–149  | pooled            | volume pricing      |
+
+> **Implementation note:** the per-active-student variable fee is **not yet
+> built** — current billing is a flat per-plan price. Per-student metered billing
+> remains separate, unscheduled work.
+
+### Plugin add-ons (Coach plan)
+
+Plugins extend a deliberately bare Coach base. **Club and Org include all
+internal plugins** at no extra cost; **Coach** can activate a curated subset
+(engagement/content plugins) as **paid monthly add-ons**, each billed as a Stripe
+subscription item on top of the Coach base.
+
+Add-on prices are **anchored** so that a coach wanting two or more add-ons
+reaches or exceeds the Coach→Club delta — making Club the rational choice.
+
+| Add-on | Coach price / mo |
+|--------|------------------|
+| Gamification | CHF 5 |
+| Referrals    | CHF 5 |
+| Club Courses | CHF 8 |
+| Club Website | CHF 8 |
+
+*Indicative placeholders. Marquee Club features — student app, automation,
+multiple managers, advanced analytics — are **never** sold à la carte.*
+
+**Mechanics:** plugin **installation is the gate**. Club/Org owners install
+freely; Coach activations go through a Cloud Function that adds the Stripe item
+(so paid value can't be self-granted). During the **trial**, coaches activate
+add-ons **free** to explore; on conversion the active add-ons carry into the paid
+subscription. The catalogue (plans + add-ons) is declared in the repo and synced
+to Stripe — see `docs/stripe-catalog.md`.
 
 ### Optional Revenue Layer
 
@@ -283,12 +315,16 @@ Only if you provide real billing + subscription value — otherwise skip to avoi
 
 The system must naturally push users upward:
 
-* **Coach → Club trigger:**
+* **Coach → Club — hard pulls (Club-only, never à la carte):**
   * Wants a branded client mobile app (in-app booking, push reminders, coaching history)
-  * Wants gamification to drive engagement (streaks, leaderboards, badges)
   * Wants automated outreach (inactivity follow-ups, onboarding sequences)
   * Needs multiple coaches or managers on the team
-  * Wants a referral program to drive growth
+  * Wants advanced + AI-driven analytics
+
+* **Coach → Club — anchored upsells (available as Coach add-ons):**
+  * Gamification and the referral program are purchasable as paid add-ons on
+    Coach, priced so that wanting both approaches the Club price — they pull
+    toward Club rather than blocking it.
 
 * **Club → Organization trigger:**
   * Manages multiple locations
@@ -334,7 +370,9 @@ The platform should be modular, with these domains:
 | Multi-team / org layer | Organization hierarchy, cross-team ops |
 | Public pages | Booking page, public profile / link-in-bio |
 
-Each module should be independently extensible and tier-gated via feature flags.
+Each module should be independently extensible and tier-gated. Plugin-delivered
+modules (gamification, referrals, courses, …) are gated by **plugin installation**
+(the packaging/billing gate); non-plugin tier features use feature flags.
 
 ---
 
