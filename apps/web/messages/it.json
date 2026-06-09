@@ -427,7 +427,36 @@
     "fieldLocationPlaceholder": "Palestra, dojo…",
     "save": "Salva",
     "emptyUpcoming": "Nessuna sessione in arrivo.",
-    "emptyPast": "Nessuna sessione passata."
+    "emptyPast": "Nessuna sessione passata.",
+    "fieldDuration": "Durata",
+    "fieldInstructor": "Istruttore",
+    "instructorPlaceholder": "Nome (opzionale)",
+    "fieldRepeat": "Ripeti questa sessione",
+    "repeatFrequency": "Ripete",
+    "repeatEvery": "Ogni",
+    "freqDay": "giorno/i",
+    "freqWeek": "settimana/e",
+    "freqMonth": "mese/i",
+    "freqDaily": "Giornaliero",
+    "freqWeekly": "Settimanale",
+    "freqMonthly": "Mensile",
+    "repeatOnDays": "Il",
+    "repeatEnds": "Termina",
+    "endsNever": "Mai",
+    "endsOnDate": "Alla data",
+    "endsAfter": "Dopo",
+    "endsOccurrences": "occorrenze",
+    "dayMon": "Lun",
+    "dayTue": "Mar",
+    "dayWed": "Mer",
+    "dayThu": "Gio",
+    "dayFri": "Ven",
+    "daySat": "Sab",
+    "daySun": "Dom",
+    "repeatPreview": "Prossime sessioni",
+    "repeatPreviewMore": "+{count} altre",
+    "generatingSeries": "Generazione sessioni…",
+    "seriesCreated": "{count, plural, one {# sessione creata} other {# sessioni create}}"
   },
   "Calendar": {
     "title": "Programma",
@@ -1456,5 +1485,12 @@
         }
       }
     }
+  },
+  "TrialWall": {
+    "title": "La tua prova gratuita è terminata",
+    "body": "Riattiva il tuo account per riprendere esattamente da dove avevi lasciato.",
+    "cta": "Riattiva — scegli un piano",
+    "signOut": "Esci",
+    "dataNote": "I tuoi dati restano disponibili per {days} giorni — riattiva quando vuoi."
   }
 }

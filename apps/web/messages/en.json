@@ -432,7 +432,36 @@
     "fieldLocationPlaceholder": "Gym, dojo…",
     "save": "Save",
     "emptyUpcoming": "No upcoming sessions.",
-    "emptyPast": "No past sessions."
+    "emptyPast": "No past sessions.",
+    "fieldDuration": "Duration",
+    "fieldInstructor": "Instructor",
+    "instructorPlaceholder": "Name (optional)",
+    "fieldRepeat": "Repeat this session",
+    "repeatFrequency": "Repeats",
+    "repeatEvery": "Every",
+    "freqDay": "day(s)",
+    "freqWeek": "week(s)",
+    "freqMonth": "month(s)",
+    "freqDaily": "Daily",
+    "freqWeekly": "Weekly",
+    "freqMonthly": "Monthly",
+    "repeatOnDays": "On",
+    "repeatEnds": "Ends",
+    "endsNever": "Never",
+    "endsOnDate": "On date",
+    "endsAfter": "After",
+    "endsOccurrences": "occurrences",
+    "dayMon": "Mon",
+    "dayTue": "Tue",
+    "dayWed": "Wed",
+    "dayThu": "Thu",
+    "dayFri": "Fri",
+    "daySat": "Sat",
+    "daySun": "Sun",
+    "repeatPreview": "Upcoming sessions",
+    "repeatPreviewMore": "+{count} more",
+    "generatingSeries": "Generating sessions…",
+    "seriesCreated": "{count, plural, one {# session created} other {# sessions created}}"
   },
   "Calendar": {
     "title": "Schedule",
@@ -1471,5 +1500,12 @@
         }
       }
     }
+  },
+  "TrialWall": {
+    "title": "Your free trial has ended",
+    "body": "Reactivate to get back into your account and keep everything exactly where you left it.",
+    "cta": "Reactivate — choose a plan",
+    "signOut": "Sign out",
+    "dataNote": "Your data is kept safe for {days} days — reactivate any time."
   }
 }

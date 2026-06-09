@@ -14,10 +14,12 @@ import {
   PLAN_PRICING,
   EXTRA_CONTACT_STRIPE_LOOKUP_KEY,
   TRIAL_EXTENSION_DAYS,
+  TRIAL_PURGE_DAYS,
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   CONTACTS_COLLECTION,
 } from '@linyup/shared'
+import { sendEmail, buildEmailTemplate } from '../utils/email'
 
 
 const VALID_PLANS: SaasPlan[] = ['coach', 'club', 'organization']
@@ -264,6 +266,11 @@ export const handleStripeWebhook = onRequest(
       const entityUpdate: Record<string, unknown> = { updated_at: now }
       if (update.plan) entityUpdate.plan = update.plan
       if (update.status) entityUpdate.plan_status = update.status
+      // Reactivation: paying clears the trial-expiry suspension (lifts the wall).
+      if (update.status === 'active') {
+        entityUpdate.suspended_at = FieldValue.delete()
+        entityUpdate.purge_at = FieldValue.delete()
+      }
 
       if (entityType === 'org') {
         await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
@@ -687,6 +694,127 @@ export const syncContactOverage = onSchedule(
         }
       } catch (err) {
         console.error(`[overage] sync failed for team ${teamId}:`, err)
+      }
+    }
+  },
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trial lifecycle: expire lapsed trials (→ walled, data soft-kept) and hard-
+// delete teams past their reactivation window. Daily scheduled job.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// All team-scoped top-level collections keyed by `teamId`. recursiveDelete on
+// each matching doc also removes that doc's subcollections (e.g. contact goals,
+// session bookings, event attendees).
+const TEAM_COLLECTIONS_BY_TEAMID = [
+  CONTACTS_COLLECTION,
+  'sessions',
+  'activities',
+  'events',
+  'checkins',
+  'session_series',
+  'courses',
+  'coach_availability',
+]
+
+/** Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users. */
+async function purgeTeam(teamId: string): Promise<void> {
+  const db = admin.firestore()
+
+  for (const coll of TEAM_COLLECTIONS_BY_TEAMID) {
+    const snap = await db.collection(coll).where('teamId', '==', teamId).get()
+    for (const d of snap.docs) await db.recursiveDelete(d.ref)
+  }
+  // referrals key the team via `team_id`, not `teamId`.
+  const refSnap = await db.collection('referrals').where('team_id', '==', teamId).get()
+  for (const d of refSnap.docs) await db.recursiveDelete(d.ref)
+
+  // Top-level docs keyed by teamId.
+  const attempts = await db.collection('saas_checkout_attempts').where('teamId', '==', teamId).get()
+  for (const d of attempts.docs) await d.ref.delete()
+  await db.collection('saas_subscriptions').doc(teamId).delete().catch(() => undefined)
+
+  // Team doc + ALL its subcollections (team_members, installed_plugins, …).
+  await db.recursiveDelete(db.collection(TEAMS_COLLECTION).doc(teamId))
+
+  // Team Storage files.
+  try {
+    await admin.storage().bucket().deleteFiles({ prefix: `teams/${teamId}/` })
+  } catch (err) {
+    console.error(`[trial] storage cleanup failed for ${teamId}:`, err)
+  }
+}
+
+/** Notify the owner that the trial ended and data is reactivatable for a window. */
+async function sendTrialExpiredEmail(teamId: string, team: FirebaseFirestore.DocumentData): Promise<void> {
+  const db = admin.firestore()
+  let ownerEmail: string | undefined
+
+  const ownerUid = team.primaryContact as string | undefined
+  if (ownerUid) ownerEmail = (await db.collection('users').doc(ownerUid).get()).data()?.email
+  if (!ownerEmail) {
+    const m = await db.collection(TEAMS_COLLECTION).doc(teamId).collection('team_members')
+      .where('role', '==', 'owner').limit(1).get()
+    if (!m.empty) {
+      const uid = m.docs[0].data().userId as string
+      ownerEmail = (await db.collection('users').doc(uid).get()).data()?.email
+    }
+  }
+  if (!ownerEmail) return
+
+  const billingUrl = `${getHostingUrl()}/billing`
+  const { html, text } = buildEmailTemplate({
+    title: 'Your Linyup trial has ended',
+    body: `Your free trial of <strong>${team.name ?? 'Linyup'}</strong> has ended. ` +
+      `Your data is kept safe for ${TRIAL_PURGE_DAYS} days — reactivate any time and pick up ` +
+      `right where you left off.<br><br><a href="${billingUrl}">Reactivate your account</a>`,
+  })
+  await sendEmail({ to: ownerEmail, subject: 'Your Linyup trial has ended', html, text })
+}
+
+export const handleTrialLifecycle = onSchedule(
+  { schedule: 'every day 01:00', timeZone: 'Europe/Zurich', timeoutSeconds: 540, memory: '1GiB' },
+  async () => {
+    const db = admin.firestore()
+    const nowMs = Date.now()
+    const nowTs = Timestamp.fromMillis(nowMs)
+
+    // Phase 1 — expire lapsed trials: wall the app + start the purge clock.
+    const expiring = await db.collection(TEAMS_COLLECTION)
+      .where('plan_status', '==', 'trial')
+      .where('trial_ends_at', '<=', nowTs)
+      .limit(200)
+      .get()
+    for (const doc of expiring.docs) {
+      const teamId = doc.id
+      try {
+        await doc.ref.update({
+          plan_status: 'expired',
+          suspended_at: FieldValue.serverTimestamp(),
+          purge_at: Timestamp.fromMillis(nowMs + TRIAL_PURGE_DAYS * 24 * 60 * 60 * 1000),
+          updated_at: FieldValue.serverTimestamp(),
+        })
+        await sendTrialExpiredEmail(teamId, doc.data()).catch((e) => console.error(`[trial] email failed ${teamId}:`, e))
+        console.log(`[trial] expired team ${teamId}`)
+      } catch (err) {
+        console.error(`[trial] expire failed ${teamId}:`, err)
+      }
+    }
+
+    // Phase 2 — purge teams past their reactivation window (bounded per run).
+    const purging = await db.collection(TEAMS_COLLECTION)
+      .where('plan_status', '==', 'expired')
+      .where('purge_at', '<=', nowTs)
+      .limit(20)
+      .get()
+    for (const doc of purging.docs) {
+      const teamId = doc.id
+      try {
+        await purgeTeam(teamId)
+        console.log(`[trial] purged team ${teamId}`)
+      } catch (err) {
+        console.error(`[trial] purge failed ${teamId}:`, err)
       }
     }
   },

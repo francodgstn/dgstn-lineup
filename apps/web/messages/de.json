@@ -427,7 +427,36 @@
     "fieldLocationPlaceholder": "Halle, Dojo…",
     "save": "Speichern",
     "emptyUpcoming": "Keine bevorstehenden Einheiten.",
-    "emptyPast": "Keine vergangenen Einheiten."
+    "emptyPast": "Keine vergangenen Einheiten.",
+    "fieldDuration": "Dauer",
+    "fieldInstructor": "Trainer/in",
+    "instructorPlaceholder": "Name (optional)",
+    "fieldRepeat": "Einheit wiederholen",
+    "repeatFrequency": "Wiederholt sich",
+    "repeatEvery": "Alle",
+    "freqDay": "Tag(e)",
+    "freqWeek": "Woche(n)",
+    "freqMonth": "Monat(e)",
+    "freqDaily": "Täglich",
+    "freqWeekly": "Wöchentlich",
+    "freqMonthly": "Monatlich",
+    "repeatOnDays": "An",
+    "repeatEnds": "Endet",
+    "endsNever": "Nie",
+    "endsOnDate": "Am Datum",
+    "endsAfter": "Nach",
+    "endsOccurrences": "Wiederholungen",
+    "dayMon": "Mo",
+    "dayTue": "Di",
+    "dayWed": "Mi",
+    "dayThu": "Do",
+    "dayFri": "Fr",
+    "daySat": "Sa",
+    "daySun": "So",
+    "repeatPreview": "Bevorstehende Einheiten",
+    "repeatPreviewMore": "+{count} weitere",
+    "generatingSeries": "Einheiten werden erstellt…",
+    "seriesCreated": "{count, plural, one {# Einheit erstellt} other {# Einheiten erstellt}}"
   },
   "Calendar": {
     "title": "Zeitplan",
@@ -1466,5 +1495,12 @@
         }
       }
     }
+  },
+  "TrialWall": {
+    "title": "Deine Testphase ist beendet",
+    "body": "Reaktiviere dein Konto, um genau dort weiterzumachen, wo du aufgehört hast.",
+    "cta": "Reaktivieren – Plan wählen",
+    "signOut": "Abmelden",
+    "dataNote": "Deine Daten bleiben {days} Tage erhalten – reaktiviere jederzeit."
   }
 }

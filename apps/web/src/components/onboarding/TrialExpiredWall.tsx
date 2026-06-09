@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { Lock } from 'lucide-react'
+import { TRIAL_PURGE_DAYS } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/Logo'
 
@@ -48,7 +49,7 @@ export function TrialExpiredWall() {
             {t('signOut')}
           </button>
         </div>
-        <p className="text-xs text-muted-foreground/60 pt-2">{t('dataNote')}</p>
+        <p className="text-xs text-muted-foreground/60 pt-2">{t('dataNote', { days: TRIAL_PURGE_DAYS })}</p>
       </div>
     </div>
   )

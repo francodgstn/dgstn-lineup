@@ -427,7 +427,36 @@
     "fieldLocationPlaceholder": "Salle, dojo…",
     "save": "Enregistrer",
     "emptyUpcoming": "Aucune séance à venir.",
-    "emptyPast": "Aucune séance passée."
+    "emptyPast": "Aucune séance passée.",
+    "fieldDuration": "Durée",
+    "fieldInstructor": "Instructeur",
+    "instructorPlaceholder": "Nom (optionnel)",
+    "fieldRepeat": "Répéter cette séance",
+    "repeatFrequency": "Se répète",
+    "repeatEvery": "Tous les",
+    "freqDay": "jour(s)",
+    "freqWeek": "semaine(s)",
+    "freqMonth": "mois",
+    "freqDaily": "Quotidien",
+    "freqWeekly": "Hebdomadaire",
+    "freqMonthly": "Mensuel",
+    "repeatOnDays": "Le",
+    "repeatEnds": "Se termine",
+    "endsNever": "Jamais",
+    "endsOnDate": "À la date",
+    "endsAfter": "Après",
+    "endsOccurrences": "occurrences",
+    "dayMon": "Lun",
+    "dayTue": "Mar",
+    "dayWed": "Mer",
+    "dayThu": "Jeu",
+    "dayFri": "Ven",
+    "daySat": "Sam",
+    "daySun": "Dim",
+    "repeatPreview": "Prochaines séances",
+    "repeatPreviewMore": "+{count} de plus",
+    "generatingSeries": "Génération des séances…",
+    "seriesCreated": "{count, plural, one {# séance créée} other {# séances créées}}"
   },
   "Calendar": {
     "title": "Planning",
@@ -1466,5 +1495,12 @@
         }
       }
     }
+  },
+  "TrialWall": {
+    "title": "Votre essai gratuit est terminé",
+    "body": "Réactivez votre compte pour reprendre exactement là où vous en étiez.",
+    "cta": "Réactiver — choisir une offre",
+    "signOut": "Se déconnecter",
+    "dataNote": "Vos données sont conservées {days} jours — réactivez à tout moment."
   }
 }
