@@ -474,7 +474,22 @@
     "repeatPreview": "Upcoming sessions",
     "repeatPreviewMore": "+{count} more",
     "generatingSeries": "Generating sessions…",
-    "seriesCreated": "{count, plural, one {# session created} other {# sessions created}}"
+    "seriesCreated": "{count, plural, one {# session created} other {# sessions created}}",
+    "partOfSeries": "Part of a recurring series",
+    "editScopeTitle": "Edit recurring session",
+    "editScopeDescription": "This session repeats. Which sessions should your changes apply to?",
+    "editScopeThis": "This session only",
+    "editScopeFuture": "This and all following sessions",
+    "applyChanges": "Apply changes",
+    "deleteScopeTitle": "Delete recurring session",
+    "deleteScopeDescription": "This session repeats. Which sessions should be deleted?",
+    "deleteScopeThis": "This session only",
+    "deleteScopeFuture": "This and all following sessions",
+    "deleteSessionTitle": "Delete session",
+    "delete": "Delete",
+    "updatingSeries": "Updating sessions…",
+    "seriesUpdated": "{count, plural, one {# session updated} other {# sessions updated}}",
+    "deleting": "Deleting…"
   },
   "Calendar": {
     "title": "Schedule",

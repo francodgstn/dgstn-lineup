@@ -469,7 +469,22 @@
     "repeatPreview": "Bevorstehende Einheiten",
     "repeatPreviewMore": "+{count} weitere",
     "generatingSeries": "Einheiten werden erstellt…",
-    "seriesCreated": "{count, plural, one {# Einheit erstellt} other {# Einheiten erstellt}}"
+    "seriesCreated": "{count, plural, one {# Einheit erstellt} other {# Einheiten erstellt}}",
+    "partOfSeries": "Teil einer Serie",
+    "editScopeTitle": "Serientermin bearbeiten",
+    "editScopeDescription": "Diese Sitzung wird wiederholt. Für welche Sitzungen sollen die Änderungen gelten?",
+    "editScopeThis": "Nur diese Sitzung",
+    "editScopeFuture": "Diese und alle folgenden Sitzungen",
+    "applyChanges": "Änderungen übernehmen",
+    "deleteScopeTitle": "Serientermin löschen",
+    "deleteScopeDescription": "Diese Sitzung wird wiederholt. Welche Sitzungen sollen gelöscht werden?",
+    "deleteScopeThis": "Nur diese Sitzung",
+    "deleteScopeFuture": "Diese und alle folgenden Sitzungen",
+    "deleteSessionTitle": "Sitzung löschen",
+    "delete": "Löschen",
+    "updatingSeries": "Sitzungen werden aktualisiert…",
+    "seriesUpdated": "{count, plural, one {# Sitzung aktualisiert} other {# Sitzungen aktualisiert}}",
+    "deleting": "Wird gelöscht…"
   },
   "Calendar": {
     "title": "Zeitplan",

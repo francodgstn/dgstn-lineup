@@ -22,6 +22,9 @@ export const TEAM_REBUILD_JOBS_SUBCOLLECTION = 'rebuild_jobs'
 
 // SaaS-specific (new in Linyup)
 export const SAAS_SUBSCRIPTIONS_COLLECTION = 'saas_subscriptions'
+// Daily platform-wide operator metric snapshots (doc id = YYYY-MM-DD).
+// Written by the capturePlatformMetrics function; read by the operator console.
+export const PLATFORM_METRICS_COLLECTION = 'platform_metrics'
 export const ORGANIZATIONS_COLLECTION = 'organizations'
 export const ORG_MEMBERS_SUBCOLLECTION = 'org_members'
 export const ORG_TEAMS_SUBCOLLECTION = 'org_teams'

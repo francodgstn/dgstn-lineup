@@ -6,39 +6,37 @@ import { HelpCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAuth } from '@/contexts/AuthContext'
 import { markIntroSeen } from '@/lib/onboarding'
+import { cn } from '@/lib/utils'
 
-// Sections that have intro content under the `Onboarding.intro.<key>` messages.
 export type IntroSection = 'dashboard' | 'contacts' | 'calendar'
 
-// Auto-shown sections this SPA session (component remounts on navigation, and
-// the in-memory profile isn't refetched after markIntroSeen writes — so this
-// stops the panel re-popping mid-session; Firestore handles cross-session).
-const autoShownThisSession = new Set<string>()
+function introStorageKey(section: IntroSection) {
+  return `linyup_intro_opened_${section}`
+}
 
-/**
- * Phase 4 of the onboarding initiative: a small, reopenable "?" panel that
- * explains a section and its terminology. Auto-opens once per user (tracked in
- * users/{uid}.onboarding.seenIntros), and stays available via the "?" button.
- */
 export function SectionIntro({ sectionKey }: { sectionKey: IntroSection }) {
   const t = useTranslations('Onboarding')
   const { user, profile } = useAuth()
   const [open, setOpen] = useState(false)
+  // Start false to avoid SSR hydration mismatch; set after mount.
+  const [glowing, setGlowing] = useState(false)
+
+  useEffect(() => {
+    if (!localStorage.getItem(introStorageKey(sectionKey))) {
+      setGlowing(true)
+    }
+  }, [sectionKey])
 
   const seen = profile?.onboarding?.seenIntros?.includes(sectionKey) ?? false
-
-  // Auto-open once after the profile has loaded, if not previously seen.
-  useEffect(() => {
-    if (!profile || seen || autoShownThisSession.has(sectionKey)) return
-    autoShownThisSession.add(sectionKey)
-    setOpen(true)
-  }, [profile, seen, sectionKey])
 
   const terms = (t.raw(`intro.${sectionKey}.terms`) as string[] | undefined) ?? []
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
-    // Persist "seen" when the (auto-shown) panel is dismissed.
+    if (next && glowing) {
+      setGlowing(false)
+      localStorage.setItem(introStorageKey(sectionKey), '1')
+    }
     if (!next && !seen && user) {
       void markIntroSeen(user.uid, sectionKey)
     }
@@ -47,7 +45,12 @@ export function SectionIntro({ sectionKey }: { sectionKey: IntroSection }) {
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
-        className="inline-flex items-center justify-center h-6 w-6 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
+        className={cn(
+          'inline-flex items-center justify-center h-7 w-7 rounded-full transition-colors',
+          glowing
+            ? 'text-primary ring-2 ring-primary/50 ring-offset-2 ring-offset-background animate-pulse'
+            : 'text-muted-foreground/60 hover:text-foreground hover:bg-muted',
+        )}
         aria-label={t('intro.open')}
       >
         <HelpCircle className="h-4 w-4" />

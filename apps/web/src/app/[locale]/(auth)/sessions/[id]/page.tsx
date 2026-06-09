@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  updateDoc, deleteDoc, setDoc, increment, serverTimestamp, Timestamp,
+  updateDoc, deleteDoc, setDoc, increment, serverTimestamp,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -13,7 +13,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useTranslations } from 'next-intl'
 import { useRouter as useI18nRouter } from '@/i18n/navigation'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Pencil, Trash2, UserPlus,
@@ -25,11 +24,8 @@ import {
   PARTICIPANTS_SUBCOLLECTION,
 } from '@linyup/shared'
 import type { Session, Booking, Contact, Activity } from '@linyup/shared'
-import { Controller, useForm } from 'react-hook-form'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DateTimePicker } from '@/components/ui/date-picker'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
+import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -65,30 +61,6 @@ function formatTime(ts?: { toDate(): Date } | null) {
   if (!ts) return ''
   return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
-function tsToInputValue(ts?: { toDate(): Date } | null) {
-  if (!ts) return ''
-  const d = ts.toDate()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-// ─── session edit schema ──────────────────────────────────────────────────────
-
-const SESSION_TYPES = ['group_class', 'coaching'] as const
-
-const editSchema = z.object({
-  activityId: z.string().optional(),
-  activityType: z.enum(SESSION_TYPES).default('group_class'),
-  start: z.date({ required_error: 'Required' }),
-  end: z.date({ required_error: 'Required' }),
-  location: z.string().max(120).optional(),
-  notes: z.string().max(2000).optional(),
-  allowBooking: z.boolean().optional(),
-}).refine((d) => !d.start || !d.end || d.end > d.start, {
-  message: 'End must be after start', path: ['end'],
-})
-type EditFormValues = z.infer<typeof editSchema>
-
 // ─── participant type (Firestore doc shape) ───────────────────────────────────
 
 interface ParticipantDoc {
@@ -274,159 +246,6 @@ function AddParticipantsDialog({
   )
 }
 
-// ─── edit session dialog ──────────────────────────────────────────────────────
-
-function EditSessionDialog({
-  open, onOpenChange, session, activities, onSaved,
-}: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  session: Session
-  activities: Activity[]
-  onSaved: () => void
-}) {
-  const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting }, reset } = useForm<EditFormValues>({
-    resolver: zodResolver(editSchema),
-    defaultValues: {
-      activityId: session.activityId ?? '',
-      activityType: (session.activityType as typeof SESSION_TYPES[number]) ?? 'group_class',
-      start: session.start?.toDate() ?? undefined,
-      end: session.end?.toDate() ?? undefined,
-      location: session.location ?? '',
-      notes: session.notes ?? '',
-      allowBooking: session.allowBooking ?? false,
-    },
-  })
-
-  // Auto-fill activityType from the selected activity
-  const watchedActivityId = watch('activityId')
-  useEffect(() => {
-    const activity = activities.find((a) => a.id === watchedActivityId)
-    if (activity?.type) setValue('activityType', activity.type)
-  }, [watchedActivityId, activities, setValue])
-
-  const onSubmit = async (values: EditFormValues) => {
-    const activity = activities.find((a) => a.id === values.activityId)
-    await updateDoc(doc(db, SESSIONS_COLLECTION, session.id), {
-      activityId: values.activityId || null,
-      activityName: activity?.name ?? null,
-      activityType: values.activityType,
-      start: Timestamp.fromDate(values.start),
-      end: Timestamp.fromDate(values.end),
-      location: values.location || null,
-      notes: values.notes || null,
-      allowBooking: values.allowBooking ?? false,
-    })
-    reset()
-    onSaved()
-    onOpenChange(false)
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Edit session</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Activity</label>
-            <Controller
-              name="activityId"
-              control={control}
-              render={({ field }) => (
-                <Select value={field.value || '__none__'} onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}>
-                  <SelectTrigger className="w-full">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value && field.value !== '__none__'
-                        ? activities.find((a) => a.id === field.value)?.name ?? field.value
-                        : <span className="text-muted-foreground">No activity</span>}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No activity</SelectItem>
-                    {activities.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Type</label>
-            <Controller
-              name="activityType"
-              control={control}
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value === 'coaching' ? 'Coaching' : 'Group class'}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SESSION_TYPES.map((tp) => (
-                      <SelectItem key={tp} value={tp}>
-                        {tp === 'coaching' ? 'Coaching' : 'Group class'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {watchedActivityId && activities.find((a) => a.id === watchedActivityId)?.type && (
-              <p className="text-xs text-muted-foreground">Auto-set from activity — you can override if needed.</p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Start</label>
-              <Controller
-                name="start"
-                control={control}
-                render={({ field }) => (
-                  <DateTimePicker value={field.value} onChange={field.onChange} />
-                )}
-              />
-              {errors.start && <p className="text-xs text-destructive">{errors.start.message}</p>}
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">End</label>
-              <Controller
-                name="end"
-                control={control}
-                render={({ field }) => (
-                  <DateTimePicker value={field.value} onChange={field.onChange} />
-                )}
-              />
-              {errors.end && <p className="text-xs text-destructive">{errors.end.message}</p>}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Location</label>
-            <input type="text" {...register('location')} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Notes</label>
-            <textarea {...register('notes')} rows={3} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" />
-          </div>
-          <div className="flex items-center gap-3">
-            <Controller name="allowBooking" control={control} render={({ field }) => (
-              <input type="checkbox" id="allowBooking" checked={field.value ?? false} onChange={field.onChange} className="h-4 w-4 rounded border-input accent-primary" />
-            )} />
-            <label htmlFor="allowBooking" className="text-sm">Allow portal booking</label>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted">Cancel</button>
-            <button type="submit" disabled={isSubmitting} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-              {isSubmitting ? 'Saving…' : 'Save changes'}
-            </button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 // ─── section header ───────────────────────────────────────────────────────────
 
 function SectionHeader({ icon, label, count, color }: { icon: React.ReactNode; label: string; count: number; color: string }) {
@@ -454,6 +273,7 @@ export default function SessionDetailPage() {
   const qc = useQueryClient()
 
   const [editOpen, setEditOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [scanMsg, setScanMsg] = useState<{ text: string; ok: boolean } | null>(null)
@@ -575,13 +395,6 @@ export default function SessionDetailPage() {
     await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, participantId))
     await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), { participants_count: increment(-1) })
     invalidate()
-  }
-
-  const deleteSession = async () => {
-    if (!window.confirm('Delete this session? This cannot be undone.')) return
-    await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId))
-    qc.invalidateQueries({ queryKey: ['sessions'] })
-    router.back()
   }
 
   // ── QR scanner ────────────────────────────────────────────────────────────────
@@ -728,7 +541,7 @@ export default function SessionDetailPage() {
               <button onClick={() => setEditOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title="Edit">
                 <Pencil className="h-4 w-4" />
               </button>
-              <button onClick={deleteSession} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" title="Delete">
+              <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" title="Delete">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -915,13 +728,25 @@ export default function SessionDetailPage() {
         />
       )}
 
-      <EditSessionDialog
-        key={editOpen ? 'open' : 'closed'}
-        open={editOpen}
-        onOpenChange={setEditOpen}
+      {currentTeamId && user && (
+        <SessionFormDialog
+          key={editOpen ? 'open' : 'closed'}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          editing={session}
+          activities={activities}
+          teamId={currentTeamId}
+          userId={user.uid}
+          onSaved={invalidate}
+        />
+      )}
+
+      <SessionDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
         session={session}
-        activities={activities}
-        onSaved={invalidate}
+        label={session.activityName ? `${session.activityName} – ${formatDate(session.start)}` : formatDate(session.start)}
+        onDeleted={() => { qc.invalidateQueries({ queryKey: ['sessions'] }); router.back() }}
       />
     </div>
   )

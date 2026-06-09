@@ -884,5 +884,12 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // ── Platform metric snapshots (operator console) ──────────────────────────
+    // Written by capturePlatformMetrics (Admin SDK) and read by the operator
+    // console (Admin SDK). No client access.
+    match /platform_metrics/{date} {
+      allow read, write: if false;
+    }
+
   }
 }

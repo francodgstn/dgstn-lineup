@@ -469,7 +469,22 @@
     "repeatPreview": "Prossime sessioni",
     "repeatPreviewMore": "+{count} altre",
     "generatingSeries": "Generazione sessioni…",
-    "seriesCreated": "{count, plural, one {# sessione creata} other {# sessioni create}}"
+    "seriesCreated": "{count, plural, one {# sessione creata} other {# sessioni create}}",
+    "partOfSeries": "Parte di una serie",
+    "editScopeTitle": "Modifica sessione ricorrente",
+    "editScopeDescription": "Questa sessione si ripete. A quali sessioni applicare le modifiche?",
+    "editScopeThis": "Solo questa sessione",
+    "editScopeFuture": "Questa e tutte le successive",
+    "applyChanges": "Applica modifiche",
+    "deleteScopeTitle": "Elimina sessione ricorrente",
+    "deleteScopeDescription": "Questa sessione si ripete. Quali sessioni eliminare?",
+    "deleteScopeThis": "Solo questa sessione",
+    "deleteScopeFuture": "Questa e tutte le successive",
+    "deleteSessionTitle": "Elimina sessione",
+    "delete": "Elimina",
+    "updatingSeries": "Aggiornamento sessioni…",
+    "seriesUpdated": "{count, plural, one {# sessione aggiornata} other {# sessioni aggiornate}}",
+    "deleting": "Eliminazione…"
   },
   "Calendar": {
     "title": "Programma",

@@ -75,6 +75,8 @@ export const generateRecurringSessions = onCall(async (request) => {
         start: Timestamp.fromDate(occurrence.start),
         end: Timestamp.fromDate(occurrence.end),
         activityId: seriesData.template?.activityId ?? null,
+        activityName: seriesData.template?.activityName ?? null,
+        activityType: seriesData.template?.activityType ?? null,
         location: seriesData.template?.location ?? null,
         tags: seriesData.template?.tags ?? [],
         notes: seriesData.template?.notes ?? '',
@@ -311,6 +313,7 @@ export const updateRecurringSession = onCall(async (request) => {
   const ALLOWED_UPDATE_FIELDS = new Set([
     'title', 'description', 'start', 'end', 'duration',
     'location', 'tags', 'maxParticipants', 'type', 'notes', 'recurrence',
+    'activityId', 'activityName', 'activityType', 'instructorName', 'instructorId', 'allowBooking',
   ])
   const safeUpdates = Object.fromEntries(
     Object.entries(updates).filter(([k]) => ALLOWED_UPDATE_FIELDS.has(k))
@@ -390,6 +393,8 @@ export const updateRecurringSession = onCall(async (request) => {
     lastGeneratedUntil: Timestamp.fromDate(generationEnd),
   }
   if (updates.activityId !== undefined) seriesUpdates['template.activityId'] = updates.activityId
+  if (updates.activityName !== undefined) seriesUpdates['template.activityName'] = updates.activityName
+  if (updates.activityType !== undefined) seriesUpdates['template.activityType'] = updates.activityType
   if (location !== undefined) seriesUpdates['template.location'] = location
   if (tags !== undefined) seriesUpdates['template.tags'] = tags
   if (updates.notes !== undefined) seriesUpdates['template.notes'] = updates.notes
@@ -475,6 +480,8 @@ export const updateRecurringSession = onCall(async (request) => {
       const seriesData = seriesDoc.data()!
       const tpl = {
         activityId: (seriesUpdates['template.activityId'] ?? seriesData.template?.activityId) as string | null ?? null,
+        activityName: (seriesUpdates['template.activityName'] ?? seriesData.template?.activityName) as string | null ?? null,
+        activityType: (seriesUpdates['template.activityType'] ?? seriesData.template?.activityType) as string | null ?? null,
         location: (seriesUpdates['template.location'] ?? seriesData.template?.location) as string | null ?? null,
         tags: (seriesUpdates['template.tags'] ?? seriesData.template?.tags) as string[] ?? [],
         notes: (seriesUpdates['template.notes'] ?? seriesData.template?.notes) as string ?? '',

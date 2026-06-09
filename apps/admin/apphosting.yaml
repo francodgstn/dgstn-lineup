@@ -1,0 +1,38 @@
+# Firebase App Hosting config for the operator console (@linyup/admin).
+# Deploy as a SEPARATE backend (rootDirectory: apps/admin) on its own domain
+# (e.g. ops.linyup.app). The backend's runtime service account must be granted
+# Firestore read access (roles/datastore.viewer) — the Admin SDK uses ADC.
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 80
+
+env:
+  # Operator allowlist (comma-separated). Set per environment.
+  - variable: OPERATOR_EMAILS
+    value: franco.dgstn@gmail.com
+    availability:
+      - RUNTIME
+
+  # Public client Firebase config for the login page. Replace with the real
+  # project values at deploy time (mirror apps/web).
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: ''
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: ''
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: ''
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: ''
+    availability:
+      - BUILD
+      - RUNTIME

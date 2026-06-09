@@ -63,6 +63,7 @@ export { addEventCheckin } from './events/addEventCheckin'
 
 // Analytics
 export { trackBookings, trackSessions, weeklyReports, trackContacts, trackSessionParticipants } from './analytics'
+export { capturePlatformMetrics } from './analytics/platformMetrics'
 
 // Daily maintenance tasks
 export { dailyTasks } from './dailyTasks'

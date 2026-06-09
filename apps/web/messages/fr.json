@@ -469,7 +469,22 @@
     "repeatPreview": "Prochaines séances",
     "repeatPreviewMore": "+{count} de plus",
     "generatingSeries": "Génération des séances…",
-    "seriesCreated": "{count, plural, one {# séance créée} other {# séances créées}}"
+    "seriesCreated": "{count, plural, one {# séance créée} other {# séances créées}}",
+    "partOfSeries": "Fait partie d’une série",
+    "editScopeTitle": "Modifier la séance récurrente",
+    "editScopeDescription": "Cette séance se répète. À quelles séances appliquer vos modifications ?",
+    "editScopeThis": "Cette séance uniquement",
+    "editScopeFuture": "Cette séance et les suivantes",
+    "applyChanges": "Appliquer",
+    "deleteScopeTitle": "Supprimer la séance récurrente",
+    "deleteScopeDescription": "Cette séance se répète. Quelles séances supprimer ?",
+    "deleteScopeThis": "Cette séance uniquement",
+    "deleteScopeFuture": "Cette séance et les suivantes",
+    "deleteSessionTitle": "Supprimer la séance",
+    "delete": "Supprimer",
+    "updatingSeries": "Mise à jour des séances…",
+    "seriesUpdated": "{count, plural, one {# séance mise à jour} other {# séances mises à jour}}",
+    "deleting": "Suppression…"
   },
   "Calendar": {
     "title": "Planning",
