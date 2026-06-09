@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Plus_Jakarta_Sans, Fredoka, Sora } from 'next/font/google'
 import { getLocale } from 'next-intl/server'
+import { ThemeProvider } from 'next-themes'
 import './globals.css'
 
 const jakarta = Plus_Jakarta_Sans({
@@ -33,7 +34,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale()
   return (
     <html lang={locale} className={`${jakarta.variable} ${sora.variable} ${fredoka.variable}`} suppressHydrationWarning>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   )
 }

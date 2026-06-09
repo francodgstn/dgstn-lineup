@@ -1,7 +1,6 @@
 import { NextIntlClientProvider, hasLocale } from 'next-intl'
 import { getMessages } from 'next-intl/server'
 import { notFound } from 'next/navigation'
-import { ThemeProvider } from 'next-themes'
 import { AuthProvider } from '@/contexts/AuthContext'
 import QueryProvider from '@/contexts/QueryProvider'
 import { Toaster } from '@/components/ui/sonner'
@@ -21,15 +20,13 @@ export default async function LocaleLayout({
   const messages = await getMessages()
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <NextIntlClientProvider locale={locale} messages={messages}>
-        <PostHogProvider>
-          <QueryProvider>
-            <AuthProvider>{children}</AuthProvider>
-          </QueryProvider>
-          <Toaster richColors position="top-right" />
-        </PostHogProvider>
-      </NextIntlClientProvider>
-    </ThemeProvider>
+    <NextIntlClientProvider locale={locale} messages={messages}>
+      <PostHogProvider>
+        <QueryProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryProvider>
+        <Toaster richColors position="top-right" />
+      </PostHogProvider>
+    </NextIntlClientProvider>
   )
 }
