@@ -20,8 +20,8 @@ export interface PlanPrice {
 }
 
 export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
-  coach:        { baseMonthly: 19,  stripeLookupKey: 'linyup_coach_monthly',        includedContacts: 20,   extraContactMonthly: 1 },
-  club:         { baseMonthly: 39,  stripeLookupKey: 'linyup_club_monthly',         includedContacts: 100,  extraContactMonthly: 1 },
+  coach:        { baseMonthly: 5.99,  stripeLookupKey: 'linyup_coach_monthly',        includedContacts: 20,   extraContactMonthly: 1 },
+  club:         { baseMonthly: 29.99,  stripeLookupKey: 'linyup_club_monthly',         includedContacts: 100,  extraContactMonthly: 1 },
   organization: { baseMonthly: 149, stripeLookupKey: 'linyup_organization_monthly', includedContacts: null, extraContactMonthly: 0 },
 }
 

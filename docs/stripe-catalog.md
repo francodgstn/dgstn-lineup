@@ -37,7 +37,7 @@ STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply
 STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply --reprice
 
 # (PowerShell) pull the key from Secret Manager instead of typing it
-$env:STRIPE_SECRET_KEY = gcloud secrets versions access latest --secret=stripe-secret-key --project=linyup-staging
+$env:STRIPE_SECRET_KEY = (gcloud secrets versions access latest --secret=stripe-secret-key --project=linyup-staging).Trim()
 pnpm stripe:sync --apply
 ```
 
@@ -47,11 +47,6 @@ Run once per environment (test, then prod) whenever the catalog changes.
 > live plan prices already exist with real amounts, the default sync leaves them
 > untouched (you'll just see `! drift` lines). Set the repo values to match live,
 > or pass `--reprice` deliberately when you actually want to change a price.
-
-## Alternatives considered
-- **Terraform Stripe provider** — fits the existing `infra/` Terraform, but the
-  community provider lags Stripe features.
-- **Stripe CLI `fixtures`** — good for test-mode seeding, weaker for prod lifecycle.
 
 The script approach was chosen for full in-house control and reuse of the
 existing `lookup_key` convention.
