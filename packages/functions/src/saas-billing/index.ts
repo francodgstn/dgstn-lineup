@@ -5,7 +5,7 @@ import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { getSecret } from '../utils/secrets'
 import { hasTeamRole } from '../utils/teams'
-import { getHostingUrl } from '../utils/env'
+import { getHostingUrl, isTrialPurgeDryRun } from '../utils/env'
 import { StripeAdapter } from '../utils/gateway/stripe'
 import type { SaasPlan } from '@linyup/shared'
 import {
@@ -718,15 +718,32 @@ const TEAM_COLLECTIONS_BY_TEAMID = [
   'coach_availability',
 ]
 
-/** Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users. */
-async function purgeTeam(teamId: string): Promise<void> {
+/**
+ * Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users.
+ * When `dryRun` is true, NOTHING is deleted — it only logs what it would remove
+ * (counts per collection). Controlled by the TRIAL_PURGE_DRY_RUN param.
+ */
+async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> {
   const db = admin.firestore()
+  const tag = dryRun ? '[trial][dry-run]' : '[trial]'
 
   for (const coll of TEAM_COLLECTIONS_BY_TEAMID) {
-    const snap = await db.collection(coll).where('teamId', '==', teamId).get()
-    for (const d of snap.docs) await db.recursiveDelete(d.ref)
+    if (dryRun) {
+      const c = await db.collection(coll).where('teamId', '==', teamId).count().get()
+      console.log(`${tag} team ${teamId}: would delete ${c.data().count} ${coll}`)
+    } else {
+      const snap = await db.collection(coll).where('teamId', '==', teamId).get()
+      for (const d of snap.docs) await db.recursiveDelete(d.ref)
+    }
   }
+
   // referrals key the team via `team_id`, not `teamId`.
+  if (dryRun) {
+    const c = await db.collection('referrals').where('team_id', '==', teamId).count().get()
+    console.log(`${tag} team ${teamId}: would delete ${c.data().count} referrals`)
+    console.log(`${tag} team ${teamId}: would delete saas_subscription + checkout attempts + team doc & subcollections + Storage teams/${teamId}/`)
+    return
+  }
   const refSnap = await db.collection('referrals').where('team_id', '==', teamId).get()
   for (const d of refSnap.docs) await db.recursiveDelete(d.ref)
 
@@ -803,6 +820,8 @@ export const handleTrialLifecycle = onSchedule(
     }
 
     // Phase 2 — purge teams past their reactivation window (bounded per run).
+    // Gated by TRIAL_PURGE_DRY_RUN (default true → log-only, no deletes).
+    const dryRun = isTrialPurgeDryRun()
     const purging = await db.collection(TEAMS_COLLECTION)
       .where('plan_status', '==', 'expired')
       .where('purge_at', '<=', nowTs)
@@ -811,8 +830,8 @@ export const handleTrialLifecycle = onSchedule(
     for (const doc of purging.docs) {
       const teamId = doc.id
       try {
-        await purgeTeam(teamId)
-        console.log(`[trial] purged team ${teamId}`)
+        await purgeTeam(teamId, dryRun)
+        console.log(`[trial] ${dryRun ? 'would purge (dry-run)' : 'purged'} team ${teamId}`)
       } catch (err) {
         console.error(`[trial] purge failed ${teamId}:`, err)
       }
