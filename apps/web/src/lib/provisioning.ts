@@ -1,5 +1,6 @@
-import { collection, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
 import type { User } from 'firebase/auth'
+import { TRIAL_DAYS } from '@linyup/shared'
 import { db } from './firebase'
 
 /**
@@ -41,6 +42,10 @@ export async function provisionTeam(
   const now = serverTimestamp()
   const { uid } = user
 
+  // New teams start on a full-access Club trial so they experience the marquee
+  // features; Coach + add-ons becomes the downgrade path at trial end.
+  const trialEndsAt = Timestamp.fromDate(new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000))
+
   const defaultLinks = [
     { label: 'Book a Trial Class', description: "Try a class and see if it's right for you", url: '', showInPortal: true, isBookingLink: true },
     { label: 'Membership Signup', description: 'Join our community and become a member', url: '', showInPortal: true, isMembershipLink: true },
@@ -54,6 +59,9 @@ export async function provisionTeam(
     sport_type: sportType || '',
     links: defaultLinks,
     settings: {},
+    plan: 'club',
+    plan_status: 'trial',
+    trial_ends_at: trialEndsAt,
     created: now,
     createdBy: uid,
     primaryContact: uid,

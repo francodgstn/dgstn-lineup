@@ -71,6 +71,7 @@ export interface Team {
   plan?: SaasPlan
   plan_status?: SaasStatus
   trial_ends_at?: Timestamp
+  trial_extended?: boolean   // one-time self-service trial extension has been used
   stripe_customer_id?: string
   max_contacts?: number
   // Organization membership

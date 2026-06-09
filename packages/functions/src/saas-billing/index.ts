@@ -13,6 +13,7 @@ import {
   pluginIdForAddonLookupKey,
   PLAN_PRICING,
   EXTRA_CONTACT_STRIPE_LOOKUP_KEY,
+  TRIAL_EXTENSION_DAYS,
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   CONTACTS_COLLECTION,
@@ -569,6 +570,44 @@ export const deactivatePluginAddon = onCall(async (request) => {
 
   await installRef.delete()
   return { success: true }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// extendTrial — one-time self-service trial extension (+TRIAL_EXTENSION_DAYS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const extendTrial = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+
+  const data = request.data as { teamId?: string }
+  if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
+
+  await assertOwner(request.auth.uid, data.teamId)
+
+  const teamRef = admin.firestore().collection(TEAMS_COLLECTION).doc(data.teamId)
+  const snap = await teamRef.get()
+  if (!snap.exists) throw new HttpsError('not-found', 'Team not found')
+
+  const team = snap.data()!
+  if (team.plan_status !== 'trial') {
+    throw new HttpsError('failed-precondition', 'Trial extension is only available during a trial')
+  }
+  if (team.trial_extended === true) {
+    throw new HttpsError('failed-precondition', 'The trial has already been extended')
+  }
+
+  // Extend from the later of now / current trial end (don't shorten a future end).
+  const currentEndMs = (team.trial_ends_at as Timestamp | undefined)?.toMillis() ?? Date.now()
+  const base = Math.max(Date.now(), currentEndMs)
+  const newEnd = Timestamp.fromMillis(base + TRIAL_EXTENSION_DAYS * 24 * 60 * 60 * 1000)
+
+  await teamRef.update({
+    trial_ends_at: newEnd,
+    trial_extended: true,
+    updated_at: FieldValue.serverTimestamp(),
+  })
+
+  return { trial_ends_at: newEnd.toMillis() }
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

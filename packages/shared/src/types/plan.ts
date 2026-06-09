@@ -3,6 +3,11 @@ import type { SaasPlan } from './team'
 // Ordered from lowest to highest — used for >= comparisons
 export const PLAN_ORDER: SaasPlan[] = ['coach', 'club', 'organization']
 
+// Trial: new self-service teams start on a full-access Club trial of this length.
+// One self-service extension of TRIAL_EXTENSION_DAYS is allowed (see extendTrial).
+export const TRIAL_DAYS = 14
+export const TRIAL_EXTENSION_DAYS = 14
+
 // Base subscription pricing per plan. Declarative source for scripts/stripe-sync.ts
 // (the whole Stripe catalogue — plans + add-ons — lives in the repo).
 // Amounts are INDICATIVE base prices in CHF/month; the authoritative amount is the

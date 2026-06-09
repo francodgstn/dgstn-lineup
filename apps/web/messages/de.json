@@ -1026,7 +1026,14 @@
     "keepSubscription": "Abonnement behalten",
     "cancelling": "Kündigung läuft…",
     "invoices": "Rechnungen",
-    "noInvoices": "Noch keine Rechnungen."
+    "noInvoices": "Noch keine Rechnungen.",
+    "trialExtendTitle": "Gefällt dir die Testphase?",
+    "trialExtendBody": "Deine Testphase endet am {date}. Wir sind sicher, dass du Linyup lieben wirst – nimm dir {days} weitere Tage, auf uns.",
+    "trialExtendBodyNoDate": "Wir sind sicher, dass du Linyup lieben wirst – nimm dir {days} weitere Tage, auf uns.",
+    "trialExtendCta": "{days} Tage mehr",
+    "trialExtending": "Wird verlängert…",
+    "trialExtendedToast": "Testphase um {days} Tage verlängert 🎉",
+    "trialExtendError": "Testphase konnte nicht verlängert werden. Bitte versuche es erneut."
   },
   "Upgrade": {
     "title": "Plan upgraden",
@@ -1098,7 +1105,8 @@
     "coachAddonBannerBody": "Füge Funktionen als kostenpflichtige Add-ons hinzu – oder erhalte sie alle inklusive im Club-Plan.",
     "addonConfirmTitle": "Plugin hinzufügen?",
     "addonConfirmBody": "{name} wird deinem Abo für CHF {price}/Mt. hinzugefügt.",
-    "addonConfirmCta": "Zum Abo hinzufügen"
+    "addonConfirmCta": "Zum Abo hinzufügen",
+    "discoverTooltip": "Empfohlen – Plugin hinzufügen"
   },
   "Org": {
     "title": "Organisation",

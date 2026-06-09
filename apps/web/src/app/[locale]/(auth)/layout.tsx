@@ -27,6 +27,7 @@ import {
   Building2,
   Gift,
   GraduationCap,
+  Plus,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -35,6 +36,8 @@ import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Logo } from '@/components/Logo'
 import { ProductTour } from '@/components/onboarding/ProductTour'
 
@@ -190,23 +193,25 @@ function OrgLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?
   )
 }
 
-// A labelled group of plugin-contributed nav links.
-type PluginNavEntry = { href: string; labelKey: string; icon: string; pluginId: string }
+// A plugin nav entry. Installed plugins render as real links; recommended-but-
+// not-installed ones render muted with an install tooltip (discovery nudge).
+type PluginNavEntry = { href: string; labelKey: string; icon: string; pluginId: string; category: string; installed: boolean }
 
 function PluginNavGroup({
   label,
-  contributions,
+  entries,
   collapsed,
   onLinkClick,
 }: {
   label: string
-  contributions: PluginNavEntry[]
+  entries: PluginNavEntry[]
   collapsed: boolean
   onLinkClick?: () => void
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const t = useTranslations('Plugins')
-  if (contributions.length === 0) return null
+  if (entries.length === 0) return null
 
   return (
     <div className="mt-3">
@@ -218,11 +223,35 @@ function PluginNavGroup({
         </p>
       )}
       <div className="space-y-0.5">
-        {contributions.map((nav) => {
+        {entries.map((nav) => {
           const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
           const linkLabel = t(nav.labelKey as Parameters<typeof t>[0])
-          const isActive = pathname.startsWith(nav.href)
 
+          // Recommended but not installed → muted discovery item → /plugins.
+          if (!nav.installed) {
+            return (
+              <TooltipProvider key={nav.pluginId + nav.href} delay={300}>
+                <Tooltip>
+                  <TooltipTrigger
+                    onClick={() => { router.push('/plugins' as Route); onLinkClick?.() }}
+                    title={collapsed ? linkLabel : undefined}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${collapsed ? 'justify-center px-2' : ''}`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 text-left">{linkLabel}</span>
+                        <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                      </>
+                    )}
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{t('discoverTooltip')}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )
+          }
+
+          const isActive = pathname.startsWith(nav.href)
           return (
             <Link
               key={nav.pluginId + nav.href}
@@ -245,30 +274,39 @@ function PluginNavGroup({
   )
 }
 
-// Renders nav links contributed by installed plugins, grouped by category:
-// engagement-category plugins (gamification, referrals) go under "Engage";
-// everything else under "Plugins". Installation is the gate, so links are
-// never plan-locked here.
+// Renders plugin nav links grouped by category (engagement → "Engage", else →
+// "Plugins"). Installed plugins are real links; recommended-but-not-installed
+// plugins appear as muted "install me" nudges. Installed sort before muted.
 function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?: () => void }) {
   const t = useTranslations('Plugins')
-  const { plugins } = useInstalledPlugins()
+  const { plugins, isInstalled, isLoading } = useInstalledPlugins()
 
-  const contributions = plugins.flatMap((p) =>
+  const installed: PluginNavEntry[] = plugins.flatMap((p) =>
     (p.manifest.navContributions ?? []).map((nav) => ({
-      ...nav,
-      pluginId: p.manifest.id,
-      category: p.manifest.category,
+      ...nav, pluginId: p.manifest.id, category: p.manifest.category, installed: true,
     })),
   )
-  if (contributions.length === 0) return null
 
-  const engage = contributions.filter((c) => c.category === 'engagement')
-  const others = contributions.filter((c) => c.category !== 'engagement')
+  const discovery: PluginNavEntry[] = isLoading
+    ? []
+    : PLUGIN_REGISTRY
+        .filter((m) => m.recommended && (m.navContributions?.length ?? 0) > 0 && !isInstalled(m.id))
+        .flatMap((m) =>
+          (m.navContributions ?? []).map((nav) => ({
+            ...nav, pluginId: m.id, category: m.category, installed: false,
+          })),
+        )
+
+  const all = [...installed, ...discovery] // installed first → sort before muted
+  if (all.length === 0) return null
+
+  const engage = all.filter((e) => e.category === 'engagement')
+  const others = all.filter((e) => e.category !== 'engagement')
 
   return (
     <>
-      <PluginNavGroup label={t('navSectionPlugins')} contributions={others} collapsed={collapsed} onLinkClick={onLinkClick} />
-      <PluginNavGroup label={t('navSectionEngage')} contributions={engage} collapsed={collapsed} onLinkClick={onLinkClick} />
+      <PluginNavGroup label={t('navSectionPlugins')} entries={others} collapsed={collapsed} onLinkClick={onLinkClick} />
+      <PluginNavGroup label={t('navSectionEngage')} entries={engage} collapsed={collapsed} onLinkClick={onLinkClick} />
     </>
   )
 }
