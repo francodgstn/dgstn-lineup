@@ -241,7 +241,18 @@ npx firebase-tools apphosting:backends:create \
 
 # 5. Seed the six demo Club tenants (ADC; idempotent — reset:sandbox to wipe first)
 pnpm seed:sandbox
+
+# 6. Custom domain — the public demo lives at https://demo.linyup.com/try.
+#    a) Firebase Console → App Hosting → linyup-web (sandbox) → Custom domains →
+#       add `demo.linyup.com`; set the DNS records it prints at the registrar.
+#    b) Firebase Console → Authentication → Settings → Authorized domains →
+#       add `demo.linyup.com` (required even for email/password sign-in).
 ```
+
+The demo MUST be served from this sandbox deployment (it's built against the
+`linyup-sandbox` Firebase project). It cannot live under `linyup.com/try` — that
+build targets `linyup-prod`, where the demo accounts/data don't exist, and `/try`
+404s there by design (`NEXT_PUBLIC_DEMO_MODE` is unset on prod).
 
 Demo logins (all `linyup123`, plan `club`/`active`): `grappling@`, `crossfit@`,
 `tennis@`, `yoga@`, `pilates@`, `dance@` `linyup.com`.
