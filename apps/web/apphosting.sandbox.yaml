@@ -45,17 +45,17 @@ env:
   # TODO: replace the three generated values below from `terraform output
   # -json firebase_web_config` after the sandbox project is created.
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "REPLACE_WITH_SANDBOX_MESSAGING_SENDER_ID"
+    value: "1006203712444"
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: REPLACE_WITH_SANDBOX_APP_ID
+    value: 1:1006203712444:web:5f1a15e86998c7a42671b9
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: REPLACE_WITH_SANDBOX_API_KEY
+    value: AIzaSyANE6K6TejYLR9I75O88SLotpnDullEGjw
     availability:
       - BUILD
       - RUNTIME

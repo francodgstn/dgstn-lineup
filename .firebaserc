@@ -8,21 +8,34 @@
   "targets": {
     "linyup-sandbox": {
       "hosting": {
-        "app": ["linyup-sandbox"],
-        "landing": ["linyup-sandbox-landing"]
+        "app": [
+          "linyup-sandbox"
+        ],
+        "landing": [
+          "linyup-sandbox-landing"
+        ]
       }
     },
     "linyup-staging": {
       "hosting": {
-        "app": ["linyup-staging"],
-        "landing": ["linyup-staging-landing"]
+        "app": [
+          "linyup-staging"
+        ],
+        "landing": [
+          "linyup-staging-landing"
+        ]
       }
     },
     "linyup-prod": {
       "hosting": {
-        "app": ["linyup-prod"],
-        "landing": ["linyup-prod-landing"]
+        "app": [
+          "linyup-prod"
+        ],
+        "landing": [
+          "linyup-prod-landing"
+        ]
       }
     }
-  }
+  },
+  "etags": {}
 }
