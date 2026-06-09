@@ -12,12 +12,47 @@ export const PLAN_ORDER: SaasPlan[] = ['coach', 'club', 'organization']
 export interface PlanPrice {
   baseMonthly: number
   stripeLookupKey: string
+  /** Included active (non-archived) contacts; null = unlimited (org/pooled). */
+  includedContacts: number | null
+  /** Overage price per extra contact beyond `includedContacts`, CHF/month.
+   *  Indicative — actual overage billing is a later phase (currently soft cap). */
+  extraContactMonthly: number
 }
 
 export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
-  coach:        { baseMonthly: 19,  stripeLookupKey: 'linyup_coach_monthly' },
-  club:         { baseMonthly: 39,  stripeLookupKey: 'linyup_club_monthly' },
-  organization: { baseMonthly: 149, stripeLookupKey: 'linyup_organization_monthly' },
+  coach:        { baseMonthly: 19,  stripeLookupKey: 'linyup_coach_monthly',        includedContacts: 20,   extraContactMonthly: 1 },
+  club:         { baseMonthly: 39,  stripeLookupKey: 'linyup_club_monthly',         includedContacts: 100,  extraContactMonthly: 1 },
+  organization: { baseMonthly: 149, stripeLookupKey: 'linyup_organization_monthly', includedContacts: null, extraContactMonthly: 0 },
+}
+
+// ─── Contact cap (included students + overage) ──────────────────────────────────
+// Soft cap: usage is tracked and surfaced; nothing is blocked. Counting basis is
+// active (non-archived, non-deleted) contacts. Overage billing is a later phase.
+
+export interface ContactUsage {
+  used: number
+  included: number | null   // null = unlimited
+  isUnlimited: boolean
+  remaining: number | null
+  overBy: number
+  atOrOverLimit: boolean
+  percent: number           // 0..100 for the meter (clamped)
+}
+
+export function contactUsageForPlan(plan: SaasPlan | null, used: number): ContactUsage {
+  const included = plan ? PLAN_PRICING[plan].includedContacts : null
+  if (included == null) {
+    return { used, included: null, isUnlimited: true, remaining: null, overBy: 0, atOrOverLimit: false, percent: 0 }
+  }
+  return {
+    used,
+    included,
+    isUnlimited: false,
+    remaining: Math.max(0, included - used),
+    overBy: Math.max(0, used - included),
+    atOrOverLimit: used >= included,
+    percent: included > 0 ? Math.min(100, Math.round((used / included) * 100)) : 100,
+  }
 }
 
 export type PlanFeature =

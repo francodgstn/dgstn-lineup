@@ -70,6 +70,9 @@
   },
   "Dashboard": {
     "title": "Dashboard",
+    "greetingMorning": "Buongiorno",
+    "greetingAfternoon": "Buon pomeriggio",
+    "greetingEvening": "Buonasera",
     "sectionHighlights": "Panoramica",
     "statActiveMembers": "Membri attivi",
     "statActiveMembersSub": "stato abbonamento attivo",
@@ -353,7 +356,11 @@
     "goalEditGoal": "Modifica obiettivo",
     "goalEditTask": "Modifica compito",
     "save": "Salva",
-    "loading": "Caricamento…"
+    "loading": "Caricamento…",
+    "usageMeter": "{used} / {included}",
+    "capWarnTitle": "Hai raggiunto il limite di contatti del tuo piano",
+    "capWarnBody": "Il tuo piano include {included} contatti e ne hai {used}. Esegui l’upgrade per un limite più alto.",
+    "capWarnCta": "Upgrade"
   },
   "TeamMemberships": {
     "title": "Tessere",

@@ -11,6 +11,7 @@ import {
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
+import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -21,9 +22,9 @@ import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, CONTACT_REQUESTS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION, ORGANIZATIONS_COLLECTION,
   ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES,
-  CONTACT_FILTERS_SUBCOLLECTION,
+  CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER,
 } from '@linyup/shared'
-import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef } from '@linyup/shared'
+import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -1386,7 +1387,8 @@ type TabId = 'active' | 'archived' | 'deleted' | 'requests'
 
 export default function ContactsPage() {
   const { currentTeamId, user, team } = useAuth()
-  const { isAtLeast } = usePlan()
+  const { isAtLeast, plan } = usePlan()
+  const { openUpgradeModal } = useUpgradeModal()
   const qc = useQueryClient()
   const t = useTranslations('Contacts')
 
@@ -1397,6 +1399,11 @@ export default function ContactsPage() {
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
   const inOrg = !!team?.org_id
   const { data: statusDefs } = useOrgMembershipStatuses(team?.org_id)
+
+  // Contact cap usage (soft cap): counts active = non-archived, non-deleted.
+  const usage = contactUsageForPlan(plan, active.length)
+  const planIdx = plan ? PLAN_ORDER.indexOf(plan) : -1
+  const nextPlan: SaasPlan | null = planIdx >= 0 && planIdx < PLAN_ORDER.length - 1 ? PLAN_ORDER[planIdx + 1] : null
 
   const [tab, setTab] = useState<TabId>('active')
   const [search, setSearch] = useState('')
@@ -1593,6 +1600,19 @@ export default function ContactsPage() {
               })}
             </p>
           )}
+          {!loadingActive && !usage.isUnlimited && (
+            <div className="mt-1.5 flex items-center gap-2 max-w-xs">
+              <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${usage.atOrOverLimit ? 'bg-destructive' : 'bg-primary'}`}
+                  style={{ width: `${usage.percent}%` }}
+                />
+              </div>
+              <span className={`text-xs tabular-nums ${usage.atOrOverLimit ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                {t('usageMeter', { used: usage.used, included: usage.included ?? 0 })}
+              </span>
+            </div>
+          )}
         </div>
         <button
           onClick={() => setDialogOpen(true)}
@@ -1602,6 +1622,27 @@ export default function ContactsPage() {
           {t('addContact')}
         </button>
       </div>
+
+      {/* Contact-cap warning (soft cap — informational, nothing is blocked) */}
+      {!loadingActive && usage.atOrOverLimit && !usage.isUnlimited && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/[0.04] px-4 py-3 flex items-start justify-between gap-3">
+          <div className="text-sm">
+            <p className="font-medium">{t('capWarnTitle')}</p>
+            <p className="text-muted-foreground">
+              {t('capWarnBody', { used: usage.used, included: usage.included ?? 0 })}
+            </p>
+          </div>
+          {nextPlan && (
+            <button
+              type="button"
+              onClick={() => openUpgradeModal({ minPlan: nextPlan })}
+              className="shrink-0 inline-flex items-center px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              {t('capWarnCta')}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Overview — collapsed by default, always visible */}
       <OverviewPanel

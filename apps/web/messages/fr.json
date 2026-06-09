@@ -70,6 +70,9 @@
   },
   "Dashboard": {
     "title": "Tableau de bord",
+    "greetingMorning": "Bonjour",
+    "greetingAfternoon": "Bon après-midi",
+    "greetingEvening": "Bonsoir",
     "sectionHighlights": "Aperçu",
     "statActiveMembers": "Membres actifs",
     "statActiveMembersSub": "statut d'adhésion actif",
@@ -353,7 +356,11 @@
     "goalEditGoal": "Modifier l'objectif",
     "goalEditTask": "Modifier la tâche",
     "save": "Enregistrer",
-    "loading": "Chargement…"
+    "loading": "Chargement…",
+    "usageMeter": "{used} / {included}",
+    "capWarnTitle": "Vous avez atteint la limite de contacts de votre offre",
+    "capWarnBody": "Votre offre inclut {included} contacts et vous en avez {used}. Passez à une offre supérieure pour augmenter la limite.",
+    "capWarnCta": "Mettre à niveau"
   },
   "TeamMemberships": {
     "title": "Adhésion",

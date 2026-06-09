@@ -70,6 +70,9 @@
   },
   "Dashboard": {
     "title": "Dashboard",
+    "greetingMorning": "Guten Morgen",
+    "greetingAfternoon": "Guten Tag",
+    "greetingEvening": "Guten Abend",
     "sectionHighlights": "Übersicht",
     "statActiveMembers": "Aktive Mitglieder",
     "statActiveMembersSub": "aktiver Mitgliedsstatus",
@@ -353,7 +356,11 @@
     "goalEditGoal": "Ziel bearbeiten",
     "goalEditTask": "Aufgabe bearbeiten",
     "save": "Speichern",
-    "loading": "Wird geladen…"
+    "loading": "Wird geladen…",
+    "usageMeter": "{used} / {included}",
+    "capWarnTitle": "Du hast das Kontaktlimit deines Plans erreicht",
+    "capWarnBody": "Dein Plan enthält {included} Kontakte, du hast {used}. Mit einem Upgrade erhältst du ein höheres Limit.",
+    "capWarnCta": "Upgrade"
   },
   "TeamMemberships": {
     "title": "Mitgliedschaft",

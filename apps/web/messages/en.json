@@ -70,6 +70,9 @@
   },
   "Dashboard": {
     "title": "Dashboard",
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
     "sectionHighlights": "Highlights",
     "statActiveMembers": "Memberships",
     "statActiveMembersSub": "active membership status",
@@ -358,7 +361,11 @@
     "goalEditGoal": "Edit goal",
     "goalEditTask": "Edit task",
     "save": "Save",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "usageMeter": "{used} / {included}",
+    "capWarnTitle": "You've reached your plan's contact limit",
+    "capWarnBody": "Your plan includes {included} contacts and you have {used}. Upgrade for a higher limit.",
+    "capWarnCta": "Upgrade"
   },
   "TeamMemberships": {
     "title": "Membership",
