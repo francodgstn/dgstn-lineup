@@ -36,24 +36,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [teamRole, setTeamRole] = useState<TeamRole | null>(null)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let profileUnsub: (() => void) | null = null
+
+    const authUnsub = onAuthStateChanged(auth, (firebaseUser) => {
+      profileUnsub?.()
+      profileUnsub = null
+
       setUser(firebaseUser)
 
-      if (firebaseUser) {
-        const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid))
-        if (profileDoc.exists()) {
-          setProfile({ id: profileDoc.id, ...profileDoc.data() } as UserProfile)
-        }
-      } else {
+      if (!firebaseUser) {
         setProfile(null)
         setTeam(null)
         setTeamRole(null)
+        setLoading(false)
+        return
       }
 
-      setLoading(false)
+      // Keep profile in sync — handles the case where the doc is created after
+      // auth (e.g. new user completing signup wizard after magic-link sign-in).
+      profileUnsub = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
+        setProfile(snap.exists() ? ({ id: snap.id, ...snap.data() } as UserProfile) : null)
+        setLoading(false)
+      })
     })
 
-    return unsubscribe
+    return () => {
+      authUnsub()
+      profileUnsub?.()
+    }
   }, [])
 
   // Subscribe to the team document whenever currentTeamId changes

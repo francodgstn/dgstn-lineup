@@ -22,9 +22,11 @@ import {
   Plus, UserPlus, ArrowRight, Clock, Lock,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { useLocale } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
-import type { Contact, Session, RankingSystem, SubscriptionType } from '@linyup/shared'
+import type { Contact, Session, RankingSystem, SubscriptionType, UserProfile, Team } from '@linyup/shared'
+import { getDailyQuote } from '@/data/quotes'
 import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 import { useDashboardData } from '@/hooks/useDashboardData'
 import { useMembershipTerm } from '@/hooks/useMembershipTerm'
@@ -144,6 +146,37 @@ function StatCard({ title, value, subtitle, icon: Icon, loading, href, secondary
     </Card>
   )
   return href ? <Link href={href as Route}>{inner}</Link> : inner
+}
+
+// ─── dashboard hero ───────────────────────────────────────────────────────────
+
+function DashboardHero({ profile, team }: { profile: UserProfile | null; team: Team | null }) {
+  const t = useTranslations('Dashboard')
+  const locale = useLocale()
+
+  const now = new Date()
+  const hour = now.getHours()
+  const greetingKey = hour < 12 ? 'greetingMorning' : hour < 17 ? 'greetingAfternoon' : 'greetingEvening'
+
+  const firstName = profile?.firstname ?? profile?.displayName?.split(' ')[0] ?? ''
+
+  const dateStr = now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })
+
+  const quote = getDailyQuote()
+
+  return (
+    <div className="space-y-0.5">
+      <h1 className="text-2xl font-bold tracking-tight">
+        {t(greetingKey)}{firstName ? `, ${firstName}` : ''} 👋
+      </h1>
+      <p className="text-sm text-muted-foreground">
+        {dateStr}{team?.name ? ` · ${team.name}` : ''}
+      </p>
+      <p className="text-xs text-muted-foreground/60 italic pt-0.5">
+        &ldquo;{quote.text}&rdquo; — {quote.author}
+      </p>
+    </div>
+  )
 }
 
 // ─── section heading ──────────────────────────────────────────────────────────
@@ -542,12 +575,14 @@ export default function DashboardPage() {
 
       {/* ── 1. Agenda ── */}
       <section className="space-y-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-1.5 min-w-0">
+            <DashboardHero profile={profile} team={team} />
             <SectionIntro sectionKey="dashboard" />
           </div>
-          <QuickActions teamSlug={teamSlug} />
+          <div className="shrink-0 pt-1">
+            <QuickActions teamSlug={teamSlug} />
+          </div>
         </div>
         <AgendaCard teamId={currentTeamId} />
       </section>
