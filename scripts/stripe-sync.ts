@@ -3,7 +3,7 @@
  *
  * The whole catalogue lives IN THE REPO:
  *   - plan prices  → PLAN_PRICING   (packages/shared/src/types/plan.ts)
- *   - add-on prices → PLUGIN_ADDONS (packages/shared/src/plugin-addons.ts)
+ *   - add-on prices → PLUGIN_ADDONS (packages/shared/src/types/plugin-addons.ts)
  *
  * This script idempotently provisions a Stripe Product + recurring monthly Price
  * (with a stable `lookup_key`) for each entry, so the same definition can be

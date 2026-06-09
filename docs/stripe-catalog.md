@@ -7,7 +7,7 @@ reproducible.
 ## Source of truth
 - Plans → `PLAN_PRICING` in `packages/shared/src/types/plan.ts`
   (`{ baseMonthly, stripeLookupKey }`).
-- Add-ons → `PLUGIN_ADDONS` in `packages/shared/src/plugin-addons.ts`
+- Add-ons → `PLUGIN_ADDONS` in `packages/shared/src/types/plugin-addons.ts`
   (`{ coachPriceMonthly, stripeLookupKey }`).
 
 These same maps drive the web UI, the billing Cloud Functions, and the sync
