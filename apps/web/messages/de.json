@@ -359,8 +359,9 @@
     "loading": "Wird geladen…",
     "usageMeter": "{used} / {included}",
     "capWarnTitle": "Du hast das Kontaktlimit deines Plans erreicht",
-    "capWarnBody": "Dein Plan enthält {included} Kontakte, du hast {used}. Mit einem Upgrade erhältst du ein höheres Limit.",
-    "capWarnCta": "Upgrade"
+    "capWarnCta": "Upgrade",
+    "capWarnBodyBilled": "Dein Plan enthält {included} Kontakte, du hast {used}. Zusätzliche Kontakte werden mit CHF {price}/Mt. pro Kontakt berechnet. Mit einem Upgrade erhältst du ein höheres Inklusivlimit.",
+    "capWarnBodyTrial": "Dein Plan enthält {included} Kontakte, du hast {used}. Nach deiner Testphase werden zusätzliche Kontakte mit CHF {price}/Mt. pro Kontakt berechnet. Mit einem Upgrade erhältst du ein höheres Inklusivlimit."
   },
   "TeamMemberships": {
     "title": "Mitgliedschaft",

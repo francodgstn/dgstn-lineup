@@ -359,8 +359,9 @@
     "loading": "Chargement…",
     "usageMeter": "{used} / {included}",
     "capWarnTitle": "Vous avez atteint la limite de contacts de votre offre",
-    "capWarnBody": "Votre offre inclut {included} contacts et vous en avez {used}. Passez à une offre supérieure pour augmenter la limite.",
-    "capWarnCta": "Mettre à niveau"
+    "capWarnCta": "Mettre à niveau",
+    "capWarnBodyBilled": "Votre offre inclut {included} contacts et vous en avez {used}. Les contacts supplémentaires sont facturés CHF {price}/mois chacun. Passez à une offre supérieure pour une limite incluse plus élevée.",
+    "capWarnBodyTrial": "Votre offre inclut {included} contacts et vous en avez {used}. À la fin de votre essai, les contacts supplémentaires seront facturés CHF {price}/mois chacun. Passez à une offre supérieure pour une limite incluse plus élevée."
   },
   "TeamMemberships": {
     "title": "Adhésion",

@@ -22,7 +22,7 @@ import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, CONTACT_REQUESTS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION, ORGANIZATIONS_COLLECTION,
   ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES,
-  CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER,
+  CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, EXTRA_CONTACT_MONTHLY,
 } from '@linyup/shared'
 import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
 import { useForm } from 'react-hook-form'
@@ -1387,7 +1387,7 @@ type TabId = 'active' | 'archived' | 'deleted' | 'requests'
 
 export default function ContactsPage() {
   const { currentTeamId, user, team } = useAuth()
-  const { isAtLeast, plan } = usePlan()
+  const { isAtLeast, plan, isTrialing } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
   const qc = useQueryClient()
   const t = useTranslations('Contacts')
@@ -1629,7 +1629,11 @@ export default function ContactsPage() {
           <div className="text-sm">
             <p className="font-medium">{t('capWarnTitle')}</p>
             <p className="text-muted-foreground">
-              {t('capWarnBody', { used: usage.used, included: usage.included ?? 0 })}
+              {t(isTrialing ? 'capWarnBodyTrial' : 'capWarnBodyBilled', {
+                used: usage.used,
+                included: usage.included ?? 0,
+                price: EXTRA_CONTACT_MONTHLY,
+              })}
             </p>
           </div>
           {nextPlan && (

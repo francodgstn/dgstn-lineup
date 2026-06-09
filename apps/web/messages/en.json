@@ -364,8 +364,9 @@
     "loading": "Loading…",
     "usageMeter": "{used} / {included}",
     "capWarnTitle": "You've reached your plan's contact limit",
-    "capWarnBody": "Your plan includes {included} contacts and you have {used}. Upgrade for a higher limit.",
-    "capWarnCta": "Upgrade"
+    "capWarnCta": "Upgrade",
+    "capWarnBodyBilled": "Your plan includes {included} contacts and you have {used}. Extra contacts are billed at CHF {price}/mo each. Upgrade for a higher included limit.",
+    "capWarnBodyTrial": "Your plan includes {included} contacts and you have {used}. After your trial, extra contacts are billed at CHF {price}/mo each. Upgrade for a higher included limit."
   },
   "TeamMemberships": {
     "title": "Membership",

@@ -359,8 +359,9 @@
     "loading": "Caricamento…",
     "usageMeter": "{used} / {included}",
     "capWarnTitle": "Hai raggiunto il limite di contatti del tuo piano",
-    "capWarnBody": "Il tuo piano include {included} contatti e ne hai {used}. Esegui l’upgrade per un limite più alto.",
-    "capWarnCta": "Upgrade"
+    "capWarnCta": "Upgrade",
+    "capWarnBodyBilled": "Il tuo piano include {included} contatti e ne hai {used}. I contatti aggiuntivi sono fatturati CHF {price}/mese ciascuno. Esegui l’upgrade per un limite incluso più alto.",
+    "capWarnBodyTrial": "Il tuo piano include {included} contatti e ne hai {used}. Al termine della prova, i contatti aggiuntivi saranno fatturati CHF {price}/mese ciascuno. Esegui l’upgrade per un limite incluso più alto."
   },
   "TeamMemberships": {
     "title": "Tessere",

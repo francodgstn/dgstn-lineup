@@ -23,7 +23,7 @@
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply --reprice   # also reprice drift
  */
 import Stripe from 'stripe'
-import { PLAN_PRICING, PLUGIN_ADDONS } from '@linyup/shared'
+import { PLAN_PRICING, PLUGIN_ADDONS, EXTRA_CONTACT_MONTHLY, EXTRA_CONTACT_STRIPE_LOOKUP_KEY } from '@linyup/shared'
 
 const CURRENCY = 'chf'
 const APPLY = process.argv.includes('--apply')
@@ -51,6 +51,13 @@ const catalog: CatalogEntry[] = [
     lookupKey: a.stripeLookupKey,
     chf: a.coachPriceMonthly,
   })),
+  // Per-student overage (quantity-based; billed per contact over the included count)
+  {
+    kind: 'plan',
+    name: 'Linyup extra student',
+    lookupKey: EXTRA_CONTACT_STRIPE_LOOKUP_KEY,
+    chf: EXTRA_CONTACT_MONTHLY,
+  },
 ]
 
 function chfToRappen(chf: number): number {

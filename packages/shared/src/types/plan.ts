@@ -25,9 +25,17 @@ export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
   organization: { baseMonthly: 149, stripeLookupKey: 'linyup_organization_monthly', includedContacts: null, extraContactMonthly: 0 },
 }
 
+// Single shared per-extra-contact overage price (same across plans for now).
+// Billed via a Stripe subscription item whose quantity = contacts over the
+// included count (synced by the syncContactOverage scheduled function).
+// If per-plan overage prices ever diverge, switch to per-plan lookup keys.
+export const EXTRA_CONTACT_MONTHLY = 1
+export const EXTRA_CONTACT_STRIPE_LOOKUP_KEY = 'linyup_extra_student_monthly'
+
 // ─── Contact cap (included students + overage) ──────────────────────────────────
 // Soft cap: usage is tracked and surfaced; nothing is blocked. Counting basis is
-// active (non-archived, non-deleted) contacts. Overage billing is a later phase.
+// active (non-archived, non-deleted) contacts. Overage beyond the included count
+// is billed per-student on paid plans (trials are free).
 
 export interface ContactUsage {
   used: number

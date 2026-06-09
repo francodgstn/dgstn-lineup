@@ -2,6 +2,7 @@
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https'
+import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { getSecret } from '../utils/secrets'
 import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
@@ -10,8 +11,11 @@ import type { SaasPlan } from '@linyup/shared'
 import {
   PLUGIN_ADDONS,
   pluginIdForAddonLookupKey,
+  PLAN_PRICING,
+  EXTRA_CONTACT_STRIPE_LOOKUP_KEY,
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
+  CONTACTS_COLLECTION,
 } from '@linyup/shared'
 
 
@@ -566,3 +570,85 @@ export const deactivatePluginAddon = onCall(async (request) => {
   await installRef.delete()
   return { success: true }
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// syncContactOverage — scheduled: bills contacts over each paid team's included
+// count via a per-student Stripe subscription item (quantity = overage). Trials
+// have no subscription, so they're naturally free; Org is unlimited (skipped).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const syncContactOverage = onSchedule(
+  { schedule: 'every day 03:00', timeZone: 'Europe/Zurich', timeoutSeconds: 300, memory: '512MiB' },
+  async () => {
+    const db = admin.firestore()
+    const subsSnap = await db.collection('saas_subscriptions')
+      .where('status', 'in', ['active', 'past_due'])
+      .get()
+
+    let adapter: StripeAdapter | null = null
+
+    for (const doc of subsSnap.docs) {
+      const sub = doc.data()
+      if (sub.entity_type === 'org') continue
+
+      const teamId = (sub.entity_id as string) ?? doc.id
+      const plan = sub.plan as SaasPlan | undefined
+      const subscriptionId = sub.gateway_data?.subscription_id as string | undefined
+      if (!plan || !subscriptionId) continue
+
+      const included = PLAN_PRICING[plan]?.includedContacts
+      if (included == null) continue // unlimited
+
+      // Active = non-archived, non-deleted (matches getActiveContacts).
+      let used = 0
+      try {
+        const agg = await db.collection(CONTACTS_COLLECTION)
+          .where('teamId', '==', teamId)
+          .where('deleted_at', '==', null)
+          .where('archived_at', '==', null)
+          .count().get()
+        used = agg.data().count
+      } catch (err) {
+        console.error(`[overage] count failed for team ${teamId}:`, err)
+        continue
+      }
+
+      const overage = Math.max(0, used - included)
+      const existing = sub.gateway_data?.overage as { itemId: string; quantity: number } | undefined
+      const subRef = db.collection('saas_subscriptions').doc(doc.id)
+
+      try {
+        if (overage > 0) {
+          if (!adapter) adapter = await getPlatformStripeAdapter()
+          if (!existing?.itemId) {
+            const { itemId } = await adapter.addSubscriptionItem({
+              subscriptionId, lookupKey: EXTRA_CONTACT_STRIPE_LOOKUP_KEY, quantity: overage,
+            })
+            await subRef.set(
+              { gateway_data: { overage: { itemId, quantity: overage } }, updated_at: FieldValue.serverTimestamp() },
+              { merge: true },
+            )
+            console.log(`[overage] team ${teamId}: +item qty ${overage} (used ${used}/${included})`)
+          } else if (existing.quantity !== overage) {
+            await adapter.updateSubscriptionItemQuantity({ itemId: existing.itemId, quantity: overage })
+            await subRef.set(
+              { gateway_data: { overage: { itemId: existing.itemId, quantity: overage } }, updated_at: FieldValue.serverTimestamp() },
+              { merge: true },
+            )
+            console.log(`[overage] team ${teamId}: qty ${existing.quantity} → ${overage}`)
+          }
+        } else if (existing?.itemId) {
+          if (!adapter) adapter = await getPlatformStripeAdapter()
+          await adapter.removeSubscriptionItem({ itemId: existing.itemId })
+          await subRef.set(
+            { gateway_data: { overage: FieldValue.delete() }, updated_at: FieldValue.serverTimestamp() },
+            { merge: true },
+          )
+          console.log(`[overage] team ${teamId}: removed overage item (used ${used}/${included})`)
+        }
+      } catch (err) {
+        console.error(`[overage] sync failed for team ${teamId}:`, err)
+      }
+    }
+  },
+)

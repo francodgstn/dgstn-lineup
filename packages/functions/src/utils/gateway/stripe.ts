@@ -75,19 +75,27 @@ export class StripeAdapter implements GatewayAdapter {
     return prices.data[0].id
   }
 
-  /** Add a plugin add-on as a subscription item on an existing subscription. */
-  async addSubscriptionItem(params: { subscriptionId: string; lookupKey: string }): Promise<{ itemId: string }> {
+  /** Add a subscription item (add-on, or quantity-based overage) to a subscription. */
+  async addSubscriptionItem(params: { subscriptionId: string; lookupKey: string; quantity?: number }): Promise<{ itemId: string }> {
     const priceId = await this.resolvePriceByLookupKey(params.lookupKey)
     const item = await this.stripe.subscriptionItems.create({
       subscription: params.subscriptionId,
       price: priceId,
-      quantity: 1,
+      quantity: params.quantity ?? 1,
       proration_behavior: 'create_prorations',
     })
     return { itemId: item.id }
   }
 
-  /** Remove a subscription item (plugin add-on deactivation). */
+  /** Update a subscription item's quantity (overage count changes). */
+  async updateSubscriptionItemQuantity(params: { itemId: string; quantity: number }): Promise<void> {
+    await this.stripe.subscriptionItems.update(params.itemId, {
+      quantity: params.quantity,
+      proration_behavior: 'create_prorations',
+    })
+  }
+
+  /** Remove a subscription item (add-on deactivation, or overage back to zero). */
   async removeSubscriptionItem(params: { itemId: string }): Promise<void> {
     await this.stripe.subscriptionItems.del(params.itemId, {
       proration_behavior: 'create_prorations',

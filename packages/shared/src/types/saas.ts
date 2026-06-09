@@ -22,6 +22,9 @@ export interface SaasSubscription {
     last_event_id?: string               // idempotency: last processed webhook event ID
     // Active paid plugin add-ons (Coach plan) → their Stripe subscription items.
     activeAddOns?: Array<{ pluginId: string; itemId: string }>
+    // Contact overage: the per-student subscription item + its current quantity
+    // (contacts over the plan's included count). Synced by syncContactOverage.
+    overage?: { itemId: string; quantity: number }
   } | null
   created_at: Timestamp
   updated_at: Timestamp
