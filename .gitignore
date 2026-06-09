@@ -51,6 +51,7 @@ coverage/
 *.tfstate
 *.tfstate.*
 *.tfplan
+tfplan
 crash.log
 crash.*.log
 # Never commit real variable values (may hold billing/org IDs); keep the examples
