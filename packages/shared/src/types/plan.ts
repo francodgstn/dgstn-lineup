@@ -1,4 +1,4 @@
-import type { SaasPlan } from './team'
+import type { SaasPlan, SaasStatus } from './team'
 
 // Ordered from lowest to highest — used for >= comparisons
 export const PLAN_ORDER: SaasPlan[] = ['coach', 'club', 'organization']
@@ -7,6 +7,21 @@ export const PLAN_ORDER: SaasPlan[] = ['coach', 'club', 'organization']
 // One self-service extension of TRIAL_EXTENSION_DAYS is allowed (see extendTrial).
 export const TRIAL_DAYS = 14
 export const TRIAL_EXTENSION_DAYS = 14
+// After a trial lapses the team is walled but its data is soft-kept this many
+// days for self-service reactivation; then it is hard-deleted.
+export const TRIAL_PURGE_DAYS = 90
+
+// True when access should be blocked: status is 'expired', OR a trial whose
+// end date has passed (client-side immediacy before the daily cron flips it).
+export function trialHasExpired(
+  planStatus: SaasStatus | null | undefined,
+  trialEndsAtMs: number | null,
+  nowMs: number,
+): boolean {
+  if (planStatus === 'expired') return true
+  if (planStatus === 'trial' && trialEndsAtMs != null && trialEndsAtMs < nowMs) return true
+  return false
+}
 
 // Base subscription pricing per plan. Declarative source for scripts/stripe-sync.ts
 // (the whole Stripe catalogue — plans + add-ons — lives in the repo).

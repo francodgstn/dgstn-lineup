@@ -3,7 +3,9 @@ import type { Timestamp } from './common'
 export type TeamRole = 'owner' | 'manager' | 'viewer'
 
 export type SaasPlan = 'coach' | 'club' | 'organization'
-export type SaasStatus = 'trial' | 'active' | 'past_due' | 'cancelled'
+// 'expired' = trial lapsed → app walled, data soft-kept for the reactivation
+// window, then hard-deleted (see TRIAL_PURGE_DAYS / handleTrialLifecycle).
+export type SaasStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'expired'
 
 export interface RankLevel {
   value: number
@@ -72,6 +74,8 @@ export interface Team {
   plan_status?: SaasStatus
   trial_ends_at?: Timestamp
   trial_extended?: boolean   // one-time self-service trial extension has been used
+  suspended_at?: Timestamp   // when the trial lapsed and the app was walled
+  purge_at?: Timestamp       // suspended_at + TRIAL_PURGE_DAYS → hard-delete deadline
   stripe_customer_id?: string
   max_contacts?: number
   // Organization membership
