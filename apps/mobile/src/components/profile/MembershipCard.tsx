@@ -216,7 +216,7 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
           </View>
         </Card.Content>
 
-        <PillHandle onPress={handleToggle} />
+        <PillHandle onPress={handleToggle} rotation={chevronRotation} />
       </LinearGradient>
     </Card>
   );

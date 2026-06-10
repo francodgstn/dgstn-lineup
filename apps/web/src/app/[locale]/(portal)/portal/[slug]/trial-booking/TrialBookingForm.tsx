@@ -112,8 +112,8 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
     setBookingError(null)
 
     try {
-      const bookTrialSession = httpsCallable(functions, 'bookTrialSession')
-      await bookTrialSession({
+      const bookSession = httpsCallable(functions, 'bookSession')
+      await bookSession({
         teamId,
         sessionId: selectedSession.id,
         contactDetails: {

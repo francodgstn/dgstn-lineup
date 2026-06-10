@@ -1,5 +1,5 @@
 import { db, getFunctions } from '../config/firebase';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, TrainingCheckin, TrainingIndicator, CoachSlot, CoachSlotWithStatus } from '../types';
 import { detectTrainingProfile } from '../utils/trainingProfile';
 import { httpsCallable } from 'firebase/functions';
@@ -672,15 +672,15 @@ export const FirestoreService = {
   }): Promise<{ success: boolean; message?: string }> {
     try {
       // Generate a one-time booking auth token for this contact so that
-      // bookTrialSession uses the authenticated path and stores the booking
+      // bookSession uses the authenticated path and stores the booking
       // under the correct contactId (needed for cancel to find the doc).
       const tokenResult = await this.generateAuthToken(params.contactId, 'booking');
       if (!tokenResult?.token) {
         throw new Error('Failed to generate booking auth token');
       }
 
-      const bookTrialSessionFn = httpsCallable(getFunctions(), 'bookTrialSession');
-      const result = await bookTrialSessionFn({
+      const bookSessionFn = httpsCallable(getFunctions(), 'bookSession');
+      const result = await bookSessionFn({
         teamId: params.teamId,
         sessionId: params.sessionId,
         bookingAuthToken: tokenResult.token,
