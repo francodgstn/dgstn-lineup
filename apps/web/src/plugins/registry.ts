@@ -10,6 +10,7 @@ import { hmdFightingCupManifest } from './hmd-fighting-cup/manifest'
 import { referralsManifest } from './referrals/manifest'
 import { clubCoursesManifest } from './club-courses/manifest'
 import { gamificationManifest } from './gamification/manifest'
+import { contactGroupsManifest } from './contact-groups/manifest'
 
 export const PLUGIN_REGISTRY: PluginManifest[] = [
   aiInsightsManifest,
@@ -19,6 +20,7 @@ export const PLUGIN_REGISTRY: PluginManifest[] = [
   referralsManifest,
   clubCoursesManifest,
   gamificationManifest,
+  contactGroupsManifest,
 ]
 
 /** All plugin-contributed event type IDs (built-in type IDs from installed plugins). */

@@ -95,6 +95,9 @@ export interface Contact {
   // Tags — free-form labels attached by automations or manually
   tags?: string[]
 
+  // Contact Groups plugin — IDs of teams/{teamId}/contact_groups docs
+  group_ids?: string[]
+
   // Ranking — keyed by RankingSystem.id (e.g. { "hmd": 5, "internal": 2 })
   ranks?: Record<string, number>
 
@@ -103,6 +106,21 @@ export interface Contact {
   archived_at?: Timestamp | null
   deleted_at?: Timestamp | null
   anonymized_at?: Timestamp | null
+}
+
+// ─── contact group (teams/{teamId}/contact_groups) ───────────────────────────
+// Contact Groups plugin — nested member groups à la association management
+// tools. Nesting via parent_id; membership lives on Contact.group_ids.
+
+export interface ContactGroup {
+  id: string
+  name: string
+  parent_id: string | null
+  color?: string
+  description?: string
+  created_at?: Timestamp
+  created_by?: string
+  updated_at?: Timestamp
 }
 
 // ─── subscription type (team configuration) ───────────────────────────────────

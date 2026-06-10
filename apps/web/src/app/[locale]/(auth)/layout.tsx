@@ -27,6 +27,7 @@ import {
   Building2,
   Gift,
   GraduationCap,
+  FolderTree,
   Plus,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -48,6 +49,7 @@ const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
   Gift,
   Puzzle,
   Trophy,
+  FolderTree,
 }
 
 // ─── nav config ───────────────────────────────────────────────────────────────

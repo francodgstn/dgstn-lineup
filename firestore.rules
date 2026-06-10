@@ -355,6 +355,13 @@ service cloud.firestore {
         allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
       }
 
+      // Contact Groups plugin — nested member groups (parent_id hierarchy).
+      // Membership lives on contacts/{id}.group_ids, covered by the contacts rules.
+      match /contact_groups/{groupId} {
+        allow read:  if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+      }
+
       // Inbound webhook endpoints — manager/owner manage; the inboundWebhook function
       // reads via Admin SDK (collectionGroup query) so no client read rule needed there.
       match /webhook_endpoints/{endpointId} {

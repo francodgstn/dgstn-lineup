@@ -50,6 +50,7 @@ import {
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab } from './NotesTab'
+import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -2447,6 +2448,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   </span>
                 )}
               </div>
+              {/* Contact Groups plugin — membership chips */}
+              {isInstalled('contact-groups') && !contact.archived_at && !contact.deleted_at && (
+                <ContactGroupsChips contact={contact} onChanged={invalidate} />
+              )}
               {/* Copy update-request link */}
               {team?.slug && !contact.archived_at && !contact.deleted_at && (
                 <button

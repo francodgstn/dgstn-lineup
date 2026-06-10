@@ -7,6 +7,7 @@ import { useRouter } from '@/i18n/navigation'
 import {
   collection, query, where, orderBy, getDocs, getDoc, addDoc, updateDoc,
   doc, serverTimestamp, Timestamp, deleteField, onSnapshot, deleteDoc, setDoc,
+  arrayUnion, arrayRemove,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -25,7 +26,10 @@ import {
   CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, EXTRA_CONTACT_MONTHLY,
   planHasHardContactCap,
 } from '@linyup/shared'
-import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
+import type { Contact, ContactGroup, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { useContactGroups, expandGroupSelection, flattenGroupTree } from '@/plugins/contact-groups/hooks'
+import { BulkGroupsDialog } from '@/plugins/contact-groups/BulkGroupsDialog'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -33,7 +37,7 @@ import {
   Search, UserPlus, X, Flame,
   Star, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
   MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
-  Check, Bookmark, BookmarkPlus, BarChart2, Pin,
+  Check, Bookmark, BookmarkPlus, BarChart2, Pin, FolderTree,
 } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
@@ -418,6 +422,7 @@ interface Filters {
   types: string[]
   statuses: string[]
   subscriptions: string[]    // subscription_type_id values; 'none' = no subscription
+  groups: string[]           // contact_groups IDs (Contact Groups plugin); parents include subgroups
   hasAlerts: boolean
   sessionsMin: number | null
   sessionsMax: number | null
@@ -425,13 +430,13 @@ interface Filters {
   rankFilter: RankFilter | null
 }
 const EMPTY_FILTERS: Filters = {
-  types: [], statuses: [], subscriptions: [],
+  types: [], statuses: [], subscriptions: [], groups: [],
   hasAlerts: false, sessionsMin: null, sessionsMax: null, inactivity: null,
   rankFilter: null,
 }
 
 function countActiveFilters(f: Filters): number {
-  return f.types.length + f.statuses.length + f.subscriptions.length
+  return f.types.length + f.statuses.length + f.subscriptions.length + f.groups.length
     + (f.hasAlerts ? 1 : 0)
     + (f.sessionsMin != null || f.sessionsMax != null ? 1 : 0)
     + (f.inactivity ? 1 : 0)
@@ -529,7 +534,8 @@ function useSavedQueries(teamId: string | null) {
           .map((d) => ({
             id: d.id,
             name: d.data().name as string,
-            filters: d.data().filters as Filters,
+            // Older saved filters may predate newer keys (e.g. groups) — backfill defaults.
+            filters: { ...EMPTY_FILTERS, ...(d.data().filters as Partial<Filters>) },
             pinned: d.data().pinned ?? false,
           }))
       )
@@ -697,11 +703,12 @@ function RankFilterContent({ rankingSystems, rankFilter, onChange }: {
 }
 
 function FilterChips({
-  filters, onChange, subscriptionTypes, teamId, rankingSystems,
+  filters, onChange, subscriptionTypes, teamId, rankingSystems, contactGroups,
 }: {
   filters: Filters; onChange: (f: Filters) => void
   subscriptionTypes: SubscriptionType[]; teamId: string | null
   rankingSystems: RankingSystem[]
+  contactGroups: ContactGroup[] | null  // null = plugin not installed
 }) {
   const t = useTranslations('Contacts')
   const { saved, save, remove, togglePin, pinnedPresets, togglePresetPin } = useSavedQueries(teamId)
@@ -813,6 +820,20 @@ function FilterChips({
         {SUB_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.subscriptions.includes(o.value)}
           onToggle={() => onChange({ ...filters, subscriptions: toggle(filters.subscriptions, o.value) })} />)}
       </FilterChip>
+
+      {/* Contact Groups plugin — chip only when installed and groups exist */}
+      {contactGroups && contactGroups.length > 0 && (
+        <FilterChip label={t('filterGroups')}
+          activeLabel={chip(filters.groups, contactGroups.map((g) => ({ value: g.id, label: g.name })), 'groups')}
+          isActive={filters.groups.length > 0} onClear={() => onChange({ ...filters, groups: [] })}>
+          {flattenGroupTree(contactGroups).map(({ group, depth }) => (
+            <div key={group.id} style={{ paddingLeft: `${depth * 14}px` }}>
+              <CheckOption label={group.name} checked={filters.groups.includes(group.id)}
+                onToggle={() => onChange({ ...filters, groups: toggle(filters.groups, group.id) })} />
+            </div>
+          ))}
+        </FilterChip>
+      )}
 
       <FilterChip label={t('filterActivity')} activeLabel={activityParts.join(' · ')}
         isActive={activityIsActive}
@@ -1405,6 +1426,9 @@ export default function ContactsPage() {
   const { data: deleted = [], isLoading: loadingDeleted } = useDeletedContacts(currentTeamId)
   const { data: requests = [] } = useContactRequests(currentTeamId)
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
+  const { isInstalled } = useInstalledPlugins()
+  const groupsEnabled = isInstalled('contact-groups')
+  const { data: contactGroups = [] } = useContactGroups(groupsEnabled ? currentTeamId : null)
   const inOrg = !!team?.org_id
   const { data: statusDefs } = useOrgMembershipStatuses(team?.org_id)
 
@@ -1428,7 +1452,7 @@ export default function ContactsPage() {
     if (freeCapBlocked) setCapDialogOpen(true)
     else setDialogOpen(true)
   }
-  const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'type' | null>(null)
+  const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'type' | 'group-add' | 'group-remove' | null>(null)
 
   // confirm dialogs
   const [confirmArchive, setConfirmArchive] = useState<string[]>([])
@@ -1467,6 +1491,12 @@ export default function ContactsPage() {
         }
         return c.subscription_type_id && f.subscriptions.includes(c.subscription_type_id)
       })
+    }
+
+    if (f.groups.length > 0) {
+      // Selecting a parent group also matches members of its subgroups
+      const wanted = expandGroupSelection(contactGroups, f.groups)
+      result = result.filter((c) => (c.group_ids ?? []).some((gid) => wanted.has(gid)))
     }
 
     if (f.hasAlerts)
@@ -1509,9 +1539,11 @@ export default function ContactsPage() {
     return result
   }
 
-  const filteredActive   = useMemo(() => applyFiltersAndSearch(active,   filters, search), [active,   filters, search])
-  const filteredArchived = useMemo(() => applyFiltersAndSearch(archived, filters, search), [archived, filters, search])
-  const filteredDeleted  = useMemo(() => applyFiltersAndSearch(deleted,  filters, search), [deleted,  filters, search])
+  /* eslint-disable react-hooks/exhaustive-deps -- applyFiltersAndSearch closes over contactGroups */
+  const filteredActive   = useMemo(() => applyFiltersAndSearch(active,   filters, search), [active,   filters, search, contactGroups])
+  const filteredArchived = useMemo(() => applyFiltersAndSearch(archived, filters, search), [archived, filters, search, contactGroups])
+  const filteredDeleted  = useMemo(() => applyFiltersAndSearch(deleted,  filters, search), [deleted,  filters, search, contactGroups])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // ── current list & loading state ──────────────────────────────────────────
 
@@ -1562,6 +1594,15 @@ export default function ContactsPage() {
         subscription_type_id: type?.id ?? null,
         subscription_type_name: type?.name ?? null,
         updatedAt: serverTimestamp(),
+      })
+    ))
+    invalidateContacts()
+  }
+
+  const bulkGroupUpdate = async (groupId: string, op: 'add' | 'remove') => {
+    await Promise.all([...selected].map((id) =>
+      updateDoc(doc(db, CONTACTS_COLLECTION, id), {
+        group_ids: op === 'add' ? arrayUnion(groupId) : arrayRemove(groupId),
       })
     ))
     invalidateContacts()
@@ -1707,6 +1748,7 @@ export default function ContactsPage() {
           subscriptionTypes={subscriptionTypes}
           teamId={currentTeamId}
           rankingSystems={rankingSystems}
+          contactGroups={groupsEnabled ? contactGroups : null}
         />
       )}
 
@@ -1820,6 +1862,10 @@ export default function ContactsPage() {
             ...(rankingSystems.length > 0 ? [{ label: t('bulkSetRank'), icon: Award, onClick: () => setBulkEditMode('rank') }] : []),
             { label: t('bulkSetSubscription'), icon: CreditCard, onClick: () => setBulkEditMode('subscription') },
             { label: t('bulkSetType'), icon: Tag, onClick: () => setBulkEditMode('type') },
+            ...(groupsEnabled ? [
+              { label: t('bulkAddToGroup'),      icon: FolderTree, onClick: () => setBulkEditMode('group-add') },
+              { label: t('bulkRemoveFromGroup'), icon: FolderTree, onClick: () => setBulkEditMode('group-remove') },
+            ] : []),
           ] : []}
           moreActions={tab === 'active' && isAtLeast('club') ? [
             { label: t('bulkMove'),     icon: ArrowRightLeft, onClick: () => {}, disabled: true },
@@ -1918,6 +1964,17 @@ export default function ContactsPage() {
         count={selected.size}
         onConfirm={bulkSetContactType}
       />
+
+      {groupsEnabled && (
+        <BulkGroupsDialog
+          open={bulkEditMode === 'group-add' || bulkEditMode === 'group-remove'}
+          onOpenChange={(v) => { if (!v) setBulkEditMode(null) }}
+          mode={bulkEditMode === 'group-remove' ? 'remove' : 'add'}
+          groups={contactGroups}
+          count={selected.size}
+          onConfirm={(groupId) => bulkGroupUpdate(groupId, bulkEditMode === 'group-remove' ? 'remove' : 'add')}
+        />
+      )}
     </div>
   )
 }

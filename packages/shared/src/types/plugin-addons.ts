@@ -19,6 +19,7 @@ export const PLUGIN_ADDONS: Record<string, PluginAddonPrice> = {
   referrals:      { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_referrals_monthly' },
   'club-courses': { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_club-courses_monthly' },
   'club-website': { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_club-website_monthly' },
+  'contact-groups': { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_contact-groups_monthly' },
 }
 
 export function pluginAddon(pluginId: string): PluginAddonPrice | undefined {
