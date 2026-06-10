@@ -4,6 +4,12 @@ import Logo from '~/components/Logo.astro';
 
 const FIREBASE_PROJECT_ID = import.meta.env.PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-linyup';
 const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
+
+// Live demo playground (sandbox env). The sneak peek embeds the real app via
+// /preview, which auto-signs into one of these demo clubs; keep the keys in
+// sync with DEMO_ACCOUNTS in apps/web/src/lib/demo.ts.
+const DEMO_URL = import.meta.env.PUBLIC_DEMO_URL ?? 'https://demo.linyup.com';
+const DEMO_CLUBS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance'];
 ---
 
 <BaseLayout
@@ -96,12 +102,18 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
       </div>
     </section>
 
-    <!-- ── UI sneak peek ─────────────────────────────────────────────── -->
+    <!-- ── UI sneak peek (live demo embed) ───────────────────────────── -->
     <section class="preview-wrap">
-      <p class="preview-label">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-        Sneak peek
-      </p>
+      <div class="preview-head">
+        <p class="preview-label">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          Sneak peek — live demo
+        </p>
+        <a class="preview-open" href={`${DEMO_URL}/try`} target="_blank" rel="noopener">
+          Open the demo
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10M7 17 17 7"/></svg>
+        </a>
+      </div>
 
       <div class="browser">
         <!-- browser chrome -->
@@ -109,108 +121,39 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
           <span class="dot dot-r"></span>
           <span class="dot dot-y"></span>
           <span class="dot dot-g"></span>
-          <div class="browser-url">app.linyup.com/dashboard</div>
+          <div class="browser-url">demo.linyup.com/dashboard</div>
         </div>
 
-        <!-- mock dashboard -->
-        <div class="mock-ui">
-          <!-- sidebar -->
-          <aside class="mock-sidebar">
-            <div class="mock-logo">
-              <div class="mock-logo-icon"></div>
-              <span>Linyup</span>
-            </div>
-            <nav class="mock-nav">
-              <div class="mock-nav-item active">
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                Dashboard
-              </div>
-              <div class="mock-nav-item">
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                Sessions
-              </div>
-              <div class="mock-nav-item">
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                Contacts
-              </div>
-              <div class="mock-nav-item">
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
-                Mobile app
-              </div>
-            </nav>
-            <div class="mock-user">
-              <div class="mock-avatar">FC</div>
-              <div class="mock-user-info">
-                <div class="mock-user-name">Franco C.</div>
-                <div class="mock-user-role">Club owner</div>
-              </div>
-            </div>
-          </aside>
-
-          <!-- main content -->
-          <div class="mock-main">
-            <div class="mock-header">
-              <div>
-                <div class="mock-greeting">Good morning, Franco 👋</div>
-                <div class="mock-date">Monday, 9 June · City Judo Club</div>
-              </div>
-              <div class="mock-new-btn">+ New session</div>
-            </div>
-
-            <!-- stats row -->
-            <div class="mock-stats">
-              <div class="mock-stat">
-                <div class="mock-stat-label">Active members</div>
-                <div class="mock-stat-value">34</div>
-                <div class="mock-stat-change up">+2 this month</div>
-              </div>
-              <div class="mock-stat">
-                <div class="mock-stat-label">Sessions this week</div>
-                <div class="mock-stat-value">5</div>
-                <div class="mock-stat-change">2 upcoming</div>
-              </div>
-              <div class="mock-stat">
-                <div class="mock-stat-label">Attendance rate</div>
-                <div class="mock-stat-value">76%</div>
-                <div class="mock-stat-change up">↑ vs last week</div>
-              </div>
-            </div>
-
-            <!-- upcoming sessions -->
-            <div class="mock-section-title">Upcoming sessions</div>
-            <div class="mock-sessions">
-              <div class="mock-session">
-                <div class="mock-session-time">09:00</div>
-                <div class="mock-session-info">
-                  <div class="mock-session-name">Kickboxing Beginners</div>
-                  <div class="mock-session-meta">Studio A · 12 registered</div>
-                </div>
-                <div class="mock-chip green">Confirmed</div>
-              </div>
-              <div class="mock-session">
-                <div class="mock-session-time">11:30</div>
-                <div class="mock-session-info">
-                  <div class="mock-session-name">Functional Workout</div>
-                  <div class="mock-session-meta">Studio B · 8 registered</div>
-                </div>
-                <div class="mock-chip green">Confirmed</div>
-              </div>
-              <div class="mock-session">
-                <div class="mock-session-time">18:00</div>
-                <div class="mock-session-info">
-                  <div class="mock-session-name">1:1 Coaching with Alex M.</div>
-                  <div class="mock-session-meta">Studio A · Private</div>
-                </div>
-                <div class="mock-chip purple">Open</div>
-              </div>
-            </div>
-          </div>
+        <!-- live demo (real app, random club each load) -->
+        <div class="preview-stage">
+          <iframe
+            id="demo-preview"
+            class="preview-frame"
+            title="Linyup live demo"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+          ></iframe>
+          <!-- non-interactive teaser: clicking anywhere opens the real demo -->
+          <a
+            class="preview-hit"
+            href={`${DEMO_URL}/try`}
+            target="_blank"
+            rel="noopener"
+            aria-label="Open the live demo"
+          ></a>
         </div>
 
         <!-- fade out bottom to suggest more below -->
         <div class="preview-fade" aria-hidden="true"></div>
       </div>
     </section>
+
+    <script define:vars={{ demoUrl: DEMO_URL, demoClubs: DEMO_CLUBS }}>
+      // Pick a random demo club per page load and boot the live preview.
+      const club = demoClubs[Math.floor(Math.random() * demoClubs.length)];
+      const frame = document.getElementById('demo-preview');
+      if (frame) frame.src = `${demoUrl}/preview?club=${club}`;
+    </script>
 
     <!-- ── Footer note ───────────────────────────────────────────────── -->
     <footer class="pre-footer">
@@ -567,156 +510,53 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
     margin: 0 auto;
   }
 
-  /* ── Mock dashboard ─────────────────────────────────────────────────── */
-  .mock-ui {
+  /* ── Live demo preview ──────────────────────────────────────────────── */
+  .preview-head {
     display: flex;
-    background: oklch(0.11 0.04 292);
-    min-height: 380px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  }
-
-  .mock-sidebar {
-    width: 180px;
-    flex-shrink: 0;
-    background: oklch(0.13 0.05 292);
-    border-right: 1px solid oklch(1 0 0 / 0.07);
-    display: flex;
-    flex-direction: column;
-    padding: 16px 0;
-  }
-
-  .mock-logo {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 0 16px 20px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #fff;
-    border-bottom: 1px solid oklch(1 0 0 / 0.07);
-    margin-bottom: 12px;
-  }
-  .mock-logo-icon {
-    width: 24px; height: 24px;
-    border-radius: 6px;
-    background: oklch(0.62 0.22 292);
-  }
-
-  .mock-nav { flex: 1; padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
-  .mock-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 7px 10px;
-    border-radius: 8px;
-    font-size: 12px;
-    color: oklch(0.60 0.04 288);
-    cursor: default;
-  }
-  .mock-nav-item.active {
-    background: oklch(0.48 0.22 292 / 0.20);
-    color: oklch(0.85 0.12 292);
-  }
-  .mock-nav-item svg { flex-shrink: 0; }
-
-  .mock-user {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 12px 16px 0;
-    border-top: 1px solid oklch(1 0 0 / 0.07);
-    margin-top: 12px;
-  }
-  .mock-avatar {
-    width: 28px; height: 28px;
-    border-radius: 50%;
-    background: oklch(0.48 0.22 292 / 0.50);
-    font-size: 9px;
-    font-weight: 700;
-    color: oklch(0.85 0.12 292);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .mock-user-name { font-size: 11px; font-weight: 600; color: #fff; }
-  .mock-user-role { font-size: 10px; color: oklch(0.55 0.04 288); }
-
-  .mock-main {
-    flex: 1;
-    padding: 20px 24px;
-    overflow: hidden;
-  }
-
-  .mock-header {
-    display: flex;
+    align-items: flex-end;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 20px;
+    gap: 12px;
+    margin: 0 0 16px;
   }
-  .mock-greeting { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 3px; }
-  .mock-date     { font-size: 11px; color: oklch(0.55 0.04 288); }
-  .mock-new-btn  {
-    font-size: 11px;
+  .preview-head .preview-label { margin: 0; }
+
+  .preview-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
     font-weight: 600;
-    color: oklch(0.82 0.12 292);
+    color: oklch(0.85 0.12 292);
     background: oklch(0.48 0.22 292 / 0.20);
     border: 1px solid oklch(0.55 0.18 292 / 0.30);
-    border-radius: 7px;
-    padding: 5px 12px;
-    white-space: nowrap;
-    cursor: default;
-  }
-
-  .mock-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-  .mock-stat {
-    background: oklch(0.16 0.05 292);
-    border: 1px solid oklch(1 0 0 / 0.07);
-    border-radius: 10px;
-    padding: 14px;
-  }
-  .mock-stat-label { font-size: 10px; color: oklch(0.55 0.04 288); margin-bottom: 6px; }
-  .mock-stat-value { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; line-height: 1; }
-  .mock-stat-change { font-size: 10px; color: oklch(0.55 0.04 288); }
-  .mock-stat-change.up { color: oklch(0.72 0.18 152); }
-
-  .mock-section-title {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: oklch(0.55 0.04 288);
-    margin-bottom: 10px;
-  }
-
-  .mock-sessions { display: flex; flex-direction: column; gap: 6px; }
-  .mock-session {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    background: oklch(0.16 0.05 292);
-    border: 1px solid oklch(1 0 0 / 0.07);
-    border-radius: 9px;
-    padding: 10px 14px;
-  }
-  .mock-session-time { font-size: 11px; font-weight: 700; color: oklch(0.65 0.08 292); width: 36px; flex-shrink: 0; }
-  .mock-session-info { flex: 1; min-width: 0; }
-  .mock-session-name { font-size: 12px; font-weight: 600; color: #fff; margin-bottom: 2px; }
-  .mock-session-meta { font-size: 10px; color: oklch(0.55 0.04 288); }
-  .mock-chip {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 9px;
     border-radius: 9999px;
-    flex-shrink: 0;
+    padding: 6px 14px;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
-  .mock-chip.green  { background: oklch(0.30 0.10 152); color: oklch(0.78 0.18 152); }
-  .mock-chip.purple { background: oklch(0.28 0.12 292); color: oklch(0.78 0.16 292); }
+  .preview-open:hover {
+    background: oklch(0.48 0.22 292 / 0.32);
+    border-color: oklch(0.55 0.18 292 / 0.50);
+  }
+
+  .preview-stage {
+    position: relative;
+    background: oklch(0.11 0.04 292);
+  }
+  .preview-frame {
+    display: block;
+    width: 100%;
+    height: 520px;
+    border: 0;
+    background: oklch(0.11 0.04 292);
+  }
+  /* The embed is a teaser, not an interactive session: a transparent hit area
+     covers it so any click opens the real demo in a new tab. */
+  .preview-hit {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+  }
 
   .preview-fade {
     position: absolute;
@@ -745,14 +585,14 @@ const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
   /* ── Responsive ─────────────────────────────────────────────────────── */
   @media (max-width: 720px) {
     .features { grid-template-columns: 1fr; }
-    .mock-sidebar { display: none; }
-    .mock-stats { grid-template-columns: repeat(2, 1fr); }
+    .preview-frame { height: 420px; }
   }
 
   @media (max-width: 540px) {
     h1 { font-size: 38px; }
     .cta-form { flex-direction: column; }
     .email-input, .btn-cta { width: 100%; justify-content: center; }
-    .mock-stats { grid-template-columns: 1fr 1fr; }
+    .preview-head { flex-direction: column; align-items: flex-start; }
+    .preview-frame { height: 380px; }
   }
 </style>

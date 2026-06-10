@@ -33,9 +33,19 @@ const emulatorRewrites = async () => {
   }
 }
 
+// Demo builds (sandbox) are embedded as a live preview on the landing page, so
+// they allow framing from our own origins; everywhere else framing is denied.
+const isDemoBuild = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+
 const securityHeaders = [
   // Prevent clickjacking
-  { key: 'X-Frame-Options', value: 'DENY' },
+  isDemoBuild
+    ? {
+        key: 'Content-Security-Policy',
+        value:
+          "frame-ancestors 'self' https://linyup.com https://*.linyup.com https://*.web.app http://localhost:* http://127.0.0.1:*",
+      }
+    : { key: 'X-Frame-Options', value: 'DENY' },
   // Stop browsers from MIME-sniffing
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   // Control referrer in cross-origin requests

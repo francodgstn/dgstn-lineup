@@ -30,6 +30,8 @@ export function ProductTour() {
 
     async function start(force: boolean) {
       if (typeof window === 'undefined' || !user) return
+      // Never run inside an embedded preview (e.g. the landing-page iframe).
+      if (window.self !== window.top) return
       // Anchors live in the desktop sidebar (hidden under md).
       if (window.innerWidth < 768) return
       if (!force) {

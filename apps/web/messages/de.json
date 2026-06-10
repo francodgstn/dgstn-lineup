@@ -52,6 +52,8 @@
     "wellnessLabel": "Wellness",
     "enterDemo": "Demo öffnen",
     "entering": "Wird geöffnet…",
+    "openDemo": "Demo öffnen",
+    "previewFailed": "Die Live-Vorschau konnte nicht gestartet werden.",
     "error": "Die Demo für {team} konnte nicht geöffnet werden. Bitte erneut versuchen.",
     "ownAccount": "Möchten Sie Ihr eigenes Konto?",
     "signUp": "Registrieren",
