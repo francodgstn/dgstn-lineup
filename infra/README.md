@@ -222,7 +222,16 @@ cd infra/environments/sandbox
 terraform init
 terraform apply        # re-run if Firebase resources fail once (async API enablement)
 
-# 1b. Deploy backend rules/indexes/functions (first time — afterwards this is
+# 1b. Provision the default Storage bucket (one-time; Terraform enables the API
+#     but the bucket itself is the Console "Get started" step — without it,
+#     `deploy --only storage` fails with "Firebase Storage has not been set up").
+#     Console: Storage → Get Started, or via API:
+curl -X POST "https://firebasestorage.googleapis.com/v1beta/projects/linyup-sandbox/defaultBucket" \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Content-Type: application/json" -H "X-Goog-User-Project: linyup-sandbox" \
+  -d '{"location":"europe-west6"}'
+
+# 1c. Deploy backend rules/indexes/functions (first time — afterwards this is
 #     automated by .github/workflows/deploy-sandbox.yml on push to main). A fresh
 #     Firestore DB ships locked (deny-all), so the client sees nothing until the
 #     repo rules are deployed:
