@@ -222,6 +222,12 @@ cd infra/environments/sandbox
 terraform init
 terraform apply        # re-run if Firebase resources fail once (async API enablement)
 
+# 1b. Deploy backend rules/indexes/functions (first time — afterwards this is
+#     automated by .github/workflows/deploy-sandbox.yml on push to main). A fresh
+#     Firestore DB ships locked (deny-all), so the client sees nothing until the
+#     repo rules are deployed:
+firebase deploy --only firestore,storage,functions,database --project sandbox
+
 # 2. Secrets (same IDs as staging; demo can reuse test Stripe/SMTP keys)
 echo -n "<value>" | gcloud secrets versions add stripe-secret-key --project=linyup-sandbox --data-file=-
 #   …repeat for stripe-webhook-secret, smtp-password, smtp-encryption-key, posthog-api-key

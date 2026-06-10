@@ -1,0 +1,79 @@
+name: Deploy Sandbox
+
+# The sandbox web app (apps/web) auto-deploys via Firebase App Hosting's GitHub
+# integration. This workflow covers everything else the demo playground needs:
+# Cloud Functions + Firestore rules/indexes + Storage rules + RTDB rules.
+#
+# Runs on pushes to main that touch backend config, and on manual dispatch.
+# Demo *data* is NOT reseeded here (that would wipe the running demo) — reseed
+# manually with `pnpm reset:sandbox && pnpm seed:sandbox`.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/functions/**'
+      - 'packages/shared/**'
+      - 'firestore.rules'
+      - 'firestore.index.json'
+      - 'storage.rules'
+      - 'database.rules.json'
+      - 'firebase.json'
+      - '.github/workflows/deploy-sandbox.yml'
+  workflow_dispatch:
+
+# Required for keyless auth to GCP via Workload Identity Federation (OIDC).
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Deploy to Sandbox (functions, firestore, storage)
+    runs-on: ubuntu-latest
+    environment: sandbox
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      # Keyless auth — exchanges the GitHub OIDC token for short-lived GCP
+      # credentials and writes an ADC file. firebase-tools reads it automatically;
+      # no JSON service-account key is involved. The deploy SA already has roles on
+      # linyup-sandbox (granted by infra/environments/sandbox iam module).
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared
+        run: pnpm --filter @linyup/shared run build
+
+      - name: Build functions
+        run: pnpm --filter @linyup/functions run build
+
+      # Cloud Build (run by `firebase deploy`) only sees packages/functions and
+      # uses plain `npm install`, which cannot resolve pnpm's `workspace:*`
+      # protocol for @linyup/shared. Vendor the built shared package into
+      # packages/functions and rewrite the dep to file:./vendor/shared so npm can
+      # install it. Mutates the ephemeral CI checkout only.
+      - name: Vendor @linyup/shared for Cloud Build
+        run: node scripts/vendor-shared-for-deploy.mjs
+
+      # ADC from the auth step is detected automatically — do NOT pass any
+      # GOOGLE_APPLICATION_CREDENTIALS* env var here.
+      # --force: lets firebase-tools set up the Artifact Registry cleanup policy
+      # non-interactively and skips the confirmation prompt when functions are
+      # removed from source. No hosting:landing here — sandbox has no landing site.
+      - name: Deploy to Firebase (Sandbox)
+        run: npx firebase-tools deploy --project sandbox --only functions,firestore,storage,database --non-interactive --force
