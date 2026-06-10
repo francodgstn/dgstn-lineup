@@ -23,6 +23,12 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
     const team = await getTeam(teamId)
     if (!team) throw new (await import('firebase-functions')).https.HttpsError('not-found', 'Team not found')
 
+    // The Free plan is single-user — inviting members requires a paid plan.
+    // The message is a stable code the web app maps to localized copy.
+    if ((team.plan ?? 'free') === 'free') {
+      throw new (await import('firebase-functions')).https.HttpsError('failed-precondition', 'free-plan-single-user')
+    }
+
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
 

@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { Input } from '@/components/ui/input'
 
-const PLANS = ['', 'coach', 'club', 'organization']
+const PLANS = ['', 'free', 'coach', 'club', 'organization']
 const STATUSES = ['', 'trial', 'active', 'past_due', 'cancelled', 'expired']
 
 const selectCls =

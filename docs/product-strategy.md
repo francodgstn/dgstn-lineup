@@ -26,6 +26,33 @@ All features must map to at least one of these.
 
 The system is structured around **business maturity**, not arbitrary feature grouping.
 
+### Tier 0 — Free (Getting Started)
+
+**Persona:**
+
+* Someone *starting* a coaching business — first handful of clients, no urgency to pay
+* Evaluators who outlast a time-boxed trial
+
+**Model:**
+
+* Full Coach feature set, differentiated by **limits**, not feature flags:
+  * **10 active contacts — hard cap** (manual adds blocked at the limit; public
+    portal signups still land, so the cap breach itself becomes the upgrade prompt)
+  * **Single user** (no team member invitations)
+  * **No plugin add-ons** (catalogue browsable, everything upgrade-locked)
+  * **"Powered by Linyup" badge** on the public portal (every free portal is a
+    referral surface; removing the badge is a paid perk)
+* CHF 0, no payment method, no Stripe subscription
+* Lifecycle: every signup still starts on the 14-day full-access Club trial; on
+  expiry the team **downgrades to Free** (data kept, no wall, no purge). Cancelled
+  paid subscriptions also land here.
+
+**Why it exists:** the contact cap scales with customer success — Free is
+genuinely useful at ≤10 clients and any economically real coaching business
+outgrows it quickly, converting exactly when the product has proven its value.
+
+> **Plan code:** `free`
+
 ### Tier 1 — Coach (Solo Operator)
 
 **Persona:**
@@ -261,7 +288,8 @@ The system is structured around **business maturity**, not arbitrary feature gro
 
 | Tier         | Base Price  | Included Students | Additional Students |
 |--------------|-------------|-------------------|---------------------|
-| Coach        | CHF 5–19    | ~20               | CHF 0.5–1 / student |
+| Free         | CHF 0       | 10 (hard cap)     | — (blocked, upgrade) |
+| Coach        | CHF 7.99    | 30                | CHF 0.5–1 / student |
 | Club         | CHF 19–39   | ~100              | CHF 0.5–1 / student |
 | Organization | CHF 99–149  | pooled            | volume pricing      |
 
@@ -306,14 +334,23 @@ Only if you provide real billing + subscription value — otherwise skip to avoi
 
 ### Trial Strategy
 
-* No freemium (to avoid low-quality users)
-* Use: 14–30 day free trial OR free up to X students (e.g. 10)
+* **Freemium + trial combined** (decision 2026-06): every signup starts on a
+  14-day full-access Club trial; on expiry the team downgrades to the **Free
+  plan** (10-contact hard cap) instead of being walled and purged.
+* The trial sells the full product; Free keeps non-converters in the funnel at
+  near-zero marginal cost and converts them when they outgrow the cap.
 
 ---
 
 ## 4. Upgrade Path Design
 
 The system must naturally push users upward:
+
+* **Free → Coach triggers:**
+  * Hits the 10-contact hard cap (the primary, success-aligned trigger)
+  * Wants a second team member on the account
+  * Wants plugin add-ons (gamification, referrals, …)
+  * Wants the "Powered by Linyup" badge off their portal
 
 * **Coach → Club — hard pulls (Club-only, never à la carte):**
   * Wants a branded client mobile app (in-app booking, push reminders, coaching history)

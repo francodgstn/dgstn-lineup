@@ -45,7 +45,7 @@ const emptyStatus = (): Record<SaasStatus, number> => ({
   expired: 0,
 })
 
-const emptyPlan = (): Record<SaasPlan, number> => ({ coach: 0, club: 0, organization: 0 })
+const emptyPlan = (): Record<SaasPlan, number> => ({ free: 0, coach: 0, club: 0, organization: 0 })
 
 export function computePlatformMetrics(
   accounts: AccountMetricInput[],

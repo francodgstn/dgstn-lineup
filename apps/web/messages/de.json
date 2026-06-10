@@ -377,7 +377,12 @@
     "capWarnTitle": "Du hast das Kontaktlimit deines Plans erreicht",
     "capWarnCta": "Upgrade",
     "capWarnBodyBilled": "Dein Plan enthält {included} Kontakte, du hast {used}. Zusätzliche Kontakte werden mit CHF {price}/Mt. pro Kontakt berechnet. Mit einem Upgrade erhältst du ein höheres Inklusivlimit.",
-    "capWarnBodyTrial": "Dein Plan enthält {included} Kontakte, du hast {used}. Nach deiner Testphase werden zusätzliche Kontakte mit CHF {price}/Mt. pro Kontakt berechnet. Mit einem Upgrade erhältst du ein höheres Inklusivlimit."
+    "capWarnBodyTrial": "Dein Plan enthält {included} Kontakte, du hast {used}. Nach deiner Testphase werden zusätzliche Kontakte mit CHF {price}/Mt. pro Kontakt berechnet. Mit einem Upgrade erhältst du ein höheres Inklusivlimit.",
+    "capWarnBodyFreeHard": "Der Free-Plan enthält {included} Kontakte, du hast {used}. Das manuelle Hinzufügen ist gesperrt, aber Anmeldungen über dein öffentliches Portal kommen weiterhin rein. Upgrade für ein höheres Limit.",
+    "freeCapDialogTitle": "Kontaktlimit erreicht",
+    "freeCapDialogBody": "Der Free-Plan enthält bis zu {included} aktive Kontakte. Upgrade auf Coach, um mehr hinzuzufügen — oder archiviere Kontakte, die du nicht mehr brauchst.",
+    "freeCapDialogDismiss": "Nicht jetzt",
+    "freeCapDialogCta": "Upgrade-Optionen ansehen"
   },
   "TeamMemberships": {
     "title": "Mitgliedschaft",
@@ -661,7 +666,8 @@
     "removedSuccess": "Mitglied entfernt.",
     "confirmCancelInviteTitle": "Einladung abbrechen",
     "confirmCancelInviteMessage": "Einladung an {email} abbrechen?",
-    "inviteCancelledSuccess": "Einladung abgebrochen."
+    "inviteCancelledSuccess": "Einladung abgebrochen.",
+    "inviteLockedFreeBody": "Der Free-Plan ist auf einen einzelnen Benutzer begrenzt. Upgrade auf Coach, um Teammitglieder einzuladen."
   },
   "Activities": {
     "title": "Aktivitäten",
@@ -1086,6 +1092,9 @@
     "accessUntil": "Zugang bis {date}",
     "cancelSubscription": "Abonnement kündigen",
     "noSubscription": "Kein aktives Abonnement.",
+    "freePlanName": "Free-Plan",
+    "onFreePlan": "Du nutzt den Free-Plan — bis zu 10 aktive Kontakte, ein Benutzer. Jederzeit upgraden.",
+    "cancelToDowngrade": "Kündige dein Abonnement, um zum Free-Plan zu wechseln",
     "choosePlan": "Plan wählen",
     "currentPlanBadge": "Aktuell",
     "redirecting": "Weiterleitung…",
@@ -1463,12 +1472,16 @@
     "tour": {
       "welcomeTitle": "Willkommen bei Linyup 👋",
       "welcomeBody": "Hier ist eine kurze Tour durch die wichtigsten Funktionen. Du kannst sie jederzeit über das Kontomenü erneut starten.",
+      "activitiesTitle": "Aktivitäten",
+      "activitiesBody": "Lege dein Angebot fest – Aktivitäten sind die Grundlage: Du brauchst mindestens eine, bevor du Sessions planen kannst.",
+      "calendarTitle": "Zeitplan",
+      "calendarBody": "Plane Kurse und Einzeltrainings und sieh Buchungen in der Listen- oder Kalenderansicht.",
       "contactsTitle": "Kontakte",
       "contactsBody": "Deine Mitglieder, Interessenten und Probetrainierenden findest du hier – mit Status, Abos und Aktivität.",
-      "calendarTitle": "Kalender",
-      "calendarBody": "Plane Kurse und Einzeltrainings und sieh Buchungen in der Listen- oder Kalenderansicht.",
       "portalTitle": "Dein öffentliches Portal",
       "portalBody": "Teile diese Seite, damit Interessenten Probetrainings buchen und sich anmelden können – ohne Login.",
+      "automationsTitle": "Automationen",
+      "automationsBody": "Richte automatische Erinnerungen, Follow-ups und Reaktivierungs-Nachrichten ein, damit niemand verloren geht.",
       "next": "Weiter",
       "prev": "Zurück",
       "done": "Verstanden"
@@ -1538,11 +1551,10 @@
       }
     }
   },
-  "TrialWall": {
-    "title": "Deine Testphase ist beendet",
-    "body": "Reaktiviere dein Konto, um genau dort weiterzumachen, wo du aufgehört hast.",
-    "cta": "Reaktivieren – Plan wählen",
-    "signOut": "Abmelden",
-    "dataNote": "Deine Daten bleiben {days} Tage erhalten – reaktiviere jederzeit."
+  "FreePlan": {
+    "downgradeBannerTitle": "Deine Testphase ist beendet — du nutzt jetzt den Free-Plan",
+    "downgradeBannerBody": "Alles ist noch da. Du kannst mit bis zu 10 aktiven Kontakten und einem Benutzer weiterarbeiten. Upgrade, um die Limits aufzuheben.",
+    "downgradeBannerCta": "Pläne ansehen",
+    "dismiss": "Ausblenden"
   }
 }

@@ -5,7 +5,7 @@ import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { getSecret } from '../utils/secrets'
 import { hasTeamRole } from '../utils/teams'
-import { getHostingUrl, isTrialPurgeDryRun } from '../utils/env'
+import { getHostingUrl } from '../utils/env'
 import { StripeAdapter } from '../utils/gateway/stripe'
 import type { SaasPlan } from '@linyup/shared'
 import {
@@ -14,7 +14,6 @@ import {
   PLAN_PRICING,
   EXTRA_CONTACT_STRIPE_LOOKUP_KEY,
   TRIAL_EXTENSION_DAYS,
-  TRIAL_PURGE_DAYS,
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   CONTACTS_COLLECTION,
@@ -266,13 +265,18 @@ export const handleStripeWebhook = onRequest(
       const entityUpdate: Record<string, unknown> = { updated_at: now }
       if (update.plan) entityUpdate.plan = update.plan
       if (update.status) entityUpdate.plan_status = update.status
-      // Reactivation: paying clears the trial-expiry suspension (lifts the wall).
+      // Reactivation: paying clears any legacy wall-era suspension markers.
       if (update.status === 'active') {
         entityUpdate.suspended_at = FieldValue.delete()
         entityUpdate.purge_at = FieldValue.delete()
       }
 
-      if (entityType === 'org') {
+      // A cancelled team subscription lands the team on the Free plan (the sub
+      // doc keeps status 'cancelled' for billing history). Orgs keep the
+      // legacy mirror + propagation below.
+      if (entityType === 'team' && update.status === 'cancelled') {
+        await downgradeTeamToFree(entityId, { fromTrial: false })
+      } else if (entityType === 'org') {
         await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
         // When org subscription lapses, propagate to linked teams
         if (update.status === 'cancelled' || update.status === 'past_due') {
@@ -700,9 +704,37 @@ export const syncContactOverage = onSchedule(
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Trial lifecycle: expire lapsed trials (→ walled, data soft-kept) and hard-
-// delete teams past their reactivation window. Daily scheduled job.
+// Trial lifecycle: lapsed trials (and cancelled paid subscriptions) land on
+// the Free plan — data kept, app fully usable within Free's limits. Daily
+// scheduled job. The old wall + 90-day purge are retired.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Move a team onto the Free plan (trial lapsed or paid subscription cancelled).
+ * Clears the legacy wall/purge markers and deactivates plugin installs — Free
+ * has no plugin access; install config is preserved so a later upgrade can
+ * reactivate without losing settings.
+ */
+async function downgradeTeamToFree(teamId: string, opts: { fromTrial: boolean }): Promise<void> {
+  const db = admin.firestore()
+  const update: Record<string, unknown> = {
+    plan: 'free',
+    plan_status: 'active',
+    suspended_at: FieldValue.delete(),
+    purge_at: FieldValue.delete(),
+    updated_at: FieldValue.serverTimestamp(),
+  }
+  if (opts.fromTrial) update.downgraded_from_trial_at = FieldValue.serverTimestamp()
+  await db.collection(TEAMS_COLLECTION).doc(teamId).update(update)
+
+  const installs = await db.collection(TEAMS_COLLECTION).doc(teamId)
+    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+    .where('status', '==', 'active')
+    .get()
+  for (const d of installs.docs) {
+    await d.ref.set({ status: 'inactive', updated_at: FieldValue.serverTimestamp() }, { merge: true })
+  }
+}
 
 // All team-scoped top-level collections keyed by `teamId`. recursiveDelete on
 // each matching doc also removes that doc's subcollections (e.g. contact goals,
@@ -721,9 +753,14 @@ const TEAM_COLLECTIONS_BY_TEAMID = [
 /**
  * Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users.
  * When `dryRun` is true, NOTHING is deleted — it only logs what it would remove
- * (counts per collection). Controlled by the TRIAL_PURGE_DRY_RUN param.
+ * (counts per collection).
+ *
+ * DORMANT: no longer wired to a schedule (the 90-day trial purge was retired
+ * when lapsed trials began downgrading to the Free plan). Kept as a manual
+ * GDPR / account-deletion utility — exported so the module compiles and so an
+ * admin script can import it.
  */
-async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> {
+export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> {
   const db = admin.firestore()
   const tag = dryRun ? '[trial][dry-run]' : '[trial]'
 
@@ -763,7 +800,7 @@ async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> {
   }
 }
 
-/** Notify the owner that the trial ended and data is reactivatable for a window. */
+/** Notify the owner that the trial ended and the team is now on the Free plan. */
 async function sendTrialExpiredEmail(teamId: string, team: FirebaseFirestore.DocumentData): Promise<void> {
   const db = admin.firestore()
   let ownerEmail: string | undefined
@@ -783,9 +820,10 @@ async function sendTrialExpiredEmail(teamId: string, team: FirebaseFirestore.Doc
   const billingUrl = `${getHostingUrl()}/billing`
   const { html, text } = buildEmailTemplate({
     title: 'Your Linyup trial has ended',
-    body: `Your free trial of <strong>${team.name ?? 'Linyup'}</strong> has ended. ` +
-      `Your data is kept safe for ${TRIAL_PURGE_DAYS} days — reactivate any time and pick up ` +
-      `right where you left off.<br><br><a href="${billingUrl}">Reactivate your account</a>`,
+    body: `Your free trial of <strong>${team.name ?? 'Linyup'}</strong> has ended, and your ` +
+      `account is now on the <strong>Free plan</strong> — up to 10 active contacts, single user. ` +
+      `All your data is kept and everything keeps working within those limits. ` +
+      `Upgrade any time to lift them.<br><br><a href="${billingUrl}">See plans &amp; upgrade</a>`,
   })
   await sendEmail({ to: ownerEmail, subject: 'Your Linyup trial has ended', html, text })
 }
@@ -794,10 +832,9 @@ export const handleTrialLifecycle = onSchedule(
   { schedule: 'every day 01:00', timeZone: 'Europe/Zurich', timeoutSeconds: 540, memory: '1GiB' },
   async () => {
     const db = admin.firestore()
-    const nowMs = Date.now()
-    const nowTs = Timestamp.fromMillis(nowMs)
+    const nowTs = Timestamp.fromMillis(Date.now())
 
-    // Phase 1 — expire lapsed trials: wall the app + start the purge clock.
+    // Phase 1 — lapsed trials land on the Free plan (data kept, no wall).
     const expiring = await db.collection(TEAMS_COLLECTION)
       .where('plan_status', '==', 'trial')
       .where('trial_ends_at', '<=', nowTs)
@@ -806,34 +843,27 @@ export const handleTrialLifecycle = onSchedule(
     for (const doc of expiring.docs) {
       const teamId = doc.id
       try {
-        await doc.ref.update({
-          plan_status: 'expired',
-          suspended_at: FieldValue.serverTimestamp(),
-          purge_at: Timestamp.fromMillis(nowMs + TRIAL_PURGE_DAYS * 24 * 60 * 60 * 1000),
-          updated_at: FieldValue.serverTimestamp(),
-        })
+        await downgradeTeamToFree(teamId, { fromTrial: true })
         await sendTrialExpiredEmail(teamId, doc.data()).catch((e) => console.error(`[trial] email failed ${teamId}:`, e))
-        console.log(`[trial] expired team ${teamId}`)
+        console.log(`[trial] downgraded lapsed trial ${teamId} to free`)
       } catch (err) {
-        console.error(`[trial] expire failed ${teamId}:`, err)
+        console.error(`[trial] downgrade failed ${teamId}:`, err)
       }
     }
 
-    // Phase 2 — purge teams past their reactivation window (bounded per run).
-    // Gated by TRIAL_PURGE_DRY_RUN (default true → log-only, no deletes).
-    const dryRun = isTrialPurgeDryRun()
-    const purging = await db.collection(TEAMS_COLLECTION)
+    // Transitional sweep (wall era → free era): convert teams stranded on the
+    // legacy 'expired' status to the Free plan. Remove this block once no
+    // 'expired' teams remain in any environment.
+    const legacy = await db.collection(TEAMS_COLLECTION)
       .where('plan_status', '==', 'expired')
-      .where('purge_at', '<=', nowTs)
-      .limit(20)
+      .limit(200)
       .get()
-    for (const doc of purging.docs) {
-      const teamId = doc.id
+    for (const doc of legacy.docs) {
       try {
-        await purgeTeam(teamId, dryRun)
-        console.log(`[trial] ${dryRun ? 'would purge (dry-run)' : 'purged'} team ${teamId}`)
+        await downgradeTeamToFree(doc.id, { fromTrial: true })
+        console.log(`[trial] converted legacy expired team ${doc.id} to free`)
       } catch (err) {
-        console.error(`[trial] purge failed ${teamId}:`, err)
+        console.error(`[trial] legacy conversion failed ${doc.id}:`, err)
       }
     }
   },

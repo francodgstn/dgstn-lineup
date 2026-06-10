@@ -39,10 +39,16 @@
     "earlyAccessCta": "Frühen Zugang sichern",
     "earlyAccessNote": "Kostenlos während des Early Access. Keine Kreditkarte erforderlich.",
     "mostPopular": "Am beliebtesten",
+    "freePrice": "Für immer kostenlos",
+    "free": {
+      "name": "Free",
+      "audience": "Für Coaches, die gerade erst starten.",
+      "features": ["Bis zu 10 Kontakte", "Öffentliches Buchungsportal", "Lektionen & Abos"]
+    },
     "coach": {
       "name": "Coach",
       "audience": "Für Einzeltrainer und Privatcoaches.",
-      "features": ["Lektionen & Anwesenheit", "Bis zu 50 Kontakte", "Schüler-App"]
+      "features": ["Alles aus Free", "30 inkludierte Kontakte", "1:1-Coaching & Teammitglieder"]
     },
     "club": {
       "name": "Verein",

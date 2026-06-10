@@ -7,9 +7,11 @@ interface PortalShellProps {
   children: React.ReactNode
   wide?: boolean
   stickyBarHeight?: number  // px of bottom padding to reserve for sticky bar
+  /** Free-plan portals carry a "Powered by Linyup" footer (public_profile.showBranding). */
+  showBranding?: boolean
 }
 
-export function PortalShell({ teamName, slug, accentColor, children, wide, stickyBarHeight }: PortalShellProps) {
+export function PortalShell({ teamName, slug, accentColor, children, wide, stickyBarHeight, showBranding }: PortalShellProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* Top nav */}
@@ -31,6 +33,14 @@ export function PortalShell({ teamName, slug, accentColor, children, wide, stick
         style={stickyBarHeight ? { paddingBottom: `${stickyBarHeight + 32}px` } : undefined}
       >
         {children}
+        {showBranding === true && (
+          <p className="pt-4 text-center text-[11px] text-muted-foreground">
+            Powered by{' '}
+            <a href="/" className="hover:underline font-medium">
+              Linyup
+            </a>
+          </p>
+        )}
       </div>
 
       {/* Accent color injected as custom property for CTA buttons */}

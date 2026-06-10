@@ -15,7 +15,8 @@ export async function requirePlan(teamId: string, minPlan: SaasPlan): Promise<vo
   }
 
   const data = snap.data()!
-  const plan: SaasPlan = data.plan ?? 'coach'
+  // Unknown/legacy teams fail closed: treat a missing plan as Free (lowest tier).
+  const plan: SaasPlan = data.plan ?? 'free'
   const status: string = data.plan_status ?? 'trial'
 
   if (status === 'past_due' || status === 'cancelled') {

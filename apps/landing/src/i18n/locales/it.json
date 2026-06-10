@@ -39,10 +39,16 @@
     "earlyAccessCta": "Accesso anticipato",
     "earlyAccessNote": "Gratuito durante l'accesso anticipato. Nessuna carta di credito richiesta.",
     "mostPopular": "Il più popolare",
+    "freePrice": "Gratuito per sempre",
+    "free": {
+      "name": "Free",
+      "audience": "Per coach che stanno iniziando.",
+      "features": ["Fino a 10 contatti", "Portale di prenotazione pubblico", "Sessioni e abbonamenti"]
+    },
     "coach": {
       "name": "Coach",
       "audience": "Per istruttori singoli e coach privati.",
-      "features": ["Sessioni e presenze", "Fino a 50 contatti", "App mobile per studenti"]
+      "features": ["Tutto di Free", "30 contatti inclusi", "Coaching 1:1 e membri del team"]
     },
     "club": {
       "name": "Club",

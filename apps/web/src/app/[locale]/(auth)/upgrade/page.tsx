@@ -14,6 +14,25 @@ interface FeatureSection {
 }
 
 const PLAN_SECTIONS: Record<SaasPlan, FeatureSection[]> = {
+  free: [
+    {
+      heading: 'Get started',
+      items: [
+        'Up to 10 active contacts',
+        'Single user',
+        'Public booking portal & profile page',
+      ],
+    },
+    {
+      heading: 'Included',
+      items: [
+        'Group sessions, QR check-in & sign-up forms',
+        'Subscriptions, packages & payment tracking',
+        'Goals & progress check-ins',
+      ],
+    },
+  ],
+
   coach: [
     {
       heading: 'Sessions & operations',
@@ -102,18 +121,21 @@ const PLAN_SECTIONS: Record<SaasPlan, FeatureSection[]> = {
 // ─── labels / colours ─────────────────────────────────────────────────────────
 
 const PLAN_LABELS: Record<SaasPlan, string> = {
+  free:         'Free',
   coach:        'Coach',
   club:         'Club',
   organization: 'Organization',
 }
 
 const PLAN_TAGLINES: Record<SaasPlan, string> = {
+  free:         'Just getting started',
   coach:        'Solo operators & personal trainers',
   club:         'Growing gyms & clubs',
   organization: 'Multi-location & franchises',
 }
 
 const PLAN_INCLUDES: Partial<Record<SaasPlan, string>> = {
+  coach:        'Everything in Free, with 30 contacts, plus:',
   club:         'Everything in Coach, plus:',
   organization: 'Everything in Club, plus:',
 }
@@ -125,6 +147,13 @@ const PLAN_COLOR: Record<SaasPlan, {
   heading: string
   includes: string
 }> = {
+  free: {
+    ring:     'border-slate-300 dark:border-slate-700',
+    badge:    'bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300',
+    check:    'text-slate-500',
+    heading:  'text-slate-700 dark:text-slate-400',
+    includes: 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-900/20 dark:border-slate-800 dark:text-slate-300',
+  },
   coach: {
     ring:     'border-sky-300 dark:border-sky-700',
     badge:    'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
@@ -155,7 +184,7 @@ function PlanCard({ plan, isCurrent, currentPlan }: { plan: SaasPlan; isCurrent:
   const colors = PLAN_COLOR[plan]
   const sections = PLAN_SECTIONS[plan]
   const includes = PLAN_INCLUDES[plan]
-  const isUpgrade = !isCurrent && PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan ?? 'coach')
+  const isUpgrade = !isCurrent && PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan ?? 'free')
 
   return (
     <div className={`relative flex flex-col rounded-xl border-2 p-6 ${
@@ -242,7 +271,7 @@ export default function UpgradePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-start">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
         {PLAN_ORDER.map((p) => (
           <PlanCard key={p} plan={p} isCurrent={plan === p} currentPlan={plan} />
         ))}

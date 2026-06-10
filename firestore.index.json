@@ -9,14 +9,6 @@
       ]
     },
     {
-      "collectionGroup": "teams",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "plan_status", "order": "ASCENDING" },
-        { "fieldPath": "purge_at", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "courses",
       "queryScope": "COLLECTION",
       "fields": [

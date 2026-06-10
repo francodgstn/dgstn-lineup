@@ -382,7 +382,12 @@
     "capWarnTitle": "You've reached your plan's contact limit",
     "capWarnCta": "Upgrade",
     "capWarnBodyBilled": "Your plan includes {included} contacts and you have {used}. Extra contacts are billed at CHF {price}/mo each. Upgrade for a higher included limit.",
-    "capWarnBodyTrial": "Your plan includes {included} contacts and you have {used}. After your trial, extra contacts are billed at CHF {price}/mo each. Upgrade for a higher included limit."
+    "capWarnBodyTrial": "Your plan includes {included} contacts and you have {used}. After your trial, extra contacts are billed at CHF {price}/mo each. Upgrade for a higher included limit.",
+    "capWarnBodyFreeHard": "The Free plan includes {included} contacts and you have {used}. Adding more manually is locked, but signups from your public portal still come through. Upgrade for a higher limit.",
+    "freeCapDialogTitle": "Contact limit reached",
+    "freeCapDialogBody": "The Free plan includes up to {included} active contacts. Upgrade to Coach to add more — or archive contacts you no longer need.",
+    "freeCapDialogDismiss": "Not now",
+    "freeCapDialogCta": "See upgrade options"
   },
   "TeamMemberships": {
     "title": "Membership",
@@ -666,7 +671,8 @@
     "removedSuccess": "Member removed.",
     "confirmCancelInviteTitle": "Cancel invitation",
     "confirmCancelInviteMessage": "Cancel the invitation to {email}?",
-    "inviteCancelledSuccess": "Invitation cancelled."
+    "inviteCancelledSuccess": "Invitation cancelled.",
+    "inviteLockedFreeBody": "The Free plan is limited to a single user. Upgrade to Coach to invite team members."
   },
   "Activities": {
     "title": "Activities",
@@ -1091,6 +1097,9 @@
     "accessUntil": "Access until {date}",
     "cancelSubscription": "Cancel subscription",
     "noSubscription": "No active subscription.",
+    "freePlanName": "Free plan",
+    "onFreePlan": "You're on the Free plan — up to 10 active contacts, single user. Upgrade any time.",
+    "cancelToDowngrade": "Cancel your subscription to move to Free",
     "choosePlan": "Choose a plan",
     "currentPlanBadge": "Current",
     "redirecting": "Redirecting…",
@@ -1468,12 +1477,16 @@
     "tour": {
       "welcomeTitle": "Welcome to Linyup 👋",
       "welcomeBody": "Here's a quick tour of the essentials. You can replay it anytime from the account menu.",
+      "activitiesTitle": "Activities",
+      "activitiesBody": "Define what you offer — your activities are the building blocks, and you'll need at least one before you can schedule sessions.",
+      "calendarTitle": "Schedule",
+      "calendarBody": "Schedule classes and 1-on-1 sessions, and see bookings in list or calendar view.",
       "contactsTitle": "Contacts",
       "contactsBody": "Your members, leads and trial-goers live here — with status, subscriptions and activity.",
-      "calendarTitle": "Calendar",
-      "calendarBody": "Schedule classes and 1-on-1 sessions, and see bookings in list or calendar view.",
       "portalTitle": "Your public portal",
       "portalBody": "Share this page so people can book trials and sign up — no login needed.",
+      "automationsTitle": "Automations",
+      "automationsBody": "Set up automatic reminders, follow-ups and re-engagement messages so no one slips through the cracks.",
       "next": "Next",
       "prev": "Back",
       "done": "Got it"
@@ -1543,11 +1556,10 @@
       }
     }
   },
-  "TrialWall": {
-    "title": "Your free trial has ended",
-    "body": "Reactivate to get back into your account and keep everything exactly where you left it.",
-    "cta": "Reactivate — choose a plan",
-    "signOut": "Sign out",
-    "dataNote": "Your data is kept safe for {days} days — reactivate any time."
+  "FreePlan": {
+    "downgradeBannerTitle": "Your trial has ended — you're now on the Free plan",
+    "downgradeBannerBody": "Everything is still here. You can keep working with up to 10 active contacts and one user. Upgrade to lift the limits.",
+    "downgradeBannerCta": "See plans",
+    "dismiss": "Dismiss"
   }
 }

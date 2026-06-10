@@ -23,6 +23,7 @@ import {
   SUBSCRIPTION_TYPES_SUBCOLLECTION, ORGANIZATIONS_COLLECTION,
   ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES,
   CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, EXTRA_CONTACT_MONTHLY,
+  planHasHardContactCap,
 } from '@linyup/shared'
 import type { Contact, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
 import { useForm } from 'react-hook-form'
@@ -210,10 +211,13 @@ function useOrgRankingSystems(orgId: string | null | undefined) {
 // ─── create dialog ────────────────────────────────────────────────────────────
 
 function CreateContactDialog({
-  open, onOpenChange, teamId, userId, onSaved,
+  open, onOpenChange, teamId, userId, onSaved, atHardCap = false,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void
   teamId: string; userId: string; onSaved: () => void
+  /** Backstop for the Free plan's hard cap — the open buttons already divert
+   *  to the upgrade dialog, this guards a dialog left open across the limit. */
+  atHardCap?: boolean
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
@@ -225,6 +229,10 @@ function CreateContactDialog({
   const TYPES: ContactType[] = ['trial', 'student', 'external']
 
   const onSubmit = async (values: CreateValues) => {
+    if (atHardCap) {
+      onOpenChange(false)
+      return
+    }
     await addDoc(collection(db, CONTACTS_COLLECTION), {
       teamId,
       firstname: values.firstname,
@@ -1400,8 +1408,11 @@ export default function ContactsPage() {
   const inOrg = !!team?.org_id
   const { data: statusDefs } = useOrgMembershipStatuses(team?.org_id)
 
-  // Contact cap usage (soft cap): counts active = non-archived, non-deleted.
+  // Contact cap usage: counts active = non-archived, non-deleted. Paid plans
+  // have a soft cap (warn + overage billing); Free has a HARD cap — manual
+  // creation is blocked, while portal signups still land (and may go over).
   const usage = contactUsageForPlan(plan, active.length)
+  const freeCapBlocked = planHasHardContactCap(plan) && usage.atOrOverLimit && !loadingActive
   const planIdx = plan ? PLAN_ORDER.indexOf(plan) : -1
   const nextPlan: SaasPlan | null = planIdx >= 0 && planIdx < PLAN_ORDER.length - 1 ? PLAN_ORDER[planIdx + 1] : null
 
@@ -1410,6 +1421,13 @@ export default function ContactsPage() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [capDialogOpen, setCapDialogOpen] = useState(false)
+
+  // Both "add contact" entry points divert here when the Free cap is reached.
+  const openCreateDialog = () => {
+    if (freeCapBlocked) setCapDialogOpen(true)
+    else setDialogOpen(true)
+  }
   const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'type' | null>(null)
 
   // confirm dialogs
@@ -1615,7 +1633,7 @@ export default function ContactsPage() {
           )}
         </div>
         <button
-          onClick={() => setDialogOpen(true)}
+          onClick={openCreateDialog}
           className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
         >
           <UserPlus className="h-4 w-4" />
@@ -1623,17 +1641,21 @@ export default function ContactsPage() {
         </button>
       </div>
 
-      {/* Contact-cap warning (soft cap — informational, nothing is blocked) */}
+      {/* Contact-cap warning. Paid plans: soft cap (informational, overage is
+          billed). Free plan: hard cap — manual adds are blocked, portal
+          signups still arrive. */}
       {!loadingActive && usage.atOrOverLimit && !usage.isUnlimited && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/[0.04] px-4 py-3 flex items-start justify-between gap-3">
           <div className="text-sm">
             <p className="font-medium">{t('capWarnTitle')}</p>
             <p className="text-muted-foreground">
-              {t(isTrialing ? 'capWarnBodyTrial' : 'capWarnBodyBilled', {
-                used: usage.used,
-                included: usage.included ?? 0,
-                price: EXTRA_CONTACT_MONTHLY,
-              })}
+              {freeCapBlocked
+                ? t('capWarnBodyFreeHard', { used: usage.used, included: usage.included ?? 0 })
+                : t(isTrialing ? 'capWarnBodyTrial' : 'capWarnBodyBilled', {
+                    used: usage.used,
+                    included: usage.included ?? 0,
+                    price: EXTRA_CONTACT_MONTHLY,
+                  })}
             </p>
           </div>
           {nextPlan && (
@@ -1777,7 +1799,7 @@ export default function ContactsPage() {
       {/* Mobile FAB */}
       {selected.size === 0 && (
         <button
-          onClick={() => setDialogOpen(true)}
+          onClick={openCreateDialog}
           className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-40"
           aria-label={t('addContact')}
         >
@@ -1814,8 +1836,37 @@ export default function ContactsPage() {
           teamId={currentTeamId}
           userId={user.uid}
           onSaved={invalidateAll}
+          atHardCap={freeCapBlocked}
         />
       )}
+
+      {/* Free plan hard-cap dialog — shown instead of the create form */}
+      <Dialog open={capDialogOpen} onOpenChange={setCapDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('freeCapDialogTitle')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t('freeCapDialogBody', { included: usage.included ?? 0 })}
+          </p>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setCapDialogOpen(false)}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {t('freeCapDialogDismiss')}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCapDialogOpen(false); openUpgradeModal({ minPlan: 'coach' }) }}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              {t('freeCapDialogCta')}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={confirmArchive.length > 0}

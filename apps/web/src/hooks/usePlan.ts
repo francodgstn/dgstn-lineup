@@ -5,19 +5,19 @@ import {
   planIsAtLeast,
   planHasFeature,
   minimumPlanForFeature,
-  trialHasExpired,
   type SaasPlan,
   type PlanFeature,
 } from '@linyup/shared'
 
 export interface UsePlanResult {
+  /** The EFFECTIVE plan: a lapsed trial (or a legacy 'expired' team) reports
+   *  'free' immediately, before the daily cron persists the downgrade. */
   plan: SaasPlan | null
   isLoading: boolean
   isTrialing: boolean
   isActive: boolean
-  /** Trial has lapsed (or status is 'expired') — app should be walled. */
-  isExpired: boolean
-  /** True when the team has an active plan (live trial counts; expired does not) */
+  /** True when the team has a usable plan. Free counts — there is no walled
+   *  state any more; limits are enforced per-feature instead. */
   hasAccess: boolean
   /** True if the team's plan is at least `minPlan` */
   isAtLeast: (minPlan: SaasPlan) => boolean
@@ -30,13 +30,21 @@ export interface UsePlanResult {
 export function usePlan(): UsePlanResult {
   const { team, loading } = useAuth()
 
-  const plan = team?.plan ?? null
+  const storedPlan = team?.plan ?? null
   const status = team?.plan_status ?? null
 
+  // Client-side immediacy: between the trial's end and the 01:00 cron that
+  // writes plan='free', treat the team as already on Free. Legacy 'expired'
+  // teams (wall era) are mapped the same way until the transitional sweep
+  // converts them.
   const trialEndsAtMs = team?.trial_ends_at?.toMillis?.() ?? null
-  const isExpired = trialHasExpired(status, trialEndsAtMs, Date.now())
-  const isTrialing = status === 'trial' && !isExpired
-  const isActive = status === 'active'
+  const trialLapsed =
+    status === 'expired' ||
+    (status === 'trial' && trialEndsAtMs != null && trialEndsAtMs < Date.now())
+
+  const plan: SaasPlan | null = trialLapsed ? 'free' : storedPlan
+  const isTrialing = status === 'trial' && !trialLapsed
+  const isActive = status === 'active' || trialLapsed
   const hasAccess = isActive || isTrialing
 
   return {
@@ -44,7 +52,6 @@ export function usePlan(): UsePlanResult {
     isLoading: loading,
     isTrialing,
     isActive,
-    isExpired,
     hasAccess,
     isAtLeast: (minPlan) => {
       if (!plan) return false

@@ -46,6 +46,7 @@ export default function SignupForm({ slug }: Props) {
   const [teamId, setTeamId] = useState<string | null>(null)
   const [teamName, setTeamName] = useState('')
   const [accentColor, setAccentColor] = useState<string | null>(null)
+  const [showBranding, setShowBranding] = useState(false)
   const [loadingTeam, setLoadingTeam] = useState(true)
 
   const [step, setStep] = useState<Step>('email')
@@ -71,6 +72,7 @@ export default function SignupForm({ slug }: Props) {
           if (id) setTeamId(id)
           setTeamName(data.name || '')
           setAccentColor(data.portalAccentColor ?? null)
+          setShowBranding(data.showBranding === true)
         }
       })
       .catch(() => {/* leave defaults */})
@@ -175,7 +177,7 @@ export default function SignupForm({ slug }: Props) {
 
   if (loadingTeam) {
     return (
-      <PortalShell teamName="" slug={slug} accentColor={null}>
+      <PortalShell teamName="" slug={slug} accentColor={null} showBranding={showBranding}>
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
         </div>
@@ -185,7 +187,7 @@ export default function SignupForm({ slug }: Props) {
 
   if (step === 'email') {
     return (
-      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
         <div>
           <h1 className="text-2xl font-bold">Register at {teamName}</h1>
           <p className="text-muted-foreground mt-1">
@@ -228,7 +230,7 @@ export default function SignupForm({ slug }: Props) {
 
   if (step === 'code') {
     return (
-      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
         <div>
           <button
             onClick={() => { setStep('email'); setError(null) }}
@@ -293,7 +295,7 @@ export default function SignupForm({ slug }: Props) {
 
   if (step === 'details') {
     return (
-      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
         <div>
           <h1 className="text-2xl font-bold">Your details</h1>
           <p className="text-muted-foreground mt-1">
@@ -412,7 +414,7 @@ export default function SignupForm({ slug }: Props) {
   // ── Success ─────────────────────────────────────────────────────────────────
 
   return (
-    <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+    <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
       <div className="py-8 text-center space-y-5">
         <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
           <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

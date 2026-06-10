@@ -40,6 +40,9 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,
     referralEnabled: !!(data.settings?.referral?.enabled),
+    // Free-plan portals carry a "Powered by Linyup" badge. Denormalized here
+    // because portal pages only ever read public_profile, never teams/.
+    showBranding: (data.plan ?? 'free') === 'free',
     updated_at: event.data!.after.updateTime,
   }
 

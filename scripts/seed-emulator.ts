@@ -262,6 +262,7 @@ async function seedTeam(opts: {
         ctaUrl: null,
         ctaLabel: null,
       },
+      showBranding: false, // paid plans carry no "Powered by Linyup" badge
       membershipRequiredFields: null,
       membershipOptionalFields: null,
       updated_at: ts(new Date()),
@@ -1197,6 +1198,112 @@ async function seedOrg() {
   })
 }
 
+// ── free-plan team ────────────────────────────────────────────────────────────
+// Minimal tenant pinned EXACTLY at the Free plan's 10-contact hard cap, to
+// exercise: blocked manual adds, portal "Powered by Linyup" badge, locked
+// member invites, and fully upgrade-locked plugins.
+
+async function seedFreeTeam() {
+  const uid      = 'seed-free-uid'
+  const teamId   = 'seed-team-free'
+  const teamSlug = 'sunrise-yoga-studio'
+  const teamName = 'Sunrise Yoga Studio'
+
+  await auth.createUser({ uid, email: 'free@linyup.com', password: 'linyup123', displayName: 'Luca Bianchi', emailVerified: true })
+
+  await db.collection('teams').doc(teamId).set({
+    name:        teamName,
+    description: `${teamName} — managed with Linyup.`,
+    slug:        teamSlug,
+    sport_type:  'Yoga',
+    createdBy:   uid,
+    created:     ts(daysFromNow(-60)),
+    plan:        'free',
+    plan_status: 'active',
+    // Mimics a lapsed trial → drives the FreeDowngradeBanner in the web app.
+    downgraded_from_trial_at: ts(daysFromNow(-5)),
+    portalTheme:       'light',
+    portalAccentColor: '#0d9488',
+    portalBackground:  { type: 'solid', color: '#ffffff' },
+    links: [
+      { label: 'Book a Free Trial', isBookingLink: true, isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
+    ],
+    socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
+  })
+
+  await db.collection('teams').doc(teamId)
+    .collection('public_profile').doc(teamId).set({
+      type:              'team',
+      name:              teamName,
+      description:       `${teamName} — managed with Linyup.`,
+      slug:              teamSlug,
+      sport_type:        'Yoga',
+      profileImage:      null,
+      heroImage:         null,
+      portalTheme:       'light',
+      portalAccentColor: '#0d9488',
+      portalBackground:  { type: 'solid', color: '#ffffff' },
+      socialLinks:       [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
+      links: [
+        { label: 'Book a Free Trial', isBookingLink: true, isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
+      ],
+      bookingSettings: { flowType: 'activity-first', windowMonths: 2, showPhone: true, ctaUrl: null, ctaLabel: null },
+      showBranding: true, // Free plan → "Powered by Linyup" badge on the portal
+      updated_at: ts(new Date()),
+    })
+
+  await db.collection('teams').doc(teamId)
+    .collection('team_members').doc(uid).set({
+      teamId, userId: uid, role: 'owner', email: 'free@linyup.com', joined: ts(daysFromNow(-60)),
+    })
+
+  await db.collection('users').doc(uid).set({
+    email: 'free@linyup.com', displayName: 'Luca Bianchi', firstname: 'Luca', lastname: 'Bianchi',
+    currentTeam: teamId,
+    created_at:  ts(daysFromNow(-60)),
+  })
+
+  // One bookable activity so the public portal flow works
+  const actId = `${teamId}-act-yoga`
+  await db.collection('activities').doc(actId).set({
+    id: actId, teamId, name: 'Vinyasa Flow', slug: 'vinyasa-flow', color: '#0d9488',
+    isFreeTrial: true, level: 'all', isActive: true, created_at: ts(daysFromNow(-60)),
+  })
+  await db.collection('activities').doc(actId)
+    .collection('public_profile').doc(actId).set({
+      type: 'activity', teamId, name: 'Vinyasa Flow', slug: 'vinyasa-flow', color: '#0d9488',
+      image_url: null, isFreeTrial: true, level: 'all',
+    })
+
+  // Exactly 10 active contacts — at the hard cap
+  const freeContacts = [
+    { firstname: 'Mia',    lastname: 'Keller',  gender: 'F' },
+    { firstname: 'Jonas',  lastname: 'Frei',    gender: 'M' },
+    { firstname: 'Lea',    lastname: 'Steiner', gender: 'F' },
+    { firstname: 'Noah',   lastname: 'Brunner', gender: 'M' },
+    { firstname: 'Elena',  lastname: 'Marti',   gender: 'F' },
+    { firstname: 'Tim',    lastname: 'Graf',    gender: 'M' },
+    { firstname: 'Sofia',  lastname: 'Arnold',  gender: 'F' },
+    { firstname: 'Luca',   lastname: 'Wyss',    gender: 'M' },
+    { firstname: 'Anna',   lastname: 'Roth',    gender: 'F' },
+    { firstname: 'Felix',  lastname: 'Baumann', gender: 'M' },
+  ]
+  for (let i = 0; i < freeContacts.length; i++) {
+    const c = freeContacts[i]
+    await db.collection('contacts').doc(`${teamId}-contact-${i.toString().padStart(3, '0')}`).set({
+      teamId, ...c,
+      email: `${c.firstname.toLowerCase()}.${c.lastname.toLowerCase()}.${teamId}@email.com`,
+      type: 'student',
+      membership_status: 'active',
+      membership_active: true,
+      total_sessions: 5 + i,
+      last_session_at: ts(daysFromNow(-(i + 1))),
+      created_at: ts(daysFromNow(-50 + i)),
+      deleted_at: null, archived_at: null,
+    })
+  }
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -1244,6 +1351,9 @@ async function main() {
     await seedTeam(account)
   }
 
+  console.log('\n🧘  Seeding free account (free@linyup.com)…')
+  await seedFreeTeam()
+
   console.log('\n🏢  Seeding organization (Titan Martial Arts Association)…')
   await seedOrg()
 
@@ -1251,6 +1361,7 @@ async function main() {
   console.log('   ┌─────────────────────┬──────────────────────┬──────────────┬────────────┐')
   console.log('   │ Plan                │ Email                │ Password     │ Status     │')
   console.log('   ├─────────────────────┼──────────────────────┼──────────────┼────────────┤')
+  console.log('   │ free (at cap 10/10) │ free@linyup.com      │ linyup123    │ active     │')
   console.log('   │ coach               │ coach@linyup.com     │ linyup123    │ trial      │')
   console.log('   │ club (in org)       │ club@linyup.com      │ linyup123    │ active     │')
   console.log('   │ org admin           │ org@linyup.com       │ linyup123    │ active     │')
@@ -1262,6 +1373,7 @@ async function main() {
   for (const a of accounts) {
     console.log(`   ${a.plan.padEnd(16)} →  http://localhost:3000/portal/${a.teamSlug}`)
   }
+  console.log(`   ${'free'.padEnd(16)} →  http://localhost:3000/portal/sunrise-yoga-studio  (shows "Powered by Linyup")`)
   console.log('')
 }
 

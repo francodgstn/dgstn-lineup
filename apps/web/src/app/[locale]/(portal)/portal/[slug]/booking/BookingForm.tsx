@@ -350,6 +350,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   const [teamName, setTeamName] = useState('')
   const [accentColor, setAccentColor] = useState<string | null>(null)
   const [bookingSettings, setBookingSettings] = useState<BookingSettings | undefined>(undefined)
+  const [showBranding, setShowBranding] = useState(false)
 
   const bookingWindowMonths    = bookingSettings?.windowMonths ?? 2
   const showPhone              = bookingSettings?.showPhone !== false
@@ -416,6 +417,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         setTeamName(teamData.name || '')
         setAccentColor(teamData.portalAccentColor ?? null)
         setBookingSettings(teamData.bookingSettings ?? undefined)
+        setShowBranding(teamData.showBranding === true)
 
         const bs: BookingSettings | undefined = teamData.bookingSettings ?? undefined
         const windowMonths = bs?.windowMonths ?? 2
@@ -727,6 +729,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           accentColor={accentColor}
           wide={wide}
           stickyBarHeight={showBar ? STICKY_H : undefined}
+          showBranding={showBranding}
         >
           {content}
         </PortalShell>
@@ -748,7 +751,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   if (loadingData) {
     return (
-      <PortalShell teamName="" slug={slug} accentColor={null}>
+      <PortalShell teamName="" slug={slug} accentColor={null} showBranding={showBranding}>
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
         </div>
@@ -760,7 +763,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   if (step === 'activities') {
     return (
-      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
         <div>
           <h1 className="text-2xl font-bold">Book a Session</h1>
           <p className="text-muted-foreground mt-1 text-sm">Choose an activity to get started.</p>
@@ -1215,7 +1218,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     const ctaLabel = bookingSettings?.ctaLabel ?? 'Contact Us'
 
     return (
-      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
         <div className="py-6 space-y-6">
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">

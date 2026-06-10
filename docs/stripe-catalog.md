@@ -7,6 +7,9 @@ reproducible.
 ## Source of truth
 - Plans → `PLAN_PRICING` in `packages/shared/src/types/plan.ts`
   (`{ baseMonthly, stripeLookupKey }`).
+  The **Free plan has `stripeLookupKey: null` by design** — it is never billed,
+  has no Stripe product/price, and the sync script skips it. Teams land on Free
+  via trial expiry or subscription cancellation, never via checkout.
 - Add-ons → `PLUGIN_ADDONS` in `packages/shared/src/types/plugin-addons.ts`
   (`{ coachPriceMonthly, stripeLookupKey }`).
 

@@ -2,9 +2,10 @@ import type { Timestamp } from './common'
 
 export type TeamRole = 'owner' | 'manager' | 'viewer'
 
-export type SaasPlan = 'coach' | 'club' | 'organization'
-// 'expired' = trial lapsed → app walled, data soft-kept for the reactivation
-// window, then hard-deleted (see TRIAL_PURGE_DAYS / handleTrialLifecycle).
+export type SaasPlan = 'free' | 'coach' | 'club' | 'organization'
+// 'expired' is LEGACY: lapsed trials used to be walled then purged; they now
+// downgrade to the free plan ('free'/'active'). Nothing writes 'expired' any
+// more — the value remains so old docs still typecheck and admin filters work.
 export type SaasStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'expired'
 
 export interface RankLevel {
@@ -74,8 +75,9 @@ export interface Team {
   plan_status?: SaasStatus
   trial_ends_at?: Timestamp
   trial_extended?: boolean   // one-time self-service trial extension has been used
-  suspended_at?: Timestamp   // when the trial lapsed and the app was walled
-  purge_at?: Timestamp       // suspended_at + TRIAL_PURGE_DAYS → hard-delete deadline
+  downgraded_from_trial_at?: Timestamp  // trial lapsed → moved to the free plan (drives the in-app banner)
+  suspended_at?: Timestamp   // LEGACY (wall era) — deleted on downgrade; nothing writes it
+  purge_at?: Timestamp       // LEGACY (purge era) — deleted on downgrade; nothing writes it
   stripe_customer_id?: string
   max_contacts?: number
   // Organization membership
@@ -119,6 +121,10 @@ export interface TeamPublicProfile {
   portalAccentColor?: string
   portalBackground?: PortalBackground
   bookingSettings?: BookingSettings
+  // Denormalized from teams/{id}.plan by syncTeamPublicProfile — true on the
+  // free plan, where the portal shows a "Powered by Linyup" badge. The portal
+  // must never read teams/, so the flag lives here.
+  showBranding?: boolean
 }
 
 export interface TeamInvitation {

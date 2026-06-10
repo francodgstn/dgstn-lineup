@@ -377,7 +377,12 @@
     "capWarnTitle": "Hai raggiunto il limite di contatti del tuo piano",
     "capWarnCta": "Upgrade",
     "capWarnBodyBilled": "Il tuo piano include {included} contatti e ne hai {used}. I contatti aggiuntivi sono fatturati CHF {price}/mese ciascuno. Esegui l’upgrade per un limite incluso più alto.",
-    "capWarnBodyTrial": "Il tuo piano include {included} contatti e ne hai {used}. Al termine della prova, i contatti aggiuntivi saranno fatturati CHF {price}/mese ciascuno. Esegui l’upgrade per un limite incluso più alto."
+    "capWarnBodyTrial": "Il tuo piano include {included} contatti e ne hai {used}. Al termine della prova, i contatti aggiuntivi saranno fatturati CHF {price}/mese ciascuno. Esegui l’upgrade per un limite incluso più alto.",
+    "capWarnBodyFreeHard": "Il piano Free include {included} contatti e ne hai {used}. L’aggiunta manuale è bloccata, ma le iscrizioni dal tuo portale pubblico continuano ad arrivare. Esegui l’upgrade per un limite più alto.",
+    "freeCapDialogTitle": "Limite contatti raggiunto",
+    "freeCapDialogBody": "Il piano Free include fino a {included} contatti attivi. Passa al Coach per aggiungerne altri — o archivia i contatti di cui non hai più bisogno.",
+    "freeCapDialogDismiss": "Non ora",
+    "freeCapDialogCta": "Vedi le opzioni di upgrade"
   },
   "TeamMemberships": {
     "title": "Tessere",
@@ -661,7 +666,8 @@
     "removedSuccess": "Membro rimosso.",
     "confirmCancelInviteTitle": "Annulla invito",
     "confirmCancelInviteMessage": "Annullare l'invito a {email}?",
-    "inviteCancelledSuccess": "Invito annullato."
+    "inviteCancelledSuccess": "Invito annullato.",
+    "inviteLockedFreeBody": "Il piano Free è limitato a un singolo utente. Passa al Coach per invitare membri del team."
   },
   "Activities": {
     "title": "Attività",
@@ -1076,6 +1082,9 @@
     "accessUntil": "Accesso fino al {date}",
     "cancelSubscription": "Cancella abbonamento",
     "noSubscription": "Nessun abbonamento attivo.",
+    "freePlanName": "Piano Free",
+    "onFreePlan": "Sei sul piano Free — fino a 10 contatti attivi, un solo utente. Esegui l'upgrade in qualsiasi momento.",
+    "cancelToDowngrade": "Cancella il tuo abbonamento per passare al piano Free",
     "choosePlan": "Scegli un piano",
     "currentPlanBadge": "Attuale",
     "redirecting": "Reindirizzamento…",
@@ -1453,12 +1462,16 @@
     "tour": {
       "welcomeTitle": "Benvenuto su Linyup 👋",
       "welcomeBody": "Ecco un breve tour delle funzioni essenziali. Puoi rivederlo quando vuoi dal menu account.",
+      "activitiesTitle": "Attività",
+      "activitiesBody": "Definisci la tua offerta — le attività sono la base: te ne serve almeno una prima di poter pianificare le sessioni.",
+      "calendarTitle": "Programma",
+      "calendarBody": "Pianifica lezioni e sessioni individuali e vedi le prenotazioni in elenco o nel calendario.",
       "contactsTitle": "Contatti",
       "contactsBody": "Qui trovi i tuoi membri, potenziali clienti e chi è in prova — con stato, abbonamenti e attività.",
-      "calendarTitle": "Calendario",
-      "calendarBody": "Pianifica lezioni e sessioni individuali e vedi le prenotazioni in elenco o nel calendario.",
       "portalTitle": "Il tuo portale pubblico",
       "portalBody": "Condividi questa pagina così le persone possono prenotare una prova e iscriversi — senza login.",
+      "automationsTitle": "Automazioni",
+      "automationsBody": "Imposta promemoria, follow-up e messaggi di riattivazione automatici, così nessuno viene dimenticato.",
       "next": "Avanti",
       "prev": "Indietro",
       "done": "Capito"
@@ -1528,11 +1541,10 @@
       }
     }
   },
-  "TrialWall": {
-    "title": "La tua prova gratuita è terminata",
-    "body": "Riattiva il tuo account per riprendere esattamente da dove avevi lasciato.",
-    "cta": "Riattiva — scegli un piano",
-    "signOut": "Esci",
-    "dataNote": "I tuoi dati restano disponibili per {days} giorni — riattiva quando vuoi."
+  "FreePlan": {
+    "downgradeBannerTitle": "La tua prova è terminata — sei ora sul piano Free",
+    "downgradeBannerBody": "È tutto ancora qui. Puoi continuare a lavorare con fino a 10 contatti attivi e un utente. Esegui l'upgrade per rimuovere i limiti.",
+    "downgradeBannerCta": "Vedi i piani",
+    "dismiss": "Chiudi"
   }
 }

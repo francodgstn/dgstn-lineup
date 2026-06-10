@@ -50,11 +50,17 @@ interface Invoice {
 // ─── plan feature copy ────────────────────────────────────────────────────────
 
 const PLAN_HIGHLIGHTS: Record<string, string[]> = {
-  coach: [
-    'Contacts, sessions & subscriptions',
+  free: [
+    'Up to 10 active contacts',
+    'Single user',
     'Public portal & booking forms',
-    'QR check-in & payment tracking',
-    'Coaching availability slots',
+    'Sessions, subscriptions & QR check-in',
+  ],
+  coach: [
+    'Everything in Free — 30 included contacts',
+    'Team members & coaching slots',
+    'No Linyup branding on your portal',
+    'Plugin add-ons available',
   ],
   club: [
     'Everything in Coach',
@@ -173,7 +179,7 @@ function CheckoutBanner() {
 
 // ─── subscription card ────────────────────────────────────────────────────────
 
-function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamId: string }) {
+function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null; team: Team | null; teamId: string }) {
   const t = useTranslations('Billing')
   const queryClient = useQueryClient()
 
@@ -183,8 +189,11 @@ function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamI
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
 
-  const plans = ['coach', 'club', 'organization'] as const
-  const currentPlanRank = sub?.plan ? planRank(sub.plan) : -1
+  const plans = ['free', 'coach', 'club', 'organization'] as const
+  // Free teams have no subscription doc (or a cancelled one) — current-plan
+  // detection for Free must come from the team doc, not the sub.
+  const onFreePlan = team?.plan === 'free' && (!sub || sub.status === 'cancelled')
+  const currentPlanRank = sub && sub.status !== 'cancelled' && sub.plan ? planRank(sub.plan) : onFreePlan ? planRank('free') : -1
 
   async function handleUpgrade(plan: string) {
     setCheckoutLoading(plan)
@@ -282,6 +291,11 @@ function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamI
                 )}
               </div>
 
+              {/* Cancelled sub → the team now runs on the Free plan */}
+              {onFreePlan && (
+                <p className="text-sm text-muted-foreground">{t('onFreePlan')}</p>
+              )}
+
               {/* Billing period */}
               {sub.status !== 'trial' && periodStartDate && periodEndDate && (
                 <p className="text-sm text-muted-foreground">
@@ -336,6 +350,12 @@ function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamI
                 )}
               </div>
             </div>
+          ) : onFreePlan ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span className="font-semibold">{t('freePlanName')}</span>
+              <span className="text-sm text-muted-foreground">{t('onFreePlan')}</span>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">{t('noSubscription')}</p>
           )}
@@ -348,10 +368,15 @@ function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamI
           <CardTitle className="text-base">{t('choosePlan')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => {
-              const isCurrent = sub?.plan === plan && sub.status !== 'cancelled'
+              const isCurrent = plan === 'free'
+                ? onFreePlan
+                : sub?.plan === plan && sub.status !== 'cancelled'
               const isDowngrade = !isCurrent && currentPlanRank > planRank(plan)
+              // Free is never "selected" via checkout — you land on it by
+              // cancelling (or letting the trial lapse).
+              const selectable = plan !== 'free' && !isCurrent && !isDowngrade
               return (
                 <div
                   key={plan}
@@ -377,7 +402,7 @@ function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamI
                     ))}
                   </ul>
 
-                  {!isCurrent && !isDowngrade && (
+                  {selectable && (
                     <Button
                       size="sm"
                       className="w-full"
@@ -388,7 +413,9 @@ function SubscriptionCard({ sub, teamId }: { sub: SaasSubscription | null; teamI
                     </Button>
                   )}
                   {isDowngrade && (
-                    <p className="text-xs text-muted-foreground text-center py-1">{t('contactToDowngrade')}</p>
+                    <p className="text-xs text-muted-foreground text-center py-1">
+                      {plan === 'free' ? t('cancelToDowngrade') : t('contactToDowngrade')}
+                    </p>
                   )}
                 </div>
               )
@@ -606,7 +633,7 @@ export default function BillingPage() {
       </Suspense>
 
       <TrialExtendCard team={team} teamId={currentTeamId!} />
-      <SubscriptionCard sub={sub ?? null} teamId={currentTeamId!} />
+      <SubscriptionCard sub={sub ?? null} team={team} teamId={currentTeamId!} />
       <InvoicesSection teamId={currentTeamId!} hasGateway={hasGateway} />
     </div>
   )

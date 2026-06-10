@@ -40,7 +40,7 @@ import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Logo } from '@/components/Logo'
 import { ProductTour } from '@/components/onboarding/ProductTour'
-import { TrialExpiredWall } from '@/components/onboarding/TrialExpiredWall'
+import { FreeDowngradeBanner } from '@/components/onboarding/FreeDowngradeBanner'
 
 // Icons referenced by string name in plugin manifest navContributions
 const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
@@ -382,7 +382,6 @@ function SidebarContent({
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
-  const { isExpired } = usePlan()
   const router = useRouter()
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
@@ -412,11 +411,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   }
 
   if (!user) return null
-
-  // Trial lapsed → wall the app; only /billing (reactivation) stays reachable.
-  if (isExpired && !pathname.startsWith('/billing')) {
-    return <TrialExpiredWall />
-  }
 
   const handleToggleCollapse = () => {
     setCollapsed((v) => {
@@ -450,6 +444,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <MobileHeader onMobileMenu={() => setMobileOpen(true)} />
           <main className="flex-1">
             <div className="max-w-5xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-8">
+              <FreeDowngradeBanner />
               {children}
             </div>
           </main>

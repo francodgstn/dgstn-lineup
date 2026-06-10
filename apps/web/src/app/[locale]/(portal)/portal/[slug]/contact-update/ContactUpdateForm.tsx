@@ -47,6 +47,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
   const [teamId, setTeamId] = useState<string | null>(null)
   const [teamName, setTeamName] = useState('')
   const [accentColor, setAccentColor] = useState<string | null>(null)
+  const [showBranding, setShowBranding] = useState(false)
   const [email, setEmail] = useState('')
   const [codeId, setCodeId] = useState('')
   const [countdown, setCountdown] = useState(0)
@@ -72,6 +73,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
         setTeamId(id)
         setTeamName((data.name as string) || slug)
         setAccentColor((data.accentColor as string | null) ?? null)
+        setShowBranding(data.showBranding === true)
         setStep('email')
       } catch {
         setStep('not-found')
@@ -217,7 +219,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
 
   if (step === 'email') {
     return (
-      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
         <div>
           <h1 className="text-2xl font-bold">Update your details</h1>
           <p className="text-muted-foreground mt-1">
@@ -265,7 +267,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
 
   if (step === 'code') {
     return (
-      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
         <div>
           <button
             onClick={() => { setStep('email'); setError(null) }}
@@ -336,7 +338,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
 
   if (step === 'form') {
     return (
-      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+      <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
         <div>
           <h1 className="text-2xl font-bold">Your details</h1>
           <p className="text-muted-foreground mt-1">
@@ -462,7 +464,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
   // ── Render: success ─────────────────────────────────────────────────────────
 
   return (
-    <PortalShell teamName={teamName} slug={slug} accentColor={accentColor}>
+    <PortalShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
       <div className="space-y-6 text-center py-8">
         <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
           <svg

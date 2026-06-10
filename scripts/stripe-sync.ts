@@ -39,12 +39,15 @@ const stripe = new Stripe(secretKey)
 interface CatalogEntry { kind: 'plan' | 'addon'; name: string; lookupKey: string; chf: number }
 
 const catalog: CatalogEntry[] = [
-  ...Object.entries(PLAN_PRICING).map(([plan, p]): CatalogEntry => ({
-    kind: 'plan',
-    name: `Linyup ${plan.charAt(0).toUpperCase()}${plan.slice(1)}`,
-    lookupKey: p.stripeLookupKey,
-    chf: p.baseMonthly,
-  })),
+  // Plans without a lookup key (free) are never billed and have no Stripe price.
+  ...Object.entries(PLAN_PRICING)
+    .filter(([, p]) => p.stripeLookupKey != null)
+    .map(([plan, p]): CatalogEntry => ({
+      kind: 'plan',
+      name: `Linyup ${plan.charAt(0).toUpperCase()}${plan.slice(1)}`,
+      lookupKey: p.stripeLookupKey!,
+      chf: p.baseMonthly,
+    })),
   ...Object.entries(PLUGIN_ADDONS).map(([id, a]): CatalogEntry => ({
     kind: 'addon',
     name: `Linyup add-on: ${id}`,

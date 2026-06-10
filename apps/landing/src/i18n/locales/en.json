@@ -39,10 +39,16 @@
     "earlyAccessCta": "Join early access",
     "earlyAccessNote": "Free during early access. No credit card required.",
     "mostPopular": "Most popular",
+    "freePrice": "Free forever",
+    "free": {
+      "name": "Free",
+      "audience": "For coaches just getting started.",
+      "features": ["Up to 10 contacts", "Public booking portal", "Sessions & subscriptions"]
+    },
     "coach": {
       "name": "Coach",
       "audience": "For solo instructors and private coaches.",
-      "features": ["Sessions & attendance", "Up to 50 contacts", "Student mobile app"]
+      "features": ["Everything in Free", "30 included contacts", "1:1 coaching & team members"]
     },
     "club": {
       "name": "Club",

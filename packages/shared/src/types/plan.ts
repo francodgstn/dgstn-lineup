@@ -1,27 +1,14 @@
-import type { SaasPlan, SaasStatus } from './team'
+import type { SaasPlan } from './team'
 
 // Ordered from lowest to highest — used for >= comparisons
-export const PLAN_ORDER: SaasPlan[] = ['coach', 'club', 'organization']
+export const PLAN_ORDER: SaasPlan[] = ['free', 'coach', 'club', 'organization']
 
 // Trial: new self-service teams start on a full-access Club trial of this length.
 // One self-service extension of TRIAL_EXTENSION_DAYS is allowed (see extendTrial).
 export const TRIAL_DAYS = 14
 export const TRIAL_EXTENSION_DAYS = 14
-// After a trial lapses the team is walled but its data is soft-kept this many
-// days for self-service reactivation; then it is hard-deleted.
-export const TRIAL_PURGE_DAYS = 90
-
-// True when access should be blocked: status is 'expired', OR a trial whose
-// end date has passed (client-side immediacy before the daily cron flips it).
-export function trialHasExpired(
-  planStatus: SaasStatus | null | undefined,
-  trialEndsAtMs: number | null,
-  nowMs: number,
-): boolean {
-  if (planStatus === 'expired') return true
-  if (planStatus === 'trial' && trialEndsAtMs != null && trialEndsAtMs < nowMs) return true
-  return false
-}
+// When the trial lapses the team is downgraded to the Free plan (see
+// handleTrialLifecycle); there is no wall or data purge.
 
 // Base subscription pricing per plan. Declarative source for scripts/stripe-sync.ts
 // (the whole Stripe catalogue — plans + add-ons — lives in the repo).
@@ -31,7 +18,8 @@ export function trialHasExpired(
 // Lookup-key convention matches the gateway: `linyup_<plan>_monthly`.
 export interface PlanPrice {
   baseMonthly: number
-  stripeLookupKey: string
+  /** null = the plan is never billed (free) and stripe:sync skips it. */
+  stripeLookupKey: string | null
   /** Included active (non-archived) contacts; null = unlimited (org/pooled). */
   includedContacts: number | null
   /** Overage price per extra contact beyond `includedContacts`, CHF/month.
@@ -40,9 +28,18 @@ export interface PlanPrice {
 }
 
 export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
-  coach:        { baseMonthly: 5.99,  stripeLookupKey: 'linyup_coach_monthly',        includedContacts: 20,   extraContactMonthly: 1 },
-  club:         { baseMonthly: 29.99,  stripeLookupKey: 'linyup_club_monthly',         includedContacts: 100,  extraContactMonthly: 1 },
+  free:         { baseMonthly: 0,    stripeLookupKey: null,                          includedContacts: 10,   extraContactMonthly: 0 },
+  coach:        { baseMonthly: 7.99, stripeLookupKey: 'linyup_coach_monthly',        includedContacts: 30,   extraContactMonthly: 1 },
+  club:         { baseMonthly: 29.99, stripeLookupKey: 'linyup_club_monthly',         includedContacts: 100,  extraContactMonthly: 1 },
   organization: { baseMonthly: 149, stripeLookupKey: 'linyup_organization_monthly', includedContacts: null, extraContactMonthly: 0 },
+}
+
+// Free has no payment method to bill overage against, so its contact cap is
+// HARD: manual contact creation is blocked at the limit (public portal
+// submissions still land — the breach is the upgrade prompt). Paid plans keep
+// the soft cap + per-extra-contact billing.
+export function planHasHardContactCap(plan: SaasPlan | null): boolean {
+  return plan === 'free'
 }
 
 // Single shared per-extra-contact overage price (same across plans for now).
@@ -122,6 +119,23 @@ export type PlanFeature =
 // pluginAccessForPlan + useInstalledPlugins. The flags remain for reference /
 // non-UI logic; do not re-introduce feature-flag gates for plugin features.
 export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
+  // Free = the full Coach feature set. The tier is differentiated by limits
+  // (10-contact hard cap, single user, no plugin add-ons, portal branding),
+  // not by feature flags.
+  free: [
+    'contacts',
+    'sessions',
+    'public_booking',
+    'qr_checkin',
+    'public_profile',
+    'signup_forms',
+    'basic_dashboard',
+    'basic_alerts',
+    'subscriptions',
+    'payment_tracking',
+    'goals',
+    'coaching',
+  ],
   coach: [
     'contacts',
     'sessions',
@@ -211,6 +225,8 @@ interface PluginAccessInput {
 
 export function pluginAccessForPlan(manifest: PluginAccessInput, plan: SaasPlan | null): PluginAccess {
   if (plan === 'club' || plan === 'organization') return { kind: 'included' }
+  // Free: no add-ons (nothing to bill against) — everything is upgrade-locked.
+  if (plan === 'free') return { kind: 'upgrade', minPlan: 'coach' }
   // Coach (or unknown/trialing coach): paid add-on if curated, else upgrade.
   if (manifest.addon) return { kind: 'addon', priceMonthly: manifest.addon.coachPriceMonthly }
   return { kind: 'upgrade', minPlan: manifest.minPlan }

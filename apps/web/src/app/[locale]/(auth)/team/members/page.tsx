@@ -17,7 +17,10 @@ import {
   Clock,
   CheckCircle2,
   X,
+  Lock,
 } from 'lucide-react'
+import { usePlan } from '@/hooks/usePlan'
+import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -110,7 +113,9 @@ function InviteDialog({ open, onClose, onSuccess }: InviteDialogProps) {
       onSuccess()
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      // Backstop for the server-side gate (stable error code → localized copy).
+      setError(msg.includes('free-plan-single-user') ? t('inviteLockedFreeBody') : msg)
     } finally {
       setLoading(false)
     }
@@ -290,7 +295,12 @@ interface Toast {
 export default function TeamMembersPage() {
   const t = useTranslations('TeamMembers')
   const { currentTeamId: teamId, user } = useAuth()
+  const { plan } = usePlan()
+  const { openUpgradeModal } = useUpgradeModal()
   const qc = useQueryClient()
+
+  // The Free plan is single-user — inviting opens the upgrade modal instead.
+  const inviteLocked = plan === 'free'
 
   // toast
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -405,8 +415,11 @@ export default function TeamMembersPage() {
           <h1 className="text-2xl font-bold">{t('title')}</h1>
         </div>
         {canManage && (
-          <Button onClick={() => setInviteOpen(true)}>
-            <UserPlus className="h-4 w-4 mr-2" />
+          <Button
+            onClick={() => (inviteLocked ? openUpgradeModal({ minPlan: 'coach' }) : setInviteOpen(true))}
+            variant={inviteLocked ? 'outline' : 'default'}
+          >
+            {inviteLocked ? <Lock className="h-4 w-4 mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
             {t('inviteButton')}
           </Button>
         )}

@@ -23,6 +23,9 @@ export interface PortalTeamData {
   portalTheme?: PortalTheme
   portalAccentColor?: string
   portalBackground?: PortalBackground
+  /** Denormalized by syncTeamPublicProfile — true on the Free plan; removing
+   *  the badge is a paid perk. */
+  showBranding?: boolean
 }
 
 // ─── social icon map ──────────────────────────────────────────────────────────
@@ -264,13 +267,16 @@ export default function PortalHome({ slug, team: teamProp, onLinkClick }: Props)
           </div>
         )}
 
-        {/* Footer */}
-        <p className="mt-12 text-center text-[11px]" style={{ color: textMuted }}>
-          Powered by{' '}
-          <a href="/" className="hover:underline font-medium" style={{ color: textMuted }}>
-            Linyup
-          </a>
-        </p>
+        {/* Footer — Free-plan badge (denormalized flag; removing it is a paid
+            perk). undefined = hidden: existing docs get the flag via backfill. */}
+        {team.showBranding === true && (
+          <p className="mt-12 text-center text-[11px]" style={{ color: textMuted }}>
+            Powered by{' '}
+            <a href="/" className="hover:underline font-medium" style={{ color: textMuted }}>
+              Linyup
+            </a>
+          </p>
+        )}
       </div>
     </div>
   )

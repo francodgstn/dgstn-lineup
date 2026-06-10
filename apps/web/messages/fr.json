@@ -377,7 +377,12 @@
     "capWarnTitle": "Vous avez atteint la limite de contacts de votre offre",
     "capWarnCta": "Mettre à niveau",
     "capWarnBodyBilled": "Votre offre inclut {included} contacts et vous en avez {used}. Les contacts supplémentaires sont facturés CHF {price}/mois chacun. Passez à une offre supérieure pour une limite incluse plus élevée.",
-    "capWarnBodyTrial": "Votre offre inclut {included} contacts et vous en avez {used}. À la fin de votre essai, les contacts supplémentaires seront facturés CHF {price}/mois chacun. Passez à une offre supérieure pour une limite incluse plus élevée."
+    "capWarnBodyTrial": "Votre offre inclut {included} contacts et vous en avez {used}. À la fin de votre essai, les contacts supplémentaires seront facturés CHF {price}/mois chacun. Passez à une offre supérieure pour une limite incluse plus élevée.",
+    "capWarnBodyFreeHard": "L'offre Gratuite inclut {included} contacts et vous en avez {used}. L'ajout manuel est bloqué, mais les inscriptions via votre portail public passent toujours. Passez à une offre supérieure pour augmenter la limite.",
+    "freeCapDialogTitle": "Limite de contacts atteinte",
+    "freeCapDialogBody": "L'offre Gratuite inclut jusqu'à {included} contacts actifs. Passez à Coach pour en ajouter davantage — ou archivez les contacts dont vous n'avez plus besoin.",
+    "freeCapDialogDismiss": "Pas maintenant",
+    "freeCapDialogCta": "Voir les options d'upgrade"
   },
   "TeamMemberships": {
     "title": "Adhésion",
@@ -661,7 +666,8 @@
     "removedSuccess": "Membre supprimé.",
     "confirmCancelInviteTitle": "Annuler l'invitation",
     "confirmCancelInviteMessage": "Annuler l'invitation à {email} ?",
-    "inviteCancelledSuccess": "Invitation annulée."
+    "inviteCancelledSuccess": "Invitation annulée.",
+    "inviteLockedFreeBody": "L'offre Gratuite est limitée à un seul utilisateur. Passez à Coach pour inviter des membres de l'équipe."
   },
   "Activities": {
     "title": "Activités",
@@ -1086,6 +1092,9 @@
     "accessUntil": "Accès jusqu'au {date}",
     "cancelSubscription": "Résilier l'abonnement",
     "noSubscription": "Aucun abonnement actif.",
+    "freePlanName": "Offre Gratuite",
+    "onFreePlan": "Vous êtes sur l'offre Gratuite — jusqu'à 10 contacts actifs, un seul utilisateur. Passez à une offre supérieure à tout moment.",
+    "cancelToDowngrade": "Résiliez votre abonnement pour passer à l'offre Gratuite",
     "choosePlan": "Choisir un plan",
     "currentPlanBadge": "Actuel",
     "redirecting": "Redirection…",
@@ -1463,12 +1472,16 @@
     "tour": {
       "welcomeTitle": "Bienvenue sur Linyup 👋",
       "welcomeBody": "Voici une visite rapide de l'essentiel. Vous pouvez la revoir à tout moment depuis le menu du compte.",
+      "activitiesTitle": "Activités",
+      "activitiesBody": "Définissez votre offre — les activités sont la base : il vous en faut au moins une avant de pouvoir planifier des séances.",
+      "calendarTitle": "Planning",
+      "calendarBody": "Planifiez des cours et des séances individuelles, et voyez les réservations en liste ou en calendrier.",
       "contactsTitle": "Contacts",
       "contactsBody": "Vos membres, prospects et personnes en essai sont ici — avec statut, abonnements et activité.",
-      "calendarTitle": "Calendrier",
-      "calendarBody": "Planifiez des cours et des séances individuelles, et voyez les réservations en liste ou en calendrier.",
       "portalTitle": "Votre portail public",
       "portalBody": "Partagez cette page pour que les gens réservent un essai et s'inscrivent — sans connexion.",
+      "automationsTitle": "Automatisations",
+      "automationsBody": "Configurez des rappels, relances et messages de réengagement automatiques pour ne laisser personne de côté.",
       "next": "Suivant",
       "prev": "Retour",
       "done": "Compris"
@@ -1538,11 +1551,10 @@
       }
     }
   },
-  "TrialWall": {
-    "title": "Votre essai gratuit est terminé",
-    "body": "Réactivez votre compte pour reprendre exactement là où vous en étiez.",
-    "cta": "Réactiver — choisir une offre",
-    "signOut": "Se déconnecter",
-    "dataNote": "Vos données sont conservées {days} jours — réactivez à tout moment."
+  "FreePlan": {
+    "downgradeBannerTitle": "Votre essai est terminé — vous êtes maintenant sur l'offre Gratuite",
+    "downgradeBannerBody": "Tout est toujours là. Vous pouvez continuer avec jusqu'à 10 contacts actifs et un seul utilisateur. Passez à une offre supérieure pour lever les limites.",
+    "downgradeBannerCta": "Voir les offres",
+    "dismiss": "Fermer"
   }
 }
