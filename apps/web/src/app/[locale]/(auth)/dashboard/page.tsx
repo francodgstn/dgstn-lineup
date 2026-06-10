@@ -131,20 +131,24 @@ function StatCard({ title, value, subtitle, icon: Icon, loading, href, secondary
 }) {
   const inner = (
     <Card variant="accent" className={href ? 'hover:shadow-md transition-shadow cursor-pointer' : ''}>
-      <CardContent className="pt-3 pb-4 min-h-[160px] flex flex-col">
-        <div className="flex items-center justify-between mb-3">
+      <CardContent className="pt-3 pb-3">
+        <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
           <Icon className="h-4 w-4 text-primary/60" />
         </div>
-        {loading ? <Skeleton className="h-10 w-20 mb-1" /> : (
-          <p className="text-4xl font-black leading-none">{value ?? '—'}</p>
-        )}
-        <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-        {secondary && (
-          <p className="text-xs text-muted-foreground/60 mt-2 pt-2 border-t border-border/50">
-            +{secondary.value ?? '—'} {secondary.label}
-          </p>
-        )}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          {loading ? <Skeleton className="h-8 w-14" /> : (
+            <p className="text-3xl font-black leading-none">{value ?? '—'}</p>
+          )}
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
+            {secondary && (
+              <p className="text-xs text-muted-foreground/60">
+                +{secondary.value ?? '—'} {secondary.label}
+              </p>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
