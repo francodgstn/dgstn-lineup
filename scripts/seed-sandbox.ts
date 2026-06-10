@@ -167,6 +167,7 @@ interface ActivityDef {
   level: 'all' | 'beginner' | 'intermediate' | 'advanced'
   isFreeTrial: boolean
   base_score: number
+  description: string   // shown on the portal booking page activity cards
 }
 interface SubDef {
   kind: Exclude<SubKind, null>
@@ -184,6 +185,8 @@ interface SectorProfile {
   teamSlug: string
   sportType: string           // matches a signup SPORT_TYPES label
   accentColor: string
+  description: string         // portal home tagline (public_profile.description)
+  portalGradient: string      // PORTAL_GRADIENTS key (apps/web/src/lib/portal.ts)
   instructors: string[]       // [owner, assistant]
   activities: ActivityDef[]   // 4–5 group classes
   coachingName: string
@@ -209,12 +212,14 @@ const SECTOR_PROFILES: SectorProfile[] = [
     key: 'grappling', sector: 'sport',
     ownerName: 'Marco Silva', teamName: 'Apex Grappling Academy', teamSlug: 'apex-grappling-academy',
     sportType: 'Martial arts', accentColor: '#dc2626', instructors: ['Marco Silva', 'Elena Rossi'],
+    description: 'BJJ and no-gi grappling for all levels — from your first class to the competition team.',
+    portalGradient: 'night',
     coachingName: 'Private Lesson',
     activities: [
-      { name: 'BJJ Fundamentals', slug: 'bjj-fundamentals', color: '#dc2626', level: 'beginner',     isFreeTrial: true,  base_score: 12 },
-      { name: 'Advanced BJJ',     slug: 'advanced-bjj',      color: '#7c3aed', level: 'advanced',     isFreeTrial: false, base_score: 15 },
-      { name: 'No-Gi Grappling',  slug: 'no-gi',             color: '#ea580c', level: 'intermediate', isFreeTrial: true,  base_score: 14 },
-      { name: 'Open Mat',         slug: 'open-mat',          color: '#0891b2', level: 'all',          isFreeTrial: true,  base_score: 8  },
+      { name: 'BJJ Fundamentals', slug: 'bjj-fundamentals', color: '#dc2626', level: 'beginner',     isFreeTrial: true,  base_score: 12, description: 'Core positions, escapes and submissions for your first year on the mats.' },
+      { name: 'Advanced BJJ',     slug: 'advanced-bjj',      color: '#7c3aed', level: 'advanced',     isFreeTrial: false, base_score: 15, description: 'Competition-paced rounds and advanced systems for experienced grapplers.' },
+      { name: 'No-Gi Grappling',  slug: 'no-gi',             color: '#ea580c', level: 'intermediate', isFreeTrial: true,  base_score: 14, description: 'Wrestling, scrambles and modern leg-lock systems — no gi required.' },
+      { name: 'Open Mat',         slug: 'open-mat',          color: '#0891b2', level: 'all',          isFreeTrial: true,  base_score: 8,  description: 'Free rolling for all levels. Bring a partner or find one here.' },
     ],
     rankingSystem: { id: 'bjj-belt', name: 'BJJ Belt', levels: BELT_LEVELS },
     subscriptions: [
@@ -242,12 +247,14 @@ const SECTOR_PROFILES: SectorProfile[] = [
     key: 'crossfit', sector: 'sport',
     ownerName: 'Anna Schmidt', teamName: 'Forge CrossFit', teamSlug: 'forge-crossfit',
     sportType: 'CrossFit / Fitness', accentColor: '#0f172a', instructors: ['Anna Schmidt', 'Tom Becker'],
+    description: 'Coached functional fitness — daily WODs, Olympic lifting and engine work for every level.',
+    portalGradient: 'royal',
     coachingName: 'Personal Training',
     activities: [
-      { name: 'WOD',             slug: 'wod',             color: '#0f172a', level: 'all',          isFreeTrial: true,  base_score: 12 },
-      { name: 'Olympic Lifting', slug: 'olympic-lifting', color: '#b45309', level: 'intermediate', isFreeTrial: false, base_score: 15 },
-      { name: 'Endurance',       slug: 'endurance',       color: '#0d9488', level: 'all',          isFreeTrial: true,  base_score: 10 },
-      { name: 'Foundations',     slug: 'foundations',     color: '#2563eb', level: 'beginner',     isFreeTrial: true,  base_score: 8  },
+      { name: 'WOD',             slug: 'wod',             color: '#0f172a', level: 'all',          isFreeTrial: true,  base_score: 12, description: 'The classic daily workout — scaled to every level by our coaches.' },
+      { name: 'Olympic Lifting', slug: 'olympic-lifting', color: '#b45309', level: 'intermediate', isFreeTrial: false, base_score: 15, description: 'Snatch and clean & jerk technique in small coached groups.' },
+      { name: 'Endurance',       slug: 'endurance',       color: '#0d9488', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Engine-building intervals on rower, bike and track.' },
+      { name: 'Foundations',     slug: 'foundations',     color: '#2563eb', level: 'beginner',     isFreeTrial: true,  base_score: 8,  description: 'Your first four weeks — movement basics and how the gym works.' },
     ],
     rankingSystem: {
       id: 'performance-level', name: 'Performance Level',
@@ -283,12 +290,14 @@ const SECTOR_PROFILES: SectorProfile[] = [
     key: 'tennis', sector: 'sport',
     ownerName: 'Pierre Dubois', teamName: 'Baseline Tennis Academy', teamSlug: 'baseline-tennis-academy',
     sportType: 'Tennis', accentColor: '#16a34a', instructors: ['Pierre Dubois', 'Sara Lindqvist'],
+    description: 'Group clinics, junior pathways and competitive match play across our three courts.',
+    portalGradient: 'forest',
     coachingName: 'Private Coaching',
     activities: [
-      { name: 'Group Clinic',        slug: 'group-clinic',    color: '#16a34a', level: 'all',          isFreeTrial: true,  base_score: 10 },
-      { name: 'Cardio Tennis',       slug: 'cardio-tennis',   color: '#ea580c', level: 'all',          isFreeTrial: true,  base_score: 12 },
-      { name: 'Junior Development',  slug: 'junior-dev',      color: '#2563eb', level: 'beginner',     isFreeTrial: true,  base_score: 8  },
-      { name: 'Match Play',          slug: 'match-play',      color: '#7c3aed', level: 'intermediate', isFreeTrial: false, base_score: 14 },
+      { name: 'Group Clinic',        slug: 'group-clinic',    color: '#16a34a', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Drill-based group clinic, organised by rating band.' },
+      { name: 'Cardio Tennis',       slug: 'cardio-tennis',   color: '#ea580c', level: 'all',          isFreeTrial: true,  base_score: 12, description: 'High-energy footwork and rally games — fitness first, score second.' },
+      { name: 'Junior Development',  slug: 'junior-dev',      color: '#2563eb', level: 'beginner',     isFreeTrial: true,  base_score: 8,  description: 'Ages 6–14 — the red-to-green ball development pathway.' },
+      { name: 'Match Play',          slug: 'match-play',      color: '#7c3aed', level: 'intermediate', isFreeTrial: false, base_score: 14, description: 'Supervised competitive sets with coaching between games.' },
     ],
     rankingSystem: {
       id: 'rating-band', name: 'Rating Band',
@@ -324,12 +333,14 @@ const SECTOR_PROFILES: SectorProfile[] = [
     key: 'yoga', sector: 'wellness',
     ownerName: 'Maya Iyer', teamName: 'Lotus Yoga Studio', teamSlug: 'lotus-yoga-studio',
     sportType: 'Yoga / Pilates', accentColor: '#9333ea', instructors: ['Maya Iyer', 'Clara Hoffmann'],
+    description: 'A calm space for vinyasa, yin and meditation — every body, every level, every day.',
+    portalGradient: 'sunset',
     coachingName: 'Private Session',
     activities: [
-      { name: 'Vinyasa Flow', slug: 'vinyasa-flow', color: '#9333ea', level: 'all',      isFreeTrial: true, base_score: 10 },
-      { name: 'Yin Yoga',     slug: 'yin-yoga',     color: '#0891b2', level: 'all',      isFreeTrial: true, base_score: 8  },
-      { name: 'Power Yoga',   slug: 'power-yoga',   color: '#dc2626', level: 'intermediate', isFreeTrial: false, base_score: 12 },
-      { name: 'Meditation',   slug: 'meditation',   color: '#16a34a', level: 'all',      isFreeTrial: true, base_score: 6  },
+      { name: 'Vinyasa Flow', slug: 'vinyasa-flow', color: '#9333ea', level: 'all',      isFreeTrial: true, base_score: 10, description: 'Breath-led flowing practice for all levels.' },
+      { name: 'Yin Yoga',     slug: 'yin-yoga',     color: '#0891b2', level: 'all',      isFreeTrial: true, base_score: 8,  description: 'Long-held floor poses to release deep tension.' },
+      { name: 'Power Yoga',   slug: 'power-yoga',   color: '#dc2626', level: 'intermediate', isFreeTrial: false, base_score: 12, description: 'A stronger, sweatier flow for experienced practitioners.' },
+      { name: 'Meditation',   slug: 'meditation',   color: '#16a34a', level: 'all',      isFreeTrial: true, base_score: 6,  description: 'Guided sits and breathwork — start or end your day grounded.' },
     ],
     rankingSystem: null, // wellness studios don't grade students
     subscriptions: [
@@ -357,12 +368,14 @@ const SECTOR_PROFILES: SectorProfile[] = [
     key: 'pilates', sector: 'wellness',
     ownerName: 'Sophie Laurent', teamName: 'Core Pilates Studio', teamSlug: 'core-pilates-studio',
     sportType: 'Yoga / Pilates', accentColor: '#0d9488', instructors: ['Sophie Laurent', 'Nadia Brun'],
+    description: 'Reformer and mat pilates in small, focused groups — strength, posture and control.',
+    portalGradient: 'ocean',
     coachingName: 'Private Reformer',
     activities: [
-      { name: 'Reformer Flow',     slug: 'reformer-flow',     color: '#0d9488', level: 'all',          isFreeTrial: true,  base_score: 12 },
-      { name: 'Mat Pilates',       slug: 'mat-pilates',       color: '#9333ea', level: 'all',          isFreeTrial: true,  base_score: 10 },
-      { name: 'Barre',             slug: 'barre',             color: '#db2777', level: 'all',          isFreeTrial: true,  base_score: 10 },
-      { name: 'Core & Stability',  slug: 'core-stability',    color: '#2563eb', level: 'beginner',     isFreeTrial: true,  base_score: 8  },
+      { name: 'Reformer Flow',     slug: 'reformer-flow',     color: '#0d9488', level: 'all',          isFreeTrial: true,  base_score: 12, description: 'Full-body reformer sequence — maximum six per class.' },
+      { name: 'Mat Pilates',       slug: 'mat-pilates',       color: '#9333ea', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Classical mat work for core strength and posture.' },
+      { name: 'Barre',             slug: 'barre',             color: '#db2777', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Ballet-inspired sculpt and balance work at the barre.' },
+      { name: 'Core & Stability',  slug: 'core-stability',    color: '#2563eb', level: 'beginner',     isFreeTrial: true,  base_score: 8,  description: 'Gentle foundations for beginners and post-rehab returns.' },
     ],
     rankingSystem: {
       id: 'reformer-level', name: 'Reformer Level',
@@ -397,12 +410,14 @@ const SECTOR_PROFILES: SectorProfile[] = [
     key: 'dance', sector: 'wellness',
     ownerName: 'Isabella Rossi', teamName: 'Rhythm Dance Studio', teamSlug: 'rhythm-dance-studio',
     sportType: 'Dance', accentColor: '#db2777', instructors: ['Isabella Rossi', 'Marcus Lee'],
+    description: 'Ballet, contemporary and hip-hop for kids and adults — from first steps to the showcase stage.',
+    portalGradient: 'warm',
     coachingName: 'Private Lesson',
     activities: [
-      { name: 'Ballet',        slug: 'ballet',        color: '#db2777', level: 'all',          isFreeTrial: true,  base_score: 10 },
-      { name: 'Contemporary',  slug: 'contemporary',  color: '#9333ea', level: 'intermediate', isFreeTrial: true,  base_score: 12 },
-      { name: 'Hip-Hop',       slug: 'hip-hop',        color: '#0f172a', level: 'all',          isFreeTrial: true,  base_score: 12 },
-      { name: 'Kids Dance',    slug: 'kids-dance',     color: '#f59e0b', level: 'beginner',     isFreeTrial: true,  base_score: 8  },
+      { name: 'Ballet',        slug: 'ballet',        color: '#db2777', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Classical technique from barre to centre work.' },
+      { name: 'Contemporary',  slug: 'contemporary',  color: '#9333ea', level: 'intermediate', isFreeTrial: true,  base_score: 12, description: 'Floor work, release technique and choreography.' },
+      { name: 'Hip-Hop',       slug: 'hip-hop',        color: '#0f172a', level: 'all',          isFreeTrial: true,  base_score: 12, description: 'Foundations, grooves and choreo to current tracks.' },
+      { name: 'Kids Dance',    slug: 'kids-dance',     color: '#f59e0b', level: 'beginner',     isFreeTrial: true,  base_score: 8,  description: 'A playful introduction to rhythm and movement, ages 5–9.' },
     ],
     rankingSystem: {
       id: 'dance-grade', name: 'Grade',
@@ -439,7 +454,7 @@ const SECTOR_PROFILES: SectorProfile[] = [
 
 async function seedClub(profile: SectorProfile) {
   const {
-    key, ownerName, teamName, teamSlug, sportType, accentColor,
+    key, ownerName, teamName, teamSlug, sportType, accentColor, description, portalGradient,
     instructors, activities, coachingName, rankingSystem, subscriptions, locations,
   } = profile
   const teamId = `sandbox-${key}`
@@ -489,9 +504,15 @@ async function seedClub(profile: SectorProfile) {
   await upsertAuthUser({ uid, email, displayName: ownerName, password: DEMO_PASSWORD })
 
   // ── team doc + public profile ─────────────────────────────────────────────
+  const portalLinks = [
+    { label: 'Book a Free Trial', description: "Try a class and see if it's right for you", isBookingLink: true,  isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
+    { label: 'Join as Member',    description: 'Join our community and become a member',    isBookingLink: false, isMembershipLink: true,  showInPortal: true, iconName: 'UserCheck',    url: null },
+  ]
+  const portalBackground = { type: 'gradient', color: portalGradient }
+
   await db.collection('teams').doc(teamId).set({
     name: teamName,
-    description: `${teamName} — managed with Linyup.`,
+    description,
     slug: teamSlug,
     sport_type: sportType,
     language: teamLanguage,
@@ -503,26 +524,20 @@ async function seedClub(profile: SectorProfile) {
     settings: { gamification: gamificationSettings, teamEmail: email },
     portalTheme: 'light',
     portalAccentColor: accentColor,
-    portalBackground: { type: 'solid', color: '#ffffff' },
-    links: [
-      { label: 'Book a Free Trial', isBookingLink: true,  isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
-      { label: 'Join as Member',    isBookingLink: false, isMembershipLink: true,  showInPortal: true, iconName: 'UserCheck',    url: null },
-    ],
+    portalBackground,
+    links: portalLinks,
     socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
   })
 
   await db.collection('teams').doc(teamId).collection('public_profile').doc(teamId).set({
-    type: 'team', name: teamName, description: `${teamName} — managed with Linyup.`,
+    type: 'team', name: teamName, description,
     slug: teamSlug, sport_type: sportType,
     profileImage: null, heroImage: null,
     portalTheme: 'light', portalAccentColor: accentColor,
-    portalBackground: { type: 'solid', color: '#ffffff' },
+    portalBackground,
     socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
-    links: [
-      { label: 'Book a Free Trial', isBookingLink: true,  isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
-      { label: 'Join as Member',    isBookingLink: false, isMembershipLink: true,  showInPortal: true, iconName: 'UserCheck',    url: null },
-    ],
-    bookingSettings: { flowType: 'activity-first', windowMonths: 2, showPhone: true, ctaUrl: null, ctaLabel: null },
+    links: portalLinks,
+    bookingSettings: { flowType: 'activity-first', windowMonths: 2, showPhone: true, ctaUrl: null, ctaLabel: null, showActivityDescription: true },
     membershipRequiredFields: null, membershipOptionalFields: null,
     updated_at: ts(now()),
   })
@@ -543,11 +558,13 @@ async function seedClub(profile: SectorProfile) {
     const a = activities[i]
     await db.collection('activities').doc(actIds[i]).set({
       teamId, name: a.name, slug: a.slug, color: a.color, level: a.level,
+      description: a.description,
       isFreeTrial: a.isFreeTrial, base_score: a.base_score,
       type: 'group_class', isActive: true, created_at: ts(daysFromNow(-200)),
     })
     await db.collection('activities').doc(actIds[i]).collection('public_profile').doc(actIds[i]).set({
       type: 'activity', teamId, name: a.name, slug: a.slug, color: a.color,
+      description: a.description,
       image_url: null, isFreeTrial: a.isFreeTrial, level: a.level,
     })
   }
