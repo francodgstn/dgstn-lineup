@@ -50,7 +50,7 @@
     "subtitle": "Choisissez un club et entrez directement dans un compte entièrement rempli — sans inscription. Chacun est un exemple réel dans le sport et le bien-être.",
     "sportLabel": "Sport",
     "wellnessLabel": "Bien-être",
-    "enterAs": "Entrer en tant que {team}",
+    "enterDemo": "Ouvrir la démo",
     "entering": "Ouverture…",
     "error": "Impossible d'ouvrir la démo {team}. Veuillez réessayer.",
     "ownAccount": "Vous voulez votre propre compte ?",

@@ -50,7 +50,7 @@
     "subtitle": "Pick a club and step straight into a fully-loaded account — no signup. Each one is a real example across sport and wellness.",
     "sportLabel": "Sport",
     "wellnessLabel": "Wellness",
-    "enterAs": "Enter as {team}",
+    "enterDemo": "Open demo",
     "entering": "Entering…",
     "error": "Could not open the {team} demo. Please try again.",
     "ownAccount": "Want your own account?",

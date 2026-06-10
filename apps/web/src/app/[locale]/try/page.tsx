@@ -4,13 +4,34 @@ import { useState } from 'react'
 import { notFound } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useRouter, Link } from '@/i18n/navigation'
+import {
+  Swords,
+  Dumbbell,
+  Target,
+  Flower2,
+  PersonStanding,
+  Music,
+  ArrowRight,
+  Loader2,
+  type LucideIcon,
+} from 'lucide-react'
 import { signIn } from '@/lib/auth'
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, isDemoMode, type DemoAccount, type DemoSector } from '@/lib/demo'
 import { Logo } from '@/components/Logo'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 export const dynamic = 'force-dynamic'
+
+// Muted icon per club — differentiation comes from the icon, not from color.
+const CLUB_ICONS: Record<string, LucideIcon> = {
+  grappling: Swords,
+  crossfit: Dumbbell,
+  tennis: Target,
+  yoga: Flower2,
+  pilates: PersonStanding,
+  dance: Music,
+}
 
 export default function TryPage() {
   const t = useTranslations('Try')
@@ -56,27 +77,44 @@ export default function TryPage() {
               {sector === 'sport' ? t('sportLabel') : t('wellnessLabel')}
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {DEMO_ACCOUNTS.filter((a) => a.sector === sector).map((account) => (
-                <Card key={account.key} className="flex flex-col overflow-hidden">
-                  <span className="h-1.5 w-full" style={{ backgroundColor: account.accent }} />
-                  <CardContent className="flex flex-1 flex-col gap-3 p-5">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold leading-tight">{account.teamName}</h3>
-                      <Badge variant="secondary" className="shrink-0">{account.sportType}</Badge>
-                    </div>
-                    <p className="flex-1 text-sm text-muted-foreground">{account.blurb}</p>
-                    <button
-                      type="button"
-                      onClick={() => enterAs(account)}
-                      disabled={entering !== null}
-                      className="mt-1 w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-                      style={{ backgroundColor: account.accent }}
-                    >
-                      {entering === account.key ? t('entering') : t('enterAs', { team: account.teamName })}
-                    </button>
-                  </CardContent>
-                </Card>
-              ))}
+              {DEMO_ACCOUNTS.filter((a) => a.sector === sector).map((account) => {
+                const Icon = CLUB_ICONS[account.key] ?? Target
+                const isEntering = entering === account.key
+                return (
+                  <Card key={account.key} className="transition-shadow hover:shadow-md">
+                    <CardContent className="flex h-full flex-col gap-3 p-5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                          <Icon className="size-5 text-muted-foreground" aria-hidden="true" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="truncate font-semibold leading-tight">{account.teamName}</h3>
+                          <p className="text-xs text-muted-foreground">{account.sportType}</p>
+                        </div>
+                      </div>
+                      <p className="flex-1 text-sm text-muted-foreground">{account.blurb}</p>
+                      <Button
+                        variant="outline"
+                        className="mt-1 w-full"
+                        onClick={() => enterAs(account)}
+                        disabled={entering !== null}
+                      >
+                        {isEntering ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                            {t('entering')}
+                          </>
+                        ) : (
+                          <>
+                            {t('enterDemo')}
+                            <ArrowRight className="size-4" aria-hidden="true" />
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           </section>
         ))}
