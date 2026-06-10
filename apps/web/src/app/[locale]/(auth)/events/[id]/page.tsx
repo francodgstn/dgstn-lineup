@@ -376,7 +376,7 @@ export default function EventDetailPage() {
   async function handleDelete() {
     if (!id) return
     await updateDoc(doc(db, EVENTS_COLLECTION, id), { deleted_at: serverTimestamp() })
-    router.push('/events' as Route)
+    router.push('/schedule' as Route)
   }
 
   async function handleSendInvitations(resend: boolean) {
@@ -424,7 +424,7 @@ export default function EventDetailPage() {
     return (
       <div className="space-y-4">
         <Link
-          href="/events"
+          href="/schedule"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -470,7 +470,7 @@ export default function EventDetailPage() {
     <div className="space-y-6">
       {/* Back */}
       <Link
-        href="/events"
+        href="/schedule"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
