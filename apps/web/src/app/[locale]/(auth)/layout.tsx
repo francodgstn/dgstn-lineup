@@ -5,7 +5,8 @@ import { useTranslations } from 'next-intl'
 import { Link, useRouter, usePathname } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
-import { TopBar } from '@/components/layout/TopBar'
+import { MobileHeader } from '@/components/layout/MobileHeader'
+import { UserMenu } from '@/components/layout/UserMenu'
 import {
   LayoutDashboard,
   Users,
@@ -19,7 +20,6 @@ import {
   Globe,
   Settings,
   CreditCard,
-  LogOut,
   ChevronLeft,
   ChevronRight,
   Lock,
@@ -72,8 +72,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/activities',       labelKey: 'activities',  icon: Zap },
       { href: '/team/event-types', labelKey: 'eventTypes',  icon: CalendarRange },
-      { href: '/automations',      labelKey: 'automations', icon: Workflow },
       { href: '/team/portal',      labelKey: 'portal',      icon: Globe },
+      { href: '/automations',      labelKey: 'automations', icon: Workflow },
       { href: '/plugins',          labelKey: 'plugins',     icon: Puzzle },
     ],
   },
@@ -322,15 +322,8 @@ function SidebarContent({
   onLinkClick?: () => void
 }) {
   const t = useTranslations('Nav')
-  const router = useRouter()
   const { team } = useAuth()
   const inOrg = !!team?.org_id
-
-  async function handleSignOut() {
-    const { signOut } = await import('@/lib/auth')
-    await signOut()
-    router.push('/login')
-  }
 
   return (
     <div className="flex flex-col h-full">
@@ -377,18 +370,9 @@ function SidebarContent({
         <OrgLinks collapsed={collapsed} onLinkClick={onLinkClick} />
       </nav>
 
-      {/* Sign out at bottom */}
+      {/* User account + QR at bottom */}
       <div className="border-t py-2 px-2 shrink-0">
-        <button
-          onClick={handleSignOut}
-          title={collapsed ? t('signOut') : undefined}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ${
-            collapsed ? 'justify-center px-2' : ''
-          }`}
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>{t('signOut')}</span>}
-        </button>
+        <UserMenu collapsed={collapsed} />
       </div>
     </div>
   )
@@ -461,9 +445,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </SheetContent>
         </Sheet>
 
-        {/* Main column: topbar + scrollable content */}
+        {/* Main column: mobile header + scrollable content (no top bar on desktop) */}
         <div className="flex flex-col flex-1 min-w-0 min-h-screen">
-          <TopBar onMobileMenu={() => setMobileOpen(true)} />
+          <MobileHeader onMobileMenu={() => setMobileOpen(true)} />
           <main className="flex-1">
             <div className="max-w-5xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-8">
               {children}
