@@ -19,11 +19,14 @@ import { PlanGate } from '@/components/plan/PlanGate'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import {
   Users, TrendingUp, BookOpen, CreditCard,
-  Plus, UserPlus, ArrowRight, Clock, Lock,
+  Plus, UserPlus, ArrowRight, Clock, Lock, ChevronDown, Zap,
 } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
-import { Link } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import type { Contact, Session, RankingSystem, SubscriptionType, UserProfile, Team } from '@linyup/shared'
 import { getDailyQuote } from '@/data/quotes'
@@ -162,8 +165,6 @@ function DashboardHero({ profile, team }: { profile: UserProfile | null; team: T
 
   const dateStr = now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })
 
-  const quote = getDailyQuote()
-
   return (
     <div className="space-y-0.5">
       <h1 className="text-2xl font-bold tracking-tight">
@@ -172,10 +173,16 @@ function DashboardHero({ profile, team }: { profile: UserProfile | null; team: T
       <p className="text-sm text-muted-foreground">
         {dateStr}{team?.name ? ` · ${team.name}` : ''}
       </p>
-      <p className="text-xs text-muted-foreground/60 italic pt-0.5">
-        &ldquo;{quote.text}&rdquo; — {quote.author}
-      </p>
     </div>
+  )
+}
+
+function DailyQuote() {
+  const quote = getDailyQuote()
+  return (
+    <p className="shrink-0 text-xs text-muted-foreground/60 italic md:max-w-xs md:pt-1 md:text-right">
+      &ldquo;{quote.text}&rdquo; — {quote.author}
+    </p>
   )
 }
 
@@ -290,20 +297,46 @@ function AgendaCard({ teamId }: { teamId: string | null }) {
 
 function QuickActions({ teamSlug }: { teamSlug?: string }) {
   const t = useTranslations('Dashboard')
+  const router = useRouter()
   const actions: { label: string; icon: React.ElementType; href: Route }[] = [
     { label: t('actionNewContact'), icon: UserPlus, href: '/contacts' as Route },
     { label: t('actionNewSession'), icon: Plus, href: '/sessions' as Route },
     { label: t('actionViewPortal'), icon: BookOpen, href: (teamSlug ? `/portal/${teamSlug}` : '/team/portal') as Route },
   ]
+
+  const chipClass =
+    'inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-sm hover:bg-muted/60 hover:shadow-md transition-all'
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {actions.map((a) => (
-        <Link key={String(a.href)} href={a.href}
-          className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-sm hover:bg-muted/60 hover:shadow-md transition-all">
-          <a.icon className="h-3.5 w-3.5 text-primary" />{a.label}
-        </Link>
-      ))}
-    </div>
+    <>
+      {/* ≥sm: individual action pills */}
+      <div className="hidden sm:flex flex-wrap gap-2">
+        {actions.map((a) => (
+          <Link key={String(a.href)} href={a.href} className={chipClass}>
+            <a.icon className="h-3.5 w-3.5 text-primary" />{a.label}
+          </Link>
+        ))}
+      </div>
+
+      {/* <sm: single "Quick actions" chip with a dropdown */}
+      <div className="sm:hidden">
+        <DropdownMenu>
+          <DropdownMenuTrigger className={chipClass}>
+            <Zap className="h-3.5 w-3.5 text-primary" />
+            {t('quickActions')}
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {actions.map((a) => (
+              <DropdownMenuItem key={String(a.href)} onClick={() => router.push(a.href)}>
+                <a.icon className="h-4 w-4 text-primary" />
+                {a.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </>
   )
 }
 
@@ -573,34 +606,37 @@ export default function DashboardPage() {
       {/* ── 0. Setup checklist (new teams only; auto-hides when done/dismissed) ── */}
       <SetupChecklist />
 
-      {/* ── 1. Agenda ── */}
+      {/* ── 1. Welcome row: greeting left, daily quote right ── */}
       <section className="space-y-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-6">
           <div className="flex items-start gap-1.5 min-w-0">
             <DashboardHero profile={profile} team={team} />
             <SectionIntro sectionKey="dashboard" />
           </div>
-          <div className="shrink-0 sm:pt-1">
-            <QuickActions teamSlug={teamSlug} />
-          </div>
+          <DailyQuote />
         </div>
+
+        {/* ── 2. Quick actions (single dropdown chip on very small screens) ── */}
+        <QuickActions teamSlug={teamSlug} />
+
+        {/* ── 3. Highlights ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard title={t('statEngaged')} value={engagedThisWeek} subtitle={t('statEngagedSub')}
+            icon={TrendingUp} loading={statsLoading} href="/contacts"
+            secondary={{ label: t('statEngagedPrev'), value: engagedPrevWeek }} />
+          <StatCard title={t('statBookings')} value={upcomingBookingsCount} subtitle={t('statBookingsSub')}
+            icon={BookOpen} loading={sessionsLoading} href="/bookings"
+            secondary={upcomingTrialsCount !== null ? { label: t('statBookingsTrial'), value: upcomingTrialsCount } : undefined} />
+          <StatCard title={t('statSubscribed')} value={internalSubCount} subtitle={t('statSubscribedSub')}
+            icon={CreditCard} loading={statsLoading} href="/contacts"
+            secondary={aggregatorSubCount !== null ? { label: t('statSubscribedAgg'), value: aggregatorSubCount } : undefined} />
+          <StatCard title={membershipTerm} value={activeMembers} subtitle={t('statActiveMembersSub')}
+            icon={Users} loading={statsLoading} href="/contacts" />
+        </div>
+
+        {/* ── 4. Agenda ── */}
         <AgendaCard teamId={currentTeamId} />
       </section>
-
-      {/* ── 2. Highlights ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title={t('statEngaged')} value={engagedThisWeek} subtitle={t('statEngagedSub')}
-          icon={TrendingUp} loading={statsLoading} href="/contacts"
-          secondary={{ label: t('statEngagedPrev'), value: engagedPrevWeek }} />
-        <StatCard title={t('statBookings')} value={upcomingBookingsCount} subtitle={t('statBookingsSub')}
-          icon={BookOpen} loading={sessionsLoading} href="/bookings"
-          secondary={upcomingTrialsCount !== null ? { label: t('statBookingsTrial'), value: upcomingTrialsCount } : undefined} />
-        <StatCard title={t('statSubscribed')} value={internalSubCount} subtitle={t('statSubscribedSub')}
-          icon={CreditCard} loading={statsLoading} href="/contacts"
-          secondary={aggregatorSubCount !== null ? { label: t('statSubscribedAgg'), value: aggregatorSubCount } : undefined} />
-        <StatCard title={membershipTerm} value={activeMembers} subtitle={t('statActiveMembersSub')}
-          icon={Users} loading={statsLoading} href="/contacts" />
-      </div>
 
       {/* ── 3. Contacts snapshot ── */}
       <section className="space-y-5">
