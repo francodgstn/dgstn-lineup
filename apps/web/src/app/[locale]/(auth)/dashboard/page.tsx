@@ -124,35 +124,43 @@ function useUpcomingSessions(teamId: string | null) {
 
 // ─── stat card ────────────────────────────────────────────────────────────────
 
+// One cell of the stats strip below. No individual card wrap — the parent strip
+// draws the frame and hairline dividers, so cells always share the row height.
 function StatCard({ title, value, subtitle, icon: Icon, loading, href, secondary }: {
   title: string; value: number | null | undefined; subtitle: string
   icon: React.ElementType; loading?: boolean; href?: string
   secondary?: { label: string; value: number | null }
 }) {
   const inner = (
-    <Card variant="accent" className={href ? 'hover:shadow-md transition-shadow cursor-pointer' : ''}>
-      <CardContent className="pt-3 pb-3">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
-          <Icon className="h-4 w-4 text-primary/60" />
-        </div>
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          {loading ? <Skeleton className="h-8 w-14" /> : (
-            <p className="text-3xl font-black leading-none">{value ?? '—'}</p>
-          )}
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
-            {secondary && (
-              <p className="text-xs text-muted-foreground/60">
-                +{secondary.value ?? '—'} {secondary.label}
-              </p>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex h-full flex-col gap-1.5 bg-card px-4 py-3 transition-colors hover:bg-muted/40">
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
+        <Icon className="h-4 w-4 shrink-0 text-primary/60" />
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        {loading ? <Skeleton className="h-7 w-12" /> : (
+          <p className="text-2xl font-black leading-none">{value ?? '—'}</p>
+        )}
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      </div>
+      {secondary && (
+        <p className="text-xs text-muted-foreground/60">
+          +{secondary.value ?? '—'} {secondary.label}
+        </p>
+      )}
+    </div>
   )
-  return href ? <Link href={href as Route}>{inner}</Link> : inner
+  return href ? <Link href={href as Route} className="h-full">{inner}</Link> : inner
+}
+
+// Frame for the StatCard cells: hairline dividers via gap-px over a border-
+// colored background; grid rows keep every cell the same height at any width.
+function StatsStrip({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border shadow-sm lg:grid-cols-4">
+      {children}
+    </div>
+  )
 }
 
 // ─── dashboard hero ───────────────────────────────────────────────────────────
@@ -624,7 +632,7 @@ export default function DashboardPage() {
         <QuickActions teamSlug={teamSlug} />
 
         {/* ── 3. Highlights ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatsStrip>
           <StatCard title={t('statEngaged')} value={engagedThisWeek} subtitle={t('statEngagedSub')}
             icon={TrendingUp} loading={statsLoading} href="/contacts"
             secondary={{ label: t('statEngagedPrev'), value: engagedPrevWeek }} />
@@ -636,7 +644,7 @@ export default function DashboardPage() {
             secondary={aggregatorSubCount !== null ? { label: t('statSubscribedAgg'), value: aggregatorSubCount } : undefined} />
           <StatCard title={membershipTerm} value={activeMembers} subtitle={t('statActiveMembersSub')}
             icon={Users} loading={statsLoading} href="/contacts" />
-        </div>
+        </StatsStrip>
 
         {/* ── 4. Agenda ── */}
         <AgendaCard teamId={currentTeamId} />
