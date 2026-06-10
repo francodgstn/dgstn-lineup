@@ -187,6 +187,8 @@ interface TeamSeed {
   plan: 'coach' | 'club' | 'organization'
   planStatus: 'trial' | 'active'
   accentColor: string
+  tagline: string                                 // portal home description (public_profile.description)
+  portalGradient: string                          // PORTAL_GRADIENTS key (apps/web/src/lib/portal.ts)
   contactCount: number
   orgId?: string                                  // set when the team is an org sub-club
   extraCoaches?: { uid: string; displayName: string; email: string }[]
@@ -195,7 +197,8 @@ interface TeamSeed {
 async function seedTeam(opts: TeamSeed) {
   const {
     uid, email, displayName, teamId, teamName, teamSlug,
-    plan, planStatus, accentColor, contactCount, orgId, extraCoaches = [],
+    plan, planStatus, accentColor, tagline, portalGradient,
+    contactCount, orgId, extraCoaches = [],
   } = opts
 
   const automationsEnabled = plan !== 'coach'
@@ -285,9 +288,14 @@ async function seedTeam(opts: TeamSeed) {
   // ── team doc ──────────────────────────────────────────────────────────────────
   const trialEndsAt = plan === 'coach' ? ts(daysFromNow(14)) : undefined
   const teamLanguage = 'en'
+  const portalLinks = [
+    { label: 'Book a Free Trial', description: "Try a class and see if it's right for you", isBookingLink: true,  isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
+    { label: 'Join as Member',    description: 'Join our community and become a member',    isBookingLink: false, isMembershipLink: true,  showInPortal: true, iconName: 'UserCheck',    url: null },
+  ]
+  const portalBackground = { type: 'gradient', color: portalGradient }
   await db.collection('teams').doc(teamId).set({
     name: teamName,
-    description: `${teamName} — managed with Linyup.`,
+    description: tagline,
     slug: teamSlug,
     sport_type: 'Martial arts',
     language: teamLanguage,
@@ -300,26 +308,20 @@ async function seedTeam(opts: TeamSeed) {
     settings: { gamification: gamificationSettings, teamEmail: email },
     portalTheme: 'light',
     portalAccentColor: accentColor,
-    portalBackground: { type: 'solid', color: '#ffffff' },
-    links: [
-      { label: 'Book a Free Trial', isBookingLink: true,  isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
-      { label: 'Join as Member',    isBookingLink: false, isMembershipLink: true,  showInPortal: true, iconName: 'UserCheck',    url: null },
-    ],
+    portalBackground,
+    links: portalLinks,
     socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
   })
 
   await db.collection('teams').doc(teamId).collection('public_profile').doc(teamId).set({
-    type: 'team', name: teamName, description: `${teamName} — managed with Linyup.`,
+    type: 'team', name: teamName, description: tagline,
     slug: teamSlug, sport_type: 'Martial arts',
     profileImage: null, heroImage: null,
     portalTheme: 'light', portalAccentColor: accentColor,
-    portalBackground: { type: 'solid', color: '#ffffff' },
+    portalBackground,
     socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
-    links: [
-      { label: 'Book a Free Trial', isBookingLink: true,  isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
-      { label: 'Join as Member',    isBookingLink: false, isMembershipLink: true,  showInPortal: true, iconName: 'UserCheck',    url: null },
-    ],
-    bookingSettings: { flowType: 'activity-first', windowMonths: 2, showPhone: true, ctaUrl: null, ctaLabel: null },
+    links: portalLinks,
+    bookingSettings: { flowType: 'activity-first', windowMonths: 2, showPhone: true, ctaUrl: null, ctaLabel: null, showActivityDescription: true },
     membershipRequiredFields: null, membershipOptionalFields: null,
     updated_at: ts(now()),
   })
@@ -347,29 +349,33 @@ async function seedTeam(opts: TeamSeed) {
 
   // ── activities (group classes + coaching) ─────────────────────────────────────
   const activities = [
-    { id: `${teamId}-act-bjj`,     name: 'Brazilian Jiu-Jitsu', slug: 'bjj',           color: accentColor, level: 'all',          isFreeTrial: true,  type: 'group_class' as const, base_score: 12 },
-    { id: `${teamId}-act-mma`,     name: 'MMA',                 slug: 'mma',           color: '#dc2626',   level: 'intermediate', isFreeTrial: false, type: 'group_class' as const, base_score: 15 },
-    { id: `${teamId}-act-kickbox`, name: 'Kickboxing',          slug: 'kickboxing',    color: '#ea580c',   level: 'all',          isFreeTrial: true,  type: 'group_class' as const, base_score: 10 },
-    { id: `${teamId}-act-yoga`,    name: 'Yoga & Mobility',     slug: 'yoga-mobility', color: '#059669',   level: 'all',          isFreeTrial: true,  type: 'group_class' as const, base_score: 8  },
+    { id: `${teamId}-act-bjj`,     name: 'Brazilian Jiu-Jitsu', slug: 'bjj',           color: accentColor, level: 'all',          isFreeTrial: true,  type: 'group_class' as const, base_score: 12, description: 'Gi grappling from fundamentals to advanced — positions, escapes and submissions.' },
+    { id: `${teamId}-act-mma`,     name: 'MMA',                 slug: 'mma',           color: '#dc2626',   level: 'intermediate', isFreeTrial: false, type: 'group_class' as const, base_score: 15, description: 'Striking-to-grappling transitions and cage craft for experienced athletes.' },
+    { id: `${teamId}-act-kickbox`, name: 'Kickboxing',          slug: 'kickboxing',    color: '#ea580c',   level: 'all',          isFreeTrial: true,  type: 'group_class' as const, base_score: 10, description: 'Pad work, combinations and conditioning — a serious workout for every level.' },
+    { id: `${teamId}-act-yoga`,    name: 'Yoga & Mobility',     slug: 'yoga-mobility', color: '#059669',   level: 'all',          isFreeTrial: true,  type: 'group_class' as const, base_score: 8,  description: 'Recovery-focused mobility and breath work to keep you on the mats.' },
   ]
   for (const a of activities) {
     await db.collection('activities').doc(a.id).set({ ...a, teamId, isActive: true, created_at: ts(daysFromNow(-200)) })
     await db.collection('activities').doc(a.id).collection('public_profile').doc(a.id).set({
       type: 'activity', teamId, name: a.name, slug: a.slug, color: a.color,
+      description: a.description,
       image_url: null, isFreeTrial: a.isFreeTrial, level: a.level,
     })
   }
 
   const coachingActId = `${teamId}-act-coaching`
   const coachingActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
+  const coachingActDescription = 'One-on-one session tailored to your goals — technique, strategy and conditioning.'
   await db.collection('activities').doc(coachingActId).set({
     teamId, name: coachingActName, slug: '1on1-coaching', color: accentColor,
+    description: coachingActDescription,
     type: 'coaching', coachId: uid, coachName: displayName, level: 'all',
     isFreeTrial: true, isActive: true, created_at: ts(daysFromNow(-180)),
   })
   await db.collection('activities').doc(coachingActId).collection('public_profile').doc(coachingActId).set({
     type: 'activity', teamId, name: coachingActName, slug: '1on1-coaching',
-    color: accentColor, image_url: null, isFreeTrial: true, level: 'all',
+    color: accentColor, description: coachingActDescription,
+    image_url: null, isFreeTrial: true, level: 'all',
   })
 
   // ── coach availability template + coaching sessions ───────────────────────────
@@ -1027,6 +1033,8 @@ async function main() {
     uid: 'seed-coach-uid', email: 'coach@linyup.com', displayName: 'Marco Rossi',
     teamId: 'seed-team-coach', teamName: 'Samurai Fight Academy', teamSlug: 'samurai-fight-academy',
     plan: 'coach', planStatus: 'trial', accentColor: '#7c3aed', contactCount: 15,
+    tagline: 'Traditional martial arts with a modern edge — disciplined training for body and mind.',
+    portalGradient: 'night',
   })
 
   // 2. Club plan — club with 2 coaches
@@ -1034,6 +1042,8 @@ async function main() {
     uid: 'seed-club-uid', email: 'club@linyup.com', displayName: 'Anna Schmidt',
     teamId: 'seed-team-club', teamName: 'Iron Circle Gym', teamSlug: 'iron-circle-gym',
     plan: 'club', planStatus: 'active', accentColor: '#dc2626', contactCount: 30,
+    tagline: 'Forge your fight game — BJJ, MMA and kickboxing under one roof, all levels welcome.',
+    portalGradient: 'warm',
     extraCoaches: [{ uid: 'seed-club-coach2-uid', displayName: 'Marco Silva', email: 'marco.silva@ironcircle.example.com' }],
   })
 
@@ -1042,12 +1052,16 @@ async function main() {
     uid: 'seed-org-uid', email: 'org@linyup.com', displayName: 'Rafael Torres',
     teamId: 'seed-org-club-a', teamName: 'Titan Combat Sports', teamSlug: 'titan-combat-sports',
     plan: 'organization', planStatus: 'active', accentColor: '#0284c7', contactCount: 20,
+    tagline: 'The Titan flagship — competition-grade grappling and MMA coaching for every level.',
+    portalGradient: 'royal',
     orgId: 'seed-org',
   })
   await seedTeam({
     uid: 'seed-org-coachb-uid', email: 'coach.b@titan.example.com', displayName: 'Diego Fernández',
     teamId: 'seed-org-club-b', teamName: 'Titan Striking Lab', teamSlug: 'titan-striking-lab',
     plan: 'organization', planStatus: 'active', accentColor: '#0d9488', contactCount: 18,
+    tagline: 'Precision striking — kickboxing technique, pad work and fight-camp conditioning.',
+    portalGradient: 'ocean',
     orgId: 'seed-org',
   })
   await seedOrg({
