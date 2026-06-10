@@ -1330,7 +1330,7 @@ export default function AutomationsPage() {
     <PlanGate minPlan="club">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
               <Workflow className="h-6 w-6" />
@@ -1340,7 +1340,7 @@ export default function AutomationsPage() {
               Trigger emails and alerts automatically based on contact activity.
             </p>
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
             <Button variant="outline" size="sm" onClick={() => setTemplateDialogOpen(true)}>
               <FileText className="h-4 w-4 mr-1.5" />Templates
             </Button>

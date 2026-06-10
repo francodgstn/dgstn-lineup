@@ -5,7 +5,7 @@
  * creates SIX fully-populated **Club**-plan accounts spanning different sectors —
  * three sport, three wellness — so the public /try playground shows real variety.
  *
- *   grappling@linyup.com  / linyup123  →  Apex Grappling Academy   (sport · martial arts)
+ *   grappling@linyup.com  / linyup123  →  Ronin Grappling Academy   (sport · martial arts)
  *   crossfit@linyup.com   / linyup123  →  Forge CrossFit           (sport · fitness)
  *   tennis@linyup.com     / linyup123  →  Baseline Tennis Academy  (sport · tennis)
  *   yoga@linyup.com       / linyup123  →  Lotus Yoga Studio        (wellness · yoga)
@@ -210,7 +210,7 @@ const SECTOR_PROFILES: SectorProfile[] = [
   // ── SPORT ──────────────────────────────────────────────────────────────────
   {
     key: 'grappling', sector: 'sport',
-    ownerName: 'Marco Silva', teamName: 'Apex Grappling Academy', teamSlug: 'apex-grappling-academy',
+    ownerName: 'Marco Silva', teamName: 'Ronin Grappling Academy', teamSlug: 'ronin-grappling-academy',
     sportType: 'Martial arts', accentColor: '#dc2626', instructors: ['Marco Silva', 'Elena Rossi'],
     description: 'BJJ and no-gi grappling for all levels — from your first class to the competition team.',
     portalGradient: 'night',
@@ -232,7 +232,7 @@ const SECTOR_PROFILES: SectorProfile[] = [
     locations: ['Mat Room A', 'Mat Room B', 'Main Hall'],
     events: [
       { title: 'Regional Gi Open',       type: 'competition', startOffset: 45, durationH: 8,  fee: 35, location: 'Sports Arena Geneva',  description: 'Regional IBJJF-style tournament — gi divisions for all belts.' },
-      { title: 'No-Gi Throwdown',        type: 'competition', startOffset: 70, durationH: 6,  fee: 25, location: 'Apex Main Hall',       description: 'In-house no-gi rounds with prizes. All levels welcome.' },
+      { title: 'No-Gi Throwdown',        type: 'competition', startOffset: 70, durationH: 6,  fee: 25, location: 'Ronin Main Hall',       description: 'In-house no-gi rounds with prizes. All levels welcome.' },
       { title: 'Guard Retention Seminar', type: 'seminar',    startOffset: 14, durationH: 3,  fee: 40, location: 'Mat Room A',           description: 'Guest black-belt seminar on modern guard retention.' },
     ],
     goals: [

@@ -1151,9 +1151,9 @@
     "referralsNavLabel": "Referrals",
     "referralsTriggerCreated": "Referral created",
     "referralsTriggerRewarded": "Referral rewarded",
-    "clubCoursesName": "Club Courses",
+    "clubCoursesName": "Online Courses",
     "clubCoursesDescription": "Create and publish online courses with text, audio and video lessons for your members.",
-    "clubCoursesNavLabel": "Courses",
+    "clubCoursesNavLabel": "Online Courses",
     "categoryContent": "Content",
     "navSectionPlugins": "Plugins",
     "gamificationName": "Gamification",
@@ -1341,7 +1341,7 @@
     "processing": "Processing…"
   },
   "Courses": {
-    "title": "Courses",
+    "title": "Online Courses",
     "subtitle": "Build and publish online courses for your members.",
     "newCourse": "New course",
     "quotaCourses": "{count} / {max} courses",

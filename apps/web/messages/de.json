@@ -1146,9 +1146,9 @@
     "referralsNavLabel": "Empfehlungen",
     "referralsTriggerCreated": "Empfehlung erstellt",
     "referralsTriggerRewarded": "Empfehlung belohnt",
-    "clubCoursesName": "Club-Kurse",
+    "clubCoursesName": "Online-Kurse",
     "clubCoursesDescription": "Erstelle und veröffentliche Online-Kurse mit Text-, Audio- und Videolektionen für deine Mitglieder.",
-    "clubCoursesNavLabel": "Kurse",
+    "clubCoursesNavLabel": "Online-Kurse",
     "categoryContent": "Inhalte",
     "navSectionPlugins": "Plugins",
     "gamificationName": "Gamification",
@@ -1336,7 +1336,7 @@
     "processing": "Wird verarbeitet…"
   },
   "Courses": {
-    "title": "Kurse",
+    "title": "Online-Kurse",
     "subtitle": "Erstelle und veröffentliche Online-Kurse für deine Mitglieder.",
     "newCourse": "Neuer Kurs",
     "quotaCourses": "{count} / {max} Kurse",

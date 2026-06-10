@@ -1146,9 +1146,9 @@
     "referralsNavLabel": "Parrainages",
     "referralsTriggerCreated": "Parrainage créé",
     "referralsTriggerRewarded": "Parrainage récompensé",
-    "clubCoursesName": "Cours du club",
+    "clubCoursesName": "Cours en ligne",
     "clubCoursesDescription": "Créez et publiez des cours en ligne avec des leçons texte, audio et vidéo pour vos membres.",
-    "clubCoursesNavLabel": "Cours",
+    "clubCoursesNavLabel": "Cours en ligne",
     "categoryContent": "Contenu",
     "navSectionPlugins": "Plugins",
     "gamificationName": "Gamification",
@@ -1336,7 +1336,7 @@
     "processing": "Traitement…"
   },
   "Courses": {
-    "title": "Cours",
+    "title": "Cours en ligne",
     "subtitle": "Créez et publiez des cours en ligne pour vos membres.",
     "newCourse": "Nouveau cours",
     "quotaCourses": "{count} / {max} cours",

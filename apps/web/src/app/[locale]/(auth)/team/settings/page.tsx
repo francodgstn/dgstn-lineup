@@ -1729,13 +1729,13 @@ export default function TeamSettingsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">{team.name}</p>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-0.5 border-b">
+      {/* Tab bar — scrolls horizontally on narrow screens instead of overflowing the page */}
+      <div className="flex gap-0.5 border-b overflow-x-auto">
         {TABS.map((tb) => (
           <button
             key={tb.id}
             onClick={() => setTab(tb.id)}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+            className={`shrink-0 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
               tab === tb.id
                 ? 'border-primary text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'

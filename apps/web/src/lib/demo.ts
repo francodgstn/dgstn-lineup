@@ -33,7 +33,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
   // ── sport ──────────────────────────────────────────────────────────────────
   {
     key: 'grappling', email: 'grappling@linyup.com',
-    teamName: 'Apex Grappling Academy', sector: 'sport', sportType: 'Martial arts',
+    teamName: 'Ronin Grappling Academy', sector: 'sport', sportType: 'Martial arts',
     blurb: 'A BJJ & no-gi gym with belt ranks, tournaments and packed mat schedules.',
     accent: '#dc2626',
   },
