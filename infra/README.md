@@ -226,7 +226,7 @@ terraform apply        # re-run if Firebase resources fail once (async API enabl
 #     automated by .github/workflows/deploy-sandbox.yml on push to main). A fresh
 #     Firestore DB ships locked (deny-all), so the client sees nothing until the
 #     repo rules are deployed:
-firebase deploy --only firestore,storage,functions,database --project sandbox
+firebase deploy --only firestore,storage,functions --project sandbox
 
 # 2. Secrets (same IDs as staging; demo can reuse test Stripe/SMTP keys)
 echo -n "<value>" | gcloud secrets versions add stripe-secret-key --project=linyup-sandbox --data-file=-
