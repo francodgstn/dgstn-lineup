@@ -87,8 +87,9 @@ export default ({ config }) => {
     },
     android: {
       adaptiveIcon: {
+        // Foreground is a white swoosh on transparency — bg must be brand purple
         foregroundImage: './assets/adaptive-icon.png',
-        backgroundColor: '#ffffff'
+        backgroundColor: '#6d28d9'
       },
       package: 'com.dgstn.linyup',
       edgeToEdgeEnabled: true,
