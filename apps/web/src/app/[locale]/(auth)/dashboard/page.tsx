@@ -575,12 +575,12 @@ export default function DashboardPage() {
 
       {/* ── 1. Agenda ── */}
       <section className="space-y-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-1.5 min-w-0">
             <DashboardHero profile={profile} team={team} />
             <SectionIntro sectionKey="dashboard" />
           </div>
-          <div className="shrink-0 pt-1">
+          <div className="shrink-0 sm:pt-1">
             <QuickActions teamSlug={teamSlug} />
           </div>
         </div>
