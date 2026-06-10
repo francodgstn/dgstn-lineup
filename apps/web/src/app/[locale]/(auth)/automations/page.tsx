@@ -26,7 +26,7 @@ import { PlanGate } from '@/components/plan/PlanGate'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Separator } from '@/components/ui/separator'
 import {
-  Workflow, Plus, Pencil, Play, Trash2, MoreVertical,
+  Workflow, Plus, Pencil, Play, Trash2, MoreVertical, CirclePause, CirclePlay,
   Clock, UserPlus, CheckCircle, XCircle,
   CalendarCheck, ShieldCheck, CreditCard, Mail, Bell,
   FileText, Settings2, Zap, RefreshCw, Sparkles, BookOpen,
@@ -318,7 +318,9 @@ function RuleCard({
                 <Pencil className="h-3.5 w-3.5 mr-2" />Edit
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onToggle}>
-                {rule.active ? 'Pause' : 'Activate'}
+                {rule.active
+                  ? <><CirclePause className="h-3.5 w-3.5 mr-2" />Pause</>
+                  : <><CirclePlay className="h-3.5 w-3.5 mr-2" />Activate</>}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleRunNow} disabled={running}>
                 <Play className="h-3.5 w-3.5 mr-2" />{running ? 'Running…' : 'Run now'}
