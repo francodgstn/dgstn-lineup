@@ -63,10 +63,10 @@ import { ContactsSummaryCard } from '@/components/dashboard/ContactsSummaryCard'
 import { BookingsTrendCard } from '@/components/dashboard/BookingsTrendCard'
 import { SessionsHeatmapCard } from '@/components/dashboard/SessionsHeatmapCard'
 import { TopActivitiesCard } from '@/components/dashboard/TopActivitiesCard'
-import { TrialFunnelCard } from '@/components/dashboard/TrialFunnelCard'
-import { WeeklyTrendsCard } from '@/components/dashboard/WeeklyTrendsCard'
-import { CorrelationExplorerCard } from '@/components/dashboard/CorrelationExplorerCard'
 import { EngagementMatrixCard } from '@/components/dashboard/EngagementMatrixCard'
+// Temporarily hidden — restore alongside the commented rows in TrendsSection:
+// import { TrialFunnelCard } from '@/components/dashboard/TrialFunnelCard'
+// import { CorrelationExplorerCard } from '@/components/dashboard/CorrelationExplorerCard'
 import { DiscoverPanel } from '@/components/dashboard/DiscoverPanel'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -649,9 +649,9 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
         </div>
       </div>
 
-      {/* Row 1: TopActivities + Heatmap */}
+      {/* Row 1: TopActivities + Heatmap + Engagement matrix */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-4">
+        <div className="lg:col-span-3">
           <TopActivitiesCard
             sessions={data.sessions}
             allBookings={data.allBookings}
@@ -663,7 +663,7 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
             compareWith={compareWith}
           />
         </div>
-        <div className="lg:col-span-8">
+        <div className="lg:col-span-5">
           <SessionsHeatmapCard
             sessions={data.sessions}
             newContactBookings={data.newContactBookings}
@@ -671,6 +671,9 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
             comparisonSessions={data.comparisonSessions}
             comparisonNewContactBookings={data.comparisonNewContactBookings}
           />
+        </div>
+        <div className="lg:col-span-4">
+          <EngagementMatrixCard weeklyReports={data.weeklyReports} trendsWeeks={trendsWeeks} />
         </div>
       </div>
 
@@ -695,18 +698,14 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
         />
       </div>
 
-      {/* Row 3: Trial funnel + Weekly trends */}
+      {/* Temporarily hidden — restore the imports above to bring these back:
+         Trial conversion + Correlation explorer.
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TrialFunnelCard
           weeklyReports={data.weeklyReports}
           comparisonWeeklyReports={data.comparisonWeeklyReports}
           {...sharedProps}
         />
-        <WeeklyTrendsCard weeklyReports={data.weeklyReports} trendsWeeks={trendsWeeks} />
-      </div>
-
-      {/* Row 4: Correlation explorer + Engagement matrix */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <CorrelationExplorerCard
           weeklyReports={data.weeklyReports}
           sessions={data.sessions}
@@ -714,8 +713,8 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
           newContactBookings={data.newContactBookings}
           trendsWeeks={trendsWeeks}
         />
-        <EngagementMatrixCard weeklyReports={data.weeklyReports} trendsWeeks={trendsWeeks} />
       </div>
+      */}
     </div>
   )
 }
