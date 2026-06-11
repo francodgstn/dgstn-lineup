@@ -17,6 +17,7 @@ export const onlineCoursesManifest: PluginManifest = {
       labelKey: 'onlineCoursesNavLabel',
       icon: 'GraduationCap',
       minPlan: 'studio',
+      section: 'engage',
     },
   ],
 }

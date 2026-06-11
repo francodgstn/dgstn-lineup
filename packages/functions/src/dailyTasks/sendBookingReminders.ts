@@ -23,7 +23,7 @@ interface TeamReminderSettings {
 
 async function getTeamReminderSettings(
   db: admin.firestore.Firestore,
-  teamId: string,
+  teamId: string
 ): Promise<TeamReminderSettings> {
   const [, teamDoc] = await to(db.collection(TEAMS_COLLECTION).doc(teamId).get())
   if (teamDoc?.exists) {
@@ -65,7 +65,7 @@ export async function sendBookingReminders(): Promise<{
       .collection(SESSIONS_COLLECTION)
       .where('start', '>=', Timestamp.fromDate(windowStart))
       .where('start', '<', Timestamp.fromDate(windowEnd))
-      .get(),
+      .get()
   )
 
   if (sessionsErr) {
@@ -94,13 +94,16 @@ export async function sendBookingReminders(): Promise<{
     const team = teamCache[teamId]
 
     if (!team.enabled) {
-      console.log(`sendBookingReminders: reminders disabled for team ${teamId}, skipping session ${sessionId}`) // eslint-disable-line no-console
+      console.log(
+        `sendBookingReminders: reminders disabled for team ${teamId}, skipping session ${sessionId}`
+      ) // eslint-disable-line no-console
       skipped++
       continue
     }
 
     // Check if this session falls within the team's configured reminder window (±12h tolerance)
-    const hoursUntilSession = (sessionData.start.toDate().getTime() - now.getTime()) / (60 * 60 * 1000)
+    const hoursUntilSession =
+      (sessionData.start.toDate().getTime() - now.getTime()) / (60 * 60 * 1000)
     if (hoursUntilSession < team.hours - 12 || hoursUntilSession >= team.hours + 12) {
       skipped++
       continue
@@ -108,7 +111,10 @@ export async function sendBookingReminders(): Promise<{
 
     const [bookingsErr, bookingsSnap] = await to(sessionDoc.ref.collection('bookings').get())
     if (bookingsErr) {
-      console.error(`sendBookingReminders: error fetching bookings for session ${sessionId}:`, bookingsErr) // eslint-disable-line no-console
+      console.error(
+        `sendBookingReminders: error fetching bookings for session ${sessionId}:`,
+        bookingsErr
+      ) // eslint-disable-line no-console
       errors++
       continue
     }
@@ -120,7 +126,10 @@ export async function sendBookingReminders(): Promise<{
     let activityName = 'Session'
     if (sessionData.activityId) {
       const [, activityDoc] = await to(
-        db.collection(ACTIVITIES_COLLECTION).doc(sessionData.activityId as string).get(),
+        db
+          .collection(ACTIVITIES_COLLECTION)
+          .doc(sessionData.activityId as string)
+          .get()
       )
       if (activityDoc?.exists) activityName = (activityDoc.data()?.name as string) || activityName
     }
@@ -137,7 +146,7 @@ export async function sendBookingReminders(): Promise<{
           .collection(TEAM_PLACES_SUBCOLLECTION)
           .where('label', '==', locationName)
           .limit(1)
-          .get(),
+          .get()
       )
       if (placesSnap && !placesSnap.empty) {
         locationAddress = (placesSnap.docs[0].data().address as string) || null
@@ -160,7 +169,7 @@ export async function sendBookingReminders(): Promise<{
         const bookingToken = (booking.booking_token as string) || null
         const manageBookingUrl =
           team.slug && bookingToken
-            ? `${getHostingUrl()}/portal/${team.slug}/manage-booking?token=${bookingToken}`
+            ? `${getHostingUrl()}/public/bio-link/${team.slug}/manage-booking?token=${bookingToken}`
             : null
 
         const { html, text } = buildBookingReminderEmail({
@@ -186,9 +195,14 @@ export async function sendBookingReminders(): Promise<{
         await bookingDoc.ref.update({ reminderSentAt: FieldValue.serverTimestamp() })
 
         sent++
-        console.log(`sendBookingReminders: reminder sent to ${booking.email} for session ${sessionId}`) // eslint-disable-line no-console
+        console.log(
+          `sendBookingReminders: reminder sent to ${booking.email} for session ${sessionId}`
+        ) // eslint-disable-line no-console
       } catch (err) {
-        console.error(`sendBookingReminders: error sending to ${booking.email}:`, (err as Error).message || err) // eslint-disable-line no-console
+        console.error(
+          `sendBookingReminders: error sending to ${booking.email}:`,
+          (err as Error).message || err
+        ) // eslint-disable-line no-console
         errors++
       }
     }

@@ -2,14 +2,21 @@
 
 import { useQuery } from '@tanstack/react-query'
 import {
-  collection, query, where, orderBy, getDocs,
-  collectionGroup, Timestamp,
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  collectionGroup,
+  Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { subWeeks, addWeeks } from 'date-fns'
 import { dateToIsoWeek } from '@/lib/isoWeek'
 import {
-  TEAMS_COLLECTION, SESSIONS_COLLECTION, ACTIVITIES_COLLECTION,
+  TEAMS_COLLECTION,
+  SESSIONS_COLLECTION,
+  ACTIVITIES_COLLECTION,
   TEAM_WEEKLY_REPORTS_SUBCOLLECTION,
 } from '@linyup/shared'
 
@@ -35,8 +42,8 @@ export interface SessionDoc {
   start: { toDate(): Date }
   end?: { toDate(): Date }
   participants_count?: number
-  portal_bookings_count?: number
-  portal_new_contact_bookings_count?: number
+  bio_link_bookings_count?: number
+  bio_link_new_contact_bookings_count?: number
   cancelled_at?: { toDate(): Date } | null
 }
 
@@ -84,14 +91,14 @@ function periodStart(weeksBack: number): Date {
 export function useDashboardData(
   teamId: string | null,
   trendsWeeks = 13,
-  compareWith: 'none' | 'prev_period' | 'last_year' = 'none',
+  compareWith: 'none' | 'prev_period' | 'last_year' = 'none'
 ): DashboardData {
   const comparisonOffset = compareWith === 'last_year' ? 52 : trendsWeeks
   const isComparing = compareWith !== 'none'
 
   const mainStart = periodStart(trendsWeeks)
   const compStart = isComparing ? periodStart(trendsWeeks + comparisonOffset) : null
-  const compEnd   = compStart ? addWeeks(compStart, trendsWeeks) : null
+  const compEnd = compStart ? addWeeks(compStart, trendsWeeks) : null
 
   const minIsoWeek = dateToIsoWeek(mainStart)
   const extMinIsoWeek = compStart ? dateToIsoWeek(compStart) : minIsoWeek
@@ -101,12 +108,14 @@ export function useDashboardData(
     enabled: !!teamId,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const snap = await getDocs(query(
-        collection(db, TEAMS_COLLECTION, teamId!, TEAM_WEEKLY_REPORTS_SUBCOLLECTION),
-        where('iso_week', '>=', extMinIsoWeek),
-        orderBy('iso_week', 'asc'),
-      ))
-      return snap.docs.map((d) => ({ iso_week: d.id, ...d.data() } as WeeklyReport))
+      const snap = await getDocs(
+        query(
+          collection(db, TEAMS_COLLECTION, teamId!, TEAM_WEEKLY_REPORTS_SUBCOLLECTION),
+          where('iso_week', '>=', extMinIsoWeek),
+          orderBy('iso_week', 'asc')
+        )
+      )
+      return snap.docs.map((d) => ({ iso_week: d.id, ...d.data() }) as WeeklyReport)
     },
   })
 
@@ -115,14 +124,17 @@ export function useDashboardData(
     enabled: !!teamId,
     staleTime: 2 * 60 * 1000,
     queryFn: async () => {
-      const snap = await getDocs(query(
-        collection(db, SESSIONS_COLLECTION),
-        where('teamId', '==', teamId),
-        where('start', '>=', Timestamp.fromDate(mainStart)),
-        where('start', '<', Timestamp.fromDate(new Date())),
-        orderBy('start', 'asc'),
-      ))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as SessionDoc))
+      const snap = await getDocs(
+        query(
+          collection(db, SESSIONS_COLLECTION),
+          where('teamId', '==', teamId),
+          where('start', '>=', Timestamp.fromDate(mainStart)),
+          where('start', '<', Timestamp.fromDate(new Date())),
+          orderBy('start', 'asc')
+        )
+      )
+      return snap.docs
+        .map((d) => ({ ...d.data(), id: d.id }) as SessionDoc)
         .filter((s) => !s.cancelled_at)
     },
   })
@@ -132,14 +144,17 @@ export function useDashboardData(
     enabled: !!teamId && isComparing && !!compStart,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const snap = await getDocs(query(
-        collection(db, SESSIONS_COLLECTION),
-        where('teamId', '==', teamId),
-        where('start', '>=', Timestamp.fromDate(compStart!)),
-        where('start', '<', Timestamp.fromDate(compEnd!)),
-        orderBy('start', 'asc'),
-      ))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as SessionDoc))
+      const snap = await getDocs(
+        query(
+          collection(db, SESSIONS_COLLECTION),
+          where('teamId', '==', teamId),
+          where('start', '>=', Timestamp.fromDate(compStart!)),
+          where('start', '<', Timestamp.fromDate(compEnd!)),
+          orderBy('start', 'asc')
+        )
+      )
+      return snap.docs
+        .map((d) => ({ ...d.data(), id: d.id }) as SessionDoc)
         .filter((s) => !s.cancelled_at)
     },
   })
@@ -149,13 +164,15 @@ export function useDashboardData(
     enabled: !!teamId,
     staleTime: 2 * 60 * 1000,
     queryFn: async () => {
-      const snap = await getDocs(query(
-        collectionGroup(db, 'bookings'),
-        where('teamId', '==', teamId),
-        where('joinedAt', '>=', Timestamp.fromDate(mainStart)),
-        orderBy('joinedAt', 'asc'),
-      ))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as BookingDoc))
+      const snap = await getDocs(
+        query(
+          collectionGroup(db, 'bookings'),
+          where('teamId', '==', teamId),
+          where('joinedAt', '>=', Timestamp.fromDate(mainStart)),
+          orderBy('joinedAt', 'asc')
+        )
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as BookingDoc)
     },
   })
 
@@ -164,14 +181,16 @@ export function useDashboardData(
     enabled: !!teamId,
     staleTime: 2 * 60 * 1000,
     queryFn: async () => {
-      const snap = await getDocs(query(
-        collectionGroup(db, 'bookings'),
-        where('teamId', '==', teamId),
-        where('is_new_contact', '==', true),
-        where('joinedAt', '>=', Timestamp.fromDate(mainStart)),
-        orderBy('joinedAt', 'asc'),
-      ))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as BookingDoc))
+      const snap = await getDocs(
+        query(
+          collectionGroup(db, 'bookings'),
+          where('teamId', '==', teamId),
+          where('is_new_contact', '==', true),
+          where('joinedAt', '>=', Timestamp.fromDate(mainStart)),
+          orderBy('joinedAt', 'asc')
+        )
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as BookingDoc)
     },
   })
 
@@ -180,14 +199,16 @@ export function useDashboardData(
     enabled: !!teamId && isComparing && !!compStart,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const snap = await getDocs(query(
-        collectionGroup(db, 'bookings'),
-        where('teamId', '==', teamId),
-        where('joinedAt', '>=', Timestamp.fromDate(compStart!)),
-        where('joinedAt', '<', Timestamp.fromDate(compEnd!)),
-        orderBy('joinedAt', 'asc'),
-      ))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as BookingDoc))
+      const snap = await getDocs(
+        query(
+          collectionGroup(db, 'bookings'),
+          where('teamId', '==', teamId),
+          where('joinedAt', '>=', Timestamp.fromDate(compStart!)),
+          where('joinedAt', '<', Timestamp.fromDate(compEnd!)),
+          orderBy('joinedAt', 'asc')
+        )
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as BookingDoc)
     },
   })
 
@@ -196,15 +217,17 @@ export function useDashboardData(
     enabled: !!teamId && isComparing && !!compStart,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const snap = await getDocs(query(
-        collectionGroup(db, 'bookings'),
-        where('teamId', '==', teamId),
-        where('is_new_contact', '==', true),
-        where('joinedAt', '>=', Timestamp.fromDate(compStart!)),
-        where('joinedAt', '<', Timestamp.fromDate(compEnd!)),
-        orderBy('joinedAt', 'asc'),
-      ))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as BookingDoc))
+      const snap = await getDocs(
+        query(
+          collectionGroup(db, 'bookings'),
+          where('teamId', '==', teamId),
+          where('is_new_contact', '==', true),
+          where('joinedAt', '>=', Timestamp.fromDate(compStart!)),
+          where('joinedAt', '<', Timestamp.fromDate(compEnd!)),
+          orderBy('joinedAt', 'asc')
+        )
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as BookingDoc)
     },
   })
 
@@ -213,11 +236,10 @@ export function useDashboardData(
     enabled: !!teamId,
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
-      const snap = await getDocs(query(
-        collection(db, ACTIVITIES_COLLECTION),
-        where('teamId', '==', teamId),
-      ))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as ActivityDoc))
+      const snap = await getDocs(
+        query(collection(db, ACTIVITIES_COLLECTION), where('teamId', '==', teamId))
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ActivityDoc)
     },
   })
 
@@ -226,18 +248,21 @@ export function useDashboardData(
     enabled: !!teamId,
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
-      const snap = await getDocs(query(
-        collection(db, TEAMS_COLLECTION, teamId!, 'subscription_types'),
-        orderBy('name', 'asc'),
-      ))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as SubscriptionTypeDoc))
+      const snap = await getDocs(
+        query(
+          collection(db, TEAMS_COLLECTION, teamId!, 'subscription_types'),
+          orderBy('name', 'asc')
+        )
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as SubscriptionTypeDoc)
     },
   })
 
   const weeklyReports = allReports.filter((r) => r.iso_week >= minIsoWeek)
-  const comparisonWeeklyReports = isComparing && compStart
-    ? allReports.filter((r) => r.iso_week >= dateToIsoWeek(compStart) && r.iso_week < minIsoWeek)
-    : []
+  const comparisonWeeklyReports =
+    isComparing && compStart
+      ? allReports.filter((r) => r.iso_week >= dateToIsoWeek(compStart) && r.iso_week < minIsoWeek)
+      : []
 
   return {
     weeklyReports,

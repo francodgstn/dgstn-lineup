@@ -42,9 +42,9 @@ export function substituteVariables(
   const reviewUrl = socialLinks.find((l) => l.platform === 'review')?.url || ''
 
   const urlMap: Record<string, string> = {
-    bookingUrl: slug ? `${baseUrl}/portal/${slug}/booking` : '',
-    membershipUrl: slug ? `${baseUrl}/portal/${slug}/membership-signup` : '',
-    portalUrl: slug ? `${baseUrl}/portal/${slug}` : '',
+    bookingUrl: slug ? `${baseUrl}/public/bio-link/${slug}/booking` : '',
+    membershipUrl: slug ? `${baseUrl}/public/bio-link/${slug}/membership-signup` : '',
+    portalUrl: slug ? `${baseUrl}/public/bio-link/${slug}` : '',
     websiteUrl,
     reviewUrl,
   }
@@ -55,11 +55,15 @@ export function substituteVariables(
     .replaceAll('{{teamName}}', teamName || '')
     .replaceAll(
       '{{contact_type}}',
-      CONTACT_TYPE_LABELS[(contact.contact_type as string) || ''] || (contact.contact_type as string) || ''
+      CONTACT_TYPE_LABELS[(contact.contact_type as string) || ''] ||
+        (contact.contact_type as string) ||
+        ''
     )
     .replaceAll(
       '{{membership_status}}',
-      MEMBERSHIP_STATUS_LABELS[(contact.membership_status as string) || ''] || (contact.membership_status as string) || ''
+      MEMBERSHIP_STATUS_LABELS[(contact.membership_status as string) || ''] ||
+        (contact.membership_status as string) ||
+        ''
     )
     .replaceAll('{{sessions_count}}', String((contact.total_sessions as number) ?? 0))
     .replace(/\{\{date([+-]\d+)?\}\}/g, (_, offset) => {
@@ -82,8 +86,10 @@ export function buildTeamFooter(teamData: TeamDataLike = {}, language = 'en'): s
   const links: string[] = []
   const website = socialLinks.find((l) => l.platform === 'website')?.url
   if (website) links.push(`<a href="${website}">Website</a>`)
-  if (settings.legalGtcUrl) links.push(`<a href="${settings.legalGtcUrl as string}">Terms &amp; Conditions</a>`)
-  if (settings.legalPrivacyUrl) links.push(`<a href="${settings.legalPrivacyUrl as string}">Privacy Policy</a>`)
+  if (settings.legalGtcUrl)
+    links.push(`<a href="${settings.legalGtcUrl as string}">Terms &amp; Conditions</a>`)
+  if (settings.legalPrivacyUrl)
+    links.push(`<a href="${settings.legalPrivacyUrl as string}">Privacy Policy</a>`)
   const linkLine = links.length ? `<p>${links.join(' &nbsp;·&nbsp; ')}</p>` : ''
   const teamEmail = (settings.teamEmail as string) || ''
   const emailLine = teamEmail

@@ -78,7 +78,7 @@ function isoWeekLabel(date: Date): string {
   const dayNum = d.getUTCDay() || 7
   d.setUTCDate(d.getUTCDate() + 4 - dayNum)
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
   return `${d.getUTCFullYear()}-W${week.toString().padStart(2, '0')}`
 }
 
@@ -129,38 +129,358 @@ interface PoolEntry {
 }
 
 const CONTACT_POOL: PoolEntry[] = [
-  { firstname: 'Luca',      lastname: 'Ferrari',    gender: 'M', birthYear: 1992, birthplace: 'Milan',     type: 'student',  status: 'active',       totalSessions: 142, sub: 'monthly'    },
-  { firstname: 'Sofia',     lastname: 'Bianchi',    gender: 'F', birthYear: 1995, birthplace: 'Rome',      type: 'student',  status: 'active',       totalSessions: 88,  sub: 'annual'     },
-  { firstname: 'Alex',      lastname: 'Müller',     gender: 'M', birthYear: 1988, birthplace: 'Zurich',    type: 'student',  status: 'active',       totalSessions: 210, sub: 'monthly'    },
-  { firstname: 'Chiara',    lastname: 'Romano',     gender: 'F', birthYear: 1999, birthplace: 'Naples',    type: 'student',  status: 'active',       totalSessions: 34,  sub: 'monthly'    },
-  { firstname: 'Matteo',    lastname: 'Esposito',   gender: 'M', birthYear: 1990, birthplace: 'Turin',     type: 'student',  status: 'active',       totalSessions: 121, sub: 'annual'     },
-  { firstname: 'Julia',     lastname: 'Weber',      gender: 'F', birthYear: 2000, birthplace: 'Basel',     type: 'student',  status: 'almost_ready', totalSessions: 7,   sub: 'dropin'     },
-  { firstname: 'David',     lastname: 'Costa',      gender: 'M', birthYear: 1993, birthplace: 'Lisbon',    type: 'student',  status: 'active',       totalSessions: 56,  sub: 'aggregator' },
-  { firstname: 'Lorenzo',   lastname: 'De Luca',    gender: 'M', birthYear: 2003, birthplace: 'Palermo',   type: 'trial',    status: 'requested',    totalSessions: 1,   sub: null         },
-  { firstname: 'Sara',      lastname: 'Ricci',      gender: 'F', birthYear: 1994, birthplace: 'Bologna',   type: 'student',  status: 'expired',      totalSessions: 41,  sub: null         },
-  { firstname: 'Hannah',    lastname: 'Fischer',    gender: 'F', birthYear: 1997, birthplace: 'Bern',      type: 'external', status: 'guest',        totalSessions: 0,   sub: null         },
-  { firstname: 'Emma',      lastname: 'Schneider',  gender: 'F', birthYear: 2001, birthplace: 'Geneva',    type: 'student',  status: 'active',       totalSessions: 29,  sub: 'monthly'    },
-  { firstname: 'Radu',      lastname: 'Ionescu',    gender: 'M', birthYear: 1987, birthplace: 'Bucharest', type: 'student',  status: 'active',       totalSessions: 175, sub: 'annual'     },
-  { firstname: 'Nina',      lastname: 'Moreau',     gender: 'F', birthYear: 1991, birthplace: 'Paris',     type: 'student',  status: 'active',       totalSessions: 96,  sub: 'monthly'    },
-  { firstname: 'Kevin',     lastname: 'Nguyen',     gender: 'M', birthYear: 1998, birthplace: 'Lyon',      type: 'trial',    status: 'under_review', totalSessions: 2,   sub: null         },
-  { firstname: 'Tobias',    lastname: 'Huber',      gender: 'M', birthYear: 1996, birthplace: 'Lucerne',   type: 'student',  status: 'active',       totalSessions: 48,  sub: 'monthly'    },
-  { firstname: 'Valentina', lastname: 'Greco',      gender: 'F', birthYear: 1993, birthplace: 'Catania',   type: 'student',  status: 'active',       totalSessions: 63,  sub: 'quarterly'  },
-  { firstname: 'Marco',     lastname: 'Conti',      gender: 'M', birthYear: 1997, birthplace: 'Florence',  type: 'student',  status: 'almost_ready', totalSessions: 5,   sub: 'dropin'     },
-  { firstname: 'Amélie',    lastname: 'Dupont',     gender: 'F', birthYear: 2002, birthplace: 'Geneva',    type: 'trial',    status: 'requested',    totalSessions: 0,   sub: null         },
-  { firstname: 'Jonas',     lastname: 'Keller',     gender: 'M', birthYear: 1989, birthplace: 'Zurich',    type: 'student',  status: 'active',       totalSessions: 134, sub: 'annual'     },
-  { firstname: 'Léa',       lastname: 'Martin',     gender: 'F', birthYear: 1996, birthplace: 'Geneva',    type: 'student',  status: 'active',       totalSessions: 72,  sub: 'monthly'    },
-  { firstname: 'Andrei',    lastname: 'Popescu',    gender: 'M', birthYear: 1992, birthplace: 'Cluj',      type: 'student',  status: 'expired',      totalSessions: 38,  sub: null         },
-  { firstname: 'Giulia',    lastname: 'Marino',     gender: 'F', birthYear: 2000, birthplace: 'Genoa',     type: 'student',  status: 'active',       totalSessions: 24,  sub: 'monthly'    },
-  { firstname: 'Felix',     lastname: 'Wagner',     gender: 'M', birthYear: 1985, birthplace: 'Basel',     type: 'student',  status: 'active',       totalSessions: 188, sub: 'aggregator' },
-  { firstname: 'Camille',   lastname: 'Girard',     gender: 'F', birthYear: 1999, birthplace: 'Lausanne',  type: 'trial',    status: 'requested',    totalSessions: 1,   sub: null         },
-  { firstname: 'Stefan',    lastname: 'Brunner',    gender: 'M', birthYear: 1994, birthplace: 'St. Gallen',type: 'student',  status: 'active',       totalSessions: 81,  sub: 'monthly'    },
-  { firstname: 'Aisha',     lastname: 'Diallo',     gender: 'F', birthYear: 1998, birthplace: 'Geneva',    type: 'student',  status: 'active',       totalSessions: 52,  sub: 'quarterly'  },
-  { firstname: 'Paolo',     lastname: 'Russo',      gender: 'M', birthYear: 1991, birthplace: 'Bari',      type: 'student',  status: 'almost_ready', totalSessions: 8,   sub: 'dropin'     },
-  { firstname: 'Marie',     lastname: 'Lefebvre',   gender: 'F', birthYear: 1995, birthplace: 'Neuchâtel', type: 'student',  status: 'active',       totalSessions: 110, sub: 'annual'     },
-  { firstname: 'Dragan',    lastname: 'Petrović',   gender: 'M', birthYear: 1990, birthplace: 'Belgrade',  type: 'student',  status: 'active',       totalSessions: 67,  sub: 'monthly'    },
-  { firstname: 'Yuki',      lastname: 'Tanaka',     gender: 'F', birthYear: 1997, birthplace: 'Zurich',    type: 'student',  status: 'active',       totalSessions: 45,  sub: 'monthly'    },
-  { firstname: 'Thomas',    lastname: 'Meier',      gender: 'M', birthYear: 1986, birthplace: 'Winterthur',type: 'external', status: 'guest',        totalSessions: 0,   sub: null         },
-  { firstname: 'Elena',     lastname: 'Novak',      gender: 'F', birthYear: 2001, birthplace: 'Ljubljana', type: 'student',  status: 'active',       totalSessions: 19,  sub: 'monthly'    },
+  {
+    firstname: 'Luca',
+    lastname: 'Ferrari',
+    gender: 'M',
+    birthYear: 1992,
+    birthplace: 'Milan',
+    type: 'student',
+    status: 'active',
+    totalSessions: 142,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Sofia',
+    lastname: 'Bianchi',
+    gender: 'F',
+    birthYear: 1995,
+    birthplace: 'Rome',
+    type: 'student',
+    status: 'active',
+    totalSessions: 88,
+    sub: 'annual',
+  },
+  {
+    firstname: 'Alex',
+    lastname: 'Müller',
+    gender: 'M',
+    birthYear: 1988,
+    birthplace: 'Zurich',
+    type: 'student',
+    status: 'active',
+    totalSessions: 210,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Chiara',
+    lastname: 'Romano',
+    gender: 'F',
+    birthYear: 1999,
+    birthplace: 'Naples',
+    type: 'student',
+    status: 'active',
+    totalSessions: 34,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Matteo',
+    lastname: 'Esposito',
+    gender: 'M',
+    birthYear: 1990,
+    birthplace: 'Turin',
+    type: 'student',
+    status: 'active',
+    totalSessions: 121,
+    sub: 'annual',
+  },
+  {
+    firstname: 'Julia',
+    lastname: 'Weber',
+    gender: 'F',
+    birthYear: 2000,
+    birthplace: 'Basel',
+    type: 'student',
+    status: 'almost_ready',
+    totalSessions: 7,
+    sub: 'dropin',
+  },
+  {
+    firstname: 'David',
+    lastname: 'Costa',
+    gender: 'M',
+    birthYear: 1993,
+    birthplace: 'Lisbon',
+    type: 'student',
+    status: 'active',
+    totalSessions: 56,
+    sub: 'aggregator',
+  },
+  {
+    firstname: 'Lorenzo',
+    lastname: 'De Luca',
+    gender: 'M',
+    birthYear: 2003,
+    birthplace: 'Palermo',
+    type: 'trial',
+    status: 'requested',
+    totalSessions: 1,
+    sub: null,
+  },
+  {
+    firstname: 'Sara',
+    lastname: 'Ricci',
+    gender: 'F',
+    birthYear: 1994,
+    birthplace: 'Bologna',
+    type: 'student',
+    status: 'expired',
+    totalSessions: 41,
+    sub: null,
+  },
+  {
+    firstname: 'Hannah',
+    lastname: 'Fischer',
+    gender: 'F',
+    birthYear: 1997,
+    birthplace: 'Bern',
+    type: 'external',
+    status: 'guest',
+    totalSessions: 0,
+    sub: null,
+  },
+  {
+    firstname: 'Emma',
+    lastname: 'Schneider',
+    gender: 'F',
+    birthYear: 2001,
+    birthplace: 'Geneva',
+    type: 'student',
+    status: 'active',
+    totalSessions: 29,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Radu',
+    lastname: 'Ionescu',
+    gender: 'M',
+    birthYear: 1987,
+    birthplace: 'Bucharest',
+    type: 'student',
+    status: 'active',
+    totalSessions: 175,
+    sub: 'annual',
+  },
+  {
+    firstname: 'Nina',
+    lastname: 'Moreau',
+    gender: 'F',
+    birthYear: 1991,
+    birthplace: 'Paris',
+    type: 'student',
+    status: 'active',
+    totalSessions: 96,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Kevin',
+    lastname: 'Nguyen',
+    gender: 'M',
+    birthYear: 1998,
+    birthplace: 'Lyon',
+    type: 'trial',
+    status: 'under_review',
+    totalSessions: 2,
+    sub: null,
+  },
+  {
+    firstname: 'Tobias',
+    lastname: 'Huber',
+    gender: 'M',
+    birthYear: 1996,
+    birthplace: 'Lucerne',
+    type: 'student',
+    status: 'active',
+    totalSessions: 48,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Valentina',
+    lastname: 'Greco',
+    gender: 'F',
+    birthYear: 1993,
+    birthplace: 'Catania',
+    type: 'student',
+    status: 'active',
+    totalSessions: 63,
+    sub: 'quarterly',
+  },
+  {
+    firstname: 'Marco',
+    lastname: 'Conti',
+    gender: 'M',
+    birthYear: 1997,
+    birthplace: 'Florence',
+    type: 'student',
+    status: 'almost_ready',
+    totalSessions: 5,
+    sub: 'dropin',
+  },
+  {
+    firstname: 'Amélie',
+    lastname: 'Dupont',
+    gender: 'F',
+    birthYear: 2002,
+    birthplace: 'Geneva',
+    type: 'trial',
+    status: 'requested',
+    totalSessions: 0,
+    sub: null,
+  },
+  {
+    firstname: 'Jonas',
+    lastname: 'Keller',
+    gender: 'M',
+    birthYear: 1989,
+    birthplace: 'Zurich',
+    type: 'student',
+    status: 'active',
+    totalSessions: 134,
+    sub: 'annual',
+  },
+  {
+    firstname: 'Léa',
+    lastname: 'Martin',
+    gender: 'F',
+    birthYear: 1996,
+    birthplace: 'Geneva',
+    type: 'student',
+    status: 'active',
+    totalSessions: 72,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Andrei',
+    lastname: 'Popescu',
+    gender: 'M',
+    birthYear: 1992,
+    birthplace: 'Cluj',
+    type: 'student',
+    status: 'expired',
+    totalSessions: 38,
+    sub: null,
+  },
+  {
+    firstname: 'Giulia',
+    lastname: 'Marino',
+    gender: 'F',
+    birthYear: 2000,
+    birthplace: 'Genoa',
+    type: 'student',
+    status: 'active',
+    totalSessions: 24,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Felix',
+    lastname: 'Wagner',
+    gender: 'M',
+    birthYear: 1985,
+    birthplace: 'Basel',
+    type: 'student',
+    status: 'active',
+    totalSessions: 188,
+    sub: 'aggregator',
+  },
+  {
+    firstname: 'Camille',
+    lastname: 'Girard',
+    gender: 'F',
+    birthYear: 1999,
+    birthplace: 'Lausanne',
+    type: 'trial',
+    status: 'requested',
+    totalSessions: 1,
+    sub: null,
+  },
+  {
+    firstname: 'Stefan',
+    lastname: 'Brunner',
+    gender: 'M',
+    birthYear: 1994,
+    birthplace: 'St. Gallen',
+    type: 'student',
+    status: 'active',
+    totalSessions: 81,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Aisha',
+    lastname: 'Diallo',
+    gender: 'F',
+    birthYear: 1998,
+    birthplace: 'Geneva',
+    type: 'student',
+    status: 'active',
+    totalSessions: 52,
+    sub: 'quarterly',
+  },
+  {
+    firstname: 'Paolo',
+    lastname: 'Russo',
+    gender: 'M',
+    birthYear: 1991,
+    birthplace: 'Bari',
+    type: 'student',
+    status: 'almost_ready',
+    totalSessions: 8,
+    sub: 'dropin',
+  },
+  {
+    firstname: 'Marie',
+    lastname: 'Lefebvre',
+    gender: 'F',
+    birthYear: 1995,
+    birthplace: 'Neuchâtel',
+    type: 'student',
+    status: 'active',
+    totalSessions: 110,
+    sub: 'annual',
+  },
+  {
+    firstname: 'Dragan',
+    lastname: 'Petrović',
+    gender: 'M',
+    birthYear: 1990,
+    birthplace: 'Belgrade',
+    type: 'student',
+    status: 'active',
+    totalSessions: 67,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Yuki',
+    lastname: 'Tanaka',
+    gender: 'F',
+    birthYear: 1997,
+    birthplace: 'Zurich',
+    type: 'student',
+    status: 'active',
+    totalSessions: 45,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Thomas',
+    lastname: 'Meier',
+    gender: 'M',
+    birthYear: 1986,
+    birthplace: 'Winterthur',
+    type: 'external',
+    status: 'guest',
+    totalSessions: 0,
+    sub: null,
+  },
+  {
+    firstname: 'Elena',
+    lastname: 'Novak',
+    gender: 'F',
+    birthYear: 2001,
+    birthplace: 'Ljubljana',
+    type: 'student',
+    status: 'active',
+    totalSessions: 19,
+    sub: 'monthly',
+  },
 ]
 
 // Badge catalogue — assigned by attendance milestones / behaviour.
@@ -187,74 +507,160 @@ interface TeamSeed {
   plan: 'coach' | 'studio' | 'organization'
   planStatus: 'trial' | 'active'
   accentColor: string
-  tagline: string                                 // portal home description (public_profile.description)
-  portalGradient: string                          // PORTAL_GRADIENTS key (apps/web/src/lib/portal.ts)
+  tagline: string // portal home description (public_profile.description)
+  portalGradient: string // BIO_LINK_GRADIENTS key (apps/web/src/lib/bioLink.ts)
   contactCount: number
-  orgId?: string                                  // set when the team is an org member team
+  orgId?: string // set when the team is an org member team
   extraCoaches?: { uid: string; displayName: string; email: string }[]
 }
 
 async function seedTeam(opts: TeamSeed) {
   const {
-    uid, email, displayName, teamId, teamName, teamSlug,
-    plan, planStatus, accentColor, tagline, portalGradient,
-    contactCount, orgId, extraCoaches = [],
+    uid,
+    email,
+    displayName,
+    teamId,
+    teamName,
+    teamSlug,
+    plan,
+    planStatus,
+    accentColor,
+    tagline,
+    portalGradient,
+    contactCount,
+    orgId,
+    extraCoaches = [],
   } = opts
 
   const automationsEnabled = plan !== 'coach'
   const gamificationEnabled = plan !== 'coach'
 
   // ── subscription types ──────────────────────────────────────────────────────
-  const subscriptionTypeDefs = plan === 'coach'
-    ? [
-        { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', description: 'Unlimited classes, billed monthly.', source: 'internal',   price: 95,  active: true },
-        { id: `${teamId}-sub-10class`, name: '10-Class Pack',      description: 'Pre-paid block of 10 sessions.',      source: 'internal',   price: 180, active: true },
-        { id: `${teamId}-sub-dropin`,  name: 'Drop-in',            description: 'Pay per session, no commitment.',     source: 'internal',   price: 25,  active: true },
-      ]
-    : [
-        { id: `${teamId}-sub-monthly`,    name: 'Monthly Membership', description: 'Unlimited classes, billed monthly.',     source: 'internal',   price: 110, active: true },
-        { id: `${teamId}-sub-quarterly`,  name: 'Quarterly Plan',     description: '3-month commitment, 10% discount.',       source: 'internal',   price: 300, active: true },
-        { id: `${teamId}-sub-annual`,     name: 'Annual Membership',  description: 'Best value — 2 months free.',            source: 'internal',   price: 990, active: true },
-        { id: `${teamId}-sub-dropin`,     name: 'Drop-in',            description: 'Pay per session, no commitment.',         source: 'internal',   price: 30,  active: true },
-        { id: `${teamId}-sub-fitpass`,    name: 'FitPass Partner',    description: 'Access via FitPass aggregator network.',  source: 'aggregator', price: null, active: true },
-      ]
+  const subscriptionTypeDefs =
+    plan === 'coach'
+      ? [
+          {
+            id: `${teamId}-sub-monthly`,
+            name: 'Monthly Membership',
+            description: 'Unlimited classes, billed monthly.',
+            source: 'internal',
+            price: 95,
+            active: true,
+          },
+          {
+            id: `${teamId}-sub-10class`,
+            name: '10-Class Pack',
+            description: 'Pre-paid block of 10 sessions.',
+            source: 'internal',
+            price: 180,
+            active: true,
+          },
+          {
+            id: `${teamId}-sub-dropin`,
+            name: 'Drop-in',
+            description: 'Pay per session, no commitment.',
+            source: 'internal',
+            price: 25,
+            active: true,
+          },
+        ]
+      : [
+          {
+            id: `${teamId}-sub-monthly`,
+            name: 'Monthly Membership',
+            description: 'Unlimited classes, billed monthly.',
+            source: 'internal',
+            price: 110,
+            active: true,
+          },
+          {
+            id: `${teamId}-sub-quarterly`,
+            name: 'Quarterly Plan',
+            description: '3-month commitment, 10% discount.',
+            source: 'internal',
+            price: 300,
+            active: true,
+          },
+          {
+            id: `${teamId}-sub-annual`,
+            name: 'Annual Membership',
+            description: 'Best value — 2 months free.',
+            source: 'internal',
+            price: 990,
+            active: true,
+          },
+          {
+            id: `${teamId}-sub-dropin`,
+            name: 'Drop-in',
+            description: 'Pay per session, no commitment.',
+            source: 'internal',
+            price: 30,
+            active: true,
+          },
+          {
+            id: `${teamId}-sub-fitpass`,
+            name: 'FitPass Partner',
+            description: 'Access via FitPass aggregator network.',
+            source: 'aggregator',
+            price: null,
+            active: true,
+          },
+        ]
   const availableSubIds = new Set(subscriptionTypeDefs.map((s) => s.id))
 
   // Map a pool SubKind → concrete subscription type for this team.
-  function resolveSub(kind: SubKind): { id: string; name: string; recurrence: string | null } | null {
+  function resolveSub(
+    kind: SubKind
+  ): { id: string; name: string; recurrence: string | null } | null {
     if (!kind) return null
     const pick = (id: string, name: string, recurrence: string | null) =>
-      availableSubIds.has(id) ? { id, name, recurrence } : { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', recurrence: 'monthly' }
+      availableSubIds.has(id)
+        ? { id, name, recurrence }
+        : { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', recurrence: 'monthly' }
     switch (kind) {
-      case 'monthly':    return pick(`${teamId}-sub-monthly`,   'Monthly Membership', 'monthly')
-      case 'quarterly':  return pick(`${teamId}-sub-quarterly`, 'Quarterly Plan',     'quarterly')
-      case 'annual':     return pick(`${teamId}-sub-annual`,    'Annual Membership',  'annual')
-      case 'dropin':     return pick(`${teamId}-sub-dropin`,    'Drop-in',            null)
-      case 'aggregator': return pick(`${teamId}-sub-fitpass`,   'FitPass Partner',    null)
+      case 'monthly':
+        return pick(`${teamId}-sub-monthly`, 'Monthly Membership', 'monthly')
+      case 'quarterly':
+        return pick(`${teamId}-sub-quarterly`, 'Quarterly Plan', 'quarterly')
+      case 'annual':
+        return pick(`${teamId}-sub-annual`, 'Annual Membership', 'annual')
+      case 'dropin':
+        return pick(`${teamId}-sub-dropin`, 'Drop-in', null)
+      case 'aggregator':
+        return pick(`${teamId}-sub-fitpass`, 'FitPass Partner', null)
     }
   }
 
   // ── ranking system ───────────────────────────────────────────────────────────
-  const rankingSystemDefs = plan === 'coach'
-    ? [{
-        id: 'training-level', name: 'Training Level', is_primary: true,
-        levels: [
-          { value: 0, label: 'Beginner',     color: '#6b7280' },
-          { value: 1, label: 'Intermediate', color: '#2563eb' },
-          { value: 2, label: 'Advanced',     color: '#7c3aed' },
-          { value: 3, label: 'Expert',       color: '#dc2626' },
-        ],
-      }]
-    : [{
-        id: 'bjj-belt', name: 'BJJ Belt', is_primary: true,
-        levels: [
-          { value: 0, label: 'White Belt',  color: '#e5e7eb' },
-          { value: 1, label: 'Blue Belt',   color: '#1d4ed8' },
-          { value: 2, label: 'Purple Belt', color: '#7e22ce' },
-          { value: 3, label: 'Brown Belt',  color: '#78350f' },
-          { value: 4, label: 'Black Belt',  color: '#111827' },
-        ],
-      }]
+  const rankingSystemDefs =
+    plan === 'coach'
+      ? [
+          {
+            id: 'training-level',
+            name: 'Training Level',
+            is_primary: true,
+            levels: [
+              { value: 0, label: 'Beginner', color: '#6b7280' },
+              { value: 1, label: 'Intermediate', color: '#2563eb' },
+              { value: 2, label: 'Advanced', color: '#7c3aed' },
+              { value: 3, label: 'Expert', color: '#dc2626' },
+            ],
+          },
+        ]
+      : [
+          {
+            id: 'bjj-belt',
+            name: 'BJJ Belt',
+            is_primary: true,
+            levels: [
+              { value: 0, label: 'White Belt', color: '#e5e7eb' },
+              { value: 1, label: 'Blue Belt', color: '#1d4ed8' },
+              { value: 2, label: 'Purple Belt', color: '#7e22ce' },
+              { value: 3, label: 'Brown Belt', color: '#78350f' },
+              { value: 4, label: 'Black Belt', color: '#111827' },
+            ],
+          },
+        ]
   const rankSystemId = plan === 'coach' ? 'training-level' : 'bjj-belt'
 
   function rankFor(entry: PoolEntry): number | null {
@@ -277,122 +683,294 @@ async function seedTeam(opts: TeamSeed) {
           { day: 6, start_hour: 7, end_hour: 10, multiplier: 1.3 },
         ],
       }
-    : { enabled: false, default_base_score: 10, streak_min_sessions: 2, monthly_cap: 200, time_multipliers: [] }
+    : {
+        enabled: false,
+        default_base_score: 10,
+        streak_min_sessions: 2,
+        monthly_cap: 200,
+        time_multipliers: [],
+      }
 
   // ── auth users (owner + extra coaches) ────────────────────────────────────────
   await upsertAuthUser({ uid, email, displayName, password: 'linyup123' })
   for (const c of extraCoaches) {
-    await upsertAuthUser({ uid: c.uid, email: c.email, displayName: c.displayName, password: 'linyup123' })
+    await upsertAuthUser({
+      uid: c.uid,
+      email: c.email,
+      displayName: c.displayName,
+      password: 'linyup123',
+    })
   }
 
   // ── team doc ──────────────────────────────────────────────────────────────────
   const trialEndsAt = plan === 'coach' ? ts(daysFromNow(14)) : undefined
   const teamLanguage = 'en'
   const portalLinks = [
-    { label: 'Book a Free Trial', description: "Try a class and see if it's right for you", isBookingLink: true,  isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
-    { label: 'Join as Member',    description: 'Join our community and become a member',    isBookingLink: false, isMembershipLink: true,  showInPortal: true, iconName: 'UserCheck',    url: null },
+    {
+      label: 'Book a Free Trial',
+      description: "Try a class and see if it's right for you",
+      isBookingLink: true,
+      isMembershipLink: false,
+      showInBioLink: true,
+      iconName: 'CalendarPlus',
+      url: null,
+    },
+    {
+      label: 'Join as Member',
+      description: 'Join our community and become a member',
+      isBookingLink: false,
+      isMembershipLink: true,
+      showInBioLink: true,
+      iconName: 'UserCheck',
+      url: null,
+    },
   ]
-  const portalBackground = { type: 'gradient', color: portalGradient }
-  await db.collection('teams').doc(teamId).set({
-    name: teamName,
-    description: tagline,
-    slug: teamSlug,
-    sport_type: 'Martial arts',
-    language: teamLanguage,
-    createdBy: uid,
-    created: ts(daysFromNow(-220)),
-    plan,
-    plan_status: planStatus,
-    ...(trialEndsAt ? { trial_ends_at: trialEndsAt } : {}),
-    ...(orgId ? { org_id: orgId, ranking_systems: [] } : { ranking_systems: rankingSystemDefs }),
-    settings: { gamification: gamificationSettings, teamEmail: email },
-    portalTheme: 'light',
-    portalAccentColor: accentColor,
-    portalBackground,
-    links: portalLinks,
-    socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
-  })
+  const bioLinkBackground = { type: 'gradient', color: portalGradient }
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .set({
+      name: teamName,
+      description: tagline,
+      slug: teamSlug,
+      sport_type: 'Martial arts',
+      language: teamLanguage,
+      createdBy: uid,
+      created: ts(daysFromNow(-220)),
+      plan,
+      plan_status: planStatus,
+      ...(trialEndsAt ? { trial_ends_at: trialEndsAt } : {}),
+      ...(orgId ? { org_id: orgId, ranking_systems: [] } : { ranking_systems: rankingSystemDefs }),
+      settings: { gamification: gamificationSettings, teamEmail: email },
+      bioLinkTheme: 'light',
+      bioLinkAccentColor: accentColor,
+      bioLinkBackground,
+      links: portalLinks,
+      socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
+    })
 
-  await db.collection('teams').doc(teamId).collection('public_profile').doc(teamId).set({
-    type: 'team', name: teamName, description: tagline,
-    slug: teamSlug, sport_type: 'Martial arts',
-    profileImage: null, heroImage: null,
-    portalTheme: 'light', portalAccentColor: accentColor,
-    portalBackground,
-    socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
-    links: portalLinks,
-    bookingSettings: { flowType: 'activity-first', windowMonths: 2, showPhone: true, ctaUrl: null, ctaLabel: null, showActivityDescription: true },
-    membershipRequiredFields: null, membershipOptionalFields: null,
-    updated_at: ts(now()),
-  })
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('public_profile')
+    .doc(teamId)
+    .set({
+      type: 'team',
+      name: teamName,
+      description: tagline,
+      slug: teamSlug,
+      sport_type: 'Martial arts',
+      profileImage: null,
+      heroImage: null,
+      bioLinkTheme: 'light',
+      bioLinkAccentColor: accentColor,
+      bioLinkBackground,
+      socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
+      links: portalLinks,
+      bookingSettings: {
+        flowType: 'activity-first',
+        windowMonths: 2,
+        showPhone: true,
+        ctaUrl: null,
+        ctaLabel: null,
+        showActivityDescription: true,
+      },
+      membershipRequiredFields: null,
+      membershipOptionalFields: null,
+      updated_at: ts(now()),
+    })
 
   // ── team members (owner + extra coaches) ──────────────────────────────────────
-  await db.collection('teams').doc(teamId).collection('team_members').doc(uid).set({
-    teamId, userId: uid, role: 'owner', email, joined: ts(daysFromNow(-220)),
-  })
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(uid)
+    .set({
+      teamId,
+      userId: uid,
+      role: 'owner',
+      email,
+      joined: ts(daysFromNow(-220)),
+    })
   const [ownerFirst, ownerLast] = displayName.split(' ')
-  await db.collection('users').doc(uid).set({
-    email, displayName, firstname: ownerFirst, lastname: ownerLast ?? '',
-    currentTeam: teamId, created_at: ts(daysFromNow(-220)),
-  }, { merge: true })
+  await db
+    .collection('users')
+    .doc(uid)
+    .set(
+      {
+        email,
+        displayName,
+        firstname: ownerFirst,
+        lastname: ownerLast ?? '',
+        currentTeam: teamId,
+        created_at: ts(daysFromNow(-220)),
+      },
+      { merge: true }
+    )
 
   for (const c of extraCoaches) {
-    await db.collection('teams').doc(teamId).collection('team_members').doc(c.uid).set({
-      teamId, userId: c.uid, role: 'manager', email: c.email, joined: ts(daysFromNow(-150)), addedBy: uid,
-    })
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('team_members')
+      .doc(c.uid)
+      .set({
+        teamId,
+        userId: c.uid,
+        role: 'manager',
+        email: c.email,
+        joined: ts(daysFromNow(-150)),
+        addedBy: uid,
+      })
     const [cf, cl] = c.displayName.split(' ')
-    await db.collection('users').doc(c.uid).set({
-      email: c.email, displayName: c.displayName, firstname: cf, lastname: cl ?? '',
-      currentTeam: teamId, created_at: ts(daysFromNow(-150)),
-    }, { merge: true })
+    await db
+      .collection('users')
+      .doc(c.uid)
+      .set(
+        {
+          email: c.email,
+          displayName: c.displayName,
+          firstname: cf,
+          lastname: cl ?? '',
+          currentTeam: teamId,
+          created_at: ts(daysFromNow(-150)),
+        },
+        { merge: true }
+      )
   }
 
   // ── activities (group classes + coaching) ─────────────────────────────────────
   const activities = [
-    { id: `${teamId}-act-bjj`,     name: 'Brazilian Jiu-Jitsu', slug: 'bjj',           color: accentColor, level: 'all',          isFreeTrial: true,  type: 'group_class' as const, base_score: 12, description: 'Gi grappling from fundamentals to advanced — positions, escapes and submissions.' },
-    { id: `${teamId}-act-mma`,     name: 'MMA',                 slug: 'mma',           color: '#dc2626',   level: 'intermediate', isFreeTrial: false, type: 'group_class' as const, base_score: 15, description: 'Striking-to-grappling transitions and cage craft for experienced athletes.' },
-    { id: `${teamId}-act-kickbox`, name: 'Kickboxing',          slug: 'kickboxing',    color: '#ea580c',   level: 'all',          isFreeTrial: true,  type: 'group_class' as const, base_score: 10, description: 'Pad work, combinations and conditioning — a serious workout for every level.' },
-    { id: `${teamId}-act-yoga`,    name: 'Yoga & Mobility',     slug: 'yoga-mobility', color: '#059669',   level: 'all',          isFreeTrial: true,  type: 'group_class' as const, base_score: 8,  description: 'Recovery-focused mobility and breath work to keep you on the mats.' },
+    {
+      id: `${teamId}-act-bjj`,
+      name: 'Brazilian Jiu-Jitsu',
+      slug: 'bjj',
+      color: accentColor,
+      level: 'all',
+      isFreeTrial: true,
+      type: 'group_class' as const,
+      base_score: 12,
+      description:
+        'Gi grappling from fundamentals to advanced — positions, escapes and submissions.',
+    },
+    {
+      id: `${teamId}-act-mma`,
+      name: 'MMA',
+      slug: 'mma',
+      color: '#dc2626',
+      level: 'intermediate',
+      isFreeTrial: false,
+      type: 'group_class' as const,
+      base_score: 15,
+      description: 'Striking-to-grappling transitions and cage craft for experienced athletes.',
+    },
+    {
+      id: `${teamId}-act-kickbox`,
+      name: 'Kickboxing',
+      slug: 'kickboxing',
+      color: '#ea580c',
+      level: 'all',
+      isFreeTrial: true,
+      type: 'group_class' as const,
+      base_score: 10,
+      description: 'Pad work, combinations and conditioning — a serious workout for every level.',
+    },
+    {
+      id: `${teamId}-act-yoga`,
+      name: 'Yoga & Mobility',
+      slug: 'yoga-mobility',
+      color: '#059669',
+      level: 'all',
+      isFreeTrial: true,
+      type: 'group_class' as const,
+      base_score: 8,
+      description: 'Recovery-focused mobility and breath work to keep you on the mats.',
+    },
   ]
   for (const a of activities) {
-    await db.collection('activities').doc(a.id).set({ ...a, teamId, isActive: true, created_at: ts(daysFromNow(-200)) })
+    await db
+      .collection('activities')
+      .doc(a.id)
+      .set({ ...a, teamId, isActive: true, created_at: ts(daysFromNow(-200)) })
     await db.collection('activities').doc(a.id).collection('public_profile').doc(a.id).set({
-      type: 'activity', teamId, name: a.name, slug: a.slug, color: a.color,
+      type: 'activity',
+      teamId,
+      name: a.name,
+      slug: a.slug,
+      color: a.color,
       description: a.description,
-      image_url: null, isFreeTrial: a.isFreeTrial, level: a.level,
+      image_url: null,
+      isFreeTrial: a.isFreeTrial,
+      level: a.level,
     })
   }
 
   const coachingActId = `${teamId}-act-coaching`
   const coachingActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
-  const coachingActDescription = 'One-on-one session tailored to your goals — technique, strategy and conditioning.'
-  await db.collection('activities').doc(coachingActId).set({
-    teamId, name: coachingActName, slug: '1on1-coaching', color: accentColor,
-    description: coachingActDescription,
-    type: 'coaching', coachId: uid, coachName: displayName, level: 'all',
-    isFreeTrial: true, isActive: true, created_at: ts(daysFromNow(-180)),
-  })
-  await db.collection('activities').doc(coachingActId).collection('public_profile').doc(coachingActId).set({
-    type: 'activity', teamId, name: coachingActName, slug: '1on1-coaching',
-    color: accentColor, description: coachingActDescription,
-    image_url: null, isFreeTrial: true, level: 'all',
-  })
+  const coachingActDescription =
+    'One-on-one session tailored to your goals — technique, strategy and conditioning.'
+  await db
+    .collection('activities')
+    .doc(coachingActId)
+    .set({
+      teamId,
+      name: coachingActName,
+      slug: '1on1-coaching',
+      color: accentColor,
+      description: coachingActDescription,
+      type: 'coaching',
+      coachId: uid,
+      coachName: displayName,
+      level: 'all',
+      isFreeTrial: true,
+      isActive: true,
+      created_at: ts(daysFromNow(-180)),
+    })
+  await db
+    .collection('activities')
+    .doc(coachingActId)
+    .collection('public_profile')
+    .doc(coachingActId)
+    .set({
+      type: 'activity',
+      teamId,
+      name: coachingActName,
+      slug: '1on1-coaching',
+      color: accentColor,
+      description: coachingActDescription,
+      image_url: null,
+      isFreeTrial: true,
+      level: 'all',
+    })
 
   // ── coach availability template + coaching sessions ───────────────────────────
   const coachingTemplateId = `${teamId}-tpl-coaching`
-  await db.collection('coach_availability').doc(coachingTemplateId).set({
-    teamId, coachId: uid, coachName: displayName, activityId: coachingActId,
-    title: coachingActName, description: 'One-on-one coaching session.',
-    duration_minutes: 60, max_participants: 1, isFreeTrial: true,
-    location: 'Dojo A', onlineUrl: null, status: 'active',
-    recurrence: { type: 'weekly', days: [1, 3], time: '08:00', timezone: 'Europe/Zurich' },
-    window_days: 30, created_at: ts(daysFromNow(-40)),
-  })
+  await db
+    .collection('coach_availability')
+    .doc(coachingTemplateId)
+    .set({
+      teamId,
+      coachId: uid,
+      coachName: displayName,
+      activityId: coachingActId,
+      title: coachingActName,
+      description: 'One-on-one coaching session.',
+      duration_minutes: 60,
+      max_participants: 1,
+      isFreeTrial: true,
+      location: 'Dojo A',
+      onlineUrl: null,
+      status: 'active',
+      recurrence: { type: 'weekly', days: [1, 3], time: '08:00', timezone: 'Europe/Zurich' },
+      window_days: 30,
+      created_at: ts(daysFromNow(-40)),
+    })
 
   const coachingSlotDefs = [
-    { dayOffset: 1,  hour: 8, bookings: 0 },
-    { dayOffset: 3,  hour: 8, bookings: 1 },
-    { dayOffset: 8,  hour: 8, bookings: 0 },
+    { dayOffset: 1, hour: 8, bookings: 0 },
+    { dayOffset: 3, hour: 8, bookings: 1 },
+    { dayOffset: 8, hour: 8, bookings: 0 },
     { dayOffset: 10, hour: 8, bookings: 1 },
     { dayOffset: 15, hour: 8, bookings: 0 },
     { dayOffset: 17, hour: 8, bookings: 0 },
@@ -412,72 +990,145 @@ async function seedTeam(opts: TeamSeed) {
     const isFull = slotDef.bookings >= 1
     const status = isFull ? 'full' : 'open'
 
-    await db.collection('sessions').doc(sid).set({
-      teamId, activityType: 'coaching', activityId: coachingActId, activityName: coachingActName,
-      templateId: coachingTemplateId, coachId: uid, coachName: displayName, isFreeTrial: true,
-      start: ts(base), end: ts(end), duration_minutes: 60, max_participants: 1,
-      bookings_count: slotDef.bookings, location: 'Dojo A', onlineUrl: null,
-      allowBooking: true, status, created_at: ts(daysFromNow(-7)),
-    })
-    await db.collection('sessions').doc(sid).collection('public_profile').doc(sid).set({
-      type: 'coaching_session', teamId, activityType: 'coaching', activityName: coachingActName,
-      coachId: uid, coachName: displayName, templateId: coachingTemplateId,
-      start: ts(base), end: ts(end), duration_minutes: 60, location: 'Dojo A', onlineUrl: null,
-      max_participants: 1, bookings_count: slotDef.bookings, isFreeTrial: true, status, allowBooking: true,
-    })
-    if (isFull) {
-      await db.collection('sessions').doc(sid).collection('bookings').doc(`${sid}-booking`).set({
-        teamId, contactId: bookedContact.id, session: sid, email: bookedContact.email,
-        firstname: bookedContact.firstname, lastname: bookedContact.lastname,
-        status: 'confirmed', joinedAt: ts(daysFromNow(-2)),
-        booking_token: `tok-coaching-${teamId}-${i}`, is_new_contact: false,
+    await db
+      .collection('sessions')
+      .doc(sid)
+      .set({
+        teamId,
+        activityType: 'coaching',
+        activityId: coachingActId,
+        activityName: coachingActName,
+        templateId: coachingTemplateId,
+        coachId: uid,
+        coachName: displayName,
+        isFreeTrial: true,
+        start: ts(base),
+        end: ts(end),
+        duration_minutes: 60,
+        max_participants: 1,
+        bookings_count: slotDef.bookings,
+        location: 'Dojo A',
+        onlineUrl: null,
+        allowBooking: true,
+        status,
+        created_at: ts(daysFromNow(-7)),
       })
+    await db
+      .collection('sessions')
+      .doc(sid)
+      .collection('public_profile')
+      .doc(sid)
+      .set({
+        type: 'coaching_session',
+        teamId,
+        activityType: 'coaching',
+        activityName: coachingActName,
+        coachId: uid,
+        coachName: displayName,
+        templateId: coachingTemplateId,
+        start: ts(base),
+        end: ts(end),
+        duration_minutes: 60,
+        location: 'Dojo A',
+        onlineUrl: null,
+        max_participants: 1,
+        bookings_count: slotDef.bookings,
+        isFreeTrial: true,
+        status,
+        allowBooking: true,
+      })
+    if (isFull) {
+      await db
+        .collection('sessions')
+        .doc(sid)
+        .collection('bookings')
+        .doc(`${sid}-booking`)
+        .set({
+          teamId,
+          contactId: bookedContact.id,
+          session: sid,
+          email: bookedContact.email,
+          firstname: bookedContact.firstname,
+          lastname: bookedContact.lastname,
+          status: 'confirmed',
+          joinedAt: ts(daysFromNow(-2)),
+          booking_token: `tok-coaching-${teamId}-${i}`,
+          is_new_contact: false,
+        })
     }
   }
 
   // ── subscription types ────────────────────────────────────────────────────────
   for (const st of subscriptionTypeDefs) {
-    await db.collection('teams').doc(teamId).collection('subscription_types').doc(st.id).set({
-      name: st.name, description: st.description, source: st.source, active: st.active,
-      ...(st.price != null ? { price: st.price } : {}), teamId, created_at: ts(daysFromNow(-120)),
-    })
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('subscription_types')
+      .doc(st.id)
+      .set({
+        name: st.name,
+        description: st.description,
+        source: st.source,
+        active: st.active,
+        ...(st.price != null ? { price: st.price } : {}),
+        teamId,
+        created_at: ts(daysFromNow(-120)),
+      })
   }
 
   // ── group sessions (4 past weeks + 4 upcoming weeks) ──────────────────────────
   type SessionDef = {
-    dayOffset: number; actId: string; actName: string; hour: number
-    duration: number; location: string; allowBooking: boolean; instructor?: string
+    dayOffset: number
+    actId: string
+    actName: string
+    hour: number
+    duration: number
+    location: string
+    allowBooking: boolean
+    instructor?: string
   }
   const sessionDefs: SessionDef[] = []
-  const instructors = extraCoaches.length ? [displayName, extraCoaches[0].displayName] : [displayName, 'Elena Rossi']
+  const instructors = extraCoaches.length
+    ? [displayName, extraCoaches[0].displayName]
+    : [displayName, 'Elena Rossi']
 
   for (let week = -4; week <= -1; week++) {
     for (const [dayOff, actId, actName, hour, dur, loc, instr] of [
-      [1, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 18, 1.5, 'Dojo A',    instructors[0]],
-      [3, `${teamId}-act-kickbox`, 'Kickboxing',          19, 1,   'Dojo B',    instructors[1]],
-      [5, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 7,  1,   'Dojo A',    instructors[0]],
-      [6, `${teamId}-act-mma`,     'MMA',                 10, 2,   'Main Hall', instructors[1]],
+      [1, `${teamId}-act-bjj`, 'Brazilian Jiu-Jitsu', 18, 1.5, 'Dojo A', instructors[0]],
+      [3, `${teamId}-act-kickbox`, 'Kickboxing', 19, 1, 'Dojo B', instructors[1]],
+      [5, `${teamId}-act-bjj`, 'Brazilian Jiu-Jitsu', 7, 1, 'Dojo A', instructors[0]],
+      [6, `${teamId}-act-mma`, 'MMA', 10, 2, 'Main Hall', instructors[1]],
     ] as const) {
       sessionDefs.push({
-        dayOffset: week * 7 + Number(dayOff), actId: String(actId), actName: String(actName),
-        hour: Number(hour), duration: Number(dur), location: String(loc),
-        allowBooking: false, instructor: String(instr),
+        dayOffset: week * 7 + Number(dayOff),
+        actId: String(actId),
+        actName: String(actName),
+        hour: Number(hour),
+        duration: Number(dur),
+        location: String(loc),
+        allowBooking: false,
+        instructor: String(instr),
       })
     }
   }
   for (let week = 0; week <= 3; week++) {
     for (const [dayOff, actId, actName, hour, dur, loc, ab, instr] of [
-      [1, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 18, 1.5, 'Dojo A',    true,  instructors[0]],
-      [2, `${teamId}-act-yoga`,    'Yoga & Mobility',     9,  1,   'Studio',    true,  'Aiko Tanaka'],
-      [3, `${teamId}-act-kickbox`, 'Kickboxing',          19, 1,   'Dojo B',    true,  instructors[1]],
-      [5, `${teamId}-act-bjj`,     'Brazilian Jiu-Jitsu', 7,  1,   'Dojo A',    true,  instructors[0]],
-      [6, `${teamId}-act-mma`,     'MMA',                 10, 2,   'Main Hall', true,  instructors[1]],
-      [0, `${teamId}-act-yoga`,    'Yoga & Mobility',     10, 1.5, 'Studio',    false, 'Aiko Tanaka'],
+      [1, `${teamId}-act-bjj`, 'Brazilian Jiu-Jitsu', 18, 1.5, 'Dojo A', true, instructors[0]],
+      [2, `${teamId}-act-yoga`, 'Yoga & Mobility', 9, 1, 'Studio', true, 'Aiko Tanaka'],
+      [3, `${teamId}-act-kickbox`, 'Kickboxing', 19, 1, 'Dojo B', true, instructors[1]],
+      [5, `${teamId}-act-bjj`, 'Brazilian Jiu-Jitsu', 7, 1, 'Dojo A', true, instructors[0]],
+      [6, `${teamId}-act-mma`, 'MMA', 10, 2, 'Main Hall', true, instructors[1]],
+      [0, `${teamId}-act-yoga`, 'Yoga & Mobility', 10, 1.5, 'Studio', false, 'Aiko Tanaka'],
     ] as const) {
       sessionDefs.push({
-        dayOffset: week * 7 + Number(dayOff), actId: String(actId), actName: String(actName),
-        hour: Number(hour), duration: Number(dur), location: String(loc),
-        allowBooking: Boolean(ab), instructor: String(instr),
+        dayOffset: week * 7 + Number(dayOff),
+        actId: String(actId),
+        actName: String(actName),
+        hour: Number(hour),
+        duration: Number(dur),
+        location: String(loc),
+        allowBooking: Boolean(ab),
+        instructor: String(instr),
       })
     }
   }
@@ -493,22 +1144,50 @@ async function seedTeam(opts: TeamSeed) {
     sessionIds.push(id)
     const act = activities.find((a) => a.id === s.actId)
 
-    await db.collection('sessions').doc(id).set({
-      teamId, activityId: s.actId, activityName: s.actName,
-      start: ts(base), end: ts(end), location: s.location,
-      instructor: s.instructor ?? null, locationAddress: '123 Fighter St',
-      allowBooking: s.allowBooking, participants_count: 0,
-      created_at: ts(daysFromNow(-200)), createdBy: uid,
-    })
-    if (s.allowBooking) {
-      await db.collection('sessions').doc(id).collection('public_profile').doc(id).set({
-        type: 'session', teamId, activityId: s.actId, activityName: s.actName,
-        activityColor: act?.color ?? null, activitySlug: act?.slug ?? null,
-        activityIsFreeTrial: act?.isFreeTrial ?? false, activityLevel: act?.level ?? null,
-        activityImage: null, start: ts(base), end: ts(end), location: s.location,
-        instructorName: s.instructor ?? null, locationAddress: '123 Fighter St',
-        locationMapsUrl: null, capacity: null, participants_count: 0, allowBooking: true, slug: null,
+    await db
+      .collection('sessions')
+      .doc(id)
+      .set({
+        teamId,
+        activityId: s.actId,
+        activityName: s.actName,
+        start: ts(base),
+        end: ts(end),
+        location: s.location,
+        instructor: s.instructor ?? null,
+        locationAddress: '123 Fighter St',
+        allowBooking: s.allowBooking,
+        participants_count: 0,
+        created_at: ts(daysFromNow(-200)),
+        createdBy: uid,
       })
+    if (s.allowBooking) {
+      await db
+        .collection('sessions')
+        .doc(id)
+        .collection('public_profile')
+        .doc(id)
+        .set({
+          type: 'session',
+          teamId,
+          activityId: s.actId,
+          activityName: s.actName,
+          activityColor: act?.color ?? null,
+          activitySlug: act?.slug ?? null,
+          activityIsFreeTrial: act?.isFreeTrial ?? false,
+          activityLevel: act?.level ?? null,
+          activityImage: null,
+          start: ts(base),
+          end: ts(end),
+          location: s.location,
+          instructorName: s.instructor ?? null,
+          locationAddress: '123 Fighter St',
+          locationMapsUrl: null,
+          capacity: null,
+          participants_count: 0,
+          allowBooking: true,
+          slug: null,
+        })
     }
   }
 
@@ -524,56 +1203,104 @@ async function seedTeam(opts: TeamSeed) {
     const rank = rankFor(c)
     const streak = c.totalSessions > 0 ? Math.floor(seededRand(seed + 'st') * 6) : 0
     const maxStreak = Math.max(streak, Math.floor(seededRand(seed + 'ms') * 10))
-    const monthScore = gamificationEnabled && c.totalSessions > 0 ? Math.floor(seededRand(seed + 'sc') * 140) : 0
-    const birthdate = c.birthYear ? new Date(c.birthYear, Math.floor(seededRand(seed + 'mo') * 12), 1 + Math.floor(seededRand(seed + 'dy') * 27)) : null
+    const monthScore =
+      gamificationEnabled && c.totalSessions > 0 ? Math.floor(seededRand(seed + 'sc') * 140) : 0
+    const birthdate = c.birthYear
+      ? new Date(
+          c.birthYear,
+          Math.floor(seededRand(seed + 'mo') * 12),
+          1 + Math.floor(seededRand(seed + 'dy') * 27)
+        )
+      : null
 
-    await db.collection('contacts').doc(id).set({
-      teamId,
-      firstname: c.firstname, lastname: c.lastname,
-      email: `${slugEmail(c)}.${teamId}@example.com`,
-      phone: `+417${(60000000 + Math.floor(seededRand(seed + 'ph') * 9999999)).toString().slice(0, 8)}`,
-      gender: c.gender, birthplace: c.birthplace,
-      birthdate: birthdate ? ts(birthdate) : null,
-      type: c.type, membership_status: c.status, membership_active: c.status === 'active',
-      ...(orgId ? { org_membership_active: c.status === 'active', org_membership_status: c.status } : {}),
-      total_sessions: c.totalSessions,
-      last_session_at: c.totalSessions > 0 ? ts(daysFromNow(-Math.floor(seededRand(seed + 'ls') * 14))) : null,
-      notes: c.type === 'student' && c.totalSessions > 20
-        ? `Consistent attendance. Focus areas noted after recent gradings.`
-        : c.type === 'trial' ? `Came in via the website trial form — follow up after first class.` : '',
-      created_at: ts(daysFromNow(-Math.floor(seededRand(seed + 'cr') * 200) - 10)),
-      deleted_at: null, archived_at: null,
-      ...(gamificationEnabled ? {
-        current_month_score: monthScore,
-        current_streak: streak,
-        max_streak: maxStreak,
-        times_leader: Math.floor(seededRand(seed + 'tl') * 3),
-        times_top5: Math.floor(seededRand(seed + 't5') * 6),
-        distinct_activities: ['bjj', 'kickboxing'].slice(0, 1 + Math.floor(seededRand(seed + 'da') * 2)),
-        custom_badges: badgesFor(c.totalSessions, maxStreak, seed),
-      } : {}),
-      ...(sub ? {
-        subscription_type_id: sub.id, subscription_type_name: sub.name,
-        subscription_recurrence: sub.recurrence, subscription_type_updated_at: ts(daysFromNow(-30)),
-      } : {}),
-      ...(rank != null ? { ranks: { [rankSystemId]: rank } } : {}),
-      tags: c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : [],
-    })
+    await db
+      .collection('contacts')
+      .doc(id)
+      .set({
+        teamId,
+        firstname: c.firstname,
+        lastname: c.lastname,
+        email: `${slugEmail(c)}.${teamId}@example.com`,
+        phone: `+417${(60000000 + Math.floor(seededRand(seed + 'ph') * 9999999)).toString().slice(0, 8)}`,
+        gender: c.gender,
+        birthplace: c.birthplace,
+        birthdate: birthdate ? ts(birthdate) : null,
+        type: c.type,
+        membership_status: c.status,
+        membership_active: c.status === 'active',
+        ...(orgId
+          ? { org_membership_active: c.status === 'active', org_membership_status: c.status }
+          : {}),
+        total_sessions: c.totalSessions,
+        last_session_at:
+          c.totalSessions > 0 ? ts(daysFromNow(-Math.floor(seededRand(seed + 'ls') * 14))) : null,
+        notes:
+          c.type === 'student' && c.totalSessions > 20
+            ? `Consistent attendance. Focus areas noted after recent gradings.`
+            : c.type === 'trial'
+              ? `Came in via the website trial form — follow up after first class.`
+              : '',
+        created_at: ts(daysFromNow(-Math.floor(seededRand(seed + 'cr') * 200) - 10)),
+        deleted_at: null,
+        archived_at: null,
+        ...(gamificationEnabled
+          ? {
+              current_month_score: monthScore,
+              current_streak: streak,
+              max_streak: maxStreak,
+              times_leader: Math.floor(seededRand(seed + 'tl') * 3),
+              times_top5: Math.floor(seededRand(seed + 't5') * 6),
+              distinct_activities: ['bjj', 'kickboxing'].slice(
+                0,
+                1 + Math.floor(seededRand(seed + 'da') * 2)
+              ),
+              custom_badges: badgesFor(c.totalSessions, maxStreak, seed),
+            }
+          : {}),
+        ...(sub
+          ? {
+              subscription_type_id: sub.id,
+              subscription_type_name: sub.name,
+              subscription_recurrence: sub.recurrence,
+              subscription_type_updated_at: ts(daysFromNow(-30)),
+            }
+          : {}),
+        ...(rank != null ? { ranks: { [rankSystemId]: rank } } : {}),
+        tags: c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : [],
+      })
 
     // subscription history
     if (sub) {
       const startedAt = daysFromNow(-Math.floor(seededRand(seed + 'sh') * 90) - 30)
       if (i % 4 === 0) {
         const prevStartedAt = daysFromNow(-Math.floor(seededRand(seed + 'ph2') * 120) - 90)
-        await db.collection('contacts').doc(id).collection('subscription_history').doc(`${id}-sub-prev`).set({
-          subscription_type_id: sub.id, subscription_type_name: sub.name, recurrence: sub.recurrence,
-          start_date: ts(prevStartedAt), end_date: ts(new Date(startedAt.getTime() - 1)), created_at: ts(prevStartedAt),
-        })
+        await db
+          .collection('contacts')
+          .doc(id)
+          .collection('subscription_history')
+          .doc(`${id}-sub-prev`)
+          .set({
+            subscription_type_id: sub.id,
+            subscription_type_name: sub.name,
+            recurrence: sub.recurrence,
+            start_date: ts(prevStartedAt),
+            end_date: ts(new Date(startedAt.getTime() - 1)),
+            created_at: ts(prevStartedAt),
+          })
       }
-      await db.collection('contacts').doc(id).collection('subscription_history').doc(`${id}-sub-current`).set({
-        subscription_type_id: sub.id, subscription_type_name: sub.name, recurrence: sub.recurrence,
-        start_date: ts(startedAt), end_date: null, created_at: ts(startedAt),
-      })
+      await db
+        .collection('contacts')
+        .doc(id)
+        .collection('subscription_history')
+        .doc(`${id}-sub-current`)
+        .set({
+          subscription_type_id: sub.id,
+          subscription_type_name: sub.name,
+          recurrence: sub.recurrence,
+          start_date: ts(startedAt),
+          end_date: null,
+          created_at: ts(startedAt),
+        })
     }
 
     // monthly scores (gamification) — last 4 months for active students
@@ -583,11 +1310,19 @@ async function seedTeam(opts: TeamSeed) {
         const label = monthLabel(md)
         const sessions = Math.floor(seededRand(seed + 'mscount' + m) * 12)
         const totalPoints = sessions * (10 + Math.floor(seededRand(seed + 'mp' + m) * 6))
-        await db.collection('contacts').doc(id).collection('monthly_scores').doc(`${id}-${label}`).set({
-          month: label, team_id: teamId, total_points: totalPoints,
-          final_score: Math.min(totalPoints, gamificationSettings.monthly_cap),
-          sessions_count: sessions, updated_at: ts(md),
-        })
+        await db
+          .collection('contacts')
+          .doc(id)
+          .collection('monthly_scores')
+          .doc(`${id}-${label}`)
+          .set({
+            month: label,
+            team_id: teamId,
+            total_points: totalPoints,
+            final_score: Math.min(totalPoints, gamificationSettings.monthly_cap),
+            sessions_count: sessions,
+            updated_at: ts(md),
+          })
       }
     }
 
@@ -598,10 +1333,20 @@ async function seedTeam(opts: TeamSeed) {
         const monday = mondayOfWeeksAgo(w)
         const label = isoWeekLabel(monday)
         const attendChance = Math.min(0.9, c.totalSessions / 60)
-        const count = seededRand(seed + 'wk' + w) < attendChance ? 1 + Math.floor(seededRand(seed + 'wc' + w) * maxPerWeek) : 0
-        await db.collection('contacts').doc(id).collection('contact_weekly_reports').doc(label).set({
-          iso_week: label, sessions_count: count, generated_at: ts(monday),
-        })
+        const count =
+          seededRand(seed + 'wk' + w) < attendChance
+            ? 1 + Math.floor(seededRand(seed + 'wc' + w) * maxPerWeek)
+            : 0
+        await db
+          .collection('contacts')
+          .doc(id)
+          .collection('contact_weekly_reports')
+          .doc(label)
+          .set({
+            iso_week: label,
+            sessions_count: count,
+            generated_at: ts(monday),
+          })
       }
     }
   }
@@ -609,25 +1354,70 @@ async function seedTeam(opts: TeamSeed) {
   // ── contact alerts (show_in_app) — a few per team ─────────────────────────────
   const alertTargets = contactIds.slice(0, Math.min(4, contactIds.length))
   const alertDefs = [
-    { schedule_type: 'sessions_countdown' as const, schedule_value: 10, message: 'Belt grading approaching — review curriculum.', show_in_app: true },
-    { schedule_type: 'datetime' as const,           schedule_value: ts(daysFromNow(7)), message: 'Membership renewal due this week.', show_in_app: true },
-    { schedule_type: 'sessions_countdown' as const, schedule_value: 50, message: '50-session milestone — celebrate in class!', show_in_app: false },
+    {
+      schedule_type: 'sessions_countdown' as const,
+      schedule_value: 10,
+      message: 'Belt grading approaching — review curriculum.',
+      show_in_app: true,
+    },
+    {
+      schedule_type: 'datetime' as const,
+      schedule_value: ts(daysFromNow(7)),
+      message: 'Membership renewal due this week.',
+      show_in_app: true,
+    },
+    {
+      schedule_type: 'sessions_countdown' as const,
+      schedule_value: 50,
+      message: '50-session milestone — celebrate in class!',
+      show_in_app: false,
+    },
   ]
   for (let i = 0; i < alertTargets.length; i++) {
     const def = alertDefs[i % alertDefs.length]
-    await db.collection('contacts').doc(alertTargets[i]).collection('contact_alerts').doc(`${alertTargets[i]}-alert-0`).set({
-      teamId, schedule_type: def.schedule_type, schedule_value: def.schedule_value,
-      message: def.message, show_in_app: def.show_in_app, archived_at: null, created_at: ts(daysFromNow(-3)),
-    })
+    await db
+      .collection('contacts')
+      .doc(alertTargets[i])
+      .collection('contact_alerts')
+      .doc(`${alertTargets[i]}-alert-0`)
+      .set({
+        teamId,
+        schedule_type: def.schedule_type,
+        schedule_value: def.schedule_value,
+        message: def.message,
+        show_in_app: def.show_in_app,
+        archived_at: null,
+        created_at: ts(daysFromNow(-3)),
+      })
   }
 
   // ── goals & tasks ──────────────────────────────────────────────────────────────
   const goalDefs = [
-    { title: 'Improve guard passing',          description: 'Work on pressure passing and leg weave.',           categories: ['technique', 'physical'] },
-    { title: 'Compete at next tournament',      description: 'Enter the regional open and go for gold.',          categories: ['attitude', 'mental'] },
-    { title: 'Build consistent training habit', description: 'Train at least 3× per week for 8 weeks.',           categories: ['attendance', 'attitude'] },
-    { title: 'Develop rear-naked choke finish', description: 'Clean finish from back control.',                   categories: ['technique'] },
-    { title: 'Improve cardio base',             description: 'Finish hard rounds without gassing in minute 3.',   categories: ['physical', 'mental'] },
+    {
+      title: 'Improve guard passing',
+      description: 'Work on pressure passing and leg weave.',
+      categories: ['technique', 'physical'],
+    },
+    {
+      title: 'Compete at next tournament',
+      description: 'Enter the regional open and go for gold.',
+      categories: ['attitude', 'mental'],
+    },
+    {
+      title: 'Build consistent training habit',
+      description: 'Train at least 3× per week for 8 weeks.',
+      categories: ['attendance', 'attitude'],
+    },
+    {
+      title: 'Develop rear-naked choke finish',
+      description: 'Clean finish from back control.',
+      categories: ['technique'],
+    },
+    {
+      title: 'Improve cardio base',
+      description: 'Finish hard rounds without gassing in minute 3.',
+      categories: ['physical', 'mental'],
+    },
   ]
   const taskDefs = [
     'Watch 3 guard-passing breakdown videos',
@@ -644,67 +1434,139 @@ async function seedTeam(opts: TeamSeed) {
     for (let g = 0; g < numGoals; g++) {
       const def = goalDefs[(i + g) % goalDefs.length]
       const goalId = `${id}-goal-${g}`
-      const status = (i < 3 && g === 0) ? 'in_progress' : 'open'
-      await db.collection('contacts').doc(id).collection('goals').doc(goalId).set({
-        type: 'goal', title: def.title, description: def.description, status,
-        categories: def.categories, created_by: 'coach', created_at: ts(daysFromNow(-28)),
-        target_date: ts(daysFromNow(60)), completed_at: null,
-      })
+      const status = i < 3 && g === 0 ? 'in_progress' : 'open'
+      await db
+        .collection('contacts')
+        .doc(id)
+        .collection('goals')
+        .doc(goalId)
+        .set({
+          type: 'goal',
+          title: def.title,
+          description: def.description,
+          status,
+          categories: def.categories,
+          created_by: 'coach',
+          created_at: ts(daysFromNow(-28)),
+          target_date: ts(daysFromNow(60)),
+          completed_at: null,
+        })
       if (status === 'in_progress') {
         for (let e = 0; e < 2; e++) {
-          await db.collection('contacts').doc(id).collection('goals').doc(goalId).collection('evaluations').doc(`${goalId}-eval-${e}`).set({
-            evaluated_at: ts(daysFromNow(-14 + e * 7)), evaluated_by: 'coach', score: 3 + e,
-            notes: e === 0 ? 'Good start — needs more drilling time.' : 'Visible improvement over last session.',
-            status_after: 'in_progress', edited: false,
-          })
+          await db
+            .collection('contacts')
+            .doc(id)
+            .collection('goals')
+            .doc(goalId)
+            .collection('evaluations')
+            .doc(`${goalId}-eval-${e}`)
+            .set({
+              evaluated_at: ts(daysFromNow(-14 + e * 7)),
+              evaluated_by: 'coach',
+              score: 3 + e,
+              notes:
+                e === 0
+                  ? 'Good start — needs more drilling time.'
+                  : 'Visible improvement over last session.',
+              status_after: 'in_progress',
+              edited: false,
+            })
         }
       }
     }
     const taskId = `${id}-task-0`
     const taskDone = i % 3 === 0
-    await db.collection('contacts').doc(id).collection('goals').doc(taskId).set({
-      type: 'task', title: taskDefs[i % taskDefs.length], description: null,
-      status: taskDone ? 'achieved' : 'open', categories: [], created_by: 'coach',
-      created_at: ts(daysFromNow(-7)), target_date: ts(daysFromNow(7)),
-      completed_at: taskDone ? ts(daysFromNow(-2)) : null,
-    })
+    await db
+      .collection('contacts')
+      .doc(id)
+      .collection('goals')
+      .doc(taskId)
+      .set({
+        type: 'task',
+        title: taskDefs[i % taskDefs.length],
+        description: null,
+        status: taskDone ? 'achieved' : 'open',
+        categories: [],
+        created_by: 'coach',
+        created_at: ts(daysFromNow(-7)),
+        target_date: ts(daysFromNow(7)),
+        completed_at: taskDone ? ts(daysFromNow(-2)) : null,
+      })
   }
 
   // ── past-session participants + bookings ──────────────────────────────────────
-  const studentIdxs = pool.map((c, i) => ({ c, i })).filter((x) => x.c.type === 'student').map((x) => x.i)
+  const studentIdxs = pool
+    .map((c, i) => ({ c, i }))
+    .filter((x) => x.c.type === 'student')
+    .map((x) => x.i)
   for (let i = 0; i < pastCount; i++) {
     const sid = sessionIds[i]
     if (!sid) continue
-    const target = 4 + (i * 3) % 6
-    const attending = studentIdxs.filter((idx, k) => ((k + i) % studentIdxs.length) < target).slice(0, target)
+    const target = 4 + ((i * 3) % 6)
+    const attending = studentIdxs
+      .filter((idx, k) => (k + i) % studentIdxs.length < target)
+      .slice(0, target)
     for (const idx of attending) {
       const cs = pool[idx]
       const contactId = contactIds[idx]
-      await db.collection('sessions').doc(sid).collection('participants').doc(contactId).set({
-        contactId, session: sid, firstname: cs.firstname, lastname: cs.lastname,
-        fullname: `${cs.lastname} ${cs.firstname}`, joinedAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
-        checkedInBy: 'seed',
-      })
+      await db
+        .collection('sessions')
+        .doc(sid)
+        .collection('participants')
+        .doc(contactId)
+        .set({
+          contactId,
+          session: sid,
+          firstname: cs.firstname,
+          lastname: cs.lastname,
+          fullname: `${cs.lastname} ${cs.firstname}`,
+          joinedAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
+          checkedInBy: 'seed',
+        })
     }
     await db.collection('sessions').doc(sid).update({ participants_count: attending.length })
   }
 
   // upcoming-session bookings from trial/external contacts
-  const bookingIdxs = pool.map((c, i) => ({ c, i })).filter((x) => x.c.type !== 'student').map((x) => x.i).slice(0, 4)
-  const sessionBookingCounts = new Map<string, { bookings_count: number; trial_bookings_count: number }>()
+  const bookingIdxs = pool
+    .map((c, i) => ({ c, i }))
+    .filter((x) => x.c.type !== 'student')
+    .map((x) => x.i)
+    .slice(0, 4)
+  const sessionBookingCounts = new Map<
+    string,
+    { bookings_count: number; trial_bookings_count: number }
+  >()
   for (let i = 0; i < bookingIdxs.length; i++) {
     const idx = bookingIdxs[i]
     const b = pool[idx]
     const sessionId = sessionIds[pastCount + (i < 2 ? 1 : 3)]
     if (!sessionId) continue
-    await db.collection('sessions').doc(sessionId).collection('bookings').doc(`${teamId}-booking-${i}`).set({
-      teamId, contact: contactIds[idx], session: sessionId,
-      email: `${slugEmail(b)}.${teamId}@example.com`, firstname: b.firstname, lastname: b.lastname,
-      phone: '', is_new_contact: true, fromPortal: true, joinedAt: ts(daysFromNow(-2)),
-      status: 'pending', booking_token: `tok-${teamId}-${i}`,
-    })
-    const cur = sessionBookingCounts.get(sessionId) ?? { bookings_count: 0, trial_bookings_count: 0 }
-    cur.bookings_count++; cur.trial_bookings_count++
+    await db
+      .collection('sessions')
+      .doc(sessionId)
+      .collection('bookings')
+      .doc(`${teamId}-booking-${i}`)
+      .set({
+        teamId,
+        contact: contactIds[idx],
+        session: sessionId,
+        email: `${slugEmail(b)}.${teamId}@example.com`,
+        firstname: b.firstname,
+        lastname: b.lastname,
+        phone: '',
+        is_new_contact: true,
+        fromPortal: true,
+        joinedAt: ts(daysFromNow(-2)),
+        status: 'pending',
+        booking_token: `tok-${teamId}-${i}`,
+      })
+    const cur = sessionBookingCounts.get(sessionId) ?? {
+      bookings_count: 0,
+      trial_bookings_count: 0,
+    }
+    cur.bookings_count++
+    cur.trial_bookings_count++
     sessionBookingCounts.set(sessionId, cur)
   }
   for (const [sessionId, counts] of sessionBookingCounts) {
@@ -713,20 +1575,46 @@ async function seedTeam(opts: TeamSeed) {
 
   // ── team activity log ─────────────────────────────────────────────────────────
   const logEntries = [
-    { event: 'contact_add',               desc: `New trial contact ${pool[bookingIdxs[0]]?.firstname ?? 'lead'} added from portal.`, contact: contactIds[bookingIdxs[0]] },
-    { event: 'session_participant_add',   desc: `${pool[0].firstname} ${pool[0].lastname} checked into BJJ.`, contact: contactIds[0] },
-    { event: 'rank_change',               desc: `${pool[2].firstname} ${pool[2].lastname} promoted.`, contact: contactIds[2] },
-    { event: 'subscription_change',       desc: `${pool[1].firstname} ${pool[1].lastname} switched to Annual Membership.`, contact: contactIds[1] },
-    { event: 'booking_confirmed',         desc: `Trial booking confirmed for an upcoming session.`, contact: contactIds[bookingIdxs[0]] },
+    {
+      event: 'contact_add',
+      desc: `New trial contact ${pool[bookingIdxs[0]]?.firstname ?? 'lead'} added from portal.`,
+      contact: contactIds[bookingIdxs[0]],
+    },
+    {
+      event: 'session_participant_add',
+      desc: `${pool[0].firstname} ${pool[0].lastname} checked into BJJ.`,
+      contact: contactIds[0],
+    },
+    {
+      event: 'rank_change',
+      desc: `${pool[2].firstname} ${pool[2].lastname} promoted.`,
+      contact: contactIds[2],
+    },
+    {
+      event: 'subscription_change',
+      desc: `${pool[1].firstname} ${pool[1].lastname} switched to Annual Membership.`,
+      contact: contactIds[1],
+    },
+    {
+      event: 'booking_confirmed',
+      desc: `Trial booking confirmed for an upcoming session.`,
+      contact: contactIds[bookingIdxs[0]],
+    },
   ]
   for (let i = 0; i < logEntries.length; i++) {
     const e = logEntries[i]
     if (!e.contact) continue
-    await db.collection('teams').doc(teamId).collection('activity_log').doc(`${teamId}-log-${i}`).set({
-      event: e.event, created_at: ts(daysFromNow(-i - 1)),
-      parameters: { description: e.desc },
-      refs: { contact: e.contact, user: teamId },
-    })
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('activity_log')
+      .doc(`${teamId}-log-${i}`)
+      .set({
+        event: e.event,
+        created_at: ts(daysFromNow(-i - 1)),
+        parameters: { description: e.desc },
+        refs: { contact: e.contact, user: teamId },
+      })
   }
 
   // ── automations (studio+ only): templates, alert presets, rules, logs ──────────
@@ -736,23 +1624,67 @@ async function seedTeam(opts: TeamSeed) {
 
   // ── events ───────────────────────────────────────────────────────────────────
   const eventDefs = [
-    { title: 'Regional BJJ Tournament', type: 'competition', startOffset: 45, durationH: 8,  fee: 25,  location: 'Sports Arena Geneva',            description: 'Annual regional championship — open to white and blue belts. Gi and No-Gi divisions.' },
-    { title: 'Summer MMA Camp',         type: 'camp',        startOffset: 60, durationH: 72, fee: 180, location: 'High Performance Training Center', description: '3-day intensive camp with guest instructors. All levels welcome.' },
-    { title: 'Nutrition Workshop',      type: 'seminar',     startOffset: 14, durationH: 3,  fee: 0,   location: 'Team HQ — Conference Room',        description: 'Practical guide to sports nutrition and recovery. Free for all members.' },
+    {
+      title: 'Regional BJJ Tournament',
+      type: 'competition',
+      startOffset: 45,
+      durationH: 8,
+      fee: 25,
+      location: 'Sports Arena Geneva',
+      description:
+        'Annual regional championship — open to white and blue belts. Gi and No-Gi divisions.',
+    },
+    {
+      title: 'Summer MMA Camp',
+      type: 'camp',
+      startOffset: 60,
+      durationH: 72,
+      fee: 180,
+      location: 'High Performance Training Center',
+      description: '3-day intensive camp with guest instructors. All levels welcome.',
+    },
+    {
+      title: 'Nutrition Workshop',
+      type: 'seminar',
+      startOffset: 14,
+      durationH: 3,
+      fee: 0,
+      location: 'Team HQ — Conference Room',
+      description: 'Practical guide to sports nutrition and recovery. Free for all members.',
+    },
   ]
   for (let ei = 0; ei < eventDefs.length; ei++) {
     const e = eventDefs[ei]
     const eventId = `${teamId}-event-${ei}`
-    const maxInvite = [Math.min(12, contactCount), Math.min(8, contactCount), Math.min(10, contactCount)][ei]
-    let sentCount = 0, attendeeCount = 0
+    const maxInvite = [
+      Math.min(12, contactCount),
+      Math.min(8, contactCount),
+      Math.min(10, contactCount),
+    ][ei]
+    let sentCount = 0,
+      attendeeCount = 0
     const startIdx = ei * 3
 
-    await db.collection('events').doc(eventId).set({
-      teamId, title: e.title, type: e.type, fee: e.fee, description: e.description, location: e.location,
-      start: ts(daysFromNow(e.startOffset)), end: ts(hoursOffset(daysFromNow(e.startOffset), e.durationH)),
-      status: 'open', participants_count: 0, attendees_count: 0, invitations_sent_count: 0,
-      deleted_at: null, createdBy: uid, created_at: ts(daysFromNow(-10)),
-    })
+    await db
+      .collection('events')
+      .doc(eventId)
+      .set({
+        teamId,
+        title: e.title,
+        type: e.type,
+        fee: e.fee,
+        description: e.description,
+        location: e.location,
+        start: ts(daysFromNow(e.startOffset)),
+        end: ts(hoursOffset(daysFromNow(e.startOffset), e.durationH)),
+        status: 'open',
+        participants_count: 0,
+        attendees_count: 0,
+        invitations_sent_count: 0,
+        deleted_at: null,
+        createdBy: uid,
+        created_at: ts(daysFromNow(-10)),
+      })
 
     for (let j = 0; j < maxInvite; j++) {
       const cidx = (startIdx + j) % pool.length
@@ -763,41 +1695,90 @@ async function seedTeam(opts: TeamSeed) {
       const hasOpened = ['opened', 'responded', 'declined'].includes(status)
       const hasRsvp = ['responded', 'declined'].includes(status)
 
-      await db.collection('events').doc(eventId).collection('invitations').doc(contactId).set({
-        contactId, firstname: c.firstname, lastname: c.lastname, email: `${slugEmail(c)}.${teamId}@example.com`,
-        status, token, link: `https://linyup.com/portal/event-invitation?token=${token}`, eventId, sentBy: uid,
-        sentAt: ts(daysFromNow(-7)), firstOpenedAt: hasOpened ? ts(daysFromNow(-5)) : null,
-        lastOpenedAt: hasOpened ? ts(daysFromNow(-3)) : null, respondedAt: hasRsvp ? ts(daysFromNow(-2)) : null,
-      })
+      await db
+        .collection('events')
+        .doc(eventId)
+        .collection('invitations')
+        .doc(contactId)
+        .set({
+          contactId,
+          firstname: c.firstname,
+          lastname: c.lastname,
+          email: `${slugEmail(c)}.${teamId}@example.com`,
+          status,
+          token,
+          link: `https://linyup.com/public/event-invitation?token=${token}`,
+          eventId,
+          sentBy: uid,
+          sentAt: ts(daysFromNow(-7)),
+          firstOpenedAt: hasOpened ? ts(daysFromNow(-5)) : null,
+          lastOpenedAt: hasOpened ? ts(daysFromNow(-3)) : null,
+          respondedAt: hasRsvp ? ts(daysFromNow(-2)) : null,
+        })
       sentCount++
       if (status === 'responded') {
         attendeeCount++
-        await db.collection('events').doc(eventId).collection('attendees').doc(contactId).set({
-          contactId, firstname: c.firstname, lastname: c.lastname, email: `${slugEmail(c)}.${teamId}@example.com`,
-          notes: j === 0 ? 'Really looking forward to this!' : null, respondedAt: ts(daysFromNow(-2)),
-        })
+        await db
+          .collection('events')
+          .doc(eventId)
+          .collection('attendees')
+          .doc(contactId)
+          .set({
+            contactId,
+            firstname: c.firstname,
+            lastname: c.lastname,
+            email: `${slugEmail(c)}.${teamId}@example.com`,
+            notes: j === 0 ? 'Really looking forward to this!' : null,
+            respondedAt: ts(daysFromNow(-2)),
+          })
       }
     }
-    await db.collection('events').doc(eventId).update({
-      invitations_sent_count: sentCount, attendees_count: attendeeCount, last_invitation_sent_at: ts(daysFromNow(-7)),
-    })
+    await db
+      .collection('events')
+      .doc(eventId)
+      .update({
+        invitations_sent_count: sentCount,
+        attendees_count: attendeeCount,
+        last_invitation_sent_at: ts(daysFromNow(-7)),
+      })
   }
 
   // ── saas_subscriptions ────────────────────────────────────────────────────────
   const nowTs = ts(now())
   if (plan === 'coach') {
-    await db.collection('saas_subscriptions').doc(teamId).set({
-      teamId, plan: 'coach', status: 'trial', trial_ends_at: ts(daysFromNow(14)),
-      current_period_start: null, current_period_end: null, cancel_at_period_end: false,
-      gateway_type: null, gateway_data: null, created_at: nowTs, updated_at: nowTs,
-    })
+    await db
+      .collection('saas_subscriptions')
+      .doc(teamId)
+      .set({
+        teamId,
+        plan: 'coach',
+        status: 'trial',
+        trial_ends_at: ts(daysFromNow(14)),
+        current_period_start: null,
+        current_period_end: null,
+        cancel_at_period_end: false,
+        gateway_type: null,
+        gateway_data: null,
+        created_at: nowTs,
+        updated_at: nowTs,
+      })
   } else if (!orgId) {
-    await db.collection('saas_subscriptions').doc(teamId).set({
-      teamId, plan, status: 'active', trial_ends_at: null,
-      current_period_start: ts(daysFromNow(-30)), current_period_end: ts(daysFromNow(1)),
-      cancel_at_period_end: false, gateway_type: null, gateway_data: null,
-      created_at: ts(daysFromNow(-220)), updated_at: nowTs,
-    })
+    await db
+      .collection('saas_subscriptions')
+      .doc(teamId)
+      .set({
+        teamId,
+        plan,
+        status: 'active',
+        trial_ends_at: null,
+        current_period_start: ts(daysFromNow(-30)),
+        current_period_end: ts(daysFromNow(1)),
+        cancel_at_period_end: false,
+        gateway_type: null,
+        gateway_data: null,
+        created_at: ts(daysFromNow(-220)),
+        updated_at: nowTs,
+      })
   }
   // org member teams are billed through the org subscription (handled in seedOrg)
 
@@ -811,13 +1792,27 @@ async function seedTeam(opts: TeamSeed) {
     email: `${slugEmail(pool[studentIdx])}.${teamId}@example.com`,
     displayName: `${pool[studentIdx].firstname} ${pool[studentIdx].lastname}`,
     password: 'linyup123',
-    claims: { contactId: studentContactId, teamId, sessionExpires, email: `${slugEmail(pool[studentIdx])}.${teamId}@example.com` },
+    claims: {
+      contactId: studentContactId,
+      teamId,
+      sessionExpires,
+      email: `${slugEmail(pool[studentIdx])}.${teamId}@example.com`,
+    },
   })
-  await db.collection('auth_tokens').doc(`${teamId}-seed-student`).set({
-    contactId: studentContactId, teamId, createdBy: uid, sessionExpires, created_at: ts(now()),
-  })
+  await db
+    .collection('auth_tokens')
+    .doc(`${teamId}-seed-student`)
+    .set({
+      contactId: studentContactId,
+      teamId,
+      createdBy: uid,
+      sessionExpires,
+      created_at: ts(now()),
+    })
 
-  console.log(`   ✓ ${teamName} (${plan}) — ${contactCount} contacts, ${sessionDefs.length} sessions`)
+  console.log(
+    `   ✓ ${teamName} (${plan}) — ${contactCount} contacts, ${sessionDefs.length} sessions`
+  )
 }
 
 // ── automations seed (templates + presets + rules + logs) ─────────────────────
@@ -828,139 +1823,288 @@ async function seedAutomations(teamId: string, language: string) {
   // outreach templates
   const templates = [
     {
-      id: `${teamId}-tmpl-welcome`, system_key: `lib_trial_welcome:${language}`,
-      name: 'Welcome to your first class', body_mode: 'markdown', language, active: true,
+      id: `${teamId}-tmpl-welcome`,
+      system_key: `lib_trial_welcome:${language}`,
+      name: 'Welcome to your first class',
+      body_mode: 'markdown',
+      language,
+      active: true,
       subject: 'Welcome to {{teamName}}, {{firstname}}!',
       body: 'Hi {{firstname}},\n\nWe are so excited to welcome you to **{{teamName}}** for your first class! Come a few minutes early, wear comfortable clothes, and bring water.\n\nSee you on the mats!\n\nThe {{teamName}} team',
     },
     {
-      id: `${teamId}-tmpl-winback`, system_key: `lib_winback:${language}`,
-      name: 'We miss you', body_mode: 'markdown', language, active: true,
+      id: `${teamId}-tmpl-winback`,
+      system_key: `lib_winback:${language}`,
+      name: 'We miss you',
+      body_mode: 'markdown',
+      language,
+      active: true,
       subject: '{{firstname}}, we miss you at {{teamName}}',
-      body: "Hi {{firstname}},\n\nIt has been a while since your last session. We would love to see you back on the mats. Reply to this email and we will help you find a class that fits your schedule.\n\nThe {{teamName}} team",
+      body: 'Hi {{firstname}},\n\nIt has been a while since your last session. We would love to see you back on the mats. Reply to this email and we will help you find a class that fits your schedule.\n\nThe {{teamName}} team',
     },
   ]
   for (const t of templates) {
-    await teamRef.collection('outreach_templates').doc(t.id).set({
-      name: t.name, subject: t.subject, body: t.body, body_mode: t.body_mode,
-      language: t.language, active: t.active, system_key: t.system_key, created_at: ts(daysFromNow(-60)),
-    })
+    await teamRef
+      .collection('outreach_templates')
+      .doc(t.id)
+      .set({
+        name: t.name,
+        subject: t.subject,
+        body: t.body,
+        body_mode: t.body_mode,
+        language: t.language,
+        active: t.active,
+        system_key: t.system_key,
+        created_at: ts(daysFromNow(-60)),
+      })
   }
 
   // alert presets
   const presets = [
-    { id: `${teamId}-preset-grading`, name: 'Belt grading reminder', description: 'Fires 10 sessions before next grading window.', schedule_type: 'sessions_countdown', schedule_value: 10, message: 'Belt grading is coming up — review the curriculum.', show_in_app: true },
-    { id: `${teamId}-preset-renewal`, name: 'Membership renewal',    description: 'One-off reminder on a chosen date.',           schedule_type: 'datetime',            schedule_value: null, message: 'Membership renewal is due — confirm payment details.', show_in_app: true },
+    {
+      id: `${teamId}-preset-grading`,
+      name: 'Belt grading reminder',
+      description: 'Fires 10 sessions before next grading window.',
+      schedule_type: 'sessions_countdown',
+      schedule_value: 10,
+      message: 'Belt grading is coming up — review the curriculum.',
+      show_in_app: true,
+    },
+    {
+      id: `${teamId}-preset-renewal`,
+      name: 'Membership renewal',
+      description: 'One-off reminder on a chosen date.',
+      schedule_type: 'datetime',
+      schedule_value: null,
+      message: 'Membership renewal is due — confirm payment details.',
+      show_in_app: true,
+    },
   ]
   for (const p of presets) {
-    await teamRef.collection('alert_presets').doc(p.id).set({
-      name: p.name, description: p.description, schedule_type: p.schedule_type,
-      schedule_value: p.schedule_value, message: p.message, show_in_app: p.show_in_app, created_at: ts(daysFromNow(-60)),
-    })
+    await teamRef
+      .collection('alert_presets')
+      .doc(p.id)
+      .set({
+        name: p.name,
+        description: p.description,
+        schedule_type: p.schedule_type,
+        schedule_value: p.schedule_value,
+        message: p.message,
+        show_in_app: p.show_in_app,
+        created_at: ts(daysFromNow(-60)),
+      })
   }
 
   // automation rules
   const rules = [
     {
-      id: `${teamId}-rule-welcome`, name: 'Welcome new trial', active: true, system_key: 'lib_trial_welcome',
+      id: `${teamId}-rule-welcome`,
+      name: 'Welcome new trial',
+      active: true,
+      system_key: 'lib_trial_welcome',
       trigger: { type: 'contact_created' },
       conditions: [{ type: 'contact_type', value: 'trial' }],
       actions: [{ type: 'send_email', templateId: `${teamId}-tmpl-welcome` }],
     },
     {
-      id: `${teamId}-rule-winback`, name: 'Win back inactive students', active: true, system_key: 'lib_winback',
+      id: `${teamId}-rule-winback`,
+      name: 'Win back inactive students',
+      active: true,
+      system_key: 'lib_winback',
       trigger: { type: 'schedule_daily' },
-      conditions: [{ type: 'contact_type', value: 'student' }, { type: 'inactivity_days', value: 30 }],
+      conditions: [
+        { type: 'contact_type', value: 'student' },
+        { type: 'inactivity_days', value: 30 },
+      ],
       actions: [
         { type: 'send_email', templateId: `${teamId}-tmpl-winback` },
         { type: 'assign_tag', tag: 'win-back' },
       ],
     },
     {
-      id: `${teamId}-rule-milestone`, name: 'Celebrate 50-session milestone', active: false, system_key: 'lib_milestone_50',
+      id: `${teamId}-rule-milestone`,
+      name: 'Celebrate 50-session milestone',
+      active: false,
+      system_key: 'lib_milestone_50',
       trigger: { type: 'session_ended' },
       conditions: [{ type: 'sessions_attended_exactly', value: 50 }],
-      actions: [{ type: 'create_alert', presetId: `${teamId}-preset-grading` }, { type: 'log_activity', message: '{{firstname}} reached 50 sessions 🎉' }],
+      actions: [
+        { type: 'create_alert', presetId: `${teamId}-preset-grading` },
+        { type: 'log_activity', message: '{{firstname}} reached 50 sessions 🎉' },
+      ],
     },
   ]
   for (const r of rules) {
-    await teamRef.collection('automation_rules').doc(r.id).set({
-      name: r.name, active: r.active, trigger: r.trigger, conditions: r.conditions,
-      actions: r.actions, system_key: r.system_key, created_at: ts(daysFromNow(-60)), updated_at: ts(daysFromNow(-5)),
-    })
+    await teamRef
+      .collection('automation_rules')
+      .doc(r.id)
+      .set({
+        name: r.name,
+        active: r.active,
+        trigger: r.trigger,
+        conditions: r.conditions,
+        actions: r.actions,
+        system_key: r.system_key,
+        created_at: ts(daysFromNow(-60)),
+        updated_at: ts(daysFromNow(-5)),
+      })
   }
 
   // automation logs (recent runs)
   const logs = [
-    { id: `${teamId}-alog-0`, rule_id: `${teamId}-rule-welcome`, rule_name: 'Welcome new trial',          trigger_type: 'contact_created', trigger_tier: 'event',     contacts_matched: 1, actions_executed: 1, actions_failed: 0, days: 1 },
-    { id: `${teamId}-alog-1`, rule_id: `${teamId}-rule-winback`, rule_name: 'Win back inactive students', trigger_type: 'schedule_daily',  trigger_tier: 'scheduled', contacts_matched: 3, actions_executed: 6, actions_failed: 0, days: 2 },
+    {
+      id: `${teamId}-alog-0`,
+      rule_id: `${teamId}-rule-welcome`,
+      rule_name: 'Welcome new trial',
+      trigger_type: 'contact_created',
+      trigger_tier: 'event',
+      contacts_matched: 1,
+      actions_executed: 1,
+      actions_failed: 0,
+      days: 1,
+    },
+    {
+      id: `${teamId}-alog-1`,
+      rule_id: `${teamId}-rule-winback`,
+      rule_name: 'Win back inactive students',
+      trigger_type: 'schedule_daily',
+      trigger_tier: 'scheduled',
+      contacts_matched: 3,
+      actions_executed: 6,
+      actions_failed: 0,
+      days: 2,
+    },
   ]
   for (const l of logs) {
-    await teamRef.collection('automation_logs').doc(l.id).set({
-      rule_id: l.rule_id, rule_name: l.rule_name, triggered_at: ts(daysFromNow(-l.days)),
-      trigger_type: l.trigger_type, trigger_tier: l.trigger_tier,
-      contacts_matched: l.contacts_matched, actions_executed: l.actions_executed, actions_failed: l.actions_failed,
-    })
+    await teamRef
+      .collection('automation_logs')
+      .doc(l.id)
+      .set({
+        rule_id: l.rule_id,
+        rule_name: l.rule_name,
+        triggered_at: ts(daysFromNow(-l.days)),
+        trigger_type: l.trigger_type,
+        trigger_tier: l.trigger_tier,
+        contacts_matched: l.contacts_matched,
+        actions_executed: l.actions_executed,
+        actions_failed: l.actions_failed,
+      })
   }
 }
 
 // ── org seed ──────────────────────────────────────────────────────────────────
 
 async function seedOrg(opts: {
-  orgId: string; orgName: string; orgSlug: string; adminUid: string; teamIds: string[]
+  orgId: string
+  orgName: string
+  orgSlug: string
+  adminUid: string
+  teamIds: string[]
 }) {
   const { orgId, orgName, orgSlug, adminUid, teamIds } = opts
   const nowTs = ts(now())
 
-  const bjjBelt = [{
-    id: 'bjj-belt', name: 'BJJ Belt', is_primary: true,
-    levels: [
-      { value: 0, label: 'White Belt',  color: '#e5e7eb' },
-      { value: 1, label: 'Blue Belt',   color: '#1d4ed8' },
-      { value: 2, label: 'Purple Belt', color: '#7e22ce' },
-      { value: 3, label: 'Brown Belt',  color: '#78350f' },
-      { value: 4, label: 'Black Belt',  color: '#111827' },
-    ],
-  }]
+  const bjjBelt = [
+    {
+      id: 'bjj-belt',
+      name: 'BJJ Belt',
+      is_primary: true,
+      levels: [
+        { value: 0, label: 'White Belt', color: '#e5e7eb' },
+        { value: 1, label: 'Blue Belt', color: '#1d4ed8' },
+        { value: 2, label: 'Purple Belt', color: '#7e22ce' },
+        { value: 3, label: 'Brown Belt', color: '#78350f' },
+        { value: 4, label: 'Black Belt', color: '#111827' },
+      ],
+    },
+  ]
 
-  await db.collection('organizations').doc(orgId).set({
-    name: orgName, slug: orgSlug,
-    description: `${orgName} — multi-team organization managed with Linyup.`,
-    plan: 'organization', plan_status: 'active', ranking_systems: bjjBelt,
-    created: ts(daysFromNow(-260)), createdBy: adminUid,
-  })
+  await db
+    .collection('organizations')
+    .doc(orgId)
+    .set({
+      name: orgName,
+      slug: orgSlug,
+      description: `${orgName} — multi-team organization managed with Linyup.`,
+      plan: 'organization',
+      plan_status: 'active',
+      ranking_systems: bjjBelt,
+      created: ts(daysFromNow(-260)),
+      createdBy: adminUid,
+    })
 
   await db.collection('organizations').doc(orgId).collection('org_members').doc(adminUid).set({
-    userId: adminUid, orgId, role: 'org_admin', joined: nowTs, addedBy: adminUid,
+    userId: adminUid,
+    orgId,
+    role: 'org_admin',
+    joined: nowTs,
+    addedBy: adminUid,
   })
-  await db.collection('users').doc(adminUid).set({ orgIds: [orgId] }, { merge: true })
+  await db
+    .collection('users')
+    .doc(adminUid)
+    .set({ orgIds: [orgId] }, { merge: true })
 
   for (const teamId of teamIds) {
     await db.collection('organizations').doc(orgId).collection('org_teams').doc(teamId).set({
-      teamId, orgId, status: 'active', joined: nowTs, addedBy: adminUid,
+      teamId,
+      orgId,
+      status: 'active',
+      joined: nowTs,
+      addedBy: adminUid,
     })
     // ensure the org admin is a manager of every member team they don't already own
     const memberRef = db.collection('teams').doc(teamId).collection('team_members').doc(adminUid)
     const existing = await memberRef.get()
     if (!existing.exists) {
-      await memberRef.set({ userId: adminUid, teamId, role: 'manager', joined: nowTs, addedBy: 'seed' })
+      await memberRef.set({
+        userId: adminUid,
+        teamId,
+        role: 'manager',
+        joined: nowTs,
+        addedBy: 'seed',
+      })
     }
   }
 
-  await db.collection('saas_subscriptions').doc(orgId).set({
-    entity_type: 'org', entity_id: orgId, teamId: orgId, plan: 'organization', status: 'active',
-    trial_ends_at: null, current_period_start: ts(daysFromNow(-30)), current_period_end: ts(daysFromNow(1)),
-    cancel_at_period_end: false, gateway_type: null, gateway_data: null,
-    created_at: ts(daysFromNow(-260)), updated_at: nowTs,
-  })
+  await db
+    .collection('saas_subscriptions')
+    .doc(orgId)
+    .set({
+      entity_type: 'org',
+      entity_id: orgId,
+      teamId: orgId,
+      plan: 'organization',
+      status: 'active',
+      trial_ends_at: null,
+      current_period_start: ts(daysFromNow(-30)),
+      current_period_end: ts(daysFromNow(1)),
+      cancel_at_period_end: false,
+      gateway_type: null,
+      gateway_data: null,
+      created_at: ts(daysFromNow(-260)),
+      updated_at: nowTs,
+    })
 
   // org-wide event
-  await db.collection('events').doc(`${orgId}-event-open`).set({
-    orgId, teamId: null, scope: 'org', title: 'Titan Open Championship 2026', type: 'competition',
-    start: ts(daysFromNow(45)), end: ts(daysFromNow(46)), location: 'Geneva Sports Arena',
-    description: 'Annual open championship — all Titan clubs are invited to participate.',
-    status: 'open', deleted_at: null, createdBy: adminUid, created_at: nowTs,
-  })
+  await db
+    .collection('events')
+    .doc(`${orgId}-event-open`)
+    .set({
+      orgId,
+      teamId: null,
+      scope: 'org',
+      title: 'Titan Open Championship 2026',
+      type: 'competition',
+      start: ts(daysFromNow(45)),
+      end: ts(daysFromNow(46)),
+      location: 'Geneva Sports Arena',
+      description: 'Annual open championship — all Titan clubs are invited to participate.',
+      status: 'open',
+      deleted_at: null,
+      createdBy: adminUid,
+      created_at: nowTs,
+    })
 
   console.log(`   ✓ ${orgName} — ${teamIds.length} member teams`)
 }
@@ -968,7 +2112,10 @@ async function seedOrg(opts: {
 // ── auth helper (idempotent create-or-update) ─────────────────────────────────
 
 async function upsertAuthUser(opts: {
-  uid: string; email: string; displayName: string; password: string
+  uid: string
+  email: string
+  displayName: string
+  password: string
   claims?: Record<string, unknown>
 }) {
   const { uid, email, displayName, password, claims } = opts
@@ -977,7 +2124,9 @@ async function upsertAuthUser(opts: {
   } catch (e: unknown) {
     const code = (e as { code?: string }).code
     if (code === 'auth/uid-already-exists' || code === 'auth/email-already-exists') {
-      await auth.updateUser(uid, { email, password, displayName, emailVerified: true }).catch(() => {})
+      await auth
+        .updateUser(uid, { email, password, displayName, emailVerified: true })
+        .catch(() => {})
     } else {
       throw e
     }
@@ -988,7 +2137,8 @@ async function upsertAuthUser(opts: {
 function slugEmail(c: PoolEntry): string {
   return `${c.firstname}.${c.lastname}`
     .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // strip combining diacritics
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // strip combining diacritics
     .replace(/[^a-z]+/g, '.')
     .replace(/\.+/g, '.')
     .replace(/^\.|\.$/g, '')
@@ -1002,7 +2152,9 @@ function slugEmail(c: PoolEntry): string {
 
 async function enableEmailPasswordSignIn() {
   const credential = admin.app().options.credential!
-  const token = await (credential as { getAccessToken(): Promise<{ access_token: string }> }).getAccessToken()
+  const token = await (
+    credential as { getAccessToken(): Promise<{ access_token: string }> }
+  ).getAccessToken()
   const url =
     `https://identitytoolkit.googleapis.com/v2/projects/${PROJECT_ID}/config` +
     `?updateMask=signIn.email.enabled,signIn.email.passwordRequired`
@@ -1030,43 +2182,81 @@ async function main() {
 
   // 1. Coach plan — solo coach
   await seedTeam({
-    uid: 'seed-coach-uid', email: 'coach@linyup.com', displayName: 'Marco Rossi',
-    teamId: 'seed-team-coach', teamName: 'Samurai Fight Academy', teamSlug: 'samurai-fight-academy',
-    plan: 'coach', planStatus: 'trial', accentColor: '#7c3aed', contactCount: 15,
-    tagline: 'Traditional martial arts with a modern edge — disciplined training for body and mind.',
+    uid: 'seed-coach-uid',
+    email: 'coach@linyup.com',
+    displayName: 'Marco Rossi',
+    teamId: 'seed-team-coach',
+    teamName: 'Samurai Fight Academy',
+    teamSlug: 'samurai-fight-academy',
+    plan: 'coach',
+    planStatus: 'trial',
+    accentColor: '#7c3aed',
+    contactCount: 15,
+    tagline:
+      'Traditional martial arts with a modern edge — disciplined training for body and mind.',
     portalGradient: 'night',
   })
 
   // 2. Studio plan — team with 2 coaches
   await seedTeam({
-    uid: 'seed-studio-uid', email: 'studio@linyup.com', displayName: 'Anna Schmidt',
-    teamId: 'seed-team-studio', teamName: 'Iron Circle Gym', teamSlug: 'iron-circle-gym',
-    plan: 'studio', planStatus: 'active', accentColor: '#dc2626', contactCount: 30,
+    uid: 'seed-studio-uid',
+    email: 'studio@linyup.com',
+    displayName: 'Anna Schmidt',
+    teamId: 'seed-team-studio',
+    teamName: 'Iron Circle Gym',
+    teamSlug: 'iron-circle-gym',
+    plan: 'studio',
+    planStatus: 'active',
+    accentColor: '#dc2626',
+    contactCount: 30,
     tagline: 'Forge your fight game — BJJ, MMA and kickboxing under one roof, all levels welcome.',
     portalGradient: 'warm',
-    extraCoaches: [{ uid: 'seed-studio-coach2-uid', displayName: 'Marco Silva', email: 'marco.silva@ironcircle.example.com' }],
+    extraCoaches: [
+      {
+        uid: 'seed-studio-coach2-uid',
+        displayName: 'Marco Silva',
+        email: 'marco.silva@ironcircle.example.com',
+      },
+    ],
   })
 
   // 3. Organisation — org admin + 2 member teams
   await seedTeam({
-    uid: 'seed-org-uid', email: 'org@linyup.com', displayName: 'Rafael Torres',
-    teamId: 'seed-org-team-a', teamName: 'Titan Combat Sports', teamSlug: 'titan-combat-sports',
-    plan: 'organization', planStatus: 'active', accentColor: '#0284c7', contactCount: 20,
+    uid: 'seed-org-uid',
+    email: 'org@linyup.com',
+    displayName: 'Rafael Torres',
+    teamId: 'seed-org-team-a',
+    teamName: 'Titan Combat Sports',
+    teamSlug: 'titan-combat-sports',
+    plan: 'organization',
+    planStatus: 'active',
+    accentColor: '#0284c7',
+    contactCount: 20,
     tagline: 'The Titan flagship — competition-grade grappling and MMA coaching for every level.',
     portalGradient: 'royal',
     orgId: 'seed-org',
   })
   await seedTeam({
-    uid: 'seed-org-coachb-uid', email: 'coach.b@titan.example.com', displayName: 'Diego Fernández',
-    teamId: 'seed-org-team-b', teamName: 'Titan Striking Lab', teamSlug: 'titan-striking-lab',
-    plan: 'organization', planStatus: 'active', accentColor: '#0d9488', contactCount: 18,
+    uid: 'seed-org-coachb-uid',
+    email: 'coach.b@titan.example.com',
+    displayName: 'Diego Fernández',
+    teamId: 'seed-org-team-b',
+    teamName: 'Titan Striking Lab',
+    teamSlug: 'titan-striking-lab',
+    plan: 'organization',
+    planStatus: 'active',
+    accentColor: '#0d9488',
+    contactCount: 18,
     tagline: 'Precision striking — kickboxing technique, pad work and fight-camp conditioning.',
     portalGradient: 'ocean',
     orgId: 'seed-org',
   })
   await seedOrg({
-    orgId: 'seed-org', orgName: 'Titan Martial Arts Association', orgSlug: 'titan-martial-arts',
-    adminUid: 'seed-org-uid', teamIds: ['seed-org-team-a', 'seed-org-team-b'],
+    orgId: 'seed-org',
+    orgName: 'Titan Martial Arts Association',
+    orgSlug: 'titan-martial-arts',
+    adminUid: 'seed-org-uid',
+    teamIds: ['seed-org-team-a', 'seed-org-team-b'],
   })
 
   console.log('\n✅ Staging seeded successfully!\n')
@@ -1084,4 +2274,7 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((err) => { console.error('❌ Seed failed:', err); process.exit(1) })
+  .catch((err) => {
+    console.error('❌ Seed failed:', err)
+    process.exit(1)
+  })

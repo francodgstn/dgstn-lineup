@@ -6,7 +6,6 @@ import { to } from '../utils/async'
 import { sendEmail } from '../utils/email'
 import { getHostingUrl } from '../utils/env'
 
-
 const EVENTS_COLLECTION = 'events'
 const CONTACTS_COLLECTION = 'contacts'
 const INVITATIONS_SUBCOLLECTION = 'invitations'
@@ -18,18 +17,46 @@ function generateInvitationToken(): string {
   return crypto.randomBytes(32).toString('hex')
 }
 
-function googleCalendarLink(title: string, start: Date, end: Date, location: string, description: string): string {
+function googleCalendarLink(
+  title: string,
+  start: Date,
+  end: Date,
+  location: string,
+  description: string
+): string {
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0]
-  const p = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: `${fmt(start)}/${fmt(end)}`, details: description, location })
+  const p = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details: description,
+    location,
+  })
   return `https://calendar.google.com/calendar/render?${p.toString()}`
 }
 
 function buildInvitationEmail(params: {
-  firstname: string; teamName: string; eventTitle: string
-  eventStart: string; eventEnd: string; location: string
-  link: string; calendarLink: string; fee: string
+  firstname: string
+  teamName: string
+  eventTitle: string
+  eventStart: string
+  eventEnd: string
+  location: string
+  link: string
+  calendarLink: string
+  fee: string
 }): { subject: string; html: string; text: string } {
-  const { firstname, teamName, eventTitle, eventStart, eventEnd, location, link, calendarLink, fee } = params
+  const {
+    firstname,
+    teamName,
+    eventTitle,
+    eventStart,
+    eventEnd,
+    location,
+    link,
+    calendarLink,
+    fee,
+  } = params
   const subject = `Invitation: ${eventTitle}`
   const feeHtml = fee ? `<p><strong>Fee:</strong> ${fee}</p>` : ''
   const locHtml = location ? `<p><strong>Location:</strong> ${location}</p>` : ''
@@ -50,7 +77,8 @@ export const sendEventInvitations = onCall(async (request) => {
   const db = admin.firestore()
 
   const [eventErr, eventDoc] = await to(db.collection(EVENTS_COLLECTION).doc(eventId).get())
-  if (eventErr || !eventDoc || !eventDoc.exists) throw new HttpsError('not-found', 'Event not found')
+  if (eventErr || !eventDoc || !eventDoc.exists)
+    throw new HttpsError('not-found', 'Event not found')
 
   const event = eventDoc.data()!
   const teamId = (event.teamId || event.teacher) as string | undefined
@@ -58,20 +86,27 @@ export const sendEventInvitations = onCall(async (request) => {
 
   const eventEnd = event.end as Timestamp | undefined
   if (eventEnd && eventEnd.toDate() < new Date()) {
-    throw new HttpsError('failed-precondition', 'Cannot send invitations for an event that has already ended')
+    throw new HttpsError(
+      'failed-precondition',
+      'Cannot send invitations for an event that has already ended'
+    )
   }
 
   // Get team info for email
   const [teamErr, teamDoc] = await to(db.collection('teams').doc(teamId).get())
-  const teamName = (!teamErr && teamDoc && teamDoc.exists) ? ((teamDoc.data()!.name as string) || 'Our Team') : 'Our Team'
+  const teamName =
+    !teamErr && teamDoc && teamDoc.exists
+      ? (teamDoc.data()!.name as string) || 'Our Team'
+      : 'Our Team'
 
   // Get all active contacts for this team with an email address
   const [contactsErr, contactsSnap] = await to(
-    db.collection(CONTACTS_COLLECTION)
+    db
+      .collection(CONTACTS_COLLECTION)
       .where('teamId', '==', teamId)
       .where('deleted_at', '==', null)
       .where('archived_at', '==', null)
-      .get(),
+      .get()
   )
   if (contactsErr || !contactsSnap || contactsSnap.empty) {
     throw new HttpsError('failed-precondition', 'No active contacts to invite')
@@ -86,65 +121,119 @@ export const sendEventInvitations = onCall(async (request) => {
   const eventStartDate = (event.start as Timestamp | undefined)?.toDate()
   const eventEndDate = (event.end as Timestamp | undefined)?.toDate()
   const locale = 'en-GB'
-  const eventStart = eventStartDate ? eventStartDate.toLocaleString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Zurich' }) : 'TBD'
-  const eventEndStr = eventEndDate ? eventEndDate.toLocaleString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Zurich' }) : ''
-  const calLink = eventStartDate ? googleCalendarLink(event.title as string, eventStartDate, eventEndDate ?? new Date(eventStartDate.getTime() + 2 * 3600000), (event.location as string) || '', (event.desc as string) || '') : ''
+  const eventStart = eventStartDate
+    ? eventStartDate.toLocaleString(locale, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Europe/Zurich',
+      })
+    : 'TBD'
+  const eventEndStr = eventEndDate
+    ? eventEndDate.toLocaleString(locale, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Europe/Zurich',
+      })
+    : ''
+  const calLink = eventStartDate
+    ? googleCalendarLink(
+        event.title as string,
+        eventStartDate,
+        eventEndDate ?? new Date(eventStartDate.getTime() + 2 * 3600000),
+        (event.location as string) || '',
+        (event.desc as string) || ''
+      )
+    : ''
 
-  let sent = 0; let skipped = 0
+  let sent = 0
+  let skipped = 0
   const errors: Array<{ contactId: string; error: string }> = []
 
-  await Promise.all(contactsSnap.docs.map(async (contactDoc) => {
-    const email = contactDoc.data().email as string | undefined
-    if (!email) return
+  await Promise.all(
+    contactsSnap.docs.map(async (contactDoc) => {
+      const email = contactDoc.data().email as string | undefined
+      if (!email) return
 
-    const existingInv = existing.get(contactDoc.id)
-    if (existingInv && !resend) { skipped++; return }
+      const existingInv = existing.get(contactDoc.id)
+      if (existingInv && !resend) {
+        skipped++
+        return
+      }
 
-    const token = (existingInv?.token as string | undefined) ?? generateInvitationToken()
-    const link = `${getHostingUrl()}/portal/event-invitation?token=${encodeURIComponent(token)}`
+      const token = (existingInv?.token as string | undefined) ?? generateInvitationToken()
+      const link = `${getHostingUrl()}/public/event-invitation?token=${encodeURIComponent(token)}`
 
-    const emailContent = buildInvitationEmail({
-      firstname: (contactDoc.data().firstname as string) || 'Guest',
-      teamName,
-      eventTitle: (event.title as string) || 'Event',
-      eventStart,
-      eventEnd: eventEndStr,
-      location: (event.location as string) || '',
-      link,
-      calendarLink: calLink,
-      fee: (event.fee as string) || '',
-    })
-
-    try {
-      await sendEmail({ to: email, subject: emailContent.subject, html: emailContent.html, text: emailContent.text })
-
-      const baseData = {
-        contactId: contactDoc.id,
-        email,
-        firstname: contactDoc.data().firstname,
-        lastname: contactDoc.data().lastname,
-        sentAt: FieldValue.serverTimestamp(),
-        sentBy: request.auth!.uid,
-        token,
+      const emailContent = buildInvitationEmail({
+        firstname: (contactDoc.data().firstname as string) || 'Guest',
+        teamName,
+        eventTitle: (event.title as string) || 'Event',
+        eventStart,
+        eventEnd: eventEndStr,
+        location: (event.location as string) || '',
         link,
-        eventId,
-      }
-      if (existingInv) {
-        await invRef.doc(contactDoc.id).update(baseData)
-      } else {
-        await invRef.doc(contactDoc.id).set({ ...baseData, status: 'sent', firstOpenedAt: null, lastOpenedAt: null, respondedAt: null })
-      }
-      sent++
-    } catch (err) {
-      console.error(`Error inviting ${email}:`, err)
-      errors.push({ contactId: contactDoc.id, error: err instanceof Error ? err.message : String(err) })
-    }
-  }))
+        calendarLink: calLink,
+        fee: (event.fee as string) || '',
+      })
 
-  await to(eventDoc.ref.update({
-    invitations_sent_count: FieldValue.increment(sent),
-    last_invitation_sent_at: FieldValue.serverTimestamp(),
-  }))
+      try {
+        await sendEmail({
+          to: email,
+          subject: emailContent.subject,
+          html: emailContent.html,
+          text: emailContent.text,
+        })
+
+        const baseData = {
+          contactId: contactDoc.id,
+          email,
+          firstname: contactDoc.data().firstname,
+          lastname: contactDoc.data().lastname,
+          sentAt: FieldValue.serverTimestamp(),
+          sentBy: request.auth!.uid,
+          token,
+          link,
+          eventId,
+        }
+        if (existingInv) {
+          await invRef.doc(contactDoc.id).update(baseData)
+        } else {
+          await invRef
+            .doc(contactDoc.id)
+            .set({
+              ...baseData,
+              status: 'sent',
+              firstOpenedAt: null,
+              lastOpenedAt: null,
+              respondedAt: null,
+            })
+        }
+        sent++
+      } catch (err) {
+        console.error(`Error inviting ${email}:`, err)
+        errors.push({
+          contactId: contactDoc.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })
+  )
+
+  await to(
+    eventDoc.ref.update({
+      invitations_sent_count: FieldValue.increment(sent),
+      last_invitation_sent_at: FieldValue.serverTimestamp(),
+    })
+  )
 
   return { success: true, stats: { sent, skipped, errors } }
 })
@@ -158,9 +247,10 @@ export const getEventInvitationDetails = onCall(async (request) => {
   const db = admin.firestore()
 
   const [invSnapErr, invSnap] = await to(
-    db.collectionGroup(INVITATIONS_SUBCOLLECTION).where('token', '==', token).limit(1).get(),
+    db.collectionGroup(INVITATIONS_SUBCOLLECTION).where('token', '==', token).limit(1).get()
   )
-  if (invSnapErr || !invSnap || invSnap.empty) throw new HttpsError('not-found', 'Invitation not found')
+  if (invSnapErr || !invSnap || invSnap.empty)
+    throw new HttpsError('not-found', 'Invitation not found')
 
   const invDoc = invSnap.docs[0]
   const pathParts = invDoc.ref.path.split('/')
@@ -168,19 +258,26 @@ export const getEventInvitationDetails = onCall(async (request) => {
   const contactId = invDoc.data().contactId as string
 
   const [eventErr, eventDoc] = await to(db.collection(EVENTS_COLLECTION).doc(eventId).get())
-  if (eventErr || !eventDoc || !eventDoc.exists) throw new HttpsError('not-found', 'Event not found')
+  if (eventErr || !eventDoc || !eventDoc.exists)
+    throw new HttpsError('not-found', 'Event not found')
 
   const [contactErr, contactDoc] = await to(db.collection(CONTACTS_COLLECTION).doc(contactId).get())
-  if (contactErr || !contactDoc || !contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+  if (contactErr || !contactDoc || !contactDoc.exists)
+    throw new HttpsError('not-found', 'Contact not found')
 
   // Check if already an attendee
-  const [attErr, attDoc] = await to(eventDoc.ref.collection(ATTENDEES_SUBCOLLECTION).doc(contactId).get())
-  const attendee = (!attErr && attDoc && attDoc.exists) ? { id: contactId, ...attDoc.data() } : null
+  const [attErr, attDoc] = await to(
+    eventDoc.ref.collection(ATTENDEES_SUBCOLLECTION).doc(contactId).get()
+  )
+  const attendee = !attErr && attDoc && attDoc.exists ? { id: contactId, ...attDoc.data() } : null
 
   if (trackView) {
     const currentStatus = invDoc.data().status as string
     const updateData: Record<string, unknown> = { lastOpenedAt: FieldValue.serverTimestamp() }
-    if (currentStatus === 'sent') { updateData.status = 'opened'; updateData.firstOpenedAt = FieldValue.serverTimestamp() }
+    if (currentStatus === 'sent') {
+      updateData.status = 'opened'
+      updateData.firstOpenedAt = FieldValue.serverTimestamp()
+    }
     await to(invDoc.ref.update(updateData))
   }
 
@@ -214,16 +311,22 @@ export const getEventInvitationDetails = onCall(async (request) => {
 // ─── handleEventInvitationResponse ───────────────────────────────────────────
 
 export const handleEventInvitationResponse = onCall(async (request) => {
-  const { token, action, notes } = request.data as { token?: string; action?: 'attend' | 'decline'; notes?: string }
+  const { token, action, notes } = request.data as {
+    token?: string
+    action?: 'attend' | 'decline'
+    notes?: string
+  }
   if (!token) throw new HttpsError('invalid-argument', 'token is required')
-  if (!action || !['attend', 'decline'].includes(action)) throw new HttpsError('invalid-argument', 'action must be "attend" or "decline"')
+  if (!action || !['attend', 'decline'].includes(action))
+    throw new HttpsError('invalid-argument', 'action must be "attend" or "decline"')
 
   const db = admin.firestore()
 
   const [invSnapErr, invSnap] = await to(
-    db.collectionGroup(INVITATIONS_SUBCOLLECTION).where('token', '==', token).limit(1).get(),
+    db.collectionGroup(INVITATIONS_SUBCOLLECTION).where('token', '==', token).limit(1).get()
   )
-  if (invSnapErr || !invSnap || invSnap.empty) throw new HttpsError('not-found', 'Invitation not found')
+  if (invSnapErr || !invSnap || invSnap.empty)
+    throw new HttpsError('not-found', 'Invitation not found')
 
   const invDoc = invSnap.docs[0]
   const pathParts = invDoc.ref.path.split('/')
@@ -231,13 +334,16 @@ export const handleEventInvitationResponse = onCall(async (request) => {
   const contactId = invDoc.data().contactId as string
 
   const [eventErr, eventDoc] = await to(db.collection(EVENTS_COLLECTION).doc(eventId).get())
-  if (eventErr || !eventDoc || !eventDoc.exists) throw new HttpsError('not-found', 'Event not found')
+  if (eventErr || !eventDoc || !eventDoc.exists)
+    throw new HttpsError('not-found', 'Event not found')
 
   const event = eventDoc.data()!
-  if (event.status !== 'open') throw new HttpsError('failed-precondition', 'Event is not open for registrations')
+  if (event.status !== 'open')
+    throw new HttpsError('failed-precondition', 'Event is not open for registrations')
 
   const [contactErr, contactDoc] = await to(db.collection(CONTACTS_COLLECTION).doc(contactId).get())
-  if (contactErr || !contactDoc || !contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+  if (contactErr || !contactDoc || !contactDoc.exists)
+    throw new HttpsError('not-found', 'Contact not found')
 
   const attendeeRef = eventDoc.ref.collection(ATTENDEES_SUBCOLLECTION).doc(contactId)
 

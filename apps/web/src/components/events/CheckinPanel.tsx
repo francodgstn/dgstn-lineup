@@ -141,6 +141,7 @@ function AddCheckinDialog({
         where('deleted_at', '==', null),
         where('archived_at', '==', null),
         orderBy('lastname'),
+        orderBy('firstname'),
       ))
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
     },

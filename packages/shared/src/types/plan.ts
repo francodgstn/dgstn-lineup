@@ -30,14 +30,29 @@ export interface PlanPrice {
 }
 
 export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
-  free:         { baseMonthly: 0,    stripeLookupKey: null,                          includedContacts: 10,   extraContactMonthly: 0 },
-  coach:        { baseMonthly: 7.99, stripeLookupKey: 'linyup_coach_monthly',        includedContacts: 30,   extraContactMonthly: 1 },
-  studio:       { baseMonthly: 29.99, stripeLookupKey: 'linyup_studio_monthly',         includedContacts: 100,  extraContactMonthly: 1 },
-  organization: { baseMonthly: 149, stripeLookupKey: 'linyup_organization_monthly', includedContacts: null, extraContactMonthly: 0 },
+  free: { baseMonthly: 0, stripeLookupKey: null, includedContacts: 10, extraContactMonthly: 0 },
+  coach: {
+    baseMonthly: 7.99,
+    stripeLookupKey: 'linyup_coach_monthly',
+    includedContacts: 30,
+    extraContactMonthly: 1,
+  },
+  studio: {
+    baseMonthly: 29.99,
+    stripeLookupKey: 'linyup_studio_monthly',
+    includedContacts: 100,
+    extraContactMonthly: 1,
+  },
+  organization: {
+    baseMonthly: 149,
+    stripeLookupKey: 'linyup_organization_monthly',
+    includedContacts: null,
+    extraContactMonthly: 0,
+  },
 }
 
 // Free has no payment method to bill overage against, so its contact cap is
-// HARD: manual contact creation is blocked at the limit (public portal
+// HARD: manual contact creation is blocked at the limit (public bio-link
 // submissions still land — the breach is the upgrade prompt). Paid plans keep
 // the soft cap + per-extra-contact billing.
 export function planHasHardContactCap(plan: SaasPlan | null): boolean {
@@ -58,18 +73,26 @@ export const EXTRA_CONTACT_STRIPE_LOOKUP_KEY = 'linyup_extra_student_monthly'
 
 export interface ContactUsage {
   used: number
-  included: number | null   // null = unlimited
+  included: number | null // null = unlimited
   isUnlimited: boolean
   remaining: number | null
   overBy: number
   atOrOverLimit: boolean
-  percent: number           // 0..100 for the meter (clamped)
+  percent: number // 0..100 for the meter (clamped)
 }
 
 export function contactUsageForPlan(plan: SaasPlan | null, used: number): ContactUsage {
   const included = plan ? PLAN_PRICING[plan].includedContacts : null
   if (included == null) {
-    return { used, included: null, isUnlimited: true, remaining: null, overBy: 0, atOrOverLimit: false, percent: 0 }
+    return {
+      used,
+      included: null,
+      isUnlimited: true,
+      remaining: null,
+      overBy: 0,
+      atOrOverLimit: false,
+      percent: 0,
+    }
   }
   return {
     used,
@@ -122,7 +145,7 @@ export type PlanFeature =
 // non-UI logic; do not re-introduce feature-flag gates for plugin features.
 export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
   // Free = the full Coach feature set. The tier is differentiated by limits
-  // (10-contact hard cap, single user, no plugin add-ons, portal branding),
+  // (10-contact hard cap, single user, no plugin add-ons, bio-link branding),
   // not by feature flags.
   free: [
     'contacts',
@@ -225,7 +248,10 @@ interface PluginAccessInput {
   addon?: { coachPriceMonthly: number; stripeLookupKey: string }
 }
 
-export function pluginAccessForPlan(manifest: PluginAccessInput, plan: SaasPlan | null): PluginAccess {
+export function pluginAccessForPlan(
+  manifest: PluginAccessInput,
+  plan: SaasPlan | null
+): PluginAccess {
   if (plan === 'studio' || plan === 'organization') return { kind: 'included' }
   // Free: no add-ons (nothing to bill against) — everything is upgrade-locked.
   if (plan === 'free') return { kind: 'upgrade', minPlan: 'coach' }

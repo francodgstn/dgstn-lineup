@@ -37,10 +37,10 @@ The system is structured around **business maturity**, not arbitrary feature gro
 
 * Full Coach feature set, differentiated by **limits**, not feature flags:
   * **10 active contacts — hard cap** (manual adds blocked at the limit; public
-    portal signups still land, so the cap breach itself becomes the upgrade prompt)
+    bio link signups still land, so the cap breach itself becomes the upgrade prompt)
   * **Single user** (no team member invitations)
   * **No plugin add-ons** (catalogue browsable, everything upgrade-locked)
-  * **"Powered by Linyup" badge** on the public portal (every free portal is a
+  * **"Powered by Linyup" badge** on the public bio link (every free bio link is a
     referral surface; removing the badge is a paid perk)
 * CHF 0, no payment method, no Stripe subscription
 * Lifecycle: every signup still starts on the 14-day full-access Studio trial; on
@@ -77,7 +77,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 * **Coaching — 1:1 appointment booking**
   * Availability templates: define recurring windows (days × time × duration)
   * Auto-generated appointment slots from templates (daily task)
-  * Portal-based client self-booking (same public URL as group session booking — no app required)
+  * Bio link-based client self-booking (same public URL as group session booking — no app required)
   * Confirmation emails with **.ics calendar invite** sent to both client and coach
   * Booking reminder email before the appointment
   * Named service types (e.g. "Personal Training", "Assessment", "Online Consultation")
@@ -110,7 +110,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 * **Resource sharing**
   * Coach attaches files (PDFs, links, videos) to a contact or to a specific coaching slot
   * Displayed as a simple list in the contact profile — not a structured library
-  * Client can access shared resources via portal or mobile app
+  * Client can access shared resources via bio link or mobile app
 
 * QR-based self check-in
 * Public profile / link-in-bio page
@@ -123,7 +123,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 
 * Max 1 team manager
 * No advanced automation
-* No student app (clients book via portal/web; app is Studio)
+* No student app (clients book via bio link/web; app is Studio)
 
 **Product Intent:**
 
@@ -131,7 +131,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 * Immediate utility for both group-class coaches and personal trainers
 * Low cognitive load
 
-**Note for personal trainers:** The Coach plan replaces three tools in one — Calendly/Acuity for 1:1 scheduling, a subscription/package billing tool, and a client CRM. Clients self-book via the public portal, receive calendar invites automatically, and the coach manages sessions, billing, and client progress in one place.
+**Note for personal trainers:** The Coach plan replaces three tools in one — Calendly/Acuity for 1:1 scheduling, a subscription/package billing tool, and a client CRM. Clients self-book via the public bio link, receive calendar invites automatically, and the coach manages sessions, billing, and client progress in one place.
 
 > **Plan code:** `coach`
 
@@ -359,7 +359,7 @@ The system must naturally push users upward:
   * Hits the 10-contact hard cap (the primary, success-aligned trigger)
   * Wants a second team member on the account
   * Wants plugin add-ons (gamification, referrals, …)
-  * Wants the "Powered by Linyup" badge off their portal
+  * Wants the "Powered by Linyup" badge off their bio link
 
 * **Coach → Studio — hard pulls (Studio-only, never à la carte):**
   * Wants a branded client mobile app (in-app booking, push reminders, coaching history)
@@ -404,10 +404,10 @@ The platform should be modular, with these domains:
 |--------|-------------|
 | Contacts & CRM | Client profiles, lifecycle, alerts |
 | Sessions & Scheduling | Single + recurring sessions, calendar |
-| Bookings | Portal booking, QR check-in, self check-in |
+| Bookings | Bio link booking, QR check-in, self check-in |
 | Coaching & 1:1 scheduling | Availability templates, slot generation, client self-booking, calendar invites, session notes, waiting list |
 | Goals & progress | Long-term goals, short-term tasks/homework, progress photos, bidirectional coach–client comment thread |
-| Resource sharing | File and link attachments per contact or coaching slot, accessible via portal and mobile app |
+| Resource sharing | File and link attachments per contact or coaching slot, accessible via bio link and mobile app |
 | Payments & Subscriptions | Recurring billing, session packages (class packs + coaching bundles), payment tracking |
 | Communication | Email / SMS / push notifications |
 | Automation engine | Triggers + workflows |

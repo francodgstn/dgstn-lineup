@@ -1,6 +1,6 @@
 /**
  * Syncs aggregator subscription types to the team's public_profile so the
- * booking portal can list them without requiring authentication.
+ * booking bio-link can list them without requiring authentication.
  *
  * Triggered on any write to teams/{teamId}/subscription_types/{typeId}.
  * Reads all active aggregator types for the team and writes the minimal list
@@ -9,11 +9,7 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { to } from '../utils/async'
-import {
-  TEAMS_COLLECTION,
-  SUBSCRIPTION_TYPES_SUBCOLLECTION,
-} from '@linyup/shared'
-
+import { TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION } from '@linyup/shared'
 
 export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
   `${TEAMS_COLLECTION}/{teamId}/${SUBSCRIPTION_TYPES_SUBCOLLECTION}/{typeId}`,
@@ -46,7 +42,7 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
     const aggregatorTypes = snapshot!.docs.map((d) => {
       const data = d.data()
       // description powers the Website plugin's Pricing section cards; name is
-      // used by the booking portal. Omit description when absent (no undefined).
+      // used by the booking bio-link. Omit description when absent (no undefined).
       const entry: { id: string; name: string; description?: string } = {
         id: d.id,
         name: data.name as string,

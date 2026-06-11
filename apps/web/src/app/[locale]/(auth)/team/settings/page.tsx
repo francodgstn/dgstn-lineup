@@ -4,8 +4,16 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
-  doc, getDoc, updateDoc, collection, query, where, getDocs,
-  addDoc, deleteDoc, serverTimestamp, Timestamp,
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -13,24 +21,61 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Card, CardContent } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import {
-  TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, ALERT_PRESETS_SUBCOLLECTION,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { TEAMS_COLLECTION, ALERT_PRESETS_SUBCOLLECTION } from '@linyup/shared'
+import type {
+  Team,
+  AlertScheduleType,
+  RankingSystem,
+  RankLevel,
+  TeamIntegration,
+  PaymentGatewayType,
 } from '@linyup/shared'
-import type { Team, SubscriptionType, AlertScheduleType, RankingSystem, RankLevel, TeamIntegration, PaymentGatewayType } from '@linyup/shared'
-import { CalendarDays, Timer, Plus, Pencil, Trash2, Star, Building2, Eye, EyeOff, Mail } from 'lucide-react'
+import {
+  CalendarDays,
+  Timer,
+  Plus,
+  Pencil,
+  Trash2,
+  Star,
+  Building2,
+  Eye,
+  EyeOff,
+  Mail,
+} from 'lucide-react'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
 import { useSmtpSettings } from '@/hooks/useSmtpSettings'
+import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { Separator } from '@/components/ui/separator'
@@ -38,9 +83,20 @@ import { Separator } from '@/components/ui/separator'
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const SPORT_TYPES = [
-  'Martial arts', 'Football / Soccer', 'Basketball', 'Volleyball', 'Tennis',
-  'Swimming', 'Gymnastics', 'CrossFit / Fitness', 'Yoga / Pilates', 'Dance',
-  'Rugby', 'Cycling', 'Athletics', 'Other',
+  'Martial arts',
+  'Football / Soccer',
+  'Basketball',
+  'Volleyball',
+  'Tennis',
+  'Swimming',
+  'Gymnastics',
+  'CrossFit / Fitness',
+  'Yoga / Pilates',
+  'Dance',
+  'Rugby',
+  'Cycling',
+  'Athletics',
+  'Other',
 ]
 
 const SLUG_REGEX = /^[a-z0-9-]+$/
@@ -70,14 +126,6 @@ const generalSchema = z.object({
     .regex(SLUG_REGEX, 'Only lowercase letters, numbers and hyphens'),
 })
 type GeneralData = z.infer<typeof generalSchema>
-
-const subTypeSchema = z.object({
-  name: z.string().min(1).max(80),
-  description: z.string().max(500).optional(),
-  source: z.enum(['internal', 'aggregator']).default('internal'),
-  active: z.boolean().optional(),
-})
-type SubTypeData = z.infer<typeof subTypeSchema>
 
 const presetSchema = z.object({
   name: z.string().min(1).max(80),
@@ -118,25 +166,15 @@ function useTeam(teamId: string | null) {
   })
 }
 
-function useSubscriptionTypes(teamId: string | null) {
-  return useQuery<SubscriptionType[]>({
-    queryKey: ['subscription-types', teamId],
-    enabled: !!teamId,
-    queryFn: async () => {
-      if (!teamId) return []
-      const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as SubscriptionType)
-    },
-  })
-}
-
 function useAlertPresets(teamId: string | null) {
   return useQuery<AlertPreset[]>({
     queryKey: ['alert-presets', teamId],
     enabled: !!teamId,
     queryFn: async () => {
       if (!teamId) return []
-      const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION))
+      const snap = await getDocs(
+        collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION)
+      )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as AlertPreset)
     },
   })
@@ -149,7 +187,10 @@ function useGatewayIntegrations(teamId: string | null) {
     queryFn: async () => {
       if (!teamId) return []
       const snap = await getDocs(
-        query(collection(db, TEAMS_COLLECTION, teamId, 'integrations'), where('type', '==', 'payment_gateway'))
+        query(
+          collection(db, TEAMS_COLLECTION, teamId, 'integrations'),
+          where('type', '==', 'payment_gateway')
+        )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TeamIntegration)
     },
@@ -219,7 +260,9 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           placeholder={t('descriptionPlaceholder')}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
         />
-        {errors.description && <p className="text-destructive text-xs">{errors.description.message}</p>}
+        {errors.description && (
+          <p className="text-destructive text-xs">{errors.description.message}</p>
+        )}
       </div>
 
       <div className="space-y-1.5">
@@ -228,14 +271,19 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           name="sport_type"
           control={control}
           render={({ field }) => (
-            <Select value={field.value || '__none__'} onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}>
+            <Select
+              value={field.value || '__none__'}
+              onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={t('sportTypeNone')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">{t('sportTypeNone')}</SelectItem>
                 {SPORT_TYPES.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -246,7 +294,9 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
       <div className="space-y-1.5">
         <Label htmlFor="slug">{t('slug')}</Label>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground shrink-0 select-none">/portal/</span>
+          <span className="text-sm text-muted-foreground shrink-0 select-none">
+            /public/bio-link/
+          </span>
           <Input
             id="slug"
             {...register('slug')}
@@ -257,7 +307,9 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
         </div>
         {slugChecking && <p className="text-muted-foreground text-xs">{t('slugChecking')}</p>}
         {slugError && <p className="text-destructive text-xs">{slugError}</p>}
-        {errors.slug && !slugError && <p className="text-destructive text-xs">{errors.slug.message}</p>}
+        {errors.slug && !slugError && (
+          <p className="text-destructive text-xs">{errors.slug.message}</p>
+        )}
         <p className="text-xs text-muted-foreground">{t('slugHelp')}</p>
       </div>
 
@@ -271,226 +323,30 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
   )
 }
 
-// ─── subscription types tab ───────────────────────────────────────────────────
-
-function SubTypeDialog({
-  open, onOpenChange, teamId, editing, onSaved,
-}: {
-  open: boolean; onOpenChange: (v: boolean) => void
-  teamId: string; editing: SubscriptionType | null; onSaved: () => void
-}) {
-  const t = useTranslations('TeamSettings')
-
-  const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting } } = useForm<SubTypeData>({
-    resolver: zodResolver(subTypeSchema),
-    defaultValues: {
-      name: editing?.name ?? '',
-      description: editing?.description ?? '',
-      source: editing?.source ?? 'internal',
-      active: editing?.active ?? true,
-    },
-  })
-
-  useEffect(() => {
-    if (open) {
-      reset({
-        name: editing?.name ?? '',
-        description: editing?.description ?? '',
-        source: editing?.source ?? 'internal',
-        active: editing?.active ?? true,
-      })
-    }
-  }, [open, editing, reset])
-
-  const source = watch('source')
-  const active = watch('active') ?? true
-
-  async function onSubmit(data: SubTypeData) {
-    const payload = {
-      name: data.name,
-      description: data.description || null,
-      source: data.source,
-      active: data.active ?? true,
-    }
-    if (editing) {
-      await updateDoc(doc(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION, editing.id), payload)
-    } else {
-      await addDoc(collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION), {
-        ...payload,
-        created_at: serverTimestamp(),
-      })
-    }
-    onSaved()
-    onOpenChange(false)
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{editing ? t('editSubscriptionType') : t('addSubscriptionType')}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 py-1">
-          <div className="space-y-1">
-            <Label>{t('fieldSubTypeName')}</Label>
-            <Input {...register('name')} placeholder="e.g. Monthly pass, Fitpass" />
-          </div>
-          <div className="space-y-1">
-            <Label>{t('fieldSubTypeDesc')}</Label>
-            <Textarea
-              {...register('description')}
-              rows={2}
-              placeholder="Optional context — e.g. Unlimited access, valid for the whole month"
-              className="resize-none"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('fieldSubTypeSource')}</Label>
-            <div className="flex gap-2">
-              {(['internal', 'aggregator'] as const).map((val) => (
-                <button
-                  key={val}
-                  type="button"
-                  onClick={() => setValue('source', val)}
-                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors text-left ${
-                    source === val
-                      ? 'border-primary bg-primary/5 text-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:border-foreground/30'
-                  }`}
-                >
-                  <p className="font-medium">{t(val === 'internal' ? 'subTypeSourceInternal' : 'subTypeSourceAggregator')}</p>
-                  <p className="text-xs font-normal mt-0.5 text-muted-foreground">
-                    {val === 'internal' ? t('subTypeSourceInternalDesc') : t('subTypeSourceAggregatorDesc')}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center justify-between py-1">
-            <div className="space-y-0.5">
-              <Label>{t('subTypeActive')}</Label>
-              <p className="text-xs text-muted-foreground">{t('subTypeActiveDesc')}</p>
-            </div>
-            <Switch
-              checked={active}
-              onCheckedChange={(v) => setValue('active', v)}
-            />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? t('saving') : t('save')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function SubscriptionTypesTab({ teamId }: { teamId: string }) {
-  const t = useTranslations('TeamSettings')
-  const qc = useQueryClient()
-  const { data: types = [], isLoading } = useSubscriptionTypes(teamId)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editing, setEditing] = useState<SubscriptionType | null>(null)
-  const [deleting, setDeleting] = useState<string | null>(null)
-
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['subscription-types', teamId] })
-
-  const openAdd = () => { setEditing(null); setDialogOpen(true) }
-  const openEdit = (st: SubscriptionType) => { setEditing(st); setDialogOpen(true) }
-
-  const handleDelete = async (id: string) => {
-    await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION, id))
-    setDeleting(null)
-    invalidate()
-  }
-
-  if (isLoading) return (
-    <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
-  )
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button size="sm" onClick={openAdd}>
-          <Plus className="h-4 w-4 mr-1.5" />{t('addSubscriptionType')}
-        </Button>
-      </div>
-
-      {types.length === 0 ? (
-        <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
-          {t('noSubscriptionTypes')}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {types.map((st) => (
-            <div key={st.id} className="flex items-center gap-3 p-3 rounded-lg border">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium">{st.name}</p>
-                  <Badge variant={st.source === 'aggregator' ? 'secondary' : 'outline'} className="text-xs">
-                    {t(st.source === 'aggregator' ? 'subTypeSourceAggregator' : 'subTypeSourceInternal')}
-                  </Badge>
-                  {st.active === false && (
-                    <Badge variant="outline" className="text-xs">{t('subTypeInactive')}</Badge>
-                  )}
-                </div>
-                {st.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{st.description}</p>}
-              </div>
-              <button onClick={() => openEdit(st)} className="p-1.5 rounded hover:bg-muted transition-colors">
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-              <button
-                onClick={() => setDeleting(st.id)}
-                className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <SubTypeDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        teamId={teamId}
-        editing={editing}
-        onSaved={invalidate}
-      />
-
-      {/* Delete confirm */}
-      <Dialog open={!!deleting} onOpenChange={() => setDeleting(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>{t('deleteSubType')}</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground py-1">
-            {t('deleteSubTypeConfirm', { name: types.find((s) => s.id === deleting)?.name ?? '' })}
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => deleting && handleDelete(deleting)}>
-              {t('deleteSubType')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
-
 // ─── alert presets tab ────────────────────────────────────────────────────────
 
 function PresetDialog({
-  open, onOpenChange, teamId, editing, onSaved,
+  open,
+  onOpenChange,
+  teamId,
+  editing,
+  onSaved,
 }: {
-  open: boolean; onOpenChange: (v: boolean) => void
-  teamId: string; editing: AlertPreset | null; onSaved: () => void
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  teamId: string
+  editing: AlertPreset | null
+  onSaved: () => void
 }) {
   const t = useTranslations('TeamSettings')
 
-  const { register, handleSubmit, watch, reset, formState: { isSubmitting } } = useForm<PresetData>({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    reset,
+    formState: { isSubmitting },
+  } = useForm<PresetData>({
     resolver: zodResolver(presetSchema),
     defaultValues: {
       name: editing?.name ?? '',
@@ -509,12 +365,16 @@ function PresetDialog({
       name: data.name,
       description: data.description || null,
       schedule_type: data.schedule_type,
-      schedule_value: data.schedule_type === 'sessions_countdown' ? Number(data.schedule_value) : null,
+      schedule_value:
+        data.schedule_type === 'sessions_countdown' ? Number(data.schedule_value) : null,
       message: data.message,
       show_in_app: data.show_in_app ?? false,
     }
     if (editing) {
-      await updateDoc(doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, editing.id), payload)
+      await updateDoc(
+        doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, editing.id),
+        payload
+      )
     } else {
       await addDoc(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION), {
         ...payload,
@@ -548,14 +408,27 @@ function PresetDialog({
             <div className="flex gap-2">
               {(['sessions_countdown', 'datetime'] as AlertScheduleType[]).map((type) => (
                 <label key={type} className="flex-1 cursor-pointer">
-                  <input type="radio" value={type} {...register('schedule_type')} className="sr-only" />
-                  <div className={`flex items-center gap-1.5 justify-center py-1.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                    scheduleType === type
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}>
-                    {type === 'sessions_countdown' ? <Timer className="h-3.5 w-3.5" /> : <CalendarDays className="h-3.5 w-3.5" />}
-                    {type === 'sessions_countdown' ? t('alertTypeSessionsCountdown') : t('alertTypeDatetime')}
+                  <input
+                    type="radio"
+                    value={type}
+                    {...register('schedule_type')}
+                    className="sr-only"
+                  />
+                  <div
+                    className={`flex items-center gap-1.5 justify-center py-1.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                      scheduleType === type
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {type === 'sessions_countdown' ? (
+                      <Timer className="h-3.5 w-3.5" />
+                    ) : (
+                      <CalendarDays className="h-3.5 w-3.5" />
+                    )}
+                    {type === 'sessions_countdown'
+                      ? t('alertTypeSessionsCountdown')
+                      : t('alertTypeDatetime')}
                   </div>
                 </label>
               ))}
@@ -589,7 +462,9 @@ function PresetDialog({
           </label>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? t('saving') : t('save')}
             </Button>
@@ -610,8 +485,14 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['alert-presets', teamId] })
 
-  const openAdd = () => { setEditing(null); setDialogOpen(true) }
-  const openEdit = (p: AlertPreset) => { setEditing(p); setDialogOpen(true) }
+  const openAdd = () => {
+    setEditing(null)
+    setDialogOpen(true)
+  }
+  const openEdit = (p: AlertPreset) => {
+    setEditing(p)
+    setDialogOpen(true)
+  }
 
   const handleDelete = async (id: string) => {
     await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, id))
@@ -619,9 +500,14 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
     invalidate()
   }
 
-  if (isLoading) return (
-    <div className="space-y-2">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
-  )
+  if (isLoading)
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 rounded-lg" />
+        ))}
+      </div>
+    )
 
   return (
     <div className="space-y-4">
@@ -629,7 +515,8 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
 
       <div className="flex justify-end">
         <Button size="sm" onClick={openAdd}>
-          <Plus className="h-4 w-4 mr-1.5" />{t('addAlertPreset')}
+          <Plus className="h-4 w-4 mr-1.5" />
+          {t('addAlertPreset')}
         </Button>
       </div>
 
@@ -642,10 +529,11 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
           {presets.map((p) => (
             <div key={p.id} className="flex items-start gap-3 p-3 rounded-lg border">
               <div className="mt-0.5 shrink-0 text-muted-foreground">
-                {p.schedule_type === 'sessions_countdown'
-                  ? <Timer className="h-4 w-4" />
-                  : <CalendarDays className="h-4 w-4" />
-                }
+                {p.schedule_type === 'sessions_countdown' ? (
+                  <Timer className="h-4 w-4" />
+                ) : (
+                  <CalendarDays className="h-4 w-4" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -658,7 +546,10 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{p.message}</p>
               </div>
-              <button onClick={() => openEdit(p)} className="p-1.5 rounded hover:bg-muted transition-colors">
+              <button
+                onClick={() => openEdit(p)}
+                className="p-1.5 rounded hover:bg-muted transition-colors"
+              >
                 <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
               <button
@@ -682,12 +573,16 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
 
       <Dialog open={!!deleting} onOpenChange={() => setDeleting(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>{t('deletePreset')}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{t('deletePreset')}</DialogTitle>
+          </DialogHeader>
           <p className="text-sm text-muted-foreground py-1">
             {t('deletePresetConfirm', { name: presets.find((p) => p.id === deleting)?.name ?? '' })}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleting(null)}>
+              Cancel
+            </Button>
             <Button variant="destructive" onClick={() => deleting && handleDelete(deleting)}>
               {t('deletePreset')}
             </Button>
@@ -703,7 +598,11 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
 const SLUG_REGEX_RANK = /^[a-z0-9-]+$/
 
 function generateId(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30)
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 30)
 }
 
 interface RankSystemFormState {
@@ -718,9 +617,14 @@ function emptySystem(): RankSystemFormState {
 }
 
 function RankSystemDialog({
-  open, onOpenChange, initial, existingIds, onSave,
+  open,
+  onOpenChange,
+  initial,
+  existingIds,
+  onSave,
 }: {
-  open: boolean; onOpenChange: (v: boolean) => void
+  open: boolean
+  onOpenChange: (v: boolean) => void
   initial: RankSystemFormState | null
   existingIds: string[]
   onSave: (s: RankSystemFormState) => void
@@ -763,15 +667,16 @@ function RankSystemDialog({
   }
 
   const addLevel = () => {
-    const nextVal = form.levels.length > 0
-      ? Math.max(...form.levels.map((l) => l.value)) + 1
-      : 0
-    setForm((f) => ({ ...f, levels: [...f.levels, { value: nextVal, label: '', color: '#9CA3AF' }] }))
+    const nextVal = form.levels.length > 0 ? Math.max(...form.levels.map((l) => l.value)) + 1 : 0
+    setForm((f) => ({
+      ...f,
+      levels: [...f.levels, { value: nextVal, label: '', color: '#9CA3AF' }],
+    }))
   }
 
   const updateLevel = (idx: number, patch: Partial<RankLevel>) => {
     setForm((f) => {
-      const levels = f.levels.map((l, i) => i === idx ? { ...l, ...patch } : l)
+      const levels = f.levels.map((l, i) => (i === idx ? { ...l, ...patch } : l))
       return { ...f, levels }
     })
   }
@@ -780,7 +685,7 @@ function RankSystemDialog({
     setForm((f) => ({ ...f, levels: f.levels.filter((_, i) => i !== idx) }))
   }
 
-  const applyPreset = (preset: typeof RANK_PRESETS[number]) => {
+  const applyPreset = (preset: (typeof RANK_PRESETS)[number]) => {
     setForm((f) => ({
       ...f,
       name: f.name || preset.name,
@@ -790,12 +695,13 @@ function RankSystemDialog({
     setPresetOpen(false)
   }
 
-  const canSave = form.name.trim().length > 0
-    && form.id.length > 0
-    && SLUG_REGEX_RANK.test(form.id)
-    && !idError
-    && form.levels.length > 0
-    && form.levels.every((l) => l.label.trim().length > 0)
+  const canSave =
+    form.name.trim().length > 0 &&
+    form.id.length > 0 &&
+    SLUG_REGEX_RANK.test(form.id) &&
+    !idError &&
+    form.levels.length > 0 &&
+    form.levels.every((l) => l.label.trim().length > 0)
 
   return (
     <>
@@ -836,7 +742,9 @@ function RankSystemDialog({
                   className="font-mono text-sm"
                 />
                 {idError && <p className="text-xs text-destructive">{idError}</p>}
-                {!idError && <p className="text-xs text-muted-foreground">{t('rankingSystemIdHelp')}</p>}
+                {!idError && (
+                  <p className="text-xs text-muted-foreground">{t('rankingSystemIdHelp')}</p>
+                )}
               </div>
             </div>
 
@@ -849,16 +757,21 @@ function RankSystemDialog({
                   onClick={addLevel}
                   className="flex items-center gap-1 text-xs text-primary hover:underline"
                 >
-                  <Plus className="h-3 w-3" />{t('addLevel')}
+                  <Plus className="h-3 w-3" />
+                  {t('addLevel')}
                 </button>
               </div>
               {form.levels.length === 0 && (
-                <p className="text-xs text-muted-foreground py-2 text-center">{t('rankingNoSystems')}</p>
+                <p className="text-xs text-muted-foreground py-2 text-center">
+                  {t('rankingNoSystems')}
+                </p>
               )}
               <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                 {form.levels.map((level, idx) => (
                   <div key={idx} className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground w-5 text-right shrink-0">{level.value}</span>
+                    <span className="text-xs text-muted-foreground w-5 text-right shrink-0">
+                      {level.value}
+                    </span>
                     <input
                       type="color"
                       value={level.color ?? '#9CA3AF'}
@@ -884,8 +797,16 @@ function RankSystemDialog({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button disabled={!canSave} onClick={() => { onSave(form); onOpenChange(false) }}>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!canSave}
+              onClick={() => {
+                onSave(form)
+                onOpenChange(false)
+              }}
+            >
               {t('save')}
             </Button>
           </DialogFooter>
@@ -895,7 +816,9 @@ function RankSystemDialog({
       {/* Preset picker */}
       <Dialog open={presetOpen} onOpenChange={setPresetOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>{t('rankingPresetsTitle')}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{t('rankingPresetsTitle')}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-2 py-1">
             {RANK_PRESETS.map((preset) => (
               <button
@@ -912,7 +835,9 @@ function RankSystemDialog({
                     />
                   ))}
                   {preset.levels.length > 5 && (
-                    <span className="text-xs text-muted-foreground ml-0.5">+{preset.levels.length - 5}</span>
+                    <span className="text-xs text-muted-foreground ml-0.5">
+                      +{preset.levels.length - 5}
+                    </span>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -936,7 +861,12 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const { rankingSystems: effectiveSystems, managedByOrg, orgId, loading: rankLoading } = useRankingSystems()
+  const {
+    rankingSystems: effectiveSystems,
+    managedByOrg,
+    orgId,
+    loading: rankLoading,
+  } = useRankingSystems()
   const systems: RankingSystem[] = managedByOrg ? effectiveSystems : (team.ranking_systems ?? [])
 
   const saveToFirestore = async (next: RankingSystem[]) => {
@@ -957,7 +887,7 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
       is_primary: form.is_primary,
     }
     const next = editing
-      ? systems.map((s) => s.id === editing.id ? system : s)
+      ? systems.map((s) => (s.id === editing.id ? system : s))
       : [...systems, system]
     await saveToFirestore(next)
     setEditing(null)
@@ -979,9 +909,17 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
     setDeleting(null)
   }
 
-  const openAdd = () => { setEditing(null); setDialogOpen(true) }
+  const openAdd = () => {
+    setEditing(null)
+    setDialogOpen(true)
+  }
   const openEdit = (s: RankingSystem) => {
-    setEditing({ id: s.id, name: s.name, levels: s.levels.map((l) => ({ ...l })), is_primary: s.is_primary ?? false })
+    setEditing({
+      id: s.id,
+      name: s.name,
+      levels: s.levels.map((l) => ({ ...l })),
+      is_primary: s.is_primary ?? false,
+    })
     setDialogOpen(true)
   }
 
@@ -1002,14 +940,17 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
         <p className="text-sm text-muted-foreground">{t('rankingSystems')}</p>
         {!managedByOrg && (
           <Button size="sm" onClick={openAdd} disabled={saving || rankLoading}>
-            <Plus className="h-4 w-4 mr-1.5" />{t('addRankingSystem')}
+            <Plus className="h-4 w-4 mr-1.5" />
+            {t('addRankingSystem')}
           </Button>
         )}
       </div>
 
       {rankLoading ? (
         <div className="space-y-2">
-          {[1, 2].map((i) => <div key={i} className="h-12 rounded-lg border bg-muted/30 animate-pulse" />)}
+          {[1, 2].map((i) => (
+            <div key={i} className="h-12 rounded-lg border bg-muted/30 animate-pulse" />
+          ))}
         </div>
       ) : systems.length === 0 ? (
         <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
@@ -1024,7 +965,9 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium">{s.name}</p>
                     {s.is_primary && (
-                      <Badge variant="default" className="text-xs">{t('rankingSystemPrimary')}</Badge>
+                      <Badge variant="default" className="text-xs">
+                        {t('rankingSystemPrimary')}
+                      </Badge>
                     )}
                     <span className="text-xs text-muted-foreground font-mono">{s.id}</span>
                   </div>
@@ -1032,25 +975,29 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                     {t('rankingSystemLevels', { count: s.levels.length })}
                   </p>
                 </div>
-                {!managedByOrg && (s.is_primary ? (
-                  <button
-                    onClick={handleClearPrimary}
-                    disabled={saving}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted disabled:opacity-50"
-                  >
-                    {t('primaryModeAuto')}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSetPrimary(s.id)}
-                    disabled={saving}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted disabled:opacity-50"
-                  >
-                    {t('rankingSystemSetPrimary')}
-                  </button>
-                ))}
+                {!managedByOrg &&
+                  (s.is_primary ? (
+                    <button
+                      onClick={handleClearPrimary}
+                      disabled={saving}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted disabled:opacity-50"
+                    >
+                      {t('primaryModeAuto')}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleSetPrimary(s.id)}
+                      disabled={saving}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted disabled:opacity-50"
+                    >
+                      {t('rankingSystemSetPrimary')}
+                    </button>
+                  ))}
                 {!managedByOrg && (
-                  <button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-muted transition-colors">
+                  <button
+                    onClick={() => openEdit(s)}
+                    className="p-1.5 rounded hover:bg-muted transition-colors"
+                  >
                     <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
                 )}
@@ -1079,16 +1026,17 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
             </div>
           ))}
           {!systems.some((s) => s.is_primary) && systems.length > 1 && (
-            <p className="text-xs text-muted-foreground px-1">
-              {t('primaryModeAuto')}
-            </p>
+            <p className="text-xs text-muted-foreground px-1">{t('primaryModeAuto')}</p>
           )}
         </div>
       )}
 
       <RankSystemDialog
         open={dialogOpen}
-        onOpenChange={(v) => { setDialogOpen(v); if (!v) setEditing(null) }}
+        onOpenChange={(v) => {
+          setDialogOpen(v)
+          if (!v) setEditing(null)
+        }}
         initial={editing}
         existingIds={systems.filter((s) => !editing || s.id !== editing.id).map((s) => s.id)}
         onSave={handleSave}
@@ -1096,13 +1044,23 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
 
       <Dialog open={!!deleting} onOpenChange={() => setDeleting(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>{t('deleteRankingSystem')}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{t('deleteRankingSystem')}</DialogTitle>
+          </DialogHeader>
           <p className="text-sm text-muted-foreground py-1">
-            {t('deleteRankingSystemConfirm', { name: systems.find((s) => s.id === deleting)?.name ?? '' })}
+            {t('deleteRankingSystemConfirm', {
+              name: systems.find((s) => s.id === deleting)?.name ?? '',
+            })}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="destructive" disabled={saving} onClick={() => deleting && handleDelete(deleting)}>
+            <Button variant="outline" onClick={() => setDeleting(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={saving}
+              onClick={() => deleting && handleDelete(deleting)}
+            >
               {t('deleteRankingSystem')}
             </Button>
           </DialogFooter>
@@ -1153,7 +1111,8 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       identifier: cfg.type === 'stripe' ? cfg.publishable_key : cfg.instance_name,
       currency: cfg.currency,
       webhookSigningSecret: cfg.type === 'payrexx' ? (cfg.webhook_signing_secret ?? '') : '',
-      defaultSubscriptionTypeId: cfg.type === 'payrexx' ? (cfg.default_subscription_type_id ?? '') : '',
+      defaultSubscriptionTypeId:
+        cfg.type === 'payrexx' ? (cfg.default_subscription_type_id ?? '') : '',
     })
     setEditingId(item.id)
     setShowDialog(true)
@@ -1164,7 +1123,11 @@ function PaymentsTab({ teamId }: { teamId: string }) {
     try {
       const config =
         values.gatewayType === 'stripe'
-          ? { type: 'stripe' as const, publishable_key: values.identifier, currency: values.currency }
+          ? {
+              type: 'stripe' as const,
+              publishable_key: values.identifier,
+              currency: values.currency,
+            }
           : {
               type: 'payrexx' as const,
               instance_name: values.identifier,
@@ -1214,13 +1177,21 @@ function PaymentsTab({ teamId }: { teamId: string }) {
     setDeleteTarget(null)
   }
 
-  if (isLoading) return <div className="space-y-2"><Skeleton className="h-16 rounded" /></div>
+  if (isLoading)
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-16 rounded" />
+      </div>
+    )
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{t('paymentsGateway')}</p>
-        <Button size="sm" onClick={openAdd}><Plus className="h-4 w-4 mr-1" />{t('paymentsAddGateway')}</Button>
+        <Button size="sm" onClick={openAdd}>
+          <Plus className="h-4 w-4 mr-1" />
+          {t('paymentsAddGateway')}
+        </Button>
       </div>
 
       {integrations.length === 0 ? (
@@ -1235,16 +1206,24 @@ function PaymentsTab({ teamId }: { teamId: string }) {
               <div key={item.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{label}</p>
-                  <p className="text-xs text-muted-foreground truncate">{identifier} · {cfg.currency}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {identifier} · {cfg.currency}
+                  </p>
                 </div>
                 <Badge variant={item.enabled ? 'default' : 'outline'} className="text-xs">
                   {item.enabled ? t('paymentsEnabled') : t('paymentsDisabled')}
                 </Badge>
                 <Switch checked={item.enabled} onCheckedChange={() => handleToggleEnabled(item)} />
-                <button onClick={() => openEdit(item)} className="text-muted-foreground hover:text-foreground p-1">
+                <button
+                  onClick={() => openEdit(item)}
+                  className="text-muted-foreground hover:text-foreground p-1"
+                >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
-                <button onClick={() => setDeleteTarget(item.id)} className="text-muted-foreground hover:text-destructive p-1">
+                <button
+                  onClick={() => setDeleteTarget(item.id)}
+                  className="text-muted-foreground hover:text-destructive p-1"
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -1259,7 +1238,9 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingId ? t('paymentsEditGateway') : t('paymentsAddGateway')}</DialogTitle>
+            <DialogTitle>
+              {editingId ? t('paymentsEditGateway') : t('paymentsAddGateway')}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
             <div className="space-y-1.5">
@@ -1271,7 +1252,13 @@ function PaymentsTab({ teamId }: { teamId: string }) {
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger>
                       <span className="flex flex-1 text-left text-sm truncate">
-                        {field.value === 'stripe' ? 'Stripe' : field.value === 'payrexx' ? 'Payrexx' : <span className="text-muted-foreground">—</span>}
+                        {field.value === 'stripe' ? (
+                          'Stripe'
+                        ) : field.value === 'payrexx' ? (
+                          'Payrexx'
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
@@ -1283,13 +1270,25 @@ function PaymentsTab({ teamId }: { teamId: string }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>{selectedType === 'stripe' ? t('paymentsPublishableKey') : 'Instance name'}</Label>
-              <Input {...register('identifier')} placeholder={selectedType === 'stripe' ? 'pk_live_…' : 'my-instance'} />
-              {errors.identifier && <p className="text-xs text-destructive">{errors.identifier.message}</p>}
+              <Label>
+                {selectedType === 'stripe' ? t('paymentsPublishableKey') : 'Instance name'}
+              </Label>
+              <Input
+                {...register('identifier')}
+                placeholder={selectedType === 'stripe' ? 'pk_live_…' : 'my-instance'}
+              />
+              {errors.identifier && (
+                <p className="text-xs text-destructive">{errors.identifier.message}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>{t('paymentsCurrency')}</Label>
-              <Input {...register('currency')} placeholder="CHF" maxLength={3} className="uppercase w-24" />
+              <Input
+                {...register('currency')}
+                placeholder="CHF"
+                maxLength={3}
+                className="uppercase w-24"
+              />
             </div>
 
             {/* Payrexx-specific fields */}
@@ -1304,8 +1303,10 @@ function PaymentsTab({ teamId }: { teamId: string }) {
                     autoComplete="off"
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Used to verify <code className="bg-muted px-1 rounded">X-Webhook-Signature</code> on incoming payment webhooks.{' '}
-                    Leave blank to disable signature verification (not recommended).
+                    Used to verify{' '}
+                    <code className="bg-muted px-1 rounded">X-Webhook-Signature</code> on incoming
+                    payment webhooks. Leave blank to disable signature verification (not
+                    recommended).
                   </p>
                 </div>
                 <div className="space-y-1.5">
@@ -1317,38 +1318,53 @@ function PaymentsTab({ teamId }: { teamId: string }) {
                       <Select value={field.value ?? ''} onValueChange={field.onChange}>
                         <SelectTrigger>
                           <span className="flex flex-1 text-left text-sm truncate">
-                            {subscriptionTypes.find(s => s.id === field.value)?.name ?? (
-                              <span className="text-muted-foreground">None — use Payrexx referenceId</span>
+                            {subscriptionTypes.find((s) => s.id === field.value)?.name ?? (
+                              <span className="text-muted-foreground">
+                                None — use Payrexx referenceId
+                              </span>
                             )}
                           </span>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">None — use Payrexx referenceId</SelectItem>
                           {subscriptionTypes.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     )}
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Applied when the Payrexx payment link has no <code className="bg-muted px-1 rounded">referenceId</code>.
-                    Set <code className="bg-muted px-1 rounded">referenceId</code> to the subscription type ID on each Payrexx link for per-plan control.
+                    Applied when the Payrexx payment link has no{' '}
+                    <code className="bg-muted px-1 rounded">referenceId</code>. Set{' '}
+                    <code className="bg-muted px-1 rounded">referenceId</code> to the subscription
+                    type ID on each Payrexx link for per-plan control.
                   </p>
                 </div>
               </>
             )}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
-              <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+              <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* Delete confirmation */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('paymentsDeleteGateway')}</AlertDialogTitle>
@@ -1356,7 +1372,10 @@ function PaymentsTab({ teamId }: { teamId: string }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
               {t('paymentsDeleteGateway')}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1371,7 +1390,14 @@ function PaymentsTab({ teamId }: { teamId: string }) {
 const KEY_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
 function SmtpForm({ teamId, orgId }: { teamId: string; orgId?: string }) {
-  const { data: smtpData, isLoading, save, test, isSaving, isTesting } = useSmtpSettings('team', teamId)
+  const {
+    data: smtpData,
+    isLoading,
+    save,
+    test,
+    isSaving,
+    isTesting,
+  } = useSmtpSettings('team', teamId)
 
   const [host, setHost] = useState('')
   const [port, setPort] = useState(587)
@@ -1423,7 +1449,10 @@ function SmtpForm({ teamId, orgId }: { teamId: string; orgId?: string }) {
   async function handleTest() {
     try {
       const result = await test()
-      showToast(result.success ? 'Test email sent successfully.' : (result.message ?? 'Test failed.'), result.success)
+      showToast(
+        result.success ? 'Test email sent successfully.' : (result.message ?? 'Test failed.'),
+        result.success
+      )
     } catch (err) {
       showToast((err as Error).message ?? 'Test failed.', false)
     }
@@ -1447,21 +1476,22 @@ function SmtpForm({ teamId, orgId }: { teamId: string; orgId?: string }) {
           Outbound email (SMTP)
         </h3>
         <p className="text-xs text-muted-foreground mt-1">
-          Configure a custom SMTP server for outreach emails. When not set, Linyup uses its own email infrastructure.
+          Configure a custom SMTP server for outreach emails. When not set, Linyup uses its own
+          email infrastructure.
         </p>
       </div>
 
       {orgId && (
         <div className="flex items-center justify-between rounded-lg border px-4 py-3">
           <div className="space-y-0.5">
-            <Label htmlFor="use-org-smtp" className="text-sm font-medium">Use organisation SMTP</Label>
-            <p className="text-xs text-muted-foreground">Inherit email configuration from your organisation.</p>
+            <Label htmlFor="use-org-smtp" className="text-sm font-medium">
+              Use organisation SMTP
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Inherit email configuration from your organisation.
+            </p>
           </div>
-          <Switch
-            id="use-org-smtp"
-            checked={useOrgSmtp}
-            onCheckedChange={setUseOrgSmtp}
-          />
+          <Switch id="use-org-smtp" checked={useOrgSmtp} onCheckedChange={setUseOrgSmtp} />
         </div>
       )}
 
@@ -1501,7 +1531,9 @@ function SmtpForm({ teamId, orgId }: { teamId: string; orgId?: string }) {
               onChange={(e) => setSecure(e.target.checked)}
               className="h-4 w-4 rounded border-input accent-primary"
             />
-            <Label htmlFor="smtp-secure" className="cursor-pointer">Use TLS (port 465)</Label>
+            <Label htmlFor="smtp-secure" className="cursor-pointer">
+              Use TLS (port 465)
+            </Label>
           </div>
 
           <div className="space-y-1.5">
@@ -1575,9 +1607,11 @@ function SmtpForm({ teamId, orgId }: { teamId: string; orgId?: string }) {
       </div>
 
       {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white z-50 ${
-          toast.ok ? 'bg-green-600' : 'bg-destructive'
-        }`}>
+        <div
+          className={`fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white z-50 ${
+            toast.ok ? 'bg-green-600' : 'bg-destructive'
+          }`}
+        >
           {toast.msg}
         </div>
       )}
@@ -1599,7 +1633,10 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
   useEffect(() => {
     if (team?.outreach_placeholders) {
       setVars(
-        Object.entries(team.outreach_placeholders).map(([key, value]) => ({ key, value: value as string })),
+        Object.entries(team.outreach_placeholders).map(([key, value]) => ({
+          key,
+          value: value as string,
+        }))
       )
     }
   }, [team?.outreach_placeholders])
@@ -1615,10 +1652,14 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
     setSaveError('')
     const invalid = vars.filter((v) => v.key && !KEY_REGEX.test(v.key))
     if (invalid.length > 0) {
-      setSaveError(`Invalid key names: ${invalid.map((v) => v.key).join(', ')}. Use letters, numbers and underscores only.`)
+      setSaveError(
+        `Invalid key names: ${invalid.map((v) => v.key).join(', ')}. Use letters, numbers and underscores only.`
+      )
       return
     }
-    const payload = Object.fromEntries(vars.filter((v) => v.key.trim()).map((v) => [v.key.trim(), v.value]))
+    const payload = Object.fromEntries(
+      vars.filter((v) => v.key.trim()).map((v) => [v.key.trim(), v.value])
+    )
     setSaving(true)
     try {
       await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { outreach_placeholders: payload })
@@ -1643,8 +1684,9 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
           <h3 className="font-semibold text-sm">Custom variables</h3>
           <p className="text-xs text-muted-foreground mt-1">
             Define key→value pairs you can use in email templates as{' '}
-            <code className="font-mono text-xs bg-muted px-1 rounded">{'{{key}}'}</code>. For example,{' '}
-            <code className="font-mono text-xs bg-muted px-1 rounded">discountCode</code> → <code className="font-mono text-xs bg-muted px-1 rounded">WELCOME20</code>.
+            <code className="font-mono text-xs bg-muted px-1 rounded">{'{{key}}'}</code>. For
+            example, <code className="font-mono text-xs bg-muted px-1 rounded">discountCode</code> →{' '}
+            <code className="font-mono text-xs bg-muted px-1 rounded">WELCOME20</code>.
           </p>
         </div>
 
@@ -1652,14 +1694,18 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
           {vars.map((row, idx) => (
             <div key={idx} className="flex items-center gap-2">
               <div className="flex items-center border rounded-md overflow-hidden flex-1">
-                <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-r select-none font-mono">{'{{'}</span>
+                <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-r select-none font-mono">
+                  {'{{'}
+                </span>
                 <input
                   value={row.key}
                   onChange={(e) => updateRow(idx, 'key', e.target.value)}
                   placeholder="variableName"
                   className="flex-1 px-2 py-2 text-sm font-mono outline-none bg-background"
                 />
-                <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-l select-none font-mono">{'}}'}</span>
+                <span className="px-2 py-2 text-xs text-muted-foreground bg-muted border-l select-none font-mono">
+                  {'}}'}
+                </span>
               </div>
               <input
                 value={row.value}
@@ -1667,7 +1713,12 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
                 placeholder="Substitution value"
                 className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
               />
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeRow(idx)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => removeRow(idx)}
+              >
                 <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </div>
@@ -1675,7 +1726,8 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
         </div>
 
         <Button variant="outline" size="sm" onClick={addRow}>
-          <Plus className="h-4 w-4 mr-1.5" />Add variable
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add variable
         </Button>
 
         {saveError && <p className="text-xs text-destructive">{saveError}</p>}
@@ -1692,7 +1744,7 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = 'general' | 'subscriptions' | 'alerts' | 'ranking' | 'payments' | 'outreach'
+type SettingsTab = 'general' | 'alerts' | 'ranking' | 'payments' | 'outreach'
 
 export default function TeamSettingsPage() {
   const { currentTeamId } = useAuth()
@@ -1715,7 +1767,6 @@ export default function TeamSettingsPage() {
 
   const TABS: { id: SettingsTab; label: string }[] = [
     { id: 'general', label: t('tabGeneral') },
-    { id: 'subscriptions', label: t('tabSubscriptionTypes') },
     { id: 'alerts', label: t('tabAlerts') },
     { id: 'ranking', label: t('tabRanking') },
     { id: 'payments', label: t('tabPayments') },
@@ -1749,7 +1800,6 @@ export default function TeamSettingsPage() {
       <Card>
         <CardContent className="pt-6">
           {tab === 'general' && <GeneralForm team={team} teamId={currentTeamId} />}
-          {tab === 'subscriptions' && <SubscriptionTypesTab teamId={currentTeamId} />}
           {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
           {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
           {tab === 'payments' && <PaymentsTab teamId={currentTeamId} />}

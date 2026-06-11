@@ -53,11 +53,51 @@ export function ProductTour() {
         // Order mirrors the setup flow: activities first (required for scheduling).
         steps: [
           { popover: { title: t('tour.welcomeTitle'), description: t('tour.welcomeBody') } },
-          { element: '[data-tour="nav-activities"]', popover: { title: t('tour.activitiesTitle'), description: t('tour.activitiesBody'), side: 'right', align: 'start' } },
-          { element: '[data-tour="nav-calendar"]', popover: { title: t('tour.calendarTitle'), description: t('tour.calendarBody'), side: 'right', align: 'start' } },
-          { element: '[data-tour="nav-contacts"]', popover: { title: t('tour.contactsTitle'), description: t('tour.contactsBody'), side: 'right', align: 'start' } },
-          { element: '[data-tour="nav-portal"]', popover: { title: t('tour.portalTitle'), description: t('tour.portalBody'), side: 'right', align: 'start' } },
-          { element: '[data-tour="nav-automations"]', popover: { title: t('tour.automationsTitle'), description: t('tour.automationsBody'), side: 'right', align: 'start' } },
+          {
+            element: '[data-tour="nav-activities"]',
+            popover: {
+              title: t('tour.activitiesTitle'),
+              description: t('tour.activitiesBody'),
+              side: 'right',
+              align: 'start',
+            },
+          },
+          {
+            element: '[data-tour="nav-calendar"]',
+            popover: {
+              title: t('tour.calendarTitle'),
+              description: t('tour.calendarBody'),
+              side: 'right',
+              align: 'start',
+            },
+          },
+          {
+            element: '[data-tour="nav-contacts"]',
+            popover: {
+              title: t('tour.contactsTitle'),
+              description: t('tour.contactsBody'),
+              side: 'right',
+              align: 'start',
+            },
+          },
+          {
+            element: '[data-tour="nav-bioLink"]',
+            popover: {
+              title: t('tour.bioLinkTitle'),
+              description: t('tour.bioLinkBody'),
+              side: 'right',
+              align: 'start',
+            },
+          },
+          {
+            element: '[data-tour="nav-automations"]',
+            popover: {
+              title: t('tour.automationsTitle'),
+              description: t('tour.automationsBody'),
+              side: 'right',
+              align: 'start',
+            },
+          },
         ],
         onDestroyed: () => {
           // Fires whether the user finished or closed early — mark done either way.

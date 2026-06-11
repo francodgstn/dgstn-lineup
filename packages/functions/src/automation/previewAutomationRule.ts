@@ -7,7 +7,11 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
 import { isTeamMember } from '../utils/teams'
 import { requirePlan } from '../utils/plan'
-import { normalizeRule, evaluateContactConditions, type ContactData } from '../utils/automationEngine'
+import {
+  normalizeRule,
+  evaluateContactConditions,
+  type ContactData,
+} from '../utils/automationEngine'
 
 interface MatchedContact {
   id: string
@@ -52,11 +56,12 @@ export const previewAutomationRule = onCall(async (request) => {
   const hasBookingCondition = rule.conditions.some((c) => c.type === 'portal_booking_no_show')
 
   if (hasBookingCondition) {
-    // Preview for booking-based rules: find matching no_show portal bookings in the delay window
+    // Preview for booking-based rules: find matching no_show bio-link bookings in the delay window
     const bookingCond = rule.conditions.find((c) => c.type === 'portal_booking_no_show') as
       | { type: 'portal_booking_no_show'; delay_days?: number; delay_hours?: number }
       | undefined
-    const delayDays = bookingCond?.delay_days || Math.round(((bookingCond?.delay_hours || 24)) / 24) || 1
+    const delayDays =
+      bookingCond?.delay_days || Math.round((bookingCond?.delay_hours || 24) / 24) || 1
     const delayHours = delayDays * 24
     const windowEnd = new Date(now.getTime() - (delayHours - 12) * 3600000)
     const windowStart = new Date(now.getTime() - (delayHours + 36) * 3600000)
@@ -89,7 +94,8 @@ export const previewAutomationRule = onCall(async (request) => {
 
     for (const sessionDoc of allSessionDocs) {
       const [bookErr, bookSnap] = await to(
-        sessionDoc.ref.collection('bookings')
+        sessionDoc.ref
+          .collection('bookings')
           .where('fromPortal', '==', true)
           .where('status', '==', 'no_show')
           .get()

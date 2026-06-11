@@ -5,8 +5,20 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useRouter, Link } from '@/i18n/navigation'
 import {
-  doc, getDoc, updateDoc, collection, query, where, orderBy, collectionGroup,
-  getDocs, addDoc, deleteDoc, serverTimestamp, Timestamp, limit,
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  orderBy,
+  collectionGroup,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  serverTimestamp,
+  Timestamp,
+  limit,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -14,20 +26,46 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
-  CONTACTS_COLLECTION, TEAMS_COLLECTION, ORGANIZATIONS_COLLECTION,
+  CONTACTS_COLLECTION,
+  TEAMS_COLLECTION,
+  ORGANIZATIONS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
-  CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION, CONTACT_ALERTS_SUBCOLLECTION,
-  ALERT_PRESETS_SUBCOLLECTION, TEAM_ACTIVITY_LOG_SUBCOLLECTION,
-  CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION,
+  CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION,
+  CONTACT_ALERTS_SUBCOLLECTION,
+  ALERT_PRESETS_SUBCOLLECTION,
+  TEAM_ACTIVITY_LOG_SUBCOLLECTION,
+  CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
+  CONTACT_TRAINING_CHECKINS_SUBCOLLECTION,
 } from '@linyup/shared'
 import type {
-  Contact, MembershipStatus, ContactType, ContactGender,
-  SubscriptionType, SubscriptionHistoryEntry, ContactAlert, AlertScheduleType,
-  RankingSystem, ActivityLogEntry, ActivityEventType, PlanFeature,
+  Contact,
+  MembershipStatus,
+  ContactType,
+  ContactGender,
+  SubscriptionType,
+  SubscriptionHistoryEntry,
+  ContactAlert,
+  AlertScheduleType,
+  RankingSystem,
+  ActivityLogEntry,
+  ActivityEventType,
+  PlanFeature,
 } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -37,16 +75,50 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  ArrowLeft, CalendarDays, Mail, Phone, StickyNote, Star, Flame,
-  BookOpen, Award, Plus, Trash2, Trophy,
-  Bell, Timer, Activity, ArchiveRestore, AlertTriangle,
-  UserPlus, Archive, RotateCcw, ArrowRightLeft, CheckCircle, XCircle,
-  CalendarCheck, CalendarX, CreditCard, BarChart2, Lock, Flag, Link2,
+  ArrowLeft,
+  CalendarDays,
+  Mail,
+  Phone,
+  StickyNote,
+  Star,
+  Flame,
+  BookOpen,
+  Award,
+  Plus,
+  Trash2,
+  Trophy,
+  Bell,
+  Timer,
+  Activity,
+  ArchiveRestore,
+  AlertTriangle,
+  UserPlus,
+  Archive,
+  RotateCcw,
+  ArrowRightLeft,
+  CheckCircle,
+  XCircle,
+  CalendarCheck,
+  CalendarX,
+  CreditCard,
+  BarChart2,
+  Lock,
+  Flag,
+  Link2,
 } from 'lucide-react'
 import {
-  LineChart, Line, XAxis, Tooltip, ResponsiveContainer,
-  AreaChart, Area,
-  RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend,
+  LineChart,
+  Line,
+  XAxis,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  Radar,
+  Legend,
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab } from './NotesTab'
@@ -58,21 +130,31 @@ function initials(c: Contact) {
   return `${c.firstname?.[0] ?? ''}${c.lastname?.[0] ?? ''}`.toUpperCase() || '?'
 }
 
-const STATUS_VARIANT: Record<MembershipStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  guest: 'secondary', requested: 'outline', under_review: 'outline',
-  almost_ready: 'outline', active: 'default', expired: 'destructive',
+const STATUS_VARIANT: Record<
+  MembershipStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  guest: 'secondary',
+  requested: 'outline',
+  under_review: 'outline',
+  almost_ready: 'outline',
+  active: 'default',
+  expired: 'destructive',
 }
 
 function formatDate(ts: { toDate(): Date } | null | undefined, opts?: Intl.DateTimeFormatOptions) {
   if (!ts) return '—'
-  return ts.toDate().toLocaleDateString([], opts ?? { day: '2-digit', month: 'short', year: 'numeric' })
+  return ts
+    .toDate()
+    .toLocaleDateString([], opts ?? { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function tsToDate(ts: unknown): Date | undefined {
   if (!ts) return undefined
   if (ts instanceof Timestamp) return ts.toDate()
   if (ts instanceof Date) return ts
-  if (typeof ts === 'object' && 'toDate' in (ts as object)) return (ts as { toDate(): Date }).toDate()
+  if (typeof ts === 'object' && 'toDate' in (ts as object))
+    return (ts as { toDate(): Date }).toDate()
   return undefined
 }
 
@@ -88,7 +170,9 @@ const profileSchema = z.object({
   birthplace: z.string().max(100).optional(),
   weight: z.coerce.number().min(0).max(500).optional(),
   type: z.enum(['trial', 'student', 'external']).optional(),
-  membership_status: z.enum(['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired']).optional(),
+  membership_status: z
+    .enum(['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired'])
+    .optional(),
   subscription_type_id: z.string().optional(),
   subscription_recurrence: z.string().optional(),
   address_route: z.string().max(100).optional(),
@@ -152,8 +236,13 @@ function useSubscriptionHistory(contactId: string) {
     queryFn: async () => {
       const snap = await getDocs(
         query(
-          collection(db, CONTACTS_COLLECTION, contactId, CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION),
-          orderBy('start_date', 'desc'),
+          collection(
+            db,
+            CONTACTS_COLLECTION,
+            contactId,
+            CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION
+          ),
+          orderBy('start_date', 'desc')
         )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as SubscriptionHistoryEntry)
@@ -179,7 +268,7 @@ function useContactBookings(contactId: string, teamId: string | null) {
           collectionGroup(db, 'bookings'),
           where('teamId', '==', teamId),
           where('contactId', '==', contactId),
-          orderBy('joinedAt', 'desc'),
+          orderBy('joinedAt', 'desc')
         )
       )
       return snap.docs.map((d) => {
@@ -213,20 +302,22 @@ function useContactActivityLog(contactId: string, teamId: string | null, days?: 
             orderBy('created_at', 'desc'),
             limit(PAGE_SIZE),
           ]
-        : [
-            where('refs.contact', '==', contactId),
-            orderBy('created_at', 'desc'),
-            limit(PAGE_SIZE),
-          ]
+        : [where('refs.contact', '==', contactId), orderBy('created_at', 'desc'), limit(PAGE_SIZE)]
       const snap = await getDocs(
-        query(collection(db, TEAMS_COLLECTION, teamId!, TEAM_ACTIVITY_LOG_SUBCOLLECTION), ...constraints)
+        query(
+          collection(db, TEAMS_COLLECTION, teamId!, TEAM_ACTIVITY_LOG_SUBCOLLECTION),
+          ...constraints
+        )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ActivityLogEntry)
     },
   })
 }
 
-interface RecentSession { id: string; joinedAt: { toDate(): Date } | null }
+interface RecentSession {
+  id: string
+  joinedAt: { toDate(): Date } | null
+}
 
 function useContactRecentSessions(contactId: string, count: number) {
   return useQuery<RecentSession[]>({
@@ -237,7 +328,7 @@ function useContactRecentSessions(contactId: string, count: number) {
           collectionGroup(db, 'participants'),
           where('contactId', '==', contactId),
           orderBy('joinedAt', 'desc'),
-          limit(count),
+          limit(count)
         )
       )
       return snap.docs.map((d) => ({ id: d.id, joinedAt: d.data().joinedAt ?? null }))
@@ -245,7 +336,10 @@ function useContactRecentSessions(contactId: string, count: number) {
   })
 }
 
-interface WeeklyReport { iso_week: string; sessions_count: number }
+interface WeeklyReport {
+  iso_week: string
+  sessions_count: number
+}
 
 function useContactWeeklyReports(contactId: string, weeks = 16) {
   return useQuery<WeeklyReport[]>({
@@ -255,11 +349,14 @@ function useContactWeeklyReports(contactId: string, weeks = 16) {
         query(
           collection(db, CONTACTS_COLLECTION, contactId, CONTACT_WEEKLY_REPORTS_SUBCOLLECTION),
           orderBy('iso_week', 'desc'),
-          limit(weeks),
+          limit(weeks)
         )
       )
       return snap.docs
-        .map((d) => ({ iso_week: d.data().iso_week as string, sessions_count: (d.data().sessions_count as number) ?? 0 }))
+        .map((d) => ({
+          iso_week: d.data().iso_week as string,
+          sessions_count: (d.data().sessions_count as number) ?? 0,
+        }))
         .reverse()
     },
   })
@@ -312,7 +409,7 @@ function useContactTrainingCheckins(contactId: string) {
         query(
           collection(db, CONTACTS_COLLECTION, contactId, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION),
           orderBy('taken_at', 'desc'),
-          limit(20),
+          limit(20)
         )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TrainingCheckin)
@@ -327,7 +424,7 @@ function useContactAlerts(contactId: string) {
       const snap = await getDocs(
         query(
           collection(db, CONTACTS_COLLECTION, contactId, CONTACT_ALERTS_SUBCOLLECTION),
-          orderBy('created_at', 'desc'),
+          orderBy('created_at', 'desc')
         )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactAlert)
@@ -350,7 +447,9 @@ function useAlertPresets(teamId: string | null) {
     enabled: !!teamId,
     queryFn: async () => {
       if (!teamId) return []
-      const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION))
+      const snap = await getDocs(
+        collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION)
+      )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as AlertPresetRecord)
     },
   })
@@ -358,13 +457,22 @@ function useAlertPresets(teamId: string | null) {
 
 // ─── field wrapper ────────────────────────────────────────────────────────────
 
-function Field({ label, required, children, error }: {
-  label: string; required?: boolean; children: React.ReactNode; error?: string
+function Field({
+  label,
+  required,
+  children,
+  error,
+}: {
+  label: string
+  required?: boolean
+  children: React.ReactNode
+  error?: string
 }) {
   return (
     <div className="space-y-1">
       <label className="text-sm font-medium">
-        {label}{required && <span className="text-destructive ml-1">*</span>}
+        {label}
+        {required && <span className="text-destructive ml-1">*</span>}
       </label>
       {children}
       {error && <p className="text-xs text-destructive">{error}</p>}
@@ -405,7 +513,9 @@ function SectionDivider({ label }: { label: string }) {
 function FormBlock({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border bg-card p-4 space-y-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">{title}</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+        {title}
+      </p>
       {children}
     </div>
   )
@@ -432,12 +542,21 @@ function LineXTick({ x, y, payload }: { x?: number; y?: number; payload?: { valu
 }
 
 function RadarAngleTick({
-  x, y, cx, cy, payload,
+  x,
+  y,
+  cx,
+  cy,
+  payload,
 }: {
-  x?: number; y?: number; cx?: number; cy?: number; payload?: { value: string }
+  x?: number
+  y?: number
+  cx?: number
+  cy?: number
+  payload?: { value: string }
 }) {
   if (!payload?.value) return null
-  const textAnchor = (x ?? 0) > (cx ?? 0) + 4 ? 'start' : (x ?? 0) < (cx ?? 0) - 4 ? 'end' : 'middle'
+  const textAnchor =
+    (x ?? 0) > (cx ?? 0) + 4 ? 'start' : (x ?? 0) < (cx ?? 0) - 4 ? 'end' : 'middle'
   return (
     <text
       fill="currentColor"
@@ -455,15 +574,24 @@ function RadarAngleTick({
 // ─── add check-in dialog ─────────────────────────────────────────────────────
 
 function AddCheckinDialog({
-  open, onOpenChange, contactId, onSaved,
+  open,
+  onOpenChange,
+  contactId,
+  onSaved,
 }: {
-  open: boolean; onOpenChange: (v: boolean) => void
-  contactId: string; onSaved: () => void
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  contactId: string
+  onSaved: () => void
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const [scores, setScores] = useState<Record<string, number>>({
-    consistency: 3, effort: 3, focus: 3, recharge: 3, sense_of_progress: 3,
+    consistency: 3,
+    effort: 3,
+    focus: 3,
+    recharge: 3,
+    sense_of_progress: 3,
   })
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
@@ -474,7 +602,13 @@ function AddCheckinDialog({
       const profile = detectTrainingProfile(scores)
       await addDoc(
         collection(db, CONTACTS_COLLECTION, contactId, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION),
-        { scores, notes: notes.trim() || null, filled_by: 'coach', taken_at: serverTimestamp(), ...profile }
+        {
+          scores,
+          notes: notes.trim() || null,
+          filled_by: 'coach',
+          taken_at: serverTimestamp(),
+          ...profile,
+        }
       )
       onSaved()
       onOpenChange(false)
@@ -488,12 +622,16 @@ function AddCheckinDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>{t('trainingCheckinTitle')}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{t('trainingCheckinTitle')}</DialogTitle>
+        </DialogHeader>
         <div className="space-y-4 py-2">
           {DEFAULT_TRAINING_INDICATORS.map((ind) => (
             <div key={ind.key} className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">{t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0])}</label>
+                <label className="text-sm font-medium">
+                  {t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0])}
+                </label>
                 <span className="text-sm font-bold tabular-nums">{scores[ind.key] ?? 3}/5</span>
               </div>
               <div className="flex gap-1">
@@ -520,12 +658,17 @@ function AddCheckinDialog({
           </div>
         </div>
         <DialogFooter>
-          <button onClick={() => onOpenChange(false)}
-            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+          <button
+            onClick={() => onOpenChange(false)}
+            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+          >
             {t('cancel')}
           </button>
-          <button onClick={save} disabled={saving}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
             {saving ? tCommon('loading') : t('saveChanges')}
           </button>
         </DialogFooter>
@@ -547,19 +690,22 @@ function isoWeekLabel(isoWeek: string) {
 }
 
 const TREND_PERIODS = [
-  { key: '4w',  weeks: 4,  label: '1M' },
+  { key: '4w', weeks: 4, label: '1M' },
   { key: '12w', weeks: 12, label: '3M' },
   { key: '24w', weeks: 24, label: '6M' },
   { key: '52w', weeks: 52, label: '1Y' },
 ] as const
-type TrendPeriodKey = typeof TREND_PERIODS[number]['key']
+type TrendPeriodKey = (typeof TREND_PERIODS)[number]['key']
 
 function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
   const [addCheckinOpen, setAddCheckinOpen] = useState(false)
   const [period, setPeriod] = useState<TrendPeriodKey>('12w')
   const selectedPeriod = TREND_PERIODS.find((p) => p.key === period)!
-  const { data: weeklyReports = [], isLoading: reportsLoading } = useContactWeeklyReports(contact.id, selectedPeriod.weeks)
+  const { data: weeklyReports = [], isLoading: reportsLoading } = useContactWeeklyReports(
+    contact.id,
+    selectedPeriod.weeks
+  )
   const { data: checkins = [], isLoading: checkinsLoading } = useContactTrainingCheckins(contact.id)
   const { hasFeature } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
@@ -574,9 +720,17 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
   const latestStudent = checkins.find((c) => c.filled_by === 'student') ?? null
   const hasBoth = !!latestCoach && !!latestStudent
 
-  const radarData = DEFAULT_TRAINING_INDICATORS.map((ind) => hasBoth
-    ? { subject: t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0]), coach: latestCoach?.scores?.[ind.key] ?? 0, student: latestStudent?.scores?.[ind.key] ?? 0 }
-    : { subject: t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0]), value: (latestCoach || latestStudent)?.scores?.[ind.key] ?? 0 }
+  const radarData = DEFAULT_TRAINING_INDICATORS.map((ind) =>
+    hasBoth
+      ? {
+          subject: t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0]),
+          coach: latestCoach?.scores?.[ind.key] ?? 0,
+          student: latestStudent?.scores?.[ind.key] ?? 0,
+        }
+      : {
+          subject: t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0]),
+          value: (latestCoach || latestStudent)?.scores?.[ind.key] ?? 0,
+        }
   )
 
   const trainingUnlocked = hasFeature('advanced_dashboard')
@@ -594,11 +748,12 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
   return (
     <div className="pb-16 space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
         {/* ── Attendance trend ── */}
         <div className="rounded-xl border bg-card p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('statsPanelAttendance')}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('statsPanelAttendance')}
+            </p>
             {/* Period selector */}
             <div className="flex items-center rounded-lg border bg-background p-0.5 gap-0.5">
               {TREND_PERIODS.map((p) => (
@@ -657,14 +812,17 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
         {/* ── Training profile ── */}
         <div className="rounded-xl border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('statsPanelTraining')}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('statsPanelTraining')}
+            </p>
             {trainingUnlocked && checkins.length > 0 && (
               <button
                 type="button"
                 onClick={() => setAddCheckinOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors"
               >
-                <Plus className="h-3.5 w-3.5" />{t('addTrainingCheckin')}
+                <Plus className="h-3.5 w-3.5" />
+                {t('addTrainingCheckin')}
               </button>
             )}
           </div>
@@ -676,7 +834,9 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
               </div>
               <div>
                 <p className="text-sm font-medium">{t('trainingProfileLockedTitle')}</p>
-                <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">{t('trainingProfileLockedDesc')}</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+                  {t('trainingProfileLockedDesc')}
+                </p>
               </div>
               <button
                 type="button"
@@ -696,7 +856,8 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
                 onClick={() => setAddCheckinOpen(true)}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
               >
-                <Plus className="h-4 w-4" />{t('addTrainingCheckin')}
+                <Plus className="h-4 w-4" />
+                {t('addTrainingCheckin')}
               </button>
             </div>
           ) : (
@@ -708,11 +869,27 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
                   <PolarAngleAxis dataKey="subject" tick={<RadarAngleTick />} />
                   {hasBoth ? (
                     <>
-                      <Radar name="Coach" dataKey="coach" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
-                      <Radar name="Student" dataKey="student" stroke="#22c55e" fill="#22c55e" fillOpacity={0.25} />
+                      <Radar
+                        name="Coach"
+                        dataKey="coach"
+                        stroke="#6366f1"
+                        fill="#6366f1"
+                        fillOpacity={0.35}
+                      />
+                      <Radar
+                        name="Student"
+                        dataKey="student"
+                        stroke="#22c55e"
+                        fill="#22c55e"
+                        fillOpacity={0.25}
+                      />
                       <Legend
                         iconSize={10}
-                        wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'hsl(var(--foreground))' }}
+                        wrapperStyle={{
+                          fontSize: 11,
+                          paddingTop: 8,
+                          color: 'hsl(var(--foreground))',
+                        }}
                       />
                     </>
                   ) : (
@@ -724,14 +901,15 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
             </div>
           )}
         </div>
-
       </div>
 
       <AddCheckinDialog
         open={addCheckinOpen}
         onOpenChange={setAddCheckinOpen}
         contactId={contact.id}
-        onSaved={() => qc.invalidateQueries({ queryKey: ['contact-training-checkins', contact.id] })}
+        onSaved={() =>
+          qc.invalidateQueries({ queryKey: ['contact-training-checkins', contact.id] })
+        }
       />
     </div>
   )
@@ -740,9 +918,16 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
 // ─── profile tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({
-  contact, teamId, orgId, onSaved, membershipFieldLocked,
+  contact,
+  teamId,
+  orgId,
+  onSaved,
+  membershipFieldLocked,
 }: {
-  contact: Contact; teamId: string | null; orgId?: string | null; onSaved: () => void
+  contact: Contact
+  teamId: string | null
+  orgId?: string | null
+  onSaved: () => void
   membershipFieldLocked?: boolean
 }) {
   const t = useTranslations('Contacts')
@@ -752,12 +937,24 @@ function ProfileTab({
   const { data: rankingSystems = [] } = useTeamRankingSystems(teamId, orgId)
 
   const TYPES: ContactType[] = ['trial', 'student', 'external']
-  const STATUSES: MembershipStatus[] = ['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired']
+  const STATUSES: MembershipStatus[] = [
+    'guest',
+    'requested',
+    'under_review',
+    'almost_ready',
+    'active',
+    'expired',
+  ]
   const GENDERS: ContactGender[] = ['M', 'F', 'other']
 
   const RECURRENCES = ['per_class', 'weekly', 'biweekly', 'monthly', 'quarterly', 'annual']
 
-  const { register, handleSubmit, control, formState: { errors, isSubmitting, isDirty } } = useForm<ProfileValues>({
+  const {
+    register,
+    handleSubmit,
+    control,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       firstname: contact.firstname,
@@ -769,7 +966,8 @@ function ProfileTab({
       birthplace: contact.birthplace ?? '',
       weight: contact.weight,
       type: contact.type,
-      membership_status: (contact.org_membership_status ?? contact.membership_status) as typeof contact.membership_status,
+      membership_status: (contact.org_membership_status ??
+        contact.membership_status) as typeof contact.membership_status,
       subscription_type_id: contact.subscription_type_id ?? '',
       subscription_recurrence: contact.subscription_recurrence ?? '',
       address_route: contact.address?.route ?? '',
@@ -793,7 +991,9 @@ function ProfileTab({
       birthplace: values.birthplace || null,
       weight: values.weight || null,
       type: values.type || null,
-      ...(membershipFieldLocked ? {} : { org_membership_status: values.membership_status || 'guest' }),
+      ...(membershipFieldLocked
+        ? {}
+        : { org_membership_status: values.membership_status || 'guest' }),
       subscription_type_id: values.subscription_type_id || null,
       subscription_recurrence: values.subscription_recurrence || null,
       address: {
@@ -844,32 +1044,50 @@ function ProfileTab({
 
       {/* 2-col section blocks on desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-
         {/* Subscription & membership */}
-        <FormBlock title={<>
-          {t('sectionMembership', { term: membershipTerm })}
-          {membershipFieldLocked && <Lock className="h-3 w-3 text-muted-foreground/60 shrink-0" />}
-        </>}>
+        <FormBlock
+          title={
+            <>
+              {t('sectionMembership', { term: membershipTerm })}
+              {membershipFieldLocked && (
+                <Lock className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+              )}
+            </>
+          }
+        >
           <Field label={t('colStatus')}>
             {membershipFieldLocked ? (
               <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/40 text-sm text-muted-foreground border border-border/50">
                 <Lock className="h-3 w-3 shrink-0" />
-                <span>{contact.org_membership_status ? t(`status_${contact.org_membership_status}`) : '—'}</span>
+                <span>
+                  {contact.org_membership_status
+                    ? t(`status_${contact.org_membership_status}`)
+                    : '—'}
+                </span>
               </div>
             ) : (
               <Controller
                 control={control}
                 name="membership_status"
                 render={({ field }) => (
-                  <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={(val) => field.onChange(val ?? '')}
+                  >
                     <SelectTrigger className="w-full">
                       <span className="flex flex-1 text-left text-sm truncate">
-                        {field.value ? t(`status_${field.value}`) : <span className="text-muted-foreground">—</span>}
+                        {field.value ? (
+                          t(`status_${field.value}`)
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
                       {STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>{t(`status_${s}`)}</SelectItem>
+                        <SelectItem key={s} value={s}>
+                          {t(`status_${s}`)}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -885,17 +1103,28 @@ function ProfileTab({
                 render={({ field }) => {
                   const selected = subTypes.find((st) => st.id === field.value)
                   return (
-                    <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
+                    <Select
+                      value={field.value ?? ''}
+                      onValueChange={(val) => field.onChange(val ?? '')}
+                    >
                       <SelectTrigger className="w-full">
                         <span className="flex flex-1 text-left text-sm truncate">
-                          {selected ? selected.name : <span className="text-muted-foreground">—</span>}
+                          {selected ? (
+                            selected.name
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </span>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">—</SelectItem>
-                        {subTypes.filter((st) => st.active !== false).map((st) => (
-                          <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
-                        ))}
+                        {subTypes
+                          .filter((st) => st.active !== false)
+                          .map((st) => (
+                            <SelectItem key={st.id} value={st.id}>
+                              {st.name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   )
@@ -908,16 +1137,25 @@ function ProfileTab({
               control={control}
               name="subscription_recurrence"
               render={({ field }) => (
-                <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val ?? '')}>
+                <Select
+                  value={field.value ?? ''}
+                  onValueChange={(val) => field.onChange(val ?? '')}
+                >
                   <SelectTrigger className="w-full">
                     <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value ? t(`recurrence_${field.value}`) : <span className="text-muted-foreground">—</span>}
+                      {field.value ? (
+                        t(`recurrence_${field.value}`)
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">—</SelectItem>
                     {RECURRENCES.map((r) => (
-                      <SelectItem key={r} value={r}>{t(`recurrence_${r}`)}</SelectItem>
+                      <SelectItem key={r} value={r}>
+                        {t(`recurrence_${r}`)}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -964,7 +1202,11 @@ function ProfileTab({
                                   type="button"
                                   onClick={() => {
                                     const next = { ...field.value }
-                                    if (selected) { delete next[system.id] } else { next[system.id] = level.value }
+                                    if (selected) {
+                                      delete next[system.id]
+                                    } else {
+                                      next[system.id] = level.value
+                                    }
                                     field.onChange(next)
                                   }}
                                   className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg border text-sm font-medium transition-colors ${
@@ -973,7 +1215,10 @@ function ProfileTab({
                                       : 'bg-background text-muted-foreground hover:text-foreground'
                                   }`}
                                 >
-                                  <div className="h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
+                                  <div
+                                    className="h-2.5 w-2.5 rounded-full shrink-0 border border-border"
+                                    style={{ background: level.color }}
+                                  />
                                   {level.label}
                                 </button>
                               )
@@ -984,23 +1229,36 @@ function ProfileTab({
                             value={currentValue !== undefined ? String(currentValue) : ''}
                             onValueChange={(val) => {
                               const next = { ...field.value }
-                              if (val === '') { delete next[system.id] } else { next[system.id] = Number(val) }
+                              if (val === '') {
+                                delete next[system.id]
+                              } else {
+                                next[system.id] = Number(val)
+                              }
                               field.onChange(next)
                             }}
                           >
                             <SelectTrigger className="w-full">
                               <span className="flex flex-1 text-left text-sm truncate">
-                                {currentValue !== undefined
-                                  ? (() => {
-                                      const lvl = system.levels.find((l) => l.value === currentValue)
-                                      return lvl ? (
-                                        <span className="flex items-center gap-2">
-                                          {lvl.color && <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: lvl.color }} />}
-                                          {lvl.label}
-                                        </span>
-                                      ) : String(currentValue)
-                                    })()
-                                  : <span className="text-muted-foreground">—</span>}
+                                {currentValue !== undefined ? (
+                                  (() => {
+                                    const lvl = system.levels.find((l) => l.value === currentValue)
+                                    return lvl ? (
+                                      <span className="flex items-center gap-2">
+                                        {lvl.color && (
+                                          <span
+                                            className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border"
+                                            style={{ background: lvl.color }}
+                                          />
+                                        )}
+                                        {lvl.label}
+                                      </span>
+                                    ) : (
+                                      String(currentValue)
+                                    )
+                                  })()
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
                               </span>
                             </SelectTrigger>
                             <SelectContent>
@@ -1009,7 +1267,10 @@ function ProfileTab({
                                 <SelectItem key={level.value} value={String(level.value)}>
                                   <span className="flex items-center gap-2">
                                     {level.color && (
-                                      <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border" style={{ background: level.color }} />
+                                      <span
+                                        className="inline-block h-2.5 w-2.5 rounded-full shrink-0 border border-border"
+                                        style={{ background: level.color }}
+                                      />
                                     )}
                                     {level.label}
                                   </span>
@@ -1040,16 +1301,25 @@ function ProfileTab({
               control={control}
               name="gender"
               render={({ field }) => (
-                <Select value={field.value ?? ''} onValueChange={(val) => field.onChange(val || undefined)}>
+                <Select
+                  value={field.value ?? ''}
+                  onValueChange={(val) => field.onChange(val || undefined)}
+                >
                   <SelectTrigger className="w-full">
                     <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value ? t(`gender_${field.value}`) : <span className="text-muted-foreground">—</span>}
+                      {field.value ? (
+                        t(`gender_${field.value}`)
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">—</SelectItem>
                     {GENDERS.map((g) => (
-                      <SelectItem key={g} value={g}>{t(`gender_${g}`)}</SelectItem>
+                      <SelectItem key={g} value={g}>
+                        {t(`gender_${g}`)}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1067,7 +1337,14 @@ function ProfileTab({
             <Input {...register('birthplace')} />
           </Field>
           <Field label={t('fieldWeight')}>
-            <Input type="number" step="0.1" min="0" max="500" inputMode="decimal" {...register('weight')} />
+            <Input
+              type="number"
+              step="0.1"
+              min="0"
+              max="500"
+              inputMode="decimal"
+              {...register('weight')}
+            />
           </Field>
         </FormBlock>
 
@@ -1102,7 +1379,6 @@ function ProfileTab({
             <Textarea {...register('acquisition_notes')} rows={3} />
           </Field>
         </FormBlock>
-
       </div>
 
       {/* Floating save */}
@@ -1123,21 +1399,22 @@ function ProfileTab({
 
 // ─── notes tab ────────────────────────────────────────────────────────────────
 
-
 // ─── bookings tab ─────────────────────────────────────────────────────────────
 
 function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
   const { data: bookings = [], isLoading } = useContactBookings(contact.id, teamId)
 
-  if (isLoading) return (
-    <div className="space-y-2">
-      {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
-    </div>
-  )
-  if (bookings.length === 0) return (
-    <div className="py-12 text-center text-muted-foreground text-sm">{t('noBookings')}</div>
-  )
+  if (isLoading)
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-14 rounded-lg" />
+        ))}
+      </div>
+    )
+  if (bookings.length === 0)
+    return <div className="py-12 text-center text-muted-foreground text-sm">{t('noBookings')}</div>
   return (
     <div className="space-y-2">
       {bookings.map((b) => (
@@ -1148,7 +1425,11 @@ function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | n
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{b.sessionLabel}</p>
             <p className="text-xs text-muted-foreground">
-              {b.sessionStart ? formatDate(b.sessionStart) : b.joinedAt ? formatDate(b.joinedAt) : '—'}
+              {b.sessionStart
+                ? formatDate(b.sessionStart)
+                : b.joinedAt
+                  ? formatDate(b.joinedAt)
+                  : '—'}
             </p>
           </div>
         </div>
@@ -1168,11 +1449,14 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['subscription-history', contact.id] })
 
-  if (isLoading) return (
-    <div className="space-y-2">
-      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
-    </div>
-  )
+  if (isLoading)
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-14 rounded-lg" />
+        ))}
+      </div>
+    )
 
   return (
     <div className="space-y-4">
@@ -1181,39 +1465,63 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
           onClick={() => setAddOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors"
         >
-          <Plus className="h-4 w-4" />{t('addSubscription')}
+          <Plus className="h-4 w-4" />
+          {t('addSubscription')}
         </button>
       </div>
 
       {history.length === 0 ? (
-        <div className="py-12 text-center text-muted-foreground text-sm">{t('noSubscriptions')}</div>
+        <div className="py-12 text-center text-muted-foreground text-sm">
+          {t('noSubscriptions')}
+        </div>
       ) : (
         <div className="space-y-2">
           {history.map((entry) => {
             const isActive = !entry.end_date
-            const typeName = subTypes.find((s) => s.id === entry.subscription_type_id)?.name
-              ?? entry.subscription_type_name ?? '—'
+            const typeName =
+              subTypes.find((s) => s.id === entry.subscription_type_id)?.name ??
+              entry.subscription_type_name ??
+              '—'
             return (
               <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border">
-                <div className={`h-2 w-2 rounded-full mt-2 shrink-0 ${isActive ? 'bg-green-500' : 'bg-muted-foreground/40'}`} />
+                <div
+                  className={`h-2 w-2 rounded-full mt-2 shrink-0 ${isActive ? 'bg-green-500' : 'bg-muted-foreground/40'}`}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium">{typeName}</p>
-                    {isActive && <Badge variant="default" className="text-xs">{t('subscriptionActiveLabel')}</Badge>}
+                    {isActive && (
+                      <Badge variant="default" className="text-xs">
+                        {t('subscriptionActiveLabel')}
+                      </Badge>
+                    )}
                   </div>
                   {entry.recurrence && (
-                    <p className="text-xs text-muted-foreground">{t(`recurrence_${entry.recurrence}`)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t(`recurrence_${entry.recurrence}`)}
+                    </p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    {formatDate(entry.start_date)} – {entry.end_date ? formatDate(entry.end_date) : t('subscriptionEndNone')}
+                    {formatDate(entry.start_date)} –{' '}
+                    {entry.end_date ? formatDate(entry.end_date) : t('subscriptionEndNone')}
                   </p>
                   {entry.termination_reason && (
-                    <p className="text-xs text-muted-foreground italic">{entry.termination_reason}</p>
+                    <p className="text-xs text-muted-foreground italic">
+                      {entry.termination_reason}
+                    </p>
                   )}
                 </div>
                 <button
                   onClick={async () => {
-                    await deleteDoc(doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION, entry.id))
+                    await deleteDoc(
+                      doc(
+                        db,
+                        CONTACTS_COLLECTION,
+                        contact.id,
+                        CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION,
+                        entry.id
+                      )
+                    )
                     invalidate()
                   }}
                   className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
@@ -1238,10 +1546,17 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
 }
 
 function AddSubscriptionDialog({
-  open, onOpenChange, contactId, subTypes, onSaved,
+  open,
+  onOpenChange,
+  contactId,
+  subTypes,
+  onSaved,
 }: {
-  open: boolean; onOpenChange: (v: boolean) => void
-  contactId: string; subTypes: SubscriptionType[]; onSaved: () => void
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  contactId: string
+  subTypes: SubscriptionType[]
+  onSaved: () => void
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
@@ -1280,25 +1595,39 @@ function AddSubscriptionDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>{t('addSubscription')}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{t('addSubscription')}</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3 py-2">
           {subTypes.length > 0 && (
             <Field label={t('subscriptionTypeName')}>
               <Select value={typeId} onValueChange={(v) => setTypeId(v ?? '')}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">—</SelectItem>
-                  {subTypes.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  {subTypes.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </Field>
           )}
           <Field label={t('subscriptionRecurrence')}>
             <Select value={recurrence} onValueChange={(v) => setRecurrence(v ?? '')}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">—</SelectItem>
-                {RECURRENCES.map((r) => <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>)}
+                {RECURRENCES.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r.replace('_', ' ')}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
@@ -1306,7 +1635,11 @@ function AddSubscriptionDialog({
             <DatePicker value={startDate} onChange={setStartDate} />
           </Field>
           <Field label={t('subscriptionEnd')}>
-            <DatePicker value={endDate} onChange={setEndDate} placeholder={t('subscriptionEndNone')} />
+            <DatePicker
+              value={endDate}
+              onChange={setEndDate}
+              placeholder={t('subscriptionEndNone')}
+            />
           </Field>
           {endDate && (
             <Field label={t('subscriptionTerminationReason')}>
@@ -1319,12 +1652,17 @@ function AddSubscriptionDialog({
           )}
         </div>
         <DialogFooter>
-          <button onClick={() => onOpenChange(false)}
-            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+          <button
+            onClick={() => onOpenChange(false)}
+            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+          >
             {t('cancel')}
           </button>
-          <button onClick={save} disabled={saving}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
             {saving ? tCommon('loading') : t('saveChanges')}
           </button>
         </DialogFooter>
@@ -1371,19 +1709,22 @@ function GamificationTab({ contact, teamId }: { contact: Contact; teamId: string
         <div className="rounded-xl border bg-card p-4 text-center">
           <p className="text-2xl font-bold">{contact.current_month_score ?? 0}</p>
           <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
-            <Star className="h-3 w-3 text-yellow-500" />{tG('sortPoints')}
+            <Star className="h-3 w-3 text-yellow-500" />
+            {tG('sortPoints')}
           </p>
         </div>
         <div className="rounded-xl border bg-card p-4 text-center">
           <p className="text-2xl font-bold">{contact.current_streak ?? 0}w</p>
           <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
-            <Flame className="h-3 w-3 text-orange-500" />{tG('sortStreak')}
+            <Flame className="h-3 w-3 text-orange-500" />
+            {tG('sortStreak')}
           </p>
         </div>
         <div className="rounded-xl border bg-card p-4 text-center">
           <p className="text-2xl font-bold">{contact.total_sessions ?? 0}</p>
           <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
-            <Trophy className="h-3 w-3 text-primary" />{t('tabBookings')}
+            <Trophy className="h-3 w-3 text-primary" />
+            {t('tabBookings')}
           </p>
         </div>
       </div>
@@ -1422,42 +1763,51 @@ function GamificationTab({ contact, teamId }: { contact: Contact; teamId: string
 // ─── activity tab ─────────────────────────────────────────────────────────────
 
 const ACTIVITY_PERIODS = [
-  { key: '30d', days: 30,  label: '30d' },
-  { key: '3m',  days: 90,  label: '3M'  },
-  { key: '6m',  days: 180, label: '6M'  },
+  { key: '30d', days: 30, label: '30d' },
+  { key: '3m', days: 90, label: '3M' },
+  { key: '6m', days: 180, label: '6M' },
   { key: 'all', days: null, label: 'All' },
 ] as const
-type ActivityPeriodKey = typeof ACTIVITY_PERIODS[number]['key']
+type ActivityPeriodKey = (typeof ACTIVITY_PERIODS)[number]['key']
 
 type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach'
 
 const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventType[]> = {
   sessions: ['session_participant_add', 'session_participant_delete'],
   bookings: ['booking_created', 'booking_confirmed', 'booking_cancelled', 'booking_rebooked'],
-  profile:  ['contact_add', 'contact_type_change', 'rank_change', 'subscription_change',
-             'contact_archive', 'contact_unarchive', 'contact_delete', 'contact_login', 'contact_anonymized'],
+  profile: [
+    'contact_add',
+    'contact_type_change',
+    'rank_change',
+    'subscription_change',
+    'contact_archive',
+    'contact_unarchive',
+    'contact_delete',
+    'contact_login',
+    'contact_anonymized',
+  ],
   outreach: ['outreach_email_sent'],
 }
 
 type EventMeta = { Icon: React.ElementType; bg: string; fg: string }
 
 const EVENT_META: Record<ActivityEventType, EventMeta> = {
-  contact_add:                 { Icon: UserPlus,        bg: 'bg-green-500/10',  fg: 'text-green-600'  },
-  contact_archive:             { Icon: Archive,         bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
-  contact_unarchive:           { Icon: RotateCcw,       bg: 'bg-green-500/10',  fg: 'text-green-600'  },
-  contact_delete:              { Icon: Trash2,          bg: 'bg-red-500/10',    fg: 'text-red-600'    },
-  contact_type_change:         { Icon: ArrowRightLeft,  bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
-  rank_change:                 { Icon: Award,           bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
-  subscription_change:         { Icon: CreditCard,      bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
-  session_participant_add:     { Icon: CalendarCheck,   bg: 'bg-green-500/10',  fg: 'text-green-600'  },
-  session_participant_delete:  { Icon: CalendarX,       bg: 'bg-red-500/10',    fg: 'text-red-600'    },
-  booking_created:             { Icon: CalendarDays,    bg: 'bg-blue-500/10',   fg: 'text-blue-600'   },
-  booking_confirmed:           { Icon: CheckCircle,     bg: 'bg-blue-500/10',   fg: 'text-blue-600'   },
-  booking_cancelled:           { Icon: XCircle,         bg: 'bg-red-500/10',    fg: 'text-red-600'    },
-  booking_rebooked:            { Icon: CalendarDays,    bg: 'bg-blue-500/10',   fg: 'text-blue-600'   },
-  contact_login:               { Icon: Activity,        bg: 'bg-green-500/10',  fg: 'text-green-600'  },
-  outreach_email_sent:         { Icon: Mail,            bg: 'bg-blue-500/10',   fg: 'text-blue-600'   },
-  contact_anonymized:          { Icon: Trash2,          bg: 'bg-muted',         fg: 'text-muted-foreground' },
+  contact_add: { Icon: UserPlus, bg: 'bg-green-500/10', fg: 'text-green-600' },
+  contact_archive: { Icon: Archive, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  contact_unarchive: { Icon: RotateCcw, bg: 'bg-green-500/10', fg: 'text-green-600' },
+  contact_delete: { Icon: Trash2, bg: 'bg-red-500/10', fg: 'text-red-600' },
+  contact_type_change: { Icon: ArrowRightLeft, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  rank_change: { Icon: Award, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  subscription_change: { Icon: CreditCard, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  session_participant_add: { Icon: CalendarCheck, bg: 'bg-green-500/10', fg: 'text-green-600' },
+  session_participant_delete: { Icon: CalendarX, bg: 'bg-red-500/10', fg: 'text-red-600' },
+  booking_created: { Icon: CalendarDays, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
+  booking_confirmed: { Icon: CheckCircle, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
+  booking_cancelled: { Icon: XCircle, bg: 'bg-red-500/10', fg: 'text-red-600' },
+  booking_rebooked: { Icon: CalendarDays, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
+  contact_login: { Icon: Activity, bg: 'bg-green-500/10', fg: 'text-green-600' },
+  outreach_email_sent: { Icon: Mail, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
+  contact_anonymized: { Icon: Trash2, bg: 'bg-muted', fg: 'text-muted-foreground' },
 }
 
 function formatActivityTimestamp(ts: { toDate(): Date } | null | undefined): string {
@@ -1472,11 +1822,15 @@ function formatActivityTimestamp(ts: { toDate(): Date } | null | undefined): str
     return `${mins}m ago`
   }
   if (diffHrs < 24) return `${Math.round(diffHrs)}h ago`
-  if (diffHrs < 48) return `Yesterday at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  if (diffHrs < 48)
+    return `Yesterday at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
   return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function dateDayLabel(ts: { toDate(): Date } | null | undefined, tCommon: (k: string) => string): string {
+function dateDayLabel(
+  ts: { toDate(): Date } | null | undefined,
+  tCommon: (k: string) => string
+): string {
   if (!ts) return ''
   const d = ts.toDate()
   const now = new Date()
@@ -1485,7 +1839,12 @@ function dateDayLabel(ts: { toDate(): Date } | null | undefined, tCommon: (k: st
   const diffDays = (today.getTime() - day.getTime()) / 86_400_000
   if (diffDays < 1) return tCommon('today')
   if (diffDays < 2) return tCommon('yesterday')
-  return d.toLocaleDateString([], { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString([], {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 function formatEventType(event: ActivityEventType): string {
@@ -1493,14 +1852,19 @@ function formatEventType(event: ActivityEventType): string {
 }
 
 function ActivityDetailDialog({
-  entry, onClose,
+  entry,
+  onClose,
 }: {
   entry: ActivityLogEntry | null
   onClose: () => void
 }) {
   if (!entry) return null
 
-  const meta = EVENT_META[entry.event] ?? { Icon: Activity, bg: 'bg-muted', fg: 'text-muted-foreground' }
+  const meta = EVENT_META[entry.event] ?? {
+    Icon: Activity,
+    bg: 'bg-muted',
+    fg: 'text-muted-foreground',
+  }
   const { Icon, bg, fg } = meta
 
   // Parameters: description first, then all other keys
@@ -1511,8 +1875,12 @@ function ActivityDetailDialog({
     const ts = entry.created_at as { toDate(): Date } | null | undefined
     if (!ts) return '—'
     return ts.toDate().toLocaleString([], {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
     })
   })()
 
@@ -1526,7 +1894,12 @@ function ActivityDetailDialog({
   }
 
   return (
-    <Dialog open={!!entry} onOpenChange={(open) => { if (!open) onClose() }}>
+    <Dialog
+      open={!!entry}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
@@ -1564,13 +1937,17 @@ function ActivityDetailDialog({
               {entry.refs.session && (
                 <div className="grid grid-cols-[140px_1fr] gap-2 px-3 py-2">
                   <span className="text-xs text-muted-foreground font-medium">session ref</span>
-                  <span className="text-xs break-all font-mono text-muted-foreground">{entry.refs.session}</span>
+                  <span className="text-xs break-all font-mono text-muted-foreground">
+                    {entry.refs.session}
+                  </span>
                 </div>
               )}
               {entry.refs.contact && (
                 <div className="grid grid-cols-[140px_1fr] gap-2 px-3 py-2">
                   <span className="text-xs text-muted-foreground font-medium">contact ref</span>
-                  <span className="text-xs break-all font-mono text-muted-foreground">{entry.refs.contact}</span>
+                  <span className="text-xs break-all font-mono text-muted-foreground">
+                    {entry.refs.contact}
+                  </span>
                 </div>
               )}
             </div>
@@ -1589,11 +1966,16 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
   const [selectedEntry, setSelectedEntry] = useState<ActivityLogEntry | null>(null)
 
   const selectedPeriod = ACTIVITY_PERIODS.find((p) => p.key === period)!
-  const { data: entries = [], isLoading } = useContactActivityLog(contact.id, teamId, selectedPeriod.days)
+  const { data: entries = [], isLoading } = useContactActivityLog(
+    contact.id,
+    teamId,
+    selectedPeriod.days
+  )
 
-  const filtered = category === 'all'
-    ? entries
-    : entries.filter((e) => (CATEGORY_EVENTS[category] as string[]).includes(e.event))
+  const filtered =
+    category === 'all'
+      ? entries
+      : entries.filter((e) => (CATEGORY_EVENTS[category] as string[]).includes(e.event))
 
   // Group filtered entries by calendar day
   const groups: { label: string; items: ActivityLogEntry[] }[] = []
@@ -1608,10 +1990,10 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
   }
 
   const CATEGORIES: { key: ActivityCategory; label: string }[] = [
-    { key: 'all',      label: t('activityFilterAll') },
+    { key: 'all', label: t('activityFilterAll') },
     { key: 'sessions', label: t('activityFilterSessions') },
     { key: 'bookings', label: t('activityFilterBookings') },
-    { key: 'profile',  label: t('activityFilterProfile') },
+    { key: 'profile', label: t('activityFilterProfile') },
     { key: 'outreach', label: t('activityFilterOutreach') },
   ]
 
@@ -1658,7 +2040,9 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
       {/* Content */}
       {isLoading ? (
         <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 rounded-lg" />
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground text-sm">
@@ -1670,26 +2054,39 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
           <div className="space-y-6">
             {groups.map((group) => (
               <div key={group.label}>
-                <p className="text-xs font-semibold text-muted-foreground mb-3 sticky top-0 bg-background py-1">{group.label}</p>
+                <p className="text-xs font-semibold text-muted-foreground mb-3 sticky top-0 bg-background py-1">
+                  {group.label}
+                </p>
                 <div className="relative pl-6">
                   {/* Vertical connector */}
                   <div className="absolute left-[9px] top-0 bottom-0 w-px bg-border" />
                   <div className="space-y-0">
                     {group.items.map((entry, idx) => {
-                      const meta = EVENT_META[entry.event] ?? { Icon: Activity, bg: 'bg-muted', fg: 'text-muted-foreground' }
+                      const meta = EVENT_META[entry.event] ?? {
+                        Icon: Activity,
+                        bg: 'bg-muted',
+                        fg: 'text-muted-foreground',
+                      }
                       const { Icon, fg } = meta
                       const isLast = idx === group.items.length - 1
                       return (
-                        <div key={entry.id} className={`relative flex items-start gap-3 py-2.5 ${isLast ? '' : 'border-b border-border/40'}`}>
+                        <div
+                          key={entry.id}
+                          className={`relative flex items-start gap-3 py-2.5 ${isLast ? '' : 'border-b border-border/40'}`}
+                        >
                           {/* Dot on the line */}
                           <div className="absolute -left-6 flex items-center justify-center w-[18px] h-[18px] rounded-full bg-background border-2 border-border mt-0.5 shrink-0">
                             <Icon className={`h-2.5 w-2.5 ${fg}`} />
                           </div>
                           <div className="flex-1 min-w-0 flex items-start justify-between gap-4">
-                            <p className="text-sm leading-snug">{entry.parameters.description as string}</p>
+                            <p className="text-sm leading-snug">
+                              {entry.parameters.description as string}
+                            </p>
                             <div className="flex flex-col items-end gap-0.5 shrink-0">
                               <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                                {formatActivityTimestamp(entry.created_at as { toDate(): Date } | null | undefined)}
+                                {formatActivityTimestamp(
+                                  entry.created_at as { toDate(): Date } | null | undefined
+                                )}
                               </span>
                               <button
                                 type="button"
@@ -1709,7 +2106,9 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
             ))}
           </div>
           {entries.length === PAGE_SIZE && (
-            <p className="text-center text-xs text-muted-foreground py-2">{t('activityLoadMore')}</p>
+            <p className="text-center text-xs text-muted-foreground py-2">
+              {t('activityLoadMore')}
+            </p>
           )}
         </>
       )}
@@ -1731,16 +2130,32 @@ const alertSchema = z.object({
 type AlertFormValues = z.infer<typeof alertSchema>
 
 function AlertDialog({
-  open, onOpenChange, contactId, onSaved,
+  open,
+  onOpenChange,
+  contactId,
+  onSaved,
 }: {
-  open: boolean; onOpenChange: (v: boolean) => void
-  contactId: string; onSaved: () => void
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  contactId: string
+  onSaved: () => void
 }) {
   const t = useTranslations('Contacts')
 
-  const { register, handleSubmit, watch, control, reset, formState: { isSubmitting } } = useForm<AlertFormValues>({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    control,
+    reset,
+    formState: { isSubmitting },
+  } = useForm<AlertFormValues>({
     resolver: zodResolver(alertSchema),
-    defaultValues: { schedule_type: 'sessions_countdown', schedule_value_sessions: 10, show_in_app: false },
+    defaultValues: {
+      schedule_type: 'sessions_countdown',
+      schedule_value_sessions: 10,
+      show_in_app: false,
+    },
   })
 
   const scheduleType = watch('schedule_type')
@@ -1758,7 +2173,10 @@ function AlertDialog({
     } else if (data.schedule_value_date) {
       payload.schedule_value = Timestamp.fromDate(data.schedule_value_date)
     }
-    await addDoc(collection(db, CONTACTS_COLLECTION, contactId, CONTACT_ALERTS_SUBCOLLECTION), payload)
+    await addDoc(
+      collection(db, CONTACTS_COLLECTION, contactId, CONTACT_ALERTS_SUBCOLLECTION),
+      payload
+    )
     onSaved()
     reset()
     onOpenChange(false)
@@ -1767,7 +2185,9 @@ function AlertDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>{t('addAlert')}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{t('addAlert')}</DialogTitle>
+        </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 py-1">
           {/* Trigger type */}
           <div className="space-y-1.5">
@@ -1775,14 +2195,27 @@ function AlertDialog({
             <div className="flex gap-2">
               {(['sessions_countdown', 'datetime'] as AlertScheduleType[]).map((type) => (
                 <label key={type} className="flex-1 cursor-pointer">
-                  <input type="radio" value={type} {...register('schedule_type')} className="sr-only" />
-                  <div className={`flex items-center gap-1.5 justify-center py-1.5 px-2 rounded-lg border text-xs font-medium transition-colors ${
-                    scheduleType === type
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}>
-                    {type === 'sessions_countdown' ? <Timer className="h-3.5 w-3.5" /> : <CalendarDays className="h-3.5 w-3.5" />}
-                    {type === 'sessions_countdown' ? t('alertTypeSessionsCountdown') : t('alertTypeDatetime')}
+                  <input
+                    type="radio"
+                    value={type}
+                    {...register('schedule_type')}
+                    className="sr-only"
+                  />
+                  <div
+                    className={`flex items-center gap-1.5 justify-center py-1.5 px-2 rounded-lg border text-xs font-medium transition-colors ${
+                      scheduleType === type
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {type === 'sessions_countdown' ? (
+                      <Timer className="h-3.5 w-3.5" />
+                    ) : (
+                      <CalendarDays className="h-3.5 w-3.5" />
+                    )}
+                    {type === 'sessions_countdown'
+                      ? t('alertTypeSessionsCountdown')
+                      : t('alertTypeDatetime')}
                   </div>
                 </label>
               ))}
@@ -1800,9 +2233,7 @@ function AlertDialog({
               <Controller
                 control={control}
                 name="schedule_value_date"
-                render={({ field }) => (
-                  <DatePicker value={field.value} onChange={field.onChange} />
-                )}
+                render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
               />
             </div>
           )}
@@ -1818,12 +2249,18 @@ function AlertDialog({
           </label>
 
           <DialogFooter>
-            <button type="button" onClick={() => onOpenChange(false)}
-              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+            >
               Cancel
             </button>
-            <button type="submit" disabled={isSubmitting}
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
               {t('addAlert')}
             </button>
           </DialogFooter>
@@ -1834,10 +2271,15 @@ function AlertDialog({
 }
 
 function AlertPresetPicker({
-  open, onOpenChange, presets, onSelect,
+  open,
+  onOpenChange,
+  presets,
+  onSelect,
 }: {
-  open: boolean; onOpenChange: (v: boolean) => void
-  presets: AlertPresetRecord[]; onSelect: (p: AlertPresetRecord, date?: Date) => void
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  presets: AlertPresetRecord[]
+  onSelect: (p: AlertPresetRecord, date?: Date) => void
 }) {
   const [dateStep, setDateStep] = useState<AlertPresetRecord | null>(null)
   const [pickedDate, setPickedDate] = useState<Date | undefined>()
@@ -1855,7 +2297,9 @@ function AlertPresetPicker({
     <>
       <Dialog open={open && !dateStep} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Apply preset</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Apply preset</DialogTitle>
+          </DialogHeader>
           <div className="space-y-2 py-1">
             {presets.map((p) => (
               <button
@@ -1864,14 +2308,20 @@ function AlertPresetPicker({
                 className="w-full flex items-center gap-3 p-3 rounded-lg border text-left hover:bg-muted transition-colors"
               >
                 <div className="shrink-0 text-muted-foreground">
-                  {p.schedule_type === 'sessions_countdown' ? <Timer className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
+                  {p.schedule_type === 'sessions_countdown' ? (
+                    <Timer className="h-4 w-4" />
+                  ) : (
+                    <CalendarDays className="h-4 w-4" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{p.name}</p>
                   <p className="text-xs text-muted-foreground line-clamp-1">{p.message}</p>
                 </div>
                 {p.schedule_type === 'sessions_countdown' && (
-                  <Badge variant="outline" className="text-xs shrink-0">{p.schedule_value} sessions</Badge>
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {p.schedule_value} sessions
+                  </Badge>
                 )}
               </button>
             ))}
@@ -1880,15 +2330,28 @@ function AlertPresetPicker({
       </Dialog>
 
       {/* Date picker for date-based presets */}
-      <Dialog open={!!dateStep} onOpenChange={() => { setDateStep(null); setPickedDate(undefined) }}>
+      <Dialog
+        open={!!dateStep}
+        onOpenChange={() => {
+          setDateStep(null)
+          setPickedDate(undefined)
+        }}
+      >
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Select date for "{dateStep?.name}"</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Select date for "{dateStep?.name}"</DialogTitle>
+          </DialogHeader>
           <div className="py-2">
             <DatePicker value={pickedDate} onChange={setPickedDate} />
           </div>
           <DialogFooter>
-            <button onClick={() => { setDateStep(null); setPickedDate(undefined) }}
-              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+            <button
+              onClick={() => {
+                setDateStep(null)
+                setPickedDate(undefined)
+              }}
+              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+            >
               Cancel
             </button>
             <button
@@ -1940,7 +2403,10 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
     } else if (date) {
       payload.schedule_value = Timestamp.fromDate(date)
     }
-    await addDoc(collection(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION), payload)
+    await addDoc(
+      collection(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION),
+      payload
+    )
     invalidate()
   }
 
@@ -1956,11 +2422,14 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
     return false
   }
 
-  if (isLoading) return (
-    <div className="space-y-2">
-      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
-    </div>
-  )
+  if (isLoading)
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-14 rounded-lg" />
+        ))}
+      </div>
+    )
 
   return (
     <div className="space-y-4 pb-24">
@@ -1970,14 +2439,16 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
             onClick={() => setPresetOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors"
           >
-            <BookOpen className="h-4 w-4" />From preset
+            <BookOpen className="h-4 w-4" />
+            From preset
           </button>
         )}
         <button
           onClick={() => setAddOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors"
         >
-          <Plus className="h-4 w-4" />{t('addAlert')}
+          <Plus className="h-4 w-4" />
+          {t('addAlert')}
         </button>
       </div>
 
@@ -1988,12 +2459,18 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
           {alerts.map((alert) => {
             const fired = isAlertFired(alert)
             return (
-              <div key={alert.id} className={`flex items-start gap-3 p-3 rounded-lg border ${fired ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : ''}`}>
-                <div className={`mt-0.5 shrink-0 ${fired ? 'text-orange-500' : 'text-muted-foreground'}`}>
-                  {alert.schedule_type === 'sessions_countdown'
-                    ? <Timer className="h-4 w-4" />
-                    : <CalendarDays className="h-4 w-4" />
-                  }
+              <div
+                key={alert.id}
+                className={`flex items-start gap-3 p-3 rounded-lg border ${fired ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : ''}`}
+              >
+                <div
+                  className={`mt-0.5 shrink-0 ${fired ? 'text-orange-500' : 'text-muted-foreground'}`}
+                >
+                  {alert.schedule_type === 'sessions_countdown' ? (
+                    <Timer className="h-4 w-4" />
+                  ) : (
+                    <CalendarDays className="h-4 w-4" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -2003,9 +2480,13 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                       </span>
                     ) : (
                       <span className="text-xs font-medium text-muted-foreground">
-                        {(alert.schedule_value as { toDate(): Date } | null)?.toDate()
-                          .toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
-                        ?? '—'}
+                        {(alert.schedule_value as { toDate(): Date } | null)
+                          ?.toDate()
+                          .toLocaleDateString([], {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          }) ?? '—'}
                       </span>
                     )}
                     <Badge
@@ -2015,7 +2496,9 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                       {fired ? t('alertFired') : t('alertPending')}
                     </Badge>
                     {alert.show_in_app && (
-                      <Badge variant="outline" className="text-xs">App</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        App
+                      </Badge>
                     )}
                   </div>
                   <p className="text-sm mt-0.5">{alert.message}</p>
@@ -2032,15 +2515,33 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
         </div>
       )}
 
-      <AlertDialog open={addOpen} onOpenChange={setAddOpen} contactId={contact.id} onSaved={invalidate} />
-      <AlertPresetPicker open={presetOpen} onOpenChange={setPresetOpen} presets={presets} onSelect={applyPreset} />
+      <AlertDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        contactId={contact.id}
+        onSaved={invalidate}
+      />
+      <AlertPresetPicker
+        open={presetOpen}
+        onOpenChange={setPresetOpen}
+        presets={presets}
+        onSelect={applyPreset}
+      />
     </div>
   )
 }
 
 // ─── archived / deleted read-only view ───────────────────────────────────────
 
-function ArchivedContactView({ contact, onAction, orgMembershipLocked }: { contact: Contact; onAction: () => void; orgMembershipLocked?: boolean }) {
+function ArchivedContactView({
+  contact,
+  onAction,
+  orgMembershipLocked,
+}: {
+  contact: Contact
+  onAction: () => void
+  orgMembershipLocked?: boolean
+}) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const qc = useQueryClient()
@@ -2091,7 +2592,8 @@ function ArchivedContactView({ contact, onAction, orgMembershipLocked }: { conta
 
   const address = contact.address
   const hasAddress = address && Object.values(address).some(Boolean)
-  const hasAcquisition = contact.acquisition && (contact.acquisition.channel || contact.acquisition.notes)
+  const hasAcquisition =
+    contact.acquisition && (contact.acquisition.channel || contact.acquisition.notes)
 
   return (
     <div className="space-y-4">
@@ -2134,10 +2636,24 @@ function ArchivedContactView({ contact, onAction, orgMembershipLocked }: { conta
         <SectionHeader>{t('sectionBasicInfo')}</SectionHeader>
         <DetailRow label={t('colType')} value={contact.type ? t(`type_${contact.type}`) : null} />
         <DetailRow
-          label={<>{t('colStatus')}{orgMembershipLocked && <Lock className="h-3 w-3 text-muted-foreground/60 shrink-0" />}</>}
-          value={(contact.org_membership_status ?? contact.membership_status) ? t(`status_${contact.org_membership_status ?? contact.membership_status}`) : null}
+          label={
+            <>
+              {t('colStatus')}
+              {orgMembershipLocked && (
+                <Lock className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+              )}
+            </>
+          }
+          value={
+            (contact.org_membership_status ?? contact.membership_status)
+              ? t(`status_${contact.org_membership_status ?? contact.membership_status}`)
+              : null
+          }
         />
-        <DetailRow label={t('fieldGender')} value={contact.gender ? t(`gender_${contact.gender}`) : null} />
+        <DetailRow
+          label={t('fieldGender')}
+          value={contact.gender ? t(`gender_${contact.gender}`) : null}
+        />
 
         <SectionHeader>{t('sectionContactInfo')}</SectionHeader>
         <DetailRow label={t('colEmail')} value={contact.email} />
@@ -2161,7 +2677,9 @@ function ArchivedContactView({ contact, onAction, orgMembershipLocked }: { conta
               value={[address.route, address.street_number].filter(Boolean).join(' ')}
             />
           )}
-          {address.postal_code && <DetailRow label={t('fieldPostalCode')} value={address.postal_code} />}
+          {address.postal_code && (
+            <DetailRow label={t('fieldPostalCode')} value={address.postal_code} />
+          )}
           {address.locality && <DetailRow label={t('fieldLocality')} value={address.locality} />}
         </div>
       )}
@@ -2253,17 +2771,24 @@ function ContactHeaderStats({ contact }: { contact: Contact }) {
       <div className="grid grid-cols-3 divide-x">
         <div className="text-center px-4 py-3">
           <p className="text-2xl font-bold tabular-nums">{contact.total_sessions ?? 0}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{t('statTotalSessions')}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+            {t('statTotalSessions')}
+          </p>
         </div>
         <div className="text-center px-4 py-3">
           <p className="text-2xl font-bold tabular-nums">
-            {contact.current_streak ?? 0}<span className="text-sm font-normal">w</span>
+            {contact.current_streak ?? 0}
+            <span className="text-sm font-normal">w</span>
           </p>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{t('statStreak')}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+            {t('statStreak')}
+          </p>
         </div>
         <div className="text-center px-4 py-3">
           <p className="text-2xl font-bold tabular-nums">{contact.current_month_score ?? 0}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{t('statMonthScore')}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+            {t('statMonthScore')}
+          </p>
         </div>
       </div>
 
@@ -2289,8 +2814,12 @@ function ContactHeaderStats({ contact }: { contact: Contact }) {
                   if (!active || !payload?.length) return null
                   return (
                     <div style={{ ...tooltipStyle, textAlign: 'center', lineHeight: 1.4 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#6366f1' }}>{payload[0].value}</div>
-                      <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))' }}>{label}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#6366f1' }}>
+                        {payload[0].value}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))' }}>
+                        {label}
+                      </div>
                     </div>
                   )
                 }}
@@ -2315,7 +2844,16 @@ function ContactHeaderStats({ contact }: { contact: Contact }) {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'profile' | 'notes' | 'stats' | 'activity' | 'bookings' | 'subscriptions' | 'goals' | 'gamification' | 'alerts'
+type TabId =
+  | 'profile'
+  | 'notes'
+  | 'stats'
+  | 'activity'
+  | 'bookings'
+  | 'subscriptions'
+  | 'goals'
+  | 'gamification'
+  | 'alerts'
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -2349,7 +2887,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   const handleCopyUpdateLink = () => {
     if (!team?.slug) return
-    const url = `${window.location.origin}/portal/${team.slug}/contact-update?contactId=${id}`
+    const url = `${window.location.origin}/public/bio-link/${team.slug}/contact-update?contactId=${id}`
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 2000)
@@ -2377,16 +2915,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const TABS: { id: TabId; label: string; icon: React.ElementType; feature?: PlanFeature }[] = [
-    { id: 'profile',       label: t('tabProfile'),       icon: Mail },
-    { id: 'notes',         label: t('tabNotes'),         icon: StickyNote },
-    { id: 'stats',         label: t('tabStats'),         icon: BarChart2 },
-    { id: 'activity',      label: t('tabActivity'),      icon: Activity },
-    { id: 'alerts',        label: t('tabAlerts'),        icon: Bell },
-    { id: 'bookings',      label: t('tabBookings'),      icon: CalendarDays },
-    { id: 'subscriptions', label: t('tabSubscriptions'), icon: BookOpen,  feature: 'subscriptions' },
-    { id: 'goals',         label: t('tabGoals'),         icon: Flag,      feature: 'goals' },
+    { id: 'profile', label: t('tabProfile'), icon: Mail },
+    { id: 'notes', label: t('tabNotes'), icon: StickyNote },
+    { id: 'stats', label: t('tabStats'), icon: BarChart2 },
+    { id: 'activity', label: t('tabActivity'), icon: Activity },
+    { id: 'alerts', label: t('tabAlerts'), icon: Bell },
+    { id: 'bookings', label: t('tabBookings'), icon: CalendarDays },
+    { id: 'subscriptions', label: t('tabSubscriptions'), icon: BookOpen, feature: 'subscriptions' },
+    { id: 'goals', label: t('tabGoals'), icon: Flag, feature: 'goals' },
     // Gamification is a plugin — the tab appears only when it's installed (filtered below).
-    { id: 'gamification',  label: t('tabGamification'),  icon: Star },
+    { id: 'gamification', label: t('tabGamification'), icon: Star },
   ]
 
   return (
@@ -2409,7 +2947,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               {initials(contact)}
             </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold">{contact.firstname} {contact.lastname}</h1>
+              <h1 className="text-xl font-bold">
+                {contact.firstname} {contact.lastname}
+              </h1>
               <div className="flex flex-wrap items-center gap-2 mt-1.5">
                 {contact.deleted_at ? (
                   <Badge variant="destructive">{t('deletedBadge')}</Badge>
@@ -2418,15 +2958,22 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 ) : (
                   <>
                     {(contact.org_membership_status ?? contact.membership_status) && (
-                      <Badge variant={STATUS_VARIANT[(contact.org_membership_status ?? contact.membership_status) as keyof typeof STATUS_VARIANT]}>
+                      <Badge
+                        variant={
+                          STATUS_VARIANT[
+                            (contact.org_membership_status ??
+                              contact.membership_status) as keyof typeof STATUS_VARIANT
+                          ]
+                        }
+                      >
                         {t(`status_${contact.org_membership_status ?? contact.membership_status}`)}
                       </Badge>
                     )}
-                    {contact.type && (
-                      <Badge variant="outline">{t(`type_${contact.type}`)}</Badge>
-                    )}
+                    {contact.type && <Badge variant="outline">{t(`type_${contact.type}`)}</Badge>}
                     {contact.acquisition?.acknowledged === false && (
-                      <Badge className="bg-blue-500 text-white border-blue-500">{t('newBadge')}</Badge>
+                      <Badge className="bg-blue-500 text-white border-blue-500">
+                        {t('newBadge')}
+                      </Badge>
                     )}
                   </>
                 )}
@@ -2444,7 +2991,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 )}
                 {contact.created_at && (
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <CalendarDays className="h-3 w-3 shrink-0" /> {t('memberSince')} {formatDate(contact.created_at)}
+                    <CalendarDays className="h-3 w-3 shrink-0" /> {t('memberSince')}{' '}
+                    {formatDate(contact.created_at)}
                   </span>
                 )}
               </div>
@@ -2465,7 +3013,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
           </div>
-
         </div>
 
         {/* Stats bar + sparkline — full-width, docked to bottom of header card */}
@@ -2473,68 +3020,67 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Archived / deleted → read-only summary; active → full tabbed view */}
-      {(contact.archived_at || contact.deleted_at) ? (
-        <ArchivedContactView contact={contact} onAction={invalidate} orgMembershipLocked={orgMembershipLocked} />
+      {contact.archived_at || contact.deleted_at ? (
+        <ArchivedContactView
+          contact={contact}
+          onAction={invalidate}
+          orgMembershipLocked={orgMembershipLocked}
+        />
       ) : (
         <>
           {/* Tabs */}
           <div className="flex gap-0.5 border-b overflow-x-auto">
-            {TABS.filter((tb) => tb.id !== 'gamification' || isInstalled('gamification')).map((tb) => {
-              const locked = tb.feature ? !hasFeature(tb.feature) : false
-              const Icon = tb.icon
-              return (
-                <button
-                  key={tb.id}
-                  onClick={() => locked ? openUpgradeModal({ feature: tb.feature }) : setTab(tb.id)}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                    locked
-                      ? 'border-transparent text-muted-foreground/50 hover:text-muted-foreground/70'
-                      : tab === tb.id
-                        ? 'border-primary text-foreground'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{tb.label}</span>
-                  {locked && <Lock className="h-3 w-3 text-muted-foreground/30" />}
-                </button>
-              )
-            })}
+            {TABS.filter((tb) => tb.id !== 'gamification' || isInstalled('gamification')).map(
+              (tb) => {
+                const locked = tb.feature ? !hasFeature(tb.feature) : false
+                const Icon = tb.icon
+                return (
+                  <button
+                    key={tb.id}
+                    onClick={() =>
+                      locked ? openUpgradeModal({ feature: tb.feature }) : setTab(tb.id)
+                    }
+                    className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                      locked
+                        ? 'border-transparent text-muted-foreground/50 hover:text-muted-foreground/70'
+                        : tab === tb.id
+                          ? 'border-primary text-foreground'
+                          : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="hidden sm:inline">{tb.label}</span>
+                    {locked && <Lock className="h-3 w-3 text-muted-foreground/30" />}
+                  </button>
+                )
+              }
+            )}
           </div>
 
           {/* Tab content */}
           <div>
             {tab === 'profile' && (
-              <ProfileTab contact={contact} teamId={currentTeamId} orgId={team?.org_id} onSaved={invalidate} membershipFieldLocked={membershipFieldLocked} />
+              <ProfileTab
+                contact={contact}
+                teamId={currentTeamId}
+                orgId={team?.org_id}
+                onSaved={invalidate}
+                membershipFieldLocked={membershipFieldLocked}
+              />
             )}
-            {tab === 'stats' && (
-              <StatsTab contact={contact} teamId={currentTeamId} />
-            )}
-            {tab === 'notes' && (
-              <NotesTab contact={contact} />
-            )}
-            {tab === 'activity' && (
-              <ActivityTab contact={contact} teamId={currentTeamId} />
-            )}
-            {tab === 'alerts' && (
-              <AlertsTab contact={contact} teamId={currentTeamId} />
-            )}
-            {tab === 'bookings' && (
-              <BookingsTab contact={contact} teamId={currentTeamId} />
-            )}
+            {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
+            {tab === 'notes' && <NotesTab contact={contact} />}
+            {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}
+            {tab === 'alerts' && <AlertsTab contact={contact} teamId={currentTeamId} />}
+            {tab === 'bookings' && <BookingsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'subscriptions' && (
               <SubscriptionsTab contact={contact} teamId={currentTeamId} />
             )}
-            {tab === 'goals' && (
-              <GoalsTab contact={contact} teamId={currentTeamId} />
-            )}
-            {tab === 'gamification' && (
-              <GamificationTab contact={contact} teamId={currentTeamId} />
-            )}
+            {tab === 'goals' && <GoalsTab contact={contact} teamId={currentTeamId} />}
+            {tab === 'gamification' && <GamificationTab contact={contact} teamId={currentTeamId} />}
           </div>
         </>
       )}
-
     </div>
   )
 }

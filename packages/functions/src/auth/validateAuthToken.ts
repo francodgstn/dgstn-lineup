@@ -1,13 +1,23 @@
 // Ported from hmd-lineup/functions/src/validateAuthToken/index.js
 // Public callable (no auth required) — validates a scoped auth token and returns
-// prefill contact data for portal forms (booking, membership signup).
+// prefill contact data for bio-link forms (booking, membership signup).
 // Does NOT mark the token as used — that happens when the form is submitted.
 import * as admin from 'firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 
 const VALID_TOKEN_TYPES = ['booking', 'membership'] as const
-const PREFILL_FIELDS = ['firstname', 'lastname', 'phone', 'birthdate', 'gender', 'birthplace', 'residence', 'notes', 'email']
+const PREFILL_FIELDS = [
+  'firstname',
+  'lastname',
+  'phone',
+  'birthdate',
+  'gender',
+  'birthplace',
+  'residence',
+  'notes',
+  'email',
+]
 
 export const validateAuthToken = onCall(async (request) => {
   // Public — no auth check; token IS the credential
@@ -28,11 +38,17 @@ export const validateAuthToken = onCall(async (request) => {
   const tokenData = tokenDoc.data()!
 
   if (tokenData.type !== type) throw new HttpsError('permission-denied', 'Token type mismatch')
-  if ((tokenData.expires_at as Timestamp).toMillis() < Timestamp.now().toMillis()) throw new HttpsError('deadline-exceeded', 'Token has expired')
+  if ((tokenData.expires_at as Timestamp).toMillis() < Timestamp.now().toMillis())
+    throw new HttpsError('deadline-exceeded', 'Token has expired')
   if (tokenData.used) throw new HttpsError('failed-precondition', 'Token has already been used')
-  if (tokenData.team_id !== teamId) throw new HttpsError('permission-denied', 'Token does not match the requested team')
+  if (tokenData.team_id !== teamId)
+    throw new HttpsError('permission-denied', 'Token does not match the requested team')
 
-  const contactDoc = await admin.firestore().collection('contacts').doc(tokenData.contact_id as string).get()
+  const contactDoc = await admin
+    .firestore()
+    .collection('contacts')
+    .doc(tokenData.contact_id as string)
+    .get()
   if (!contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
 
   const contactData = contactDoc.data()!
@@ -41,7 +57,9 @@ export const validateAuthToken = onCall(async (request) => {
     if (contactData[field] !== undefined) prefillData[field] = contactData[field]
   }
 
-  console.log(`Token validated for contact: ${tokenData.contact_id as string} (type: ${(contactData.type as string) || 'unknown'})`)
+  console.log(
+    `Token validated for contact: ${tokenData.contact_id as string} (type: ${(contactData.type as string) || 'unknown'})`
+  )
 
   return {
     valid: true,

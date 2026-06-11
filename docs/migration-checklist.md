@@ -75,7 +75,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `cancelBooking`
 - ✅ `rebookSession`
 - ✅ `getBookingDetails`
-- ~~`bookTrialSession`~~ — superseded by `bookSession` (handles trial + authenticated portal bookings, referral tracking, IP rate limiting, bookingAuthToken)
+- ~~`bookTrialSession`~~ — superseded by `bookSession` (handles trial + authenticated bio-link bookings, referral tracking, IP rate limiting, bookingAuthToken)
 - ✅ `bookCoachSlot`
 - ✅ `cancelCoachBooking`
 - ✅ `trackCoachBookings`
@@ -125,8 +125,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `getMyReferralCode`
 - ✅ `getMyReferralStats`
 
-### Portal
-- ✅ `portalPreview`
+### Bio-link
+- ✅ `bioLinkPreview`
 - ✅ `getInTouchForm`
 
 ### SaaS Billing
@@ -189,7 +189,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 ### Events (studio+)
 - ✅ Events list page
 - ✅ Event detail page (`/events/[id]`) — overview stats, attendees tab, invitations tab, send/resend invitations, edit, delete
-- ✅ Event invitation flow (portal RSVP page — `/portal/event-invitation?token=…`) — greets contact by name, shows event details, attend/decline buttons, notes field, handles already-responded state, closed/past event notices
+- ✅ Event invitation flow (bio-link RSVP page — `/public/event-invitation?token=…`) — greets contact by name, shows event details, attend/decline buttons, notes field, handles already-responded state, closed/past event notices
 
 ### Bookings
 - ✅ Bookings list page (basic)
@@ -198,10 +198,10 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 ### Coaching
 > Restructured: there is no separate `/coaching` admin page. Coaching is modelled as an activity type
 > (`type: 'group_class' | 'coaching'` on `Activity`). Sessions inherit `activityType` from their linked
-> activity. Coach slot generation remains a backend concern. The portal-side booking flow is intact.
+> activity. Coach slot generation remains a backend concern. The bio-link-side booking flow is intact.
 - ✅ Activity `type` field (group_class | coaching) — selectable in Activities form; sessions inherit `activityType`
 - ✅ Coach slot generation functions (`generateCoachSlots`, `generateCoachSlotsScheduled`)
-- ✅ Coach booking flow (portal: `/portal/[slug]/coaching` + cancel page)
+- ✅ Coach booking flow (bio-link: `/public/bio-link/[slug]/coaching` + cancel page)
 - ~~Admin `/coaching` page~~ — intentionally removed; coaching sessions live in the Sessions page
 
 ### Gamification (studio+)
@@ -209,7 +209,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 
 ### Team
 - ✅ Team settings page
-- ✅ Team portal settings
+- ✅ Team bio-link settings
 - ✅ Team members page — full invite/manage UI (send invitations, change role, remove member, cancel invite)
 - ✅ Subscription types management (CRUD in team settings — name, description, source, active toggle)
 - ✅ Payment gateway config (Payments tab in team settings — add/edit/delete Stripe/Payrexx gateways)
@@ -218,12 +218,12 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ Billing page (`/billing`) — subscription status, plan selection, invoice history, cancel flow
 - ✅ Sidebar nav entry
 
-### Portal (public, unauthenticated)
+### Bio-link (public, unauthenticated)
 - ✅ Public profile page
 - ✅ Session booking flow
 - ✅ Trial sign-up form
-- ✅ Contact update request form (`/portal/[slug]/contact-update?contactId=…`) — email verify → 3-step form → `requestContactUpdate`; "Copy update link" button on contact detail page
-- ✅ Event RSVP page — `/portal/event-invitation?token=…` (studio+)
+- ✅ Contact update request form (`/public/bio-link/[slug]/contact-update?contactId=…`) — email verify → 3-step form → `requestContactUpdate`; "Copy update link" button on contact detail page
+- ✅ Event RSVP page — `/public/event-invitation?token=…` (studio+)
 
 ---
 
@@ -266,7 +266,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 ## Security & Data Model
 
 - ✅ Firestore security rules — full port + teamId model
-- ✅ `public_profile` pattern enforced for all portal-facing data
+- ✅ `public_profile` pattern enforced for all bio-link-facing data
 - ✅ Sync triggers for team, session, activity public profiles
 - ✅ `syncSubscriptionTypesToPublicProfile` trigger
 - ✅ Firestore indexes reviewed for all new queries added during migration

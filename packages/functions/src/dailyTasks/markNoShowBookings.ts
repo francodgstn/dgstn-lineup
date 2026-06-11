@@ -3,7 +3,11 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
 import { SESSIONS_COLLECTION, CONTACTS_COLLECTION } from '@linyup/shared'
 
-export async function markNoShowBookings(): Promise<{ sessions: number; updated: number; errors: number }> {
+export async function markNoShowBookings(): Promise<{
+  sessions: number
+  updated: number
+  errors: number
+}> {
   console.log('markNoShowBookings task started') // eslint-disable-line no-console
 
   const db = admin.firestore()
@@ -16,7 +20,7 @@ export async function markNoShowBookings(): Promise<{ sessions: number; updated:
       .collection(SESSIONS_COLLECTION)
       .where('end', '>=', Timestamp.fromDate(sevenDaysAgo))
       .where('end', '<', Timestamp.fromDate(now))
-      .get(),
+      .get()
   )
   if (sessErr) {
     console.error('markNoShowBookings: error fetching sessions:', sessErr) // eslint-disable-line no-console
@@ -28,16 +32,21 @@ export async function markNoShowBookings(): Promise<{ sessions: number; updated:
 
   for (const sessionDoc of sessSnap!.docs) {
     const [bookErr, bookSnap] = await to(
-      sessionDoc.ref.collection('bookings').where('fromPortal', '==', true).get(),
+      sessionDoc.ref.collection('bookings').where('fromPortal', '==', true).get()
     )
     if (bookErr) {
-      console.error(`markNoShowBookings: error fetching bookings for session ${sessionDoc.id}:`, bookErr) // eslint-disable-line no-console
+      console.error(
+        `markNoShowBookings: error fetching bookings for session ${sessionDoc.id}:`,
+        bookErr
+      ) // eslint-disable-line no-console
       stats.errors++
       continue
     }
 
     // Include docs with no status field (treated as pending)
-    const pendingDocs = bookSnap!.docs.filter((d) => !d.data().status || d.data().status === 'pending')
+    const pendingDocs = bookSnap!.docs.filter(
+      (d) => !d.data().status || d.data().status === 'pending'
+    )
     if (pendingDocs.length === 0) continue
 
     try {
@@ -59,14 +68,19 @@ export async function markNoShowBookings(): Promise<{ sessions: number; updated:
       }
 
       batch.update(sessionDoc.ref, {
-        portal_bookings_count: FieldValue.increment(-pendingDocs.length),
+        bio_link_bookings_count: FieldValue.increment(-pendingDocs.length),
       })
 
       await batch.commit()
       stats.updated += pendingDocs.length
-      console.log(`markNoShowBookings: session ${sessionDoc.id} — flipped ${pendingDocs.length} bookings to no_show`) // eslint-disable-line no-console
+      console.log(
+        `markNoShowBookings: session ${sessionDoc.id} — flipped ${pendingDocs.length} bookings to no_show`
+      ) // eslint-disable-line no-console
     } catch (err) {
-      console.error(`markNoShowBookings: error updating session ${sessionDoc.id}:`, (err as Error).message) // eslint-disable-line no-console
+      console.error(
+        `markNoShowBookings: error updating session ${sessionDoc.id}:`,
+        (err as Error).message
+      ) // eslint-disable-line no-console
       stats.errors++
     }
   }

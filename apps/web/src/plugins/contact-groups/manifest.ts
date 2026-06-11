@@ -8,6 +8,7 @@ export const contactGroupsManifest: PluginManifest = {
   category: 'organization',
   minPlan: 'coach',
   status: 'available',
+  recommended: true,
   addon: PLUGIN_ADDONS['contact-groups'],
   iconName: 'FolderTree',
   navContributions: [
@@ -15,6 +16,7 @@ export const contactGroupsManifest: PluginManifest = {
       href: '/plugins/contact-groups',
       labelKey: 'contactGroupsNavLabel',
       icon: 'FolderTree',
+      section: 'operations',
     },
   ],
 }

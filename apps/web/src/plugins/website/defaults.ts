@@ -1,20 +1,25 @@
-import type {
-  WebsiteSection,
-  WebsiteSectionType,
-  SiteDraft,
-  SiteMeta,
-} from '@linyup/shared'
+import type { WebsiteSection, WebsiteSectionType, SiteDraft, SiteMeta } from '@linyup/shared'
 
 // ─── section library (for the "Add section" menu) ──────────────────────────────
 // icon names map to lucide icons resolved in the builder via the shared DynamicIcon.
 
-export const SECTION_LIBRARY: { type: WebsiteSectionType; labelKey: string; descKey: string; icon: string }[] = [
-  { type: 'hero',     labelKey: 'sectionHero',     descKey: 'sectionHeroDesc',     icon: 'Image' },
-  { type: 'about',    labelKey: 'sectionAbout',    descKey: 'sectionAboutDesc',    icon: 'FileText' },
-  { type: 'gallery',  labelKey: 'sectionGallery',  descKey: 'sectionGalleryDesc',  icon: 'Images' },
-  { type: 'pricing',  labelKey: 'sectionPricing',  descKey: 'sectionPricingDesc',  icon: 'Tag' },
-  { type: 'schedule', labelKey: 'sectionSchedule', descKey: 'sectionScheduleDesc', icon: 'CalendarDays' },
-  { type: 'contact',  labelKey: 'sectionContact',  descKey: 'sectionContactDesc',  icon: 'MapPin' },
+export const SECTION_LIBRARY: {
+  type: WebsiteSectionType
+  labelKey: string
+  descKey: string
+  icon: string
+}[] = [
+  { type: 'hero', labelKey: 'sectionHero', descKey: 'sectionHeroDesc', icon: 'Image' },
+  { type: 'about', labelKey: 'sectionAbout', descKey: 'sectionAboutDesc', icon: 'FileText' },
+  { type: 'gallery', labelKey: 'sectionGallery', descKey: 'sectionGalleryDesc', icon: 'Images' },
+  { type: 'pricing', labelKey: 'sectionPricing', descKey: 'sectionPricingDesc', icon: 'Tag' },
+  {
+    type: 'schedule',
+    labelKey: 'sectionSchedule',
+    descKey: 'sectionScheduleDesc',
+    icon: 'CalendarDays',
+  },
+  { type: 'contact', labelKey: 'sectionContact', descKey: 'sectionContactDesc', icon: 'MapPin' },
 ]
 
 /** Client-only unique id for a new section (React key + image path segment + anchor). */
@@ -45,12 +50,12 @@ export function emptyDraft(team: {
   id: string
   name: string
   slug?: string
-  portalAccentColor?: string
+  bioLinkAccentColor?: string
 }): SiteDraft {
   const meta: SiteMeta = {
     title: team.name,
     theme: 'light',
-    accentColor: team.portalAccentColor || '#6366f1',
+    accentColor: team.bioLinkAccentColor || '#6366f1',
     font: 'sans',
     header: { showNav: true, ctaLabel: 'Book now', ctaAction: 'booking' },
     footer: { showSocial: true },

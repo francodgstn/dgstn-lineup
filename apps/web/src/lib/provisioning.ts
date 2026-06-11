@@ -47,8 +47,20 @@ export async function provisionTeam(
   const trialEndsAt = Timestamp.fromDate(new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000))
 
   const defaultLinks = [
-    { label: 'Book a Trial Class', description: "Try a class and see if it's right for you", url: '', showInPortal: true, isBookingLink: true },
-    { label: 'Membership Signup', description: 'Join our community and become a member', url: '', showInPortal: true, isMembershipLink: true },
+    {
+      label: 'Book a Trial Class',
+      description: "Try a class and see if it's right for you",
+      url: '',
+      showInBioLink: true,
+      isBookingLink: true,
+    },
+    {
+      label: 'Membership Signup',
+      description: 'Join our community and become a member',
+      url: '',
+      showInBioLink: true,
+      isMembershipLink: true,
+    },
   ]
 
   // Team document

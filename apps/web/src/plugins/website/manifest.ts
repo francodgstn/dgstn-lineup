@@ -8,10 +8,11 @@ export const websiteManifest: PluginManifest = {
   category: 'website',
   minPlan: 'studio',
   status: 'available',
+  recommended: true,
   addon: PLUGIN_ADDONS['website'],
   iconName: 'Globe',
   hasOwnerConfig: true,
   navContributions: [
-    { href: '/plugins/website', labelKey: 'websiteNavLabel', icon: 'Globe', section: 'configure' },
+    { href: '/plugins/website', labelKey: 'websiteNavLabel', icon: 'Globe', section: 'engage' },
   ],
 }

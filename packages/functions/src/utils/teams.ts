@@ -36,22 +36,43 @@ export async function getTeamOwner(teamId: string): Promise<string | null> {
 }
 
 export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
-  const snap = await admin.firestore().collection('teams').doc(teamId).collection('team_members').get()
-  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as unknown as TeamMember))
+  const snap = await admin
+    .firestore()
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .get()
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as unknown as TeamMember)
 }
 
 export async function isTeamMember(userId: string, teamId: string): Promise<boolean> {
-  const doc = await admin.firestore().collection('teams').doc(teamId).collection('team_members').doc(userId).get()
+  const doc = await admin
+    .firestore()
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(userId)
+    .get()
   return doc.exists
 }
 
 export async function getTeamRole(userId: string, teamId: string): Promise<TeamRole | null> {
-  const doc = await admin.firestore().collection('teams').doc(teamId).collection('team_members').doc(userId).get()
+  const doc = await admin
+    .firestore()
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(userId)
+    .get()
   if (!doc.exists) return null
   return doc.data()!.role as TeamRole
 }
 
-export async function hasTeamRole(userId: string, teamId: string, requiredRole: TeamRole): Promise<boolean> {
+export async function hasTeamRole(
+  userId: string,
+  teamId: string,
+  requiredRole: TeamRole
+): Promise<boolean> {
   const role = await getTeamRole(userId, teamId)
   if (!role) return false
   const hierarchy: Record<TeamRole, number> = { owner: 3, manager: 2, viewer: 1 }
@@ -73,7 +94,12 @@ export async function setUserCurrentTeam(userId: string, teamId: string): Promis
   })
 }
 
-export async function addTeamMember(teamId: string, userId: string, role: TeamRole, addedBy: string): Promise<void> {
+export async function addTeamMember(
+  teamId: string,
+  userId: string,
+  role: TeamRole,
+  addedBy: string
+): Promise<void> {
   const userDoc = await admin.firestore().collection('users').doc(userId).get()
   if (!userDoc.exists) throw new Error(`User ${userId} not found`)
 
@@ -93,10 +119,20 @@ export async function addTeamMember(teamId: string, userId: string, role: TeamRo
 }
 
 export async function removeTeamMember(teamId: string, userId: string): Promise<void> {
-  await admin.firestore().collection('teams').doc(teamId).collection('team_members').doc(userId).delete()
+  await admin
+    .firestore()
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(userId)
+    .delete()
 }
 
-export async function updateTeamMemberRole(teamId: string, userId: string, newRole: TeamRole): Promise<void> {
+export async function updateTeamMemberRole(
+  teamId: string,
+  userId: string,
+  newRole: TeamRole
+): Promise<void> {
   await admin
     .firestore()
     .collection('teams')
@@ -107,7 +143,12 @@ export async function updateTeamMemberRole(teamId: string, userId: string, newRo
 }
 
 export async function createTeamRecord(
-  teamData: { name: string; description?: string; primaryContact?: string; settings?: Record<string, unknown> },
+  teamData: {
+    name: string
+    description?: string
+    primaryContact?: string
+    settings?: Record<string, unknown>
+  },
   ownerId: string
 ): Promise<string> {
   const teamRef = admin.firestore().collection('teams').doc()
@@ -126,14 +167,33 @@ export async function createTeamRecord(
       .slice(0, 50)
 
     if (baseSlug.length >= 3) {
-      const existing = await admin.firestore().collection('teams').where('slug', '==', baseSlug).limit(1).get()
-      slug = existing.empty ? baseSlug : `${baseSlug.slice(0, 44)}-${teamId.slice(0, 4).toLowerCase()}`
+      const existing = await admin
+        .firestore()
+        .collection('teams')
+        .where('slug', '==', baseSlug)
+        .limit(1)
+        .get()
+      slug = existing.empty
+        ? baseSlug
+        : `${baseSlug.slice(0, 44)}-${teamId.slice(0, 4).toLowerCase()}`
     }
   }
 
   const defaultLinks = [
-    { label: 'Book a Trial Class', description: "Try a class and see if it's right for you", url: '', showInPortal: true, isBookingLink: true },
-    { label: 'Membership Signup', description: 'Join our community and become a member', url: '', showInPortal: true, isMembershipLink: true },
+    {
+      label: 'Book a Trial Class',
+      description: "Try a class and see if it's right for you",
+      url: '',
+      showInBioLink: true,
+      isBookingLink: true,
+    },
+    {
+      label: 'Membership Signup',
+      description: 'Join our community and become a member',
+      url: '',
+      showInBioLink: true,
+      isMembershipLink: true,
+    },
   ]
 
   await teamRef.set({

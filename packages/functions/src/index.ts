@@ -35,7 +35,14 @@ export { onSessionUpdate } from './sync/onSessionUpdate'
 export { onActivityTypeChange } from './sync/onActivityTypeChange'
 
 // Booking
-export { bookSession, sendBookingVerificationCode, verifyBookingCode, cancelBooking, getBookingDetails, rebookSession } from './booking'
+export {
+  bookSession,
+  sendBookingVerificationCode,
+  verifyBookingCode,
+  cancelBooking,
+  getBookingDetails,
+  rebookSession,
+} from './booking'
 
 // Gamification
 export { recalculateScores, resetScores } from './gamification'
@@ -44,7 +51,12 @@ export { processScoresRebuildJob } from './gamification/processScoresRebuildJob'
 export { recalculateScoresFromDate } from './gamification/recalculateScoresFromDate'
 
 // Sessions
-export { generateRecurringSessions, cancelSession, updateRecurringSession, selfCheckIn } from './sessions'
+export {
+  generateRecurringSessions,
+  cancelSession,
+  updateRecurringSession,
+  selfCheckIn,
+} from './sessions'
 export { setSessionLocation } from './sessions/setSessionLocation'
 export { setSessionTags } from './sessions/setSessionTags'
 
@@ -57,12 +69,22 @@ export { manageContactUpdateRequest } from './contacts/manageContactUpdateReques
 export { switchMembershipContact } from './contacts/switchMembershipContact'
 
 // Events
-export { sendEventInvitations, getEventInvitationDetails, handleEventInvitationResponse } from './events'
+export {
+  sendEventInvitations,
+  getEventInvitationDetails,
+  handleEventInvitationResponse,
+} from './events'
 export { trackEventAttendees } from './events/trackEventAttendees'
 export { addEventCheckin } from './events/addEventCheckin'
 
 // Analytics
-export { trackBookings, trackSessions, weeklyReports, trackContacts, trackSessionParticipants } from './analytics'
+export {
+  trackBookings,
+  trackSessions,
+  weeklyReports,
+  trackContacts,
+  trackSessionParticipants,
+} from './analytics'
 export { capturePlatformMetrics } from './analytics/platformMetrics'
 
 // Daily maintenance tasks
@@ -72,10 +94,26 @@ export { dailyTasks } from './dailyTasks'
 export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'
 
 // Coaching (1:1 slots) — booking/cancellation handled by bookSession/cancelBooking
-export { generateCoachSlots, generateCoachSlotsScheduled, onCoachAvailabilityWritten } from './coaching'
+export {
+  generateCoachSlots,
+  generateCoachSlotsScheduled,
+  onCoachAvailabilityWritten,
+} from './coaching'
 
 // SaaS billing (Linyup's own platform subscriptions — Stripe)
-export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices, reactivateSaasSubscription, getBillingPortalUrl, activatePluginAddon, deactivatePluginAddon, syncContactOverage, extendTrial, handleTrialLifecycle } from './saas-billing'
+export {
+  createCheckoutSession,
+  handleStripeWebhook,
+  cancelSaasSubscription,
+  getSaasInvoices,
+  reactivateSaasSubscription,
+  getBillingPortalUrl,
+  activatePluginAddon,
+  deactivatePluginAddon,
+  syncContactOverage,
+  extendTrial,
+  handleTrialLifecycle,
+} from './saas-billing'
 
 // Organizations (multi-team tier)
 export {
@@ -99,10 +137,15 @@ export { saveSmtpConfig, testSmtpConfig } from './smtp-settings'
 export { sendOutreachEmail } from './outreach'
 
 // Referrals
-export { generateReferralCodes, confirmReferral, getMyReferralCode, getMyReferralStats } from './referrals'
+export {
+  generateReferralCodes,
+  confirmReferral,
+  getMyReferralCode,
+  getMyReferralStats,
+} from './referrals'
 
-// Portal
-export { getInTouchForm } from './portal/getInTouchForm'
+// Bio-link
+export { getInTouchForm } from './bio-link/getInTouchForm'
 
 // Website plugin (studio site builder) — publish/unpublish the public snapshot
 export { publishWebsite, unpublishWebsite } from './website'

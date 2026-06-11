@@ -38,9 +38,7 @@ import { applicationDefault } from 'firebase-admin/app'
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // On the emulator, write into the namespace the web app + emulator use
 // (demo-linyup); against the cloud, target the dedicated sandbox project.
-const PROJECT_ID = USE_EMULATOR
-  ? process.env.GCLOUD_PROJECT || 'demo-linyup'
-  : 'linyup-sandbox'
+const PROJECT_ID = USE_EMULATOR ? process.env.GCLOUD_PROJECT || 'demo-linyup' : 'linyup-sandbox'
 
 admin.initializeApp(
   USE_EMULATOR
@@ -73,7 +71,7 @@ function isoWeekLabel(date: Date): string {
   const dayNum = d.getUTCDay() || 7
   d.setUTCDate(d.getUTCDate() + 4 - dayNum)
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
   return `${d.getUTCFullYear()}-W${week.toString().padStart(2, '0')}`
 }
 function mondayOfWeeksAgo(n: number): Date {
@@ -120,30 +118,270 @@ interface PoolEntry {
 }
 
 const CONTACT_POOL: PoolEntry[] = [
-  { firstname: 'Luca',      lastname: 'Ferrari',    gender: 'M', birthYear: 1992, birthplace: 'Milan',     type: 'student',  status: 'active',       totalSessions: 142, sub: 'monthly'    },
-  { firstname: 'Sofia',     lastname: 'Bianchi',    gender: 'F', birthYear: 1995, birthplace: 'Rome',      type: 'student',  status: 'active',       totalSessions: 88,  sub: 'annual'     },
-  { firstname: 'Alex',      lastname: 'Müller',     gender: 'M', birthYear: 1988, birthplace: 'Zurich',    type: 'student',  status: 'active',       totalSessions: 210, sub: 'monthly'    },
-  { firstname: 'Chiara',    lastname: 'Romano',     gender: 'F', birthYear: 1999, birthplace: 'Naples',    type: 'student',  status: 'active',       totalSessions: 34,  sub: 'monthly'    },
-  { firstname: 'Matteo',    lastname: 'Esposito',   gender: 'M', birthYear: 1990, birthplace: 'Turin',     type: 'student',  status: 'active',       totalSessions: 121, sub: 'annual'     },
-  { firstname: 'Julia',     lastname: 'Weber',      gender: 'F', birthYear: 2000, birthplace: 'Basel',     type: 'student',  status: 'almost_ready', totalSessions: 7,   sub: 'dropin'     },
-  { firstname: 'David',     lastname: 'Costa',      gender: 'M', birthYear: 1993, birthplace: 'Lisbon',    type: 'student',  status: 'active',       totalSessions: 56,  sub: 'aggregator' },
-  { firstname: 'Lorenzo',   lastname: 'De Luca',    gender: 'M', birthYear: 2003, birthplace: 'Palermo',   type: 'trial',    status: 'requested',    totalSessions: 1,   sub: null         },
-  { firstname: 'Sara',      lastname: 'Ricci',      gender: 'F', birthYear: 1994, birthplace: 'Bologna',   type: 'student',  status: 'expired',      totalSessions: 41,  sub: null         },
-  { firstname: 'Hannah',    lastname: 'Fischer',    gender: 'F', birthYear: 1997, birthplace: 'Bern',      type: 'external', status: 'guest',        totalSessions: 0,   sub: null         },
-  { firstname: 'Emma',      lastname: 'Schneider',  gender: 'F', birthYear: 2001, birthplace: 'Geneva',    type: 'student',  status: 'active',       totalSessions: 29,  sub: 'monthly'    },
-  { firstname: 'Radu',      lastname: 'Ionescu',    gender: 'M', birthYear: 1987, birthplace: 'Bucharest', type: 'student',  status: 'active',       totalSessions: 175, sub: 'annual'     },
-  { firstname: 'Nina',      lastname: 'Moreau',     gender: 'F', birthYear: 1991, birthplace: 'Paris',     type: 'student',  status: 'active',       totalSessions: 96,  sub: 'monthly'    },
-  { firstname: 'Kevin',     lastname: 'Nguyen',     gender: 'M', birthYear: 1998, birthplace: 'Lyon',      type: 'trial',    status: 'under_review', totalSessions: 2,   sub: null         },
-  { firstname: 'Tobias',    lastname: 'Huber',      gender: 'M', birthYear: 1996, birthplace: 'Lucerne',   type: 'student',  status: 'active',       totalSessions: 48,  sub: 'monthly'    },
-  { firstname: 'Valentina', lastname: 'Greco',      gender: 'F', birthYear: 1993, birthplace: 'Catania',   type: 'student',  status: 'active',       totalSessions: 63,  sub: 'quarterly'  },
-  { firstname: 'Marco',     lastname: 'Conti',      gender: 'M', birthYear: 1997, birthplace: 'Florence',  type: 'student',  status: 'almost_ready', totalSessions: 5,   sub: 'dropin'     },
-  { firstname: 'Amélie',    lastname: 'Dupont',     gender: 'F', birthYear: 2002, birthplace: 'Geneva',    type: 'trial',    status: 'requested',    totalSessions: 0,   sub: null         },
-  { firstname: 'Jonas',     lastname: 'Keller',     gender: 'M', birthYear: 1989, birthplace: 'Zurich',    type: 'student',  status: 'active',       totalSessions: 134, sub: 'annual'     },
-  { firstname: 'Léa',       lastname: 'Martin',     gender: 'F', birthYear: 1996, birthplace: 'Geneva',    type: 'student',  status: 'active',       totalSessions: 72,  sub: 'monthly'    },
-  { firstname: 'Andrei',    lastname: 'Popescu',    gender: 'M', birthYear: 1992, birthplace: 'Cluj',      type: 'student',  status: 'expired',      totalSessions: 38,  sub: null         },
-  { firstname: 'Giulia',    lastname: 'Marino',     gender: 'F', birthYear: 2000, birthplace: 'Genoa',     type: 'student',  status: 'active',       totalSessions: 24,  sub: 'monthly'    },
-  { firstname: 'Felix',     lastname: 'Wagner',     gender: 'M', birthYear: 1985, birthplace: 'Basel',     type: 'student',  status: 'active',       totalSessions: 188, sub: 'aggregator' },
-  { firstname: 'Camille',   lastname: 'Girard',     gender: 'F', birthYear: 1999, birthplace: 'Lausanne',  type: 'trial',    status: 'requested',    totalSessions: 1,   sub: null         },
+  {
+    firstname: 'Luca',
+    lastname: 'Ferrari',
+    gender: 'M',
+    birthYear: 1992,
+    birthplace: 'Milan',
+    type: 'student',
+    status: 'active',
+    totalSessions: 142,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Sofia',
+    lastname: 'Bianchi',
+    gender: 'F',
+    birthYear: 1995,
+    birthplace: 'Rome',
+    type: 'student',
+    status: 'active',
+    totalSessions: 88,
+    sub: 'annual',
+  },
+  {
+    firstname: 'Alex',
+    lastname: 'Müller',
+    gender: 'M',
+    birthYear: 1988,
+    birthplace: 'Zurich',
+    type: 'student',
+    status: 'active',
+    totalSessions: 210,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Chiara',
+    lastname: 'Romano',
+    gender: 'F',
+    birthYear: 1999,
+    birthplace: 'Naples',
+    type: 'student',
+    status: 'active',
+    totalSessions: 34,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Matteo',
+    lastname: 'Esposito',
+    gender: 'M',
+    birthYear: 1990,
+    birthplace: 'Turin',
+    type: 'student',
+    status: 'active',
+    totalSessions: 121,
+    sub: 'annual',
+  },
+  {
+    firstname: 'Julia',
+    lastname: 'Weber',
+    gender: 'F',
+    birthYear: 2000,
+    birthplace: 'Basel',
+    type: 'student',
+    status: 'almost_ready',
+    totalSessions: 7,
+    sub: 'dropin',
+  },
+  {
+    firstname: 'David',
+    lastname: 'Costa',
+    gender: 'M',
+    birthYear: 1993,
+    birthplace: 'Lisbon',
+    type: 'student',
+    status: 'active',
+    totalSessions: 56,
+    sub: 'aggregator',
+  },
+  {
+    firstname: 'Lorenzo',
+    lastname: 'De Luca',
+    gender: 'M',
+    birthYear: 2003,
+    birthplace: 'Palermo',
+    type: 'trial',
+    status: 'requested',
+    totalSessions: 1,
+    sub: null,
+  },
+  {
+    firstname: 'Sara',
+    lastname: 'Ricci',
+    gender: 'F',
+    birthYear: 1994,
+    birthplace: 'Bologna',
+    type: 'student',
+    status: 'expired',
+    totalSessions: 41,
+    sub: null,
+  },
+  {
+    firstname: 'Hannah',
+    lastname: 'Fischer',
+    gender: 'F',
+    birthYear: 1997,
+    birthplace: 'Bern',
+    type: 'external',
+    status: 'guest',
+    totalSessions: 0,
+    sub: null,
+  },
+  {
+    firstname: 'Emma',
+    lastname: 'Schneider',
+    gender: 'F',
+    birthYear: 2001,
+    birthplace: 'Geneva',
+    type: 'student',
+    status: 'active',
+    totalSessions: 29,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Radu',
+    lastname: 'Ionescu',
+    gender: 'M',
+    birthYear: 1987,
+    birthplace: 'Bucharest',
+    type: 'student',
+    status: 'active',
+    totalSessions: 175,
+    sub: 'annual',
+  },
+  {
+    firstname: 'Nina',
+    lastname: 'Moreau',
+    gender: 'F',
+    birthYear: 1991,
+    birthplace: 'Paris',
+    type: 'student',
+    status: 'active',
+    totalSessions: 96,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Kevin',
+    lastname: 'Nguyen',
+    gender: 'M',
+    birthYear: 1998,
+    birthplace: 'Lyon',
+    type: 'trial',
+    status: 'under_review',
+    totalSessions: 2,
+    sub: null,
+  },
+  {
+    firstname: 'Tobias',
+    lastname: 'Huber',
+    gender: 'M',
+    birthYear: 1996,
+    birthplace: 'Lucerne',
+    type: 'student',
+    status: 'active',
+    totalSessions: 48,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Valentina',
+    lastname: 'Greco',
+    gender: 'F',
+    birthYear: 1993,
+    birthplace: 'Catania',
+    type: 'student',
+    status: 'active',
+    totalSessions: 63,
+    sub: 'quarterly',
+  },
+  {
+    firstname: 'Marco',
+    lastname: 'Conti',
+    gender: 'M',
+    birthYear: 1997,
+    birthplace: 'Florence',
+    type: 'student',
+    status: 'almost_ready',
+    totalSessions: 5,
+    sub: 'dropin',
+  },
+  {
+    firstname: 'Amélie',
+    lastname: 'Dupont',
+    gender: 'F',
+    birthYear: 2002,
+    birthplace: 'Geneva',
+    type: 'trial',
+    status: 'requested',
+    totalSessions: 0,
+    sub: null,
+  },
+  {
+    firstname: 'Jonas',
+    lastname: 'Keller',
+    gender: 'M',
+    birthYear: 1989,
+    birthplace: 'Zurich',
+    type: 'student',
+    status: 'active',
+    totalSessions: 134,
+    sub: 'annual',
+  },
+  {
+    firstname: 'Léa',
+    lastname: 'Martin',
+    gender: 'F',
+    birthYear: 1996,
+    birthplace: 'Geneva',
+    type: 'student',
+    status: 'active',
+    totalSessions: 72,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Andrei',
+    lastname: 'Popescu',
+    gender: 'M',
+    birthYear: 1992,
+    birthplace: 'Cluj',
+    type: 'student',
+    status: 'expired',
+    totalSessions: 38,
+    sub: null,
+  },
+  {
+    firstname: 'Giulia',
+    lastname: 'Marino',
+    gender: 'F',
+    birthYear: 2000,
+    birthplace: 'Genoa',
+    type: 'student',
+    status: 'active',
+    totalSessions: 24,
+    sub: 'monthly',
+  },
+  {
+    firstname: 'Felix',
+    lastname: 'Wagner',
+    gender: 'M',
+    birthYear: 1985,
+    birthplace: 'Basel',
+    type: 'student',
+    status: 'active',
+    totalSessions: 188,
+    sub: 'aggregator',
+  },
+  {
+    firstname: 'Camille',
+    lastname: 'Girard',
+    gender: 'F',
+    birthYear: 1999,
+    birthplace: 'Lausanne',
+    type: 'trial',
+    status: 'requested',
+    totalSessions: 1,
+    sub: null,
+  },
 ]
 
 // Badge catalogue — assigned by attendance milestones / behaviour.
@@ -167,7 +405,7 @@ interface ActivityDef {
   level: 'all' | 'beginner' | 'intermediate' | 'advanced'
   isFreeTrial: boolean
   base_score: number
-  description: string   // shown on the portal booking page activity cards
+  description: string // shown on the portal booking page activity cards
 }
 interface SubDef {
   kind: Exclude<SubKind, null>
@@ -176,209 +414,708 @@ interface SubDef {
   source: 'internal' | 'aggregator'
   price: number | null
 }
-interface RankLevel { value: number; label: string; color: string }
+interface RankLevel {
+  value: number
+  label: string
+  color: string
+}
 interface SectorProfile {
-  key: string                 // login local-part + id prefix
+  key: string // login local-part + id prefix
   sector: 'sport' | 'wellness'
   ownerName: string
   teamName: string
   teamSlug: string
-  sportType: string           // matches a signup SPORT_TYPES label
+  sportType: string // matches a signup SPORT_TYPES label
   accentColor: string
-  description: string         // portal home tagline (public_profile.description)
-  portalGradient: string      // PORTAL_GRADIENTS key (apps/web/src/lib/portal.ts)
-  instructors: string[]       // [owner, assistant]
-  activities: ActivityDef[]   // 4–5 group classes
+  description: string // portal home tagline (public_profile.description)
+  portalGradient: string // BIO_LINK_GRADIENTS key (apps/web/src/lib/bioLink.ts)
+  instructors: string[] // [owner, assistant]
+  activities: ActivityDef[] // 4–5 group classes
   coachingName: string
   rankingSystem: { id: string; name: string; levels: RankLevel[] } | null
   subscriptions: SubDef[]
   locations: string[]
-  events: { title: string; type: string; startOffset: number; durationH: number; fee: number; location: string; description: string }[]
+  events: {
+    title: string
+    type: string
+    startOffset: number
+    durationH: number
+    fee: number
+    location: string
+    description: string
+  }[]
   goals: { title: string; description: string; categories: string[] }[]
   tasks: string[]
 }
 
 const BELT_LEVELS: RankLevel[] = [
-  { value: 0, label: 'White Belt',  color: '#e5e7eb' },
-  { value: 1, label: 'Blue Belt',   color: '#1d4ed8' },
+  { value: 0, label: 'White Belt', color: '#e5e7eb' },
+  { value: 1, label: 'Blue Belt', color: '#1d4ed8' },
   { value: 2, label: 'Purple Belt', color: '#7e22ce' },
-  { value: 3, label: 'Brown Belt',  color: '#78350f' },
-  { value: 4, label: 'Black Belt',  color: '#111827' },
+  { value: 3, label: 'Brown Belt', color: '#78350f' },
+  { value: 4, label: 'Black Belt', color: '#111827' },
 ]
 
 const SECTOR_PROFILES: SectorProfile[] = [
   // ── SPORT ──────────────────────────────────────────────────────────────────
   {
-    key: 'grappling', sector: 'sport',
-    ownerName: 'Marco Silva', teamName: 'Ronin Grappling Academy', teamSlug: 'ronin-grappling-academy',
-    sportType: 'Martial arts', accentColor: '#dc2626', instructors: ['Marco Silva', 'Elena Rossi'],
-    description: 'BJJ and no-gi grappling for all levels — from your first class to the competition team.',
+    key: 'grappling',
+    sector: 'sport',
+    ownerName: 'Marco Silva',
+    teamName: 'Ronin Grappling Academy',
+    teamSlug: 'ronin-grappling-academy',
+    sportType: 'Martial arts',
+    accentColor: '#dc2626',
+    instructors: ['Marco Silva', 'Elena Rossi'],
+    description:
+      'BJJ and no-gi grappling for all levels — from your first class to the competition team.',
     portalGradient: 'night',
     coachingName: 'Private Lesson',
     activities: [
-      { name: 'BJJ Fundamentals', slug: 'bjj-fundamentals', color: '#dc2626', level: 'beginner',     isFreeTrial: true,  base_score: 12, description: 'Core positions, escapes and submissions for your first year on the mats.' },
-      { name: 'Advanced BJJ',     slug: 'advanced-bjj',      color: '#7c3aed', level: 'advanced',     isFreeTrial: false, base_score: 15, description: 'Competition-paced rounds and advanced systems for experienced grapplers.' },
-      { name: 'No-Gi Grappling',  slug: 'no-gi',             color: '#ea580c', level: 'intermediate', isFreeTrial: true,  base_score: 14, description: 'Wrestling, scrambles and modern leg-lock systems — no gi required.' },
-      { name: 'Open Mat',         slug: 'open-mat',          color: '#0891b2', level: 'all',          isFreeTrial: true,  base_score: 8,  description: 'Free rolling for all levels. Bring a partner or find one here.' },
+      {
+        name: 'BJJ Fundamentals',
+        slug: 'bjj-fundamentals',
+        color: '#dc2626',
+        level: 'beginner',
+        isFreeTrial: true,
+        base_score: 12,
+        description: 'Core positions, escapes and submissions for your first year on the mats.',
+      },
+      {
+        name: 'Advanced BJJ',
+        slug: 'advanced-bjj',
+        color: '#7c3aed',
+        level: 'advanced',
+        isFreeTrial: false,
+        base_score: 15,
+        description: 'Competition-paced rounds and advanced systems for experienced grapplers.',
+      },
+      {
+        name: 'No-Gi Grappling',
+        slug: 'no-gi',
+        color: '#ea580c',
+        level: 'intermediate',
+        isFreeTrial: true,
+        base_score: 14,
+        description: 'Wrestling, scrambles and modern leg-lock systems — no gi required.',
+      },
+      {
+        name: 'Open Mat',
+        slug: 'open-mat',
+        color: '#0891b2',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 8,
+        description: 'Free rolling for all levels. Bring a partner or find one here.',
+      },
     ],
     rankingSystem: { id: 'bjj-belt', name: 'BJJ Belt', levels: BELT_LEVELS },
     subscriptions: [
-      { kind: 'monthly',    name: 'Unlimited Monthly', description: 'Unlimited mat time, billed monthly.', source: 'internal',   price: 140 },
-      { kind: 'quarterly',  name: 'Quarterly Plan',    description: '3-month commitment, 10% off.',        source: 'internal',   price: 380 },
-      { kind: 'annual',     name: 'Annual Membership', description: 'Best value — 2 months free.',         source: 'internal',   price: 1290 },
-      { kind: 'dropin',     name: 'Drop-in',           description: 'Single open-mat session.',            source: 'internal',   price: 30  },
-      { kind: 'aggregator', name: 'FitPass Partner',   description: 'Access via the FitPass network.',     source: 'aggregator', price: null },
+      {
+        kind: 'monthly',
+        name: 'Unlimited Monthly',
+        description: 'Unlimited mat time, billed monthly.',
+        source: 'internal',
+        price: 140,
+      },
+      {
+        kind: 'quarterly',
+        name: 'Quarterly Plan',
+        description: '3-month commitment, 10% off.',
+        source: 'internal',
+        price: 380,
+      },
+      {
+        kind: 'annual',
+        name: 'Annual Membership',
+        description: 'Best value — 2 months free.',
+        source: 'internal',
+        price: 1290,
+      },
+      {
+        kind: 'dropin',
+        name: 'Drop-in',
+        description: 'Single open-mat session.',
+        source: 'internal',
+        price: 30,
+      },
+      {
+        kind: 'aggregator',
+        name: 'FitPass Partner',
+        description: 'Access via the FitPass network.',
+        source: 'aggregator',
+        price: null,
+      },
     ],
     locations: ['Mat Room A', 'Mat Room B', 'Main Hall'],
     events: [
-      { title: 'Regional Gi Open',       type: 'competition', startOffset: 45, durationH: 8,  fee: 35, location: 'Sports Arena Geneva',  description: 'Regional IBJJF-style tournament — gi divisions for all belts.' },
-      { title: 'No-Gi Throwdown',        type: 'competition', startOffset: 70, durationH: 6,  fee: 25, location: 'Ronin Main Hall',       description: 'In-house no-gi rounds with prizes. All levels welcome.' },
-      { title: 'Guard Retention Seminar', type: 'seminar',    startOffset: 14, durationH: 3,  fee: 40, location: 'Mat Room A',           description: 'Guest black-belt seminar on modern guard retention.' },
+      {
+        title: 'Regional Gi Open',
+        type: 'competition',
+        startOffset: 45,
+        durationH: 8,
+        fee: 35,
+        location: 'Sports Arena Geneva',
+        description: 'Regional IBJJF-style tournament — gi divisions for all belts.',
+      },
+      {
+        title: 'No-Gi Throwdown',
+        type: 'competition',
+        startOffset: 70,
+        durationH: 6,
+        fee: 25,
+        location: 'Ronin Main Hall',
+        description: 'In-house no-gi rounds with prizes. All levels welcome.',
+      },
+      {
+        title: 'Guard Retention Seminar',
+        type: 'seminar',
+        startOffset: 14,
+        durationH: 3,
+        fee: 40,
+        location: 'Mat Room A',
+        description: 'Guest black-belt seminar on modern guard retention.',
+      },
     ],
     goals: [
-      { title: 'Improve guard passing',          description: 'Work on pressure passing and the leg weave.',     categories: ['technique', 'physical'] },
-      { title: 'Compete at next tournament',     description: 'Enter the regional open and go for gold.',        categories: ['attitude', 'mental'] },
-      { title: 'Develop rear-naked choke finish', description: 'Clean finish from back control.',                 categories: ['technique'] },
-      { title: 'Build a consistent habit',        description: 'Train at least 3× per week for 8 weeks.',         categories: ['attendance', 'attitude'] },
+      {
+        title: 'Improve guard passing',
+        description: 'Work on pressure passing and the leg weave.',
+        categories: ['technique', 'physical'],
+      },
+      {
+        title: 'Compete at next tournament',
+        description: 'Enter the regional open and go for gold.',
+        categories: ['attitude', 'mental'],
+      },
+      {
+        title: 'Develop rear-naked choke finish',
+        description: 'Clean finish from back control.',
+        categories: ['technique'],
+      },
+      {
+        title: 'Build a consistent habit',
+        description: 'Train at least 3× per week for 8 weeks.',
+        categories: ['attendance', 'attitude'],
+      },
     ],
-    tasks: ['Watch 3 guard-passing breakdowns', 'Drill solo escapes 10 min/day', 'Review tournament rules', 'Write post-roll notes each session'],
+    tasks: [
+      'Watch 3 guard-passing breakdowns',
+      'Drill solo escapes 10 min/day',
+      'Review tournament rules',
+      'Write post-roll notes each session',
+    ],
   },
   {
-    key: 'crossfit', sector: 'sport',
-    ownerName: 'Anna Schmidt', teamName: 'Forge CrossFit', teamSlug: 'forge-crossfit',
-    sportType: 'CrossFit / Fitness', accentColor: '#0f172a', instructors: ['Anna Schmidt', 'Tom Becker'],
-    description: 'Coached functional fitness — daily WODs, Olympic lifting and engine work for every level.',
+    key: 'crossfit',
+    sector: 'sport',
+    ownerName: 'Anna Schmidt',
+    teamName: 'Forge CrossFit',
+    teamSlug: 'forge-crossfit',
+    sportType: 'CrossFit / Fitness',
+    accentColor: '#0f172a',
+    instructors: ['Anna Schmidt', 'Tom Becker'],
+    description:
+      'Coached functional fitness — daily WODs, Olympic lifting and engine work for every level.',
     portalGradient: 'royal',
     coachingName: 'Personal Training',
     activities: [
-      { name: 'WOD',             slug: 'wod',             color: '#0f172a', level: 'all',          isFreeTrial: true,  base_score: 12, description: 'The classic daily workout — scaled to every level by our coaches.' },
-      { name: 'Olympic Lifting', slug: 'olympic-lifting', color: '#b45309', level: 'intermediate', isFreeTrial: false, base_score: 15, description: 'Snatch and clean & jerk technique in small coached groups.' },
-      { name: 'Endurance',       slug: 'endurance',       color: '#0d9488', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Engine-building intervals on rower, bike and track.' },
-      { name: 'Foundations',     slug: 'foundations',     color: '#2563eb', level: 'beginner',     isFreeTrial: true,  base_score: 8,  description: 'Your first four weeks — movement basics and how the gym works.' },
+      {
+        name: 'WOD',
+        slug: 'wod',
+        color: '#0f172a',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 12,
+        description: 'The classic daily workout — scaled to every level by our coaches.',
+      },
+      {
+        name: 'Olympic Lifting',
+        slug: 'olympic-lifting',
+        color: '#b45309',
+        level: 'intermediate',
+        isFreeTrial: false,
+        base_score: 15,
+        description: 'Snatch and clean & jerk technique in small coached groups.',
+      },
+      {
+        name: 'Endurance',
+        slug: 'endurance',
+        color: '#0d9488',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 10,
+        description: 'Engine-building intervals on rower, bike and track.',
+      },
+      {
+        name: 'Foundations',
+        slug: 'foundations',
+        color: '#2563eb',
+        level: 'beginner',
+        isFreeTrial: true,
+        base_score: 8,
+        description: 'Your first four weeks — movement basics and how the gym works.',
+      },
     ],
     rankingSystem: {
-      id: 'performance-level', name: 'Performance Level',
+      id: 'performance-level',
+      name: 'Performance Level',
       levels: [
         { value: 0, label: 'Foundations', color: '#94a3b8' },
-        { value: 1, label: 'Scaled',      color: '#2563eb' },
-        { value: 2, label: 'Rx',          color: '#b45309' },
-        { value: 3, label: 'Elite',       color: '#dc2626' },
+        { value: 1, label: 'Scaled', color: '#2563eb' },
+        { value: 2, label: 'Rx', color: '#b45309' },
+        { value: 3, label: 'Elite', color: '#dc2626' },
       ],
     },
     subscriptions: [
-      { kind: 'monthly',    name: 'Unlimited Monthly', description: 'Unlimited classes, billed monthly.', source: 'internal',   price: 155 },
-      { kind: 'quarterly',  name: '3× / Week Plan',    description: 'Three sessions a week, billed monthly.', source: 'internal', price: 120 },
-      { kind: 'annual',     name: 'Annual Membership', description: 'Best value — pay once, train all year.', source: 'internal', price: 1490 },
-      { kind: 'dropin',     name: 'Drop-in',           description: 'Single WOD.',                           source: 'internal',   price: 28  },
-      { kind: 'aggregator', name: 'ClassPass',         description: 'Access via the ClassPass network.',     source: 'aggregator', price: null },
+      {
+        kind: 'monthly',
+        name: 'Unlimited Monthly',
+        description: 'Unlimited classes, billed monthly.',
+        source: 'internal',
+        price: 155,
+      },
+      {
+        kind: 'quarterly',
+        name: '3× / Week Plan',
+        description: 'Three sessions a week, billed monthly.',
+        source: 'internal',
+        price: 120,
+      },
+      {
+        kind: 'annual',
+        name: 'Annual Membership',
+        description: 'Best value — pay once, train all year.',
+        source: 'internal',
+        price: 1490,
+      },
+      {
+        kind: 'dropin',
+        name: 'Drop-in',
+        description: 'Single WOD.',
+        source: 'internal',
+        price: 28,
+      },
+      {
+        kind: 'aggregator',
+        name: 'ClassPass',
+        description: 'Access via the ClassPass network.',
+        source: 'aggregator',
+        price: null,
+      },
     ],
     locations: ['The Box', 'Lifting Platform', 'Outdoor Rig'],
     events: [
-      { title: 'Forge Throwdown',     type: 'competition', startOffset: 40, durationH: 6, fee: 30, location: 'The Box',       description: 'In-house partner competition across three WODs.' },
-      { title: 'Hyrox Prep Camp',     type: 'camp',        startOffset: 60, durationH: 4, fee: 45, location: 'Outdoor Rig',   description: 'Weekend prep camp for the next Hyrox race.' },
-      { title: 'Nutrition Workshop',  type: 'seminar',     startOffset: 14, durationH: 2, fee: 0,  location: 'The Box',       description: 'Practical fuelling and recovery for athletes. Free for members.' },
+      {
+        title: 'Forge Throwdown',
+        type: 'competition',
+        startOffset: 40,
+        durationH: 6,
+        fee: 30,
+        location: 'The Box',
+        description: 'In-house partner competition across three WODs.',
+      },
+      {
+        title: 'Hyrox Prep Camp',
+        type: 'camp',
+        startOffset: 60,
+        durationH: 4,
+        fee: 45,
+        location: 'Outdoor Rig',
+        description: 'Weekend prep camp for the next Hyrox race.',
+      },
+      {
+        title: 'Nutrition Workshop',
+        type: 'seminar',
+        startOffset: 14,
+        durationH: 2,
+        fee: 0,
+        location: 'The Box',
+        description: 'Practical fuelling and recovery for athletes. Free for members.',
+      },
     ],
     goals: [
-      { title: 'First strict pull-up',   description: 'Build to one unassisted strict pull-up.',        categories: ['physical'] },
-      { title: 'Bodyweight clean',       description: 'Clean your bodyweight with clean technique.',     categories: ['technique', 'physical'] },
-      { title: 'Sub-8 Fran',             description: 'Complete Fran under 8 minutes Rx.',               categories: ['mental', 'physical'] },
-      { title: 'Consistent attendance',  description: 'Hit 4 classes a week for a month.',               categories: ['attendance'] },
+      {
+        title: 'First strict pull-up',
+        description: 'Build to one unassisted strict pull-up.',
+        categories: ['physical'],
+      },
+      {
+        title: 'Bodyweight clean',
+        description: 'Clean your bodyweight with clean technique.',
+        categories: ['technique', 'physical'],
+      },
+      {
+        title: 'Sub-8 Fran',
+        description: 'Complete Fran under 8 minutes Rx.',
+        categories: ['mental', 'physical'],
+      },
+      {
+        title: 'Consistent attendance',
+        description: 'Hit 4 classes a week for a month.',
+        categories: ['attendance'],
+      },
     ],
-    tasks: ['Mobility 10 min after each WOD', 'Log lifts in the app', 'Practice double-unders', 'Track protein for a week'],
+    tasks: [
+      'Mobility 10 min after each WOD',
+      'Log lifts in the app',
+      'Practice double-unders',
+      'Track protein for a week',
+    ],
   },
   {
-    key: 'tennis', sector: 'sport',
-    ownerName: 'Pierre Dubois', teamName: 'Baseline Tennis Academy', teamSlug: 'baseline-tennis-academy',
-    sportType: 'Tennis', accentColor: '#16a34a', instructors: ['Pierre Dubois', 'Sara Lindqvist'],
-    description: 'Group clinics, junior pathways and competitive match play across our three courts.',
+    key: 'tennis',
+    sector: 'sport',
+    ownerName: 'Pierre Dubois',
+    teamName: 'Baseline Tennis Academy',
+    teamSlug: 'baseline-tennis-academy',
+    sportType: 'Tennis',
+    accentColor: '#16a34a',
+    instructors: ['Pierre Dubois', 'Sara Lindqvist'],
+    description:
+      'Group clinics, junior pathways and competitive match play across our three courts.',
     portalGradient: 'forest',
     coachingName: 'Private Coaching',
     activities: [
-      { name: 'Group Clinic',        slug: 'group-clinic',    color: '#16a34a', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Drill-based group clinic, organised by rating band.' },
-      { name: 'Cardio Tennis',       slug: 'cardio-tennis',   color: '#ea580c', level: 'all',          isFreeTrial: true,  base_score: 12, description: 'High-energy footwork and rally games — fitness first, score second.' },
-      { name: 'Junior Development',  slug: 'junior-dev',      color: '#2563eb', level: 'beginner',     isFreeTrial: true,  base_score: 8,  description: 'Ages 6–14 — the red-to-green ball development pathway.' },
-      { name: 'Match Play',          slug: 'match-play',      color: '#7c3aed', level: 'intermediate', isFreeTrial: false, base_score: 14, description: 'Supervised competitive sets with coaching between games.' },
+      {
+        name: 'Group Clinic',
+        slug: 'group-clinic',
+        color: '#16a34a',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 10,
+        description: 'Drill-based group clinic, organised by rating band.',
+      },
+      {
+        name: 'Cardio Tennis',
+        slug: 'cardio-tennis',
+        color: '#ea580c',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 12,
+        description: 'High-energy footwork and rally games — fitness first, score second.',
+      },
+      {
+        name: 'Junior Development',
+        slug: 'junior-dev',
+        color: '#2563eb',
+        level: 'beginner',
+        isFreeTrial: true,
+        base_score: 8,
+        description: 'Ages 6–14 — the red-to-green ball development pathway.',
+      },
+      {
+        name: 'Match Play',
+        slug: 'match-play',
+        color: '#7c3aed',
+        level: 'intermediate',
+        isFreeTrial: false,
+        base_score: 14,
+        description: 'Supervised competitive sets with coaching between games.',
+      },
     ],
     rankingSystem: {
-      id: 'rating-band', name: 'Rating Band',
+      id: 'rating-band',
+      name: 'Rating Band',
       levels: [
-        { value: 0, label: '1.0–2.0 Beginner',     color: '#94a3b8' },
-        { value: 1, label: '2.5–3.0 Improver',     color: '#2563eb' },
+        { value: 0, label: '1.0–2.0 Beginner', color: '#94a3b8' },
+        { value: 1, label: '2.5–3.0 Improver', color: '#2563eb' },
         { value: 2, label: '3.5–4.0 Intermediate', color: '#16a34a' },
-        { value: 3, label: '4.5–5.0 Advanced',     color: '#dc2626' },
+        { value: 3, label: '4.5–5.0 Advanced', color: '#dc2626' },
       ],
     },
     subscriptions: [
-      { kind: 'monthly',   name: 'Court Membership', description: 'Unlimited clinics + court booking, monthly.', source: 'internal', price: 130 },
-      { kind: 'quarterly', name: 'Seasonal Plan',    description: 'One season of group clinics.',                source: 'internal', price: 340 },
-      { kind: 'annual',    name: 'Annual Membership', description: 'Full year, includes 2 private lessons.',     source: 'internal', price: 1190 },
-      { kind: 'dropin',    name: 'Drop-in Clinic',   description: 'Single group clinic.',                        source: 'internal', price: 32  },
+      {
+        kind: 'monthly',
+        name: 'Court Membership',
+        description: 'Unlimited clinics + court booking, monthly.',
+        source: 'internal',
+        price: 130,
+      },
+      {
+        kind: 'quarterly',
+        name: 'Seasonal Plan',
+        description: 'One season of group clinics.',
+        source: 'internal',
+        price: 340,
+      },
+      {
+        kind: 'annual',
+        name: 'Annual Membership',
+        description: 'Full year, includes 2 private lessons.',
+        source: 'internal',
+        price: 1190,
+      },
+      {
+        kind: 'dropin',
+        name: 'Drop-in Clinic',
+        description: 'Single group clinic.',
+        source: 'internal',
+        price: 32,
+      },
     ],
     locations: ['Court 1', 'Court 2', 'Indoor Court'],
     events: [
-      { title: 'Club Championships',  type: 'competition', startOffset: 50, durationH: 10, fee: 20, location: 'Court 1',      description: 'Annual singles + doubles club championship across all bands.' },
-      { title: 'Junior Camp',         type: 'camp',        startOffset: 35, durationH: 30, fee: 160, location: 'Indoor Court', description: 'Week-long junior development camp. Ages 8–14.' },
-      { title: 'Doubles Strategy Clinic', type: 'seminar', startOffset: 14, durationH: 2,  fee: 15, location: 'Court 2',      description: 'Positioning and shot selection for doubles.' },
+      {
+        title: 'Club Championships',
+        type: 'competition',
+        startOffset: 50,
+        durationH: 10,
+        fee: 20,
+        location: 'Court 1',
+        description: 'Annual singles + doubles club championship across all bands.',
+      },
+      {
+        title: 'Junior Camp',
+        type: 'camp',
+        startOffset: 35,
+        durationH: 30,
+        fee: 160,
+        location: 'Indoor Court',
+        description: 'Week-long junior development camp. Ages 8–14.',
+      },
+      {
+        title: 'Doubles Strategy Clinic',
+        type: 'seminar',
+        startOffset: 14,
+        durationH: 2,
+        fee: 15,
+        location: 'Court 2',
+        description: 'Positioning and shot selection for doubles.',
+      },
     ],
     goals: [
-      { title: 'Reliable second serve',  description: 'Land 7/10 kick second serves under pressure.',  categories: ['technique', 'mental'] },
-      { title: 'Move up a rating band',  description: 'Progress from 3.0 to 3.5 by end of season.',     categories: ['attitude'] },
-      { title: 'Net play confidence',    description: 'Finish points at the net in match play.',        categories: ['technique'] },
-      { title: 'Match fitness',          description: 'Play 3 full sets without fading.',               categories: ['physical'] },
+      {
+        title: 'Reliable second serve',
+        description: 'Land 7/10 kick second serves under pressure.',
+        categories: ['technique', 'mental'],
+      },
+      {
+        title: 'Move up a rating band',
+        description: 'Progress from 3.0 to 3.5 by end of season.',
+        categories: ['attitude'],
+      },
+      {
+        title: 'Net play confidence',
+        description: 'Finish points at the net in match play.',
+        categories: ['technique'],
+      },
+      {
+        title: 'Match fitness',
+        description: 'Play 3 full sets without fading.',
+        categories: ['physical'],
+      },
     ],
-    tasks: ['Shadow-swing serve 10 min/day', 'Watch a pro doubles match', 'String racquet before camp', 'Footwork ladder twice a week'],
+    tasks: [
+      'Shadow-swing serve 10 min/day',
+      'Watch a pro doubles match',
+      'String racquet before camp',
+      'Footwork ladder twice a week',
+    ],
   },
   // ── WELLNESS ─────────────────────────────────────────────────────────────────
   {
-    key: 'yoga', sector: 'wellness',
-    ownerName: 'Maya Iyer', teamName: 'Lotus Yoga Studio', teamSlug: 'lotus-yoga-studio',
-    sportType: 'Yoga / Pilates', accentColor: '#9333ea', instructors: ['Maya Iyer', 'Clara Hoffmann'],
-    description: 'A calm space for vinyasa, yin and meditation — every body, every level, every day.',
+    key: 'yoga',
+    sector: 'wellness',
+    ownerName: 'Maya Iyer',
+    teamName: 'Lotus Yoga Studio',
+    teamSlug: 'lotus-yoga-studio',
+    sportType: 'Yoga / Pilates',
+    accentColor: '#9333ea',
+    instructors: ['Maya Iyer', 'Clara Hoffmann'],
+    description:
+      'A calm space for vinyasa, yin and meditation — every body, every level, every day.',
     portalGradient: 'sunset',
     coachingName: 'Private Session',
     activities: [
-      { name: 'Vinyasa Flow', slug: 'vinyasa-flow', color: '#9333ea', level: 'all',      isFreeTrial: true, base_score: 10, description: 'Breath-led flowing practice for all levels.' },
-      { name: 'Yin Yoga',     slug: 'yin-yoga',     color: '#0891b2', level: 'all',      isFreeTrial: true, base_score: 8,  description: 'Long-held floor poses to release deep tension.' },
-      { name: 'Power Yoga',   slug: 'power-yoga',   color: '#dc2626', level: 'intermediate', isFreeTrial: false, base_score: 12, description: 'A stronger, sweatier flow for experienced practitioners.' },
-      { name: 'Meditation',   slug: 'meditation',   color: '#16a34a', level: 'all',      isFreeTrial: true, base_score: 6,  description: 'Guided sits and breathwork — start or end your day grounded.' },
+      {
+        name: 'Vinyasa Flow',
+        slug: 'vinyasa-flow',
+        color: '#9333ea',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 10,
+        description: 'Breath-led flowing practice for all levels.',
+      },
+      {
+        name: 'Yin Yoga',
+        slug: 'yin-yoga',
+        color: '#0891b2',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 8,
+        description: 'Long-held floor poses to release deep tension.',
+      },
+      {
+        name: 'Power Yoga',
+        slug: 'power-yoga',
+        color: '#dc2626',
+        level: 'intermediate',
+        isFreeTrial: false,
+        base_score: 12,
+        description: 'A stronger, sweatier flow for experienced practitioners.',
+      },
+      {
+        name: 'Meditation',
+        slug: 'meditation',
+        color: '#16a34a',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 6,
+        description: 'Guided sits and breathwork — start or end your day grounded.',
+      },
     ],
     rankingSystem: null, // wellness studios don't grade students
     subscriptions: [
-      { kind: 'monthly',    name: 'Unlimited Monthly', description: 'Unlimited classes, billed monthly.', source: 'internal',   price: 110 },
-      { kind: 'quarterly',  name: '10-Class Pack',     description: 'Ten classes, use any time in 3 months.', source: 'internal', price: 180 },
-      { kind: 'annual',     name: 'Annual Membership', description: 'Full year of unlimited flow.',         source: 'internal',   price: 990 },
-      { kind: 'dropin',     name: 'Drop-in',           description: 'Single class.',                        source: 'internal',   price: 24  },
-      { kind: 'aggregator', name: 'ClassPass',         description: 'Access via the ClassPass network.',     source: 'aggregator', price: null },
+      {
+        kind: 'monthly',
+        name: 'Unlimited Monthly',
+        description: 'Unlimited classes, billed monthly.',
+        source: 'internal',
+        price: 110,
+      },
+      {
+        kind: 'quarterly',
+        name: '10-Class Pack',
+        description: 'Ten classes, use any time in 3 months.',
+        source: 'internal',
+        price: 180,
+      },
+      {
+        kind: 'annual',
+        name: 'Annual Membership',
+        description: 'Full year of unlimited flow.',
+        source: 'internal',
+        price: 990,
+      },
+      {
+        kind: 'dropin',
+        name: 'Drop-in',
+        description: 'Single class.',
+        source: 'internal',
+        price: 24,
+      },
+      {
+        kind: 'aggregator',
+        name: 'ClassPass',
+        description: 'Access via the ClassPass network.',
+        source: 'aggregator',
+        price: null,
+      },
     ],
     locations: ['Studio A', 'Studio B', 'Garden Deck'],
     events: [
-      { title: 'Weekend Yoga Retreat', type: 'camp',    startOffset: 55, durationH: 48, fee: 220, location: 'Lakeside Retreat House', description: 'Two-day immersion: flow, meditation and restorative practice.' },
-      { title: 'Breathwork Workshop',  type: 'seminar', startOffset: 18, durationH: 2,  fee: 35,  location: 'Studio A',              description: 'Guided pranayama and breath techniques for calm.' },
-      { title: 'Full-Moon Flow',       type: 'seminar', startOffset: 9,  durationH: 1.5, fee: 0,  location: 'Garden Deck',           description: 'Free community evening flow under the full moon.' },
+      {
+        title: 'Weekend Yoga Retreat',
+        type: 'camp',
+        startOffset: 55,
+        durationH: 48,
+        fee: 220,
+        location: 'Lakeside Retreat House',
+        description: 'Two-day immersion: flow, meditation and restorative practice.',
+      },
+      {
+        title: 'Breathwork Workshop',
+        type: 'seminar',
+        startOffset: 18,
+        durationH: 2,
+        fee: 35,
+        location: 'Studio A',
+        description: 'Guided pranayama and breath techniques for calm.',
+      },
+      {
+        title: 'Full-Moon Flow',
+        type: 'seminar',
+        startOffset: 9,
+        durationH: 1.5,
+        fee: 0,
+        location: 'Garden Deck',
+        description: 'Free community evening flow under the full moon.',
+      },
     ],
     goals: [
-      { title: 'Hold crow for 10s',      description: 'Build the arm balance gradually and safely.',  categories: ['technique', 'physical'] },
-      { title: 'Daily breath practice',  description: '5 minutes of pranayama every morning.',         categories: ['attitude', 'mental'] },
-      { title: 'Touch toes comfortably', description: 'Improve hamstring mobility over 6 weeks.',       categories: ['physical'] },
-      { title: 'Attend 3× per week',     description: 'Build a consistent practice rhythm.',           categories: ['attendance'] },
+      {
+        title: 'Hold crow for 10s',
+        description: 'Build the arm balance gradually and safely.',
+        categories: ['technique', 'physical'],
+      },
+      {
+        title: 'Daily breath practice',
+        description: '5 minutes of pranayama every morning.',
+        categories: ['attitude', 'mental'],
+      },
+      {
+        title: 'Touch toes comfortably',
+        description: 'Improve hamstring mobility over 6 weeks.',
+        categories: ['physical'],
+      },
+      {
+        title: 'Attend 3× per week',
+        description: 'Build a consistent practice rhythm.',
+        categories: ['attendance'],
+      },
     ],
-    tasks: ['Roll out the mat before bed', 'Try one Yin class this week', 'Breathe 5 min each morning', 'Note how you feel after class'],
+    tasks: [
+      'Roll out the mat before bed',
+      'Try one Yin class this week',
+      'Breathe 5 min each morning',
+      'Note how you feel after class',
+    ],
   },
   {
-    key: 'pilates', sector: 'wellness',
-    ownerName: 'Sophie Laurent', teamName: 'Core Pilates Studio', teamSlug: 'core-pilates-studio',
-    sportType: 'Yoga / Pilates', accentColor: '#0d9488', instructors: ['Sophie Laurent', 'Nadia Brun'],
-    description: 'Reformer and mat pilates in small, focused groups — strength, posture and control.',
+    key: 'pilates',
+    sector: 'wellness',
+    ownerName: 'Sophie Laurent',
+    teamName: 'Core Pilates Studio',
+    teamSlug: 'core-pilates-studio',
+    sportType: 'Yoga / Pilates',
+    accentColor: '#0d9488',
+    instructors: ['Sophie Laurent', 'Nadia Brun'],
+    description:
+      'Reformer and mat pilates in small, focused groups — strength, posture and control.',
     portalGradient: 'ocean',
     coachingName: 'Private Reformer',
     activities: [
-      { name: 'Reformer Flow',     slug: 'reformer-flow',     color: '#0d9488', level: 'all',          isFreeTrial: true,  base_score: 12, description: 'Full-body reformer sequence — maximum six per class.' },
-      { name: 'Mat Pilates',       slug: 'mat-pilates',       color: '#9333ea', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Classical mat work for core strength and posture.' },
-      { name: 'Barre',             slug: 'barre',             color: '#db2777', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Ballet-inspired sculpt and balance work at the barre.' },
-      { name: 'Core & Stability',  slug: 'core-stability',    color: '#2563eb', level: 'beginner',     isFreeTrial: true,  base_score: 8,  description: 'Gentle foundations for beginners and post-rehab returns.' },
+      {
+        name: 'Reformer Flow',
+        slug: 'reformer-flow',
+        color: '#0d9488',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 12,
+        description: 'Full-body reformer sequence — maximum six per class.',
+      },
+      {
+        name: 'Mat Pilates',
+        slug: 'mat-pilates',
+        color: '#9333ea',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 10,
+        description: 'Classical mat work for core strength and posture.',
+      },
+      {
+        name: 'Barre',
+        slug: 'barre',
+        color: '#db2777',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 10,
+        description: 'Ballet-inspired sculpt and balance work at the barre.',
+      },
+      {
+        name: 'Core & Stability',
+        slug: 'core-stability',
+        color: '#2563eb',
+        level: 'beginner',
+        isFreeTrial: true,
+        base_score: 8,
+        description: 'Gentle foundations for beginners and post-rehab returns.',
+      },
     ],
     rankingSystem: {
-      id: 'reformer-level', name: 'Reformer Level',
+      id: 'reformer-level',
+      name: 'Reformer Level',
       levels: [
         { value: 0, label: 'Level 1', color: '#94a3b8' },
         { value: 1, label: 'Level 2', color: '#0d9488' },
@@ -386,67 +1123,250 @@ const SECTOR_PROFILES: SectorProfile[] = [
       ],
     },
     subscriptions: [
-      { kind: 'monthly',    name: 'Unlimited Monthly', description: 'Unlimited reformer + mat, monthly.',  source: 'internal',   price: 165 },
-      { kind: 'quarterly',  name: '8-Class Pack',      description: 'Eight reformer classes in 2 months.',  source: 'internal',   price: 200 },
-      { kind: 'annual',     name: 'Annual Membership', description: 'Best value — unlimited all year.',     source: 'internal',   price: 1690 },
-      { kind: 'dropin',     name: 'Drop-in',           description: 'Single reformer class.',               source: 'internal',   price: 38  },
-      { kind: 'aggregator', name: 'ClassPass',         description: 'Access via the ClassPass network.',     source: 'aggregator', price: null },
+      {
+        kind: 'monthly',
+        name: 'Unlimited Monthly',
+        description: 'Unlimited reformer + mat, monthly.',
+        source: 'internal',
+        price: 165,
+      },
+      {
+        kind: 'quarterly',
+        name: '8-Class Pack',
+        description: 'Eight reformer classes in 2 months.',
+        source: 'internal',
+        price: 200,
+      },
+      {
+        kind: 'annual',
+        name: 'Annual Membership',
+        description: 'Best value — unlimited all year.',
+        source: 'internal',
+        price: 1690,
+      },
+      {
+        kind: 'dropin',
+        name: 'Drop-in',
+        description: 'Single reformer class.',
+        source: 'internal',
+        price: 38,
+      },
+      {
+        kind: 'aggregator',
+        name: 'ClassPass',
+        description: 'Access via the ClassPass network.',
+        source: 'aggregator',
+        price: null,
+      },
     ],
     locations: ['Reformer Room', 'Mat Studio', 'Barre Studio'],
     events: [
-      { title: 'Reformer Intensive',  type: 'camp',    startOffset: 42, durationH: 4, fee: 60, location: 'Reformer Room', description: 'Half-day deep dive into advanced reformer repertoire.' },
-      { title: 'Posture Workshop',    type: 'seminar', startOffset: 16, durationH: 2, fee: 30, location: 'Mat Studio',    description: 'Understand your posture and build a daily routine.' },
-      { title: 'Prenatal Pilates Q&A', type: 'seminar', startOffset: 10, durationH: 1, fee: 0, location: 'Barre Studio',  description: 'Free session on safe movement during pregnancy.' },
+      {
+        title: 'Reformer Intensive',
+        type: 'camp',
+        startOffset: 42,
+        durationH: 4,
+        fee: 60,
+        location: 'Reformer Room',
+        description: 'Half-day deep dive into advanced reformer repertoire.',
+      },
+      {
+        title: 'Posture Workshop',
+        type: 'seminar',
+        startOffset: 16,
+        durationH: 2,
+        fee: 30,
+        location: 'Mat Studio',
+        description: 'Understand your posture and build a daily routine.',
+      },
+      {
+        title: 'Prenatal Pilates Q&A',
+        type: 'seminar',
+        startOffset: 10,
+        durationH: 1,
+        fee: 0,
+        location: 'Barre Studio',
+        description: 'Free session on safe movement during pregnancy.',
+      },
     ],
     goals: [
-      { title: 'Master the hundred',     description: 'Hold strong form through all 100 beats.',       categories: ['technique', 'physical'] },
-      { title: 'Improve core control',   description: 'Stable pelvis through full reformer flow.',      categories: ['physical'] },
-      { title: 'Progress to Level 2',    description: 'Build the strength for the Level 2 repertoire.', categories: ['attitude'] },
-      { title: 'Weekly consistency',     description: 'Two reformer + one mat class each week.',        categories: ['attendance'] },
+      {
+        title: 'Master the hundred',
+        description: 'Hold strong form through all 100 beats.',
+        categories: ['technique', 'physical'],
+      },
+      {
+        title: 'Improve core control',
+        description: 'Stable pelvis through full reformer flow.',
+        categories: ['physical'],
+      },
+      {
+        title: 'Progress to Level 2',
+        description: 'Build the strength for the Level 2 repertoire.',
+        categories: ['attitude'],
+      },
+      {
+        title: 'Weekly consistency',
+        description: 'Two reformer + one mat class each week.',
+        categories: ['attendance'],
+      },
     ],
-    tasks: ['Foot exercises at home', 'Book a Level 2 assessment', 'Practice breathing pattern', 'Stretch hip flexors daily'],
+    tasks: [
+      'Foot exercises at home',
+      'Book a Level 2 assessment',
+      'Practice breathing pattern',
+      'Stretch hip flexors daily',
+    ],
   },
   {
-    key: 'dance', sector: 'wellness',
-    ownerName: 'Isabella Rossi', teamName: 'Rhythm Dance Studio', teamSlug: 'rhythm-dance-studio',
-    sportType: 'Dance', accentColor: '#db2777', instructors: ['Isabella Rossi', 'Marcus Lee'],
-    description: 'Ballet, contemporary and hip-hop for kids and adults — from first steps to the showcase stage.',
+    key: 'dance',
+    sector: 'wellness',
+    ownerName: 'Isabella Rossi',
+    teamName: 'Rhythm Dance Studio',
+    teamSlug: 'rhythm-dance-studio',
+    sportType: 'Dance',
+    accentColor: '#db2777',
+    instructors: ['Isabella Rossi', 'Marcus Lee'],
+    description:
+      'Ballet, contemporary and hip-hop for kids and adults — from first steps to the showcase stage.',
     portalGradient: 'warm',
     coachingName: 'Private Lesson',
     activities: [
-      { name: 'Ballet',        slug: 'ballet',        color: '#db2777', level: 'all',          isFreeTrial: true,  base_score: 10, description: 'Classical technique from barre to centre work.' },
-      { name: 'Contemporary',  slug: 'contemporary',  color: '#9333ea', level: 'intermediate', isFreeTrial: true,  base_score: 12, description: 'Floor work, release technique and choreography.' },
-      { name: 'Hip-Hop',       slug: 'hip-hop',        color: '#0f172a', level: 'all',          isFreeTrial: true,  base_score: 12, description: 'Foundations, grooves and choreo to current tracks.' },
-      { name: 'Kids Dance',    slug: 'kids-dance',     color: '#f59e0b', level: 'beginner',     isFreeTrial: true,  base_score: 8,  description: 'A playful introduction to rhythm and movement, ages 5–9.' },
+      {
+        name: 'Ballet',
+        slug: 'ballet',
+        color: '#db2777',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 10,
+        description: 'Classical technique from barre to centre work.',
+      },
+      {
+        name: 'Contemporary',
+        slug: 'contemporary',
+        color: '#9333ea',
+        level: 'intermediate',
+        isFreeTrial: true,
+        base_score: 12,
+        description: 'Floor work, release technique and choreography.',
+      },
+      {
+        name: 'Hip-Hop',
+        slug: 'hip-hop',
+        color: '#0f172a',
+        level: 'all',
+        isFreeTrial: true,
+        base_score: 12,
+        description: 'Foundations, grooves and choreo to current tracks.',
+      },
+      {
+        name: 'Kids Dance',
+        slug: 'kids-dance',
+        color: '#f59e0b',
+        level: 'beginner',
+        isFreeTrial: true,
+        base_score: 8,
+        description: 'A playful introduction to rhythm and movement, ages 5–9.',
+      },
     ],
     rankingSystem: {
-      id: 'dance-grade', name: 'Grade',
+      id: 'dance-grade',
+      name: 'Grade',
       levels: [
         { value: 0, label: 'Pre-Bronze', color: '#a16207' },
-        { value: 1, label: 'Bronze',     color: '#b45309' },
-        { value: 2, label: 'Silver',     color: '#94a3b8' },
-        { value: 3, label: 'Gold',       color: '#eab308' },
+        { value: 1, label: 'Bronze', color: '#b45309' },
+        { value: 2, label: 'Silver', color: '#94a3b8' },
+        { value: 3, label: 'Gold', color: '#eab308' },
       ],
     },
     subscriptions: [
-      { kind: 'monthly',   name: 'Unlimited Monthly', description: 'Unlimited classes, billed monthly.',  source: 'internal', price: 120 },
-      { kind: 'quarterly', name: 'Term Plan',         description: 'One full term of weekly classes.',     source: 'internal', price: 290 },
-      { kind: 'annual',    name: 'Annual Membership', description: 'Full year including the showcase.',     source: 'internal', price: 1090 },
-      { kind: 'dropin',    name: 'Drop-in',           description: 'Single class.',                        source: 'internal', price: 26  },
+      {
+        kind: 'monthly',
+        name: 'Unlimited Monthly',
+        description: 'Unlimited classes, billed monthly.',
+        source: 'internal',
+        price: 120,
+      },
+      {
+        kind: 'quarterly',
+        name: 'Term Plan',
+        description: 'One full term of weekly classes.',
+        source: 'internal',
+        price: 290,
+      },
+      {
+        kind: 'annual',
+        name: 'Annual Membership',
+        description: 'Full year including the showcase.',
+        source: 'internal',
+        price: 1090,
+      },
+      {
+        kind: 'dropin',
+        name: 'Drop-in',
+        description: 'Single class.',
+        source: 'internal',
+        price: 26,
+      },
     ],
     locations: ['Dance Hall', 'Studio 2', 'Performance Space'],
     events: [
-      { title: 'Spring Showcase',     type: 'competition', startOffset: 60, durationH: 4, fee: 15, location: 'Performance Space', description: 'Our annual student showcase across all styles and grades.' },
-      { title: 'Hip-Hop Masterclass', type: 'seminar',     startOffset: 21, durationH: 2, fee: 35, location: 'Dance Hall',       description: 'Guest choreographer masterclass — all levels.' },
-      { title: 'Open Day',            type: 'seminar',     startOffset: 12, durationH: 3, fee: 0,  location: 'Studio 2',         description: 'Free taster classes for new and prospective dancers.' },
+      {
+        title: 'Spring Showcase',
+        type: 'competition',
+        startOffset: 60,
+        durationH: 4,
+        fee: 15,
+        location: 'Performance Space',
+        description: 'Our annual student showcase across all styles and grades.',
+      },
+      {
+        title: 'Hip-Hop Masterclass',
+        type: 'seminar',
+        startOffset: 21,
+        durationH: 2,
+        fee: 35,
+        location: 'Dance Hall',
+        description: 'Guest choreographer masterclass — all levels.',
+      },
+      {
+        title: 'Open Day',
+        type: 'seminar',
+        startOffset: 12,
+        durationH: 3,
+        fee: 0,
+        location: 'Studio 2',
+        description: 'Free taster classes for new and prospective dancers.',
+      },
     ],
     goals: [
-      { title: 'Clean double pirouette',  description: 'Land a controlled double turn.',                categories: ['technique'] },
-      { title: 'Perform at the showcase',  description: 'Learn and polish the showcase routine.',        categories: ['attitude', 'mental'] },
-      { title: 'Improve flexibility',      description: 'Reach a full split over the term.',             categories: ['physical'] },
-      { title: 'Grade up',                 description: 'Pass the next grade assessment.',               categories: ['attendance', 'attitude'] },
+      {
+        title: 'Clean double pirouette',
+        description: 'Land a controlled double turn.',
+        categories: ['technique'],
+      },
+      {
+        title: 'Perform at the showcase',
+        description: 'Learn and polish the showcase routine.',
+        categories: ['attitude', 'mental'],
+      },
+      {
+        title: 'Improve flexibility',
+        description: 'Reach a full split over the term.',
+        categories: ['physical'],
+      },
+      {
+        title: 'Grade up',
+        description: 'Pass the next grade assessment.',
+        categories: ['attendance', 'attitude'],
+      },
     ],
-    tasks: ['Stretch 15 min daily', 'Practice the routine at home', 'Watch the choreography video', 'Bring proper shoes to class'],
+    tasks: [
+      'Stretch 15 min daily',
+      'Practice the routine at home',
+      'Watch the choreography video',
+      'Bring proper shoes to class',
+    ],
   },
 ]
 
@@ -454,8 +1374,20 @@ const SECTOR_PROFILES: SectorProfile[] = [
 
 async function seedDemoTeam(profile: SectorProfile) {
   const {
-    key, ownerName, teamName, teamSlug, sportType, accentColor, description, portalGradient,
-    instructors, activities, coachingName, rankingSystem, subscriptions, locations,
+    key,
+    ownerName,
+    teamName,
+    teamSlug,
+    sportType,
+    accentColor,
+    description,
+    portalGradient,
+    instructors,
+    activities,
+    coachingName,
+    rankingSystem,
+    subscriptions,
+    locations,
   } = profile
   const teamId = `sandbox-${key}`
   const uid = `sandbox-${key}-uid`
@@ -465,12 +1397,21 @@ async function seedDemoTeam(profile: SectorProfile) {
 
   // ── subscription types ────────────────────────────────────────────────────
   const subIdOf = (kind: SubKind) => `${teamId}-sub-${kind}`
-  function resolveSub(kind: SubKind): { id: string; name: string; recurrence: string | null } | null {
+  function resolveSub(
+    kind: SubKind
+  ): { id: string; name: string; recurrence: string | null } | null {
     if (!kind) return null
     const found = subscriptions.find((s) => s.kind === kind)
     const recurrenceOf = (k: SubKind) =>
-      k === 'monthly' ? 'monthly' : k === 'quarterly' ? 'quarterly' : k === 'annual' ? 'annual' : null
-    if (found) return { id: subIdOf(found.kind), name: found.name, recurrence: recurrenceOf(found.kind) }
+      k === 'monthly'
+        ? 'monthly'
+        : k === 'quarterly'
+          ? 'quarterly'
+          : k === 'annual'
+            ? 'annual'
+            : null
+    if (found)
+      return { id: subIdOf(found.kind), name: found.name, recurrence: recurrenceOf(found.kind) }
     const monthly = subscriptions.find((s) => s.kind === 'monthly')!
     return { id: subIdOf('monthly'), name: monthly.name, recurrence: 'monthly' }
   }
@@ -505,96 +1446,207 @@ async function seedDemoTeam(profile: SectorProfile) {
 
   // ── team doc + public profile ─────────────────────────────────────────────
   const portalLinks = [
-    { label: 'Book a Free Trial', description: "Try a class and see if it's right for you", isBookingLink: true,  isMembershipLink: false, showInPortal: true, iconName: 'CalendarPlus', url: null },
-    { label: 'Join as Member',    description: 'Join our community and become a member',    isBookingLink: false, isMembershipLink: true,  showInPortal: true, iconName: 'UserCheck',    url: null },
+    {
+      label: 'Book a Free Trial',
+      description: "Try a class and see if it's right for you",
+      isBookingLink: true,
+      isMembershipLink: false,
+      showInBioLink: true,
+      iconName: 'CalendarPlus',
+      url: null,
+    },
+    {
+      label: 'Join as Member',
+      description: 'Join our community and become a member',
+      isBookingLink: false,
+      isMembershipLink: true,
+      showInBioLink: true,
+      iconName: 'UserCheck',
+      url: null,
+    },
   ]
-  const portalBackground = { type: 'gradient', color: portalGradient }
+  const bioLinkBackground = { type: 'gradient', color: portalGradient }
 
-  await db.collection('teams').doc(teamId).set({
-    name: teamName,
-    description,
-    slug: teamSlug,
-    sport_type: sportType,
-    language: teamLanguage,
-    createdBy: uid,
-    created: ts(daysFromNow(-220)),
-    plan: 'studio',
-    plan_status: 'active',
-    ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],
-    settings: { gamification: gamificationSettings, teamEmail: email },
-    portalTheme: 'light',
-    portalAccentColor: accentColor,
-    portalBackground,
-    links: portalLinks,
-    socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
-  })
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .set({
+      name: teamName,
+      description,
+      slug: teamSlug,
+      sport_type: sportType,
+      language: teamLanguage,
+      createdBy: uid,
+      created: ts(daysFromNow(-220)),
+      plan: 'studio',
+      plan_status: 'active',
+      ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],
+      settings: { gamification: gamificationSettings, teamEmail: email },
+      bioLinkTheme: 'light',
+      bioLinkAccentColor: accentColor,
+      bioLinkBackground,
+      links: portalLinks,
+      socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
+    })
 
-  await db.collection('teams').doc(teamId).collection('public_profile').doc(teamId).set({
-    type: 'team', name: teamName, description,
-    slug: teamSlug, sport_type: sportType,
-    profileImage: null, heroImage: null,
-    portalTheme: 'light', portalAccentColor: accentColor,
-    portalBackground,
-    socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
-    links: portalLinks,
-    bookingSettings: { flowType: 'activity-first', windowMonths: 2, showPhone: true, ctaUrl: null, ctaLabel: null, showActivityDescription: true },
-    membershipRequiredFields: null, membershipOptionalFields: null,
-    updated_at: ts(now()),
-  })
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('public_profile')
+    .doc(teamId)
+    .set({
+      type: 'team',
+      name: teamName,
+      description,
+      slug: teamSlug,
+      sport_type: sportType,
+      profileImage: null,
+      heroImage: null,
+      bioLinkTheme: 'light',
+      bioLinkAccentColor: accentColor,
+      bioLinkBackground,
+      socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
+      links: portalLinks,
+      bookingSettings: {
+        flowType: 'activity-first',
+        windowMonths: 2,
+        showPhone: true,
+        ctaUrl: null,
+        ctaLabel: null,
+        showActivityDescription: true,
+      },
+      membershipRequiredFields: null,
+      membershipOptionalFields: null,
+      updated_at: ts(now()),
+    })
 
   // ── owner member + user profile ─────────────────────────────────────────────
-  await db.collection('teams').doc(teamId).collection('team_members').doc(uid).set({
-    teamId, userId: uid, role: 'owner', email, joined: ts(daysFromNow(-220)),
-  })
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(uid)
+    .set({
+      teamId,
+      userId: uid,
+      role: 'owner',
+      email,
+      joined: ts(daysFromNow(-220)),
+    })
   const [ownerFirst, ownerLast] = ownerName.split(' ')
-  await db.collection('users').doc(uid).set({
-    email, displayName: ownerName, firstname: ownerFirst, lastname: ownerLast ?? '',
-    currentTeam: teamId, created_at: ts(daysFromNow(-220)),
-  }, { merge: true })
+  await db
+    .collection('users')
+    .doc(uid)
+    .set(
+      {
+        email,
+        displayName: ownerName,
+        firstname: ownerFirst,
+        lastname: ownerLast ?? '',
+        currentTeam: teamId,
+        created_at: ts(daysFromNow(-220)),
+      },
+      { merge: true }
+    )
 
   // ── activities (group classes + coaching) ─────────────────────────────────
   const actIds = activities.map((_, i) => `${teamId}-act-${i}`)
   for (let i = 0; i < activities.length; i++) {
     const a = activities[i]
-    await db.collection('activities').doc(actIds[i]).set({
-      teamId, name: a.name, slug: a.slug, color: a.color, level: a.level,
-      description: a.description,
-      isFreeTrial: a.isFreeTrial, base_score: a.base_score,
-      type: 'group_class', isActive: true, created_at: ts(daysFromNow(-200)),
-    })
-    await db.collection('activities').doc(actIds[i]).collection('public_profile').doc(actIds[i]).set({
-      type: 'activity', teamId, name: a.name, slug: a.slug, color: a.color,
-      description: a.description,
-      image_url: null, isFreeTrial: a.isFreeTrial, level: a.level,
-    })
+    await db
+      .collection('activities')
+      .doc(actIds[i])
+      .set({
+        teamId,
+        name: a.name,
+        slug: a.slug,
+        color: a.color,
+        level: a.level,
+        description: a.description,
+        isFreeTrial: a.isFreeTrial,
+        base_score: a.base_score,
+        type: 'group_class',
+        isActive: true,
+        created_at: ts(daysFromNow(-200)),
+      })
+    await db
+      .collection('activities')
+      .doc(actIds[i])
+      .collection('public_profile')
+      .doc(actIds[i])
+      .set({
+        type: 'activity',
+        teamId,
+        name: a.name,
+        slug: a.slug,
+        color: a.color,
+        description: a.description,
+        image_url: null,
+        isFreeTrial: a.isFreeTrial,
+        level: a.level,
+      })
   }
 
   const coachingActId = `${teamId}-act-coaching`
-  await db.collection('activities').doc(coachingActId).set({
-    teamId, name: coachingName, slug: 'private-coaching', color: accentColor,
-    type: 'coaching', coachId: uid, coachName: ownerName, level: 'all',
-    isFreeTrial: true, isActive: true, created_at: ts(daysFromNow(-180)),
-  })
-  await db.collection('activities').doc(coachingActId).collection('public_profile').doc(coachingActId).set({
-    type: 'activity', teamId, name: coachingName, slug: 'private-coaching',
-    color: accentColor, image_url: null, isFreeTrial: true, level: 'all',
-  })
+  await db
+    .collection('activities')
+    .doc(coachingActId)
+    .set({
+      teamId,
+      name: coachingName,
+      slug: 'private-coaching',
+      color: accentColor,
+      type: 'coaching',
+      coachId: uid,
+      coachName: ownerName,
+      level: 'all',
+      isFreeTrial: true,
+      isActive: true,
+      created_at: ts(daysFromNow(-180)),
+    })
+  await db
+    .collection('activities')
+    .doc(coachingActId)
+    .collection('public_profile')
+    .doc(coachingActId)
+    .set({
+      type: 'activity',
+      teamId,
+      name: coachingName,
+      slug: 'private-coaching',
+      color: accentColor,
+      image_url: null,
+      isFreeTrial: true,
+      level: 'all',
+    })
 
   // ── coach availability template + coaching sessions ───────────────────────
   const coachingTemplateId = `${teamId}-tpl-coaching`
-  await db.collection('coach_availability').doc(coachingTemplateId).set({
-    teamId, coachId: uid, coachName: ownerName, activityId: coachingActId,
-    title: coachingName, description: `One-on-one ${coachingName.toLowerCase()}.`,
-    duration_minutes: 60, max_participants: 1, isFreeTrial: true,
-    location: locations[0], onlineUrl: null, status: 'active',
-    recurrence: { type: 'weekly', days: [1, 3], time: '08:00', timezone: 'Europe/Zurich' },
-    window_days: 30, created_at: ts(daysFromNow(-40)),
-  })
+  await db
+    .collection('coach_availability')
+    .doc(coachingTemplateId)
+    .set({
+      teamId,
+      coachId: uid,
+      coachName: ownerName,
+      activityId: coachingActId,
+      title: coachingName,
+      description: `One-on-one ${coachingName.toLowerCase()}.`,
+      duration_minutes: 60,
+      max_participants: 1,
+      isFreeTrial: true,
+      location: locations[0],
+      onlineUrl: null,
+      status: 'active',
+      recurrence: { type: 'weekly', days: [1, 3], time: '08:00', timezone: 'Europe/Zurich' },
+      window_days: 30,
+      created_at: ts(daysFromNow(-40)),
+    })
 
   const coachingSlotDefs = [
-    { dayOffset: 1,  hour: 8, bookings: 0 },
-    { dayOffset: 3,  hour: 8, bookings: 1 },
-    { dayOffset: 8,  hour: 8, bookings: 0 },
+    { dayOffset: 1, hour: 8, bookings: 0 },
+    { dayOffset: 3, hour: 8, bookings: 1 },
+    { dayOffset: 8, hour: 8, bookings: 0 },
     { dayOffset: 10, hour: 8, bookings: 1 },
     { dayOffset: 15, hour: 8, bookings: 0 },
     { dayOffset: 17, hour: 8, bookings: 0 },
@@ -614,49 +1666,119 @@ async function seedDemoTeam(profile: SectorProfile) {
     const isFull = slotDef.bookings >= 1
     const status = isFull ? 'full' : 'open'
 
-    await db.collection('sessions').doc(sid).set({
-      teamId, activityType: 'coaching', activityId: coachingActId, activityName: coachingName,
-      templateId: coachingTemplateId, coachId: uid, coachName: ownerName, isFreeTrial: true,
-      start: ts(base), end: ts(end), duration_minutes: 60, max_participants: 1,
-      bookings_count: slotDef.bookings, location: locations[0], onlineUrl: null,
-      allowBooking: true, status, created_at: ts(daysFromNow(-7)),
-    })
-    await db.collection('sessions').doc(sid).collection('public_profile').doc(sid).set({
-      type: 'coaching_session', teamId, activityType: 'coaching', activityName: coachingName,
-      coachId: uid, coachName: ownerName, templateId: coachingTemplateId,
-      start: ts(base), end: ts(end), duration_minutes: 60, location: locations[0], onlineUrl: null,
-      max_participants: 1, bookings_count: slotDef.bookings, isFreeTrial: true, status, allowBooking: true,
-    })
-    if (isFull) {
-      await db.collection('sessions').doc(sid).collection('bookings').doc(`${sid}-booking`).set({
-        teamId, contactId: bookedContact.id, session: sid, email: bookedContact.email,
-        firstname: bookedContact.firstname, lastname: bookedContact.lastname,
-        status: 'confirmed', joinedAt: ts(daysFromNow(-2)),
-        booking_token: `tok-coaching-${teamId}-${i}`, is_new_contact: false,
+    await db
+      .collection('sessions')
+      .doc(sid)
+      .set({
+        teamId,
+        activityType: 'coaching',
+        activityId: coachingActId,
+        activityName: coachingName,
+        templateId: coachingTemplateId,
+        coachId: uid,
+        coachName: ownerName,
+        isFreeTrial: true,
+        start: ts(base),
+        end: ts(end),
+        duration_minutes: 60,
+        max_participants: 1,
+        bookings_count: slotDef.bookings,
+        location: locations[0],
+        onlineUrl: null,
+        allowBooking: true,
+        status,
+        created_at: ts(daysFromNow(-7)),
       })
+    await db
+      .collection('sessions')
+      .doc(sid)
+      .collection('public_profile')
+      .doc(sid)
+      .set({
+        type: 'coaching_session',
+        teamId,
+        activityType: 'coaching',
+        activityName: coachingName,
+        coachId: uid,
+        coachName: ownerName,
+        templateId: coachingTemplateId,
+        start: ts(base),
+        end: ts(end),
+        duration_minutes: 60,
+        location: locations[0],
+        onlineUrl: null,
+        max_participants: 1,
+        bookings_count: slotDef.bookings,
+        isFreeTrial: true,
+        status,
+        allowBooking: true,
+      })
+    if (isFull) {
+      await db
+        .collection('sessions')
+        .doc(sid)
+        .collection('bookings')
+        .doc(`${sid}-booking`)
+        .set({
+          teamId,
+          contactId: bookedContact.id,
+          session: sid,
+          email: bookedContact.email,
+          firstname: bookedContact.firstname,
+          lastname: bookedContact.lastname,
+          status: 'confirmed',
+          joinedAt: ts(daysFromNow(-2)),
+          booking_token: `tok-coaching-${teamId}-${i}`,
+          is_new_contact: false,
+        })
     }
   }
 
   // ── subscription types ────────────────────────────────────────────────────
   for (const st of subscriptions) {
-    await db.collection('teams').doc(teamId).collection('subscription_types').doc(subIdOf(st.kind)).set({
-      name: st.name, description: st.description, source: st.source, active: true,
-      ...(st.price != null ? { price: st.price } : {}), teamId, created_at: ts(daysFromNow(-120)),
-    })
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('subscription_types')
+      .doc(subIdOf(st.kind))
+      .set({
+        name: st.name,
+        description: st.description,
+        source: st.source,
+        active: true,
+        ...(st.price != null ? { price: st.price } : {}),
+        teamId,
+        created_at: ts(daysFromNow(-120)),
+      })
   }
 
   // ── group sessions (4 past weeks + 4 upcoming weeks) ──────────────────────
   // Weekly template references activities by index (modulo, so 4–5 activities work).
-  type Slot = { day: number; actIdx: number; hour: number; dur: number; locIdx: number; upcomingOnly?: boolean }
+  type Slot = {
+    day: number
+    actIdx: number
+    hour: number
+    dur: number
+    locIdx: number
+    upcomingOnly?: boolean
+  }
   const weeklyTemplate: Slot[] = [
     { day: 1, actIdx: 0, hour: 18, dur: 1.5, locIdx: 0 },
-    { day: 2, actIdx: 3, hour: 9,  dur: 1,   locIdx: 1 },
-    { day: 3, actIdx: 2, hour: 19, dur: 1,   locIdx: 1 },
-    { day: 5, actIdx: 0, hour: 7,  dur: 1,   locIdx: 0 },
+    { day: 2, actIdx: 3, hour: 9, dur: 1, locIdx: 1 },
+    { day: 3, actIdx: 2, hour: 19, dur: 1, locIdx: 1 },
+    { day: 5, actIdx: 0, hour: 7, dur: 1, locIdx: 0 },
     { day: 6, actIdx: 1, hour: 10, dur: 1.5, locIdx: 2 },
-    { day: 0, actIdx: 3, hour: 10, dur: 1,   locIdx: 1, upcomingOnly: true },
+    { day: 0, actIdx: 3, hour: 10, dur: 1, locIdx: 1, upcomingOnly: true },
   ]
-  type SessionDef = { dayOffset: number; actIdx: number; hour: number; duration: number; location: string; allowBooking: boolean; instructor: string }
+  type SessionDef = {
+    dayOffset: number
+    actIdx: number
+    hour: number
+    duration: number
+    location: string
+    allowBooking: boolean
+    instructor: string
+  }
   const sessionDefs: SessionDef[] = []
   for (let week = -4; week <= 3; week++) {
     const upcoming = week >= 0
@@ -666,7 +1788,8 @@ async function seedDemoTeam(profile: SectorProfile) {
       sessionDefs.push({
         dayOffset: week * 7 + s.day,
         actIdx: s.actIdx % activities.length,
-        hour: s.hour, duration: s.dur,
+        hour: s.hour,
+        duration: s.dur,
         location: locations[s.locIdx % locations.length],
         allowBooking: upcoming && !s.upcomingOnly,
         instructor: instructors[si % instructors.length],
@@ -685,22 +1808,50 @@ async function seedDemoTeam(profile: SectorProfile) {
     const id = `${teamId}-session-${i.toString().padStart(3, '0')}`
     sessionIds.push(id)
 
-    await db.collection('sessions').doc(id).set({
-      teamId, activityId: actIds[s.actIdx], activityName: a.name,
-      start: ts(base), end: ts(end), location: s.location,
-      instructor: s.instructor, locationAddress: '12 Studio Lane',
-      allowBooking: s.allowBooking, participants_count: 0,
-      created_at: ts(daysFromNow(-200)), createdBy: uid,
-    })
-    if (s.allowBooking) {
-      await db.collection('sessions').doc(id).collection('public_profile').doc(id).set({
-        type: 'session', teamId, activityId: actIds[s.actIdx], activityName: a.name,
-        activityColor: a.color, activitySlug: a.slug, activityIsFreeTrial: a.isFreeTrial,
-        activityLevel: a.level, activityImage: null,
-        start: ts(base), end: ts(end), location: s.location,
-        instructorName: s.instructor, locationAddress: '12 Studio Lane',
-        locationMapsUrl: null, capacity: null, participants_count: 0, allowBooking: true, slug: null,
+    await db
+      .collection('sessions')
+      .doc(id)
+      .set({
+        teamId,
+        activityId: actIds[s.actIdx],
+        activityName: a.name,
+        start: ts(base),
+        end: ts(end),
+        location: s.location,
+        instructor: s.instructor,
+        locationAddress: '12 Studio Lane',
+        allowBooking: s.allowBooking,
+        participants_count: 0,
+        created_at: ts(daysFromNow(-200)),
+        createdBy: uid,
       })
+    if (s.allowBooking) {
+      await db
+        .collection('sessions')
+        .doc(id)
+        .collection('public_profile')
+        .doc(id)
+        .set({
+          type: 'session',
+          teamId,
+          activityId: actIds[s.actIdx],
+          activityName: a.name,
+          activityColor: a.color,
+          activitySlug: a.slug,
+          activityIsFreeTrial: a.isFreeTrial,
+          activityLevel: a.level,
+          activityImage: null,
+          start: ts(base),
+          end: ts(end),
+          location: s.location,
+          instructorName: s.instructor,
+          locationAddress: '12 Studio Lane',
+          locationMapsUrl: null,
+          capacity: null,
+          participants_count: 0,
+          allowBooking: true,
+          slug: null,
+        })
     }
   }
 
@@ -717,52 +1868,94 @@ async function seedDemoTeam(profile: SectorProfile) {
     const streak = c.totalSessions > 0 ? Math.floor(seededRand(seed + 'st') * 6) : 0
     const maxStreak = Math.max(streak, Math.floor(seededRand(seed + 'ms') * 10))
     const monthScore = c.totalSessions > 0 ? Math.floor(seededRand(seed + 'sc') * 140) : 0
-    const birthdate = c.birthYear ? new Date(c.birthYear, Math.floor(seededRand(seed + 'mo') * 12), 1 + Math.floor(seededRand(seed + 'dy') * 27)) : null
+    const birthdate = c.birthYear
+      ? new Date(
+          c.birthYear,
+          Math.floor(seededRand(seed + 'mo') * 12),
+          1 + Math.floor(seededRand(seed + 'dy') * 27)
+        )
+      : null
 
-    await db.collection('contacts').doc(id).set({
-      teamId,
-      firstname: c.firstname, lastname: c.lastname,
-      email: `${slugEmail(c)}.${teamId}@example.com`,
-      phone: `+417${(60000000 + Math.floor(seededRand(seed + 'ph') * 9999999)).toString().slice(0, 8)}`,
-      gender: c.gender, birthplace: c.birthplace,
-      birthdate: birthdate ? ts(birthdate) : null,
-      type: c.type, membership_status: c.status, membership_active: c.status === 'active',
-      total_sessions: c.totalSessions,
-      last_session_at: c.totalSessions > 0 ? ts(daysFromNow(-Math.floor(seededRand(seed + 'ls') * 14))) : null,
-      notes: c.type === 'student' && c.totalSessions > 20
-        ? 'Consistent attendance. Progressing well — review focus areas next month.'
-        : c.type === 'trial' ? 'Came in via the website trial form — follow up after first class.' : '',
-      created_at: ts(daysFromNow(-Math.floor(seededRand(seed + 'cr') * 200) - 10)),
-      deleted_at: null, archived_at: null,
-      current_month_score: monthScore,
-      current_streak: streak,
-      max_streak: maxStreak,
-      times_leader: Math.floor(seededRand(seed + 'tl') * 3),
-      times_top5: Math.floor(seededRand(seed + 't5') * 6),
-      distinct_activities: activities.slice(0, 1 + Math.floor(seededRand(seed + 'da') * 2)).map((a) => a.slug),
-      custom_badges: badgesFor(c.totalSessions, maxStreak, seed),
-      ...(sub ? {
-        subscription_type_id: sub.id, subscription_type_name: sub.name,
-        subscription_recurrence: sub.recurrence, subscription_type_updated_at: ts(daysFromNow(-30)),
-      } : {}),
-      ...(rank != null && rankSystemId ? { ranks: { [rankSystemId]: rank } } : {}),
-      tags: c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : [],
-    })
+    await db
+      .collection('contacts')
+      .doc(id)
+      .set({
+        teamId,
+        firstname: c.firstname,
+        lastname: c.lastname,
+        email: `${slugEmail(c)}.${teamId}@example.com`,
+        phone: `+417${(60000000 + Math.floor(seededRand(seed + 'ph') * 9999999)).toString().slice(0, 8)}`,
+        gender: c.gender,
+        birthplace: c.birthplace,
+        birthdate: birthdate ? ts(birthdate) : null,
+        type: c.type,
+        membership_status: c.status,
+        membership_active: c.status === 'active',
+        total_sessions: c.totalSessions,
+        last_session_at:
+          c.totalSessions > 0 ? ts(daysFromNow(-Math.floor(seededRand(seed + 'ls') * 14))) : null,
+        notes:
+          c.type === 'student' && c.totalSessions > 20
+            ? 'Consistent attendance. Progressing well — review focus areas next month.'
+            : c.type === 'trial'
+              ? 'Came in via the website trial form — follow up after first class.'
+              : '',
+        created_at: ts(daysFromNow(-Math.floor(seededRand(seed + 'cr') * 200) - 10)),
+        deleted_at: null,
+        archived_at: null,
+        current_month_score: monthScore,
+        current_streak: streak,
+        max_streak: maxStreak,
+        times_leader: Math.floor(seededRand(seed + 'tl') * 3),
+        times_top5: Math.floor(seededRand(seed + 't5') * 6),
+        distinct_activities: activities
+          .slice(0, 1 + Math.floor(seededRand(seed + 'da') * 2))
+          .map((a) => a.slug),
+        custom_badges: badgesFor(c.totalSessions, maxStreak, seed),
+        ...(sub
+          ? {
+              subscription_type_id: sub.id,
+              subscription_type_name: sub.name,
+              subscription_recurrence: sub.recurrence,
+              subscription_type_updated_at: ts(daysFromNow(-30)),
+            }
+          : {}),
+        ...(rank != null && rankSystemId ? { ranks: { [rankSystemId]: rank } } : {}),
+        tags: c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : [],
+      })
 
     // subscription history
     if (sub) {
       const startedAt = daysFromNow(-Math.floor(seededRand(seed + 'sh') * 90) - 30)
       if (i % 4 === 0) {
         const prevStartedAt = daysFromNow(-Math.floor(seededRand(seed + 'ph2') * 120) - 90)
-        await db.collection('contacts').doc(id).collection('subscription_history').doc(`${id}-sub-prev`).set({
-          subscription_type_id: sub.id, subscription_type_name: sub.name, recurrence: sub.recurrence,
-          start_date: ts(prevStartedAt), end_date: ts(new Date(startedAt.getTime() - 1)), created_at: ts(prevStartedAt),
-        })
+        await db
+          .collection('contacts')
+          .doc(id)
+          .collection('subscription_history')
+          .doc(`${id}-sub-prev`)
+          .set({
+            subscription_type_id: sub.id,
+            subscription_type_name: sub.name,
+            recurrence: sub.recurrence,
+            start_date: ts(prevStartedAt),
+            end_date: ts(new Date(startedAt.getTime() - 1)),
+            created_at: ts(prevStartedAt),
+          })
       }
-      await db.collection('contacts').doc(id).collection('subscription_history').doc(`${id}-sub-current`).set({
-        subscription_type_id: sub.id, subscription_type_name: sub.name, recurrence: sub.recurrence,
-        start_date: ts(startedAt), end_date: null, created_at: ts(startedAt),
-      })
+      await db
+        .collection('contacts')
+        .doc(id)
+        .collection('subscription_history')
+        .doc(`${id}-sub-current`)
+        .set({
+          subscription_type_id: sub.id,
+          subscription_type_name: sub.name,
+          recurrence: sub.recurrence,
+          start_date: ts(startedAt),
+          end_date: null,
+          created_at: ts(startedAt),
+        })
     }
 
     // monthly scores (gamification) — last 4 months for active students
@@ -772,11 +1965,19 @@ async function seedDemoTeam(profile: SectorProfile) {
         const label = monthLabel(md)
         const sessions = Math.floor(seededRand(seed + 'mscount' + m) * 12)
         const totalPoints = sessions * (10 + Math.floor(seededRand(seed + 'mp' + m) * 6))
-        await db.collection('contacts').doc(id).collection('monthly_scores').doc(`${id}-${label}`).set({
-          month: label, team_id: teamId, total_points: totalPoints,
-          final_score: Math.min(totalPoints, gamificationSettings.monthly_cap),
-          sessions_count: sessions, updated_at: ts(md),
-        })
+        await db
+          .collection('contacts')
+          .doc(id)
+          .collection('monthly_scores')
+          .doc(`${id}-${label}`)
+          .set({
+            month: label,
+            team_id: teamId,
+            total_points: totalPoints,
+            final_score: Math.min(totalPoints, gamificationSettings.monthly_cap),
+            sessions_count: sessions,
+            updated_at: ts(md),
+          })
       }
     }
 
@@ -787,10 +1988,20 @@ async function seedDemoTeam(profile: SectorProfile) {
         const monday = mondayOfWeeksAgo(w)
         const label = isoWeekLabel(monday)
         const attendChance = Math.min(0.9, c.totalSessions / 60)
-        const count = seededRand(seed + 'wk' + w) < attendChance ? 1 + Math.floor(seededRand(seed + 'wc' + w) * maxPerWeek) : 0
-        await db.collection('contacts').doc(id).collection('contact_weekly_reports').doc(label).set({
-          iso_week: label, sessions_count: count, generated_at: ts(monday),
-        })
+        const count =
+          seededRand(seed + 'wk' + w) < attendChance
+            ? 1 + Math.floor(seededRand(seed + 'wc' + w) * maxPerWeek)
+            : 0
+        await db
+          .collection('contacts')
+          .doc(id)
+          .collection('contact_weekly_reports')
+          .doc(label)
+          .set({
+            iso_week: label,
+            sessions_count: count,
+            generated_at: ts(monday),
+          })
       }
     }
   }
@@ -798,16 +2009,41 @@ async function seedDemoTeam(profile: SectorProfile) {
   // ── contact alerts (show_in_app) — a few per team ─────────────────────────
   const alertTargets = contactIds.slice(0, Math.min(4, contactIds.length))
   const alertDefs = [
-    { schedule_type: 'sessions_countdown' as const, schedule_value: 10, message: 'Assessment approaching — review goals together.', show_in_app: true },
-    { schedule_type: 'datetime' as const,           schedule_value: ts(daysFromNow(7)), message: 'Membership renewal due this week.', show_in_app: true },
-    { schedule_type: 'sessions_countdown' as const, schedule_value: 50, message: '50-session milestone — celebrate in class!', show_in_app: false },
+    {
+      schedule_type: 'sessions_countdown' as const,
+      schedule_value: 10,
+      message: 'Assessment approaching — review goals together.',
+      show_in_app: true,
+    },
+    {
+      schedule_type: 'datetime' as const,
+      schedule_value: ts(daysFromNow(7)),
+      message: 'Membership renewal due this week.',
+      show_in_app: true,
+    },
+    {
+      schedule_type: 'sessions_countdown' as const,
+      schedule_value: 50,
+      message: '50-session milestone — celebrate in class!',
+      show_in_app: false,
+    },
   ]
   for (let i = 0; i < alertTargets.length; i++) {
     const def = alertDefs[i % alertDefs.length]
-    await db.collection('contacts').doc(alertTargets[i]).collection('contact_alerts').doc(`${alertTargets[i]}-alert-0`).set({
-      teamId, schedule_type: def.schedule_type, schedule_value: def.schedule_value,
-      message: def.message, show_in_app: def.show_in_app, archived_at: null, created_at: ts(daysFromNow(-3)),
-    })
+    await db
+      .collection('contacts')
+      .doc(alertTargets[i])
+      .collection('contact_alerts')
+      .doc(`${alertTargets[i]}-alert-0`)
+      .set({
+        teamId,
+        schedule_type: def.schedule_type,
+        schedule_value: def.schedule_value,
+        message: def.message,
+        show_in_app: def.show_in_app,
+        archived_at: null,
+        created_at: ts(daysFromNow(-3)),
+      })
   }
 
   // ── goals & tasks ──────────────────────────────────────────────────────────
@@ -819,67 +2055,139 @@ async function seedDemoTeam(profile: SectorProfile) {
     for (let g = 0; g < numGoals; g++) {
       const def = profile.goals[(i + g) % profile.goals.length]
       const goalId = `${id}-goal-${g}`
-      const status = (i < 3 && g === 0) ? 'in_progress' : 'open'
-      await db.collection('contacts').doc(id).collection('goals').doc(goalId).set({
-        type: 'goal', title: def.title, description: def.description, status,
-        categories: def.categories, created_by: 'coach', created_at: ts(daysFromNow(-28)),
-        target_date: ts(daysFromNow(60)), completed_at: null,
-      })
+      const status = i < 3 && g === 0 ? 'in_progress' : 'open'
+      await db
+        .collection('contacts')
+        .doc(id)
+        .collection('goals')
+        .doc(goalId)
+        .set({
+          type: 'goal',
+          title: def.title,
+          description: def.description,
+          status,
+          categories: def.categories,
+          created_by: 'coach',
+          created_at: ts(daysFromNow(-28)),
+          target_date: ts(daysFromNow(60)),
+          completed_at: null,
+        })
       if (status === 'in_progress') {
         for (let e = 0; e < 2; e++) {
-          await db.collection('contacts').doc(id).collection('goals').doc(goalId).collection('evaluations').doc(`${goalId}-eval-${e}`).set({
-            evaluated_at: ts(daysFromNow(-14 + e * 7)), evaluated_by: 'coach', score: 3 + e,
-            notes: e === 0 ? 'Good start — keep practising.' : 'Visible improvement over last session.',
-            status_after: 'in_progress', edited: false,
-          })
+          await db
+            .collection('contacts')
+            .doc(id)
+            .collection('goals')
+            .doc(goalId)
+            .collection('evaluations')
+            .doc(`${goalId}-eval-${e}`)
+            .set({
+              evaluated_at: ts(daysFromNow(-14 + e * 7)),
+              evaluated_by: 'coach',
+              score: 3 + e,
+              notes:
+                e === 0
+                  ? 'Good start — keep practising.'
+                  : 'Visible improvement over last session.',
+              status_after: 'in_progress',
+              edited: false,
+            })
         }
       }
     }
     const taskId = `${id}-task-0`
     const taskDone = i % 3 === 0
-    await db.collection('contacts').doc(id).collection('goals').doc(taskId).set({
-      type: 'task', title: profile.tasks[i % profile.tasks.length], description: null,
-      status: taskDone ? 'achieved' : 'open', categories: [], created_by: 'coach',
-      created_at: ts(daysFromNow(-7)), target_date: ts(daysFromNow(7)),
-      completed_at: taskDone ? ts(daysFromNow(-2)) : null,
-    })
+    await db
+      .collection('contacts')
+      .doc(id)
+      .collection('goals')
+      .doc(taskId)
+      .set({
+        type: 'task',
+        title: profile.tasks[i % profile.tasks.length],
+        description: null,
+        status: taskDone ? 'achieved' : 'open',
+        categories: [],
+        created_by: 'coach',
+        created_at: ts(daysFromNow(-7)),
+        target_date: ts(daysFromNow(7)),
+        completed_at: taskDone ? ts(daysFromNow(-2)) : null,
+      })
   }
 
   // ── past-session participants + bookings ──────────────────────────────────
-  const studentIdxs = pool.map((c, i) => ({ c, i })).filter((x) => x.c.type === 'student').map((x) => x.i)
+  const studentIdxs = pool
+    .map((c, i) => ({ c, i }))
+    .filter((x) => x.c.type === 'student')
+    .map((x) => x.i)
   for (let i = 0; i < pastCount; i++) {
     const sid = sessionIds[i]
     if (!sid) continue
-    const target = 4 + (i * 3) % 6
-    const attending = studentIdxs.filter((_, k) => ((k + i) % studentIdxs.length) < target).slice(0, target)
+    const target = 4 + ((i * 3) % 6)
+    const attending = studentIdxs
+      .filter((_, k) => (k + i) % studentIdxs.length < target)
+      .slice(0, target)
     for (const idx of attending) {
       const cs = pool[idx]
       const contactId = contactIds[idx]
-      await db.collection('sessions').doc(sid).collection('participants').doc(contactId).set({
-        contactId, session: sid, firstname: cs.firstname, lastname: cs.lastname,
-        fullname: `${cs.lastname} ${cs.firstname}`, joinedAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
-        checkedInBy: 'seed',
-      })
+      await db
+        .collection('sessions')
+        .doc(sid)
+        .collection('participants')
+        .doc(contactId)
+        .set({
+          contactId,
+          session: sid,
+          firstname: cs.firstname,
+          lastname: cs.lastname,
+          fullname: `${cs.lastname} ${cs.firstname}`,
+          joinedAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
+          checkedInBy: 'seed',
+        })
     }
     await db.collection('sessions').doc(sid).update({ participants_count: attending.length })
   }
 
   // upcoming-session bookings from trial/external contacts
-  const bookingIdxs = pool.map((c, i) => ({ c, i })).filter((x) => x.c.type !== 'student').map((x) => x.i).slice(0, 4)
-  const sessionBookingCounts = new Map<string, { bookings_count: number; trial_bookings_count: number }>()
+  const bookingIdxs = pool
+    .map((c, i) => ({ c, i }))
+    .filter((x) => x.c.type !== 'student')
+    .map((x) => x.i)
+    .slice(0, 4)
+  const sessionBookingCounts = new Map<
+    string,
+    { bookings_count: number; trial_bookings_count: number }
+  >()
   for (let i = 0; i < bookingIdxs.length; i++) {
     const idx = bookingIdxs[i]
     const b = pool[idx]
     const sessionId = sessionIds[pastCount + (i < 2 ? 1 : 3)]
     if (!sessionId) continue
-    await db.collection('sessions').doc(sessionId).collection('bookings').doc(`${teamId}-booking-${i}`).set({
-      teamId, contact: contactIds[idx], session: sessionId,
-      email: `${slugEmail(b)}.${teamId}@example.com`, firstname: b.firstname, lastname: b.lastname,
-      phone: '', is_new_contact: true, fromPortal: true, joinedAt: ts(daysFromNow(-2)),
-      status: 'pending', booking_token: `tok-${teamId}-${i}`,
-    })
-    const cur = sessionBookingCounts.get(sessionId) ?? { bookings_count: 0, trial_bookings_count: 0 }
-    cur.bookings_count++; cur.trial_bookings_count++
+    await db
+      .collection('sessions')
+      .doc(sessionId)
+      .collection('bookings')
+      .doc(`${teamId}-booking-${i}`)
+      .set({
+        teamId,
+        contact: contactIds[idx],
+        session: sessionId,
+        email: `${slugEmail(b)}.${teamId}@example.com`,
+        firstname: b.firstname,
+        lastname: b.lastname,
+        phone: '',
+        is_new_contact: true,
+        fromPortal: true,
+        joinedAt: ts(daysFromNow(-2)),
+        status: 'pending',
+        booking_token: `tok-${teamId}-${i}`,
+      })
+    const cur = sessionBookingCounts.get(sessionId) ?? {
+      bookings_count: 0,
+      trial_bookings_count: 0,
+    }
+    cur.bookings_count++
+    cur.trial_bookings_count++
     sessionBookingCounts.set(sessionId, cur)
   }
   for (const [sessionId, counts] of sessionBookingCounts) {
@@ -888,19 +2196,41 @@ async function seedDemoTeam(profile: SectorProfile) {
 
   // ── team activity log ─────────────────────────────────────────────────────
   const logEntries = [
-    { event: 'contact_add',             desc: `New trial contact ${pool[bookingIdxs[0]]?.firstname ?? 'lead'} added from portal.`, contact: contactIds[bookingIdxs[0]] },
-    { event: 'session_participant_add', desc: `${pool[0].firstname} ${pool[0].lastname} checked into ${activities[0].name}.`, contact: contactIds[0] },
-    { event: 'subscription_change',     desc: `${pool[1].firstname} ${pool[1].lastname} switched to ${subscriptions.find((s) => s.kind === 'annual')?.name ?? 'Annual'}.`, contact: contactIds[1] },
-    { event: 'booking_confirmed',       desc: 'Trial booking confirmed for an upcoming session.', contact: contactIds[bookingIdxs[0]] },
+    {
+      event: 'contact_add',
+      desc: `New trial contact ${pool[bookingIdxs[0]]?.firstname ?? 'lead'} added from portal.`,
+      contact: contactIds[bookingIdxs[0]],
+    },
+    {
+      event: 'session_participant_add',
+      desc: `${pool[0].firstname} ${pool[0].lastname} checked into ${activities[0].name}.`,
+      contact: contactIds[0],
+    },
+    {
+      event: 'subscription_change',
+      desc: `${pool[1].firstname} ${pool[1].lastname} switched to ${subscriptions.find((s) => s.kind === 'annual')?.name ?? 'Annual'}.`,
+      contact: contactIds[1],
+    },
+    {
+      event: 'booking_confirmed',
+      desc: 'Trial booking confirmed for an upcoming session.',
+      contact: contactIds[bookingIdxs[0]],
+    },
   ]
   for (let i = 0; i < logEntries.length; i++) {
     const e = logEntries[i]
     if (!e.contact) continue
-    await db.collection('teams').doc(teamId).collection('activity_log').doc(`${teamId}-log-${i}`).set({
-      event: e.event, created_at: ts(daysFromNow(-i - 1)),
-      parameters: { description: e.desc },
-      refs: { contact: e.contact, user: teamId },
-    })
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('activity_log')
+      .doc(`${teamId}-log-${i}`)
+      .set({
+        event: e.event,
+        created_at: ts(daysFromNow(-i - 1)),
+        parameters: { description: e.desc },
+        refs: { contact: e.contact, user: teamId },
+      })
   }
 
   // ── automations (Studio tier) ─────────────────────────────────────────────────
@@ -910,16 +2240,35 @@ async function seedDemoTeam(profile: SectorProfile) {
   for (let ei = 0; ei < profile.events.length; ei++) {
     const e = profile.events[ei]
     const eventId = `${teamId}-event-${ei}`
-    const maxInvite = [Math.min(12, contactCount), Math.min(8, contactCount), Math.min(10, contactCount)][ei]
-    let sentCount = 0, attendeeCount = 0
+    const maxInvite = [
+      Math.min(12, contactCount),
+      Math.min(8, contactCount),
+      Math.min(10, contactCount),
+    ][ei]
+    let sentCount = 0,
+      attendeeCount = 0
     const startIdx = ei * 3
 
-    await db.collection('events').doc(eventId).set({
-      teamId, title: e.title, type: e.type, fee: e.fee, description: e.description, location: e.location,
-      start: ts(daysFromNow(e.startOffset)), end: ts(hoursOffset(daysFromNow(e.startOffset), e.durationH)),
-      status: 'open', participants_count: 0, attendees_count: 0, invitations_sent_count: 0,
-      deleted_at: null, createdBy: uid, created_at: ts(daysFromNow(-10)),
-    })
+    await db
+      .collection('events')
+      .doc(eventId)
+      .set({
+        teamId,
+        title: e.title,
+        type: e.type,
+        fee: e.fee,
+        description: e.description,
+        location: e.location,
+        start: ts(daysFromNow(e.startOffset)),
+        end: ts(hoursOffset(daysFromNow(e.startOffset), e.durationH)),
+        status: 'open',
+        participants_count: 0,
+        attendees_count: 0,
+        invitations_sent_count: 0,
+        deleted_at: null,
+        createdBy: uid,
+        created_at: ts(daysFromNow(-10)),
+      })
 
     for (let j = 0; j < maxInvite; j++) {
       const cidx = (startIdx + j) % pool.length
@@ -930,34 +2279,78 @@ async function seedDemoTeam(profile: SectorProfile) {
       const hasOpened = ['opened', 'responded', 'declined'].includes(status)
       const hasRsvp = ['responded', 'declined'].includes(status)
 
-      await db.collection('events').doc(eventId).collection('invitations').doc(contactId).set({
-        contactId, firstname: c.firstname, lastname: c.lastname, email: `${slugEmail(c)}.${teamId}@example.com`,
-        status, token, link: `https://linyup.com/portal/event-invitation?token=${token}`, eventId, sentBy: uid,
-        sentAt: ts(daysFromNow(-7)), firstOpenedAt: hasOpened ? ts(daysFromNow(-5)) : null,
-        lastOpenedAt: hasOpened ? ts(daysFromNow(-3)) : null, respondedAt: hasRsvp ? ts(daysFromNow(-2)) : null,
-      })
+      await db
+        .collection('events')
+        .doc(eventId)
+        .collection('invitations')
+        .doc(contactId)
+        .set({
+          contactId,
+          firstname: c.firstname,
+          lastname: c.lastname,
+          email: `${slugEmail(c)}.${teamId}@example.com`,
+          status,
+          token,
+          link: `https://linyup.com/public/event-invitation?token=${token}`,
+          eventId,
+          sentBy: uid,
+          sentAt: ts(daysFromNow(-7)),
+          firstOpenedAt: hasOpened ? ts(daysFromNow(-5)) : null,
+          lastOpenedAt: hasOpened ? ts(daysFromNow(-3)) : null,
+          respondedAt: hasRsvp ? ts(daysFromNow(-2)) : null,
+        })
       sentCount++
       if (status === 'responded') {
         attendeeCount++
-        await db.collection('events').doc(eventId).collection('attendees').doc(contactId).set({
-          contactId, firstname: c.firstname, lastname: c.lastname, email: `${slugEmail(c)}.${teamId}@example.com`,
-          notes: j === 0 ? 'Really looking forward to this!' : null, respondedAt: ts(daysFromNow(-2)),
-        })
+        await db
+          .collection('events')
+          .doc(eventId)
+          .collection('attendees')
+          .doc(contactId)
+          .set({
+            contactId,
+            firstname: c.firstname,
+            lastname: c.lastname,
+            email: `${slugEmail(c)}.${teamId}@example.com`,
+            notes: j === 0 ? 'Really looking forward to this!' : null,
+            respondedAt: ts(daysFromNow(-2)),
+          })
       }
     }
-    await db.collection('events').doc(eventId).update({
-      invitations_sent_count: sentCount, attendees_count: attendeeCount, last_invitation_sent_at: ts(daysFromNow(-7)),
-    })
+    await db
+      .collection('events')
+      .doc(eventId)
+      .update({
+        invitations_sent_count: sentCount,
+        attendees_count: attendeeCount,
+        last_invitation_sent_at: ts(daysFromNow(-7)),
+      })
   }
+
+  // ── installed plugins + their demo data (website, online courses, gamification) ──
+  await seedTeamPlugins(profile, teamId, uid)
+
+  // ── team weekly reports (1 year of history → dashboard trend charts) ────────
+  await seedWeeklyReports(teamId)
 
   // ── saas_subscriptions (active Studio; gateway_type null = manually managed) ──
   const nowTs = ts(now())
-  await db.collection('saas_subscriptions').doc(teamId).set({
-    teamId, plan: 'studio', status: 'active', trial_ends_at: null,
-    current_period_start: ts(daysFromNow(-30)), current_period_end: ts(daysFromNow(1)),
-    cancel_at_period_end: false, gateway_type: null, gateway_data: null,
-    created_at: ts(daysFromNow(-220)), updated_at: nowTs,
-  })
+  await db
+    .collection('saas_subscriptions')
+    .doc(teamId)
+    .set({
+      teamId,
+      plan: 'studio',
+      status: 'active',
+      trial_ends_at: null,
+      current_period_start: ts(daysFromNow(-30)),
+      current_period_end: ts(daysFromNow(1)),
+      cancel_at_period_end: false,
+      gateway_type: null,
+      gateway_data: null,
+      created_at: ts(daysFromNow(-220)),
+      updated_at: nowTs,
+    })
 
   // ── student auth user (custom-token identity matching generateAuthToken) ───
   const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
@@ -966,16 +2359,26 @@ async function seedDemoTeam(profile: SectorProfile) {
   const sessionExpires = Date.now() + STUDENT_SESSION_MS
   const studentEmail = `${slugEmail(pool[studentIdx])}.${teamId}@example.com`
   await upsertAuthUser({
-    uid: studentUid, email: studentEmail,
+    uid: studentUid,
+    email: studentEmail,
     displayName: `${pool[studentIdx].firstname} ${pool[studentIdx].lastname}`,
     password: DEMO_PASSWORD,
     claims: { contactId: studentContactId, teamId, sessionExpires, email: studentEmail },
   })
-  await db.collection('auth_tokens').doc(`${teamId}-seed-student`).set({
-    contactId: studentContactId, teamId, createdBy: uid, sessionExpires, created_at: ts(now()),
-  })
+  await db
+    .collection('auth_tokens')
+    .doc(`${teamId}-seed-student`)
+    .set({
+      contactId: studentContactId,
+      teamId,
+      createdBy: uid,
+      sessionExpires,
+      created_at: ts(now()),
+    })
 
-  console.log(`   ✓ ${teamName} (${profile.sector}) — ${contactCount} contacts, ${sessionDefs.length} sessions`)
+  console.log(
+    `   ✓ ${teamName} (${profile.sector}) — ${contactCount} contacts, ${sessionDefs.length} sessions`
+  )
 }
 
 // ── automations seed (templates + presets + rules + logs) ─────────────────────
@@ -986,83 +2389,516 @@ async function seedAutomations(teamId: string, language: string) {
 
   const templates = [
     {
-      id: `${teamId}-tmpl-welcome`, system_key: `lib_trial_welcome:${language}`,
-      name: 'Welcome to your first class', body_mode: 'markdown', language, active: true,
+      id: `${teamId}-tmpl-welcome`,
+      system_key: `lib_trial_welcome:${language}`,
+      name: 'Welcome to your first class',
+      body_mode: 'markdown',
+      language,
+      active: true,
       subject: 'Welcome to {{teamName}}, {{firstname}}!',
       body: 'Hi {{firstname}},\n\nWe are so excited to welcome you to **{{teamName}}** for your first class! Come a few minutes early, wear comfortable clothes, and bring water.\n\nSee you soon!\n\nThe {{teamName}} team',
     },
     {
-      id: `${teamId}-tmpl-winback`, system_key: `lib_winback:${language}`,
-      name: 'We miss you', body_mode: 'markdown', language, active: true,
+      id: `${teamId}-tmpl-winback`,
+      system_key: `lib_winback:${language}`,
+      name: 'We miss you',
+      body_mode: 'markdown',
+      language,
+      active: true,
       subject: '{{firstname}}, we miss you at {{teamName}}',
-      body: "Hi {{firstname}},\n\nIt has been a while since your last visit. We would love to see you back. Reply to this email and we will help you find a class that fits your schedule.\n\nThe {{teamName}} team",
+      body: 'Hi {{firstname}},\n\nIt has been a while since your last visit. We would love to see you back. Reply to this email and we will help you find a class that fits your schedule.\n\nThe {{teamName}} team',
     },
   ]
   for (const t of templates) {
-    await teamRef.collection('outreach_templates').doc(t.id).set({
-      name: t.name, subject: t.subject, body: t.body, body_mode: t.body_mode,
-      language: t.language, active: t.active, system_key: t.system_key, created_at: ts(daysFromNow(-60)),
-    })
+    await teamRef
+      .collection('outreach_templates')
+      .doc(t.id)
+      .set({
+        name: t.name,
+        subject: t.subject,
+        body: t.body,
+        body_mode: t.body_mode,
+        language: t.language,
+        active: t.active,
+        system_key: t.system_key,
+        created_at: ts(daysFromNow(-60)),
+      })
   }
 
   const presets = [
-    { id: `${teamId}-preset-assessment`, name: 'Assessment reminder', description: 'Fires 10 sessions before the next assessment.', schedule_type: 'sessions_countdown', schedule_value: 10, message: 'Assessment is coming up — review goals together.', show_in_app: true },
-    { id: `${teamId}-preset-renewal`,    name: 'Membership renewal',  description: 'One-off reminder on a chosen date.',           schedule_type: 'datetime',            schedule_value: null, message: 'Membership renewal is due — confirm payment details.', show_in_app: true },
+    {
+      id: `${teamId}-preset-assessment`,
+      name: 'Assessment reminder',
+      description: 'Fires 10 sessions before the next assessment.',
+      schedule_type: 'sessions_countdown',
+      schedule_value: 10,
+      message: 'Assessment is coming up — review goals together.',
+      show_in_app: true,
+    },
+    {
+      id: `${teamId}-preset-renewal`,
+      name: 'Membership renewal',
+      description: 'One-off reminder on a chosen date.',
+      schedule_type: 'datetime',
+      schedule_value: null,
+      message: 'Membership renewal is due — confirm payment details.',
+      show_in_app: true,
+    },
   ]
   for (const p of presets) {
-    await teamRef.collection('alert_presets').doc(p.id).set({
-      name: p.name, description: p.description, schedule_type: p.schedule_type,
-      schedule_value: p.schedule_value, message: p.message, show_in_app: p.show_in_app, created_at: ts(daysFromNow(-60)),
-    })
+    await teamRef
+      .collection('alert_presets')
+      .doc(p.id)
+      .set({
+        name: p.name,
+        description: p.description,
+        schedule_type: p.schedule_type,
+        schedule_value: p.schedule_value,
+        message: p.message,
+        show_in_app: p.show_in_app,
+        created_at: ts(daysFromNow(-60)),
+      })
   }
 
   const rules = [
     {
-      id: `${teamId}-rule-welcome`, name: 'Welcome new trial', active: true, system_key: 'lib_trial_welcome',
+      id: `${teamId}-rule-welcome`,
+      name: 'Welcome new trial',
+      active: true,
+      system_key: 'lib_trial_welcome',
       trigger: { type: 'contact_created' },
       conditions: [{ type: 'contact_type', value: 'trial' }],
       actions: [{ type: 'send_email', templateId: `${teamId}-tmpl-welcome` }],
     },
     {
-      id: `${teamId}-rule-winback`, name: 'Win back inactive members', active: true, system_key: 'lib_winback',
+      id: `${teamId}-rule-winback`,
+      name: 'Win back inactive members',
+      active: true,
+      system_key: 'lib_winback',
       trigger: { type: 'schedule_daily' },
-      conditions: [{ type: 'contact_type', value: 'student' }, { type: 'inactivity_days', value: 30 }],
+      conditions: [
+        { type: 'contact_type', value: 'student' },
+        { type: 'inactivity_days', value: 30 },
+      ],
       actions: [
         { type: 'send_email', templateId: `${teamId}-tmpl-winback` },
         { type: 'assign_tag', tag: 'win-back' },
       ],
     },
     {
-      id: `${teamId}-rule-milestone`, name: 'Celebrate 50-session milestone', active: false, system_key: 'lib_milestone_50',
+      id: `${teamId}-rule-milestone`,
+      name: 'Celebrate 50-session milestone',
+      active: false,
+      system_key: 'lib_milestone_50',
       trigger: { type: 'session_ended' },
       conditions: [{ type: 'sessions_attended_exactly', value: 50 }],
-      actions: [{ type: 'create_alert', presetId: `${teamId}-preset-assessment` }, { type: 'log_activity', message: '{{firstname}} reached 50 sessions 🎉' }],
+      actions: [
+        { type: 'create_alert', presetId: `${teamId}-preset-assessment` },
+        { type: 'log_activity', message: '{{firstname}} reached 50 sessions 🎉' },
+      ],
     },
   ]
   for (const r of rules) {
-    await teamRef.collection('automation_rules').doc(r.id).set({
-      name: r.name, active: r.active, trigger: r.trigger, conditions: r.conditions,
-      actions: r.actions, system_key: r.system_key, created_at: ts(daysFromNow(-60)), updated_at: ts(daysFromNow(-5)),
-    })
+    await teamRef
+      .collection('automation_rules')
+      .doc(r.id)
+      .set({
+        name: r.name,
+        active: r.active,
+        trigger: r.trigger,
+        conditions: r.conditions,
+        actions: r.actions,
+        system_key: r.system_key,
+        created_at: ts(daysFromNow(-60)),
+        updated_at: ts(daysFromNow(-5)),
+      })
   }
 
   const logs = [
-    { id: `${teamId}-alog-0`, rule_id: `${teamId}-rule-welcome`, rule_name: 'Welcome new trial',          trigger_type: 'contact_created', trigger_tier: 'event',     contacts_matched: 1, actions_executed: 1, actions_failed: 0, days: 1 },
-    { id: `${teamId}-alog-1`, rule_id: `${teamId}-rule-winback`, rule_name: 'Win back inactive members', trigger_type: 'schedule_daily',  trigger_tier: 'scheduled', contacts_matched: 3, actions_executed: 6, actions_failed: 0, days: 2 },
+    {
+      id: `${teamId}-alog-0`,
+      rule_id: `${teamId}-rule-welcome`,
+      rule_name: 'Welcome new trial',
+      trigger_type: 'contact_created',
+      trigger_tier: 'event',
+      contacts_matched: 1,
+      actions_executed: 1,
+      actions_failed: 0,
+      days: 1,
+    },
+    {
+      id: `${teamId}-alog-1`,
+      rule_id: `${teamId}-rule-winback`,
+      rule_name: 'Win back inactive members',
+      trigger_type: 'schedule_daily',
+      trigger_tier: 'scheduled',
+      contacts_matched: 3,
+      actions_executed: 6,
+      actions_failed: 0,
+      days: 2,
+    },
   ]
   for (const l of logs) {
-    await teamRef.collection('automation_logs').doc(l.id).set({
-      rule_id: l.rule_id, rule_name: l.rule_name, triggered_at: ts(daysFromNow(-l.days)),
-      trigger_type: l.trigger_type, trigger_tier: l.trigger_tier,
-      contacts_matched: l.contacts_matched, actions_executed: l.actions_executed, actions_failed: l.actions_failed,
+    await teamRef
+      .collection('automation_logs')
+      .doc(l.id)
+      .set({
+        rule_id: l.rule_id,
+        rule_name: l.rule_name,
+        triggered_at: ts(daysFromNow(-l.days)),
+        trigger_type: l.trigger_type,
+        trigger_tier: l.trigger_tier,
+        contacts_matched: l.contacts_matched,
+        actions_executed: l.actions_executed,
+        actions_failed: l.actions_failed,
+      })
+  }
+}
+
+// ── plugin install + demo data (website, online courses, gamification) ────────
+// All six demo teams install the same plugins with near-identical, sector-
+// neutral content (parameterised by team name / sport) so every /try tenant
+// showcases the full plugin surface.
+
+async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: string) {
+  const { teamName, teamSlug, description, accentColor, instructors, activities, locations } =
+    profile
+
+  // ── installed_plugins (the install = the feature gate) ──────────────────────
+  const plugins: { id: string; config?: Record<string, unknown> }[] = [
+    { id: 'gamification' }, // seed already writes scores/badges/settings
+    { id: 'website' },
+    { id: 'online-courses' },
+  ]
+  for (const p of plugins) {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('installed_plugins')
+      .doc(p.id)
+      .set({
+        pluginId: p.id,
+        teamId,
+        installedAt: ts(daysFromNow(-200)),
+        installedBy: uid,
+        status: 'active',
+        config: p.config ?? {},
+        updated_at: ts(daysFromNow(-200)),
+      })
+  }
+
+  // ── website plugin: a published one-page site (draft + public snapshot) ──────
+  // hero + about + schedule (live sessions) + contact — every section populated.
+  const siteSections = [
+    {
+      id: `${teamId}-sec-hero`,
+      type: 'hero',
+      headline: teamName,
+      subheadline: description,
+      align: 'center',
+      overlay: 45,
+      cta: { label: 'Book a Free Trial', action: 'booking' },
+    },
+    {
+      id: `${teamId}-sec-about`,
+      type: 'about',
+      heading: `About ${teamName}`,
+      imageSide: 'left',
+      body: `<p>${description}</p><p>Our coaches welcome every level — drop in for a free trial class, find your rhythm, and become part of a community that keeps showing up. Sessions run throughout the week at ${locations[0]}.</p>`,
+    },
+    {
+      id: `${teamId}-sec-schedule`,
+      type: 'schedule',
+      heading: 'Upcoming classes',
+      source: 'sessions',
+      windowDays: 14,
+    },
+    {
+      id: `${teamId}-sec-contact`,
+      type: 'contact',
+      heading: 'Visit us',
+      address: '12 Studio Lane, 8001 Zürich',
+      phone: '+41 44 123 45 67',
+      email: `${teamSlug}@linyup.com`,
+      hours: 'Mon–Fri 7:00–21:00 · Sat 9:00–14:00',
+      mapQuery: 'Zürich, Switzerland',
+      showSocial: true,
+    },
+  ]
+  const siteMeta = {
+    title: teamName,
+    theme: 'light',
+    accentColor,
+    font: 'sans',
+    seo: { title: teamName, description },
+    header: { showNav: true, ctaLabel: 'Book now', ctaAction: 'booking' },
+    footer: { showSocial: true },
+  }
+  await db
+    .collection('site_drafts')
+    .doc(teamId)
+    .set({
+      teamId,
+      slug: teamSlug,
+      name: teamName,
+      enabled: true,
+      meta: siteMeta,
+      sections: siteSections,
+      updated_at: ts(daysFromNow(-12)),
+      updatedBy: uid,
     })
+  await db
+    .collection('site_published')
+    .doc(teamId)
+    .set({
+      teamId,
+      slug: teamSlug,
+      name: teamName,
+      meta: siteMeta,
+      sections: siteSections,
+      socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
+      showBranding: false, // studio plan
+      published_at: ts(daysFromNow(-12)),
+      updated_at: ts(daysFromNow(-12)),
+    })
+
+  // ── online courses plugin: 1 published + 1 draft course, each with modules ──
+  const primary = activities[0]?.name ?? 'Training'
+  const coach = instructors[0] ?? 'Your coach'
+  const courses = [
+    {
+      id: `${teamId}-course-foundations`,
+      title: `${primary} Foundations`,
+      summary: `A self-paced introduction to ${primary.toLowerCase()} — watch, learn, and practise between classes.`,
+      status: 'published' as const,
+      access: 'members' as const,
+      createdDaysAgo: 90,
+      modules: [
+        {
+          title: 'Welcome & basics',
+          lessons: [
+            {
+              title: 'What to expect',
+              type: 'text' as const,
+              body: `<p>Welcome to ${teamName}! Here is everything you need to know before your first class with ${coach}.</p>`,
+            },
+            {
+              title: 'Your first session',
+              type: 'video' as const,
+              body: '<p>A quick walkthrough of how a typical class runs.</p>',
+              media: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+              dur: 360,
+            },
+          ],
+        },
+        {
+          title: 'Core skills',
+          lessons: [
+            {
+              title: `${primary} fundamentals`,
+              type: 'text' as const,
+              body: '<p>The building blocks every member should master early on.</p>',
+            },
+            {
+              title: 'Drills to practise at home',
+              type: 'video' as const,
+              body: '<p>Three short drills you can do between classes.</p>',
+              media: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+              dur: 480,
+            },
+          ],
+        },
+        {
+          title: 'Going further',
+          lessons: [
+            {
+              title: 'Building consistency',
+              type: 'text' as const,
+              body: '<p>How to turn a few classes into a lasting habit.</p>',
+            },
+            {
+              title: 'Tracking your progress',
+              type: 'text' as const,
+              body: '<p>Use the app to follow your attendance and milestones.</p>',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: `${teamId}-course-welcome`,
+      title: `Getting started at ${teamName}`,
+      summary: 'Our values, etiquette, and how to get the most from your membership.',
+      status: 'draft' as const,
+      access: 'free' as const,
+      createdDaysAgo: 30,
+      modules: [
+        {
+          title: 'Before you arrive',
+          lessons: [
+            {
+              title: 'What to bring',
+              type: 'text' as const,
+              body: '<p>A short checklist for your first visit.</p>',
+            },
+            {
+              title: 'Studio etiquette',
+              type: 'text' as const,
+              body: '<p>A few simple norms that keep classes welcoming for everyone.</p>',
+            },
+          ],
+        },
+        {
+          title: 'Your membership',
+          lessons: [
+            {
+              title: 'Making the most of it',
+              type: 'text' as const,
+              body: '<p>Tips for booking, attending and progressing.</p>',
+            },
+          ],
+        },
+      ],
+    },
+  ]
+
+  for (const c of courses) {
+    let moduleCount = 0,
+      lessonCount = 0
+    const courseRef = db.collection('courses').doc(c.id)
+    for (let mi = 0; mi < c.modules.length; mi++) {
+      const m = c.modules[mi]
+      const moduleId = `${c.id}-m${mi}`
+      await courseRef
+        .collection('modules')
+        .doc(moduleId)
+        .set({
+          courseId: c.id,
+          teamId,
+          title: m.title,
+          order: mi,
+          created_at: ts(daysFromNow(-c.createdDaysAgo)),
+          updated_at: ts(daysFromNow(-c.createdDaysAgo)),
+        })
+      moduleCount++
+      for (let li = 0; li < m.lessons.length; li++) {
+        const l = m.lessons[li]
+        await courseRef
+          .collection('lessons')
+          .doc(`${moduleId}-l${li}`)
+          .set({
+            courseId: c.id,
+            moduleId,
+            teamId,
+            title: l.title,
+            type: l.type,
+            order: li,
+            body: l.body,
+            ...(l.type === 'video'
+              ? { mediaSource: 'youtube', mediaUrl: l.media, durationSeconds: l.dur }
+              : {}),
+            attachments: [],
+            created_at: ts(daysFromNow(-c.createdDaysAgo)),
+            updated_at: ts(daysFromNow(-c.createdDaysAgo)),
+          })
+        lessonCount++
+      }
+    }
+    await courseRef.set({
+      scope: 'team',
+      teamId,
+      title: c.title,
+      slug: `${c.id}`,
+      summary: c.summary,
+      status: c.status,
+      accessRule: { type: c.access },
+      moduleCount,
+      lessonCount,
+      order: 0,
+      created_at: ts(daysFromNow(-c.createdDaysAgo)),
+      updated_at: ts(daysFromNow(-c.createdDaysAgo)),
+      createdBy: uid,
+      archived_at: null,
+    })
+  }
+}
+
+// ── team weekly reports — a year of history so the dashboard trend charts
+// (Weekly trends, Trial funnel, Correlation, Engagement matrix, Bookings) show a
+// believable upward acquisition curve with weekly noise. Doc id = ISO week label
+// (matches the dashboard's dateToIsoWeek / buildWeekKeys). Shape mirrors the
+// generateWeeklyReports Cloud Function output.
+
+function scaleMap(map: Record<string, number>, factor: number): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries(map)) out[k] = Math.max(0, Math.round(v * factor))
+  return out
+}
+
+async function seedWeeklyReports(teamId: string) {
+  // Current-snapshot aggregates from the shared contact pool.
+  const byType: Record<string, number> = {}
+  const byStatus: Record<string, number> = {}
+  const byRecurrence: Record<string, number> = {}
+  const bySub: Record<string, number> = {}
+  for (const c of CONTACT_POOL) {
+    byType[c.type] = (byType[c.type] ?? 0) + 1
+    byStatus[c.status] = (byStatus[c.status] ?? 0) + 1
+    if (c.sub) {
+      bySub[`${teamId}-sub-${c.sub}`] = (bySub[`${teamId}-sub-${c.sub}`] ?? 0) + 1
+      const rec = c.sub === 'monthly' || c.sub === 'quarterly' || c.sub === 'annual' ? c.sub : null
+      if (rec) byRecurrence[rec] = (byRecurrence[rec] ?? 0) + 1
+    }
+  }
+  const curActive = CONTACT_POOL.length
+
+  const WEEKS = 52 // a full year of history → fills the dashboard's 4/8/13/26/52-week views
+  for (let w = WEEKS - 1; w >= 0; w--) {
+    const monday = mondayOfWeeksAgo(w)
+    const label = isoWeekLabel(monday)
+    const seed = `${teamId}-wr-${w}`
+    const progress = (WEEKS - 1 - w) / (WEEKS - 1) // 0 = oldest, 1 = current week
+    const ramp = 0.62 + 0.38 * progress
+    const factor = Math.min(1.05, Math.max(0.5, ramp + (seededRand(seed + 'n') - 0.5) * 0.08))
+
+    const coaching = 1 + Math.floor(seededRand(seed + 'co') * 2) // 1–2
+    const group = 5 + Math.floor(seededRand(seed + 'gp') * 2) // 5–6
+    const bookings = 1 + Math.round(progress * 4) + Math.floor(seededRand(seed + 'bk') * 2) // grows 1→6
+    const bkCoaching = Math.min(bookings, Math.floor(seededRand(seed + 'bc') * 2))
+
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('team_weekly_reports')
+      .doc(label)
+      .set({
+        iso_week: label,
+        generated_at: ts(new Date(monday.getTime() + 6 * 86_400_000)),
+        active_contacts_count: Math.max(0, Math.round(curActive * factor)),
+        contacts_count_by_type: scaleMap(byType, factor),
+        contacts_count_by_membership_status: scaleMap(byStatus, factor),
+        contacts_count_by_subscription_type: scaleMap(bySub, factor),
+        contacts_count_by_recurrence: scaleMap(byRecurrence, factor),
+        sessions_count: group + coaching,
+        sessions_count_by_type: { group_class: group, coaching },
+        bookings_count: bookings,
+        bookings_count_by_type: { group_class: bookings - bkCoaching, coaching: bkCoaching },
+        trial_conversions_count:
+          seededRand(seed + 'cv') < 0.25 + progress * 0.4
+            ? 1 + Math.floor(seededRand(seed + 'cv2') * 2)
+            : 0,
+        trial_dropouts_count: seededRand(seed + 'dp') < 0.3 ? 1 : 0,
+      })
   }
 }
 
 // ── auth helpers ──────────────────────────────────────────────────────────────
 
 async function upsertAuthUser(opts: {
-  uid: string; email: string; displayName: string; password: string
+  uid: string
+  email: string
+  displayName: string
+  password: string
   claims?: Record<string, unknown>
 }) {
   const { uid, email, displayName, password, claims } = opts
@@ -1071,7 +2907,9 @@ async function upsertAuthUser(opts: {
   } catch (e: unknown) {
     const code = (e as { code?: string }).code
     if (code === 'auth/uid-already-exists' || code === 'auth/email-already-exists') {
-      await auth.updateUser(uid, { email, password, displayName, emailVerified: true }).catch(() => {})
+      await auth
+        .updateUser(uid, { email, password, displayName, emailVerified: true })
+        .catch(() => {})
     } else {
       throw e
     }
@@ -1082,7 +2920,8 @@ async function upsertAuthUser(opts: {
 function slugEmail(c: PoolEntry): string {
   return `${c.firstname}.${c.lastname}`
     .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // strip combining diacritics
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // strip combining diacritics
     .replace(/[^a-z]+/g, '.')
     .replace(/\.+/g, '.')
     .replace(/^\.|\.$/g, '')
@@ -1093,7 +2932,9 @@ function slugEmail(c: PoolEntry): string {
 // credential as the Admin SDK.
 async function enableEmailPasswordSignIn() {
   const credential = admin.app().options.credential!
-  const token = await (credential as { getAccessToken(): Promise<{ access_token: string }> }).getAccessToken()
+  const token = await (
+    credential as { getAccessToken(): Promise<{ access_token: string }> }
+  ).getAccessToken()
   const headers = {
     Authorization: `Bearer ${token.access_token}`,
     'Content-Type': 'application/json',
@@ -1157,11 +2998,14 @@ async function main() {
   console.log('   All accounts: plan=studio, status=active (full feature set, no trial wall).')
   console.log('   Portals:')
   for (const p of SECTOR_PROFILES) {
-    console.log(`   ${p.teamName.padEnd(26)} → /portal/${p.teamSlug}`)
+    console.log(`   ${p.teamName.padEnd(26)} → /public/bio-link/${p.teamSlug}`)
   }
   console.log('')
 }
 
 main()
   .then(() => process.exit(0))
-  .catch((err) => { console.error('❌ Seed failed:', err); process.exit(1) })
+  .catch((err) => {
+    console.error('❌ Seed failed:', err)
+    process.exit(1)
+  })

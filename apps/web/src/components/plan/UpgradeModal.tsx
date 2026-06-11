@@ -1,7 +1,13 @@
 'use client'
 
 import { Lock, Check } from 'lucide-react'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Link } from '@/i18n/navigation'
 import { usePlan } from '@/hooks/usePlan'
 import { usePlanName } from '@/hooks/usePlanName'
@@ -15,10 +21,22 @@ interface UpgradeModalProps {
 }
 
 const PLAN_COLOR: Record<SaasPlan, { icon: string; badge: string; check: string }> = {
-  free:         { icon: 'text-slate-500',  badge: 'bg-slate-50 dark:bg-slate-900/20', check: 'text-slate-500' },
-  coach:        { icon: 'text-sky-500',    badge: 'bg-sky-50 dark:bg-sky-900/20',    check: 'text-sky-500' },
-  studio:       { icon: 'text-amber-500',  badge: 'bg-amber-50 dark:bg-amber-900/20', check: 'text-amber-500' },
-  organization: { icon: 'text-violet-500', badge: 'bg-violet-50 dark:bg-violet-900/20', check: 'text-violet-500' },
+  free: {
+    icon: 'text-slate-500',
+    badge: 'bg-slate-50 dark:bg-slate-900/20',
+    check: 'text-slate-500',
+  },
+  coach: { icon: 'text-sky-500', badge: 'bg-sky-50 dark:bg-sky-900/20', check: 'text-sky-500' },
+  studio: {
+    icon: 'text-amber-500',
+    badge: 'bg-amber-50 dark:bg-amber-900/20',
+    check: 'text-amber-500',
+  },
+  organization: {
+    icon: 'text-violet-500',
+    badge: 'bg-violet-50 dark:bg-violet-900/20',
+    check: 'text-violet-500',
+  },
 }
 
 const PLAN_CONTENT: Record<SaasPlan, { tagline: string; features: string[] }> = {
@@ -26,11 +44,7 @@ const PLAN_CONTENT: Record<SaasPlan, { tagline: string; features: string[] }> = 
   // keep the Record exhaustive.
   free: {
     tagline: 'Get started for free with up to 10 contacts.',
-    features: [
-      'Up to 10 active contacts',
-      'Public booking portal',
-      'Sessions, subscriptions & goals',
-    ],
+    features: ['Up to 10 active contacts', 'Public bio link', 'Sessions, subscriptions & goals'],
   },
   coach: {
     tagline: 'Everything a solo coach needs to run a professional practice.',
@@ -67,15 +81,20 @@ export function UpgradeModal({ open, onClose, feature, minPlan }: UpgradeModalPr
   const label = planName(required)
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose()
+      }}
+    >
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 ${colors.badge}`}>
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 ${colors.badge}`}
+          >
             <Lock className={`h-5 w-5 ${colors.icon}`} />
           </div>
-          <DialogTitle className="text-lg">
-            Upgrade to {label}
-          </DialogTitle>
+          <DialogTitle className="text-lg">Upgrade to {label}</DialogTitle>
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground -mt-1">{content.tagline}</p>

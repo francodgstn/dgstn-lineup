@@ -22,7 +22,6 @@ import {
 } from '@linyup/shared'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
-
 const VALID_PLANS: SaasPlan[] = ['coach', 'studio', 'organization']
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -36,7 +35,7 @@ async function getPlatformStripeAdapter(): Promise<StripeAdapter> {
   const secretKey = await getSecret('stripe-secret-key')
   return StripeAdapter.withSecretKey(
     { type: 'stripe', publishable_key: '', currency: 'chf' },
-    secretKey,
+    secretKey
   )
 }
 
@@ -48,8 +47,10 @@ async function assertOwner(uid: string, teamId: string): Promise<void> {
 /** Stripe lookup keys for a team's currently-active add-on plugins (carried
  * into checkout so trial add-ons keep working once the coach pays). */
 async function activeAddonLookupKeys(teamId: string): Promise<string[]> {
-  const snap = await admin.firestore()
-    .collection(TEAMS_COLLECTION).doc(teamId)
+  const snap = await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
     .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
     .where('status', '==', 'active')
     .get()
@@ -82,13 +83,17 @@ export const createCheckoutSession = onCall(async (request) => {
 
   // Rate limit: max 3 checkout session requests per team per hour
   const oneHourAgo = Timestamp.fromMillis(Date.now() - 60 * 60 * 1000)
-  const recentAttempts = await admin.firestore()
+  const recentAttempts = await admin
+    .firestore()
     .collection('saas_checkout_attempts')
     .where('teamId', '==', teamId)
     .where('created_at', '>', oneHourAgo)
     .get()
   if (recentAttempts.size >= 3) {
-    throw new HttpsError('resource-exhausted', 'Too many checkout requests. Please try again in an hour.')
+    throw new HttpsError(
+      'resource-exhausted',
+      'Too many checkout requests. Please try again in an hour.'
+    )
   }
 
   // Get owner email for pre-filling checkout
@@ -121,12 +126,16 @@ export const createCheckoutSession = onCall(async (request) => {
   }
 
   // Log attempt for rate limiting (non-blocking)
-  admin.firestore().collection('saas_checkout_attempts').add({
-    teamId,
-    plan,
-    sessionId: session.sessionId,
-    created_at: FieldValue.serverTimestamp(),
-  }).catch((err) => console.error('Failed to log checkout attempt:', err))
+  admin
+    .firestore()
+    .collection('saas_checkout_attempts')
+    .add({
+      teamId,
+      plan,
+      sessionId: session.sessionId,
+      created_at: FieldValue.serverTimestamp(),
+    })
+    .catch((err) => console.error('Failed to log checkout attempt:', err))
 
   return { url: session.url }
 })
@@ -135,203 +144,220 @@ export const createCheckoutSession = onCall(async (request) => {
 // handleStripeWebhook — onRequest: validates signature, syncs saas_subscriptions
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const handleStripeWebhook = onRequest(
-  { invoker: 'public' },
-  async (req, res) => {
-    if (req.method !== 'POST') {
-      res.status(405).send('Method Not Allowed')
-      return
-    }
-
-    const signature = req.headers['stripe-signature']
-    if (!signature || typeof signature !== 'string') {
-      console.error('Missing stripe-signature header')
-      res.status(400).send('Missing stripe-signature header')
-      return
-    }
-
-    let webhookSecret: string
-    try {
-      webhookSecret = await getSecret('stripe-webhook-secret')
-    } catch (err) {
-      console.error('Failed to load stripe-webhook-secret:', err)
-      res.status(500).send('Internal error')
-      return
-    }
-
-    const adapter = await getPlatformStripeAdapter()
-
-    let event: Awaited<ReturnType<typeof adapter.parseWebhook>>
-    try {
-      event = await adapter.parseWebhook({
-        payload: req.rawBody ?? req.body,
-        signature,
-        secret: webhookSecret,
-      })
-    } catch (err) {
-      console.error('Webhook signature verification failed:', err)
-      res.status(400).send('Invalid webhook signature')
-      return
-    }
-
-    // Either teamId or orgId must be present in the event metadata to route the update
-    const entityId = event.teamId ?? event.orgId
-    const entityType = event.orgId ? 'org' : 'team'
-    if (!entityId) {
-      console.log(`Webhook event ${event.eventId} has no teamId or orgId — skipping`)
-      res.status(200).send('ok')
-      return
-    }
-
-    const subRef = admin.firestore().collection('saas_subscriptions').doc(entityId)
-
-    try {
-      // Idempotency check
-      const existing = await subRef.get()
-      if (existing.exists) {
-        const lastEventId = existing.data()?.gateway_data?.last_event_id
-        if (lastEventId === event.eventId) {
-          console.log(`Webhook event ${event.eventId} already processed — skipping`)
-          res.status(200).send('ok')
-          return
-        }
-      }
-
-      const now = FieldValue.serverTimestamp()
-
-      // Add-on subscription items present on this subscription (Coach plugins).
-      const addonActive = (event.items ?? [])
-        .map((it) => ({
-          itemId: it.itemId,
-          pluginId: it.lookupKey ? pluginIdForAddonLookupKey(it.lookupKey) : undefined,
-        }))
-        .filter((x): x is { itemId: string; pluginId: string } => !!x.pluginId)
-
-      // Map event to saas_subscriptions fields
-      const update: Record<string, unknown> = {
-        entity_type: entityType,
-        entity_id: entityId,
-        teamId: entityId, // kept for backwards compatibility
-        updated_at: now,
-        'gateway_data.last_event_id': event.eventId,
-        gateway_type: 'stripe',
-      }
-
-      switch (event.type) {
-        case 'subscription.created':
-          update.status = 'active'
-          update['gateway_data.subscription_id'] = event.subscriptionId
-          update['gateway_data.customer_id'] = event.customerId
-          if (event.plan) update.plan = event.plan
-          if (event.currentPeriodStart) update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
-          if (event.currentPeriodEnd) update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
-          update.cancel_at_period_end = false
-          update.trial_ends_at = null
-          update['gateway_data.activeAddOns'] = addonActive
-          if (!existing.exists) {
-            update.created_at = now
-          }
-          break
-
-        case 'subscription.updated':
-          if (event.plan) update.plan = event.plan
-          if (event.currentPeriodStart) update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
-          if (event.currentPeriodEnd) update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
-          if (event.cancelAtPeriodEnd !== undefined) update.cancel_at_period_end = event.cancelAtPeriodEnd
-          if (event.subscriptionId) update['gateway_data.subscription_id'] = event.subscriptionId
-          if (event.customerId) update['gateway_data.customer_id'] = event.customerId
-          update['gateway_data.activeAddOns'] = addonActive
-          break
-
-        case 'subscription.cancelled':
-          update.status = 'cancelled'
-          update.cancel_at_period_end = false
-          break
-
-        case 'payment.succeeded':
-          update.status = 'active'
-          update['gateway_data.last_invoice_id'] = event.lastInvoiceId
-          update['gateway_data.last_payment_status'] = 'succeeded'
-          break
-
-        case 'payment.failed':
-          update.status = 'past_due'
-          update['gateway_data.last_invoice_id'] = event.lastInvoiceId
-          update['gateway_data.last_payment_status'] = 'failed'
-          break
-      }
-
-      await subRef.set(update, { merge: true })
-
-      // Sync plan + status to the owning entity so usePlan() / useOrg() stays accurate
-      const entityUpdate: Record<string, unknown> = { updated_at: now }
-      if (update.plan) entityUpdate.plan = update.plan
-      if (update.status) entityUpdate.plan_status = update.status
-      // Reactivation: paying clears any legacy wall-era suspension markers.
-      if (update.status === 'active') {
-        entityUpdate.suspended_at = FieldValue.delete()
-        entityUpdate.purge_at = FieldValue.delete()
-      }
-
-      // A cancelled team subscription lands the team on the Free plan (the sub
-      // doc keeps status 'cancelled' for billing history). Orgs keep the
-      // legacy mirror + propagation below.
-      if (entityType === 'team' && update.status === 'cancelled') {
-        await downgradeTeamToFree(entityId, { fromTrial: false })
-      } else if (entityType === 'org') {
-        await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
-        // When org subscription lapses, propagate to linked teams
-        if (update.status === 'cancelled' || update.status === 'past_due') {
-          const orgTeamsSnap = await admin.firestore()
-            .collection('organizations').doc(entityId)
-            .collection('org_teams')
-            .where('status', '==', 'active')
-            .get()
-          const batch = admin.firestore().batch()
-          for (const doc of orgTeamsSnap.docs) {
-            batch.update(admin.firestore().collection('teams').doc(doc.id), {
-              plan_status: update.status,
-              updated_at: now,
-            })
-          }
-          await batch.commit()
-        }
-      } else {
-        await admin.firestore().collection('teams').doc(entityId).update(entityUpdate)
-      }
-
-      // Reconcile plugin add-on installs against the subscription's items.
-      // Handles trial→paid conversion (carried add-ons become paid items) and
-      // external removals. Only touches paid add-on installs (config.addonItemId).
-      if (entityType === 'team' && (event.type === 'subscription.created' || event.type === 'subscription.updated')) {
-        const installsCol = admin.firestore()
-          .collection(TEAMS_COLLECTION).doc(entityId)
-          .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
-        const activeIds = new Set(addonActive.map((a) => a.pluginId))
-        for (const a of addonActive) {
-          await installsCol.doc(a.pluginId).set(
-            { pluginId: a.pluginId, teamId: entityId, status: 'active', config: { addonItemId: a.itemId }, updated_at: now },
-            { merge: true },
-          )
-        }
-        const installsSnap = await installsCol.get()
-        for (const d of installsSnap.docs) {
-          const cfg = (d.data().config ?? {}) as { addonItemId?: string }
-          if (cfg.addonItemId && !activeIds.has(d.id)) {
-            await installsCol.doc(d.id).delete()
-          }
-        }
-      }
-
-      console.log(`Processed webhook ${event.type} (${event.eventId}) for ${entityType} ${entityId}`)
-    } catch (err) {
-      // Log but always return 200 so Stripe doesn't retry forever
-      console.error(`Failed to process webhook event ${event.eventId}:`, err)
-    }
-
-    res.status(200).send('ok')
+export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed')
+    return
   }
-)
+
+  const signature = req.headers['stripe-signature']
+  if (!signature || typeof signature !== 'string') {
+    console.error('Missing stripe-signature header')
+    res.status(400).send('Missing stripe-signature header')
+    return
+  }
+
+  let webhookSecret: string
+  try {
+    webhookSecret = await getSecret('stripe-webhook-secret')
+  } catch (err) {
+    console.error('Failed to load stripe-webhook-secret:', err)
+    res.status(500).send('Internal error')
+    return
+  }
+
+  const adapter = await getPlatformStripeAdapter()
+
+  let event: Awaited<ReturnType<typeof adapter.parseWebhook>>
+  try {
+    event = await adapter.parseWebhook({
+      payload: req.rawBody ?? req.body,
+      signature,
+      secret: webhookSecret,
+    })
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err)
+    res.status(400).send('Invalid webhook signature')
+    return
+  }
+
+  // Either teamId or orgId must be present in the event metadata to route the update
+  const entityId = event.teamId ?? event.orgId
+  const entityType = event.orgId ? 'org' : 'team'
+  if (!entityId) {
+    console.log(`Webhook event ${event.eventId} has no teamId or orgId — skipping`)
+    res.status(200).send('ok')
+    return
+  }
+
+  const subRef = admin.firestore().collection('saas_subscriptions').doc(entityId)
+
+  try {
+    // Idempotency check
+    const existing = await subRef.get()
+    if (existing.exists) {
+      const lastEventId = existing.data()?.gateway_data?.last_event_id
+      if (lastEventId === event.eventId) {
+        console.log(`Webhook event ${event.eventId} already processed — skipping`)
+        res.status(200).send('ok')
+        return
+      }
+    }
+
+    const now = FieldValue.serverTimestamp()
+
+    // Add-on subscription items present on this subscription (Coach plugins).
+    const addonActive = (event.items ?? [])
+      .map((it) => ({
+        itemId: it.itemId,
+        pluginId: it.lookupKey ? pluginIdForAddonLookupKey(it.lookupKey) : undefined,
+      }))
+      .filter((x): x is { itemId: string; pluginId: string } => !!x.pluginId)
+
+    // Map event to saas_subscriptions fields
+    const update: Record<string, unknown> = {
+      entity_type: entityType,
+      entity_id: entityId,
+      teamId: entityId, // kept for backwards compatibility
+      updated_at: now,
+      'gateway_data.last_event_id': event.eventId,
+      gateway_type: 'stripe',
+    }
+
+    switch (event.type) {
+      case 'subscription.created':
+        update.status = 'active'
+        update['gateway_data.subscription_id'] = event.subscriptionId
+        update['gateway_data.customer_id'] = event.customerId
+        if (event.plan) update.plan = event.plan
+        if (event.currentPeriodStart)
+          update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
+        if (event.currentPeriodEnd)
+          update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
+        update.cancel_at_period_end = false
+        update.trial_ends_at = null
+        update['gateway_data.activeAddOns'] = addonActive
+        if (!existing.exists) {
+          update.created_at = now
+        }
+        break
+
+      case 'subscription.updated':
+        if (event.plan) update.plan = event.plan
+        if (event.currentPeriodStart)
+          update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
+        if (event.currentPeriodEnd)
+          update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
+        if (event.cancelAtPeriodEnd !== undefined)
+          update.cancel_at_period_end = event.cancelAtPeriodEnd
+        if (event.subscriptionId) update['gateway_data.subscription_id'] = event.subscriptionId
+        if (event.customerId) update['gateway_data.customer_id'] = event.customerId
+        update['gateway_data.activeAddOns'] = addonActive
+        break
+
+      case 'subscription.cancelled':
+        update.status = 'cancelled'
+        update.cancel_at_period_end = false
+        break
+
+      case 'payment.succeeded':
+        update.status = 'active'
+        update['gateway_data.last_invoice_id'] = event.lastInvoiceId
+        update['gateway_data.last_payment_status'] = 'succeeded'
+        break
+
+      case 'payment.failed':
+        update.status = 'past_due'
+        update['gateway_data.last_invoice_id'] = event.lastInvoiceId
+        update['gateway_data.last_payment_status'] = 'failed'
+        break
+    }
+
+    await subRef.set(update, { merge: true })
+
+    // Sync plan + status to the owning entity so usePlan() / useOrg() stays accurate
+    const entityUpdate: Record<string, unknown> = { updated_at: now }
+    if (update.plan) entityUpdate.plan = update.plan
+    if (update.status) entityUpdate.plan_status = update.status
+    // Reactivation: paying clears any legacy wall-era suspension markers.
+    if (update.status === 'active') {
+      entityUpdate.suspended_at = FieldValue.delete()
+      entityUpdate.purge_at = FieldValue.delete()
+    }
+
+    // A cancelled team subscription lands the team on the Free plan (the sub
+    // doc keeps status 'cancelled' for billing history). Orgs keep the
+    // legacy mirror + propagation below.
+    if (entityType === 'team' && update.status === 'cancelled') {
+      await downgradeTeamToFree(entityId, { fromTrial: false })
+    } else if (entityType === 'org') {
+      await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
+      // When org subscription lapses, propagate to linked teams
+      if (update.status === 'cancelled' || update.status === 'past_due') {
+        const orgTeamsSnap = await admin
+          .firestore()
+          .collection('organizations')
+          .doc(entityId)
+          .collection('org_teams')
+          .where('status', '==', 'active')
+          .get()
+        const batch = admin.firestore().batch()
+        for (const doc of orgTeamsSnap.docs) {
+          batch.update(admin.firestore().collection('teams').doc(doc.id), {
+            plan_status: update.status,
+            updated_at: now,
+          })
+        }
+        await batch.commit()
+      }
+    } else {
+      await admin.firestore().collection('teams').doc(entityId).update(entityUpdate)
+    }
+
+    // Reconcile plugin add-on installs against the subscription's items.
+    // Handles trial→paid conversion (carried add-ons become paid items) and
+    // external removals. Only touches paid add-on installs (config.addonItemId).
+    if (
+      entityType === 'team' &&
+      (event.type === 'subscription.created' || event.type === 'subscription.updated')
+    ) {
+      const installsCol = admin
+        .firestore()
+        .collection(TEAMS_COLLECTION)
+        .doc(entityId)
+        .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+      const activeIds = new Set(addonActive.map((a) => a.pluginId))
+      for (const a of addonActive) {
+        await installsCol
+          .doc(a.pluginId)
+          .set(
+            {
+              pluginId: a.pluginId,
+              teamId: entityId,
+              status: 'active',
+              config: { addonItemId: a.itemId },
+              updated_at: now,
+            },
+            { merge: true }
+          )
+      }
+      const installsSnap = await installsCol.get()
+      for (const d of installsSnap.docs) {
+        const cfg = (d.data().config ?? {}) as { addonItemId?: string }
+        if (cfg.addonItemId && !activeIds.has(d.id)) {
+          await installsCol.doc(d.id).delete()
+        }
+      }
+    }
+
+    console.log(`Processed webhook ${event.type} (${event.eventId}) for ${entityType} ${entityId}`)
+  } catch (err) {
+    // Log but always return 200 so Stripe doesn't retry forever
+    console.error(`Failed to process webhook event ${event.eventId}:`, err)
+  }
+
+  res.status(200).send('ok')
+})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // cancelSaasSubscription — marks subscription to cancel at period end
@@ -350,7 +376,8 @@ export const cancelSaasSubscription = onCall(async (request) => {
 
   const subData = subDoc.data()!
   const subscriptionId = subData.gateway_data?.subscription_id as string | undefined
-  if (!subscriptionId) throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
+  if (!subscriptionId)
+    throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
 
   const adapter = await getPlatformStripeAdapter()
 
@@ -388,7 +415,8 @@ export const reactivateSaasSubscription = onCall(async (request) => {
 
   const subData = subDoc.data()!
   const subscriptionId = subData.gateway_data?.subscription_id as string | undefined
-  if (!subscriptionId) throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
+  if (!subscriptionId)
+    throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
 
   const adapter = await getPlatformStripeAdapter()
 
@@ -423,7 +451,8 @@ export const getBillingPortalUrl = onCall(async (request) => {
   if (!subDoc.exists) throw new HttpsError('not-found', 'No subscription found')
 
   const customerId = subDoc.data()?.gateway_data?.customer_id as string | undefined
-  if (!customerId) throw new HttpsError('failed-precondition', 'No Stripe customer found — contact support')
+  if (!customerId)
+    throw new HttpsError('failed-precondition', 'No Stripe customer found — contact support')
 
   const adapter = await getPlatformStripeAdapter()
   const hostingUrl = getHostingUrl()
@@ -497,12 +526,18 @@ export const activatePluginAddon = onCall(async (request) => {
   const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(teamId).get()
   const plan = teamSnap.data()?.plan as SaasPlan | undefined
   if (plan !== 'coach') {
-    throw new HttpsError('failed-precondition', 'Add-ons apply to the Coach plan; Studio/Org include all plugins')
+    throw new HttpsError(
+      'failed-precondition',
+      'Add-ons apply to the Coach plan; Studio/Org include all plugins'
+    )
   }
 
-  const installRef = admin.firestore()
-    .collection(TEAMS_COLLECTION).doc(teamId)
-    .collection(INSTALLED_PLUGINS_SUBCOLLECTION).doc(pluginId)
+  const installRef = admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+    .doc(pluginId)
 
   const subSnap = await admin.firestore().collection('saas_subscriptions').doc(teamId).get()
   const sub = subSnap.exists ? subSnap.data()! : null
@@ -514,29 +549,54 @@ export const activatePluginAddon = onCall(async (request) => {
     const adapter = await getPlatformStripeAdapter()
     let itemId: string
     try {
-      const res = await adapter.addSubscriptionItem({ subscriptionId: subscriptionId!, lookupKey: addon.stripeLookupKey })
+      const res = await adapter.addSubscriptionItem({
+        subscriptionId: subscriptionId!,
+        lookupKey: addon.stripeLookupKey,
+      })
       itemId = res.itemId
     } catch (err) {
       console.error('addSubscriptionItem failed:', err)
       throw new HttpsError('internal', 'Failed to add the add-on to your subscription')
     }
-    const current = ((sub?.gateway_data?.activeAddOns ?? []) as Array<{ pluginId: string; itemId: string }>)
-      .filter((a) => a.pluginId !== pluginId)
-    await admin.firestore().collection('saas_subscriptions').doc(teamId).set(
-      { gateway_data: { activeAddOns: [...current, { pluginId, itemId }] }, updated_at: FieldValue.serverTimestamp() },
-      { merge: true },
-    )
+    const current = (
+      (sub?.gateway_data?.activeAddOns ?? []) as Array<{ pluginId: string; itemId: string }>
+    ).filter((a) => a.pluginId !== pluginId)
+    await admin
+      .firestore()
+      .collection('saas_subscriptions')
+      .doc(teamId)
+      .set(
+        {
+          gateway_data: { activeAddOns: [...current, { pluginId, itemId }] },
+          updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
     await installRef.set(
-      { pluginId, teamId, installedAt: FieldValue.serverTimestamp(), installedBy: request.auth.uid, status: 'active', config: { addonItemId: itemId } },
-      { merge: true },
+      {
+        pluginId,
+        teamId,
+        installedAt: FieldValue.serverTimestamp(),
+        installedBy: request.auth.uid,
+        status: 'active',
+        config: { addonItemId: itemId },
+      },
+      { merge: true }
     )
     return { success: true, billed: true }
   }
 
   // Trial / no subscription → free during the trial.
   await installRef.set(
-    { pluginId, teamId, installedAt: FieldValue.serverTimestamp(), installedBy: request.auth.uid, status: 'active', config: { addonFreeTrial: true } },
-    { merge: true },
+    {
+      pluginId,
+      teamId,
+      installedAt: FieldValue.serverTimestamp(),
+      installedBy: request.auth.uid,
+      status: 'active',
+      config: { addonFreeTrial: true },
+    },
+    { merge: true }
   )
   return { success: true, billed: false }
 })
@@ -556,9 +616,12 @@ export const deactivatePluginAddon = onCall(async (request) => {
 
   await assertOwner(request.auth.uid, teamId)
 
-  const installRef = admin.firestore()
-    .collection(TEAMS_COLLECTION).doc(teamId)
-    .collection(INSTALLED_PLUGINS_SUBCOLLECTION).doc(pluginId)
+  const installRef = admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+    .doc(pluginId)
   const installSnap = await installRef.get()
   if (!installSnap.exists) return { success: true }
 
@@ -573,12 +636,20 @@ export const deactivatePluginAddon = onCall(async (request) => {
       throw new HttpsError('internal', 'Failed to remove the add-on from your subscription')
     }
     const subSnap = await admin.firestore().collection('saas_subscriptions').doc(teamId).get()
-    const current = ((subSnap.data()?.gateway_data?.activeAddOns ?? []) as Array<{ pluginId: string; itemId: string }>)
-      .filter((a) => a.pluginId !== pluginId)
-    await admin.firestore().collection('saas_subscriptions').doc(teamId).set(
-      { gateway_data: { activeAddOns: current }, updated_at: FieldValue.serverTimestamp() },
-      { merge: true },
-    )
+    const current = (
+      (subSnap.data()?.gateway_data?.activeAddOns ?? []) as Array<{
+        pluginId: string
+        itemId: string
+      }>
+    ).filter((a) => a.pluginId !== pluginId)
+    await admin
+      .firestore()
+      .collection('saas_subscriptions')
+      .doc(teamId)
+      .set(
+        { gateway_data: { activeAddOns: current }, updated_at: FieldValue.serverTimestamp() },
+        { merge: true }
+      )
   }
 
   await installRef.delete()
@@ -633,7 +704,8 @@ export const syncContactOverage = onSchedule(
   { schedule: 'every day 03:00', timeZone: 'Europe/Zurich', timeoutSeconds: 300, memory: '512MiB' },
   async () => {
     const db = admin.firestore()
-    const subsSnap = await db.collection('saas_subscriptions')
+    const subsSnap = await db
+      .collection('saas_subscriptions')
       .where('status', 'in', ['active', 'past_due'])
       .get()
 
@@ -654,11 +726,13 @@ export const syncContactOverage = onSchedule(
       // Active = non-archived, non-deleted (matches getActiveContacts).
       let used = 0
       try {
-        const agg = await db.collection(CONTACTS_COLLECTION)
+        const agg = await db
+          .collection(CONTACTS_COLLECTION)
           .where('teamId', '==', teamId)
           .where('deleted_at', '==', null)
           .where('archived_at', '==', null)
-          .count().get()
+          .count()
+          .get()
         used = agg.data().count
       } catch (err) {
         console.error(`[overage] count failed for team ${teamId}:`, err)
@@ -674,18 +748,29 @@ export const syncContactOverage = onSchedule(
           if (!adapter) adapter = await getPlatformStripeAdapter()
           if (!existing?.itemId) {
             const { itemId } = await adapter.addSubscriptionItem({
-              subscriptionId, lookupKey: EXTRA_CONTACT_STRIPE_LOOKUP_KEY, quantity: overage,
+              subscriptionId,
+              lookupKey: EXTRA_CONTACT_STRIPE_LOOKUP_KEY,
+              quantity: overage,
             })
             await subRef.set(
-              { gateway_data: { overage: { itemId, quantity: overage } }, updated_at: FieldValue.serverTimestamp() },
-              { merge: true },
+              {
+                gateway_data: { overage: { itemId, quantity: overage } },
+                updated_at: FieldValue.serverTimestamp(),
+              },
+              { merge: true }
             )
             console.log(`[overage] team ${teamId}: +item qty ${overage} (used ${used}/${included})`)
           } else if (existing.quantity !== overage) {
-            await adapter.updateSubscriptionItemQuantity({ itemId: existing.itemId, quantity: overage })
+            await adapter.updateSubscriptionItemQuantity({
+              itemId: existing.itemId,
+              quantity: overage,
+            })
             await subRef.set(
-              { gateway_data: { overage: { itemId: existing.itemId, quantity: overage } }, updated_at: FieldValue.serverTimestamp() },
-              { merge: true },
+              {
+                gateway_data: { overage: { itemId: existing.itemId, quantity: overage } },
+                updated_at: FieldValue.serverTimestamp(),
+              },
+              { merge: true }
             )
             console.log(`[overage] team ${teamId}: qty ${existing.quantity} → ${overage}`)
           }
@@ -693,8 +778,11 @@ export const syncContactOverage = onSchedule(
           if (!adapter) adapter = await getPlatformStripeAdapter()
           await adapter.removeSubscriptionItem({ itemId: existing.itemId })
           await subRef.set(
-            { gateway_data: { overage: FieldValue.delete() }, updated_at: FieldValue.serverTimestamp() },
-            { merge: true },
+            {
+              gateway_data: { overage: FieldValue.delete() },
+              updated_at: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
           )
           console.log(`[overage] team ${teamId}: removed overage item (used ${used}/${included})`)
         }
@@ -702,7 +790,7 @@ export const syncContactOverage = onSchedule(
         console.error(`[overage] sync failed for team ${teamId}:`, err)
       }
     }
-  },
+  }
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -729,12 +817,17 @@ async function downgradeTeamToFree(teamId: string, opts: { fromTrial: boolean })
   if (opts.fromTrial) update.downgraded_from_trial_at = FieldValue.serverTimestamp()
   await db.collection(TEAMS_COLLECTION).doc(teamId).update(update)
 
-  const installs = await db.collection(TEAMS_COLLECTION).doc(teamId)
+  const installs = await db
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
     .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
     .where('status', '==', 'active')
     .get()
   for (const d of installs.docs) {
-    await d.ref.set({ status: 'inactive', updated_at: FieldValue.serverTimestamp() }, { merge: true })
+    await d.ref.set(
+      { status: 'inactive', updated_at: FieldValue.serverTimestamp() },
+      { merge: true }
+    )
   }
 }
 
@@ -780,7 +873,9 @@ export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> 
   if (dryRun) {
     const c = await db.collection('referrals').where('team_id', '==', teamId).count().get()
     console.log(`${tag} team ${teamId}: would delete ${c.data().count} referrals`)
-    console.log(`${tag} team ${teamId}: would delete saas_subscription + checkout attempts + site draft + published site + team doc & subcollections + Storage teams/${teamId}/`)
+    console.log(
+      `${tag} team ${teamId}: would delete saas_subscription + checkout attempts + site draft + published site + team doc & subcollections + Storage teams/${teamId}/`
+    )
     return
   }
   const refSnap = await db.collection('referrals').where('team_id', '==', teamId).get()
@@ -789,32 +884,55 @@ export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> 
   // Top-level docs keyed by teamId.
   const attempts = await db.collection('saas_checkout_attempts').where('teamId', '==', teamId).get()
   for (const d of attempts.docs) await d.ref.delete()
-  await db.collection('saas_subscriptions').doc(teamId).delete().catch(() => undefined)
+  await db
+    .collection('saas_subscriptions')
+    .doc(teamId)
+    .delete()
+    .catch(() => undefined)
   // Website plugin: private draft + public snapshot (both keyed by teamId).
-  await db.collection(SITE_DRAFTS_COLLECTION).doc(teamId).delete().catch(() => undefined)
-  await db.collection(SITE_PUBLISHED_COLLECTION).doc(teamId).delete().catch(() => undefined)
+  await db
+    .collection(SITE_DRAFTS_COLLECTION)
+    .doc(teamId)
+    .delete()
+    .catch(() => undefined)
+  await db
+    .collection(SITE_PUBLISHED_COLLECTION)
+    .doc(teamId)
+    .delete()
+    .catch(() => undefined)
 
   // Team doc + ALL its subcollections (team_members, installed_plugins, …).
   await db.recursiveDelete(db.collection(TEAMS_COLLECTION).doc(teamId))
 
   // Team Storage files.
   try {
-    await admin.storage().bucket().deleteFiles({ prefix: `teams/${teamId}/` })
+    await admin
+      .storage()
+      .bucket()
+      .deleteFiles({ prefix: `teams/${teamId}/` })
   } catch (err) {
     console.error(`[trial] storage cleanup failed for ${teamId}:`, err)
   }
 }
 
 /** Notify the owner that the trial ended and the team is now on the Free plan. */
-async function sendTrialExpiredEmail(teamId: string, team: FirebaseFirestore.DocumentData): Promise<void> {
+async function sendTrialExpiredEmail(
+  teamId: string,
+  team: FirebaseFirestore.DocumentData
+): Promise<void> {
   const db = admin.firestore()
   let ownerEmail: string | undefined
 
   const ownerUid = team.primaryContact as string | undefined
   if (ownerUid) ownerEmail = (await db.collection('users').doc(ownerUid).get()).data()?.email
   if (!ownerEmail) {
-    const m = await db.collection(TEAMS_COLLECTION).doc(teamId).collection('team_members')
-      .where('role', '==', 'owner').limit(1).get()
+    const m = await db
+      .collection(TEAMS_COLLECTION)
+      .doc(teamId)
+      .collection('team_members')
+      .where('role', '==', 'owner')
+      .limit(1)
+      .get()
     if (!m.empty) {
       const uid = m.docs[0].data().userId as string
       ownerEmail = (await db.collection('users').doc(uid).get()).data()?.email
@@ -825,7 +943,8 @@ async function sendTrialExpiredEmail(teamId: string, team: FirebaseFirestore.Doc
   const billingUrl = `${getHostingUrl()}/billing`
   const { html, text } = buildEmailTemplate({
     title: 'Your Linyup trial has ended',
-    body: `Your free trial of <strong>${team.name ?? 'Linyup'}</strong> has ended, and your ` +
+    body:
+      `Your free trial of <strong>${team.name ?? 'Linyup'}</strong> has ended, and your ` +
       `account is now on the <strong>Free plan</strong> — up to 10 active contacts, single user. ` +
       `All your data is kept and everything keeps working within those limits. ` +
       `Upgrade any time to lift them.<br><br><a href="${billingUrl}">See plans &amp; upgrade</a>`,
@@ -840,7 +959,8 @@ export const handleTrialLifecycle = onSchedule(
     const nowTs = Timestamp.fromMillis(Date.now())
 
     // Phase 1 — lapsed trials land on the Free plan (data kept, no wall).
-    const expiring = await db.collection(TEAMS_COLLECTION)
+    const expiring = await db
+      .collection(TEAMS_COLLECTION)
       .where('plan_status', '==', 'trial')
       .where('trial_ends_at', '<=', nowTs)
       .limit(200)
@@ -849,7 +969,9 @@ export const handleTrialLifecycle = onSchedule(
       const teamId = doc.id
       try {
         await downgradeTeamToFree(teamId, { fromTrial: true })
-        await sendTrialExpiredEmail(teamId, doc.data()).catch((e) => console.error(`[trial] email failed ${teamId}:`, e))
+        await sendTrialExpiredEmail(teamId, doc.data()).catch((e) =>
+          console.error(`[trial] email failed ${teamId}:`, e)
+        )
         console.log(`[trial] downgraded lapsed trial ${teamId} to free`)
       } catch (err) {
         console.error(`[trial] downgrade failed ${teamId}:`, err)
@@ -859,7 +981,8 @@ export const handleTrialLifecycle = onSchedule(
     // Transitional sweep (wall era → free era): convert teams stranded on the
     // legacy 'expired' status to the Free plan. Remove this block once no
     // 'expired' teams remain in any environment.
-    const legacy = await db.collection(TEAMS_COLLECTION)
+    const legacy = await db
+      .collection(TEAMS_COLLECTION)
       .where('plan_status', '==', 'expired')
       .limit(200)
       .get()
@@ -871,5 +994,5 @@ export const handleTrialLifecycle = onSchedule(
         console.error(`[trial] legacy conversion failed ${doc.id}:`, err)
       }
     }
-  },
-)
+  }
+)

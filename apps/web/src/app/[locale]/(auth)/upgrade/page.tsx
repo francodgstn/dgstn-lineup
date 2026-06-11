@@ -18,11 +18,7 @@ const PLAN_SECTIONS: Record<SaasPlan, FeatureSection[]> = {
   free: [
     {
       heading: 'Get started',
-      items: [
-        'Up to 10 active contacts',
-        'Single user',
-        'Public booking portal & profile page',
-      ],
+      items: ['Up to 10 active contacts', 'Single user', 'Public bio link & profile page'],
     },
     {
       heading: 'Included',
@@ -38,7 +34,7 @@ const PLAN_SECTIONS: Record<SaasPlan, FeatureSection[]> = {
     {
       heading: 'Sessions & operations',
       items: [
-        'Group sessions, class scheduling & public booking portal',
+        'Group sessions, class scheduling & public bio link',
         'QR check-in, sign-up forms & public profile page',
         'Booking confirmations, reminders & no-show alerts',
       ],
@@ -46,7 +42,7 @@ const PLAN_SECTIONS: Record<SaasPlan, FeatureSection[]> = {
     {
       heading: '1:1 coaching',
       items: [
-        'Availability templates & portal-based slot booking',
+        'Availability templates & bio-link-based slot booking',
         'Calendar invites (.ics), booking & reminder emails',
         'Session notes & slot waiting list',
       ],
@@ -104,17 +100,11 @@ const PLAN_SECTIONS: Record<SaasPlan, FeatureSection[]> = {
   organization: [
     {
       heading: 'Multi-team management',
-      items: [
-        'Multiple teams under one organisation',
-        'Central admin console + unified data view',
-      ],
+      items: ['Multiple teams under one organisation', 'Central admin console + unified data view'],
     },
     {
       heading: 'Coordination & platform',
-      items: [
-        'Cross-team events & messaging',
-        'API access + org-level roles & permissions',
-      ],
+      items: ['Cross-team events & messaging', 'API access + org-level roles & permissions'],
     },
   ],
 }
@@ -124,71 +114,91 @@ const PLAN_SECTIONS: Record<SaasPlan, FeatureSection[]> = {
 // never hardcode them here (the 'studio' tier is sold as "Studio").
 
 const PLAN_TAGLINES: Record<SaasPlan, string> = {
-  free:         'Just getting started',
-  coach:        'Solo operators & personal trainers',
-  studio:       'Growing studios, gyms & clubs',
+  free: 'Just getting started',
+  coach: 'Solo operators & personal trainers',
+  studio: 'Growing studios, gyms & clubs',
   organization: 'Multi-location & franchises',
 }
 
 const PLAN_INCLUDES: Partial<Record<SaasPlan, string>> = {
-  coach:        'Everything in Free, with 30 contacts, plus:',
-  studio:       'Everything in Coach, plus:',
+  coach: 'Everything in Free, with 30 contacts, plus:',
+  studio: 'Everything in Coach, plus:',
   organization: 'Everything in Studio, plus:',
 }
 
-const PLAN_COLOR: Record<SaasPlan, {
-  ring: string
-  badge: string
-  check: string
-  heading: string
-  includes: string
-}> = {
+const PLAN_COLOR: Record<
+  SaasPlan,
+  {
+    ring: string
+    badge: string
+    check: string
+    heading: string
+    includes: string
+  }
+> = {
   free: {
-    ring:     'border-slate-300 dark:border-slate-700',
-    badge:    'bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300',
-    check:    'text-slate-500',
-    heading:  'text-slate-700 dark:text-slate-400',
-    includes: 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-900/20 dark:border-slate-800 dark:text-slate-300',
+    ring: 'border-slate-300 dark:border-slate-700',
+    badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300',
+    check: 'text-slate-500',
+    heading: 'text-slate-700 dark:text-slate-400',
+    includes:
+      'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-900/20 dark:border-slate-800 dark:text-slate-300',
   },
   coach: {
-    ring:     'border-sky-300 dark:border-sky-700',
-    badge:    'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
-    check:    'text-sky-500',
-    heading:  'text-sky-700 dark:text-sky-400',
-    includes: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/20 dark:border-sky-800 dark:text-sky-300',
+    ring: 'border-sky-300 dark:border-sky-700',
+    badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+    check: 'text-sky-500',
+    heading: 'text-sky-700 dark:text-sky-400',
+    includes:
+      'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/20 dark:border-sky-800 dark:text-sky-300',
   },
   studio: {
-    ring:     'border-amber-300 dark:border-amber-700',
-    badge:    'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    check:    'text-amber-500',
-    heading:  'text-amber-700 dark:text-amber-400',
-    includes: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300',
+    ring: 'border-amber-300 dark:border-amber-700',
+    badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    check: 'text-amber-500',
+    heading: 'text-amber-700 dark:text-amber-400',
+    includes:
+      'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300',
   },
   organization: {
-    ring:     'border-violet-300 dark:border-violet-700',
-    badge:    'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-    check:    'text-violet-500',
-    heading:  'text-violet-700 dark:text-violet-400',
-    includes: 'bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-900/20 dark:border-violet-800 dark:text-violet-300',
+    ring: 'border-violet-300 dark:border-violet-700',
+    badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+    check: 'text-violet-500',
+    heading: 'text-violet-700 dark:text-violet-400',
+    includes:
+      'bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-900/20 dark:border-violet-800 dark:text-violet-300',
   },
 }
 
 // ─── plan card ────────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, isCurrent, currentPlan }: { plan: SaasPlan; isCurrent: boolean; currentPlan: SaasPlan | null }) {
+function PlanCard({
+  plan,
+  isCurrent,
+  currentPlan,
+}: {
+  plan: SaasPlan
+  isCurrent: boolean
+  currentPlan: SaasPlan | null
+}) {
   const t = useTranslations('Upgrade')
   const planName = usePlanName()
   const colors = PLAN_COLOR[plan]
   const sections = PLAN_SECTIONS[plan]
   const includes = PLAN_INCLUDES[plan]
-  const isUpgrade = !isCurrent && PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan ?? 'free')
+  const isUpgrade =
+    !isCurrent && PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan ?? 'free')
 
   return (
-    <div className={`relative flex flex-col rounded-xl border-2 p-6 ${
-      isCurrent ? `${colors.ring} shadow-md` : 'border-border'
-    }`}>
+    <div
+      className={`relative flex flex-col rounded-xl border-2 p-6 ${
+        isCurrent ? `${colors.ring} shadow-md` : 'border-border'
+      }`}
+    >
       {isCurrent && (
-        <span className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${colors.badge}`}>
+        <span
+          className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${colors.badge}`}
+        >
           {t('currentPlan')}
         </span>
       )}
@@ -201,7 +211,9 @@ function PlanCard({ plan, isCurrent, currentPlan }: { plan: SaasPlan; isCurrent:
 
       {/* "Everything in X, plus" banner */}
       {includes && (
-        <div className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium mb-4 ${colors.includes}`}>
+        <div
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium mb-4 ${colors.includes}`}
+        >
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
           {includes}
         </div>
@@ -218,7 +230,9 @@ function PlanCard({ plan, isCurrent, currentPlan }: { plan: SaasPlan; isCurrent:
               {section.items.map((item) => (
                 <li key={item} className="flex items-start gap-2 text-sm">
                   <Check className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${colors.check}`} />
-                  <span className={isCurrent ? 'text-foreground' : 'text-muted-foreground'}>{item}</span>
+                  <span className={isCurrent ? 'text-foreground' : 'text-muted-foreground'}>
+                    {item}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -274,9 +288,7 @@ export default function UpgradePage() {
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground text-center">
-        {t('contactNote')}
-      </p>
+      <p className="text-xs text-muted-foreground text-center">{t('contactNote')}</p>
     </div>
   )
 }

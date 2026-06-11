@@ -22,7 +22,7 @@ export type SiteFont = 'sans' | 'serif' | 'rounded'
 export type SectionAlign = 'left' | 'center'
 export type SiteCtaAction = 'booking' | 'membership' | 'url'
 
-/** A call-to-action button. `booking`/`membership` resolve to the team's portal
+/** A call-to-action button. `booking`/`membership` resolve to the team's bio-link
  *  flows; `url` opens an external link. */
 export interface SiteCta {
   label: string

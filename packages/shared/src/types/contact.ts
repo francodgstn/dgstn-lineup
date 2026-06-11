@@ -45,7 +45,7 @@ export interface Contact {
   // Address
   address?: ContactAddress
 
-  // Team-level membership (legacy / portal signup flow)
+  // Team-level membership (legacy / bio-link signup flow)
   type?: ContactType
   membership_status?: MembershipStatus
   membership_active?: boolean
@@ -78,11 +78,11 @@ export interface Contact {
   times_top5?: number
   custom_badges?: string[]
 
-  // Booking / portal counters (managed by Cloud Functions)
+  // Booking / bio-link counters (managed by Cloud Functions)
   pending_bookings_count?: number
   conversions_count?: number
 
-  // Portal login tracking
+  // Bio-link login tracking
   login_count?: number
   last_login_at?: Timestamp
 

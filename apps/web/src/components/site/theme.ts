@@ -18,7 +18,9 @@ export function buildPalette(meta: SiteMeta, systemDark: boolean): SitePalette {
   const accent = meta.accentColor || '#6366f1'
   return isDark
     ? {
-        isDark, accent, onAccent: '#ffffff',
+        isDark,
+        accent,
+        onAccent: '#ffffff',
         bg: '#0b0f19',
         surface: 'rgba(255,255,255,0.05)',
         border: 'rgba(255,255,255,0.12)',
@@ -26,7 +28,9 @@ export function buildPalette(meta: SiteMeta, systemDark: boolean): SitePalette {
         muted: 'rgba(248,250,252,0.62)',
       }
     : {
-        isDark, accent, onAccent: '#ffffff',
+        isDark,
+        accent,
+        onAccent: '#ffffff',
         bg: '#ffffff',
         surface: '#f8fafc',
         border: 'rgba(15,23,42,0.08)',
@@ -41,13 +45,13 @@ export const FONT_STACK: Record<SiteFont, string> = {
   rounded: '"ui-rounded", "SF Pro Rounded", "Nunito", "Quicksand", system-ui, sans-serif',
 }
 
-/** Resolve a CTA to an href. booking/membership → portal flows; url → external. */
+/** Resolve a CTA to an href. booking/membership → bio-link flows; url → external. */
 export function ctaHref(
   cta: Pick<SiteCta, 'action' | 'url'> | undefined,
-  slug: string,
+  slug: string
 ): string | undefined {
   if (!cta) return undefined
-  if (cta.action === 'booking') return `/portal/${slug}/booking`
-  if (cta.action === 'membership') return `/portal/${slug}/signup`
+  if (cta.action === 'booking') return `/public/bio-link/${slug}/booking`
+  if (cta.action === 'membership') return `/public/bio-link/${slug}/signup`
   return cta.url || undefined
 }

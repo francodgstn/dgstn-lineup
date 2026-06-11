@@ -93,7 +93,10 @@ export const confirmReferral = onCall(async (request) => {
 
   if (!referralId) throw new HttpsError('invalid-argument', 'Missing required field: referralId')
   if (!action || !(action in TRANSITIONS)) {
-    throw new HttpsError('invalid-argument', `Invalid action. Must be one of: ${Object.keys(TRANSITIONS).join(', ')}`)
+    throw new HttpsError(
+      'invalid-argument',
+      `Invalid action. Must be one of: ${Object.keys(TRANSITIONS).join(', ')}`
+    )
   }
 
   const userId = request.auth.uid
@@ -116,8 +119,15 @@ export const confirmReferral = onCall(async (request) => {
   }
 
   if (action === 'mark_rewarded') {
-    if (!reward || typeof reward.reward_type !== 'string' || typeof reward.reward_amount !== 'number') {
-      throw new HttpsError('invalid-argument', 'reward with reward_type (string) and reward_amount (number) is required for mark_rewarded')
+    if (
+      !reward ||
+      typeof reward.reward_type !== 'string' ||
+      typeof reward.reward_amount !== 'number'
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'reward with reward_type (string) and reward_amount (number) is required for mark_rewarded'
+      )
     }
   }
 
@@ -129,7 +139,9 @@ export const confirmReferral = onCall(async (request) => {
     reward_notes ?? null
   )
 
-  console.log(`Referral ${referralId} advanced from ${transition.from} to ${transition.to} by user ${userId}`)
+  console.log(
+    `Referral ${referralId} advanced from ${transition.from} to ${transition.to} by user ${userId}`
+  )
   return { success: true, newStatus: transition.to }
 })
 
@@ -148,7 +160,7 @@ export const getMyReferralCode = onCall(async (request) => {
   if (!contactDoc.exists) throw new HttpsError('not-found', 'Contact not found.')
 
   const contactData = contactDoc.data()!
-  const teamId = ((contactData.teamId ?? contactData.teacher) as string | undefined)
+  const teamId = (contactData.teamId ?? contactData.teacher) as string | undefined
   if (!teamId) throw new HttpsError('failed-precondition', 'Contact is not associated with a team.')
 
   const team = await getTeam(teamId)
@@ -160,7 +172,7 @@ export const getMyReferralCode = onCall(async (request) => {
 
   const code = await ensureReferralCode(contactId, teamId)
   const teamSlug = team?.slug
-  const referralUrl = `${getHostingUrl()}/portal/${teamSlug}/booking?referral=${code}`
+  const referralUrl = `${getHostingUrl()}/public/bio-link/${teamSlug}/booking?referral=${code}`
 
   console.log(`Referral code ${code} returned for contact ${contactId}`)
   return { code, referralUrl }
@@ -177,9 +189,14 @@ export const getMyReferralStats = onCall(async (request) => {
 
   const db = admin.firestore()
   const [err, snapshot] = await to(
-    db.collection('referrals').where('referrer_contact_id', '==', contactId).where('status', '==', 'rewarded').get()
+    db
+      .collection('referrals')
+      .where('referrer_contact_id', '==', contactId)
+      .where('status', '==', 'rewarded')
+      .get()
   )
-  if (err) throw new HttpsError('internal', (err as Error).message ?? 'Failed to get referral stats.')
+  if (err)
+    throw new HttpsError('internal', (err as Error).message ?? 'Failed to get referral stats.')
 
   return { rewarded_count: snapshot?.size ?? 0 }
 })

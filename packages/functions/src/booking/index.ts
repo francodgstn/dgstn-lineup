@@ -20,7 +20,6 @@ import {
   buildCoachNotificationEmail,
 } from '../coaching/templates'
 
-
 type Lang = 'en' | 'de' | 'fr' | 'it'
 const VALID_LANGS: Lang[] = ['en', 'de', 'fr', 'it']
 function isLang(v: unknown): v is Lang {
@@ -65,7 +64,10 @@ export const sendBookingVerificationCode = onCall(async (request) => {
     .get()
 
   if (recentCodes.size >= 3) {
-    throw new HttpsError('resource-exhausted', 'Too many verification requests. Please try again in an hour.')
+    throw new HttpsError(
+      'resource-exhausted',
+      'Too many verification requests. Please try again in an hour.'
+    )
   }
 
   // Find matching contacts
@@ -78,7 +80,11 @@ export const sendBookingVerificationCode = onCall(async (request) => {
     .get()
 
   if (contactsSnap.empty) {
-    return { success: true, hasContacts: false, message: 'No existing profile found. Please use the regular booking form.' }
+    return {
+      success: true,
+      hasContacts: false,
+      message: 'No existing profile found. Please use the regular booking form.',
+    }
   }
 
   const matchedContactIds = contactsSnap.docs.map((d) => d.id)
@@ -110,14 +116,25 @@ export const sendBookingVerificationCode = onCall(async (request) => {
       fr: `Votre code de vérification pour ${teamName}`,
       it: `Il tuo codice di verifica per ${teamName}`,
     }
-    await sendEmail({ to: sanitizedEmail, subject: subjects[lang], html: emailContent.html, text: emailContent.text })
+    await sendEmail({
+      to: sanitizedEmail,
+      subject: subjects[lang],
+      html: emailContent.html,
+      text: emailContent.text,
+    })
     console.log(`Booking verification email sent (team: ${teamId})`)
   } catch (err) {
     await codeRef.delete()
     throw new HttpsError('internal', 'Failed to send verification email. Please try again.')
   }
 
-  return { success: true, hasContacts: true, codeId: codeRef.id, expiresAt: expiresAt.toMillis(), contactsCount: matchedContactIds.length }
+  return {
+    success: true,
+    hasContacts: true,
+    codeId: codeRef.id,
+    expiresAt: expiresAt.toMillis(),
+    contactsCount: matchedContactIds.length,
+  }
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,7 +145,8 @@ export const verifyBookingCode = onCall(async (request) => {
   const data = request.data as { codeId?: string; code?: string; selectedContactId?: string }
 
   if (!data?.codeId) throw new HttpsError('invalid-argument', 'codeId is required')
-  if (!data.code && !data.selectedContactId) throw new HttpsError('invalid-argument', 'code or selectedContactId is required')
+  if (!data.code && !data.selectedContactId)
+    throw new HttpsError('invalid-argument', 'code or selectedContactId is required')
 
   if (data.code && !/^\d{6}$/.test(data.code)) {
     throw new HttpsError('invalid-argument', 'Code must be 6 digits')
@@ -140,15 +158,22 @@ export const verifyBookingCode = onCall(async (request) => {
 
   const codeData = codeDoc.data()!
 
-  if (codeData.used) throw new HttpsError('failed-precondition', 'This verification code has already been used.')
+  if (codeData.used)
+    throw new HttpsError('failed-precondition', 'This verification code has already been used.')
 
   const now = Timestamp.now()
   if (codeData.expires_at.toMillis() < now.toMillis()) {
-    throw new HttpsError('deadline-exceeded', 'Verification code has expired. Please request a new code.')
+    throw new HttpsError(
+      'deadline-exceeded',
+      'Verification code has expired. Please request a new code.'
+    )
   }
 
   if (codeData.attempts >= 5) {
-    throw new HttpsError('resource-exhausted', 'Too many failed attempts. Please request a new code.')
+    throw new HttpsError(
+      'resource-exhausted',
+      'Too many failed attempts. Please request a new code.'
+    )
   }
 
   const matchedContactIds: string[] = codeData.matched_contact_ids || []
@@ -158,20 +183,41 @@ export const verifyBookingCode = onCall(async (request) => {
     if (!matchedContactIds.includes(data.selectedContactId)) {
       throw new HttpsError('invalid-argument', 'Selected contact not found in matched contacts')
     }
-    const contactDoc = await admin.firestore().collection('contacts').doc(data.selectedContactId).get()
+    const contactDoc = await admin
+      .firestore()
+      .collection('contacts')
+      .doc(data.selectedContactId)
+      .get()
     if (!contactDoc.exists) throw new HttpsError('not-found', 'Selected contact no longer exists')
     const c = contactDoc.data()!
-    return { verified: true, codeId: data.codeId, selectedContactId: data.selectedContactId, contactData: { id: contactDoc.id, firstname: c.firstname || '', lastname: c.lastname || '', email: c.email || '', phone: c.phone || '' }, requiresContactSelection: false }
+    return {
+      verified: true,
+      codeId: data.codeId,
+      selectedContactId: data.selectedContactId,
+      contactData: {
+        id: contactDoc.id,
+        firstname: c.firstname || '',
+        lastname: c.lastname || '',
+        email: c.email || '',
+        phone: c.phone || '',
+      },
+      requiresContactSelection: false,
+    }
   }
 
   // Verify the code
   if (data.code) {
-    const isValid = codeData.code_hash ? verifyCode(data.code, codeData.email, codeData.code_hash) : false
+    const isValid = codeData.code_hash
+      ? verifyCode(data.code, codeData.email, codeData.code_hash)
+      : false
 
     if (!isValid) {
       await codeRef.update({ attempts: FieldValue.increment(1) })
       const remaining = 5 - (codeData.attempts + 1)
-      throw new HttpsError('invalid-argument', `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`)
+      throw new HttpsError(
+        'invalid-argument',
+        `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`
+      )
     }
 
     await codeRef.update({ verified: true, verified_at: FieldValue.serverTimestamp() })
@@ -183,19 +229,43 @@ export const verifyBookingCode = onCall(async (request) => {
       const d = await admin.firestore().collection('contacts').doc(id).get()
       if (!d.exists) return null
       const c = d.data()!
-      return { id: d.id, firstname: c.firstname || '', lastname: c.lastname || '', phone: c.phone || '' }
-    }),
-  ).then((r) => r.filter(Boolean) as { id: string; firstname: string; lastname: string; phone: string }[])
+      return {
+        id: d.id,
+        firstname: c.firstname || '',
+        lastname: c.lastname || '',
+        phone: c.phone || '',
+      }
+    })
+  ).then(
+    (r) => r.filter(Boolean) as { id: string; firstname: string; lastname: string; phone: string }[]
+  )
 
   // Auto-select if single contact
   if (contacts.length === 1) {
     const single = contacts[0]
     const contactDoc = await admin.firestore().collection('contacts').doc(single.id).get()
     const c = contactDoc.data()!
-    return { verified: true, codeId: data.codeId, selectedContactId: single.id, contactData: { id: contactDoc.id, firstname: c.firstname || '', lastname: c.lastname || '', email: c.email || '', phone: c.phone || '' }, requiresContactSelection: false }
+    return {
+      verified: true,
+      codeId: data.codeId,
+      selectedContactId: single.id,
+      contactData: {
+        id: contactDoc.id,
+        firstname: c.firstname || '',
+        lastname: c.lastname || '',
+        email: c.email || '',
+        phone: c.phone || '',
+      },
+      requiresContactSelection: false,
+    }
   }
 
-  return { verified: true, codeId: data.codeId, matchedContacts: contacts, requiresContactSelection: true }
+  return {
+    verified: true,
+    codeId: data.codeId,
+    matchedContacts: contacts,
+    requiresContactSelection: true,
+  }
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -245,7 +315,10 @@ export const bookSession = onCall(async (request) => {
       .where('joinedAt', '>', oneHourAgo)
       .get()
     if (recentIpBookings.size >= 10) {
-      throw new HttpsError('resource-exhausted', 'Too many booking requests. Please try again later.')
+      throw new HttpsError(
+        'resource-exhausted',
+        'Too many booking requests. Please try again later.'
+      )
     }
   }
 
@@ -263,23 +336,36 @@ export const bookSession = onCall(async (request) => {
   }
 
   // ── Resolve authenticated contact ────────────────────────────────────────────
-  let authenticatedContact: admin.firestore.DocumentData & { id: string } | null = null
+  let authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null = null
 
   // bookingAuthToken path — one-time token stored in auth_tokens with type:'booking'
   if (data.bookingAuthToken) {
-    const tokenDoc = await admin.firestore().collection('auth_tokens').doc(data.bookingAuthToken).get()
+    const tokenDoc = await admin
+      .firestore()
+      .collection('auth_tokens')
+      .doc(data.bookingAuthToken)
+      .get()
     if (!tokenDoc.exists) throw new HttpsError('invalid-argument', 'Invalid booking auth token')
     const tokenData = tokenDoc.data()!
-    if (tokenData.type !== 'booking') throw new HttpsError('permission-denied', 'Token is not a booking token')
-    if (tokenData.team_id !== data.teamId) throw new HttpsError('permission-denied', 'Token does not match the requested team')
+    if (tokenData.type !== 'booking')
+      throw new HttpsError('permission-denied', 'Token is not a booking token')
+    if (tokenData.team_id !== data.teamId)
+      throw new HttpsError('permission-denied', 'Token does not match the requested team')
     const now = Timestamp.now()
-    if (tokenData.expires_at?.toMillis() < now.toMillis()) throw new HttpsError('deadline-exceeded', 'Booking auth token has expired')
-    if (tokenData.used) throw new HttpsError('failed-precondition', 'Booking auth token has already been used')
+    if (tokenData.expires_at?.toMillis() < now.toMillis())
+      throw new HttpsError('deadline-exceeded', 'Booking auth token has expired')
+    if (tokenData.used)
+      throw new HttpsError('failed-precondition', 'Booking auth token has already been used')
 
-    const contactDoc = await admin.firestore().collection('contacts').doc(tokenData.contact_id).get()
+    const contactDoc = await admin
+      .firestore()
+      .collection('contacts')
+      .doc(tokenData.contact_id)
+      .get()
     if (!contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
     const c = contactDoc.data()!
-    if (c.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Contact does not belong to this team')
+    if (c.teamId !== data.teamId)
+      throw new HttpsError('permission-denied', 'Contact does not belong to this team')
 
     await admin.firestore().collection('auth_tokens').doc(data.bookingAuthToken).update({
       used: true,
@@ -293,25 +379,41 @@ export const bookSession = onCall(async (request) => {
   if (data.authenticatedContactId) {
     // Validate verification code
     if (data.verificationCodeId) {
-      const codeDoc = await admin.firestore().collection('booking_verification_codes').doc(data.verificationCodeId).get()
+      const codeDoc = await admin
+        .firestore()
+        .collection('booking_verification_codes')
+        .doc(data.verificationCodeId)
+        .get()
       if (!codeDoc.exists) throw new HttpsError('invalid-argument', 'Invalid verification code')
       const codeData = codeDoc.data()!
-      if (!codeData.verified) throw new HttpsError('failed-precondition', 'Verification code not verified')
-      if (codeData.team_id !== data.teamId) throw new HttpsError('permission-denied', 'Code does not match team')
+      if (!codeData.verified)
+        throw new HttpsError('failed-precondition', 'Verification code not verified')
+      if (codeData.team_id !== data.teamId)
+        throw new HttpsError('permission-denied', 'Code does not match team')
       const isValid = (codeData.matched_contact_ids || []).includes(data.authenticatedContactId)
-      if (!isValid) throw new HttpsError('permission-denied', 'Contact not found in verified matches')
-      await admin.firestore().collection('booking_verification_codes').doc(data.verificationCodeId).update({
-        used: true,
-        used_at: FieldValue.serverTimestamp(),
-        used_for_session: data.sessionId,
-        used_contact_id: data.authenticatedContactId,
-      })
+      if (!isValid)
+        throw new HttpsError('permission-denied', 'Contact not found in verified matches')
+      await admin
+        .firestore()
+        .collection('booking_verification_codes')
+        .doc(data.verificationCodeId)
+        .update({
+          used: true,
+          used_at: FieldValue.serverTimestamp(),
+          used_for_session: data.sessionId,
+          used_contact_id: data.authenticatedContactId,
+        })
     }
 
-    const contactDoc = await admin.firestore().collection('contacts').doc(data.authenticatedContactId).get()
+    const contactDoc = await admin
+      .firestore()
+      .collection('contacts')
+      .doc(data.authenticatedContactId)
+      .get()
     if (!contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
     const contactData = contactDoc.data()!
-    if (contactData.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Contact does not belong to this team')
+    if (contactData.teamId !== data.teamId)
+      throw new HttpsError('permission-denied', 'Contact does not belong to this team')
     authenticatedContact = { id: data.authenticatedContactId, ...contactData }
   }
 
@@ -328,12 +430,19 @@ export const bookSession = onCall(async (request) => {
       phone: authenticatedContact.phone || null,
     }
   } else {
-    if (!data.contactDetails) throw new HttpsError('invalid-argument', 'contactDetails required for new bookings')
+    if (!data.contactDetails)
+      throw new HttpsError('invalid-argument', 'contactDetails required for new bookings')
     const { firstname, lastname, email, phone } = data.contactDetails
-    if (!firstname || !lastname || !email) throw new HttpsError('invalid-argument', 'firstname, lastname, email required')
+    if (!firstname || !lastname || !email)
+      throw new HttpsError('invalid-argument', 'firstname, lastname, email required')
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) throw new HttpsError('invalid-argument', 'Invalid email format')
-    sanitized = { firstname: firstname.trim(), lastname: lastname.trim(), email: email.toLowerCase().trim(), phone: phone?.trim() || null }
+    sanitized = {
+      firstname: firstname.trim(),
+      lastname: lastname.trim(),
+      email: email.toLowerCase().trim(),
+      phone: phone?.trim() || null,
+    }
   }
 
   // Validate team and get owner email
@@ -345,7 +454,14 @@ export const bookSession = onCall(async (request) => {
 
   let ownerEmail: string | null = null
   let ownerFirstname = 'Team'
-  const ownersSnap = await admin.firestore().collection('teams').doc(data.teamId).collection('team_members').where('role', '==', 'owner').limit(1).get()
+  const ownersSnap = await admin
+    .firestore()
+    .collection('teams')
+    .doc(data.teamId)
+    .collection('team_members')
+    .where('role', '==', 'owner')
+    .limit(1)
+    .get()
   if (!ownersSnap.empty) {
     const ownerId = ownersSnap.docs[0].id
     const ownerDoc = await admin.firestore().collection('users').doc(ownerId).get()
@@ -360,8 +476,10 @@ export const bookSession = onCall(async (request) => {
   if (!sessionDoc.exists) throw new HttpsError('not-found', 'Session not found')
   const sessionData = sessionDoc.data()!
 
-  if (sessionData.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Session does not belong to this team')
-  if (!sessionData.allowBooking) throw new HttpsError('permission-denied', 'Bookings are not allowed for this session')
+  if (sessionData.teamId !== data.teamId)
+    throw new HttpsError('permission-denied', 'Session does not belong to this team')
+  if (!sessionData.allowBooking)
+    throw new HttpsError('permission-denied', 'Bookings are not allowed for this session')
 
   const now = Timestamp.now()
   if (sessionData.start.toMillis() < now.toMillis()) {
@@ -371,7 +489,7 @@ export const bookSession = onCall(async (request) => {
   // Get activity name and isFreeTrial flag
   const isCoachingSession = sessionData.activityType === 'coaching'
   let activityName = (sessionData.activityName as string) || 'Session'
-  let sessionIsFreeTrial = true  // default open
+  let sessionIsFreeTrial = true // default open
 
   if (isCoachingSession) {
     // Coaching sessions carry isFreeTrial directly on the session doc
@@ -384,12 +502,18 @@ export const bookSession = onCall(async (request) => {
     }
   } else if (sessionData.activityId) {
     try {
-      const actDoc = await admin.firestore().collection('activities').doc(sessionData.activityId).get()
+      const actDoc = await admin
+        .firestore()
+        .collection('activities')
+        .doc(sessionData.activityId)
+        .get()
       if (actDoc.exists) {
         activityName = actDoc.data()!.name || activityName
         sessionIsFreeTrial = actDoc.data()!.isFreeTrial !== false
       }
-    } catch (_) { /* non-fatal */ }
+    } catch (_) {
+      /* non-fatal */
+    }
   }
 
   // ── Members-only gate ──────────────────────────────────────────────────────
@@ -416,25 +540,57 @@ export const bookSession = onCall(async (request) => {
     contactId = authenticatedContact.id
     // Check for duplicate booking
     const [existingBooking, existingParticipant] = await Promise.all([
-      admin.firestore().collection('sessions').doc(data.sessionId).collection('bookings').doc(contactId).get(),
-      admin.firestore().collection('sessions').doc(data.sessionId).collection('participants').doc(contactId).get(),
+      admin
+        .firestore()
+        .collection('sessions')
+        .doc(data.sessionId)
+        .collection('bookings')
+        .doc(contactId)
+        .get(),
+      admin
+        .firestore()
+        .collection('sessions')
+        .doc(data.sessionId)
+        .collection('participants')
+        .doc(contactId)
+        .get(),
     ])
     if (existingBooking.exists || existingParticipant.exists) {
       throw new HttpsError('already-exists', 'You are already registered for this session')
     }
   } else {
     // Find existing contact by email + name
-    const existingSnap = await admin.firestore().collection('contacts').where('teamId', '==', data.teamId).where('email', '==', sanitized.email).get()
+    const existingSnap = await admin
+      .firestore()
+      .collection('contacts')
+      .where('teamId', '==', data.teamId)
+      .where('email', '==', sanitized.email)
+      .get()
     const exactMatch = existingSnap.docs.find((d) => {
       const c = d.data()
-      return c.firstname?.toLowerCase().trim() === sanitized.firstname.toLowerCase() && c.lastname?.toLowerCase().trim() === sanitized.lastname.toLowerCase()
+      return (
+        c.firstname?.toLowerCase().trim() === sanitized.firstname.toLowerCase() &&
+        c.lastname?.toLowerCase().trim() === sanitized.lastname.toLowerCase()
+      )
     })
 
     if (exactMatch) {
       contactId = exactMatch.id
       const [existingBooking, existingParticipant] = await Promise.all([
-        admin.firestore().collection('sessions').doc(data.sessionId).collection('bookings').doc(contactId).get(),
-        admin.firestore().collection('sessions').doc(data.sessionId).collection('participants').doc(contactId).get(),
+        admin
+          .firestore()
+          .collection('sessions')
+          .doc(data.sessionId)
+          .collection('bookings')
+          .doc(contactId)
+          .get(),
+        admin
+          .firestore()
+          .collection('sessions')
+          .doc(data.sessionId)
+          .collection('participants')
+          .doc(contactId)
+          .get(),
       ])
       if (existingBooking.exists || existingParticipant.exists) {
         throw new HttpsError('already-exists', 'You are already registered for this session')
@@ -464,53 +620,82 @@ export const bookSession = onCall(async (request) => {
   // Add booking to session
   const bookingToken = generateSecureToken()
   const teamSlug: string | null = team.slug || null
-  const manageBookingUrl = teamSlug ? `${getHostingUrl()}/portal/${teamSlug}/manage-booking?token=${bookingToken}` : null
-  const subscriptionTypeId = typeof data.subscription_type_id === 'string' && data.subscription_type_id ? data.subscription_type_id : null
+  const manageBookingUrl = teamSlug
+    ? `${getHostingUrl()}/public/bio-link/${teamSlug}/manage-booking?token=${bookingToken}`
+    : null
+  const subscriptionTypeId =
+    typeof data.subscription_type_id === 'string' && data.subscription_type_id
+      ? data.subscription_type_id
+      : null
 
-  await admin.firestore().collection('sessions').doc(data.sessionId).collection('bookings').doc(contactId).set({
-    firstname: sanitized.firstname,
-    lastname: sanitized.lastname,
-    email: sanitized.email,
-    phone: sanitized.phone ?? null,
-    contact: contactId,
-    session: data.sessionId,
-    teamId: data.teamId,
-    joinedAt: FieldValue.serverTimestamp(),
-    fromPortal: true,
-    is_new_contact: isNewContact,
-    booking_token: bookingToken,
-    booking_ip: bookingIp,
-    authenticated_booking: isAuthenticatedBooking,
-    subscription_type_id: subscriptionTypeId,
-  })
+  await admin
+    .firestore()
+    .collection('sessions')
+    .doc(data.sessionId)
+    .collection('bookings')
+    .doc(contactId)
+    .set({
+      firstname: sanitized.firstname,
+      lastname: sanitized.lastname,
+      email: sanitized.email,
+      phone: sanitized.phone ?? null,
+      contact: contactId,
+      session: data.sessionId,
+      teamId: data.teamId,
+      joinedAt: FieldValue.serverTimestamp(),
+      fromPortal: true,
+      is_new_contact: isNewContact,
+      booking_token: bookingToken,
+      booking_ip: bookingIp,
+      authenticated_booking: isAuthenticatedBooking,
+      subscription_type_id: subscriptionTypeId,
+    })
 
-  await admin.firestore().collection('sessions').doc(data.sessionId).set(
-    {
-      has_bookings: true,
-      portal_bookings_count: FieldValue.increment(1),
-      ...(isNewContact && { portal_new_contact_bookings_count: FieldValue.increment(1) }),
-      last_booking_at: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  )
+  await admin
+    .firestore()
+    .collection('sessions')
+    .doc(data.sessionId)
+    .set(
+      {
+        has_bookings: true,
+        bio_link_bookings_count: FieldValue.increment(1),
+        ...(isNewContact && { bio_link_new_contact_bookings_count: FieldValue.increment(1) }),
+        last_booking_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
 
   if (!isNewContact) {
-    await admin.firestore().collection('contacts').doc(contactId).update({ pending_bookings_count: FieldValue.increment(1) })
+    await admin
+      .firestore()
+      .collection('contacts')
+      .doc(contactId)
+      .update({ pending_bookings_count: FieldValue.increment(1) })
   }
 
   // Contact alert (booking notification, shows immediately)
   try {
     const sessionStart: Date = (sessionData.start as Timestamp).toDate()
-    await admin.firestore().collection('contacts').doc(contactId).collection('contact_alerts').add({
-      teamId: data.teamId,
-      contact: { id: contactId, firstname: sanitized.firstname, lastname: sanitized.lastname, avatar_url: authenticatedContact?.avatar_url ?? null },
-      message: `New booking for ${activityName} on ${sessionStart.toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })}`,
-      schedule: { type: 'datetime', value: Timestamp.now() },
-      alert_type: 'booking',
-      session_id: data.sessionId,
-      created_at: FieldValue.serverTimestamp(),
-      archived_at: null,
-    })
+    await admin
+      .firestore()
+      .collection('contacts')
+      .doc(contactId)
+      .collection('contact_alerts')
+      .add({
+        teamId: data.teamId,
+        contact: {
+          id: contactId,
+          firstname: sanitized.firstname,
+          lastname: sanitized.lastname,
+          avatar_url: authenticatedContact?.avatar_url ?? null,
+        },
+        message: `New booking for ${activityName} on ${sessionStart.toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })}`,
+        schedule: { type: 'datetime', value: Timestamp.now() },
+        alert_type: 'booking',
+        session_id: data.sessionId,
+        created_at: FieldValue.serverTimestamp(),
+        archived_at: null,
+      })
   } catch (alertErr) {
     console.error('Failed to create contact alert for booking:', alertErr)
   }
@@ -518,7 +703,8 @@ export const bookSession = onCall(async (request) => {
   // Referral tracking (non-fatal)
   if (referrerContactId && referrerContactId !== contactId) {
     try {
-      const existingReferral = await admin.firestore()
+      const existingReferral = await admin
+        .firestore()
         .collection('referrals')
         .where('referred_contact_id', '==', contactId)
         .where('team_id', '==', data.teamId)
@@ -550,7 +736,7 @@ export const bookSession = onCall(async (request) => {
       }
     }
 
-    const cancelUrl = manageBookingUrl  // reuse manage-booking URL for cancellation
+    const cancelUrl = manageBookingUrl // reuse manage-booking URL for cancellation
     try {
       const email = buildCoachingConfirmationEmail({
         firstname: sanitized.firstname,
@@ -586,7 +772,9 @@ export const bookSession = onCall(async (request) => {
         subject: subjects[lang],
         html: email.html,
         text: email.text,
-        attachments: [{ filename: ical.filename, content: ical.content, contentType: ical.contentType }],
+        attachments: [
+          { filename: ical.filename, content: ical.content, contentType: ical.contentType },
+        ],
       })
     } catch (err) {
       console.error('Error sending coaching confirmation email:', err)
@@ -612,7 +800,12 @@ export const bookSession = onCall(async (request) => {
           fr: `Nouveau rendez-vous : ${sanitized.firstname} ${sanitized.lastname}`,
           it: `Nuovo appuntamento: ${sanitized.firstname} ${sanitized.lastname}`,
         }
-        await sendEmail({ to: coachEmail, subject: subjects[lang], html: notif.html, text: notif.text })
+        await sendEmail({
+          to: coachEmail,
+          subject: subjects[lang],
+          html: notif.html,
+          text: notif.text,
+        })
       } catch (err) {
         console.error('Error sending coaching coach notification email:', err)
       }
@@ -620,9 +813,28 @@ export const bookSession = onCall(async (request) => {
   } else {
     // ── Regular group-class session ─────────────────────────────────────────────
     try {
-      const confirmEmail = buildBookingConfirmationEmail({ firstname: sanitized.firstname, teamName, activityName, sessionStart, sessionEnd, locationName: sessionData.location || null, manageBookingUrl, lang })
-      const subjects: Record<Lang, string> = { en: `Booking Confirmed – ${activityName}`, de: `Buchung bestätigt – ${activityName}`, fr: `Réservation confirmée – ${activityName}`, it: `Prenotazione confermata – ${activityName}` }
-      await sendEmail({ to: sanitized.email, subject: subjects[lang], html: confirmEmail.html, text: confirmEmail.text })
+      const confirmEmail = buildBookingConfirmationEmail({
+        firstname: sanitized.firstname,
+        teamName,
+        activityName,
+        sessionStart,
+        sessionEnd,
+        locationName: sessionData.location || null,
+        manageBookingUrl,
+        lang,
+      })
+      const subjects: Record<Lang, string> = {
+        en: `Booking Confirmed – ${activityName}`,
+        de: `Buchung bestätigt – ${activityName}`,
+        fr: `Réservation confirmée – ${activityName}`,
+        it: `Prenotazione confermata – ${activityName}`,
+      }
+      await sendEmail({
+        to: sanitized.email,
+        subject: subjects[lang],
+        html: confirmEmail.html,
+        text: confirmEmail.text,
+      })
       console.log(`Confirmation email sent to ${sanitized.email}`)
     } catch (err) {
       console.error('Error sending confirmation email:', err)
@@ -631,9 +843,28 @@ export const bookSession = onCall(async (request) => {
     // Send notification to owner
     if (ownerEmail) {
       try {
-        const notifEmail = buildTeacherNotificationEmail({ teamOwnerFirstname: ownerFirstname, contactName: `${sanitized.firstname} ${sanitized.lastname}`, contactEmail: sanitized.email, contactPhone: sanitized.phone, activityName, sessionStart, sessionEnd, lang })
-        const subjects: Record<Lang, string> = { en: `New Booking: ${sanitized.firstname} ${sanitized.lastname}`, de: `Neue Buchung: ${sanitized.firstname} ${sanitized.lastname}`, fr: `Nouvelle réservation : ${sanitized.firstname} ${sanitized.lastname}`, it: `Nuova prenotazione: ${sanitized.firstname} ${sanitized.lastname}` }
-        await sendEmail({ to: ownerEmail, subject: subjects[lang], html: notifEmail.html, text: notifEmail.text })
+        const notifEmail = buildTeacherNotificationEmail({
+          teamOwnerFirstname: ownerFirstname,
+          contactName: `${sanitized.firstname} ${sanitized.lastname}`,
+          contactEmail: sanitized.email,
+          contactPhone: sanitized.phone,
+          activityName,
+          sessionStart,
+          sessionEnd,
+          lang,
+        })
+        const subjects: Record<Lang, string> = {
+          en: `New Booking: ${sanitized.firstname} ${sanitized.lastname}`,
+          de: `Neue Buchung: ${sanitized.firstname} ${sanitized.lastname}`,
+          fr: `Nouvelle réservation : ${sanitized.firstname} ${sanitized.lastname}`,
+          it: `Nuova prenotazione: ${sanitized.firstname} ${sanitized.lastname}`,
+        }
+        await sendEmail({
+          to: ownerEmail,
+          subject: subjects[lang],
+          html: notifEmail.html,
+          text: notifEmail.text,
+        })
         console.log(`Owner notification sent to ${ownerEmail}`)
       } catch (err) {
         console.error('Error sending owner notification:', err)
@@ -647,7 +878,11 @@ export const bookSession = onCall(async (request) => {
     sessionId: data.sessionId,
     isNewContact,
     isAuthenticatedBooking,
-    sessionDetails: { activityName, start: sessionStart.toISOString(), end: sessionEnd.toISOString() },
+    sessionDetails: {
+      activityName,
+      start: sessionStart.toISOString(),
+      end: sessionEnd.toISOString(),
+    },
   }
 })
 
@@ -661,12 +896,23 @@ export const cancelBooking = onCall(async (request) => {
 
   const db = admin.firestore()
 
-  let bookingsSnapshot = await db.collectionGroup('bookings').where('booking_token', '==', token).limit(1).get()
+  let bookingsSnapshot = await db
+    .collectionGroup('bookings')
+    .where('booking_token', '==', token)
+    .limit(1)
+    .get()
   if (bookingsSnapshot.empty) {
-    bookingsSnapshot = await db.collectionGroup('participants').where('booking_token', '==', token).limit(1).get()
+    bookingsSnapshot = await db
+      .collectionGroup('participants')
+      .where('booking_token', '==', token)
+      .limit(1)
+      .get()
   }
   if (bookingsSnapshot.empty) {
-    throw new HttpsError('not-found', 'Booking not found. The link may have expired or the booking was already cancelled.')
+    throw new HttpsError(
+      'not-found',
+      'Booking not found. The link may have expired or the booking was already cancelled.'
+    )
   }
 
   const bookingDoc = bookingsSnapshot.docs[0]
@@ -674,7 +920,10 @@ export const cancelBooking = onCall(async (request) => {
 
   const cancellableStatuses = ['pending', 'no_show']
   if (booking.status && !cancellableStatuses.includes(booking.status as string)) {
-    throw new HttpsError('failed-precondition', 'This booking has already been cancelled or confirmed.')
+    throw new HttpsError(
+      'failed-precondition',
+      'This booking has already been cancelled or confirmed.'
+    )
   }
 
   const pathParts = bookingDoc.ref.path.split('/')
@@ -682,14 +931,19 @@ export const cancelBooking = onCall(async (request) => {
   const contactId = booking.contact as string | undefined
 
   const [sessionErr, sessionDoc] = await to(db.collection('sessions').doc(sessionId).get())
-  if (sessionErr || !sessionDoc || !sessionDoc.exists) throw new HttpsError('not-found', 'Session no longer exists.')
+  if (sessionErr || !sessionDoc || !sessionDoc.exists)
+    throw new HttpsError('not-found', 'Session no longer exists.')
 
   const session = sessionDoc.data()!
   const sessionStart = (session.start as Timestamp).toDate()
-  if (sessionStart < new Date()) throw new HttpsError('failed-precondition', 'Cannot cancel a booking for a past session.')
+  if (sessionStart < new Date())
+    throw new HttpsError('failed-precondition', 'Cannot cancel a booking for a past session.')
 
   const teamId = (session.teamId || session.teacher) as string
-  let teamName = ''; let teamLanguage = 'en'; let teamSlug: string | null = null; let ctaUrl: string | null = null
+  let teamName = ''
+  let teamLanguage = 'en'
+  let teamSlug: string | null = null
+  let ctaUrl: string | null = null
 
   const [teamErr, teamDoc] = await to(db.collection('teams').doc(teamId).get())
   if (!teamErr && teamDoc && teamDoc.exists) {
@@ -702,24 +956,42 @@ export const cancelBooking = onCall(async (request) => {
 
   let activityName = 'Session'
   if (session.activityId) {
-    const [actErr, actDoc] = await to(db.collection('activities').doc(session.activityId as string).get())
-    if (!actErr && actDoc && actDoc.exists) activityName = (actDoc.data()?.name as string) || 'Session'
+    const [actErr, actDoc] = await to(
+      db
+        .collection('activities')
+        .doc(session.activityId as string)
+        .get()
+    )
+    if (!actErr && actDoc && actDoc.exists)
+      activityName = (actDoc.data()?.name as string) || 'Session'
   }
 
   const cancelBatch = db.batch()
-  cancelBatch.update(bookingDoc.ref, { status: 'cancelled', cancelled_at: FieldValue.serverTimestamp() })
-  cancelBatch.update(db.collection('sessions').doc(sessionId), { portal_bookings_count: FieldValue.increment(-1) })
+  cancelBatch.update(bookingDoc.ref, {
+    status: 'cancelled',
+    cancelled_at: FieldValue.serverTimestamp(),
+  })
+  cancelBatch.update(db.collection('sessions').doc(sessionId), {
+    bio_link_bookings_count: FieldValue.increment(-1),
+  })
   if (contactId) {
-    cancelBatch.update(db.collection('contacts').doc(contactId), { pending_bookings_count: FieldValue.increment(-1) })
+    cancelBatch.update(db.collection('contacts').doc(contactId), {
+      pending_bookings_count: FieldValue.increment(-1),
+    })
   }
   await cancelBatch.commit()
 
   const rebookUrl = teamSlug
-    ? `${getHostingUrl()}/portal/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`
+    ? `${getHostingUrl()}/public/bio-link/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`
     : null
 
   const sessionEnd = (session.end as Timestamp).toDate()
-  const dateStr = sessionStart.toLocaleDateString('en', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const dateStr = sessionStart.toLocaleDateString('en', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
   const timeStr = `${sessionStart.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })} – ${sessionEnd.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}`
   const firstname = (booking.firstname as string) || 'Guest'
   const rebookLine = rebookUrl ? `<p><a href="${rebookUrl}">Book another session</a></p>` : ''
@@ -748,12 +1020,23 @@ export const getBookingDetails = onCall(async (request) => {
 
   const db = admin.firestore()
 
-  let bookingsSnapshot = await db.collectionGroup('bookings').where('booking_token', '==', token).limit(1).get()
+  let bookingsSnapshot = await db
+    .collectionGroup('bookings')
+    .where('booking_token', '==', token)
+    .limit(1)
+    .get()
   if (bookingsSnapshot.empty) {
-    bookingsSnapshot = await db.collectionGroup('participants').where('booking_token', '==', token).limit(1).get()
+    bookingsSnapshot = await db
+      .collectionGroup('participants')
+      .where('booking_token', '==', token)
+      .limit(1)
+      .get()
   }
   if (bookingsSnapshot.empty) {
-    throw new HttpsError('not-found', 'Booking not found. The link may have expired or the booking was cancelled.')
+    throw new HttpsError(
+      'not-found',
+      'Booking not found. The link may have expired or the booking was cancelled.'
+    )
   }
 
   const bookingDoc = bookingsSnapshot.docs[0]
@@ -772,10 +1055,13 @@ export const getBookingDetails = onCall(async (request) => {
   const activityId = (session.activityId as string) || null
   if (activityId) {
     const [actErr, actDoc] = await to(db.collection('activities').doc(activityId).get())
-    if (!actErr && actDoc && actDoc.exists) activityName = (actDoc.data()?.name as string) || 'Session'
+    if (!actErr && actDoc && actDoc.exists)
+      activityName = (actDoc.data()?.name as string) || 'Session'
   }
 
-  let teamName = ''; let teamSlug: string | null = null; let teamLanguage = 'en'
+  let teamName = ''
+  let teamSlug: string | null = null
+  let teamLanguage = 'en'
   const [, teamDoc] = await to(db.collection('teams').doc(teamId).get())
   if (teamDoc && teamDoc.exists) {
     const team = teamDoc.data()!
@@ -785,12 +1071,19 @@ export const getBookingDetails = onCall(async (request) => {
   }
 
   const now = Timestamp.now()
-  const futureLimit = new Date(); futureLimit.setDate(futureLimit.getDate() + 60)
+  const futureLimit = new Date()
+  futureLimit.setDate(futureLimit.getDate() + 60)
 
-  let availableSessions: Array<{ id: string; start: string; end: string; location: string | null }> = []
+  let availableSessions: Array<{
+    id: string
+    start: string
+    end: string
+    location: string | null
+  }> = []
   if (activityId) {
     const [, sessSnap] = await to(
-      db.collection('sessions')
+      db
+        .collection('sessions')
         .where('teamId', '==', teamId)
         .where('activityId', '==', activityId)
         .where('allowBooking', '==', true)
@@ -798,7 +1091,7 @@ export const getBookingDetails = onCall(async (request) => {
         .where('start', '<=', Timestamp.fromDate(futureLimit))
         .orderBy('start', 'asc')
         .limit(5)
-        .get(),
+        .get()
     )
     if (sessSnap) {
       availableSessions = sessSnap.docs
@@ -862,12 +1155,23 @@ export const rebookSession = onCall(async (request) => {
 
   const db = admin.firestore()
 
-  let bookingsSnapshot = await db.collectionGroup('bookings').where('booking_token', '==', token).limit(1).get()
+  let bookingsSnapshot = await db
+    .collectionGroup('bookings')
+    .where('booking_token', '==', token)
+    .limit(1)
+    .get()
   if (bookingsSnapshot.empty) {
-    bookingsSnapshot = await db.collectionGroup('participants').where('booking_token', '==', token).limit(1).get()
+    bookingsSnapshot = await db
+      .collectionGroup('participants')
+      .where('booking_token', '==', token)
+      .limit(1)
+      .get()
   }
   if (bookingsSnapshot.empty) {
-    throw new HttpsError('not-found', 'Booking not found. The link may have expired or the booking was already cancelled.')
+    throw new HttpsError(
+      'not-found',
+      'Booking not found. The link may have expired or the booking was already cancelled.'
+    )
   }
 
   const bookingDoc = bookingsSnapshot.docs[0]
@@ -886,20 +1190,25 @@ export const rebookSession = onCall(async (request) => {
   }
 
   const [, oldSessionDoc] = await to(db.collection('sessions').doc(oldSessionId).get())
-  if (!oldSessionDoc || !oldSessionDoc.exists) throw new HttpsError('not-found', 'Original session no longer exists.')
+  if (!oldSessionDoc || !oldSessionDoc.exists)
+    throw new HttpsError('not-found', 'Original session no longer exists.')
   const oldSession = oldSessionDoc.data()!
   const teamId = (oldSession.teamId || oldSession.teacher) as string
 
   const [, newSessionDoc] = await to(db.collection('sessions').doc(newSessionId).get())
-  if (!newSessionDoc || !newSessionDoc.exists) throw new HttpsError('not-found', 'New session not found.')
+  if (!newSessionDoc || !newSessionDoc.exists)
+    throw new HttpsError('not-found', 'New session not found.')
   const newSession = newSessionDoc.data()!
 
   const newTeamId = (newSession.teamId || newSession.teacher) as string
-  if (newTeamId !== teamId) throw new HttpsError('permission-denied', 'Cannot rebook to a session from a different team.')
-  if (!newSession.allowBooking) throw new HttpsError('failed-precondition', 'This session is not available for booking.')
+  if (newTeamId !== teamId)
+    throw new HttpsError('permission-denied', 'Cannot rebook to a session from a different team.')
+  if (!newSession.allowBooking)
+    throw new HttpsError('failed-precondition', 'This session is not available for booking.')
 
   const newSessionStart = (newSession.start as Timestamp).toDate()
-  if (newSessionStart < new Date()) throw new HttpsError('failed-precondition', 'Cannot book a session in the past.')
+  if (newSessionStart < new Date())
+    throw new HttpsError('failed-precondition', 'Cannot book a session in the past.')
   if (newSession.isException && newSession.exceptionType === 'cancelled') {
     throw new HttpsError('failed-precondition', 'This session has been cancelled.')
   }
@@ -913,11 +1222,21 @@ export const rebookSession = onCall(async (request) => {
   }
 
   const newBookingToken = generateSecureToken()
-  const newBookingRef = db.collection('sessions').doc(newSessionId).collection('bookings').doc(contactId)
+  const newBookingRef = db
+    .collection('sessions')
+    .doc(newSessionId)
+    .collection('bookings')
+    .doc(contactId)
   const batch = db.batch()
 
-  batch.update(bookingDoc.ref, { status: 'rebooked', rebooked_to: newSessionId, rebooked_at: FieldValue.serverTimestamp() })
-  batch.update(db.collection('sessions').doc(oldSessionId), { portal_bookings_count: FieldValue.increment(-1) })
+  batch.update(bookingDoc.ref, {
+    status: 'rebooked',
+    rebooked_to: newSessionId,
+    rebooked_at: FieldValue.serverTimestamp(),
+  })
+  batch.update(db.collection('sessions').doc(oldSessionId), {
+    bio_link_bookings_count: FieldValue.increment(-1),
+  })
   batch.set(newBookingRef, {
     firstname: booking.firstname,
     lastname: booking.lastname,
@@ -935,12 +1254,13 @@ export const rebookSession = onCall(async (request) => {
   })
   batch.update(db.collection('sessions').doc(newSessionId), {
     has_bookings: true,
-    portal_bookings_count: FieldValue.increment(1),
+    bio_link_bookings_count: FieldValue.increment(1),
     last_booking_at: FieldValue.serverTimestamp(),
   })
   await batch.commit()
 
-  let teamName = ''; let teamSlug: string | null = null
+  let teamName = ''
+  let teamSlug: string | null = null
   const [, teamDoc] = await to(db.collection('teams').doc(teamId).get())
   if (teamDoc && teamDoc.exists) {
     teamName = (teamDoc.data()!.name as string) || ''
@@ -949,25 +1269,39 @@ export const rebookSession = onCall(async (request) => {
 
   let activityName = 'Session'
   if (newSession.activityId) {
-    const [, actDoc] = await to(db.collection('activities').doc(newSession.activityId as string).get())
+    const [, actDoc] = await to(
+      db
+        .collection('activities')
+        .doc(newSession.activityId as string)
+        .get()
+    )
     if (actDoc && actDoc.exists) activityName = (actDoc.data()?.name as string) || 'Session'
   }
 
   const manageBookingUrl = teamSlug
-    ? `${getHostingUrl()}/portal/${teamSlug}/manage-booking?token=${newBookingToken}`
+    ? `${getHostingUrl()}/public/bio-link/${teamSlug}/manage-booking?token=${newBookingToken}`
     : null
 
   const oldSessionStart = (oldSession.start as Timestamp).toDate()
   const newSessionEnd = (newSession.end as Timestamp).toDate()
   const locale = 'en-GB'
-  const dateOpts: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+  const dateOpts: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }
   const timeOpts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }
   const firstname = (booking.firstname as string) || 'Guest'
   const oldDateStr = oldSessionStart.toLocaleDateString(locale, dateOpts)
   const newDateStr = newSessionStart.toLocaleDateString(locale, dateOpts)
   const newTimeStr = `${newSessionStart.toLocaleTimeString(locale, timeOpts)} – ${newSessionEnd.toLocaleTimeString(locale, timeOpts)}`
-  const locationLine = newSession.location ? `<p><strong>Location:</strong> ${newSession.location}</p>` : ''
-  const manageLink = manageBookingUrl ? `<p><a href="${manageBookingUrl}">Manage your booking</a></p>` : ''
+  const locationLine = newSession.location
+    ? `<p><strong>Location:</strong> ${newSession.location}</p>`
+    : ''
+  const manageLink = manageBookingUrl
+    ? `<p><a href="${manageBookingUrl}">Manage your booking</a></p>`
+    : ''
 
   try {
     await sendEmail({
@@ -984,7 +1318,11 @@ export const rebookSession = onCall(async (request) => {
     success: true,
     message: 'Your booking has been changed.',
     newBookingToken,
-    newSession: { id: newSessionId, start: newSessionStart.toISOString(), end: newSessionEnd.toISOString() },
+    newSession: {
+      id: newSessionId,
+      start: newSessionStart.toISOString(),
+      end: newSessionEnd.toISOString(),
+    },
     manageBookingUrl,
   }
 })

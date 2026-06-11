@@ -9,41 +9,66 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 
 export const sendTeamInvitation = regionalFunctions.https.onCall(
   async (data: { teamId: string; email: string; role: 'manager' | 'viewer' }, context) => {
-    if (!context.auth) throw new (await import('firebase-functions')).https.HttpsError('unauthenticated', 'Not authenticated')
+    if (!context.auth)
+      throw new (await import('firebase-functions')).https.HttpsError(
+        'unauthenticated',
+        'Not authenticated'
+      )
 
     const { teamId, email, role } = data
     const userId = context.auth.uid
 
-    if (!teamId || !email || !role) throw new (await import('firebase-functions')).https.HttpsError('invalid-argument', 'teamId, email, and role are required')
-    if (!['manager', 'viewer'].includes(role)) throw new (await import('firebase-functions')).https.HttpsError('invalid-argument', 'Invalid role')
+    if (!teamId || !email || !role)
+      throw new (await import('firebase-functions')).https.HttpsError(
+        'invalid-argument',
+        'teamId, email, and role are required'
+      )
+    if (!['manager', 'viewer'].includes(role))
+      throw new (await import('firebase-functions')).https.HttpsError(
+        'invalid-argument',
+        'Invalid role'
+      )
 
     const isOwner = await hasTeamRole(userId, teamId, 'owner')
-    if (!isOwner) throw new (await import('firebase-functions')).https.HttpsError('permission-denied', 'Only team owners can send invitations')
+    if (!isOwner)
+      throw new (await import('firebase-functions')).https.HttpsError(
+        'permission-denied',
+        'Only team owners can send invitations'
+      )
 
     const team = await getTeam(teamId)
-    if (!team) throw new (await import('firebase-functions')).https.HttpsError('not-found', 'Team not found')
+    if (!team)
+      throw new (await import('firebase-functions')).https.HttpsError('not-found', 'Team not found')
 
     // The Free plan is single-user — inviting members requires a paid plan.
     // The message is a stable code the web app maps to localized copy.
     if ((team.plan ?? 'free') === 'free') {
-      throw new (await import('firebase-functions')).https.HttpsError('failed-precondition', 'free-plan-single-user')
+      throw new (await import('firebase-functions')).https.HttpsError(
+        'failed-precondition',
+        'free-plan-single-user'
+      )
     }
 
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
 
-    const invRef = await admin.firestore().collection('teams').doc(teamId).collection('team_invitations').add({
-      teamId,
-      email: email.toLowerCase().trim(),
-      role,
-      token,
-      invitedBy: userId,
-      created: FieldValue.serverTimestamp(),
-      expires_at: expiresAt,
-    })
+    const invRef = await admin
+      .firestore()
+      .collection('teams')
+      .doc(teamId)
+      .collection('team_invitations')
+      .add({
+        teamId,
+        email: email.toLowerCase().trim(),
+        role,
+        token,
+        invitedBy: userId,
+        created: FieldValue.serverTimestamp(),
+        expires_at: expiresAt,
+      })
 
     const hostingUrl = process.env.HOSTING_URL || 'https://linyup.com'
-    const invitationUrl = `${hostingUrl}/portal/team-invitation/${token}`
+    const invitationUrl = `${hostingUrl}/public/bio-link/team-invitation/${token}`
 
     const { html, text } = buildEmailTemplate({
       title: `You've been invited to join ${team.name} on Linyup`,

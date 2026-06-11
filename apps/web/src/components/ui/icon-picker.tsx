@@ -5,7 +5,7 @@ import * as LucideIcons from 'lucide-react'
 import { Globe } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ICON_CATEGORIES } from '@/lib/portal'
+import { ICON_CATEGORIES } from '@/lib/bioLink'
 
 // ─── dynamic icon renderer ────────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ export function IconPicker({ value, onChange, className }: Props) {
       <PopoverTrigger
         className={cn(
           'flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground transition-colors',
-          className,
+          className
         )}
       >
         <DynamicIcon name={value} className="h-4 w-4" />
@@ -50,10 +50,14 @@ export function IconPicker({ value, onChange, className }: Props) {
                     key={name}
                     type="button"
                     title={name}
-                    onClick={() => { onChange(name); setOpen(false) }}
+                    onClick={() => {
+                      onChange(name)
+                      setOpen(false)
+                    }}
                     className={cn(
                       'flex h-8 w-8 items-center justify-center rounded hover:bg-muted transition-colors',
-                      value === name && 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/30',
+                      value === name &&
+                        'bg-primary/10 text-primary ring-1 ring-inset ring-primary/30'
                     )}
                   >
                     <DynamicIcon name={name} className="h-4 w-4" />

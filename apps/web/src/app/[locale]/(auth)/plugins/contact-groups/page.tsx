@@ -52,6 +52,7 @@ function useActiveContacts(teamId: string | null) {
         where('deleted_at', '==', null),
         where('archived_at', '==', null),
         orderBy('lastname'),
+        orderBy('firstname'),
       )
       const snap = await getDocs(q)
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)

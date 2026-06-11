@@ -201,11 +201,11 @@ service cloud.firestore {
       // Only team owners can delete teams
       allow delete: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
 
-      // Public profile subcollection - minimal public data for portal
+      // Public profile subcollection - minimal public data for bio-link
       match /public_profile/{publicProfileId} {
-        // Anyone can read (needed for public portal access)
+        // Anyone can read (needed for public bio-link access)
         allow read;
-        // Team members can update portal settings (appearance, links, booking config)
+        // Team members can update bio-link settings (appearance, links, booking config)
         allow write: if isTeamMember(teamId);
       }
 
@@ -593,7 +593,7 @@ service cloud.firestore {
       }
 
       // Invitations — written and read exclusively by Cloud Functions (admin SDK).
-      // The portal uses getEventInvitationDetails() callable, not direct client reads.
+      // The bio-link uses getEventInvitationDetails() callable, not direct client reads.
       match /invitations/{invitation} {
         allow read:  if false;
         allow write: if false;
@@ -633,7 +633,7 @@ service cloud.firestore {
         allow read: if isSelfContact(participantId);
       }
 
-      // bookings sub-collection (portal reservations, separate from confirmed attendance)
+      // bookings sub-collection (bio-link reservations, separate from confirmed attendance)
       match /bookings/{bookingId} {
         allow read, write: if belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session))) || hasRole('admin');
         // Allow contacts to read their own booking doc (student app)
@@ -759,7 +759,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Booking verification codes - for email-based authentication in portal
+    // Booking verification codes - for email-based authentication in bio-link
     // All operations handled via cloud functions
     match /booking_verification_codes/{codeId} {
       allow read: if false;

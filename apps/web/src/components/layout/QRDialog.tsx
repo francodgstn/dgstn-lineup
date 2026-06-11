@@ -8,22 +8,33 @@ import { Copy, Download, Check, ExternalLink } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
-type QRTab = 'checkin' | 'portal'
+type QRTab = 'checkin' | 'bioLink'
 
-export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () => void; team: Team | null }) {
+export function QRDialog({
+  open,
+  onClose,
+  team,
+}: {
+  open: boolean
+  onClose: () => void
+  team: Team | null
+}) {
   const t = useTranslations('TopBar')
   const [tab, setTab] = useState<QRTab>('checkin')
   const [copied, setCopied] = useState(false)
   const checkinRef = useRef<HTMLCanvasElement>(null)
-  const portalRef  = useRef<HTMLCanvasElement>(null)
+  const bioLinkRef = useRef<HTMLCanvasElement>(null)
 
-  const portalUrl = typeof window !== 'undefined' && team?.slug
-    ? `${window.location.origin}/portal/${team.slug}`
-    : ''
+  const bioLinkUrl =
+    typeof window !== 'undefined' && team?.slug
+      ? `${window.location.origin}/public/bio-link/${team.slug}`
+      : ''
 
   const checkinValue = team?.slug ? JSON.stringify({ team: team.slug }) : ''
 
-  function activeRef() { return tab === 'checkin' ? checkinRef : portalRef }
+  function activeRef() {
+    return tab === 'checkin' ? checkinRef : bioLinkRef
+  }
 
   function download(filename: string) {
     const canvas = activeRef().current
@@ -42,7 +53,7 @@ export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () =
     const headerH = 40
     const qrSize = qr.width
     const out = document.createElement('canvas')
-    out.width  = qrSize + pad * 2
+    out.width = qrSize + pad * 2
     out.height = qrSize + headerH + pad * 2
 
     const ctx = out.getContext('2d')!
@@ -70,7 +81,7 @@ export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () =
     // Scale QR 4× for crisp print resolution
     const scale = 4
     const hiRes = document.createElement('canvas')
-    hiRes.width  = qrCanvas.width  * scale
+    hiRes.width = qrCanvas.width * scale
     hiRes.height = qrCanvas.height * scale
     const hCtx = hiRes.getContext('2d')!
     hCtx.fillStyle = '#ffffff'
@@ -81,11 +92,11 @@ export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () =
     const { jsPDF } = await import('jspdf')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
-    const pageW   = doc.internal.pageSize.getWidth()   // 210
-    const pageH   = doc.internal.pageSize.getHeight()  // 297
-    const margin  = 22
-    const centerX = pageW / 2                          // 105
-    const maxW    = pageW - margin * 2                 // 166
+    const pageW = doc.internal.pageSize.getWidth() // 210
+    const pageH = doc.internal.pageSize.getHeight() // 297
+    const margin = 22
+    const centerX = pageW / 2 // 105
+    const maxW = pageW - margin * 2 // 166
 
     // ── Title ────────────────────────────────────────────────────────────────
     doc.setFont('helvetica', 'bold')
@@ -108,7 +119,7 @@ export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () =
     doc.text(team.name, centerX, lineY + 1.5, { align: 'center' })
 
     // ── Description ──────────────────────────────────────────────────────────
-    let cursorY = lineY + 9   // 71 mm
+    let cursorY = lineY + 9 // 71 mm
     if (team.description) {
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
@@ -124,11 +135,11 @@ export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () =
     }
 
     // ── QR code + border box ─────────────────────────────────────────────────
-    const qrSize   = 78
-    const qrPad    = 7
-    const boxSize  = qrSize + qrPad * 2   // 92
-    const boxX     = centerX - boxSize / 2
-    const qrX      = centerX - qrSize / 2
+    const qrSize = 78
+    const qrPad = 7
+    const boxSize = qrSize + qrPad * 2 // 92
+    const boxX = centerX - boxSize / 2
+    const qrX = centerX - qrSize / 2
 
     doc.setDrawColor(70, 70, 70)
     doc.setLineWidth(0.9)
@@ -152,8 +163,8 @@ export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () =
   }
 
   async function copyUrl() {
-    if (!portalUrl) return
-    await navigator.clipboard.writeText(portalUrl)
+    if (!bioLinkUrl) return
+    await navigator.clipboard.writeText(bioLinkUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -173,23 +184,25 @@ export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () =
           <div className="space-y-4">
             {/* Tabs */}
             <div className="flex rounded-lg border overflow-hidden w-fit">
-              {(['checkin', 'portal'] as QRTab[]).map((v) => (
+              {(['checkin', 'bioLink'] as QRTab[]).map((v) => (
                 <button
                   key={v}
                   type="button"
                   onClick={() => setTab(v)}
                   className={`px-4 py-1.5 text-sm transition-colors ${
-                    tab === v ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'
+                    tab === v
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-muted text-muted-foreground'
                   }`}
                 >
-                  {t(v === 'checkin' ? 'qrCheckinTab' : 'qrPortalTab')}
+                  {t(v === 'checkin' ? 'qrCheckinTab' : 'qrBioLinkTab')}
                 </button>
               ))}
             </div>
 
             {/* Description */}
             <p className="text-xs text-muted-foreground">
-              {t(tab === 'checkin' ? 'qrCheckinDesc' : 'qrPortalDesc')}
+              {t(tab === 'checkin' ? 'qrCheckinDesc' : 'qrBioLinkDesc')}
             </p>
 
             {/* QR codes (both rendered, only one visible — preserves canvas ref) */}
@@ -197,19 +210,34 @@ export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () =
               <div className={tab === 'checkin' ? '' : 'hidden'}>
                 <QRCodeCanvas ref={checkinRef} value={checkinValue} size={200} level="M" />
               </div>
-              <div className={tab === 'portal' ? '' : 'hidden'}>
-                <QRCodeCanvas ref={portalRef} value={portalUrl} size={200} level="M" />
+              <div className={tab === 'bioLink' ? '' : 'hidden'}>
+                <QRCodeCanvas ref={bioLinkRef} value={bioLinkUrl} size={200} level="M" />
               </div>
             </div>
 
-            {/* Portal URL */}
-            {tab === 'portal' && (
+            {/* Bio-link URL */}
+            {tab === 'bioLink' && (
               <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-1.5">
-                <span className="text-xs font-mono flex-1 truncate text-muted-foreground">{portalUrl}</span>
-                <button type="button" onClick={copyUrl} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-                  {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                <span className="text-xs font-mono flex-1 truncate text-muted-foreground">
+                  {bioLinkUrl}
+                </span>
+                <button
+                  type="button"
+                  onClick={copyUrl}
+                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 text-green-600" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
                 </button>
-                <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                <a
+                  href={bioLinkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </div>
@@ -232,7 +260,9 @@ export function QRDialog({ open, onClose, team }: { open: boolean; onClose: () =
                 variant="outline"
                 size="sm"
                 className="flex-1 gap-1.5"
-                onClick={() => downloadBranded(team?.name ?? 'Linyup', `linyup-qr-${tab}-branded.png`)}
+                onClick={() =>
+                  downloadBranded(team?.name ?? 'Linyup', `linyup-qr-${tab}-branded.png`)
+                }
               >
                 <Download className="h-3.5 w-3.5" />
                 {t('qrDownloadBranded')}

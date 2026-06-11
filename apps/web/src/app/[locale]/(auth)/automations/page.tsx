@@ -4,8 +4,18 @@ import React, { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
-  collection, query, where, orderBy, getDocs, getDoc,
-  addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp,
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  getDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -13,7 +23,13 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,16 +37,47 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { PlanGate } from '@/components/plan/PlanGate'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Separator } from '@/components/ui/separator'
 import {
-  Workflow, Plus, Pencil, Play, Trash2, MoreVertical, CirclePause, CirclePlay,
-  Clock, UserPlus, CheckCircle, XCircle,
-  CalendarCheck, ShieldCheck, CreditCard, Mail, Bell,
-  FileText, Settings2, Zap, RefreshCw, Sparkles, BookOpen,
-  Tag, Webhook,
+  Workflow,
+  Plus,
+  Pencil,
+  Play,
+  Trash2,
+  MoreVertical,
+  CirclePause,
+  CirclePlay,
+  Clock,
+  UserPlus,
+  CheckCircle,
+  XCircle,
+  CalendarCheck,
+  ShieldCheck,
+  CreditCard,
+  Mail,
+  Bell,
+  FileText,
+  Settings2,
+  Zap,
+  RefreshCw,
+  Sparkles,
+  BookOpen,
+  Tag,
+  Webhook,
 } from 'lucide-react'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import { Link } from '@/i18n/navigation'
@@ -43,13 +90,13 @@ import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 interface AutomationTrigger {
   type: string
   delayMinutes?: number
-  webhook_endpoint_id?: string  // inbound_webhook only
+  webhook_endpoint_id?: string // inbound_webhook only
 }
 
 interface AutomationCondition {
   type: string
   value?: string
-  field?: string      // field_equals condition
+  field?: string // field_equals condition
   delay_days?: number
 }
 
@@ -62,8 +109,8 @@ interface AutomationAction {
   subject?: string
   body?: string
   message?: string
-  tag?: string     // assign_tag / remove_tag
-  url?: string     // webhook
+  tag?: string // assign_tag / remove_tag
+  url?: string // webhook
 }
 
 interface AutomationRule {
@@ -75,7 +122,7 @@ interface AutomationRule {
   actions: AutomationAction[]
   last_run_at?: { toDate(): Date } | null
   last_run_sent?: number
-  system_key?: string   // present on starter-kit rules — used to prevent duplicate seeding
+  system_key?: string // present on starter-kit rules — used to prevent duplicate seeding
   // legacy fields — normalised on read
   template_id?: string
   alert_preset_id?: string
@@ -88,74 +135,96 @@ interface OutreachTemplate {
   body: string
   language: string
   active: boolean
-  system_key?: string   // present on starter-kit templates — used to prevent duplicate seeding
+  system_key?: string // present on starter-kit templates — used to prevent duplicate seeding
 }
 
 // Form shapes
 interface FormCondition {
   type: string
   value: string
-  condField?: string    // field_equals — the field name
+  condField?: string // field_equals — the field name
 }
 interface FormAction {
   type: string
-  templateId: string    // send_email
-  field?: string        // update_field — which contact field
-  fieldValue?: string   // update_field — the new value
-  subject?: string      // notify_team — email subject
-  body?: string         // notify_team — email body (markdown)
-  message?: string      // log_activity — log message
-  tag?: string          // assign_tag / remove_tag
-  url?: string          // webhook
+  templateId: string // send_email
+  field?: string // update_field — which contact field
+  fieldValue?: string // update_field — the new value
+  subject?: string // notify_team — email subject
+  body?: string // notify_team — email body (markdown)
+  message?: string // log_activity — log message
+  tag?: string // assign_tag / remove_tag
+  url?: string // webhook
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const TRIGGER_OPTIONS = [
-  { value: 'schedule_daily',            label: 'Daily scan (scheduled)',         icon: Clock,          supportsDelay: false },
-  { value: 'contact_created',           label: 'Contact created',                icon: UserPlus,       supportsDelay: true },
-  { value: 'booking_confirmed',         label: 'Booking confirmed',              icon: CheckCircle,    supportsDelay: true },
-  { value: 'booking_no_show',           label: 'Booking marked no-show',         icon: XCircle,        supportsDelay: true },
-  { value: 'booking_cancelled',         label: 'Booking cancelled',              icon: XCircle,        supportsDelay: true },
-  { value: 'membership_status_changed', label: 'Membership status changed',      icon: ShieldCheck,    supportsDelay: true },
-  { value: 'subscription_changed',      label: 'Subscription changed',           icon: CreditCard,     supportsDelay: true },
-  { value: 'session_ended',             label: 'Session ended',                  icon: CalendarCheck,  supportsDelay: true },
-  { value: 'inbound_webhook',           label: 'Inbound webhook',                icon: Webhook,        supportsDelay: false },
-  { value: 'manual',                    label: 'Manual only',                    icon: Play,           supportsDelay: false },
+  { value: 'schedule_daily', label: 'Daily scan (scheduled)', icon: Clock, supportsDelay: false },
+  { value: 'contact_created', label: 'Contact created', icon: UserPlus, supportsDelay: true },
+  {
+    value: 'booking_confirmed',
+    label: 'Booking confirmed',
+    icon: CheckCircle,
+    supportsDelay: true,
+  },
+  { value: 'booking_no_show', label: 'Booking marked no-show', icon: XCircle, supportsDelay: true },
+  { value: 'booking_cancelled', label: 'Booking cancelled', icon: XCircle, supportsDelay: true },
+  {
+    value: 'membership_status_changed',
+    label: 'Membership status changed',
+    icon: ShieldCheck,
+    supportsDelay: true,
+  },
+  {
+    value: 'subscription_changed',
+    label: 'Subscription changed',
+    icon: CreditCard,
+    supportsDelay: true,
+  },
+  { value: 'session_ended', label: 'Session ended', icon: CalendarCheck, supportsDelay: true },
+  { value: 'inbound_webhook', label: 'Inbound webhook', icon: Webhook, supportsDelay: false },
+  { value: 'manual', label: 'Manual only', icon: Play, supportsDelay: false },
 ]
 
 const CONDITION_TYPE_OPTIONS = [
-  { value: 'contact_type',              label: 'Contact type',                    input: 'contact_type_select' },
-  { value: 'membership_status',         label: 'Membership status',               input: 'membership_select' },
-  { value: 'subscription',              label: 'Subscription',                    input: 'subscription_select' },
-  { value: 'sessions_attended_min',     label: 'Sessions attended ≥',            input: 'number' },
-  { value: 'sessions_attended_max',     label: 'Sessions attended ≤',            input: 'number' },
-  { value: 'sessions_attended_exactly', label: 'Sessions attended =',            input: 'number' },
-  { value: 'inactivity_days',           label: 'Inactive for at least (days)',   input: 'number' },
-  { value: 'inactivity_days_max',       label: 'Inactive for at most (days)',    input: 'number' },
-  { value: 'subscription_expires_in',   label: 'Subscription expires in ≤ (days)', input: 'number' },
-  { value: 'days_since_created',        label: 'Days since created ≥',          input: 'number' },
-  { value: 'tag',                       label: 'Has tag',                         input: 'text' },
-  { value: 'field_equals',              label: 'Field equals',                    input: 'field_equals' },
-  { value: 'birthday_today',            label: 'Birthday today',                 input: 'none' },
-  { value: 'portal_booking_no_show',    label: 'Portal booking no-show',         input: 'none' },
+  { value: 'contact_type', label: 'Contact type', input: 'contact_type_select' },
+  { value: 'membership_status', label: 'Membership status', input: 'membership_select' },
+  { value: 'subscription', label: 'Subscription', input: 'subscription_select' },
+  { value: 'sessions_attended_min', label: 'Sessions attended ≥', input: 'number' },
+  { value: 'sessions_attended_max', label: 'Sessions attended ≤', input: 'number' },
+  { value: 'sessions_attended_exactly', label: 'Sessions attended =', input: 'number' },
+  { value: 'inactivity_days', label: 'Inactive for at least (days)', input: 'number' },
+  { value: 'inactivity_days_max', label: 'Inactive for at most (days)', input: 'number' },
+  { value: 'subscription_expires_in', label: 'Subscription expires in ≤ (days)', input: 'number' },
+  { value: 'days_since_created', label: 'Days since created ≥', input: 'number' },
+  { value: 'tag', label: 'Has tag', input: 'text' },
+  { value: 'field_equals', label: 'Field equals', input: 'field_equals' },
+  { value: 'birthday_today', label: 'Birthday today', input: 'none' },
+  { value: 'portal_booking_no_show', label: 'Bio-link booking no-show', input: 'none' },
 ]
 
 const CONTACT_TYPE_VALUES = ['trial', 'student', 'external']
-const MEMBERSHIP_STATUS_VALUES = ['guest', 'requested', 'being_checked', 'almost_ready', 'active', 'expired']
+const MEMBERSHIP_STATUS_VALUES = [
+  'guest',
+  'requested',
+  'being_checked',
+  'almost_ready',
+  'active',
+  'expired',
+]
 const SUBSCRIPTION_VALUES = [
   { value: 'any', label: 'Any subscription' },
   { value: 'none', label: 'No subscription' },
 ]
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
-  send_email:   'Send email',
+  send_email: 'Send email',
   update_field: 'Update contact field',
-  assign_tag:   'Add tag to contact',
-  remove_tag:   'Remove tag from contact',
-  notify_team:  'Notify team (email)',
+  assign_tag: 'Add tag to contact',
+  remove_tag: 'Remove tag from contact',
+  notify_team: 'Notify team (email)',
   log_activity: 'Log activity entry',
-  webhook:      'Webhook (POST)',
+  webhook: 'Webhook (POST)',
   create_alert: 'Create alert (coming soon)',
 }
 
@@ -213,12 +282,15 @@ function normaliseRule(data: Record<string, unknown>, id: string): AutomationRul
   if (Array.isArray(data.actions) && (data.actions as unknown[]).length > 0) {
     actions.push(...(data.actions as AutomationAction[]))
   } else {
-    if (data.template_id) actions.push({ type: 'send_email', templateId: data.template_id as string })
-    if (data.alert_preset_id) actions.push({ type: 'create_alert', presetId: data.alert_preset_id as string })
+    if (data.template_id)
+      actions.push({ type: 'send_email', templateId: data.template_id as string })
+    if (data.alert_preset_id)
+      actions.push({ type: 'create_alert', presetId: data.alert_preset_id as string })
   }
-  const trigger = (data.trigger && typeof data.trigger === 'object')
-    ? data.trigger as AutomationTrigger
-    : { type: 'schedule_daily' }
+  const trigger =
+    data.trigger && typeof data.trigger === 'object'
+      ? (data.trigger as AutomationTrigger)
+      : { type: 'schedule_daily' }
   return {
     id,
     name: (data.name as string) || '',
@@ -242,10 +314,7 @@ function useRules(teamId: string | null) {
     queryFn: async () => {
       if (!teamId) return []
       const snap = await getDocs(
-        query(
-          collection(db, TEAMS_COLLECTION, teamId, 'automation_rules'),
-          orderBy('name', 'asc'),
-        ),
+        query(collection(db, TEAMS_COLLECTION, teamId, 'automation_rules'), orderBy('name', 'asc'))
       )
       return snap.docs.map((d) => normaliseRule(d.data() as Record<string, unknown>, d.id))
     },
@@ -262,8 +331,8 @@ function useTemplates(teamId: string | null) {
         query(
           collection(db, TEAMS_COLLECTION, teamId, 'outreach_templates'),
           where('active', '==', true),
-          orderBy('name', 'asc'),
-        ),
+          orderBy('name', 'asc')
+        )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as OutreachTemplate)
     },
@@ -279,7 +348,12 @@ function TriggerIcon({ type, className }: { type: string; className?: string }) 
 }
 
 function RuleCard({
-  rule, templates, onEdit, onToggle, onRunNow, onDelete,
+  rule,
+  templates,
+  onEdit,
+  onToggle,
+  onRunNow,
+  onDelete,
 }: {
   rule: AutomationRule
   templates: OutreachTemplate[]
@@ -292,18 +366,29 @@ function RuleCard({
 
   async function handleRunNow() {
     setRunning(true)
-    try { await onRunNow() } finally { setRunning(false) }
+    try {
+      await onRunNow()
+    } finally {
+      setRunning(false)
+    }
   }
 
   const trigger = rule.trigger ?? { type: 'schedule_daily' }
 
   return (
-    <div className={`rounded-xl border bg-card p-4 space-y-3 transition-opacity ${rule.active ? '' : 'opacity-60'}`}>
+    <div
+      className={`rounded-xl border bg-card p-4 space-y-3 transition-opacity ${rule.active ? '' : 'opacity-60'}`}
+    >
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <TriggerIcon type={trigger.type} className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-          <h3 className="font-semibold text-sm leading-tight truncate">{rule.name || '(unnamed)'}</h3>
+          <TriggerIcon
+            type={trigger.type}
+            className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5"
+          />
+          <h3 className="font-semibold text-sm leading-tight truncate">
+            {rule.name || '(unnamed)'}
+          </h3>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant={rule.active ? 'default' : 'secondary'} className="text-xs">
@@ -315,18 +400,32 @@ function RuleCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={onEdit}>
-                <Pencil className="h-3.5 w-3.5 mr-2" />Edit
+                <Pencil className="h-3.5 w-3.5 mr-2" />
+                Edit
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onToggle}>
-                {rule.active
-                  ? <><CirclePause className="h-3.5 w-3.5 mr-2" />Pause</>
-                  : <><CirclePlay className="h-3.5 w-3.5 mr-2" />Activate</>}
+                {rule.active ? (
+                  <>
+                    <CirclePause className="h-3.5 w-3.5 mr-2" />
+                    Pause
+                  </>
+                ) : (
+                  <>
+                    <CirclePlay className="h-3.5 w-3.5 mr-2" />
+                    Activate
+                  </>
+                )}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleRunNow} disabled={running}>
-                <Play className="h-3.5 w-3.5 mr-2" />{running ? 'Running…' : 'Run now'}
+                <Play className="h-3.5 w-3.5 mr-2" />
+                {running ? 'Running…' : 'Run now'}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-                <Trash2 className="h-3.5 w-3.5 mr-2" />Delete
+              <DropdownMenuItem
+                onClick={onDelete}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -337,9 +436,11 @@ function RuleCard({
       <div className="text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{triggerLabel(trigger.type)}</span>
         {trigger.delayMinutes && trigger.delayMinutes > 0 && (
-          <span className="ml-1">· {trigger.delayMinutes < 60
-            ? `${trigger.delayMinutes}m delay`
-            : `${trigger.delayMinutes / 60}h delay`}
+          <span className="ml-1">
+            ·{' '}
+            {trigger.delayMinutes < 60
+              ? `${trigger.delayMinutes}m delay`
+              : `${trigger.delayMinutes / 60}h delay`}
           </span>
         )}
       </div>
@@ -348,7 +449,10 @@ function RuleCard({
       {rule.conditions.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {rule.conditions.map((c, i) => (
-            <span key={i} className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium text-muted-foreground bg-muted">
+            <span
+              key={i}
+              className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium text-muted-foreground bg-muted"
+            >
               {conditionSummary(c)}
             </span>
           ))}
@@ -359,15 +463,18 @@ function RuleCard({
       {rule.actions.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {rule.actions.map((a, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
-              {a.type === 'send_email'   && <Mail className="h-3 w-3" />}
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary"
+            >
+              {a.type === 'send_email' && <Mail className="h-3 w-3" />}
               {a.type === 'create_alert' && <Bell className="h-3 w-3" />}
               {a.type === 'update_field' && <Settings2 className="h-3 w-3" />}
-              {a.type === 'notify_team'  && <Bell className="h-3 w-3" />}
+              {a.type === 'notify_team' && <Bell className="h-3 w-3" />}
               {a.type === 'log_activity' && <FileText className="h-3 w-3" />}
-              {a.type === 'assign_tag'   && <Tag className="h-3 w-3" />}
-              {a.type === 'remove_tag'   && <Tag className="h-3 w-3" />}
-              {a.type === 'webhook'      && <Webhook className="h-3 w-3" />}
+              {a.type === 'assign_tag' && <Tag className="h-3 w-3" />}
+              {a.type === 'remove_tag' && <Tag className="h-3 w-3" />}
+              {a.type === 'webhook' && <Webhook className="h-3 w-3" />}
               {actionSummary(a, templates)}
             </span>
           ))}
@@ -388,12 +495,20 @@ function RuleCard({
 // ─── Condition editor ─────────────────────────────────────────────────────────
 
 function ConditionEditor({
-  conditions, onChange,
-}: { conditions: FormCondition[]; onChange: (c: FormCondition[]) => void }) {
-  function add() { onChange([...conditions, { type: 'contact_type', value: 'trial' }]) }
-  function remove(i: number) { onChange(conditions.filter((_, idx) => idx !== i)) }
+  conditions,
+  onChange,
+}: {
+  conditions: FormCondition[]
+  onChange: (c: FormCondition[]) => void
+}) {
+  function add() {
+    onChange([...conditions, { type: 'contact_type', value: 'trial' }])
+  }
+  function remove(i: number) {
+    onChange(conditions.filter((_, idx) => idx !== i))
+  }
   function update(i: number, patch: Partial<FormCondition>) {
-    onChange(conditions.map((c, idx) => idx === i ? { ...c, ...patch } : c))
+    onChange(conditions.map((c, idx) => (idx === i ? { ...c, ...patch } : c)))
   }
 
   return (
@@ -407,24 +522,36 @@ function ConditionEditor({
               {/* Row 1: type selector + inline value (all types except field_equals) */}
               <div className={`grid gap-2 ${isFieldEquals ? 'grid-cols-1' : 'grid-cols-2'}`}>
                 {/* Type select */}
-                <Select value={cond.type} onValueChange={(v: string | null) => {
-                  const next = v ?? cond.type
-                  const defaultVal = next === 'contact_type' ? 'trial'
-                    : next === 'membership_status' ? 'active'
-                    : next === 'subscription' ? 'any'
-                    : (next === 'portal_booking_no_show' || next === 'birthday_today') ? ''
-                    : next === 'tag' || next === 'field_equals' ? ''
-                    : '7'
-                  update(i, { type: next, value: defaultVal, condField: undefined })
-                }}>
+                <Select
+                  value={cond.type}
+                  onValueChange={(v: string | null) => {
+                    const next = v ?? cond.type
+                    const defaultVal =
+                      next === 'contact_type'
+                        ? 'trial'
+                        : next === 'membership_status'
+                          ? 'active'
+                          : next === 'subscription'
+                            ? 'any'
+                            : next === 'portal_booking_no_show' || next === 'birthday_today'
+                              ? ''
+                              : next === 'tag' || next === 'field_equals'
+                                ? ''
+                                : '7'
+                    update(i, { type: next, value: defaultVal, condField: undefined })
+                  }}
+                >
                   <SelectTrigger className="h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
-                      {CONDITION_TYPE_OPTIONS.find((o) => o.value === cond.type)?.label ?? cond.type}
+                      {CONDITION_TYPE_OPTIONS.find((o) => o.value === cond.type)?.label ??
+                        cond.type}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
                     {CONDITION_TYPE_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value} className="text-xs">
+                        {o.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -433,35 +560,55 @@ function ConditionEditor({
                 {!isFieldEquals && (
                   <>
                     {opt?.input === 'contact_type_select' && (
-                      <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <Select
+                        value={cond.value}
+                        onValueChange={(v) => update(i, { value: v ?? '' })}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           {CONTACT_TYPE_VALUES.map((v) => (
-                            <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
+                            <SelectItem key={v} value={v} className="text-xs">
+                              {v}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     )}
                     {opt?.input === 'membership_select' && (
-                      <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <Select
+                        value={cond.value}
+                        onValueChange={(v) => update(i, { value: v ?? '' })}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           {MEMBERSHIP_STATUS_VALUES.map((v) => (
-                            <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
+                            <SelectItem key={v} value={v} className="text-xs">
+                              {v}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     )}
                     {opt?.input === 'subscription_select' && (
-                      <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
+                      <Select
+                        value={cond.value}
+                        onValueChange={(v) => update(i, { value: v ?? '' })}
+                      >
                         <SelectTrigger className="h-8 text-xs">
                           <span className="flex flex-1 text-left text-xs truncate">
-                            {SUBSCRIPTION_VALUES.find((sv) => sv.value === cond.value)?.label ?? cond.value}
+                            {SUBSCRIPTION_VALUES.find((sv) => sv.value === cond.value)?.label ??
+                              cond.value}
                           </span>
                         </SelectTrigger>
                         <SelectContent>
                           {SUBSCRIPTION_VALUES.map((sv) => (
-                            <SelectItem key={sv.value} value={sv.value} className="text-xs">{sv.label}</SelectItem>
+                            <SelectItem key={sv.value} value={sv.value} className="text-xs">
+                              {sv.label}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -483,7 +630,7 @@ function ConditionEditor({
                         onChange={(e) => update(i, { value: e.target.value })}
                       />
                     )}
-                    {(opt?.input === 'none') && <div />}
+                    {opt?.input === 'none' && <div />}
                   </>
                 )}
               </div>
@@ -506,14 +653,21 @@ function ConditionEditor({
                 </div>
               )}
             </div>
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => remove(i)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => remove(i)}
+            >
               <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
           </div>
         )
       })}
       <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={add}>
-        <Plus className="h-3 w-3 mr-1" />Add condition
+        <Plus className="h-3 w-3 mr-1" />
+        Add condition
       </Button>
     </div>
   )
@@ -523,11 +677,18 @@ function ConditionEditor({
 
 const UPDATE_FIELD_OPTIONS = [
   { value: 'type', label: 'Contact type', values: ['trial', 'student', 'external'] },
-  { value: 'membership_status', label: 'Membership status', values: ['guest', 'requested', 'being_checked', 'almost_ready', 'active', 'expired'] },
+  {
+    value: 'membership_status',
+    label: 'Membership status',
+    values: ['guest', 'requested', 'being_checked', 'almost_ready', 'active', 'expired'],
+  },
 ] as const
 
 function ActionEditor({
-  actions, templates, onChange, actionTypeLabels: labelOverrides,
+  actions,
+  templates,
+  onChange,
+  actionTypeLabels: labelOverrides,
 }: {
   actions: FormAction[]
   templates: OutreachTemplate[]
@@ -535,10 +696,14 @@ function ActionEditor({
   actionTypeLabels?: Record<string, string>
 }) {
   const resolvedActionLabels = labelOverrides ?? ACTION_TYPE_LABELS
-  function add() { onChange([...actions, { type: 'send_email', templateId: '' }]) }
-  function remove(i: number) { onChange(actions.filter((_, idx) => idx !== i)) }
+  function add() {
+    onChange([...actions, { type: 'send_email', templateId: '' }])
+  }
+  function remove(i: number) {
+    onChange(actions.filter((_, idx) => idx !== i))
+  }
   function update(i: number, patch: Partial<FormAction>) {
-    onChange(actions.map((a, idx) => idx === i ? { ...a, ...patch } : a))
+    onChange(actions.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
   }
 
   const selectedFieldMeta = (action: FormAction) =>
@@ -553,17 +718,19 @@ function ActionEditor({
             <div className="grid grid-cols-2 gap-2">
               <Select
                 value={action.type}
-                onValueChange={(v) => update(i, {
-                  type: v ?? 'send_email',
-                  templateId: '',
-                  field: undefined,
-                  fieldValue: undefined,
-                  subject: undefined,
-                  body: undefined,
-                  message: undefined,
-                  tag: undefined,
-                  url: undefined,
-                })}
+                onValueChange={(v) =>
+                  update(i, {
+                    type: v ?? 'send_email',
+                    templateId: '',
+                    field: undefined,
+                    fieldValue: undefined,
+                    subject: undefined,
+                    body: undefined,
+                    message: undefined,
+                    tag: undefined,
+                    url: undefined,
+                  })
+                }
               >
                 <SelectTrigger className="h-8 text-xs">
                   <span className="flex flex-1 text-left text-xs truncate">
@@ -571,40 +738,67 @@ function ActionEditor({
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="send_email"    className="text-xs">Send email</SelectItem>
-                  <SelectItem value="update_field"  className="text-xs">Update contact field</SelectItem>
-                  <SelectItem value="assign_tag"    className="text-xs">Add tag to contact</SelectItem>
-                  <SelectItem value="remove_tag"    className="text-xs">Remove tag from contact</SelectItem>
-                  <SelectItem value="notify_team"   className="text-xs">Notify team (email)</SelectItem>
-                  <SelectItem value="log_activity"  className="text-xs">Log activity entry</SelectItem>
-                  <SelectItem value="webhook"       className="text-xs">Webhook (POST)</SelectItem>
-                  <SelectItem value="create_alert"  className="text-xs">Create alert (coming soon)</SelectItem>
+                  <SelectItem value="send_email" className="text-xs">
+                    Send email
+                  </SelectItem>
+                  <SelectItem value="update_field" className="text-xs">
+                    Update contact field
+                  </SelectItem>
+                  <SelectItem value="assign_tag" className="text-xs">
+                    Add tag to contact
+                  </SelectItem>
+                  <SelectItem value="remove_tag" className="text-xs">
+                    Remove tag from contact
+                  </SelectItem>
+                  <SelectItem value="notify_team" className="text-xs">
+                    Notify team (email)
+                  </SelectItem>
+                  <SelectItem value="log_activity" className="text-xs">
+                    Log activity entry
+                  </SelectItem>
+                  <SelectItem value="webhook" className="text-xs">
+                    Webhook (POST)
+                  </SelectItem>
+                  <SelectItem value="create_alert" className="text-xs">
+                    Create alert (coming soon)
+                  </SelectItem>
                 </SelectContent>
               </Select>
 
               {/* Inline secondary for send_email */}
               {action.type === 'send_email' && (
-                <Select value={action.templateId} onValueChange={(v) => update(i, { templateId: v ?? '' })}>
+                <Select
+                  value={action.templateId}
+                  onValueChange={(v) => update(i, { templateId: v ?? '' })}
+                >
                   <SelectTrigger className="h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
-                      {templates.find((t) => t.id === action.templateId)?.name
-                        ?? <span className="text-muted-foreground">Select template</span>}
+                      {templates.find((t) => t.id === action.templateId)?.name ?? (
+                        <span className="text-muted-foreground">Select template</span>
+                      )}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {templates.length === 0
-                      ? <SelectItem value="__none" disabled className="text-xs text-muted-foreground">No templates</SelectItem>
-                      : templates.map((t) => (
-                          <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
-                        ))
-                    }
+                    {templates.length === 0 ? (
+                      <SelectItem value="__none" disabled className="text-xs text-muted-foreground">
+                        No templates
+                      </SelectItem>
+                    ) : (
+                      templates.map((t) => (
+                        <SelectItem key={t.id} value={t.id} className="text-xs">
+                          {t.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               )}
 
               {/* create_alert placeholder */}
               {action.type === 'create_alert' && (
-                <p className="text-xs text-muted-foreground self-center">Alert presets coming soon</p>
+                <p className="text-xs text-muted-foreground self-center">
+                  Alert presets coming soon
+                </p>
               )}
             </div>
 
@@ -614,20 +808,25 @@ function ActionEditor({
               <div className="grid grid-cols-2 gap-2">
                 <Select
                   value={action.field ?? ''}
-                  onValueChange={(v) => update(i, {
-                    field: v ?? '',
-                    fieldValue: selectedFieldMeta({ ...action, field: v ?? '' })?.values[0] ?? '',
-                  })}
+                  onValueChange={(v) =>
+                    update(i, {
+                      field: v ?? '',
+                      fieldValue: selectedFieldMeta({ ...action, field: v ?? '' })?.values[0] ?? '',
+                    })
+                  }
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
-                      {UPDATE_FIELD_OPTIONS.find((o) => o.value === action.field)?.label
-                        ?? <span className="text-muted-foreground">Field</span>}
+                      {UPDATE_FIELD_OPTIONS.find((o) => o.value === action.field)?.label ?? (
+                        <span className="text-muted-foreground">Field</span>
+                      )}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
                     {UPDATE_FIELD_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value} className="text-xs">
+                        {o.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -641,7 +840,9 @@ function ActionEditor({
                   </SelectTrigger>
                   <SelectContent>
                     {(selectedFieldMeta(action)?.values ?? []).map((v) => (
-                      <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
+                      <SelectItem key={v} value={v} className="text-xs">
+                        {v}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -694,13 +895,20 @@ function ActionEditor({
             )}
           </div>
 
-          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => remove(i)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={() => remove(i)}
+          >
             <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
         </div>
       ))}
       <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={add}>
-        <Plus className="h-3 w-3 mr-1" />Add action
+        <Plus className="h-3 w-3 mr-1" />
+        Add action
       </Button>
     </div>
   )
@@ -709,17 +917,24 @@ function ActionEditor({
 // ─── RuleDialog ───────────────────────────────────────────────────────────────
 
 const ruleSchema = z.object({
-  name:          z.string().min(1, 'Name is required'),
-  trigger_type:  z.string().min(1, 'Trigger is required'),
+  name: z.string().min(1, 'Name is required'),
+  trigger_type: z.string().min(1, 'Trigger is required'),
   delay_minutes: z.coerce.number().min(0).optional(),
-  active:        z.boolean(),
+  active: z.boolean(),
 })
 
 type RuleFormValues = z.infer<typeof ruleSchema>
 
 function RuleDialog({
-  open, onOpenChange, teamId, editing, templates, webhookEndpoints, onSaved,
-  triggerOptions: triggerOptionsProp, actionTypeLabels: actionTypeLabelsProp,
+  open,
+  onOpenChange,
+  teamId,
+  editing,
+  templates,
+  webhookEndpoints,
+  onSaved,
+  triggerOptions: triggerOptionsProp,
+  actionTypeLabels: actionTypeLabelsProp,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -728,7 +943,12 @@ function RuleDialog({
   templates: OutreachTemplate[]
   webhookEndpoints: WebhookEndpoint[]
   onSaved: () => void
-  triggerOptions?: Array<{ value: string; label: string; icon: React.ElementType; supportsDelay: boolean }>
+  triggerOptions?: Array<{
+    value: string
+    label: string
+    icon: React.ElementType
+    supportsDelay: boolean
+  }>
   actionTypeLabels?: Record<string, string>
 }) {
   const resolvedTriggerOptions = triggerOptionsProp ?? TRIGGER_OPTIONS
@@ -737,13 +957,21 @@ function RuleDialog({
   const [webhookEndpointId, setWebhookEndpointId] = useState('')
   const [submitError, setSubmitError] = useState('')
 
-  const { register, handleSubmit, watch, setValue, reset, formState: { errors, isSubmitting } } = useForm<RuleFormValues>({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<RuleFormValues>({
     resolver: zodResolver(ruleSchema),
     defaultValues: { name: '', trigger_type: 'schedule_daily', delay_minutes: 0, active: true },
   })
 
   const triggerType = watch('trigger_type')
-  const supportsDelay = resolvedTriggerOptions.find((t) => t.value === triggerType)?.supportsDelay ?? false
+  const supportsDelay =
+    resolvedTriggerOptions.find((t) => t.value === triggerType)?.supportsDelay ?? false
 
   // Populate form when editing
   useEffect(() => {
@@ -755,22 +983,26 @@ function RuleDialog({
         delay_minutes: editing.trigger.delayMinutes ?? 0,
         active: editing.active,
       })
-      setConditions(editing.conditions.map((c) => ({
-        type: c.type,
-        value: c.value ?? (c.delay_days != null ? String(c.delay_days) : ''),
-        condField: (c as { field?: string }).field,
-      })))
-      setActions(editing.actions.map((a) => ({
-        type: a.type,
-        templateId: a.templateId ?? '',
-        field: a.field,
-        fieldValue: a.value != null ? String(a.value) : undefined,
-        subject: a.subject,
-        body: a.body,
-        message: a.message,
-        tag: (a as { tag?: string }).tag,
-        url: (a as { url?: string }).url,
-      })))
+      setConditions(
+        editing.conditions.map((c) => ({
+          type: c.type,
+          value: c.value ?? (c.delay_days != null ? String(c.delay_days) : ''),
+          condField: (c as { field?: string }).field,
+        }))
+      )
+      setActions(
+        editing.actions.map((a) => ({
+          type: a.type,
+          templateId: a.templateId ?? '',
+          field: a.field,
+          fieldValue: a.value != null ? String(a.value) : undefined,
+          subject: a.subject,
+          body: a.body,
+          message: a.message,
+          tag: (a as { tag?: string }).tag,
+          url: (a as { url?: string }).url,
+        }))
+      )
       setWebhookEndpointId(editing.trigger.webhook_endpoint_id ?? '')
     } else {
       reset({ name: '', trigger_type: 'schedule_daily', delay_minutes: 0, active: true })
@@ -800,19 +1032,22 @@ function RuleDialog({
           const opt = CONDITION_TYPE_OPTIONS.find((o) => o.value === c.type)
           if (opt?.input === 'number') return { type: c.type, value: Number(c.value) }
           if (opt?.input === 'none') return { type: c.type }
-          if (c.type === 'field_equals') return { type: 'field_equals', field: c.condField ?? '', value: c.value }
+          if (c.type === 'field_equals')
+            return { type: 'field_equals', field: c.condField ?? '', value: c.value }
           return { type: c.type, value: c.value }
         }),
         actions: actions
           .filter((a) => a.type !== 'create_alert') // skip placeholder
           .map((a) => {
-            if (a.type === 'send_email')   return { type: 'send_email',   templateId: a.templateId }
-            if (a.type === 'update_field') return { type: 'update_field', field: a.field ?? '', value: a.fieldValue ?? '' }
-            if (a.type === 'notify_team')  return { type: 'notify_team',  subject: a.subject ?? '', body: a.body ?? '' }
+            if (a.type === 'send_email') return { type: 'send_email', templateId: a.templateId }
+            if (a.type === 'update_field')
+              return { type: 'update_field', field: a.field ?? '', value: a.fieldValue ?? '' }
+            if (a.type === 'notify_team')
+              return { type: 'notify_team', subject: a.subject ?? '', body: a.body ?? '' }
             if (a.type === 'log_activity') return { type: 'log_activity', message: a.message ?? '' }
-            if (a.type === 'assign_tag')   return { type: 'assign_tag',   tag: a.tag ?? '' }
-            if (a.type === 'remove_tag')   return { type: 'remove_tag',   tag: a.tag ?? '' }
-            if (a.type === 'webhook')      return { type: 'webhook',      url: a.url ?? '' }
+            if (a.type === 'assign_tag') return { type: 'assign_tag', tag: a.tag ?? '' }
+            if (a.type === 'remove_tag') return { type: 'remove_tag', tag: a.tag ?? '' }
+            if (a.type === 'webhook') return { type: 'webhook', url: a.url ?? '' }
             return { type: a.type }
           }),
         updated_at: serverTimestamp(),
@@ -843,9 +1078,18 @@ function RuleDialog({
           {/* Name + active */}
           <div className="flex gap-3 items-end">
             <div className="flex-1">
-              <Label htmlFor="rl-name" className="text-xs font-medium">Name</Label>
-              <Input id="rl-name" {...register('name')} placeholder="e.g. No-show follow-up" className="mt-1" />
-              {errors.name && <p className="text-xs text-destructive mt-1">{errors.name.message}</p>}
+              <Label htmlFor="rl-name" className="text-xs font-medium">
+                Name
+              </Label>
+              <Input
+                id="rl-name"
+                {...register('name')}
+                placeholder="e.g. No-show follow-up"
+                className="mt-1"
+              />
+              {errors.name && (
+                <p className="text-xs text-destructive mt-1">{errors.name.message}</p>
+              )}
             </div>
             <div className="flex items-center gap-2 pb-0.5">
               <Switch
@@ -853,7 +1097,9 @@ function RuleDialog({
                 checked={watch('active')}
                 onCheckedChange={(v) => setValue('active', v)}
               />
-              <Label htmlFor="rl-active" className="text-xs">Active</Label>
+              <Label htmlFor="rl-active" className="text-xs">
+                Active
+              </Label>
             </div>
           </div>
 
@@ -861,19 +1107,27 @@ function RuleDialog({
 
           {/* Trigger */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Trigger</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Trigger
+            </p>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-xs">When</Label>
-                <Select value={triggerType} onValueChange={(v) => setValue('trigger_type', v ?? '')}>
+                <Select
+                  value={triggerType}
+                  onValueChange={(v) => setValue('trigger_type', v ?? '')}
+                >
                   <SelectTrigger className="mt-1 h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
-                      {resolvedTriggerOptions.find((t) => t.value === triggerType)?.label ?? triggerType}
+                      {resolvedTriggerOptions.find((t) => t.value === triggerType)?.label ??
+                        triggerType}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
                     {resolvedTriggerOptions.map((t) => (
-                      <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                      <SelectItem key={t.value} value={t.value} className="text-xs">
+                        {t.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -902,16 +1156,22 @@ function RuleDialog({
                     No endpoints yet — create one in the Webhooks dialog first.
                   </p>
                 ) : (
-                  <Select value={webhookEndpointId} onValueChange={(v) => setWebhookEndpointId(v ?? '')}>
+                  <Select
+                    value={webhookEndpointId}
+                    onValueChange={(v) => setWebhookEndpointId(v ?? '')}
+                  >
                     <SelectTrigger className="mt-1 h-8 text-xs">
                       <span className="flex flex-1 text-left text-xs truncate">
-                        {webhookEndpoints.find((ep) => ep.id === webhookEndpointId)?.name
-                          ?? <span className="text-muted-foreground">Select endpoint</span>}
+                        {webhookEndpoints.find((ep) => ep.id === webhookEndpointId)?.name ?? (
+                          <span className="text-muted-foreground">Select endpoint</span>
+                        )}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
                       {webhookEndpoints.map((ep) => (
-                        <SelectItem key={ep.id} value={ep.id} className="text-xs">{ep.name}</SelectItem>
+                        <SelectItem key={ep.id} value={ep.id} className="text-xs">
+                          {ep.name}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -934,14 +1194,23 @@ function RuleDialog({
 
           {/* Actions */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</p>
-            <ActionEditor actions={actions} templates={templates} onChange={setActions} actionTypeLabels={actionTypeLabelsProp} />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Actions
+            </p>
+            <ActionEditor
+              actions={actions}
+              templates={templates}
+              onChange={setActions}
+              actionTypeLabels={actionTypeLabelsProp}
+            />
           </div>
 
           {submitError && <p className="text-xs text-destructive">{submitError}</p>}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? 'Saving…' : 'Save automation'}
             </Button>
@@ -958,30 +1227,30 @@ const PLACEHOLDER_GROUPS = [
   {
     label: 'Contact',
     items: [
-      { key: 'firstname',         hint: 'First name' },
-      { key: 'lastname',          hint: 'Last name' },
-      { key: 'contact_type',      hint: 'Trial / Student / External' },
+      { key: 'firstname', hint: 'First name' },
+      { key: 'lastname', hint: 'Last name' },
+      { key: 'contact_type', hint: 'Trial / Student / External' },
       { key: 'membership_status', hint: 'Active / Expired / …' },
-      { key: 'sessions_count',    hint: 'Sessions attended' },
+      { key: 'sessions_count', hint: 'Sessions attended' },
     ],
   },
   {
     label: 'Team',
     items: [
-      { key: 'teamName',      hint: 'Team name' },
-      { key: 'bookingUrl',    hint: 'Trial booking page' },
+      { key: 'teamName', hint: 'Team name' },
+      { key: 'bookingUrl', hint: 'Trial booking page' },
       { key: 'membershipUrl', hint: 'Membership signup' },
-      { key: 'portalUrl',     hint: 'Team portal' },
-      { key: 'websiteUrl',    hint: 'Website (if set)' },
-      { key: 'reviewUrl',     hint: 'Review page (if set)' },
+      { key: 'portalUrl', hint: 'Team portal' },
+      { key: 'websiteUrl', hint: 'Website (if set)' },
+      { key: 'reviewUrl', hint: 'Review page (if set)' },
     ],
   },
   {
     label: 'Dates',
     items: [
-      { key: 'date',    hint: 'Today' },
-      { key: 'date+7',  hint: '+7 days (any N)' },
-      { key: 'date-7',  hint: '-7 days (any N)' },
+      { key: 'date', hint: 'Today' },
+      { key: 'date+7', hint: '+7 days (any N)' },
+      { key: 'date-7', hint: '-7 days (any N)' },
     ],
   },
 ]
@@ -998,7 +1267,9 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
 
   return (
     <div className="w-56 shrink-0 border-l overflow-y-auto px-3 py-4 space-y-4">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Placeholders</p>
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        Placeholders
+      </p>
       <p className="text-xs text-muted-foreground -mt-2">Click to copy</p>
 
       {PLACEHOLDER_GROUPS.map((group) => (
@@ -1015,7 +1286,9 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
                 <span className="font-mono text-xs text-primary group-hover:underline">
                   {copied === item.key ? '✓ Copied' : `{{${item.key}}}`}
                 </span>
-                <span className="block text-xs text-muted-foreground leading-tight">{item.hint}</span>
+                <span className="block text-xs text-muted-foreground leading-tight">
+                  {item.hint}
+                </span>
               </button>
             ))}
           </div>
@@ -1028,7 +1301,11 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
         {Object.keys(customPlaceholders).length === 0 ? (
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground italic">No custom variables yet.</p>
-            <Link href="/team/settings" className="text-xs text-primary hover:underline" onClick={() => {}}>
+            <Link
+              href="/team/settings"
+              className="text-xs text-primary hover:underline"
+              onClick={() => {}}
+            >
               Manage in Settings → Outreach
             </Link>
           </div>
@@ -1044,10 +1321,15 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
                 <span className="font-mono text-xs text-primary group-hover:underline">
                   {copied === key ? '✓ Copied' : `{{${key}}}`}
                 </span>
-                <span className="block text-xs text-muted-foreground leading-tight truncate">{value}</span>
+                <span className="block text-xs text-muted-foreground leading-tight truncate">
+                  {value}
+                </span>
               </button>
             ))}
-            <Link href="/team/settings" className="block text-xs text-muted-foreground hover:underline mt-1 px-2">
+            <Link
+              href="/team/settings"
+              className="block text-xs text-muted-foreground hover:underline mt-1 px-2"
+            >
               Manage in Settings → Outreach
             </Link>
           </div>
@@ -1060,16 +1342,22 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
 // ─── TemplateDialog ───────────────────────────────────────────────────────────
 
 const tmplSchema = z.object({
-  name:     z.string().min(1, 'Required'),
-  subject:  z.string().min(1, 'Required'),
-  body:     z.string().min(1, 'Required'),
+  name: z.string().min(1, 'Required'),
+  subject: z.string().min(1, 'Required'),
+  body: z.string().min(1, 'Required'),
   language: z.string().min(1),
 })
 type TmplFormValues = z.infer<typeof tmplSchema>
 
 function TemplateDialog({
-  open, onOpenChange, teamId,
-}: { open: boolean; onOpenChange: (v: boolean) => void; teamId: string }) {
+  open,
+  onOpenChange,
+  teamId,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  teamId: string
+}) {
   const qc = useQueryClient()
   const { data: allTemplates = [], isLoading } = useQuery<OutreachTemplate[]>({
     queryKey: ['outreach_templates_all', teamId],
@@ -1078,8 +1366,8 @@ function TemplateDialog({
       const snap = await getDocs(
         query(
           collection(db, TEAMS_COLLECTION, teamId, 'outreach_templates'),
-          orderBy('name', 'asc'),
-        ),
+          orderBy('name', 'asc')
+        )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as OutreachTemplate)
     },
@@ -1101,14 +1389,28 @@ function TemplateDialog({
   const [formOpen, setFormOpen] = useState(false)
   const [submitErr, setSubmitErr] = useState('')
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<TmplFormValues>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<TmplFormValues>({
     resolver: zodResolver(tmplSchema),
     defaultValues: { name: '', subject: '', body: '', language: 'en' },
   })
 
   useEffect(() => {
-    if (!formOpen) { reset({ name: '', subject: '', body: '', language: 'en' }); setEditingTmpl(null); setSubmitErr('') }
-    else if (editingTmpl) reset({ name: editingTmpl.name, subject: editingTmpl.subject, body: editingTmpl.body, language: editingTmpl.language })
+    if (!formOpen) {
+      reset({ name: '', subject: '', body: '', language: 'en' })
+      setEditingTmpl(null)
+      setSubmitErr('')
+    } else if (editingTmpl)
+      reset({
+        name: editingTmpl.name,
+        subject: editingTmpl.subject,
+        body: editingTmpl.body,
+        language: editingTmpl.language,
+      })
   }, [formOpen, editingTmpl, reset])
 
   const invalidate = () => {
@@ -1127,17 +1429,23 @@ function TemplateDialog({
       }
       invalidate()
       setFormOpen(false)
-    } catch (err) { setSubmitErr((err as Error).message) }
+    } catch (err) {
+      setSubmitErr((err as Error).message)
+    }
   }
 
   const onDelete = async (tmpl: OutreachTemplate) => {
-    await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'outreach_templates', tmpl.id), { active: false })
+    await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'outreach_templates', tmpl.id), {
+      active: false,
+    })
     invalidate()
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`sm:max-w-[900px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden`}>
+      <DialogContent
+        className={`sm:max-w-[900px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden`}
+      >
         <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b">
           <DialogTitle>Email templates</DialogTitle>
         </DialogHeader>
@@ -1154,17 +1462,37 @@ function TemplateDialog({
             )}
 
             {allTemplates.map((tmpl) => (
-              <div key={tmpl.id} className="flex items-start justify-between gap-2 border rounded-lg p-3">
+              <div
+                key={tmpl.id}
+                className="flex items-start justify-between gap-2 border rounded-lg p-3"
+              >
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">{tmpl.name}</p>
                   <p className="text-xs text-muted-foreground truncate">{tmpl.subject}</p>
-                  {!tmpl.active && <Badge variant="secondary" className="text-xs mt-1">Inactive</Badge>}
+                  {!tmpl.active && (
+                    <Badge variant="secondary" className="text-xs mt-1">
+                      Inactive
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingTmpl(tmpl); setFormOpen(true) }}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => {
+                      setEditingTmpl(tmpl)
+                      setFormOpen(true)
+                    }}
+                  >
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDelete(tmpl)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => onDelete(tmpl)}
+                  >
                     <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                   </Button>
                 </div>
@@ -1172,32 +1500,54 @@ function TemplateDialog({
             ))}
 
             <Button variant="outline" className="w-full" onClick={() => setFormOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />New template
+              <Plus className="h-4 w-4 mr-2" />
+              New template
             </Button>
           </div>
         ) : (
           /* ── Form view — two-panel ── */
           <div className="flex flex-1 min-h-0">
             {/* Left: form */}
-            <form onSubmit={handleSubmit(onSaveTmpl)} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <form
+              onSubmit={handleSubmit(onSaveTmpl)}
+              className="flex-1 overflow-y-auto px-6 py-5 space-y-4"
+            >
               <div>
                 <Label className="text-xs">Template name</Label>
-                <Input {...register('name')} placeholder="e.g. No-show follow-up" className="mt-1" />
-                {errors.name && <p className="text-xs text-destructive mt-1">{errors.name.message}</p>}
+                <Input
+                  {...register('name')}
+                  placeholder="e.g. No-show follow-up"
+                  className="mt-1"
+                />
+                {errors.name && (
+                  <p className="text-xs text-destructive mt-1">{errors.name.message}</p>
+                )}
               </div>
               <div>
                 <Label className="text-xs">Email subject</Label>
                 <Input {...register('subject')} placeholder="We missed you!" className="mt-1" />
-                {errors.subject && <p className="text-xs text-destructive mt-1">{errors.subject.message}</p>}
+                {errors.subject && (
+                  <p className="text-xs text-destructive mt-1">{errors.subject.message}</p>
+                )}
               </div>
               <div>
                 <Label className="text-xs">Body</Label>
-                <Textarea {...register('body')} rows={12} placeholder="Hi {{firstname}},&#10;&#10;We noticed you missed our session…" className="mt-1 font-mono text-xs" />
-                {errors.body && <p className="text-xs text-destructive mt-1">{errors.body.message}</p>}
+                <Textarea
+                  {...register('body')}
+                  rows={12}
+                  placeholder="Hi {{firstname}},&#10;&#10;We noticed you missed our session…"
+                  className="mt-1 font-mono text-xs"
+                />
+                {errors.body && (
+                  <p className="text-xs text-destructive mt-1">{errors.body.message}</p>
+                )}
               </div>
               <div className="w-36">
                 <Label className="text-xs">Language</Label>
-                <select {...register('language')} className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
+                <select
+                  {...register('language')}
+                  className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                >
                   <option value="en">English</option>
                   <option value="de">Deutsch</option>
                   <option value="fr">Français</option>
@@ -1206,7 +1556,9 @@ function TemplateDialog({
               </div>
               {submitErr && <p className="text-xs text-destructive">{submitErr}</p>}
               <div className="flex justify-between pt-1 pb-4">
-                <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>← Back</Button>
+                <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>
+                  ← Back
+                </Button>
                 <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting ? 'Saving…' : editingTmpl ? 'Save changes' : 'Create template'}
                 </Button>
@@ -1236,7 +1588,10 @@ export default function AutomationsPage() {
     ...installedPlugins.flatMap((p) =>
       (p.manifest.automationTriggers ?? []).map((tr) => ({
         value: tr.id,
-        label: tr.labelKey.replace('Plugins.', '').replace(/([A-Z])/g, ' $1').trim(),
+        label: tr.labelKey
+          .replace('Plugins.', '')
+          .replace(/([A-Z])/g, ' $1')
+          .trim(),
         icon: Zap,
         supportsDelay: tr.supportsDelay,
         isPlugin: true,
@@ -1248,7 +1603,10 @@ export default function AutomationsPage() {
     installedPlugins.flatMap((p) =>
       (p.manifest.automationActions ?? []).map((ac) => [
         ac.id,
-        ac.labelKey.replace('Plugins.', '').replace(/([A-Z])/g, ' $1').trim(),
+        ac.labelKey
+          .replace('Plugins.', '')
+          .replace(/([A-Z])/g, ' $1')
+          .trim(),
       ])
     )
   )
@@ -1279,9 +1637,11 @@ export default function AutomationsPage() {
   const [webhooksOpen, setWebhooksOpen] = useState(false)
   const [quickStarting, setQuickStarting] = useState(false)
 
-  const invalidateRules     = () => qc.invalidateQueries({ queryKey: ['automation_rules', currentTeamId] })
-  const invalidateTemplates = () => qc.invalidateQueries({ queryKey: ['outreach_templates', currentTeamId] })
-  const invalidateAll       = () => {
+  const invalidateRules = () =>
+    qc.invalidateQueries({ queryKey: ['automation_rules', currentTeamId] })
+  const invalidateTemplates = () =>
+    qc.invalidateQueries({ queryKey: ['outreach_templates', currentTeamId] })
+  const invalidateAll = () => {
     invalidateRules()
     invalidateTemplates()
     qc.invalidateQueries({ queryKey: ['outreach_templates_for_library', currentTeamId] })
@@ -1291,9 +1651,11 @@ export default function AutomationsPage() {
     if (!currentTeamId) return
     setQuickStarting(true)
     try {
-      const snap = await getDocs(collection(db, TEAMS_COLLECTION, currentTeamId, 'outreach_templates'))
-      const allTmpl = snap.docs.map(d => ({ ...d.data(), id: d.id }))
-      const installedRuleKeys = new Set(rules.flatMap(r => r.system_key ? [r.system_key] : []))
+      const snap = await getDocs(
+        collection(db, TEAMS_COLLECTION, currentTeamId, 'outreach_templates')
+      )
+      const allTmpl = snap.docs.map((d) => ({ ...d.data(), id: d.id }))
+      const installedRuleKeys = new Set(rules.flatMap((r) => (r.system_key ? [r.system_key] : [])))
       await installStarterBundle(currentTeamId, allTmpl, installedRuleKeys)
       invalidateAll()
     } catch (err) {
@@ -1305,10 +1667,9 @@ export default function AutomationsPage() {
 
   async function handleToggle(rule: AutomationRule) {
     if (!currentTeamId) return
-    await updateDoc(
-      doc(db, TEAMS_COLLECTION, currentTeamId, 'automation_rules', rule.id),
-      { active: !rule.active },
-    )
+    await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId, 'automation_rules', rule.id), {
+      active: !rule.active,
+    })
     invalidateRules()
   }
 
@@ -1325,8 +1686,8 @@ export default function AutomationsPage() {
     invalidateRules()
   }
 
-  const activeRules  = rules.filter((r) => r.active)
-  const pausedRules  = rules.filter((r) => !r.active)
+  const activeRules = rules.filter((r) => r.active)
+  const pausedRules = rules.filter((r) => !r.active)
 
   return (
     <PlanGate minPlan="studio">
@@ -1344,16 +1705,26 @@ export default function AutomationsPage() {
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
             <Button variant="outline" size="sm" onClick={() => setTemplateDialogOpen(true)}>
-              <FileText className="h-4 w-4 mr-1.5" />Templates
+              <FileText className="h-4 w-4 mr-1.5" />
+              Templates
             </Button>
             <Button variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
-              <BookOpen className="h-4 w-4 mr-1.5" />Library
+              <BookOpen className="h-4 w-4 mr-1.5" />
+              Library
             </Button>
             <Button variant="outline" size="sm" onClick={() => setWebhooksOpen(true)}>
-              <Webhook className="h-4 w-4 mr-1.5" />Webhooks
+              <Webhook className="h-4 w-4 mr-1.5" />
+              Webhooks
             </Button>
-            <Button size="sm" onClick={() => { setEditingRule(null); setRuleDialogOpen(true) }}>
-              <Plus className="h-4 w-4 mr-1.5" />New automation
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditingRule(null)
+                setRuleDialogOpen(true)
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              New automation
             </Button>
           </div>
         </div>
@@ -1361,7 +1732,9 @@ export default function AutomationsPage() {
         {/* Loading */}
         {rulesLoading && (
           <div className="grid gap-6 sm:grid-cols-2">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-36 rounded-xl" />)}
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-36 rounded-xl" />
+            ))}
           </div>
         )}
 
@@ -1374,7 +1747,8 @@ export default function AutomationsPage() {
             <div>
               <p className="font-semibold">No automations yet</p>
               <p className="text-muted-foreground text-sm mt-1 max-w-xs">
-                Load a starter kit in one click, browse the library to pick individual rules, or build your own.
+                Load a starter kit in one click, browse the library to pick individual rules, or
+                build your own.
               </p>
             </div>
             <div className="flex gap-2 flex-wrap justify-center">
@@ -1383,7 +1757,8 @@ export default function AutomationsPage() {
                 {quickStarting ? 'Installing…' : 'Quick-start (8 rules)'}
               </Button>
               <Button onClick={() => setLibraryOpen(true)}>
-                <BookOpen className="h-4 w-4 mr-2" />Browse library
+                <BookOpen className="h-4 w-4 mr-2" />
+                Browse library
               </Button>
             </div>
           </div>
@@ -1392,14 +1767,19 @@ export default function AutomationsPage() {
         {/* Active rules */}
         {activeRules.length > 0 && (
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Active</h2>
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Active
+            </h2>
             <div className="grid gap-6 sm:grid-cols-2">
               {activeRules.map((rule) => (
                 <RuleCard
                   key={rule.id}
                   rule={rule}
                   templates={templates}
-                  onEdit={() => { setEditingRule(rule); setRuleDialogOpen(true) }}
+                  onEdit={() => {
+                    setEditingRule(rule)
+                    setRuleDialogOpen(true)
+                  }}
                   onToggle={() => handleToggle(rule)}
                   onRunNow={() => handleRunNow(rule)}
                   onDelete={() => handleDelete(rule)}
@@ -1412,14 +1792,19 @@ export default function AutomationsPage() {
         {/* Paused rules */}
         {pausedRules.length > 0 && (
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Paused</h2>
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Paused
+            </h2>
             <div className="grid gap-6 sm:grid-cols-2">
               {pausedRules.map((rule) => (
                 <RuleCard
                   key={rule.id}
                   rule={rule}
                   templates={templates}
-                  onEdit={() => { setEditingRule(rule); setRuleDialogOpen(true) }}
+                  onEdit={() => {
+                    setEditingRule(rule)
+                    setRuleDialogOpen(true)
+                  }}
                   onToggle={() => handleToggle(rule)}
                   onRunNow={() => handleRunNow(rule)}
                   onDelete={() => handleDelete(rule)}
@@ -1432,7 +1817,10 @@ export default function AutomationsPage() {
         {/* Mobile FAB */}
         <button
           className="md:hidden fixed bottom-6 right-6 z-40 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
-          onClick={() => { setEditingRule(null); setRuleDialogOpen(true) }}
+          onClick={() => {
+            setEditingRule(null)
+            setRuleDialogOpen(true)
+          }}
         >
           <Plus className="h-6 w-6" />
         </button>

@@ -4,8 +4,18 @@ import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
-  collectionGroup, query, where, orderBy, limit, getDocs,
-  doc, getDoc, writeBatch, serverTimestamp, increment, collection,
+  collectionGroup,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  doc,
+  getDoc,
+  writeBatch,
+  serverTimestamp,
+  increment,
+  collection,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -37,7 +47,17 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Booking } from '@linyup/shared'
-import { Search, MoreHorizontal, Check, X, UserX, Undo, Repeat, ExternalLink, User } from 'lucide-react'
+import {
+  Search,
+  MoreHorizontal,
+  Check,
+  X,
+  UserX,
+  Undo,
+  Repeat,
+  ExternalLink,
+  User,
+} from 'lucide-react'
 import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 
@@ -45,8 +65,10 @@ import type { Route } from 'next'
 
 function tsToDate(ts: unknown): Date | null {
   if (!ts) return null
-  if (typeof (ts as { toDate?: unknown }).toDate === 'function') return (ts as { toDate(): Date }).toDate()
-  if (typeof (ts as { seconds?: unknown }).seconds === 'number') return new Date((ts as { seconds: number }).seconds * 1000)
+  if (typeof (ts as { toDate?: unknown }).toDate === 'function')
+    return (ts as { toDate(): Date }).toDate()
+  if (typeof (ts as { seconds?: unknown }).seconds === 'number')
+    return new Date((ts as { seconds: number }).seconds * 1000)
   return null
 }
 
@@ -77,8 +99,14 @@ function initials(b: Booking) {
 }
 
 const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500',
-  'bg-pink-500', 'bg-teal-500', 'bg-red-500', 'bg-indigo-500',
+  'bg-blue-500',
+  'bg-purple-500',
+  'bg-green-500',
+  'bg-orange-500',
+  'bg-pink-500',
+  'bg-teal-500',
+  'bg-red-500',
+  'bg-indigo-500',
 ]
 function avatarColor(id: string) {
   let h = 0
@@ -115,7 +143,7 @@ function useBookings(teamId: string | null) {
         collectionGroup(db, 'bookings'),
         where('teamId', '==', teamId),
         orderBy('joinedAt', 'desc'),
-        limit(200),
+        limit(200)
       )
       const snap = await getDocs(q)
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Booking)
@@ -126,7 +154,7 @@ function useBookings(teamId: string | null) {
 function useSessionMap(bookings: Booking[]) {
   const sessionIds = useMemo(
     () => [...new Set(bookings.map((b) => b.session).filter((s): s is string => !!s))],
-    [bookings],
+    [bookings]
   )
 
   return useQuery<Record<string, SessionInfo>>({
@@ -166,7 +194,7 @@ function useFutureSessions(teamId: string | null) {
         where('teamId', '==', teamId),
         where('allowBooking', '==', true),
         orderBy('start', 'asc'),
-        limit(50),
+        limit(50)
       )
       const snap = await getDocs(q)
       return snap.docs
@@ -214,7 +242,7 @@ function useBookingAction(teamId: string | null) {
         })
         // Adjust session counters
         batch.update(sessionRef, {
-          portal_bookings_count: increment(-1),
+          bio_link_bookings_count: increment(-1),
           conversions_count: increment(1),
         })
         if (booking.contact) {
@@ -233,7 +261,7 @@ function useBookingAction(teamId: string | null) {
         batch.delete(participantRef)
         // Undo session counters
         batch.update(sessionRef, {
-          portal_bookings_count: increment(1),
+          bio_link_bookings_count: increment(1),
           conversions_count: increment(-1),
         })
         if (booking.contact) {
@@ -245,7 +273,7 @@ function useBookingAction(teamId: string | null) {
         batch.update(bookingRef, { status: 'no_show', no_show_at: serverTimestamp() })
         const wasPending = !booking.status || booking.status === 'pending'
         if (wasPending) {
-          batch.update(sessionRef, { portal_bookings_count: increment(-1) })
+          batch.update(sessionRef, { bio_link_bookings_count: increment(-1) })
           if (booking.contact) {
             batch.update(doc(db, 'contacts', booking.contact), {
               pending_bookings_count: increment(-1),
@@ -260,7 +288,7 @@ function useBookingAction(teamId: string | null) {
         })
         const wasPending = !booking.status || booking.status === 'pending'
         if (wasPending) {
-          batch.update(sessionRef, { portal_bookings_count: increment(-1) })
+          batch.update(sessionRef, { bio_link_bookings_count: increment(-1) })
           if (booking.contact) {
             batch.update(doc(db, 'contacts', booking.contact), {
               pending_bookings_count: increment(-1),
@@ -327,11 +355,12 @@ function RebookDialog({
               <span className="flex flex-1 text-left text-sm truncate">
                 {(() => {
                   const selected = options.find((s) => s.id === selectedId)
-                  if (!selected) return <span className="text-muted-foreground">{t('rebookPickSession')}</span>
+                  if (!selected)
+                    return <span className="text-muted-foreground">{t('rebookPickSession')}</span>
                   const start = selected.start ? new Date(selected.start) : null
                   return start
                     ? `${selected.activityName ?? '—'} · ${start.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                    : selected.activityName ?? selected.id
+                    : (selected.activityName ?? selected.id)
                 })()}
               </span>
             </SelectTrigger>
@@ -340,10 +369,16 @@ function RebookDialog({
                 const start = s.start ? new Date(s.start) : null
                 const end = s.end ? new Date(s.end) : null
                 const label = start
-                  ? start.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) +
+                  ? start.toLocaleDateString([], {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                    }) +
                     ' ' +
                     start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-                    (end ? ' – ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '')
+                    (end
+                      ? ' – ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : '')
                   : s.id
                 return (
                   <SelectItem key={s.id} value={s.id}>
@@ -390,7 +425,9 @@ function BookingRow({
   const router = useRouter()
   const status: BookingStatus = (booking.status as BookingStatus) ?? 'pending'
   const sessionDate = sessionInfo?.start ? formatIso(sessionInfo.start) : null
-  const sessionTime = sessionInfo?.start ? formatTime(sessionInfo.start as unknown as { toDate(): Date }) : null
+  const sessionTime = sessionInfo?.start
+    ? formatTime(sessionInfo.start as unknown as { toDate(): Date })
+    : null
   const activityName = sessionInfo?.activityName
 
   const isPending = status === 'pending'
@@ -421,9 +458,13 @@ function BookingRow({
         {(activityName || sessionDate) && (
           <p className="text-sm text-foreground/80 truncate mt-0.5 font-medium">
             {activityName && <span>{activityName}</span>}
-            {activityName && sessionDate && <span className="text-muted-foreground font-normal"> · </span>}
+            {activityName && sessionDate && (
+              <span className="text-muted-foreground font-normal"> · </span>
+            )}
             {sessionDate && <span>{sessionDate}</span>}
-            {sessionTime && <span className="text-muted-foreground font-normal"> {sessionTime}</span>}
+            {sessionTime && (
+              <span className="text-muted-foreground font-normal"> {sessionTime}</span>
+            )}
           </p>
         )}
       </div>
@@ -542,7 +583,7 @@ export default function BookingsPage() {
 
   const handleAction = useCallback(
     (booking: Booking, action: BookingAction) => doAction({ booking, action }),
-    [doAction],
+    [doAction]
   )
 
   const handleRebookConfirm = useCallback(
@@ -553,7 +594,7 @@ export default function BookingsPage() {
         { onSuccess: () => setRebookTarget(null) }
       )
     },
-    [rebookTarget, doRebook],
+    [rebookTarget, doRebook]
   )
 
   // Session IDs already booked by the rebookTarget contact (exclude from picker)
@@ -607,7 +648,7 @@ export default function BookingsPage() {
       statusFilter === 'all'
         ? searchFiltered
         : searchFiltered.filter((b) => (b.status ?? 'pending') === statusFilter),
-    [searchFiltered, statusFilter],
+    [searchFiltered, statusFilter]
   )
 
   const trials = bookings.filter((b) => b.is_new_contact).length

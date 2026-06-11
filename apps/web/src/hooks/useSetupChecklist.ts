@@ -14,7 +14,7 @@ export type SetupStepKey =
   | 'activities'
   | 'sessions'
   | 'subscriptions'
-  | 'portal'
+  | 'bioLink'
   | 'contacts'
   | 'ranks'
 
@@ -40,7 +40,7 @@ async function subcollectionHasAny(teamId: string, sub: string): Promise<boolean
 /**
  * Data-driven setup checklist. Each step auto-completes from real data, so the
  * checklist reflects the team's actual readiness rather than a manual tick.
- * Portal counts as done once a public_profile has been published; ranks read
+ * Bio-link counts as done once a public_profile has been published; ranks read
  * straight off the team document and are optional.
  */
 export function useSetupChecklist(teamId: string | null, team: Team | null) {
@@ -52,15 +52,15 @@ export function useSetupChecklist(teamId: string | null, team: Team | null) {
     staleTime: 60 * 1000,
     queryFn: async (): Promise<Record<Exclude<SetupStepKey, 'ranks'>, boolean>> => {
       const id = teamId as string
-      const [activities, sessions, contacts, subscriptions, portal] = await Promise.all([
+      const [activities, sessions, contacts, subscriptions, bioLink] = await Promise.all([
         teamCollectionHasAny(ACTIVITIES_COLLECTION, id),
         teamCollectionHasAny(SESSIONS_COLLECTION, id),
         teamCollectionHasAny(CONTACTS_COLLECTION, id),
         subcollectionHasAny(id, SUBSCRIPTION_TYPES_SUBCOLLECTION),
-        // Portal is "live" once its public_profile doc exists.
+        // Bio-link is "live" once its public_profile doc exists.
         subcollectionHasAny(id, 'public_profile'),
       ])
-      return { activities, sessions, contacts, subscriptions, portal }
+      return { activities, sessions, contacts, subscriptions, bioLink }
     },
   })
 
@@ -69,7 +69,7 @@ export function useSetupChecklist(teamId: string | null, team: Team | null) {
     { key: 'activities', href: '/activities', done: !!d?.activities },
     { key: 'sessions', href: '/schedule', done: !!d?.sessions },
     { key: 'subscriptions', href: '/subscriptions', done: !!d?.subscriptions },
-    { key: 'portal', href: '/team/portal', done: !!d?.portal },
+    { key: 'bioLink', href: '/team/bio-link', done: !!d?.bioLink },
     { key: 'contacts', href: '/contacts', done: !!d?.contacts },
     { key: 'ranks', href: '/team/settings', done: ranksDone, optional: true },
   ]

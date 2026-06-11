@@ -50,13 +50,13 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - `packages/shared`: all types + Firestore path constants
 - `packages/functions`: utils ported, ~12 functions fully implemented, rest stubbed
 - Firebase config: `firestore.rules`, `firestore.index.json`, `storage.rules`, `database.rules.json`, `firebase.json`, `.firebaserc`
-- `apps/web`: Next.js 15 scaffold with `(auth)` route group, `(portal)` route group, login page, AuthContext, TanStack Query
+- `apps/web`: Next.js 15 scaffold with `(auth)` route group, `(public)` route group, login page, AuthContext, TanStack Query
 - `apps/mobile`: full port of `hmd-lineup/student-app/` with Linyup branding
 - CI/CD: `.github/workflows/verify.yml` + `deploy.yml`
 - shadcn/ui component library installed in `apps/web/src/components/ui/`
 - Build + typecheck clean across all packages; dev server runs at port 3000
 - `firebase-auth.ts` split from `firebase.ts` to prevent SSG crash (auth/invalid-api-key)
-- Portal routes tagged `force-dynamic`; `apps/web/.env.local` created with placeholders
+- Bio-link routes tagged `force-dynamic`; `apps/web/.env.local` created with placeholders
 - Self-service signup wizard (`app/signup/page.tsx`) — 2-step: account → team → dashboard
 - Firebase emulator wired up for local dev (`demo-linyup` project, no real Firebase project needed)
 
@@ -77,7 +77,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~15 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Outreach/automation engine** — not started
-- **Coaching page** — stub only; needs full implementation (see `docs/product-strategy.md` for scope). Coach plan: availability templates + portal-based slot booking + .ics emails. Studio plan: mobile app integration + push reminders. Source: `C:\git\hmd\hmd-lineup\functions\src\{bookCoachSlot,cancelCoachBooking,generateCoachSlots,trackCoachBookings}\` and `src\routes\CoachSlots\`
+- **Coaching page** — stub only; needs full implementation (see `docs/product-strategy.md` for scope). Coach plan: availability templates + bio-link-based slot booking + .ics emails. Studio plan: mobile app integration + push reminders. Source: `C:\git\hmd\hmd-lineup\functions\src\{bookCoachSlot,cancelCoachBooking,generateCoachSlots,trackCoachBookings}\` and `src\routes\CoachSlots\`
 
 ---
 
@@ -117,9 +117,9 @@ import { regionalFunctions } from '../utils/functions'
 export const myFn = regionalFunctions.firestore.document('…').onCreate(…)
 ```
 
-### Public portal — ONLY read `public_profile` subcollections
+### Public bio-link — ONLY read `public_profile` subcollections
 
-Portal routes (`/portal/*`) must never query main collections. Always use:
+Bio-link routes (`/public/bio-link/*`) must never query main collections. Always use:
 
 ```typescript
 // resolve team by slug
@@ -250,7 +250,7 @@ apps/web/
 ## Next.js specifics
 
 - `typedRoutes: true` at root level in `next.config.ts`. Use `Route` from `next` for typed hrefs.
-- Portal routes must export `export const dynamic = 'force-dynamic'` to prevent SSG Firebase calls.
+- Bio-link routes must export `export const dynamic = 'force-dynamic'` to prevent SSG Firebase calls.
 - `Input` component in `src/components/ui/input.tsx` uses a plain `<input>` (not `@base-ui/react`) — do not revert this; the base-ui wrapper causes SSR hydration mismatches.
 
 ---

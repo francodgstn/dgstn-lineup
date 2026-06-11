@@ -54,13 +54,13 @@ const PLAN_HIGHLIGHTS: Record<string, string[]> = {
   free: [
     'Up to 10 active contacts',
     'Single user',
-    'Public portal & booking forms',
+    'Public bio link & booking forms',
     'Sessions, subscriptions & QR check-in',
   ],
   coach: [
     'Everything in Free — 30 included contacts',
     'Team members & coaching slots',
-    'No Linyup branding on your portal',
+    'No Linyup branding on your bio link',
     'Plugin add-ons available',
   ],
   studio: [
@@ -108,7 +108,10 @@ function useInvoices(teamId: string | null, enabled: boolean) {
     queryKey: ['saas-invoices', teamId],
     enabled: !!teamId && enabled,
     queryFn: async () => {
-      const getSaasInvoices = httpsCallable<{ teamId: string }, { invoices: Invoice[] }>(functions, 'getSaasInvoices')
+      const getSaasInvoices = httpsCallable<{ teamId: string }, { invoices: Invoice[] }>(
+        functions,
+        'getSaasInvoices'
+      )
       const result = await getSaasInvoices({ teamId: teamId! })
       return result.data.invoices
     },
@@ -180,7 +183,15 @@ function CheckoutBanner() {
 
 // ─── subscription card ────────────────────────────────────────────────────────
 
-function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null; team: Team | null; teamId: string }) {
+function SubscriptionCard({
+  sub,
+  team,
+  teamId,
+}: {
+  sub: SaasSubscription | null
+  team: Team | null
+  teamId: string
+}) {
   const t = useTranslations('Billing')
   const planName = usePlanName()
   const queryClient = useQueryClient()
@@ -195,15 +206,26 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
   // Free teams have no subscription doc (or a cancelled one) — current-plan
   // detection for Free must come from the team doc, not the sub.
   const onFreePlan = team?.plan === 'free' && (!sub || sub.status === 'cancelled')
-  const currentPlanRank = sub && sub.status !== 'cancelled' && sub.plan ? planRank(sub.plan) : onFreePlan ? planRank('free') : -1
+  const currentPlanRank =
+    sub && sub.status !== 'cancelled' && sub.plan
+      ? planRank(sub.plan)
+      : onFreePlan
+        ? planRank('free')
+        : -1
 
   async function handleUpgrade(plan: string) {
     setCheckoutLoading(plan)
     try {
-      const createCheckout = httpsCallable<{ teamId: string; plan: string }, { url: string }>(functions, 'createCheckoutSession')
+      const createCheckout = httpsCallable<{ teamId: string; plan: string }, { url: string }>(
+        functions,
+        'createCheckoutSession'
+      )
       const result = await createCheckout({ teamId, plan })
       const url = result.data.url
-      if (!url.startsWith('https://checkout.stripe.com/') && !url.startsWith('https://billing.stripe.com/')) {
+      if (
+        !url.startsWith('https://checkout.stripe.com/') &&
+        !url.startsWith('https://billing.stripe.com/')
+      ) {
         throw new Error('Unexpected checkout URL')
       }
       window.location.href = url
@@ -231,7 +253,10 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
   async function handleReactivate() {
     setReactivating(true)
     try {
-      const reactivateFn = httpsCallable<{ teamId: string }>(functions, 'reactivateSaasSubscription')
+      const reactivateFn = httpsCallable<{ teamId: string }>(
+        functions,
+        'reactivateSaasSubscription'
+      )
       await reactivateFn({ teamId })
       await queryClient.invalidateQueries({ queryKey: ['saas-subscription', teamId] })
     } catch (err) {
@@ -244,7 +269,10 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
   async function handleUpdatePayment() {
     setPaymentLoading(true)
     try {
-      const fn = httpsCallable<{ teamId: string; returnUrl: string }, { url: string }>(functions, 'getBillingPortalUrl')
+      const fn = httpsCallable<{ teamId: string; returnUrl: string }, { url: string }>(
+        functions,
+        'getBillingPortalUrl'
+      )
       const result = await fn({ teamId, returnUrl: window.location.href })
       const url = result.data.url
       if (!url.startsWith('https://billing.stripe.com/')) throw new Error('Unexpected URL')
@@ -280,9 +308,7 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
               {/* Plan name + status */}
               <div className="flex items-center gap-3 flex-wrap">
                 <StatusIcon status={sub.status} />
-                <span className="font-semibold">
-                  {planName(sub.plan)} plan
-                </span>
+                <span className="font-semibold">{planName(sub.plan)} plan</span>
                 <Badge variant={statusVariant(sub.status)} className="capitalize">
                   {sub.status.replace('_', ' ')}
                 </Badge>
@@ -294,14 +320,13 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
               </div>
 
               {/* Cancelled sub → the team now runs on the Free plan */}
-              {onFreePlan && (
-                <p className="text-sm text-muted-foreground">{t('onFreePlan')}</p>
-              )}
+              {onFreePlan && <p className="text-sm text-muted-foreground">{t('onFreePlan')}</p>}
 
               {/* Billing period */}
               {sub.status !== 'trial' && periodStartDate && periodEndDate && (
                 <p className="text-sm text-muted-foreground">
-                  {t('periodLabel')}: {periodStartDate.toLocaleDateString()} – {periodEndDate.toLocaleDateString()}
+                  {t('periodLabel')}: {periodStartDate.toLocaleDateString()} –{' '}
+                  {periodEndDate.toLocaleDateString()}
                 </p>
               )}
 
@@ -332,16 +357,27 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
               {/* Actions */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 {sub.cancel_at_period_end && sub.status === 'active' && (
-                  <Button size="sm" variant="outline" onClick={handleReactivate} disabled={reactivating}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleReactivate}
+                    disabled={reactivating}
+                  >
                     {reactivating ? t('reactivating') : t('reactivate')}
                   </Button>
                 )}
-                {(sub.status === 'active' || sub.status === 'past_due') && sub.gateway_type === 'stripe' && (
-                  <Button size="sm" variant="ghost" onClick={handleUpdatePayment} disabled={paymentLoading}>
-                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                    {paymentLoading ? t('updatingPayment') : t('updatePayment')}
-                  </Button>
-                )}
+                {(sub.status === 'active' || sub.status === 'past_due') &&
+                  sub.gateway_type === 'stripe' && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleUpdatePayment}
+                      disabled={paymentLoading}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                      {paymentLoading ? t('updatingPayment') : t('updatePayment')}
+                    </Button>
+                  )}
                 {sub.status === 'active' && !sub.cancel_at_period_end && (
                   <button
                     className="text-xs text-muted-foreground hover:text-destructive underline ml-auto"
@@ -372,9 +408,8 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => {
-              const isCurrent = plan === 'free'
-                ? onFreePlan
-                : sub?.plan === plan && sub.status !== 'cancelled'
+              const isCurrent =
+                plan === 'free' ? onFreePlan : sub?.plan === plan && sub.status !== 'cancelled'
               const isDowngrade = !isCurrent && currentPlanRank > planRank(plan)
               // Free is never "selected" via checkout — you land on it by
               // cancelling (or letting the trial lapse).
@@ -385,9 +420,7 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
                   className={`rounded-lg border p-4 space-y-3 ${isCurrent ? 'border-primary bg-primary/5' : ''}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold">
-                      {planName(plan)}
-                    </p>
+                    <p className="font-semibold">{planName(plan)}</p>
                     {isCurrent && (
                       <Badge variant="default" className="text-xs shrink-0">
                         {t('currentPlanBadge')}
@@ -397,7 +430,10 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
 
                   <ul className="space-y-1.5">
                     {PLAN_HIGHLIGHTS[plan].map((feature) => (
-                      <li key={feature} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <li
+                        key={feature}
+                        className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                      >
                         <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
                         {feature}
                       </li>
@@ -473,7 +509,9 @@ function InvoicesSection({ teamId, hasGateway }: { teamId: string; hasGateway: b
       <CardContent>
         {isLoading ? (
           <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 rounded" />)}
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 rounded" />
+            ))}
           </div>
         ) : invoices.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">{t('noInvoices')}</p>
@@ -483,19 +521,34 @@ function InvoicesSection({ teamId, hasGateway }: { teamId: string; hasGateway: b
               <div key={inv.id} className="flex items-center gap-3 py-2.5">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{formatCurrency(inv.amount, inv.currency)}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(inv.created).toLocaleDateString()}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(inv.created).toLocaleDateString()}
+                  </p>
                 </div>
-                <Badge variant={inv.status === 'paid' ? 'default' : 'outline'} className="text-xs capitalize">
+                <Badge
+                  variant={inv.status === 'paid' ? 'default' : 'outline'}
+                  className="text-xs capitalize"
+                >
                   {inv.status}
                 </Badge>
                 <div className="flex items-center gap-1.5">
                   {inv.hostedUrl && (
-                    <a href={inv.hostedUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground underline">
+                    <a
+                      href={inv.hostedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-muted-foreground hover:text-foreground underline"
+                    >
                       {t('invoiceView')}
                     </a>
                   )}
                   {inv.pdfUrl && (
-                    <a href={inv.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                    <a
+                      href={inv.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   )}
@@ -569,7 +622,9 @@ function TrialExtendCard({ team, teamId }: { team: Team | null; teamId: string }
         <div className="space-y-1">
           <p className="font-semibold">{t('trialExtendTitle')}</p>
           <p className="text-sm text-muted-foreground">
-            {endDate ? t('trialExtendBody', { days: TRIAL_EXTENSION_DAYS, date: endDate }) : t('trialExtendBodyNoDate', { days: TRIAL_EXTENSION_DAYS })}
+            {endDate
+              ? t('trialExtendBody', { days: TRIAL_EXTENSION_DAYS, date: endDate })
+              : t('trialExtendBodyNoDate', { days: TRIAL_EXTENSION_DAYS })}
           </p>
         </div>
         <Button onClick={extend} disabled={loading} className="shrink-0">

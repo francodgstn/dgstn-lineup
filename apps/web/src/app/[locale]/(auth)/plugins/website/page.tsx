@@ -7,7 +7,15 @@ import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { toast } from 'sonner'
 import {
-  Globe, Plus, ChevronUp, ChevronDown, Pencil, Trash2, Eye, ExternalLink, Check,
+  Globe,
+  Plus,
+  ChevronUp,
+  ChevronDown,
+  Pencil,
+  Trash2,
+  Eye,
+  ExternalLink,
+  Check,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -18,14 +26,27 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select'
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import type { SiteDraft, SiteMeta, WebsiteSection, WebsiteSectionType } from '@linyup/shared'
@@ -35,27 +56,53 @@ import { useSiteDraft, saveSiteDraft, publishSite, unpublishSite } from '@/plugi
 import { SECTION_LIBRARY, newSection, emptyDraft } from '@/plugins/website/defaults'
 import { getWebsiteLimits } from '@/plugins/website/limits'
 
-const ACCENT_PRESETS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
+const ACCENT_PRESETS = [
+  '#6366f1',
+  '#3b82f6',
+  '#10b981',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+]
 const limits = getWebsiteLimits()
 
 // ─── appearance panel ─────────────────────────────────────────────────────────
 
-function AppearancePanel({ meta, onChange }: { meta: SiteMeta; onChange: (patch: Partial<SiteMeta>) => void }) {
-  const setHeader = (p: Partial<SiteMeta['header']>) => onChange({ header: { ...meta.header, ...p } })
-  const setSeo = (p: Partial<NonNullable<SiteMeta['seo']>>) => onChange({ seo: { ...meta.seo, ...p } })
+function AppearancePanel({
+  meta,
+  onChange,
+}: {
+  meta: SiteMeta
+  onChange: (patch: Partial<SiteMeta>) => void
+}) {
+  const setHeader = (p: Partial<SiteMeta['header']>) =>
+    onChange({ header: { ...meta.header, ...p } })
+  const setSeo = (p: Partial<NonNullable<SiteMeta['seo']>>) =>
+    onChange({ seo: { ...meta.seo, ...p } })
 
   return (
     <div className="space-y-5">
       <div className="space-y-1.5">
         <Label className="text-xs">Site title</Label>
-        <Input value={meta.title} onChange={(e) => onChange({ title: e.target.value })} className="h-9" />
+        <Input
+          value={meta.title}
+          onChange={(e) => onChange({ title: e.target.value })}
+          className="h-9"
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Theme</Label>
-          <Select value={meta.theme} onValueChange={(v) => onChange({ theme: v as SiteMeta['theme'] })}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <Select
+            value={meta.theme}
+            onValueChange={(v) => onChange({ theme: v as SiteMeta['theme'] })}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="light">Light</SelectItem>
               <SelectItem value="dark">Dark</SelectItem>
@@ -65,8 +112,13 @@ function AppearancePanel({ meta, onChange }: { meta: SiteMeta; onChange: (patch:
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Font</Label>
-          <Select value={meta.font} onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <Select
+            value={meta.font}
+            onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="sans">Sans</SelectItem>
               <SelectItem value="serif">Serif</SelectItem>
@@ -85,7 +137,11 @@ function AppearancePanel({ meta, onChange }: { meta: SiteMeta; onChange: (patch:
               type="button"
               onClick={() => onChange({ accentColor: c })}
               className="h-7 w-7 rounded-full transition-all"
-              style={{ background: c, outline: meta.accentColor === c ? `2px solid ${c}` : 'none', outlineOffset: 2 }}
+              style={{
+                background: c,
+                outline: meta.accentColor === c ? `2px solid ${c}` : 'none',
+                outlineOffset: 2,
+              }}
             />
           ))}
           <input
@@ -101,16 +157,29 @@ function AppearancePanel({ meta, onChange }: { meta: SiteMeta; onChange: (patch:
         <p className="text-xs font-medium text-muted-foreground">Header</p>
         <label className="flex items-center justify-between">
           <span className="text-sm">Show navigation bar</span>
-          <Switch checked={meta.header.showNav} onCheckedChange={(v) => setHeader({ showNav: v })} />
+          <Switch
+            checked={meta.header.showNav}
+            onCheckedChange={(v) => setHeader({ showNav: v })}
+          />
         </label>
         <div className="space-y-1.5">
           <Label className="text-xs">Header button label</Label>
-          <Input value={meta.header.ctaLabel ?? ''} onChange={(e) => setHeader({ ctaLabel: e.target.value })} placeholder="Book now" className="h-9" />
+          <Input
+            value={meta.header.ctaLabel ?? ''}
+            onChange={(e) => setHeader({ ctaLabel: e.target.value })}
+            placeholder="Book now"
+            className="h-9"
+          />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Header button action</Label>
-          <Select value={meta.header.ctaAction ?? 'booking'} onValueChange={(v) => setHeader({ ctaAction: v as SiteMeta['header']['ctaAction'] })}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <Select
+            value={meta.header.ctaAction ?? 'booking'}
+            onValueChange={(v) => setHeader({ ctaAction: v as SiteMeta['header']['ctaAction'] })}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="booking">Open booking</SelectItem>
               <SelectItem value="membership">Membership signup</SelectItem>
@@ -121,25 +190,41 @@ function AppearancePanel({ meta, onChange }: { meta: SiteMeta; onChange: (patch:
         {meta.header.ctaAction === 'url' && (
           <div className="space-y-1.5">
             <Label className="text-xs">Header button URL</Label>
-            <Input value={meta.header.ctaUrl ?? ''} onChange={(e) => setHeader({ ctaUrl: e.target.value })} placeholder="https://" className="h-9 font-mono text-xs" />
+            <Input
+              value={meta.header.ctaUrl ?? ''}
+              onChange={(e) => setHeader({ ctaUrl: e.target.value })}
+              placeholder="https://"
+              className="h-9 font-mono text-xs"
+            />
           </div>
         )}
       </div>
 
       <label className="flex items-center justify-between rounded-lg border p-3">
         <span className="text-sm">Show social links in footer</span>
-        <Switch checked={meta.footer.showSocial} onCheckedChange={(v) => onChange({ footer: { showSocial: v } })} />
+        <Switch
+          checked={meta.footer.showSocial}
+          onCheckedChange={(v) => onChange({ footer: { showSocial: v } })}
+        />
       </label>
 
       <div className="space-y-3 rounded-lg border p-3">
         <p className="text-xs font-medium text-muted-foreground">SEO (optional)</p>
         <div className="space-y-1.5">
           <Label className="text-xs">Page title</Label>
-          <Input value={meta.seo?.title ?? ''} onChange={(e) => setSeo({ title: e.target.value })} className="h-9" />
+          <Input
+            value={meta.seo?.title ?? ''}
+            onChange={(e) => setSeo({ title: e.target.value })}
+            className="h-9"
+          />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Meta description</Label>
-          <Input value={meta.seo?.description ?? ''} onChange={(e) => setSeo({ description: e.target.value })} className="h-9" />
+          <Input
+            value={meta.seo?.description ?? ''}
+            onChange={(e) => setSeo({ description: e.target.value })}
+            className="h-9"
+          />
         </div>
       </div>
     </div>
@@ -150,13 +235,20 @@ function AppearancePanel({ meta, onChange }: { meta: SiteMeta; onChange: (patch:
 
 function sectionSummary(s: WebsiteSection): string {
   switch (s.type) {
-    case 'hero':     return s.headline
-    case 'about':    return s.heading
-    case 'gallery':  return `${s.images.length} photo(s)`
-    case 'pricing':  return s.heading ?? 'Membership plans'
-    case 'schedule': return s.heading ?? 'Upcoming sessions'
-    case 'contact':  return s.heading ?? 'Contact details'
-    default:         return ''
+    case 'hero':
+      return s.headline
+    case 'about':
+      return s.heading
+    case 'gallery':
+      return `${s.images.length} photo(s)`
+    case 'pricing':
+      return s.heading ?? 'Membership plans'
+    case 'schedule':
+      return s.heading ?? 'Upcoming sessions'
+    case 'contact':
+      return s.heading ?? 'Contact details'
+    default:
+      return ''
   }
 }
 
@@ -185,7 +277,12 @@ export default function WebsiteBuilderPage() {
     if (draft || draftLoading || !currentTeamId || !team) return
     setDraft(
       savedDraft ??
-        emptyDraft({ id: currentTeamId, name: team.name, slug: team.slug, portalAccentColor: team.portalAccentColor }),
+        emptyDraft({
+          id: currentTeamId,
+          name: team.name,
+          slug: team.slug,
+          bioLinkAccentColor: team.bioLinkAccentColor,
+        })
     )
   }, [draft, draftLoading, savedDraft, currentTeamId, team])
 
@@ -194,9 +291,13 @@ export default function WebsiteBuilderPage() {
     setDraft((d) => (d ? updater(d) : d))
     setDirty(true)
   }
-  const patchMeta = (patch: Partial<SiteMeta>) => mutate((d) => ({ ...d, meta: { ...d.meta, ...patch } }))
+  const patchMeta = (patch: Partial<SiteMeta>) =>
+    mutate((d) => ({ ...d, meta: { ...d.meta, ...patch } }))
   const updateSection = (id: string, patch: Record<string, unknown>) =>
-    mutate((d) => ({ ...d, sections: d.sections.map((s) => (s.id === id ? ({ ...s, ...patch } as WebsiteSection) : s)) }))
+    mutate((d) => ({
+      ...d,
+      sections: d.sections.map((s) => (s.id === id ? ({ ...s, ...patch } as WebsiteSection) : s)),
+    }))
   function addSection(type: WebsiteSectionType) {
     if (draft && draft.sections.length >= limits.maxSections) {
       toast.error(t('limitSections', { max: limits.maxSections }))
@@ -207,7 +308,8 @@ export default function WebsiteBuilderPage() {
     setOpenId(sec.id)
     setTab('sections')
   }
-  const removeSection = (id: string) => mutate((d) => ({ ...d, sections: d.sections.filter((s) => s.id !== id) }))
+  const removeSection = (id: string) =>
+    mutate((d) => ({ ...d, sections: d.sections.filter((s) => s.id !== id) }))
   function moveSection(id: string, dir: -1 | 1) {
     mutate((d) => {
       const i = d.sections.findIndex((s) => s.id === id)
@@ -238,7 +340,10 @@ export default function WebsiteBuilderPage() {
 
   async function handlePublish() {
     if (!currentTeamId || !draft) return
-    if (!draft.slug) { toast.error(t('errorNoSlug')); return }
+    if (!draft.slug) {
+      toast.error(t('errorNoSlug'))
+      return
+    }
     setPublishing(true)
     try {
       const ok = await handleSave()
@@ -285,7 +390,10 @@ export default function WebsiteBuilderPage() {
         <Globe className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
         <p className="font-medium">{t('notInstalledTitle')}</p>
         <p className="mt-1 text-sm text-muted-foreground">{t('notInstalledBody')}</p>
-        <Link href={'/plugins' as Route} className="mt-4 inline-block text-sm text-primary hover:underline">
+        <Link
+          href={'/plugins' as Route}
+          className="mt-4 inline-block text-sm text-primary hover:underline"
+        >
           {t('goToPlugins')} →
         </Link>
       </div>
@@ -293,11 +401,22 @@ export default function WebsiteBuilderPage() {
   }
 
   const slug = team?.slug ?? draft.slug
-  const siteUrl = typeof window !== 'undefined' ? `${window.location.origin}/site/${slug}` : `/site/${slug}`
-  const status = dirty ? t('statusUnsaved') : draft.enabled ? t('statusPublished') : t('statusDraft')
+  const siteUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/public/site/${slug}`
+      : `/public/site/${slug}`
+  const status = dirty
+    ? t('statusUnsaved')
+    : draft.enabled
+      ? t('statusPublished')
+      : t('statusDraft')
   const previewSite: RenderableSite = {
-    teamId: draft.teamId, name: draft.name, slug: draft.slug,
-    meta: draft.meta, sections: draft.sections, socialLinks: team?.socialLinks,
+    teamId: draft.teamId,
+    name: draft.name,
+    slug: draft.slug,
+    meta: draft.meta,
+    sections: draft.sections,
+    socialLinks: team?.socialLinks,
   }
 
   return (
@@ -309,7 +428,12 @@ export default function WebsiteBuilderPage() {
           <div>
             <h1 className="text-2xl font-semibold">{t('title')}</h1>
             {slug ? (
-              <a href={siteUrl} target="_blank" rel="noopener noreferrer" className="mt-0.5 flex items-center gap-1 text-sm text-primary hover:underline">
+              <a
+                href={siteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-0.5 flex items-center gap-1 text-sm text-primary hover:underline"
+              >
                 {siteUrl.replace(/^https?:\/\//, '')}
                 <ExternalLink className="h-3 w-3" />
               </a>
@@ -319,9 +443,17 @@ export default function WebsiteBuilderPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="text-xs">{status}</Badge>
+          <Badge variant="secondary" className="text-xs">
+            {status}
+          </Badge>
           {draft.enabled && (
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={handleUnpublish} disabled={publishing}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={handleUnpublish}
+              disabled={publishing}
+            >
               {t('unpublish')}
             </Button>
           )}
@@ -329,7 +461,14 @@ export default function WebsiteBuilderPage() {
             {saving ? t('saving') : t('saveDraft')}
           </Button>
           <Button size="sm" onClick={handlePublish} disabled={publishing}>
-            {publishing ? t('publishing') : <><Check className="mr-1 h-4 w-4" />{t('publish')}</>}
+            {publishing ? (
+              t('publishing')
+            ) : (
+              <>
+                <Check className="mr-1 h-4 w-4" />
+                {t('publish')}
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -340,7 +479,12 @@ export default function WebsiteBuilderPage() {
         <div className="min-w-0 flex-1 space-y-4">
           {/* Tabs */}
           <div className="flex gap-0 border-b">
-            {([['sections', t('tabSections')], ['appearance', t('tabAppearance')]] as const).map(([key, label]) => (
+            {(
+              [
+                ['sections', t('tabSections')],
+                ['appearance', t('tabAppearance')],
+              ] as const
+            ).map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -365,28 +509,58 @@ export default function WebsiteBuilderPage() {
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                         <DynamicIcon name={lib?.icon ?? 'Square'} className="h-4 w-4" />
                       </span>
-                      <button type="button" onClick={() => setOpenId(open ? null : s.id)} className="min-w-0 flex-1 text-left">
-                        <p className="text-sm font-medium">{lib ? t(lib.labelKey as Parameters<typeof t>[0]) : s.type}</p>
-                        <p className="truncate text-xs text-muted-foreground">{sectionSummary(s)}</p>
+                      <button
+                        type="button"
+                        onClick={() => setOpenId(open ? null : s.id)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <p className="text-sm font-medium">
+                          {lib ? t(lib.labelKey as Parameters<typeof t>[0]) : s.type}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {sectionSummary(s)}
+                        </p>
                       </button>
                       <div className="flex items-center gap-0.5">
-                        <button type="button" onClick={() => moveSection(s.id, -1)} disabled={i === 0} className="rounded p-1 hover:bg-muted disabled:opacity-30">
+                        <button
+                          type="button"
+                          onClick={() => moveSection(s.id, -1)}
+                          disabled={i === 0}
+                          className="rounded p-1 hover:bg-muted disabled:opacity-30"
+                        >
                           <ChevronUp className="h-3.5 w-3.5" />
                         </button>
-                        <button type="button" onClick={() => moveSection(s.id, 1)} disabled={i === draft.sections.length - 1} className="rounded p-1 hover:bg-muted disabled:opacity-30">
+                        <button
+                          type="button"
+                          onClick={() => moveSection(s.id, 1)}
+                          disabled={i === draft.sections.length - 1}
+                          className="rounded p-1 hover:bg-muted disabled:opacity-30"
+                        >
                           <ChevronDown className="h-3.5 w-3.5" />
                         </button>
-                        <button type="button" onClick={() => setOpenId(open ? null : s.id)} className="rounded p-1 hover:bg-muted">
+                        <button
+                          type="button"
+                          onClick={() => setOpenId(open ? null : s.id)}
+                          className="rounded p-1 hover:bg-muted"
+                        >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
-                        <button type="button" onClick={() => setDeleteId(s.id)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive">
+                        <button
+                          type="button"
+                          onClick={() => setDeleteId(s.id)}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                        >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </div>
                     {open && currentTeamId && (
                       <div className="border-t p-3">
-                        <SectionEditor section={s} teamId={currentTeamId} onChange={(patch) => updateSection(s.id, patch)} />
+                        <SectionEditor
+                          section={s}
+                          teamId={currentTeamId}
+                          onChange={(patch) => updateSection(s.id, patch)}
+                        />
                       </div>
                     )}
                   </div>
@@ -401,11 +575,19 @@ export default function WebsiteBuilderPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-64">
                   {SECTION_LIBRARY.map((lib) => (
-                    <DropdownMenuItem key={lib.type} onClick={() => addSection(lib.type)} className="gap-2">
+                    <DropdownMenuItem
+                      key={lib.type}
+                      onClick={() => addSection(lib.type)}
+                      className="gap-2"
+                    >
                       <DynamicIcon name={lib.icon} className="h-4 w-4 text-muted-foreground" />
                       <span className="flex flex-col">
-                        <span className="text-sm">{t(lib.labelKey as Parameters<typeof t>[0])}</span>
-                        <span className="text-xs text-muted-foreground">{t(lib.descKey as Parameters<typeof t>[0])}</span>
+                        <span className="text-sm">
+                          {t(lib.labelKey as Parameters<typeof t>[0])}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {t(lib.descKey as Parameters<typeof t>[0])}
+                        </span>
                       </span>
                     </DropdownMenuItem>
                   ))}
@@ -428,7 +610,12 @@ export default function WebsiteBuilderPage() {
       </div>
 
       {/* Delete confirm */}
-      <AlertDialog open={!!deleteId} onOpenChange={(v) => { if (!v) setDeleteId(null) }}>
+      <AlertDialog
+        open={!!deleteId}
+        onOpenChange={(v) => {
+          if (!v) setDeleteId(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('deleteSectionTitle')}</AlertDialogTitle>
@@ -437,7 +624,10 @@ export default function WebsiteBuilderPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { if (deleteId) removeSection(deleteId); setDeleteId(null) }}
+              onClick={() => {
+                if (deleteId) removeSection(deleteId)
+                setDeleteId(null)
+              }}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               {t('delete')}

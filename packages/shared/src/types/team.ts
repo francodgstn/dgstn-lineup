@@ -25,24 +25,31 @@ export interface TeamLink {
   label: string
   description?: string
   url: string
-  showInPortal: boolean
+  showInBioLink: boolean
   iconName?: string
   isBookingLink?: boolean
   isMembershipLink?: boolean
 }
 
 export type SocialPlatform =
-  | 'instagram' | 'facebook' | 'youtube' | 'tiktok'
-  | 'x' | 'linkedin' | 'whatsapp' | 'website' | 'review'
+  | 'instagram'
+  | 'facebook'
+  | 'youtube'
+  | 'tiktok'
+  | 'x'
+  | 'linkedin'
+  | 'whatsapp'
+  | 'website'
+  | 'review'
 
 export interface SocialLink {
   platform: SocialPlatform
   url: string
 }
 
-export type PortalTheme = 'light' | 'dark' | 'auto'
+export type BioLinkTheme = 'light' | 'dark' | 'auto'
 
-export interface PortalBackground {
+export interface BioLinkBackground {
   type: 'solid' | 'gradient'
   color: string
 }
@@ -58,13 +65,13 @@ export interface Team {
   links?: TeamLink[]
   language?: 'en' | 'de' | 'fr' | 'it'
   settings?: Record<string, unknown>
-  // Portal / link-in-bio
+  // Bio-link / link-in-bio
   profileImage?: string
   heroImage?: string
   socialLinks?: SocialLink[]
-  portalTheme?: PortalTheme
-  portalAccentColor?: string
-  portalBackground?: PortalBackground
+  bioLinkTheme?: BioLinkTheme
+  bioLinkAccentColor?: string
+  bioLinkBackground?: BioLinkBackground
   // Outreach / email template custom variables
   outreach_placeholders?: Record<string, string>
   // Onboarding: team-level dismissal of the setup checklist (data-driven; the
@@ -74,10 +81,10 @@ export interface Team {
   plan?: SaasPlan
   plan_status?: SaasStatus
   trial_ends_at?: Timestamp
-  trial_extended?: boolean   // one-time self-service trial extension has been used
-  downgraded_from_trial_at?: Timestamp  // trial lapsed → moved to the free plan (drives the in-app banner)
-  suspended_at?: Timestamp   // LEGACY (wall era) — deleted on downgrade; nothing writes it
-  purge_at?: Timestamp       // LEGACY (purge era) — deleted on downgrade; nothing writes it
+  trial_extended?: boolean // one-time self-service trial extension has been used
+  downgraded_from_trial_at?: Timestamp // trial lapsed → moved to the free plan (drives the in-app banner)
+  suspended_at?: Timestamp // LEGACY (wall era) — deleted on downgrade; nothing writes it
+  purge_at?: Timestamp // LEGACY (purge era) — deleted on downgrade; nothing writes it
   stripe_customer_id?: string
   max_contacts?: number
   // Organization membership
@@ -117,12 +124,12 @@ export interface TeamPublicProfile {
   profileImage?: string
   heroImage?: string
   socialLinks?: SocialLink[]
-  portalTheme?: PortalTheme
-  portalAccentColor?: string
-  portalBackground?: PortalBackground
+  bioLinkTheme?: BioLinkTheme
+  bioLinkAccentColor?: string
+  bioLinkBackground?: BioLinkBackground
   bookingSettings?: BookingSettings
   // Denormalized from teams/{id}.plan by syncTeamPublicProfile — true on the
-  // free plan, where the portal shows a "Powered by Linyup" badge. The portal
+  // free plan, where the bio-link shows a "Powered by Linyup" badge. The bio-link
   // must never read teams/, so the flag lives here.
   showBranding?: boolean
 }
