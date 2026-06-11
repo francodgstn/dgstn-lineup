@@ -1,7 +1,7 @@
 {
   "site": {
     "name": "Linyup",
-    "description": "L'outil de gestion tout-en-un pour coaches et clubs — sessions, contacts, réservations et application mobile étudiante, tout en un."
+    "description": "L'outil de gestion tout-en-un pour coaches et studios — sessions, contacts, réservations et application mobile étudiante, tout en un."
   },
   "nav": {
     "features": "Fonctionnalités",
@@ -10,14 +10,14 @@
     "cta": "Commencer gratuitement"
   },
   "hero": {
-    "tagline": "Pour coaches, salles de sport et clubs",
-    "title": "Planifiez vos cours. Connaissez vos élèves. Développez votre club.",
-    "subtitle": "Linyup est l'outil de gestion tout-en-un pour coaches et clubs — sessions, contacts, réservations et application mobile étudiante, tout en un.",
+    "tagline": "Pour coaches, salles de sport et studios",
+    "title": "Planifiez vos cours. Connaissez vos élèves. Développez votre studio.",
+    "subtitle": "Linyup est l'outil de gestion tout-en-un pour coaches et studios — sessions, contacts, réservations et application mobile étudiante, tout en un.",
     "cta": "Commencer gratuitement",
     "ctaSecondary": "Voir les fonctionnalités"
   },
   "features": {
-    "title": "Tout ce qu'il vous faut pour gérer un club moderne",
+    "title": "Tout ce qu'il vous faut pour gérer un studio moderne",
     "subtitle": "Du coach solo à l'organisation multi-sites, Linyup s'adapte à votre façon de travailler.",
     "sessions": {
       "title": "Sessions",
@@ -52,22 +52,22 @@
     },
     "studio": {
       "name": "Studio",
-      "audience": "Pour les studios, salles de sport et clubs avec plusieurs coaches et cours.",
+      "audience": "Pour les studios et salles de sport avec plusieurs coaches et cours.",
       "features": ["Tout de Coach", "Contacts illimités", "Automatisations & gamification", "Tendances & analyses"]
     },
     "org": {
       "name": "Organisation",
-      "audience": "Pour les clubs multi-sites, fédérations et franchises.",
+      "audience": "Pour les studios multi-sites, fédérations et franchises.",
       "features": ["Tout de Studio", "Hiérarchie multi-équipes", "Classements & événements à l'échelle de l'organisation"]
     }
   },
   "cta": {
     "title": "Prêt à vous lancer ?",
-    "subtitle": "Rejoignez les coaches et clubs qui utilisent déjà Linyup pour gérer leur activité.",
+    "subtitle": "Rejoignez les coaches et studios qui utilisent déjà Linyup pour gérer leur activité.",
     "button": "Commencer gratuitement"
   },
   "footer": {
-    "tagline": "L'outil de gestion moderne pour coaches et clubs.",
+    "tagline": "L'outil de gestion moderne pour coaches et studios.",
     "links": {
       "privacy": "Confidentialité",
       "terms": "CGU",

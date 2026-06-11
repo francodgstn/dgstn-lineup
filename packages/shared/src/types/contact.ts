@@ -55,9 +55,12 @@ export interface Contact {
   org_membership_status?: string
   org_membership_active?: boolean
   org_membership_expiration?: Timestamp
+  // Subscription (one active subscription per contact)
   subscription_type_id?: string
   subscription_type_name?: string
-  subscription_recurrence?: string
+  subscription_recurrence?: string // authoritative; derived from the chosen price when one exists
+  subscription_price_id?: string // set only when the chosen type has prices
+  subscription_amount?: number // amount snapshot at assignment time
   subscription_type_updated_at?: Timestamp
 
   // Acquisition / funnel
@@ -101,6 +104,10 @@ export interface Contact {
   // Ranking — keyed by RankingSystem.id (e.g. { "hmd": 5, "internal": 2 })
   ranks?: Record<string, number>
 
+  // Custom Fields plugin — keyed by CustomFieldDefinition.id. Dates are stored
+  // as ISO 'YYYY-MM-DD' strings to keep the map JSON-flat.
+  custom_fields?: Record<string, string | number | boolean>
+
   // Lifecycle
   created_at?: Timestamp
   archived_at?: Timestamp | null
@@ -125,12 +132,32 @@ export interface ContactGroup {
 
 // ─── subscription type (team configuration) ───────────────────────────────────
 
+export type SubscriptionRecurrence =
+  | 'per_class'
+  | 'weekly'
+  | 'biweekly'
+  | 'monthly'
+  | 'quarterly'
+  | 'annual'
+
+// A single price option on a subscription type (Stripe-like: product → prices).
+// Amount is in the team's default currency (Team.default_currency).
+export interface SubscriptionPrice {
+  id: string // client-generated; stable across edits
+  amount: number // in the team default currency, e.g. 49.9
+  recurrence: SubscriptionRecurrence
+  label?: string // optional, e.g. "Intro offer"
+  active?: boolean // default true; inactive prices are hidden from the table + assignment
+}
+
 export interface SubscriptionType {
   id: string
   name: string
   description?: string
   source?: 'internal' | 'aggregator'
   active?: boolean
+  public?: boolean // show on the bio-link / website pricing table (default off)
+  prices?: SubscriptionPrice[] // optional; absent = the simple "just a container" flow
 }
 
 // ─── subscription history (contacts/{id}/subscription_history) ────────────────
@@ -140,6 +167,8 @@ export interface SubscriptionHistoryEntry {
   subscription_type_id?: string
   subscription_type_name?: string
   recurrence?: string
+  subscription_price_id?: string // price chosen at the time, when the type had prices
+  amount?: number // amount snapshot at the time of subscription
   start_date?: Timestamp
   end_date?: Timestamp | null
   termination_reason?: string

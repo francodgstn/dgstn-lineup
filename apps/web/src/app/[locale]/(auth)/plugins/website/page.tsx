@@ -241,6 +241,8 @@ function sectionSummary(s: WebsiteSection): string {
       return s.heading
     case 'gallery':
       return `${s.images.length} photo(s)`
+    case 'activities':
+      return s.heading ?? 'Activities'
     case 'pricing':
       return s.heading ?? 'Membership plans'
     case 'schedule':
@@ -555,12 +557,21 @@ export default function WebsiteBuilderPage() {
                       </div>
                     </div>
                     {open && currentTeamId && (
-                      <div className="border-t p-3">
+                      <div className="space-y-3 border-t p-3">
                         <SectionEditor
                           section={s}
                           teamId={currentTeamId}
                           onChange={(patch) => updateSection(s.id, patch)}
                         />
+                        {s.type !== 'hero' && (
+                          <label className="flex items-center justify-between rounded-lg border p-3">
+                            <span className="text-sm">{t('showInMenu')}</span>
+                            <Switch
+                              checked={s.showInNav !== false}
+                              onCheckedChange={(v) => updateSection(s.id, { showInNav: v })}
+                            />
+                          </label>
+                        )}
                       </div>
                     )}
                   </div>

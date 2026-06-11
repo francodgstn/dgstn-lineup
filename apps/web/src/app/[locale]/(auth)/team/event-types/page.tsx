@@ -19,6 +19,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Plus, Pencil, Trash2, Lock, Package } from 'lucide-react'
 import {
   TEAMS_COLLECTION, EVENT_TYPES_SUBCOLLECTION,
@@ -245,21 +246,24 @@ export default function EventTypesPage() {
   const pluginTypes = PLUGIN_REGISTRY.filter((p) => p.eventType)
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Event types</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure the types of events your team can run. Built-in types have hardcoded check-in forms.
-          Custom types let you define your own check-in fields.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Event types"
+        subtitle="Configure the types of events your team can run. Built-in types have hardcoded check-in forms; custom types let you define your own check-in fields."
+        action={
+          <Button onClick={() => { setEditing(null); setFormOpen(true) }}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            New type
+          </Button>
+        }
+      />
 
       {/* Built-in types */}
-      <section className="space-y-5">
+      <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Built-in</h2>
-        <div className="rounded-xl border overflow-hidden">
+        <div className="space-y-2">
           {BUILTIN_EVENT_TYPES.map((type) => (
-            <div key={type} className="flex items-center gap-3 px-4 py-3 border-b last:border-0">
+            <div key={type} className="flex items-center gap-3 rounded-lg border p-3">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">{BUILTIN_LABELS[type] ?? type}</p>
                 <p className="text-xs text-muted-foreground capitalize">{type}</p>
@@ -273,11 +277,11 @@ export default function EventTypesPage() {
 
       {/* Plugin-provided types */}
       {pluginTypes.length > 0 && (
-        <section className="space-y-5">
+        <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">From plugins</h2>
-          <div className="rounded-xl border overflow-hidden">
+          <div className="space-y-2">
             {pluginTypes.map((plugin) => (
-              <div key={plugin.id} className="flex items-center gap-3 px-4 py-3 border-b last:border-0">
+              <div key={plugin.id} className="flex items-center gap-3 rounded-lg border p-3">
                 <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{plugin.eventType!.id}</p>
@@ -291,14 +295,8 @@ export default function EventTypesPage() {
       )}
 
       {/* Custom types */}
-      <section className="space-y-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Custom</h2>
-          <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true) }}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            New type
-          </Button>
-        </div>
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Custom</h2>
 
         {isLoading && (
           <div className="space-y-2">
@@ -307,15 +305,15 @@ export default function EventTypesPage() {
         )}
 
         {!isLoading && customTypes.length === 0 && (
-          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
             No custom event types yet. Create one to add custom check-in fields.
           </div>
         )}
 
         {!isLoading && customTypes.length > 0 && (
-          <div className="rounded-xl border overflow-hidden">
+          <div className="space-y-2">
             {customTypes.map((type) => (
-              <div key={type.id} className="flex items-center gap-3 px-4 py-3 border-b last:border-0">
+              <div key={type.id} className="flex items-center gap-3 rounded-lg border p-3">
                 {type.color && (
                   <span className="w-3 h-3 rounded-full shrink-0" style={{ background: type.color }} />
                 )}

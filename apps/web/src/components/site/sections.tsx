@@ -13,6 +13,7 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { formatCurrency } from '@/lib/format'
 import {
   Instagram,
   Facebook,
@@ -35,6 +36,7 @@ import type {
   HeroSection,
   AboutSection,
   GallerySection,
+  ActivitiesSection,
   PricingSection,
   ScheduleSection,
   ContactSection,
@@ -109,14 +111,14 @@ function HeroBlock({ section, ctx }: { section: HeroSection; ctx: RenderCtx }) {
         className={`relative mx-auto w-full max-w-5xl px-6 py-20 ${center ? 'text-center' : 'text-left'}`}
       >
         <h1
-          className="text-4xl sm:text-5xl font-bold tracking-tight"
+          className="text-4xl @2xl:text-5xl font-bold tracking-tight"
           style={{ color: '#ffffff', textShadow: '0 2px 18px rgba(0,0,0,0.35)' }}
         >
           {section.headline}
         </h1>
         {section.subheadline && (
           <p
-            className={`mt-4 text-lg sm:text-xl ${center ? 'mx-auto max-w-2xl' : 'max-w-2xl'}`}
+            className={`mt-4 text-lg @2xl:text-xl ${center ? 'mx-auto max-w-2xl' : 'max-w-2xl'}`}
             style={{ color: 'rgba(255,255,255,0.92)', textShadow: '0 1px 12px rgba(0,0,0,0.35)' }}
           >
             {section.subheadline}
@@ -169,7 +171,7 @@ function AboutBlock({ section, ctx }: { section: AboutSection; ctx: RenderCtx })
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <div className={`grid items-center gap-10 ${section.imageUrl ? 'md:grid-cols-2' : ''}`}>
+        <div className={`grid items-center gap-10 ${section.imageUrl ? '@3xl:grid-cols-2' : ''}`}>
           {section.imageUrl && imageRight && <AboutText section={section} palette={palette} />}
           {section.imageUrl && (
             <div className="overflow-hidden rounded-2xl">
@@ -205,10 +207,10 @@ function GalleryBlock({ section, ctx }: { section: GallerySection; ctx: RenderCt
   const { palette } = ctx
   const cols =
     section.columns === 2
-      ? 'sm:grid-cols-2'
+      ? '@2xl:grid-cols-2'
       : section.columns === 4
-        ? 'sm:grid-cols-2 lg:grid-cols-4'
-        : 'sm:grid-cols-2 lg:grid-cols-3'
+        ? '@2xl:grid-cols-2 @5xl:grid-cols-4'
+        : '@2xl:grid-cols-2 @5xl:grid-cols-3'
   if (!section.images.length && !section.heading) return null
   return (
     <section id={section.id} className="py-20" style={{ background: palette.surface }}>
@@ -245,17 +247,199 @@ function GalleryBlock({ section, ctx }: { section: GallerySection; ctx: RenderCt
   )
 }
 
+// ─── Activities (live: team public_profile mirrors, type 'activity') ──────────
+
+interface ActivityEntry {
+  id: string
+  name: string
+  slug: string
+  description?: string
+  color?: string
+  imageUrl?: string
+  level?: string
+  isFreeTrial?: boolean
+}
+
+function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: RenderCtx }) {
+  const { palette, slug, teamId, preview } = ctx
+  const [activities, setActivities] = useState<ActivityEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    const q = query(
+      collectionGroup(db, 'public_profile'),
+      where('teamId', '==', teamId),
+      where('type', '==', 'activity')
+    )
+    getDocs(q)
+      .then((snap) => {
+        if (!alive) return
+        const list = snap.docs
+          .map((d) => {
+            const data = d.data()
+            return {
+              id: d.id,
+              name: (data.name as string) || '',
+              slug: (data.slug as string) || '',
+              description: (data.description as string) || undefined,
+              color: (data.color as string) || undefined,
+              imageUrl: (data.image_url as string) || undefined,
+              level: (data.level as string) || undefined,
+              isFreeTrial: Boolean(data.isFreeTrial),
+            }
+          })
+          .filter((a) => a.name)
+          .sort((a, b) => a.name.localeCompare(b.name))
+        setActivities(list)
+      })
+      .catch(() => {
+        if (alive) setActivities([])
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [teamId])
+
+  const cols =
+    section.columns === 2
+      ? '@2xl:grid-cols-2'
+      : section.columns === 4
+        ? '@2xl:grid-cols-2 @5xl:grid-cols-4'
+        : '@2xl:grid-cols-2 @5xl:grid-cols-3'
+
+  return (
+    <section id={section.id} className="py-20" style={{ background: palette.bg }}>
+      <div className="mx-auto max-w-5xl px-6">
+        <Heading text={section.heading ?? 'What we offer'} palette={palette} />
+        {section.subheading && (
+          <p className="mt-3 text-center" style={{ color: palette.muted }}>
+            {section.subheading}
+          </p>
+        )}
+        <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
+          {loading ? (
+            <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
+              Loading…
+            </p>
+          ) : activities.length === 0 ? (
+            <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
+              No activities yet.
+            </p>
+          ) : (
+            activities.map((a) => {
+              const href =
+                section.showBooking && a.slug
+                  ? `/public/bio-link/${slug}/booking/${a.slug}`
+                  : undefined
+              return (
+                <div
+                  key={a.id}
+                  className="flex flex-col overflow-hidden rounded-2xl border"
+                  style={{ borderColor: palette.border, background: palette.surface }}
+                >
+                  <div
+                    className="relative aspect-[4/3] w-full"
+                    style={{ background: a.color || palette.accent }}
+                  >
+                    {a.imageUrl ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={a.imageUrl}
+                        alt=""
+                        className="h-full w-full object-cover transition-transform hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <span
+                          className="text-4xl font-bold"
+                          style={{ color: '#ffffff', opacity: 0.92 }}
+                        >
+                          {a.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                    {a.isFreeTrial && (
+                      <span
+                        className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow"
+                        style={{ background: palette.accent, color: palette.onAccent }}
+                      >
+                        Free trial
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-semibold" style={{ color: palette.text }}>
+                        {a.name}
+                      </h3>
+                      {a.level && a.level !== 'all' && (
+                        <span
+                          className="rounded-full border px-2 py-0.5 text-xs capitalize"
+                          style={{ borderColor: palette.border, color: palette.muted }}
+                        >
+                          {a.level}
+                        </span>
+                      )}
+                    </div>
+                    {a.description && (
+                      <p className="mt-2 flex-1 text-sm" style={{ color: palette.muted }}>
+                        {a.description}
+                      </p>
+                    )}
+                    {href && (
+                      <a
+                        {...linkProps(preview ? undefined : href, preview)}
+                        className="mt-4 inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
+                        style={{ color: palette.accent }}
+                      >
+                        Book
+                        <ArrowRight className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ─── Pricing (live: team public_profile.aggregator_subscription_types) ────────
+
+interface PlanPrice {
+  amount: number
+  recurrence: string
+  label?: string
+}
 
 interface PlanEntry {
   id: string
   name: string
   description?: string
+  prices?: PlanPrice[]
+}
+
+// Short, public-facing recurrence suffixes (this renderer is not i18n-aware).
+const RECURRENCE_SUFFIX: Record<string, string> = {
+  per_class: '/class',
+  weekly: '/week',
+  biweekly: '/2 weeks',
+  monthly: '/mo',
+  quarterly: '/quarter',
+  annual: '/yr',
 }
 
 function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCtx }) {
   const { palette, slug, teamId, preview } = ctx
   const [plans, setPlans] = useState<PlanEntry[]>([])
+  const [currency, setCurrency] = useState('CHF')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -265,6 +449,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
         if (!alive) return
         const list = (snap.data()?.aggregator_subscription_types ?? []) as PlanEntry[]
         setPlans(Array.isArray(list) ? list : [])
+        setCurrency((snap.data()?.default_currency as string | undefined) ?? 'CHF')
       })
       .catch(() => {
         if (alive) setPlans([])
@@ -288,7 +473,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
             {section.subheading}
           </p>
         )}
-        <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 grid grid-cols-1 gap-5 @2xl:grid-cols-2 @5xl:grid-cols-3">
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
               Loading…
@@ -307,6 +492,21 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                 <h3 className="text-lg font-semibold" style={{ color: palette.text }}>
                   {p.name}
                 </h3>
+                {p.prices && p.prices.length > 0 && (
+                  <div className="mt-3 space-y-1">
+                    {p.prices.map((pr, i) => (
+                      <div key={i} className="flex items-baseline gap-1.5">
+                        <span className="text-2xl font-bold" style={{ color: palette.text }}>
+                          {formatCurrency(pr.amount, currency)}
+                        </span>
+                        <span className="text-sm" style={{ color: palette.muted }}>
+                          {RECURRENCE_SUFFIX[pr.recurrence] ?? ''}
+                          {pr.label ? ` · ${pr.label}` : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {p.description && (
                   <p className="mt-2 flex-1 text-sm" style={{ color: palette.muted }}>
                     {p.description}
@@ -467,7 +667,7 @@ function ContactBlock({ section, ctx }: { section: ContactSection; ctx: RenderCt
       <div className="mx-auto max-w-5xl px-6">
         <Heading text={section.heading ?? 'Get in touch'} palette={palette} />
         <div
-          className={`mt-10 grid gap-8 ${section.mapQuery ? 'md:grid-cols-2' : 'max-w-md mx-auto'}`}
+          className={`mt-10 grid gap-8 ${section.mapQuery ? '@3xl:grid-cols-2' : 'max-w-md mx-auto'}`}
         >
           <div className="space-y-4">
             {rows.map((r, i) => {
@@ -535,6 +735,8 @@ export function SectionBlock({ section, ctx }: { section: WebsiteSection; ctx: R
       return <AboutBlock section={section} ctx={ctx} />
     case 'gallery':
       return <GalleryBlock section={section} ctx={ctx} />
+    case 'activities':
+      return <ActivitiesBlock section={section} ctx={ctx} />
     case 'pricing':
       return <PricingBlock section={section} ctx={ctx} />
     case 'schedule':
@@ -553,6 +755,8 @@ export function sectionNavLabel(section: WebsiteSection): string {
       return section.heading || 'About'
     case 'gallery':
       return section.heading || 'Gallery'
+    case 'activities':
+      return section.heading || 'Activities'
     case 'pricing':
       return section.heading || 'Membership'
     case 'schedule':

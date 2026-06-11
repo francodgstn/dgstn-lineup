@@ -65,6 +65,15 @@ function sanitizeSection(raw: unknown): WebsiteSection | null {
   const type = d.type
   if (!id || typeof type !== 'string') return null
 
+  const section = buildSection(d, id, type)
+  if (!section) return null
+  // Nav membership is common to every section type. Stored only when explicitly
+  // hidden; absence means "visible" (the renderer defaults showInNav to true).
+  if (d.showInNav === false) section.showInNav = false
+  return section
+}
+
+function buildSection(d: Dict, id: string, type: string): WebsiteSection | null {
   switch (type) {
     case 'hero': {
       const headline = optStr(d.headline, 200)
@@ -103,6 +112,17 @@ function sanitizeSection(raw: unknown): WebsiteSection | null {
         heading: optStr(d.heading, 200),
         images,
         columns: (columns === 2 || columns === 4 ? columns : 3) as 2 | 3 | 4,
+      }) as unknown as WebsiteSection
+    }
+    case 'activities': {
+      const columns = num(d.columns, 2, 4, 3)
+      return clean({
+        id, type: 'activities',
+        heading: optStr(d.heading, 200),
+        subheading: optStr(d.subheading, 400),
+        source: 'activities',
+        columns: (columns === 2 || columns === 4 ? columns : 3) as 2 | 3 | 4,
+        showBooking: bool(d.showBooking),
       }) as unknown as WebsiteSection
     }
     case 'pricing': {

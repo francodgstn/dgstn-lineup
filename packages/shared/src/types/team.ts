@@ -21,6 +21,20 @@ export interface RankingSystem {
   is_primary?: boolean
 }
 
+// ─── Custom Fields plugin ─────────────────────────────────────────────────────
+// Account-wide definitions of extra contact fields. Defined here (team config);
+// the per-contact values live on Contact.custom_fields keyed by definition id.
+
+export type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'checkbox'
+
+export interface CustomFieldDefinition {
+  id: string // stable slug/uuid — the key used in Contact.custom_fields
+  label: string
+  type: CustomFieldType
+  options?: string[] // for type 'select'
+  required?: boolean
+}
+
 export interface TeamLink {
   label: string
   description?: string
@@ -62,6 +76,8 @@ export interface Team {
   primaryContact?: string
   sport_type?: string
   ranking_systems?: RankingSystem[]
+  // Custom Fields plugin — account-wide extra contact field definitions
+  custom_field_definitions?: CustomFieldDefinition[]
   links?: TeamLink[]
   language?: 'en' | 'de' | 'fr' | 'it'
   settings?: Record<string, unknown>
@@ -87,6 +103,9 @@ export interface Team {
   purge_at?: Timestamp // LEGACY (purge era) — deleted on downgrade; nothing writes it
   stripe_customer_id?: string
   max_contacts?: number
+  // Billing currency for subscription-type prices (ISO 4217, e.g. 'CHF').
+  // Pre-filled from the configured payment gateway's currency when one exists.
+  default_currency?: string
   // Organization membership
   org_id?: string
   // Timestamps
@@ -132,6 +151,9 @@ export interface TeamPublicProfile {
   // free plan, where the bio-link shows a "Powered by Linyup" badge. The bio-link
   // must never read teams/, so the flag lives here.
   showBranding?: boolean
+  // Denormalized from teams/{id}.default_currency by syncTeamPublicProfile so the
+  // public website pricing table can format prices without reading teams/.
+  default_currency?: string
 }
 
 export interface TeamInvitation {

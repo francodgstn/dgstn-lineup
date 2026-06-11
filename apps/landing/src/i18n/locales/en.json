@@ -1,7 +1,7 @@
 {
   "site": {
     "name": "Linyup",
-    "description": "The all-in-one management tool for coaches and clubs — sessions, contacts, bookings, and a student mobile app."
+    "description": "The all-in-one management tool for coaches and studios — sessions, contacts, bookings, and a student mobile app."
   },
   "nav": {
     "features": "Features",
@@ -10,14 +10,14 @@
     "cta": "Start free"
   },
   "hero": {
-    "tagline": "For coaches, gyms, and clubs",
-    "title": "Run your classes. Know your students. Grow your club.",
-    "subtitle": "Linyup is the all-in-one management tool for coaches and clubs — sessions, contacts, bookings, and a student mobile app, all in one place.",
+    "tagline": "For coaches, gyms, and studios",
+    "title": "Run your classes. Know your students. Grow your studio.",
+    "subtitle": "Linyup is the all-in-one management tool for coaches and studios — sessions, contacts, bookings, and a student mobile app, all in one place.",
     "cta": "Start for free",
     "ctaSecondary": "See features"
   },
   "features": {
-    "title": "Everything you need to run a modern club",
+    "title": "Everything you need to run a modern studio",
     "subtitle": "From solo coach to multi-location organisation, Linyup adapts to the way you work.",
     "sessions": {
       "title": "Sessions",
@@ -52,22 +52,22 @@
     },
     "studio": {
       "name": "Studio",
-      "audience": "For studios, gyms and clubs with multiple coaches and classes.",
+      "audience": "For studios and gyms with multiple coaches and classes.",
       "features": ["Everything in Coach", "Unlimited contacts", "Automations & gamification", "Trends & analytics"]
     },
     "org": {
       "name": "Organisation",
-      "audience": "For multi-location clubs, federations, and franchises.",
+      "audience": "For multi-location studios, federations, and franchises.",
       "features": ["Everything in Studio", "Multi-team hierarchy", "Org-wide rankings & events"]
     }
   },
   "cta": {
     "title": "Ready to get started?",
-    "subtitle": "Join coaches and clubs already using Linyup to run their business.",
+    "subtitle": "Join coaches and studios already using Linyup to run their business.",
     "button": "Start for free"
   },
   "footer": {
-    "tagline": "The modern management tool for coaches and clubs.",
+    "tagline": "The modern management tool for coaches and studios.",
     "links": {
       "privacy": "Privacy",
       "terms": "Terms",

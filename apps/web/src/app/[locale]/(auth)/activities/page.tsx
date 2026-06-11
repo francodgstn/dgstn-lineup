@@ -28,6 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION } from '@linyup/shared'
 import type { Activity, ActivityLevel, ActivityType } from '@linyup/shared'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Plus, Pencil, Archive, ImageIcon, X } from 'lucide-react'
 
 // ─── archive confirm dialog ───────────────────────────────────────────────────
@@ -449,24 +450,17 @@ export default function ActivitiesPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          {!isLoading && (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t('subtitle', { count: activities.length })}
-            </p>
-          )}
-        </div>
-        <button
-          onClick={openNew}
-          className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          {t('newActivity')}
-        </button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={t('title')}
+        subtitle={isLoading ? undefined : t('subtitle', { count: activities.length })}
+        action={
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            {t('newActivity')}
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="space-y-3">
@@ -493,15 +487,6 @@ export default function ActivitiesPage() {
           ))}
         </div>
       )}
-
-      {/* Mobile FAB */}
-      <button
-        onClick={openNew}
-        className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-40"
-        aria-label={t('newActivity')}
-      >
-        <Plus className="h-6 w-6" />
-      </button>
 
       {currentTeamId && user && (
         <ActivityDialog

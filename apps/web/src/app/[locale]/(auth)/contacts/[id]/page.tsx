@@ -21,6 +21,7 @@ import {
   limit,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { formatCurrency } from '@/lib/format'
 import { useAuth } from '@/contexts/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -123,6 +124,7 @@ import {
 import { GoalsTab } from './GoalsTab'
 import { NotesTab } from './NotesTab'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
+import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -175,6 +177,7 @@ const profileSchema = z.object({
     .optional(),
   subscription_type_id: z.string().optional(),
   subscription_recurrence: z.string().optional(),
+  subscription_price_id: z.string().optional(),
   address_route: z.string().max(100).optional(),
   address_street_number: z.string().max(20).optional(),
   address_postal_code: z.string().max(20).optional(),
@@ -182,6 +185,9 @@ const profileSchema = z.object({
   acquisition_channel: z.string().max(100).optional(),
   acquisition_notes: z.string().max(500).optional(),
   ranks: z.record(z.string(), z.number()).optional(),
+  custom_fields: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .optional(),
 })
 type ProfileValues = z.infer<typeof profileSchema>
 
@@ -933,6 +939,9 @@ function ProfileTab({
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const membershipTerm = useMembershipTerm()
+  const { team } = useAuth()
+  const { isInstalled } = useInstalledPlugins()
+  const currency = (team?.default_currency ?? 'CHF').toUpperCase()
   const { data: subTypes = [] } = useSubscriptionTypes(teamId)
   const { data: rankingSystems = [] } = useTeamRankingSystems(teamId, orgId)
 
@@ -953,6 +962,8 @@ function ProfileTab({
     register,
     handleSubmit,
     control,
+    watch,
+    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
@@ -970,6 +981,7 @@ function ProfileTab({
         contact.membership_status) as typeof contact.membership_status,
       subscription_type_id: contact.subscription_type_id ?? '',
       subscription_recurrence: contact.subscription_recurrence ?? '',
+      subscription_price_id: contact.subscription_price_id ?? '',
       address_route: contact.address?.route ?? '',
       address_street_number: contact.address?.street_number ?? '',
       address_postal_code: contact.address?.postal_code ?? '',
@@ -977,10 +989,15 @@ function ProfileTab({
       acquisition_channel: contact.acquisition?.channel ?? '',
       acquisition_notes: contact.acquisition?.notes ?? '',
       ranks: contact.ranks ?? {},
+      custom_fields: contact.custom_fields ?? {},
     },
   })
 
   const onSubmit = async (values: ProfileValues) => {
+    // When the chosen type has prices, recurrence + amount derive from the
+    // selected price; otherwise the free recurrence dropdown stays authoritative.
+    const chosenType = subTypes.find((st) => st.id === values.subscription_type_id)
+    const chosenPrice = chosenType?.prices?.find((p) => p.id === values.subscription_price_id)
     await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
       firstname: values.firstname,
       lastname: values.lastname,
@@ -995,7 +1012,11 @@ function ProfileTab({
         ? {}
         : { org_membership_status: values.membership_status || 'guest' }),
       subscription_type_id: values.subscription_type_id || null,
-      subscription_recurrence: values.subscription_recurrence || null,
+      subscription_price_id: chosenPrice ? chosenPrice.id : null,
+      subscription_recurrence: chosenPrice
+        ? chosenPrice.recurrence
+        : values.subscription_recurrence || null,
+      subscription_amount: chosenPrice ? chosenPrice.amount : null,
       address: {
         route: values.address_route || null,
         street_number: values.address_street_number || null,
@@ -1008,6 +1029,7 @@ function ProfileTab({
         acknowledged: contact.acquisition?.acknowledged ?? false,
       },
       ranks: values.ranks ?? {},
+      custom_fields: values.custom_fields ?? {},
       updatedAt: serverTimestamp(),
     })
     onSaved()
@@ -1105,7 +1127,11 @@ function ProfileTab({
                   return (
                     <Select
                       value={field.value ?? ''}
-                      onValueChange={(val) => field.onChange(val ?? '')}
+                      onValueChange={(val) => {
+                        field.onChange(val ?? '')
+                        // Reset the chosen price — it belongs to the previous type.
+                        setValue('subscription_price_id', '')
+                      }}
                     >
                       <SelectTrigger className="w-full">
                         <span className="flex flex-1 text-left text-sm truncate">
@@ -1132,36 +1158,83 @@ function ProfileTab({
               />
             </Field>
           )}
-          <Field label={t('subscriptionRecurrence')}>
-            <Controller
-              control={control}
-              name="subscription_recurrence"
-              render={({ field }) => (
-                <Select
-                  value={field.value ?? ''}
-                  onValueChange={(val) => field.onChange(val ?? '')}
-                >
-                  <SelectTrigger className="w-full">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value ? (
-                        t(`recurrence_${field.value}`)
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">—</SelectItem>
-                    {RECURRENCES.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {t(`recurrence_${r}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </Field>
+          {(() => {
+            const selType = subTypes.find((st) => st.id === watch('subscription_type_id'))
+            const activePrices = (selType?.prices ?? []).filter((p) => p.active !== false)
+            // When the chosen type carries prices, pick a price (recurrence + amount
+            // derive from it). Otherwise fall back to the free recurrence dropdown.
+            if (activePrices.length > 0) {
+              return (
+                <Field label={t('subscriptionPrice')}>
+                  <Controller
+                    control={control}
+                    name="subscription_price_id"
+                    render={({ field }) => {
+                      const sel = activePrices.find((p) => p.id === field.value)
+                      const priceLabel = (p: (typeof activePrices)[number]) =>
+                        `${p.label ? `${p.label} · ` : ''}${formatCurrency(p.amount, currency)} · ${t(`recurrence_${p.recurrence}`)}`
+                      return (
+                        <Select
+                          value={field.value ?? ''}
+                          onValueChange={(val) => field.onChange(val ?? '')}
+                        >
+                          <SelectTrigger className="w-full">
+                            <span className="flex flex-1 text-left text-sm truncate">
+                              {sel ? (
+                                priceLabel(sel)
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">—</SelectItem>
+                            {activePrices.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {priceLabel(p)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )
+                    }}
+                  />
+                </Field>
+              )
+            }
+            return (
+              <Field label={t('subscriptionRecurrence')}>
+                <Controller
+                  control={control}
+                  name="subscription_recurrence"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ?? ''}
+                      onValueChange={(val) => field.onChange(val ?? '')}
+                    >
+                      <SelectTrigger className="w-full">
+                        <span className="flex flex-1 text-left text-sm truncate">
+                          {field.value ? (
+                            t(`recurrence_${field.value}`)
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">—</SelectItem>
+                        {RECURRENCES.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {t(`recurrence_${r}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </Field>
+            )
+          })()}
         </FormBlock>
 
         {/* Ranks */}
@@ -1378,6 +1451,22 @@ function ProfileTab({
           <Field label={t('fieldAcquisitionNotes')}>
             <Textarea {...register('acquisition_notes')} rows={3} />
           </Field>
+        </FormBlock>
+
+        {/* Custom Fields plugin — always the last card; upsell prompt when not installed */}
+        <FormBlock title={t('sectionCustomFields')}>
+          <Controller
+            control={control}
+            name="custom_fields"
+            render={({ field }) => (
+              <CustomFieldsCardBody
+                installed={isInstalled('custom-fields')}
+                definitions={team?.custom_field_definitions ?? []}
+                value={field.value ?? {}}
+                onChange={field.onChange}
+              />
+            )}
+          />
         </FormBlock>
       </div>
 

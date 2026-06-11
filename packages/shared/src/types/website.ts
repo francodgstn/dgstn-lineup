@@ -38,6 +38,9 @@ export interface SiteImage {
 interface SectionBase {
   /** Stable id (used as React key, image upload path segment, anchor target). */
   id: string
+  /** Whether this section shows as an item in the site's navigation menu.
+   *  Defaults to visible (true) when unset; the hero is never listed. */
+  showInNav?: boolean
 }
 
 export interface HeroSection extends SectionBase {
@@ -64,6 +67,18 @@ export interface GallerySection extends SectionBase {
   heading?: string
   images: SiteImage[]
   columns: 2 | 3 | 4
+}
+
+/** Pulls live activities from the team's public_profile mirrors (type: 'activity').
+ *  Presented as a card grid; each card can deep-link into the booking flow. */
+export interface ActivitiesSection extends SectionBase {
+  type: 'activities'
+  heading?: string
+  subheading?: string
+  source: 'activities'
+  columns: 2 | 3 | 4
+  /** Show a "Book" link on each card → /booking/[activitySlug]. */
+  showBooking?: boolean
 }
 
 /** Pulls live data from the team's public_profile.aggregator_subscription_types. */
@@ -102,6 +117,7 @@ export type WebsiteSection =
   | HeroSection
   | AboutSection
   | GallerySection
+  | ActivitiesSection
   | PricingSection
   | ScheduleSection
   | ContactSection

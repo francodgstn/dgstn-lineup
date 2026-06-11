@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Globe } from 'lucide-react'
+import { Globe, Menu, X } from 'lucide-react'
 import type { SiteMeta, WebsiteSection, SocialLink } from '@linyup/shared'
 import { buildPalette, FONT_STACK, ctaHref } from './theme'
 import { SectionBlock, sectionNavLabel, SOCIAL_ICONS, type RenderCtx } from './sections'
@@ -26,6 +26,7 @@ export default function WebsiteRenderer({
   preview?: boolean
 }) {
   const [systemDark, setSystemDark] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     if (site.meta.theme !== 'auto') return
@@ -44,10 +45,11 @@ export default function WebsiteRenderer({
 
   const navItems = site.meta.header.showNav
     ? site.sections
-        .filter((s) => s.type !== 'hero')
+        .filter((s) => s.type !== 'hero' && s.showInNav !== false)
         .map((s) => ({ id: s.id, label: sectionNavLabel(s) }))
         .filter((n) => n.label)
     : []
+  const hasMenu = navItems.length > 0 || !!site.meta.header.ctaLabel
 
   const headerHref = site.meta.header.ctaLabel
     ? ctaHref(
@@ -61,7 +63,7 @@ export default function WebsiteRenderer({
   const inert = (e: React.MouseEvent) => e.preventDefault()
 
   return (
-    <div className="min-h-full w-full" style={{ background: palette.bg, color: palette.text, fontFamily: font }}>
+    <div className="@container min-h-full w-full" style={{ background: palette.bg, color: palette.text, fontFamily: font }}>
       {/* Header */}
       <header
         className="sticky top-0 z-20 backdrop-blur"
@@ -76,7 +78,7 @@ export default function WebsiteRenderer({
           >
             {site.meta.title || site.name}
           </a>
-          <nav className="hidden items-center gap-5 md:flex">
+          <nav className="hidden items-center gap-5 @3xl:flex">
             {navItems.map((n) => (
               <a
                 key={n.id}
@@ -99,7 +101,59 @@ export default function WebsiteRenderer({
               </a>
             )}
           </nav>
+
+          {/* Mobile hamburger */}
+          {hasMenu && (
+            <button
+              type="button"
+              onClick={() => setMobileOpen((o) => !o)}
+              aria-label="Menu"
+              aria-expanded={mobileOpen}
+              className="flex h-9 w-9 items-center justify-center rounded-md transition-opacity hover:opacity-70 @3xl:hidden"
+              style={{ color: palette.text }}
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          )}
         </div>
+
+        {/* Mobile menu panel */}
+        {hasMenu && mobileOpen && (
+          <div
+            className="@3xl:hidden"
+            style={{ background: palette.bg, borderTop: `1px solid ${palette.border}` }}
+          >
+            <nav className="mx-auto flex max-w-5xl flex-col gap-1 px-6 py-3">
+              {navItems.map((n) => (
+                <a
+                  key={n.id}
+                  href={preview ? undefined : `#${n.id}`}
+                  onClick={(e) => {
+                    if (preview) inert(e)
+                    setMobileOpen(false)
+                  }}
+                  className="rounded-md py-2 text-sm transition-opacity hover:opacity-70"
+                  style={{ color: palette.muted }}
+                >
+                  {n.label}
+                </a>
+              ))}
+              {site.meta.header.ctaLabel && (
+                <a
+                  href={preview ? undefined : headerHref}
+                  onClick={(e) => {
+                    if (preview) inert(e)
+                    setMobileOpen(false)
+                  }}
+                  className="mt-2 rounded-full px-4 py-2 text-center text-sm font-semibold"
+                  style={{ background: palette.accent, color: palette.onAccent }}
+                >
+                  {site.meta.header.ctaLabel}
+                </a>
+              )}
+            </nav>
+          </div>
+        )}
       </header>
 
       <main id="top">

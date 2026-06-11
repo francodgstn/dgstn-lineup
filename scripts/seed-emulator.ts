@@ -216,6 +216,41 @@ async function seedTeam(opts: {
             },
           ]
 
+  // Pricing helpers shared by the subscription_types write, the public_profile
+  // mirror, and the per-contact subscription snapshots below.
+  type SeedRecurrence = 'per_class' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual'
+  // Canonical recurrence per plan id (drives the single seeded price each priced
+  // type carries). Aggregator types stay price-less.
+  const recurrenceForSub = (id: string): SeedRecurrence | null => {
+    if (id.endsWith('-sub-monthly') || id.endsWith('-sub-youth')) return 'monthly'
+    if (id.endsWith('-sub-quarterly')) return 'quarterly'
+    if (id.endsWith('-sub-annual')) return 'annual'
+    if (id.endsWith('-sub-dropin') || id.endsWith('-sub-10class')) return 'per_class'
+    return null
+  }
+  // subId → seeded price snapshot, for contact + history denormalization.
+  const priceBySubId: Record<string, { priceId: string; amount: number; recurrence: SeedRecurrence }> = {}
+  for (const st of subscriptionTypeDefs) {
+    const recurrence = recurrenceForSub(st.id)
+    if (st.price != null && recurrence) {
+      priceBySubId[st.id] = { priceId: `${st.id}-price`, amount: st.price, recurrence }
+    }
+  }
+  // Mirror written to public_profile (what syncSubscriptionTypesToPublicProfile
+  // would produce) so the bio-link / website pricing table works deterministically.
+  const publicSubTypes = subscriptionTypeDefs
+    .filter((st) => st.active !== false)
+    .map((st) => {
+      const recurrence = recurrenceForSub(st.id)
+      const entry: { id: string; name: string; description?: string; prices?: { amount: number; recurrence: string }[] } = {
+        id: st.id,
+        name: st.name,
+      }
+      if (st.description) entry.description = st.description
+      if (st.price != null && recurrence) entry.prices = [{ amount: st.price, recurrence }]
+      return entry
+    })
+
   // Ranking systems — Training Level for coach, BJJ Belt for studio/org
   const rankingSystemDefs =
     plan === 'coach'
@@ -341,6 +376,7 @@ async function seedTeam(opts: {
       created: ts(daysFromNow(-120)),
       plan,
       plan_status: planStatus,
+      default_currency: 'CHF',
       ...(trialEndsAt ? { trial_ends_at: trialEndsAt } : {}),
       ranking_systems: rankingSystemDefs,
       settings: { gamification: gamificationSettings },
@@ -412,6 +448,8 @@ async function seedTeam(opts: {
         ctaLabel: null,
       },
       showBranding: false, // paid plans carry no "Powered by Linyup" badge
+      default_currency: 'CHF',
+      aggregator_subscription_types: publicSubTypes,
       membershipRequiredFields: null,
       membershipOptionalFields: null,
       updated_at: ts(new Date()),
@@ -666,6 +704,11 @@ async function seedTeam(opts: {
 
   // ── subscription types ──────────────────────────────────────────────────────
   for (const st of subscriptionTypeDefs) {
+    const recurrence = recurrenceForSub(st.id)
+    const prices =
+      st.price != null && recurrence
+        ? [{ id: `${st.id}-price`, amount: st.price, recurrence, active: true }]
+        : []
     await db
       .collection('teams')
       .doc(teamId)
@@ -676,7 +719,9 @@ async function seedTeam(opts: {
         description: st.description,
         source: st.source,
         active: st.active,
-        ...(st.price != null ? { price: st.price } : {}),
+        // Surface every active plan on the bio-link / website pricing table.
+        public: st.active !== false,
+        prices,
         teamId,
         created_at: ts(daysFromNow(-60)),
       })
@@ -1027,7 +1072,14 @@ async function seedTeam(opts: {
           ? {
               subscription_type_id: subAssign.subId,
               subscription_type_name: subAssign.subName,
-              subscription_recurrence: subAssign.recurrence,
+              subscription_recurrence:
+                priceBySubId[subAssign.subId]?.recurrence ?? subAssign.recurrence,
+              ...(priceBySubId[subAssign.subId]
+                ? {
+                    subscription_price_id: priceBySubId[subAssign.subId].priceId,
+                    subscription_amount: priceBySubId[subAssign.subId].amount,
+                  }
+                : {}),
             }
           : {}),
         ...(rankValue != null ? { ranks: { [rankSystemId]: rankValue } } : {}),
@@ -1052,7 +1104,13 @@ async function seedTeam(opts: {
         .set({
           subscription_type_id: subAssign.subId,
           subscription_type_name: subAssign.subName,
-          recurrence: subAssign.recurrence,
+          recurrence: priceBySubId[subAssign.subId]?.recurrence ?? subAssign.recurrence,
+          ...(priceBySubId[subAssign.subId]
+            ? {
+                subscription_price_id: priceBySubId[subAssign.subId].priceId,
+                amount: priceBySubId[subAssign.subId].amount,
+              }
+            : {}),
           start_date: ts(prevStartedAt),
           end_date: ts(prevEndedAt),
           created_at: ts(prevStartedAt),
@@ -1067,7 +1125,13 @@ async function seedTeam(opts: {
       .set({
         subscription_type_id: subAssign.subId,
         subscription_type_name: subAssign.subName,
-        recurrence: subAssign.recurrence,
+        recurrence: priceBySubId[subAssign.subId]?.recurrence ?? subAssign.recurrence,
+        ...(priceBySubId[subAssign.subId]
+          ? {
+              subscription_price_id: priceBySubId[subAssign.subId].priceId,
+              amount: priceBySubId[subAssign.subId].amount,
+            }
+          : {}),
         start_date: ts(startedAt),
         end_date: null, // open — currently active
         created_at: ts(startedAt),

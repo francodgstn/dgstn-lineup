@@ -1397,23 +1397,34 @@ async function seedDemoTeam(profile: SectorProfile) {
 
   // ── subscription types ────────────────────────────────────────────────────
   const subIdOf = (kind: SubKind) => `${teamId}-sub-${kind}`
-  function resolveSub(
-    kind: SubKind
-  ): { id: string; name: string; recurrence: string | null } | null {
-    if (!kind) return null
-    const found = subscriptions.find((s) => s.kind === kind)
-    const recurrenceOf = (k: SubKind) =>
-      k === 'monthly'
-        ? 'monthly'
-        : k === 'quarterly'
-          ? 'quarterly'
-          : k === 'annual'
-            ? 'annual'
+  // Canonical recurrence per kind — drives the single seeded price each priced
+  // type carries. Drop-in is pay-per-class; aggregator types stay price-less.
+  const recurrenceForKind = (k: Exclude<SubKind, null>): string | null =>
+    k === 'monthly'
+      ? 'monthly'
+      : k === 'quarterly'
+        ? 'quarterly'
+        : k === 'annual'
+          ? 'annual'
+          : k === 'dropin'
+            ? 'per_class'
             : null
-    if (found)
-      return { id: subIdOf(found.kind), name: found.name, recurrence: recurrenceOf(found.kind) }
-    const monthly = subscriptions.find((s) => s.kind === 'monthly')!
-    return { id: subIdOf('monthly'), name: monthly.name, recurrence: 'monthly' }
+  function resolveSub(kind: SubKind): {
+    id: string
+    name: string
+    recurrence: string | null
+    priceId?: string
+    amount?: number
+  } | null {
+    if (!kind) return null
+    const found =
+      subscriptions.find((s) => s.kind === kind) ??
+      subscriptions.find((s) => s.kind === 'monthly')!
+    const id = subIdOf(found.kind)
+    const recurrence = recurrenceForKind(found.kind)
+    return found.price != null && recurrence
+      ? { id, name: found.name, recurrence, priceId: `${id}-price`, amount: found.price }
+      : { id, name: found.name, recurrence }
   }
 
   const rankSystemId = rankingSystem?.id ?? null
@@ -1480,6 +1491,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       created: ts(daysFromNow(-220)),
       plan: 'studio',
       plan_status: 'active',
+      default_currency: 'CHF',
       ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],
       settings: { gamification: gamificationSettings, teamEmail: email },
       bioLinkTheme: 'light',
@@ -1488,6 +1500,21 @@ async function seedDemoTeam(profile: SectorProfile) {
       links: portalLinks,
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
     })
+
+  // Mirror written to public_profile (what syncSubscriptionTypesToPublicProfile
+  // would produce) so the bio-link / website pricing table works deterministically.
+  const publicSubTypes = subscriptions.map((st) => {
+    const recurrence = recurrenceForKind(st.kind)
+    const entry: {
+      id: string
+      name: string
+      description?: string
+      prices?: { amount: number; recurrence: string }[]
+    } = { id: subIdOf(st.kind), name: st.name }
+    if (st.description) entry.description = st.description
+    if (st.price != null && recurrence) entry.prices = [{ amount: st.price, recurrence }]
+    return entry
+  })
 
   await db
     .collection('teams')
@@ -1515,6 +1542,8 @@ async function seedDemoTeam(profile: SectorProfile) {
         ctaLabel: null,
         showActivityDescription: true,
       },
+      default_currency: 'CHF',
+      aggregator_subscription_types: publicSubTypes,
       membershipRequiredFields: null,
       membershipOptionalFields: null,
       updated_at: ts(now()),
@@ -1736,17 +1765,25 @@ async function seedDemoTeam(profile: SectorProfile) {
 
   // ── subscription types ────────────────────────────────────────────────────
   for (const st of subscriptions) {
+    const id = subIdOf(st.kind)
+    const recurrence = recurrenceForKind(st.kind)
+    const prices =
+      st.price != null && recurrence
+        ? [{ id: `${id}-price`, amount: st.price, recurrence, active: true }]
+        : []
     await db
       .collection('teams')
       .doc(teamId)
       .collection('subscription_types')
-      .doc(subIdOf(st.kind))
+      .doc(id)
       .set({
         name: st.name,
         description: st.description,
         source: st.source,
         active: true,
-        ...(st.price != null ? { price: st.price } : {}),
+        // Surface every plan on the bio-link / website pricing table.
+        public: true,
+        prices,
         teamId,
         created_at: ts(daysFromNow(-120)),
       })
@@ -1917,6 +1954,9 @@ async function seedDemoTeam(profile: SectorProfile) {
               subscription_type_id: sub.id,
               subscription_type_name: sub.name,
               subscription_recurrence: sub.recurrence,
+              ...(sub.priceId
+                ? { subscription_price_id: sub.priceId, subscription_amount: sub.amount }
+                : {}),
               subscription_type_updated_at: ts(daysFromNow(-30)),
             }
           : {}),
@@ -1938,6 +1978,7 @@ async function seedDemoTeam(profile: SectorProfile) {
             subscription_type_id: sub.id,
             subscription_type_name: sub.name,
             recurrence: sub.recurrence,
+            ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
             start_date: ts(prevStartedAt),
             end_date: ts(new Date(startedAt.getTime() - 1)),
             created_at: ts(prevStartedAt),
@@ -1952,6 +1993,7 @@ async function seedDemoTeam(profile: SectorProfile) {
           subscription_type_id: sub.id,
           subscription_type_name: sub.name,
           recurrence: sub.recurrence,
+          ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
           start_date: ts(startedAt),
           end_date: null,
           created_at: ts(startedAt),

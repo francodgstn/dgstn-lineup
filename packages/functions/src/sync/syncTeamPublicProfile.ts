@@ -42,8 +42,13 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     // Free-plan bio-links carry a "Powered by Linyup" badge. Denormalized here
     // because bio-link pages only ever read public_profile, never teams/.
     showBranding: (data.plan ?? 'free') === 'free',
+    // Billing currency for the website pricing table (bio-link/website never read teams/).
+    default_currency: (data.default_currency as string | undefined) || null,
     updated_at: event.data!.after.updateTime,
   }
 
-  await afterRef.collection('public_profile').doc(teamId).set(publicProfile)
+  // Merge so sibling syncs that write other public_profile fields with merge
+  // (e.g. aggregator_subscription_types, bookingSettings) aren't clobbered by a
+  // team-doc write. Every field above is recomputed each run, so merge is safe.
+  await afterRef.collection('public_profile').doc(teamId).set(publicProfile, { merge: true })
 })

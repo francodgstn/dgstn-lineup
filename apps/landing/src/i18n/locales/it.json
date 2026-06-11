@@ -1,7 +1,7 @@
 {
   "site": {
     "name": "Linyup",
-    "description": "Lo strumento di gestione all-in-one per coach e club — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto."
+    "description": "Lo strumento di gestione all-in-one per coach e studi — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto."
   },
   "nav": {
     "features": "Funzionalità",
@@ -10,14 +10,14 @@
     "cta": "Inizia gratis"
   },
   "hero": {
-    "tagline": "Per coach, palestre e club",
-    "title": "Gestisci le tue lezioni. Conosci i tuoi studenti. Fai crescere il tuo club.",
-    "subtitle": "Linyup è lo strumento di gestione all-in-one per coach e club — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto.",
+    "tagline": "Per coach, palestre e studi",
+    "title": "Gestisci le tue lezioni. Conosci i tuoi studenti. Fai crescere il tuo studio.",
+    "subtitle": "Linyup è lo strumento di gestione all-in-one per coach e studi — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto.",
     "cta": "Inizia gratis",
     "ctaSecondary": "Scopri le funzionalità"
   },
   "features": {
-    "title": "Tutto ciò di cui hai bisogno per gestire un club moderno",
+    "title": "Tutto ciò di cui hai bisogno per gestire uno studio moderno",
     "subtitle": "Dal coach solo all'organizzazione multi-sede, Linyup si adatta al tuo modo di lavorare.",
     "sessions": {
       "title": "Sessioni",
@@ -52,22 +52,22 @@
     },
     "studio": {
       "name": "Studio",
-      "audience": "Per studi, palestre e club con più coach e corsi.",
+      "audience": "Per studi e palestre con più coach e corsi.",
       "features": ["Tutto di Coach", "Contatti illimitati", "Automazioni e gamification", "Tendenze e analisi"]
     },
     "org": {
       "name": "Organizzazione",
-      "audience": "Per club multi-sede, federazioni e franchising.",
+      "audience": "Per studi multi-sede, federazioni e franchising.",
       "features": ["Tutto di Studio", "Gerarchia multi-team", "Classifiche ed eventi a livello di organizzazione"]
     }
   },
   "cta": {
     "title": "Pronto per iniziare?",
-    "subtitle": "Unisciti ai coach e ai club che già usano Linyup per gestire la propria attività.",
+    "subtitle": "Unisciti ai coach e agli studi che già usano Linyup per gestire la propria attività.",
     "button": "Inizia gratis"
   },
   "footer": {
-    "tagline": "Lo strumento di gestione moderno per coach e club.",
+    "tagline": "Lo strumento di gestione moderno per coach e studi.",
     "links": {
       "privacy": "Privacy",
       "terms": "Termini",

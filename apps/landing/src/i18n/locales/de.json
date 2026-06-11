@@ -1,7 +1,7 @@
 {
   "site": {
     "name": "Linyup",
-    "description": "Das All-in-one-Verwaltungstool für Trainer und Vereine — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort."
+    "description": "Das All-in-one-Verwaltungstool für Trainer und Studios — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort."
   },
   "nav": {
     "features": "Funktionen",
@@ -10,14 +10,14 @@
     "cta": "Kostenlos starten"
   },
   "hero": {
-    "tagline": "Für Trainer, Fitnessstudios und Vereine",
-    "title": "Lektionen planen. Schüler kennen. Verein wachsen lassen.",
-    "subtitle": "Linyup ist das All-in-one-Verwaltungstool für Trainer und Vereine — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort.",
+    "tagline": "Für Trainer, Studios und Fitnesscenter",
+    "title": "Lektionen planen. Schüler kennen. Studio wachsen lassen.",
+    "subtitle": "Linyup ist das All-in-one-Verwaltungstool für Trainer und Studios — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort.",
     "cta": "Kostenlos starten",
     "ctaSecondary": "Funktionen ansehen"
   },
   "features": {
-    "title": "Alles, was du für einen modernen Verein brauchst",
+    "title": "Alles, was du für ein modernes Studio brauchst",
     "subtitle": "Von der Einzelperson bis zur Mehrstandort-Organisation — Linyup passt sich deiner Arbeitsweise an.",
     "sessions": {
       "title": "Lektionen",
@@ -52,22 +52,22 @@
     },
     "studio": {
       "name": "Studio",
-      "audience": "Für Studios, Fitnesscenter und Vereine mit mehreren Trainern und Klassen.",
+      "audience": "Für Studios und Fitnesscenter mit mehreren Trainern und Klassen.",
       "features": ["Alles aus Coach", "Unbegrenzte Kontakte", "Automatisierungen & Gamification", "Trends & Analysen"]
     },
     "org": {
       "name": "Organisation",
-      "audience": "Für Mehrstandort-Vereine, Verbände und Franchises.",
+      "audience": "Für Mehrstandort-Studios, Verbände und Franchises.",
       "features": ["Alles aus Studio", "Multi-Team-Hierarchie", "Organisationsweite Ranglisten & Events"]
     }
   },
   "cta": {
     "title": "Bereit loszulegen?",
-    "subtitle": "Schliess dich Trainern und Vereinen an, die Linyup bereits für ihr Business nutzen.",
+    "subtitle": "Schliess dich Trainern und Studios an, die Linyup bereits für ihr Business nutzen.",
     "button": "Kostenlos starten"
   },
   "footer": {
-    "tagline": "Das moderne Verwaltungstool für Trainer und Vereine.",
+    "tagline": "Das moderne Verwaltungstool für Trainer und Studios.",
     "links": {
       "privacy": "Datenschutz",
       "terms": "AGB",

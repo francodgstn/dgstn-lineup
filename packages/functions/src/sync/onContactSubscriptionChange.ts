@@ -28,6 +28,9 @@ export const onContactSubscriptionChange = onDocumentUpdated(
     const teamId = after.teamId as string | undefined
     const newTypeId = (after.subscription_type_id as string | undefined) || null
     const newRecurrence = (after.subscription_recurrence as string | undefined) || null
+    const newPriceId = (after.subscription_price_id as string | undefined) || null
+    const newAmount =
+      typeof after.subscription_amount === 'number' ? (after.subscription_amount as number) : null
 
     console.log(
       `onContactSubscriptionChange: contact ${contactId} subscription changed`,
@@ -99,6 +102,8 @@ export const onContactSubscriptionChange = onDocumentUpdated(
         subscription_type_id: newTypeId,
         subscription_type_name: newTypeName,
         recurrence: newRecurrence,
+        subscription_price_id: newPriceId,
+        amount: newAmount,
         start_date: now,
         end_date: null,
         termination_reason: null,
@@ -122,6 +127,8 @@ export const onContactSubscriptionChange = onDocumentUpdated(
         to_subscription_type_id: newTypeId,
         to_subscription_type_name: newTypeName,
         recurrence: newRecurrence,
+        subscription_price_id: newPriceId,
+        amount: newAmount,
         changed_at: now,
         termination_reason: terminationReason,
         team_id: teamId,

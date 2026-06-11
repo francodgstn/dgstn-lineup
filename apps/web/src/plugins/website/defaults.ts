@@ -12,6 +12,12 @@ export const SECTION_LIBRARY: {
   { type: 'hero', labelKey: 'sectionHero', descKey: 'sectionHeroDesc', icon: 'Image' },
   { type: 'about', labelKey: 'sectionAbout', descKey: 'sectionAboutDesc', icon: 'FileText' },
   { type: 'gallery', labelKey: 'sectionGallery', descKey: 'sectionGalleryDesc', icon: 'Images' },
+  {
+    type: 'activities',
+    labelKey: 'sectionActivities',
+    descKey: 'sectionActivitiesDesc',
+    icon: 'LayoutGrid',
+  },
   { type: 'pricing', labelKey: 'sectionPricing', descKey: 'sectionPricingDesc', icon: 'Tag' },
   {
     type: 'schedule',
@@ -36,6 +42,8 @@ export function newSection(type: WebsiteSectionType): WebsiteSection {
       return { id, type, heading: 'About us', body: '', imageSide: 'left' }
     case 'gallery':
       return { id, type, images: [], columns: 3 }
+    case 'activities':
+      return { id, type, source: 'activities', columns: 3, showBooking: true }
     case 'pricing':
       return { id, type, source: 'subscriptions' }
     case 'schedule':

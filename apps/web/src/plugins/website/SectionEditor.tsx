@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select'
 import type {
   WebsiteSection, HeroSection, AboutSection, GallerySection,
-  PricingSection, ScheduleSection, ContactSection, SiteCta,
+  ActivitiesSection, PricingSection, ScheduleSection, ContactSection, SiteCta,
 } from '@linyup/shared'
 import { uploadSiteImage } from './hooks'
 import { getWebsiteLimits } from './limits'
@@ -262,6 +262,32 @@ function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: str
   )
 }
 
+function ActivitiesFields({ s, onChange }: { s: ActivitiesSection; onChange: (p: Patch) => void }) {
+  return (
+    <div className="space-y-3">
+      <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        Activity cards are pulled live from your activities. Edit those under Activities.
+      </p>
+      <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="What we offer" className="h-9" /></Field>
+      <Field label="Subheading"><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
+      <Field label="Columns">
+        <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
+          <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="2">2</SelectItem>
+            <SelectItem value="3">3</SelectItem>
+            <SelectItem value="4">4</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <label className="flex items-center justify-between rounded-lg border p-3">
+        <span className="text-sm">Show “Book” link on cards</span>
+        <Switch checked={s.showBooking ?? false} onCheckedChange={(v) => onChange({ showBooking: v })} />
+      </label>
+    </div>
+  )
+}
+
 function PricingFields({ s, onChange }: { s: PricingSection; onChange: (p: Patch) => void }) {
   return (
     <div className="space-y-3">
@@ -328,6 +354,7 @@ export function SectionEditor({
     case 'hero':     return <HeroFields s={section} teamId={teamId} onChange={onChange} />
     case 'about':    return <AboutFields s={section} teamId={teamId} onChange={onChange} />
     case 'gallery':  return <GalleryFields s={section} teamId={teamId} onChange={onChange} />
+    case 'activities': return <ActivitiesFields s={section} onChange={onChange} />
     case 'pricing':  return <PricingFields s={section} onChange={onChange} />
     case 'schedule': return <ScheduleFields s={section} onChange={onChange} />
     case 'contact':  return <ContactFields s={section} onChange={onChange} />

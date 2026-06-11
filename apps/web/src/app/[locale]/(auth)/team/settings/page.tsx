@@ -17,6 +17,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { CustomFieldsTab } from '@/plugins/custom-fields/CustomFieldsTab'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -1744,13 +1746,21 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = 'general' | 'alerts' | 'ranking' | 'payments' | 'outreach'
+type SettingsTab = 'general' | 'alerts' | 'ranking' | 'payments' | 'outreach' | 'custom-fields'
 
 export default function TeamSettingsPage() {
   const { currentTeamId } = useAuth()
   const { data: team, isLoading } = useTeam(currentTeamId)
+  const { isInstalled } = useInstalledPlugins()
   const t = useTranslations('TeamSettings')
   const [tab, setTab] = useState<SettingsTab>('general')
+
+  // Deep-link support: open the tab named in ?tab= (e.g. the contact card's
+  // "set up custom fields" link → ?tab=custom-fields).
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab')
+    if (requested) setTab(requested as SettingsTab)
+  }, [])
 
   if (isLoading) {
     return (
@@ -1771,6 +1781,10 @@ export default function TeamSettingsPage() {
     { id: 'ranking', label: t('tabRanking') },
     { id: 'payments', label: t('tabPayments') },
     { id: 'outreach', label: 'Outreach' },
+    // Custom Fields plugin — tab appears only when the plugin is installed
+    ...(isInstalled('custom-fields')
+      ? [{ id: 'custom-fields' as SettingsTab, label: t('tabCustomFields') }]
+      : []),
   ]
 
   return (
@@ -1804,6 +1818,9 @@ export default function TeamSettingsPage() {
           {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
           {tab === 'payments' && <PaymentsTab teamId={currentTeamId} />}
           {tab === 'outreach' && <OutreachTab teamId={currentTeamId} team={team} />}
+          {tab === 'custom-fields' && isInstalled('custom-fields') && (
+            <CustomFieldsTab teamId={currentTeamId} team={team} />
+          )}
         </CardContent>
       </Card>
     </div>
