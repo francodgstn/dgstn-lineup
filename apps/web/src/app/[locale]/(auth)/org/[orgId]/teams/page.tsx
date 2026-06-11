@@ -40,7 +40,7 @@ import {
   TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION,
   USERS_COLLECTION, CONTACTS_COLLECTION,
 } from '@linyup/shared'
-import type { OrgTeam, ClubAccessRequest, ClubAccessType } from '@linyup/shared'
+import type { OrgTeam, TeamAccessRequest, TeamAccessType } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface OrgTeamRow extends OrgTeam {
@@ -50,15 +50,15 @@ interface OrgTeamRow extends OrgTeam {
   activeMemberships?: number
 }
 
-function useClubAccessRequests(orgId: string) {
-  return useQuery<Record<string, ClubAccessRequest>>({
-    queryKey: ['club-access-requests', orgId],
+function useTeamAccessRequests(orgId: string) {
+  return useQuery<Record<string, TeamAccessRequest>>({
+    queryKey: ['team-access-requests', orgId],
     queryFn: async () => {
       const snap = await getDocs(
-        collection(db, ORGANIZATIONS_COLLECTION, orgId, 'club_access_requests'),
+        collection(db, ORGANIZATIONS_COLLECTION, orgId, 'team_access_requests'),
       )
-      const result: Record<string, ClubAccessRequest> = {}
-      snap.docs.forEach((d) => { result[d.id] = { ...d.data() } as ClubAccessRequest })
+      const result: Record<string, TeamAccessRequest> = {}
+      snap.docs.forEach((d) => { result[d.id] = { ...d.data() } as TeamAccessRequest })
       return result
     },
   })
@@ -134,7 +134,7 @@ function RequestAccessDialog({
   onClose: () => void
   onSuccess: () => void
 }) {
-  const [accessType, setAccessType] = useState<ClubAccessType>('view')
+  const [accessType, setAccessType] = useState<TeamAccessType>('view')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -143,7 +143,7 @@ function RequestAccessDialog({
     setLoading(true)
     setError(null)
     try {
-      const fn = httpsCallable(functions, 'requestClubAccess')
+      const fn = httpsCallable(functions, 'requestTeamAccess')
       await fn({ orgId, teamId: team?.teamId, accessType })
       onSuccess()
       onClose()
@@ -161,13 +161,13 @@ function RequestAccessDialog({
           <DialogTitle>Request access</DialogTitle>
           <DialogDescription>
             Request direct access to <strong>{team?.teamName ?? team?.teamId}</strong>.
-            The club owner will be notified and can approve your request.
+            The team owner will be notified and can approve your request.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>Access level</Label>
-            <Select value={accessType} onValueChange={(v) => setAccessType(v as ClubAccessType)}>
+            <Select value={accessType} onValueChange={(v) => setAccessType(v as TeamAccessType)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -203,7 +203,7 @@ function InviteDialog({
   onClose: () => void
   onSuccess: () => void
 }) {
-  const t = useTranslations('OrgClubs')
+  const t = useTranslations('OrgTeams')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -214,7 +214,7 @@ function InviteDialog({
     setLoading(true)
     setError(null)
     try {
-      const fn = httpsCallable(functions, 'inviteClubToOrg')
+      const fn = httpsCallable(functions, 'inviteTeamToOrg')
       await fn({ orgId, inviteeEmail: email.trim() })
       setEmail('')
       onSuccess()
@@ -241,7 +241,7 @@ function InviteDialog({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="owner@club.example.com"
+              placeholder="owner@team.example.com"
               required
             />
           </div>
@@ -262,14 +262,14 @@ function InviteDialog({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function OrgClubsPage() {
+export default function OrgTeamsPage() {
   const { orgId } = useParams<{ orgId: string }>()
-  const t = useTranslations('OrgClubs')
+  const t = useTranslations('OrgTeams')
   const { isAdmin, membershipTerm } = useOrg()
   const { user } = useAuth()
   const qc = useQueryClient()
   const { data: teams, isLoading } = useOrgTeams(orgId)
-  const { data: accessRequests } = useClubAccessRequests(orgId)
+  const { data: accessRequests } = useTeamAccessRequests(orgId)
 
   const [inviteOpen, setInviteOpen] = useState(false)
   const [requestAccessTarget, setRequestAccessTarget] = useState<OrgTeamRow | null>(null)
@@ -284,14 +284,14 @@ export default function OrgClubsPage() {
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['org-teams', orgId] })
-    qc.invalidateQueries({ queryKey: ['club-access-requests', orgId] })
+    qc.invalidateQueries({ queryKey: ['team-access-requests', orgId] })
   }
 
   async function handleRemove() {
     if (!removeTarget) return
     setActionLoading(true)
     try {
-      const fn = httpsCallable(functions, 'removeClubFromOrg')
+      const fn = httpsCallable(functions, 'removeTeamFromOrg')
       await fn({ orgId: orgId, teamId: removeTarget.teamId })
       showToast(t('removedSuccess'))
       invalidate()
@@ -344,7 +344,7 @@ export default function OrgClubsPage() {
         ) : !teams || teams.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
             <Building2 className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-muted-foreground text-sm">{t('noClubs')}</p>
+            <p className="text-muted-foreground text-sm">{t('noTeams')}</p>
             {isAdmin && (
               <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
                 <Plus className="h-4 w-4 mr-1.5" />
@@ -356,7 +356,7 @@ export default function OrgClubsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
-                <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colClub')}</th>
+                <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colTeam')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">{t('colOwner')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colJoined')}</th>
                 <th className="text-right font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">Active {membershipTerm.toLowerCase()}</th>
@@ -383,7 +383,7 @@ export default function OrgClubsPage() {
                   {isAdmin && (
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {/* Request Access button — only show for active clubs */}
+                        {/* Request Access button — only show for active teams */}
                         {row.status === 'active' && (() => {
                           const req = accessRequests?.[row.teamId]
                           if (req?.status === 'pending' && req.requestedBy === user?.uid) {
@@ -445,7 +445,7 @@ export default function OrgClubsPage() {
         orgId={orgId}
         team={requestAccessTarget}
         onClose={() => setRequestAccessTarget(null)}
-        onSuccess={() => { invalidate(); showToast('Access request sent to club owner') }}
+        onSuccess={() => { invalidate(); showToast('Access request sent to team owner') }}
       />
 
       <AlertDialog open={!!removeTarget} onOpenChange={(v) => !v && setRemoveTarget(null)}>

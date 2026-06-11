@@ -128,7 +128,7 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | Collection | Action |
 |---|---|
 | `users` | Copied as-is (Auth UIDs must match — step 4 above) |
-| `teams` | Copied + `plan: 'club'`, `organizationId: 'hmd'` added |
+| `teams` | Copied + `plan: 'studio'`, `organizationId: 'hmd'` added |
 | `activities` | Copied + new fields (`slug`, `type`, `isActive`, `level`) |
 | `session_series` | Copied + recurrence field names normalised |
 | `contacts` + subcollections | Copied; `rank → ranks.hmd`; `notes`, `acquisition` dropped |

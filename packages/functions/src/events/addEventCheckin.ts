@@ -44,7 +44,7 @@ export const addEventCheckin = onCall(async (request) => {
 
   // Determine the teamId to stamp on the checkin (the contact's team).
   // For team events this must match the event's own teamId.
-  // For org events the caller may specify a different club's teamId.
+  // For org events the caller may specify a different team's teamId.
   const resolvedTeamId: string = isOrgEvent
     ? (checkinTeamId ?? (event.teamId as string))
     : (event.teamId as string)

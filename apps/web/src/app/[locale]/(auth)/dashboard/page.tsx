@@ -445,7 +445,7 @@ function TrendsUpsell() {
       <p className="text-sm font-medium">{t('sectionTrends')}</p>
       <p className="text-xs text-muted-foreground max-w-xs mx-auto">{t('trendsUpsell')}</p>
       <button
-        onClick={() => openUpgradeModal({ minPlan: 'club' })}
+        onClick={() => openUpgradeModal({ minPlan: 'studio' })}
         className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
       >
         <Lock className="h-3 w-3" />
@@ -455,7 +455,7 @@ function TrendsUpsell() {
   )
 }
 
-// ─── trends section (Club+ only) ─────────────────────────────────────────────
+// ─── trends section (Studio+ only) ───────────────────────────────────────────
 
 type CompareWith = 'none' | 'prev_period' | 'last_year'
 const WEEKS_OPTIONS = [4, 8, 13, 26, 52]
@@ -660,10 +660,10 @@ export default function DashboardPage() {
         />
       </section>
 
-      {/* ── 4. Trends (Club+ only) ── */}
+      {/* ── 4. Trends (Studio+ only) ── */}
       <section className="space-y-5">
         <SectionHeading>{t('sectionTrends')}</SectionHeading>
-        <PlanGate minPlan="club" fallback={<TrendsUpsell />}>
+        <PlanGate minPlan="studio" fallback={<TrendsUpsell />}>
           <TrendsSection teamId={currentTeamId} />
         </PlanGate>
       </section>

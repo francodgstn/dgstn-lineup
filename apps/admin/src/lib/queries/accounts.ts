@@ -27,7 +27,7 @@ export interface AccountRow {
   plan: SaasPlan | null
   status: SaasStatus | null
   trialEndsAtMs: number | null
-  /** Active contacts (teams only — orgs aggregate their clubs, out of scope). */
+  /** Active contacts (teams only — orgs aggregate their teams, out of scope). */
   contactCount: number | null
   includedContacts: number | null
   ownerEmail: string | null

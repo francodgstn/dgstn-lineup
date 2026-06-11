@@ -306,14 +306,14 @@ service cloud.firestore {
 
       // Installed plugins — teams enable/configure add-on plugins here.
       // All members can read (needed by automation UI and nav display).
-      // Club/Org owners install client-side (plugins are included). Coach plans
+      // Studio/Org owners install client-side (plugins are included). Coach plans
       // activate plugins as PAID add-ons via the activatePluginAddon Cloud
       // Function (admin SDK), so client writes are denied on Coach — this stops
       // a coach self-granting a paid plugin for free.
       match /installed_plugins/{pluginId} {
         allow read:  if isTeamMember(teamId);
         allow write: if hasTeamRole(teamId, 'owner')
-                     && get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', '') in ['club', 'organization'];
+                     && get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', '') in ['studio', 'organization'];
       }
 
       // Subscription types subcollection (team-defined subscription plans and aggregators)
@@ -376,7 +376,7 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // Custom event types (club-level; org-level event types live under organizations/{orgId}/event_types)
+      // Custom event types (team-level; org-level event types live under organizations/{orgId}/event_types)
       match /event_types/{typeId} {
         allow read:   if isTeamMember(teamId);
         allow create: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
@@ -420,9 +420,9 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // Org access requests — org admins request view/manage access to this club.
+      // Org access requests — org admins request view/manage access to this team.
       // Owners and managers can read requests and approve/deny server-side;
-      // only cloud functions write (requestClubAccess creates, approveClubAccess updates).
+      // only cloud functions write (requestTeamAccess creates, approveTeamAccess updates).
       match /org_access_requests/{orgId} {
         allow read: if hasTeamRole(teamId, 'owner') || hasTeamRole(teamId, 'manager');
         allow write: if false;
@@ -558,7 +558,7 @@ service cloud.firestore {
     }
 
     // Events — team-scoped or org-scoped
-    // Org events (scope=='org') are visible to all clubs in that org.
+    // Org events (scope=='org') are visible to all teams in that org.
     match /events/{event} {
       allow create: if belongsToUserTeam(request.resource)
                     || (isAuthed() && request.resource.data.scope == 'org'
@@ -789,7 +789,7 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------
-    // Club Courses plugin (lightweight LMS) — authoring only (admin web)
+    // Online Courses plugin (lightweight LMS) — authoring only (admin web)
     // Team members read; managers+ write. Org-scope read added in a later slice.
     // ----------------------------------------------
     match /courses/{courseId} {
@@ -832,7 +832,7 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------
-    // Organizations (multi-club tier)
+    // Organizations (multi-team tier)
     // ----------------------------------------------
     match /organizations/{orgId} {
       allow read: if isOrgMember(orgId);
@@ -869,8 +869,8 @@ service cloud.firestore {
         allow delete: if hasOrgRole(orgId, 'org_admin');
       }
 
-      match /club_access_requests/{teamId} {
-        // Org admin can read all requests; club owner can read their own
+      match /team_access_requests/{teamId} {
+        // Org admin can read all requests; team owner can read their own
         allow read: if hasOrgRole(orgId, 'org_admin') || (isAuthed() && isTeamMember(teamId) && hasTeamRole(teamId, 'owner'));
         // Only org admin can create/update requests (approval done server-side)
         allow write: if hasOrgRole(orgId, 'org_admin');

@@ -40,8 +40,8 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `sendTeamInvitation`
 - ✅ `getTeamInvitationDetails`
 - ✅ `acceptTeamInvitation`
-- ✅ `manageTeamInvitation` (club+)
-- ✅ `manageTeamMember` (club+)
+- ✅ `manageTeamInvitation` (studio+)
+- ✅ `manageTeamMember` (studio+)
 - ✅ `generateAuthToken`
 - ✅ `sendMembershipVerificationCode`
 - ✅ `verifyMembershipCode`
@@ -92,7 +92,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `requestContactUpdate`
 - ✅ `switchMembershipContact`
 
-### Events (club+)
+### Events (studio+)
 - ✅ `sendEventInvitations`
 - ✅ `getEventInvitationDetails`
 - ✅ `handleEventInvitationResponse`
@@ -110,7 +110,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `triggerAutomationRule`
 - ✅ `previewAutomationRule`
 
-### Gamification (club+)
+### Gamification (studio+)
 - ✅ `recalculateScores`
 - ✅ `resetScores`
 - ✅ `processScoresRebuildJob`
@@ -169,7 +169,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 ### Dashboard
 - ✅ Overview cards (contacts snapshot, recent sessions, alerts)
 - ✅ RosterCard (donut chart — type / membership / subscription / billing views)
-- ✅ TrendsSection (gated club+): BookingsTrendCard, SessionsHeatmapCard, ContactsSummaryCard, TopActivitiesCard, TrialFunnelCard
+- ✅ TrendsSection (gated studio+): BookingsTrendCard, SessionsHeatmapCard, ContactsSummaryCard, TopActivitiesCard, TrialFunnelCard
 - ❌ AI Insights card (requires `generateDashboardInsight`)
 
 ### Contacts
@@ -186,7 +186,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 ### Activities
 - ✅ Activities list + create/edit/archive
 
-### Events (club+)
+### Events (studio+)
 - ✅ Events list page
 - ✅ Event detail page (`/events/[id]`) — overview stats, attendees tab, invitations tab, send/resend invitations, edit, delete
 - ✅ Event invitation flow (portal RSVP page — `/portal/event-invitation?token=…`) — greets contact by name, shows event details, attend/decline buttons, notes field, handles already-responded state, closed/past event notices
@@ -204,7 +204,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ Coach booking flow (portal: `/portal/[slug]/coaching` + cancel page)
 - ~~Admin `/coaching` page~~ — intentionally removed; coaching sessions live in the Sessions page
 
-### Gamification (club+)
+### Gamification (studio+)
 - ✅ Leaderboard, badge award, score breakdown UI — full implementation
 
 ### Team
@@ -223,7 +223,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ Session booking flow
 - ✅ Trial sign-up form
 - ✅ Contact update request form (`/portal/[slug]/contact-update?contactId=…`) — email verify → 3-step form → `requestContactUpdate`; "Copy update link" button on contact detail page
-- ✅ Event RSVP page — `/portal/event-invitation?token=…` (club+)
+- ✅ Event RSVP page — `/portal/event-invitation?token=…` (studio+)
 
 ---
 
@@ -246,12 +246,12 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `utils/automationEngine.ts` — core engine: normalizeRule, evaluateContactConditions, runRule, fireEventRules, enqueueDelayedRule
   - ✅ Backward-compat: normalizeRule() converts legacy hmd-lineup rule format at runtime (no data migration)
   - ✅ 30-day dedup window for scheduled rules; 7-day for event-triggered rules
-  - ✅ Plan gate in fireEventRules (club+ only)
+  - ✅ Plan gate in fireEventRules (studio+ only)
   - ✅ Phase-2+ action types (assign_tag, update_field, webhook) are no-ops until implemented, not errors
 - ✅ `dailyTasks/runScheduledRules.ts` — Tier 3 generic scanner (`schedule_daily` rules, inactivity etc.)
-  - ✅ Plan gate per team (club+ only)
-- ✅ `automation/triggerAutomationRule` — onCall, manual trigger, bypasses dedup (club+)
-- ✅ `automation/previewAutomationRule` — onCall, dry-run preview, returns matched contacts (club+)
+  - ✅ Plan gate per team (studio+ only)
+- ✅ `automation/triggerAutomationRule` — onCall, manual trigger, bypasses dedup (studio+)
+- ✅ `automation/previewAutomationRule` — onCall, dry-run preview, returns matched contacts (studio+)
 - ✅ `automation/onContactWrite` — Tier 1 event trigger: contact_created, membership_status_changed, subscription_changed
 - ✅ `automation/onBookingWrite` — Tier 1 event trigger: booking_confirmed, booking_no_show
 - ✅ `automation/onSessionWrite` — Tier 1+2: session_ended detection + Cloud Tasks enqueue

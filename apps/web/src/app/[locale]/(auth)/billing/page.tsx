@@ -8,6 +8,7 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePlanName } from '@/hooks/usePlanName'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -62,16 +63,16 @@ const PLAN_HIGHLIGHTS: Record<string, string[]> = {
     'No Linyup branding on your portal',
     'Plugin add-ons available',
   ],
-  club: [
+  studio: [
     'Everything in Coach',
     'Student mobile app',
     'Automations & outreach templates',
     'Multiple managers & AI insights',
   ],
   organization: [
-    'Everything in Club',
-    'Multi-club management',
-    'Cross-club events & messaging',
+    'Everything in Studio',
+    'Multi-team management',
+    'Cross-team events & messaging',
     'API access & advanced permissions',
   ],
 }
@@ -181,6 +182,7 @@ function CheckoutBanner() {
 
 function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null; team: Team | null; teamId: string }) {
   const t = useTranslations('Billing')
+  const planName = usePlanName()
   const queryClient = useQueryClient()
 
   const [cancelling, setCancelling] = useState(false)
@@ -189,7 +191,7 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
 
-  const plans = ['free', 'coach', 'club', 'organization'] as const
+  const plans = ['free', 'coach', 'studio', 'organization'] as const
   // Free teams have no subscription doc (or a cancelled one) — current-plan
   // detection for Free must come from the team doc, not the sub.
   const onFreePlan = team?.plan === 'free' && (!sub || sub.status === 'cancelled')
@@ -278,8 +280,8 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
               {/* Plan name + status */}
               <div className="flex items-center gap-3 flex-wrap">
                 <StatusIcon status={sub.status} />
-                <span className="font-semibold capitalize">
-                  {sub.plan === 'organization' ? 'Organization' : sub.plan} plan
+                <span className="font-semibold">
+                  {planName(sub.plan)} plan
                 </span>
                 <Badge variant={statusVariant(sub.status)} className="capitalize">
                   {sub.status.replace('_', ' ')}
@@ -383,8 +385,8 @@ function SubscriptionCard({ sub, team, teamId }: { sub: SaasSubscription | null;
                   className={`rounded-lg border p-4 space-y-3 ${isCurrent ? 'border-primary bg-primary/5' : ''}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold capitalize">
-                      {plan === 'organization' ? 'Organization' : plan}
+                    <p className="font-semibold">
+                      {planName(plan)}
                     </p>
                     {isCurrent && (
                       <Badge variant="default" className="text-xs shrink-0">

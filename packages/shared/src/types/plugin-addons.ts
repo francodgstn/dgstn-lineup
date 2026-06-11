@@ -3,7 +3,7 @@
 // (Stripe subscription items), and scripts/stripe-sync.ts (declarative Stripe
 // product/price provisioning).
 //
-// Club/Org include all plugins; Coach activates these as paid monthly add-ons.
+// Studio/Org include all plugins; Coach activates these as paid monthly add-ons.
 // Prices here are display/seed values — the authoritative amount is the Stripe
 // Price for the matching lookup key (kept in sync via scripts/stripe-sync.ts).
 
@@ -17,8 +17,8 @@ export interface PluginAddonPrice {
 export const PLUGIN_ADDONS: Record<string, PluginAddonPrice> = {
   gamification:   { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_gamification_monthly' },
   referrals:      { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_referrals_monthly' },
-  'club-courses': { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_club-courses_monthly' },
-  'club-website': { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_club-website_monthly' },
+  'online-courses': { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_online-courses_monthly' },
+  website:        { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_website_monthly' },
   'contact-groups': { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_contact-groups_monthly' },
 }
 

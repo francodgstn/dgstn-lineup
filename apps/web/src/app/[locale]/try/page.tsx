@@ -23,8 +23,8 @@ import { Button } from '@/components/ui/button'
 
 export const dynamic = 'force-dynamic'
 
-// Muted icon per club — differentiation comes from the icon, not from color.
-const CLUB_ICONS: Record<string, LucideIcon> = {
+// Muted icon per demo team — differentiation comes from the icon, not from color.
+const TEAM_ICONS: Record<string, LucideIcon> = {
   grappling: Swords,
   crossfit: Dumbbell,
   tennis: Target,
@@ -78,7 +78,7 @@ export default function TryPage() {
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {DEMO_ACCOUNTS.filter((a) => a.sector === sector).map((account) => {
-                const Icon = CLUB_ICONS[account.key] ?? Target
+                const Icon = TEAM_ICONS[account.key] ?? Target
                 const isEntering = entering === account.key
                 return (
                   <Card key={account.key} className="transition-shadow hover:shadow-md">

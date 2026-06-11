@@ -37,9 +37,9 @@ recurring monthly price. Set the **Lookup key** exactly as shown:
 
 | Plan         | Lookup key                  |
 |--------------|-----------------------------|
-| Coach        | `lineup_coach_monthly`      |
-| Club         | `lineup_club_monthly`       |
-| Organization | `lineup_organization_monthly` |
+| Coach        | `linyup_coach_monthly`      |
+| Studio       | `linyup_studio_monthly`       |
+| Organization | `linyup_organization_monthly` |
 
 The lookup key is how `createCheckoutSession` (Cloud Function) resolves the
 price — no price IDs are hardcoded in the codebase.
@@ -114,7 +114,7 @@ as `STRIPE_WEBHOOK_SECRET` → restart Terminal 1.
 | Email                 | Password    | Plan         | Status  |
 |-----------------------|-------------|--------------|---------|
 | `coach@linyup.com`    | `linyup123` | Coach        | Trial   |
-| `club@linyup.com`     | `linyup123` | Club         | Active  |
+| `studio@linyup.com`     | `linyup123` | Studio       | Active  |
 | `org@linyup.com`      | `linyup123` | Organization | Active  |
 
 ---
@@ -125,13 +125,13 @@ as `STRIPE_WEBHOOK_SECRET` → restart Terminal 1.
 
 1. Sign in as `coach@linyup.com`
 2. Sidebar → **Billing** (or **Upgrade** → "Upgrade to this plan")
-3. Click **Select Plan: Club**
+3. Click **Select Plan: Studio**
 4. Stripe Checkout opens — use test card:
    - Number: `4242 4242 4242 4242`
    - Expiry: any future date (e.g. `12/34`)
    - CVC: any 3 digits
 5. Complete payment → redirected back to `/billing?checkout=success`
-6. Page shows: **Club · Active · Next billing: ...**
+6. Page shows: **Studio · Active · Next billing: ...**
 
 Watch Terminal 2 — you'll see `customer.subscription.created` and
 `invoice.payment_succeeded` events forwarded to the local function.
@@ -149,7 +149,7 @@ Stripe shows a 3DS prompt → complete it → payment succeeds.
 
 ### Cancel subscription
 
-1. Sign in as `club@linyup.com` (already active)
+1. Sign in as `studio@linyup.com` (already active)
 2. Billing → "Cancel at end of period"
 3. Confirm → `cancel_at_period_end: true` set on subscription
 4. Badge shows: **Cancels on [date]**
@@ -216,7 +216,7 @@ teams will need to re-enter them.
 → `FUNCTIONS_EMULATOR=true` is set but `STRIPE_SECRET_KEY` is missing from
 `packages/functions/.env.local`. Add it.
 
-**"No Stripe price found for lookup key: lineup_club_monthly"**  
+**"No Stripe price found for lookup key: linyup_studio_monthly"**  
 → The price doesn't exist in your test Stripe account. Create it in the
 dashboard with the exact lookup key shown in the table above.
 

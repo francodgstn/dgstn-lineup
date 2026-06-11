@@ -1,7 +1,7 @@
 import type { Timestamp } from './common'
 
 // 'org' is reserved for a future slice where a parent org publishes courses to all
-// member clubs. MVP only writes 'team'.
+// member teams. MVP only writes 'team'.
 export type CourseScope = 'team' | 'org'
 
 export type CourseStatus = 'draft' | 'published' | 'archived'

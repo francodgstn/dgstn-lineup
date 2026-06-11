@@ -353,7 +353,8 @@ export default function SessionsCalendar({
   const [internalYear,  setInternalYear ] = useState(() => today.getFullYear())
   const [internalMonth, setInternalMonth] = useState(() => today.getMonth())
   const [selected,      setSelected     ] = useState<Date>(() => new Date(today))
-  const [mode,          setMode         ] = useState<DetailMode>('day')
+  // Default to the week view — gives the most useful at-a-glance schedule.
+  const [mode,          setMode         ] = useState<DetailMode>('week')
   const [peekSessionId, setPeekSessionId] = useState<string | null>(null)
 
   const viewYear  = externalYear  ?? internalYear

@@ -166,7 +166,7 @@ Field mutations (key transforms):
 - `sessions.activity_id` → `sessions.activityId` (also enriched with `activityName`, `activityType`)
 - `sessions.portal_bookings_count`, `sessions.notes` — deleted
 - `sessions.allowBooking` — new boolean derived from `portal_bookings_count`
-- `teams.plan` — set to `'club'` (ALWAYS_MERGE), `plan_status` → `'active'`, `org_id`/`organizationId` → `'hmd'`
+- `teams.plan` — set to `'studio'` (ALWAYS_MERGE), `plan_status` → `'active'`, `org_id`/`organizationId` → `'hmd'`
 
 ---
 

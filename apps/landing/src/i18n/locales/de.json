@@ -50,15 +50,15 @@
       "audience": "Für Einzeltrainer und Privatcoaches.",
       "features": ["Alles aus Free", "30 inkludierte Kontakte", "1:1-Coaching & Teammitglieder"]
     },
-    "club": {
-      "name": "Verein",
-      "audience": "Für Fitnessstudios und Vereine mit mehreren Trainern und Klassen.",
+    "studio": {
+      "name": "Studio",
+      "audience": "Für Studios, Fitnesscenter und Vereine mit mehreren Trainern und Klassen.",
       "features": ["Alles aus Coach", "Unbegrenzte Kontakte", "Automatisierungen & Gamification", "Trends & Analysen"]
     },
     "org": {
       "name": "Organisation",
       "audience": "Für Mehrstandort-Vereine, Verbände und Franchises.",
-      "features": ["Alles aus Verein", "Mehr-Vereins-Hierarchie", "Organisationsweite Ranglisten & Events"]
+      "features": ["Alles aus Studio", "Multi-Team-Hierarchie", "Organisationsweite Ranglisten & Events"]
     }
   },
   "cta": {

@@ -447,7 +447,7 @@ export default function EventDetailPage() {
   const eventPlugin = PLUGIN_REGISTRY.find((p) => p.eventType?.id === event.type)
   const showCategoriesTab = !!eventPlugin?.eventType?.hasCategories
 
-  // Attendees tab: visible to org admins (cross-club events) and team owners/managers
+  // Attendees tab: visible to org admins (cross-team events) and team owners/managers
   const canSeeAttendees = isOrgAdmin || teamRole === 'owner' || teamRole === 'manager'
 
   const checkinLabel = (() => {

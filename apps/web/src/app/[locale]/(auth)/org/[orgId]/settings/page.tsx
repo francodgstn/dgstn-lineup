@@ -685,7 +685,7 @@ function OrgSmtpCard({ orgId, isAdmin }: { orgId: string; isAdmin: boolean }) {
             Outbound email (SMTP)
           </CardTitle>
           <CardDescription>
-            Configure a shared SMTP server for all clubs in this organisation. Club-level SMTP settings override this.
+            Configure a shared SMTP server for all teams in this organisation. Team-level SMTP settings override this.
           </CardDescription>
         </CardHeader>
         <CardContent>

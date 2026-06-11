@@ -38,13 +38,23 @@ const stripe = new Stripe(secretKey)
 
 interface CatalogEntry { kind: 'plan' | 'addon'; name: string; lookupKey: string; chf: number }
 
+// Stripe Product names are customer-facing (Checkout, invoices, customer portal).
+// Plan IDs are stable machine identifiers; marketing names can change.
+// Keep this map in line with the `Plans` namespace in apps/web/messages/en.json.
+const PLAN_DISPLAY_NAMES: Record<string, string> = {
+  free: 'Free',
+  coach: 'Coach',
+  studio: 'Studio',
+  organization: 'Organization',
+}
+
 const catalog: CatalogEntry[] = [
   // Plans without a lookup key (free) are never billed and have no Stripe price.
   ...Object.entries(PLAN_PRICING)
     .filter(([, p]) => p.stripeLookupKey != null)
     .map(([plan, p]): CatalogEntry => ({
       kind: 'plan',
-      name: `Linyup ${plan.charAt(0).toUpperCase()}${plan.slice(1)}`,
+      name: `Linyup ${PLAN_DISPLAY_NAMES[plan] ?? plan}`,
       lookupKey: p.stripeLookupKey!,
       chf: p.baseMonthly,
     })),
@@ -88,6 +98,14 @@ async function syncEntry(entry: CatalogEntry) {
       lookup_key: entry.lookupKey,
     })
     return
+  }
+
+  // Product names are mutable and customer-facing — unlike prices, drift here is
+  // synced in place (covers plan renames).
+  const product = typeof current.product === 'string' ? null : current.product
+  if (product && !product.deleted && product.name !== entry.name) {
+    console.log(`~ rename   ${entry.lookupKey}  "${product.name}" → "${entry.name}"`)
+    if (APPLY) await stripe.products.update(product.id, { name: entry.name })
   }
 
   if (current.unit_amount === unitAmount && current.currency === CURRENCY) {

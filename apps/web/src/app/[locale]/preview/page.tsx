@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 /**
  * Embedded live preview entry point (used by the landing page's iframe).
- * Signs into a demo club — `?club=<key>` or a random one — and lands on the
+ * Signs into a demo team — `?team=<key>` or a random one — and lands on the
  * dashboard. Standalone visitors can use it too; it's just a fast lane into
  * the same demo accounts as /try.
  */
@@ -52,7 +52,7 @@ function PreviewInner() {
   useEffect(() => {
     if (started.current) return
     started.current = true
-    const key = params.get('club')
+    const key = params.get('team')
     const account =
       DEMO_ACCOUNTS.find((a) => a.key === key) ??
       DEMO_ACCOUNTS[Math.floor(Math.random() * DEMO_ACCOUNTS.length)]

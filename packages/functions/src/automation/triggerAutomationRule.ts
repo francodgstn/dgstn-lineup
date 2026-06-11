@@ -2,7 +2,7 @@
 // Manually triggers a single automation rule for a team.
 // Bypasses the dedup guard (force=true) so the rule fires even if contacts
 // were already processed by a previous run.
-// Requires club+ plan.
+// Requires studio+ plan.
 import * as admin from 'firebase-admin'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { FieldValue } from 'firebase-admin/firestore'
@@ -27,7 +27,7 @@ export const triggerAutomationRule = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'You are not a member of this team.')
   }
 
-  await requirePlan(teamId, 'club')
+  await requirePlan(teamId, 'studio')
 
   const db = admin.firestore()
 

@@ -38,19 +38,19 @@ export const contrastTextColor = (hex: string) => {
 export const MEMBERSHIP_STATUS_CONFIG: Record<string, { label: string; description: string; bgColor: string; textColor: string }> = {
   guest: {
     label: 'GUEST',
-    description: 'You are registered as a guest. Contact your club to start the membership process.',
+    description: 'You are registered as a guest. Contact your team to start the membership process.',
     bgColor: '#FF9800', // Orange
     textColor: '#FFFFFF',
   },
   requested: {
     label: 'REQUESTED',
-    description: 'Your membership request has been submitted. Waiting for the Club Manager to forward it.',
+    description: 'Your membership request has been submitted. Waiting for the Team Manager to forward it.',
     bgColor: '#9E9E9E', // Grey
     textColor: '#FFFFFF',
   },
   being_checked: {
     label: 'BEING CHECKED',
-    description: 'The Organization Admin is reviewing your request after the club forwarded it.',
+    description: 'The Organization Admin is reviewing your request after the team forwarded it.',
     bgColor: '#2196F3', // Blue
     textColor: '#FFFFFF',
   },
@@ -68,7 +68,7 @@ export const MEMBERSHIP_STATUS_CONFIG: Record<string, { label: string; descripti
   },
   expired: {
     label: 'EXPIRED',
-    description: 'Your membership has reached its end date or was manually expired. Contact your club to renew.',
+    description: 'Your membership has reached its end date or was manually expired. Contact your team to renew.',
     bgColor: '#F44336', // Red
     textColor: '#FFFFFF',
   },

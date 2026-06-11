@@ -38,8 +38,8 @@ import {
   createModule, updateModule, deleteModule,
   createLesson, updateLesson, deleteLesson,
   type LessonInput,
-} from '@/plugins/club-courses/hooks'
-import { getClubCoursesLimits } from '@/plugins/club-courses/limits'
+} from '@/plugins/online-courses/hooks'
+import { getOnlineCoursesLimits } from '@/plugins/online-courses/limits'
 
 const LESSON_ICON: Record<LessonType, typeof FileText> = {
   text: FileText,
@@ -72,7 +72,7 @@ function LessonPanel({
   onClose: () => void
 }) {
   const t = useTranslations('Courses')
-  const limits = getClubCoursesLimits()
+  const limits = getOnlineCoursesLimits()
   const [title, setTitle] = useState(initial?.title ?? '')
   const [body, setBody] = useState(initial?.body ?? '')
   const [featured, setFeatured] = useState<FeaturedKind>(
@@ -302,7 +302,7 @@ type Selection =
 function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) {
   const t = useTranslations('Courses')
   const queryClient = useQueryClient()
-  const limits = getClubCoursesLimits()
+  const limits = getOnlineCoursesLimits()
 
   const { data: modules = [], isLoading: modulesLoading } = useModules(courseId)
   const { data: lessons = [], isLoading: lessonsLoading } = useLessons(courseId)
@@ -680,7 +680,7 @@ function SettingsTab({
             <AlertDialogAction
               onClick={async () => {
                 await deleteCourse(courseId)
-                router.push('/plugins/club-courses' as Route)
+                router.push('/plugins/online-courses' as Route)
               }}
             >{t('delete')}</AlertDialogAction>
           </AlertDialogFooter>
@@ -711,7 +711,7 @@ export default function CourseBuilderPage() {
   if (!course) {
     return (
       <div className="max-w-3xl space-y-4">
-        <Link href={'/plugins/club-courses' as Route} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+        <Link href={'/plugins/online-courses' as Route} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
           <ChevronLeft className="h-4 w-4" />{t('backToCourses')}
         </Link>
         <p className="text-sm text-muted-foreground">{t('notFound')}</p>
@@ -721,7 +721,7 @@ export default function CourseBuilderPage() {
 
   return (
     <div className="max-w-5xl space-y-5">
-      <Link href={'/plugins/club-courses' as Route} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+      <Link href={'/plugins/online-courses' as Route} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
         <ChevronLeft className="h-4 w-4" />{t('backToCourses')}
       </Link>
 

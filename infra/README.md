@@ -211,7 +211,7 @@ or a `v*` tag), gated on the `production` GitHub environment's required reviewer
 ## Sandbox environment (demo playground)
 
 `linyup-sandbox` is a throwaway environment that powers the public `/try` page:
-six fully-seeded **Club** demo tenants (sport + wellness) with one-click logins.
+six fully-seeded **Studio** demo tenants (sport + wellness) with one-click logins.
 It uses the same modules as staging — only `project_id`, hosting site IDs and the
 budget differ — plus two demo-specific switches.
 
@@ -256,7 +256,7 @@ npx firebase-tools apphosting:backends:create \
   --project linyup-sandbox --app <WEB_APP_ID> --backend linyup-web \
   --primary-region us-central1 --root-dir apps/web --non-interactive
 
-# 5. Seed the six demo Club tenants (ADC; idempotent — reset:sandbox to wipe first)
+# 5. Seed the six demo Studio tenants (ADC; idempotent — reset:sandbox to wipe first)
 pnpm seed:sandbox
 
 # 6. Custom domain — the public demo lives at https://demo.linyup.com/try.
@@ -271,7 +271,7 @@ The demo MUST be served from this sandbox deployment (it's built against the
 build targets `linyup-prod`, where the demo accounts/data don't exist, and `/try`
 404s there by design (`NEXT_PUBLIC_DEMO_MODE` is unset on prod).
 
-Demo logins (all `linyup123`, plan `club`/`active`): `grappling@`, `crossfit@`,
+Demo logins (all `linyup123`, plan `studio`/`active`): `grappling@`, `crossfit@`,
 `tennis@`, `yoga@`, `pilates@`, `dance@` `linyup.com`.
 
 > **Auto-reseed** (nightly wipe + reseed) is a deferred follow-up — for now reseed

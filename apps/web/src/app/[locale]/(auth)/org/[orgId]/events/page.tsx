@@ -134,7 +134,7 @@ function OrgEventDialog({
       await addDoc(collection(db, EVENTS_COLLECTION), { ...payload, created_at: serverTimestamp() })
     }
     qc.invalidateQueries({ queryKey: ['org-events', orgId] })
-    // Also invalidate club events (they pick up org events too)
+    // Also invalidate team events (they pick up org events too)
     qc.invalidateQueries({ queryKey: ['events'] })
     onClose()
   }

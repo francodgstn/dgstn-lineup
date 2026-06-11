@@ -191,7 +191,7 @@ export default function OrgInvitePage() {
 
               {invitation.teamName && (
                 <div className="flex justify-between text-sm py-2 border-y">
-                  <span className="text-muted-foreground">{t('clubLabel')}</span>
+                  <span className="text-muted-foreground">{t('teamLabel')}</span>
                   <span className="font-medium">{invitation.teamName}</span>
                 </div>
               )}

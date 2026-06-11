@@ -16,7 +16,7 @@ export interface AccountMetricInput {
   status: SaasStatus | null
   createdMs: number
   trialEndsAtMs: number | null
-  /** Active contacts (teams only); null for orgs (they aggregate their clubs). */
+  /** Active contacts (teams only); null for orgs (they aggregate their teams). */
   contactCount: number | null
   /** Contact-overage units billed on top of the plan (0 if none). */
   overageQty: number
@@ -45,7 +45,7 @@ const emptyStatus = (): Record<SaasStatus, number> => ({
   expired: 0,
 })
 
-const emptyPlan = (): Record<SaasPlan, number> => ({ free: 0, coach: 0, club: 0, organization: 0 })
+const emptyPlan = (): Record<SaasPlan, number> => ({ free: 0, coach: 0, studio: 0, organization: 0 })
 
 export function computePlatformMetrics(
   accounts: AccountMetricInput[],

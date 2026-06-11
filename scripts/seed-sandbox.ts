@@ -1,8 +1,8 @@
 /**
  * Seed script for the **demo playground** (the `linyup-sandbox` Firebase project).
  *
- * Unlike seed-staging.ts (coach/club/org tiers, all "Martial arts"), this seed
- * creates SIX fully-populated **Club**-plan accounts spanning different sectors —
+ * Unlike seed-staging.ts (coach/studio/org tiers, all "Martial arts"), this seed
+ * creates SIX fully-populated **Studio**-plan accounts spanning different sectors —
  * three sport, three wellness — so the public /try playground shows real variety.
  *
  *   grappling@linyup.com  / linyup123  →  Ronin Grappling Academy   (sport · martial arts)
@@ -12,7 +12,7 @@
  *   pilates@linyup.com    / linyup123  →  Core Pilates Studio      (wellness · pilates)
  *   dance@linyup.com      / linyup123  →  Rhythm Dance Studio      (wellness · dance)
  *
- * Every account is plan: 'club', status: 'active' (full feature set, never hits
+ * Every account is plan: 'studio', status: 'active' (full feature set, never hits
  * the trial wall). Keep DEMO_ACCOUNTS in apps/web/src/lib/demo.ts in sync.
  *
  * ──────────────────────────────────────────────────────────────────────────────
@@ -450,9 +450,9 @@ const SECTOR_PROFILES: SectorProfile[] = [
   },
 ]
 
-// ── per-club seed ───────────────────────────────────────────────────────────
+// ── per-team seed ───────────────────────────────────────────────────────────
 
-async function seedClub(profile: SectorProfile) {
+async function seedDemoTeam(profile: SectorProfile) {
   const {
     key, ownerName, teamName, teamSlug, sportType, accentColor, description, portalGradient,
     instructors, activities, coachingName, rankingSystem, subscriptions, locations,
@@ -460,7 +460,7 @@ async function seedClub(profile: SectorProfile) {
   const teamId = `sandbox-${key}`
   const uid = `sandbox-${key}-uid`
   const email = `${key}@linyup.com`
-  const contactCount = CONTACT_POOL.length // ~24 contacts per club
+  const contactCount = CONTACT_POOL.length // ~24 contacts per team
   const teamLanguage = 'en'
 
   // ── subscription types ────────────────────────────────────────────────────
@@ -518,7 +518,7 @@ async function seedClub(profile: SectorProfile) {
     language: teamLanguage,
     createdBy: uid,
     created: ts(daysFromNow(-220)),
-    plan: 'club',
+    plan: 'studio',
     plan_status: 'active',
     ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],
     settings: { gamification: gamificationSettings, teamEmail: email },
@@ -903,7 +903,7 @@ async function seedClub(profile: SectorProfile) {
     })
   }
 
-  // ── automations (Club tier) ─────────────────────────────────────────────────
+  // ── automations (Studio tier) ─────────────────────────────────────────────────
   await seedAutomations(teamId, teamLanguage)
 
   // ── events ───────────────────────────────────────────────────────────────────
@@ -950,10 +950,10 @@ async function seedClub(profile: SectorProfile) {
     })
   }
 
-  // ── saas_subscriptions (active Club; gateway_type null = manually managed) ──
+  // ── saas_subscriptions (active Studio; gateway_type null = manually managed) ──
   const nowTs = ts(now())
   await db.collection('saas_subscriptions').doc(teamId).set({
-    teamId, plan: 'club', status: 'active', trial_ends_at: null,
+    teamId, plan: 'studio', status: 'active', trial_ends_at: null,
     current_period_start: ts(daysFromNow(-30)), current_period_end: ts(daysFromNow(1)),
     cancel_at_period_end: false, gateway_type: null, gateway_data: null,
     created_at: ts(daysFromNow(-220)), updated_at: nowTs,
@@ -1141,12 +1141,12 @@ async function main() {
   if (!USE_EMULATOR) await enableEmailPasswordSignIn()
 
   for (const profile of SECTOR_PROFILES) {
-    await seedClub(profile)
+    await seedDemoTeam(profile)
   }
 
   console.log('\n✅ Demo playground seeded successfully!\n')
   console.log('   ┌──────────┬──────────────────────────┬────────────────────────┬────────────┐')
-  console.log('   │ Sector   │ Club                     │ Login                  │ Password   │')
+  console.log('   │ Sector   │ Team                     │ Login                  │ Password   │')
   console.log('   ├──────────┼──────────────────────────┼────────────────────────┼────────────┤')
   for (const p of SECTOR_PROFILES) {
     console.log(
@@ -1154,7 +1154,7 @@ async function main() {
     )
   }
   console.log('   └──────────┴──────────────────────────┴────────────────────────┴────────────┘\n')
-  console.log('   All accounts: plan=club, status=active (full feature set, no trial wall).')
+  console.log('   All accounts: plan=studio, status=active (full feature set, no trial wall).')
   console.log('   Portals:')
   for (const p of SECTOR_PROFILES) {
     console.log(`   ${p.teamName.padEnd(26)} → /portal/${p.teamSlug}`)

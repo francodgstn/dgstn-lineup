@@ -55,10 +55,10 @@ export async function runScheduledRules(): Promise<{ teams: number; rules: numbe
       ? (teamDoc.data() as Record<string, unknown>)
       : {}
 
-    // Plan gate: automation rules require club+ plan
+    // Plan gate: automation rules require studio+ plan
     const teamPlan = (teamData.plan as string) || 'coach'
-    if (!['club', 'org', 'enterprise'].includes(teamPlan)) {
-      console.log(`[runScheduledRules] Team ${teamId} on plan '${teamPlan}' — automation requires club+, skipping`) // eslint-disable-line no-console
+    if (!['studio', 'organization'].includes(teamPlan)) {
+      console.log(`[runScheduledRules] Team ${teamId} on plan '${teamPlan}' — automation requires studio+, skipping`) // eslint-disable-line no-console
       continue
     }
 

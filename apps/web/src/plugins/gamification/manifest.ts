@@ -6,7 +6,7 @@ export const gamificationManifest: PluginManifest = {
   nameKey: 'gamificationName',
   descriptionKey: 'gamificationDescription',
   category: 'engagement',
-  minPlan: 'club',
+  minPlan: 'studio',
   status: 'available',
   recommended: true,
   addon: PLUGIN_ADDONS['gamification'],

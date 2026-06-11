@@ -17,12 +17,12 @@
  * What it creates — three SaaS plan tiers, all major features covered:
  *
  *   coach@linyup.com   / linyup123  →  plan: coach        (trial)
- *   club@linyup.com    / linyup123  →  plan: club         (active, 2 coaches)
+ *   studio@linyup.com    / linyup123  →  plan: studio       (active, 2 coaches)
  *   org@linyup.com     / linyup123  →  plan: organization (active, org admin)
  *
  *   Coach team:  Samurai Fight Academy        — 15 contacts
- *   Club team:   Iron Circle Gym              — 30 contacts, gamification, automations
- *   Org:         Titan Martial Arts Assoc.    — 2 sub-clubs:
+ *   Studio team: Iron Circle Gym              — 30 contacts, gamification, automations
+ *   Org:         Titan Martial Arts Assoc.    — 2 member teams:
  *                  · Titan Combat Sports       — 20 contacts (owned by org admin)
  *                  · Titan Striking Lab        — 18 contacts (owned by 2nd coach)
  *
@@ -35,12 +35,12 @@
  *     gamification (score, streak, badges, monthly_scores), alerts, goals/tasks
  *   - subscription_history, contact_weekly_reports, contact_alerts (show_in_app)
  *   - team activity_log
- *   - alert_presets + outreach_templates + automation_rules + automation_logs (club+)
+ *   - alert_presets + outreach_templates + automation_rules + automation_logs (studio+)
  *   - events + invitations + attendees
  *   - saas_subscriptions (mirrors what the Stripe webhook would write)
  *
  *   Auth users:
- *   - one coach (owner) per team + a second coach for club / org-club-b
+ *   - one coach (owner) per team + a second coach for studio / org-team-b
  *   - one student per team — uid `contact:{teamId}:{contactId}` with custom
  *     claims { contactId, teamId, sessionExpires } matching generateAuthToken().
  */
@@ -184,13 +184,13 @@ interface TeamSeed {
   teamId: string
   teamName: string
   teamSlug: string
-  plan: 'coach' | 'club' | 'organization'
+  plan: 'coach' | 'studio' | 'organization'
   planStatus: 'trial' | 'active'
   accentColor: string
   tagline: string                                 // portal home description (public_profile.description)
   portalGradient: string                          // PORTAL_GRADIENTS key (apps/web/src/lib/portal.ts)
   contactCount: number
-  orgId?: string                                  // set when the team is an org sub-club
+  orgId?: string                                  // set when the team is an org member team
   extraCoaches?: { uid: string; displayName: string; email: string }[]
 }
 
@@ -729,7 +729,7 @@ async function seedTeam(opts: TeamSeed) {
     })
   }
 
-  // ── automations (club+ only): templates, alert presets, rules, logs ──────────
+  // ── automations (studio+ only): templates, alert presets, rules, logs ──────────
   if (automationsEnabled) {
     await seedAutomations(teamId, teamLanguage)
   }
@@ -799,7 +799,7 @@ async function seedTeam(opts: TeamSeed) {
       created_at: ts(daysFromNow(-220)), updated_at: nowTs,
     })
   }
-  // org sub-clubs are billed through the org subscription (handled in seedOrg)
+  // org member teams are billed through the org subscription (handled in seedOrg)
 
   // ── student auth user (custom-token identity matching generateAuthToken) ──────
   const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
@@ -907,9 +907,9 @@ async function seedAutomations(teamId: string, language: string) {
 // ── org seed ──────────────────────────────────────────────────────────────────
 
 async function seedOrg(opts: {
-  orgId: string; orgName: string; orgSlug: string; adminUid: string; clubIds: string[]
+  orgId: string; orgName: string; orgSlug: string; adminUid: string; teamIds: string[]
 }) {
-  const { orgId, orgName, orgSlug, adminUid, clubIds } = opts
+  const { orgId, orgName, orgSlug, adminUid, teamIds } = opts
   const nowTs = ts(now())
 
   const bjjBelt = [{
@@ -925,7 +925,7 @@ async function seedOrg(opts: {
 
   await db.collection('organizations').doc(orgId).set({
     name: orgName, slug: orgSlug,
-    description: `${orgName} — multi-club organization managed with Linyup.`,
+    description: `${orgName} — multi-team organization managed with Linyup.`,
     plan: 'organization', plan_status: 'active', ranking_systems: bjjBelt,
     created: ts(daysFromNow(-260)), createdBy: adminUid,
   })
@@ -935,11 +935,11 @@ async function seedOrg(opts: {
   })
   await db.collection('users').doc(adminUid).set({ orgIds: [orgId] }, { merge: true })
 
-  for (const teamId of clubIds) {
+  for (const teamId of teamIds) {
     await db.collection('organizations').doc(orgId).collection('org_teams').doc(teamId).set({
       teamId, orgId, status: 'active', joined: nowTs, addedBy: adminUid,
     })
-    // ensure the org admin is a manager of every sub-club they don't already own
+    // ensure the org admin is a manager of every member team they don't already own
     const memberRef = db.collection('teams').doc(teamId).collection('team_members').doc(adminUid)
     const existing = await memberRef.get()
     if (!existing.exists) {
@@ -962,7 +962,7 @@ async function seedOrg(opts: {
     status: 'open', deleted_at: null, createdBy: adminUid, created_at: nowTs,
   })
 
-  console.log(`   ✓ ${orgName} — ${clubIds.length} sub-clubs`)
+  console.log(`   ✓ ${orgName} — ${teamIds.length} member teams`)
 }
 
 // ── auth helper (idempotent create-or-update) ─────────────────────────────────
@@ -1037,20 +1037,20 @@ async function main() {
     portalGradient: 'night',
   })
 
-  // 2. Club plan — club with 2 coaches
+  // 2. Studio plan — team with 2 coaches
   await seedTeam({
-    uid: 'seed-club-uid', email: 'club@linyup.com', displayName: 'Anna Schmidt',
-    teamId: 'seed-team-club', teamName: 'Iron Circle Gym', teamSlug: 'iron-circle-gym',
-    plan: 'club', planStatus: 'active', accentColor: '#dc2626', contactCount: 30,
+    uid: 'seed-studio-uid', email: 'studio@linyup.com', displayName: 'Anna Schmidt',
+    teamId: 'seed-team-studio', teamName: 'Iron Circle Gym', teamSlug: 'iron-circle-gym',
+    plan: 'studio', planStatus: 'active', accentColor: '#dc2626', contactCount: 30,
     tagline: 'Forge your fight game — BJJ, MMA and kickboxing under one roof, all levels welcome.',
     portalGradient: 'warm',
-    extraCoaches: [{ uid: 'seed-club-coach2-uid', displayName: 'Marco Silva', email: 'marco.silva@ironcircle.example.com' }],
+    extraCoaches: [{ uid: 'seed-studio-coach2-uid', displayName: 'Marco Silva', email: 'marco.silva@ironcircle.example.com' }],
   })
 
-  // 3. Organisation — org admin + 2 sub-clubs
+  // 3. Organisation — org admin + 2 member teams
   await seedTeam({
     uid: 'seed-org-uid', email: 'org@linyup.com', displayName: 'Rafael Torres',
-    teamId: 'seed-org-club-a', teamName: 'Titan Combat Sports', teamSlug: 'titan-combat-sports',
+    teamId: 'seed-org-team-a', teamName: 'Titan Combat Sports', teamSlug: 'titan-combat-sports',
     plan: 'organization', planStatus: 'active', accentColor: '#0284c7', contactCount: 20,
     tagline: 'The Titan flagship — competition-grade grappling and MMA coaching for every level.',
     portalGradient: 'royal',
@@ -1058,7 +1058,7 @@ async function main() {
   })
   await seedTeam({
     uid: 'seed-org-coachb-uid', email: 'coach.b@titan.example.com', displayName: 'Diego Fernández',
-    teamId: 'seed-org-club-b', teamName: 'Titan Striking Lab', teamSlug: 'titan-striking-lab',
+    teamId: 'seed-org-team-b', teamName: 'Titan Striking Lab', teamSlug: 'titan-striking-lab',
     plan: 'organization', planStatus: 'active', accentColor: '#0d9488', contactCount: 18,
     tagline: 'Precision striking — kickboxing technique, pad work and fight-camp conditioning.',
     portalGradient: 'ocean',
@@ -1066,7 +1066,7 @@ async function main() {
   })
   await seedOrg({
     orgId: 'seed-org', orgName: 'Titan Martial Arts Association', orgSlug: 'titan-martial-arts',
-    adminUid: 'seed-org-uid', clubIds: ['seed-org-club-a', 'seed-org-club-b'],
+    adminUid: 'seed-org-uid', teamIds: ['seed-org-team-a', 'seed-org-team-b'],
   })
 
   console.log('\n✅ Staging seeded successfully!\n')
@@ -1074,11 +1074,11 @@ async function main() {
   console.log('   │ Plan                 │ Email                │ Password   │ Status   │')
   console.log('   ├──────────────────────┼──────────────────────┼────────────┼──────────┤')
   console.log('   │ coach                │ coach@linyup.com     │ linyup123  │ trial    │')
-  console.log('   │ club (2 coaches)     │ club@linyup.com      │ linyup123  │ active   │')
+  console.log('   │ studio (2 coaches)   │ studio@linyup.com    │ linyup123  │ active   │')
   console.log('   │ org admin            │ org@linyup.com       │ linyup123  │ active   │')
   console.log('   └──────────────────────┴──────────────────────┴────────────┴──────────┘\n')
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com)')
-  console.log('   Sub-clubs: Titan Combat Sports + Titan Striking Lab')
+  console.log('   Member teams: Titan Combat Sports + Titan Striking Lab')
   console.log('   Student logins use custom tokens (uid contact:{teamId}:{contactId}).\n')
 }
 

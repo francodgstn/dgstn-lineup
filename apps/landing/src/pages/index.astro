@@ -6,10 +6,10 @@ const FIREBASE_PROJECT_ID = import.meta.env.PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-
 const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
 
 // Live demo playground (sandbox env). The sneak peek embeds the real app via
-// /preview, which auto-signs into one of these demo clubs; keep the keys in
+// /preview, which auto-signs into one of these demo teams; keep the keys in
 // sync with DEMO_ACCOUNTS in apps/web/src/lib/demo.ts.
 const DEMO_URL = import.meta.env.PUBLIC_DEMO_URL ?? 'https://demo.linyup.com';
-const DEMO_CLUBS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance'];
+const DEMO_TEAMS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance'];
 ---
 
 <BaseLayout
@@ -124,7 +124,7 @@ const DEMO_CLUBS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance
           <div class="browser-url">demo.linyup.com/dashboard</div>
         </div>
 
-        <!-- live demo (real app, random club each load) -->
+        <!-- live demo (real app, random team each load) -->
         <div class="preview-stage">
           <iframe
             id="demo-preview"
@@ -148,11 +148,11 @@ const DEMO_CLUBS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance
       </div>
     </section>
 
-    <script define:vars={{ demoUrl: DEMO_URL, demoClubs: DEMO_CLUBS }}>
-      // Pick a random demo club per page load and boot the live preview.
-      const club = demoClubs[Math.floor(Math.random() * demoClubs.length)];
+    <script define:vars={{ demoUrl: DEMO_URL, demoTeams: DEMO_TEAMS }}>
+      // Pick a random demo team per page load and boot the live preview.
+      const team = demoTeams[Math.floor(Math.random() * demoTeams.length)];
       const frame = document.getElementById('demo-preview');
-      if (frame) frame.src = `${demoUrl}/preview?club=${club}`;
+      if (frame) frame.src = `${demoUrl}/preview?team=${team}`;
     </script>
 
     <!-- ── Footer note ───────────────────────────────────────────────── -->

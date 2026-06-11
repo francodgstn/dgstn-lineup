@@ -469,7 +469,7 @@ export const ProfileScreen: React.FC = () => {
 
         {teamProfile && (teamProfile.referralEnabled || teamProfile.socialLinks?.some(l => l.platform === 'instagram' || l.platform === 'review')) && (
           <View>
-            <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>Support the Club</Text>
+            <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>Support the Team</Text>
             <SocialActionsCard teamProfile={teamProfile} rewardedCount={rewardedCount} />
           </View>
         )}

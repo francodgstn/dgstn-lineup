@@ -14,7 +14,7 @@ function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNod
   const pathname = usePathname()
 
   const tabs = [
-    { href: `/org/${orgId}/clubs`,       label: t('tabClubs'),       icon: Building2 },
+    { href: `/org/${orgId}/teams`,       label: t('tabTeams'),       icon: Building2 },
     { href: `/org/${orgId}/events`,      label: t('tabEvents'),      icon: CalendarRange },
     { href: `/org/${orgId}/memberships`, label: membershipTerm,      icon: IdCard },
     { href: `/org/${orgId}/ranking`,     label: t('tabRanking'),     icon: Shield },

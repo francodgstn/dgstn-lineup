@@ -33,11 +33,19 @@ export interface PluginAutomationAction {
   configFields?: PluginAutomationActionField[]
 }
 
+/** Built-in sidebar sections a plugin nav item can render into. */
+export type PluginNavSection = 'operations' | 'configure' | 'team'
+
 export interface PluginNavContribution {
-  href: string         // relative to /(auth)/ — e.g. '/plugins/club-website'
+  href: string         // relative to /(auth)/ — e.g. '/plugins/online-courses'
   labelKey: string
   icon: string
   minPlan?: SaasPlan
+  /** Optional existing sidebar section to render into. When set and matching
+   *  a built-in section, the item appears inside that section (after the
+   *  built-in items). When omitted or unmatched, the item falls back to the
+   *  default plugin groups ("Plugins" / "Engage"). */
+  section?: PluginNavSection
 }
 
 export interface PluginEventType {
@@ -59,7 +67,7 @@ export interface PluginManifest {
   status: PluginStatus
   recommended?: boolean    // surfaced with a "Recommended" tag and floated to the top
   // When set, this plugin is available to the Coach plan as a paid monthly
-  // add-on (à la carte). Club/Org include all plugins regardless. Plugins
+  // add-on (à la carte). Studio/Org include all plugins regardless. Plugins
   // without `addon` are upgrade-locked for coaches.
   addon?: { coachPriceMonthly: number; stripeLookupKey: string }
 

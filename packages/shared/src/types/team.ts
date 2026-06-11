@@ -2,7 +2,7 @@ import type { Timestamp } from './common'
 
 export type TeamRole = 'owner' | 'manager' | 'viewer'
 
-export type SaasPlan = 'free' | 'coach' | 'club' | 'organization'
+export type SaasPlan = 'free' | 'coach' | 'studio' | 'organization'
 // 'expired' is LEGACY: lapsed trials used to be walled then purged; they now
 // downgrade to the free plan ('free'/'active'). Nothing writes 'expired' any
 // more — the value remains so old docs still typecheck and admin filters work.

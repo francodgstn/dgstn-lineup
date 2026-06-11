@@ -1867,7 +1867,7 @@ export default function ContactsPage() {
               { label: t('bulkRemoveFromGroup'), icon: FolderTree, onClick: () => setBulkEditMode('group-remove') },
             ] : []),
           ] : []}
-          moreActions={tab === 'active' && isAtLeast('club') ? [
+          moreActions={tab === 'active' && isAtLeast('studio') ? [
             { label: t('bulkMove'),     icon: ArrowRightLeft, onClick: () => {}, disabled: true },
             { label: t('bulkOutreach'), icon: Mail,           onClick: () => {}, disabled: true },
           ] : []}

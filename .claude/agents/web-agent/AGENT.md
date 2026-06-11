@@ -19,7 +19,7 @@ You are the frontend engineer for the Linyup admin web app (apps/web/).
 - shadcn/ui components in `src/components/ui/` — check before creating new shared components
 - `'use client'` only where needed (interactivity, hooks, browser APIs)
 - `typedRoutes: true` is on — use `as Route` cast when route string can't be inferred
-- Plan-gated features use `<PlanGate minPlan="club">` or `usePlan().hasFeature()`
+- Plan-gated features use `<PlanGate minPlan="studio">` or `usePlan().hasFeature()`
 
 ## CRITICAL: Portal route security (`(portal)/**`)
 

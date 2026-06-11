@@ -172,7 +172,7 @@ function OrgLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?
       )}
       <div className="space-y-0.5">
         {orgs.map((org) => {
-          const href = `/org/${org.id}/clubs`
+          const href = `/org/${org.id}/teams`
           const isActive = pathname.includes(`/org/${org.id}`)
           return (
             <Link
@@ -198,90 +198,18 @@ function OrgLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?
 
 // A plugin nav entry. Installed plugins render as real links; recommended-but-
 // not-installed ones render muted with an install tooltip (discovery nudge).
-type PluginNavEntry = { href: string; labelKey: string; icon: string; pluginId: string; category: string; installed: boolean }
+type PluginNavEntry = { href: string; labelKey: string; icon: string; pluginId: string; category: string; installed: boolean; section?: string }
 
-function PluginNavGroup({
-  label,
-  entries,
-  collapsed,
-  onLinkClick,
-}: {
-  label: string
-  entries: PluginNavEntry[]
-  collapsed: boolean
-  onLinkClick?: () => void
-}) {
-  const pathname = usePathname()
-  const router = useRouter()
-  const t = useTranslations('Plugins')
-  if (entries.length === 0) return null
-
-  return (
-    <div className="mt-3">
-      {collapsed ? (
-        <div className="border-t mx-1 mb-1" />
-      ) : (
-        <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pb-1">
-          {label}
-        </p>
-      )}
-      <div className="space-y-0.5">
-        {entries.map((nav) => {
-          const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
-          const linkLabel = t(nav.labelKey as Parameters<typeof t>[0])
-
-          // Recommended but not installed → muted discovery item → /plugins.
-          if (!nav.installed) {
-            return (
-              <TooltipProvider key={nav.pluginId + nav.href} delay={300}>
-                <Tooltip>
-                  <TooltipTrigger
-                    onClick={() => { router.push('/plugins' as Route); onLinkClick?.() }}
-                    title={collapsed ? linkLabel : undefined}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${collapsed ? 'justify-center px-2' : ''}`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {!collapsed && (
-                      <>
-                        <span className="flex-1 text-left">{linkLabel}</span>
-                        <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
-                      </>
-                    )}
-                  </TooltipTrigger>
-                  <TooltipContent side="right">{t('discoverTooltip')}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )
-          }
-
-          const isActive = pathname.startsWith(nav.href)
-          return (
-            <Link
-              key={nav.pluginId + nav.href}
-              href={nav.href as Route}
-              onClick={onLinkClick}
-              title={collapsed ? linkLabel : undefined}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-                isActive
-                  ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
-                  : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-              } ${collapsed ? 'justify-center px-2' : ''}`}
-            >
-              <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-              {!collapsed && <span>{linkLabel}</span>}
-            </Link>
-          )
-        })}
-      </div>
-    </div>
-  )
+// Maps PluginNavContribution.section values to built-in NAV_SECTIONS labelKeys.
+const PLUGIN_SECTION_TO_LABEL_KEY: Record<string, string> = {
+  operations: 'sectionOperations',
+  configure: 'sectionConfigure',
+  team: 'sectionTeam',
 }
 
-// Renders plugin nav links grouped by category (engagement → "Engage", else →
-// "Plugins"). Installed plugins are real links; recommended-but-not-installed
-// plugins appear as muted "install me" nudges. Installed sort before muted.
-function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?: () => void }) {
-  const t = useTranslations('Plugins')
+/** All plugin nav entries: installed (real links) + recommended-not-installed
+ *  (muted discovery nudges). Installed sort before muted. */
+function usePluginNavEntries(): PluginNavEntry[] {
   const { plugins, isInstalled, isLoading } = useInstalledPlugins()
 
   const installed: PluginNavEntry[] = plugins.flatMap((p) =>
@@ -300,11 +228,98 @@ function PluginNavLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLink
           })),
         )
 
-  const all = [...installed, ...discovery] // installed first → sort before muted
-  if (all.length === 0) return null
+  return [...installed, ...discovery]
+}
 
-  const engage = all.filter((e) => e.category === 'engagement')
-  const others = all.filter((e) => e.category !== 'engagement')
+function PluginNavItem({ nav, collapsed, onLinkClick }: { nav: PluginNavEntry; collapsed: boolean; onLinkClick?: () => void }) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const t = useTranslations('Plugins')
+  const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
+  const linkLabel = t(nav.labelKey as Parameters<typeof t>[0])
+
+  // Recommended but not installed → muted discovery item → /plugins.
+  if (!nav.installed) {
+    return (
+      <TooltipProvider delay={300}>
+        <Tooltip>
+          <TooltipTrigger
+            onClick={() => { router.push('/plugins' as Route); onLinkClick?.() }}
+            title={collapsed ? linkLabel : undefined}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${collapsed ? 'justify-center px-2' : ''}`}
+          >
+            <Icon className="h-4 w-4 shrink-0" />
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left">{linkLabel}</span>
+                <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+              </>
+            )}
+          </TooltipTrigger>
+          <TooltipContent side="right">{t('discoverTooltip')}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  const isActive = pathname.startsWith(nav.href)
+  return (
+    <Link
+      href={nav.href as Route}
+      onClick={onLinkClick}
+      title={collapsed ? linkLabel : undefined}
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+        isActive
+          ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+      } ${collapsed ? 'justify-center px-2' : ''}`}
+    >
+      <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+      {!collapsed && <span>{linkLabel}</span>}
+    </Link>
+  )
+}
+
+function PluginNavGroup({
+  label,
+  entries,
+  collapsed,
+  onLinkClick,
+}: {
+  label: string
+  entries: PluginNavEntry[]
+  collapsed: boolean
+  onLinkClick?: () => void
+}) {
+  if (entries.length === 0) return null
+
+  return (
+    <div className="mt-3">
+      {collapsed ? (
+        <div className="border-t mx-1 mb-1" />
+      ) : (
+        <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pb-1">
+          {label}
+        </p>
+      )}
+      <div className="space-y-0.5">
+        {entries.map((nav) => (
+          <PluginNavItem key={nav.pluginId + nav.href} nav={nav} collapsed={collapsed} onLinkClick={onLinkClick} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Renders plugin nav links grouped by category (engagement → "Engage", else →
+// "Plugins"). Entries whose manifest targets an existing sidebar section are
+// rendered inside that section instead (see SidebarContent) and excluded here.
+function PluginNavLinks({ entries, collapsed, onLinkClick }: { entries: PluginNavEntry[]; collapsed: boolean; onLinkClick?: () => void }) {
+  const t = useTranslations('Plugins')
+  if (entries.length === 0) return null
+
+  const engage = entries.filter((e) => e.category === 'engagement')
+  const others = entries.filter((e) => e.category !== 'engagement')
 
   return (
     <>
@@ -326,6 +341,12 @@ function SidebarContent({
   const t = useTranslations('Nav')
   const { team } = useAuth()
   const inOrg = !!team?.org_id
+
+  // Plugin nav entries: those targeting a built-in section render inside it;
+  // the rest fall back to the default "Plugins" / "Engage" groups below.
+  const pluginEntries = usePluginNavEntries()
+  const sectionedEntries = pluginEntries.filter((e) => e.section && PLUGIN_SECTION_TO_LABEL_KEY[e.section])
+  const unsectionedEntries = pluginEntries.filter((e) => !(e.section && PLUGIN_SECTION_TO_LABEL_KEY[e.section]))
 
   return (
     <div className="flex flex-col h-full">
@@ -365,10 +386,15 @@ function SidebarContent({
               {section.items.filter((item) => !item.requiresOrg || inOrg).map((item) => (
                 <NavLink key={item.href} item={item} collapsed={collapsed} onClick={onLinkClick} />
               ))}
+              {sectionedEntries
+                .filter((e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey)
+                .map((nav) => (
+                  <PluginNavItem key={nav.pluginId + nav.href} nav={nav} collapsed={collapsed} onLinkClick={onLinkClick} />
+                ))}
             </div>
           </div>
         ))}
-        <PluginNavLinks collapsed={collapsed} onLinkClick={onLinkClick} />
+        <PluginNavLinks entries={unsectionedEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
         <OrgLinks collapsed={collapsed} onLinkClick={onLinkClick} />
       </nav>
 

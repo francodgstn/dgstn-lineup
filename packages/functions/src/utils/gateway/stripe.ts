@@ -147,7 +147,7 @@ export class StripeAdapter implements GatewayAdapter {
    * portal, which changes the price but does NOT update subscription metadata.
    * Falls back to metadata.plan (set at checkout creation) for backwards compat.
    *
-   * Lookup key convention: linyup_{plan}_monthly  →  plan = 'coach' | 'club' | 'organization'
+   * Lookup key convention: linyup_{plan}_monthly  →  plan = 'coach' | 'studio' | 'organization'
    */
   private extractPlanFromSubscription(sub: any): string | undefined {
     const items: any[] = sub.items?.data ?? []

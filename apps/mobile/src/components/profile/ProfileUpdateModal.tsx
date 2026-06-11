@@ -133,7 +133,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <Text variant="bodyMedium" style={[styles.introText, { color: theme.colors.onSurfaceVariant }]}>
-            Submit your updated details. This request will be reviewed and approved by a club administrator.
+            Submit your updated details. This request will be reviewed and approved by a team administrator.
           </Text>
 
           {error && (

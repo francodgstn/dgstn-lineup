@@ -50,15 +50,15 @@
       "audience": "For solo instructors and private coaches.",
       "features": ["Everything in Free", "30 included contacts", "1:1 coaching & team members"]
     },
-    "club": {
-      "name": "Club",
-      "audience": "For gyms and clubs with multiple coaches and classes.",
+    "studio": {
+      "name": "Studio",
+      "audience": "For studios, gyms and clubs with multiple coaches and classes.",
       "features": ["Everything in Coach", "Unlimited contacts", "Automations & gamification", "Trends & analytics"]
     },
     "org": {
       "name": "Organisation",
       "audience": "For multi-location clubs, federations, and franchises.",
-      "features": ["Everything in Club", "Multi-club hierarchy", "Org-wide rankings & events"]
+      "features": ["Everything in Studio", "Multi-team hierarchy", "Org-wide rankings & events"]
     }
   },
   "cta": {

@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 // handlePayrexxWebhook — receives signed payment notifications from Payrexx.
 //
-// This is the TEAM-LEVEL payment webhook (clubs charging their students).
+// This is the TEAM-LEVEL payment webhook (teams charging their students).
 // It is separate from handleStripeWebhook, which handles Linyup's own SaaS billing.
 //
 // URL: POST /handlePayrexxWebhook?teamId={teamId}

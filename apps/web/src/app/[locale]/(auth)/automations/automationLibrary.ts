@@ -43,7 +43,7 @@ export interface LibraryItem {
   name: string
   description: string   // 1-line shown on card
   tags: string[]
-  requires_plan: 'coach' | 'club'
+  requires_plan: 'coach' | 'studio'
   /** Defined only for items that own their email template. Migrated items reference
    *  an existing sys_* template via the action's template_key instead. */
   template?: {
@@ -85,7 +85,7 @@ export const AUTOMATION_LIBRARY: LibraryItem[] = [
     name: 'Welcome new trial',
     description: 'Sends a warm welcome email the moment a trial contact is created.',
     tags: ['trial', 'welcome', 'first contact', 'onboarding'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     template: {
       name: 'Welcome to your first class',
       body_mode: 'markdown',
@@ -177,7 +177,7 @@ Il team {{teamName}}`,
     name: 'Trial no-show — 1-day follow-up',
     description: 'Sends a rebook nudge one day after a trial booking is marked no-show.',
     tags: ['trial', 'no-show', 'rebook', 'recovery'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     // No template field — uses existing sys_rebook_nudge
     rule: {
       trigger: { type: 'schedule_daily' },
@@ -196,7 +196,7 @@ Il team {{teamName}}`,
     name: 'Trial no-show — 3-day reminder',
     description: 'A gentler mid-point follow-up 3 days after a missed trial booking.',
     tags: ['trial', 'no-show', 'rebook', 'recovery'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     template: {
       name: 'We still have a spot for you',
       body_mode: 'markdown',
@@ -276,7 +276,7 @@ Il team {{teamName}}`,
     name: 'Trial no-show — 5-day reminder',
     description: 'Final rebook nudge 5 days after a missed trial booking.',
     tags: ['trial', 'no-show', 'rebook', 'recovery'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [
@@ -294,7 +294,7 @@ Il team {{teamName}}`,
     name: 'Trial attended — day-1 follow-up',
     description: 'Follows up the day after a trial contact completes their first class.',
     tags: ['trial', 'follow-up', 'conversion', 'first class'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [
@@ -312,7 +312,7 @@ Il team {{teamName}}`,
     name: 'Trial attended — 7-day nudge',
     description: 'Nudges a trial contact who hasn\'t subscribed 7 days after their first class.',
     tags: ['trial', 'nudge', 'conversion', 'inactivity'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [
@@ -331,7 +331,7 @@ Il team {{teamName}}`,
     name: 'Trial attended — 21-day final',
     description: 'Final conversion email sent 21 days after a trial with no follow-up booking.',
     tags: ['trial', 'conversion', 'final', 'inactivity'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [
@@ -351,7 +351,7 @@ Il team {{teamName}}`,
     name: 'Student inactive — 30 days',
     description: 'Win-back email after 30 days of inactivity for regular students.',
     tags: ['student', 'winback', 'inactivity', 'retention'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [
@@ -369,7 +369,7 @@ Il team {{teamName}}`,
     name: 'Student inactive — 60 days',
     description: 'Second win-back email for students absent for 60 days.',
     tags: ['student', 'winback', 'inactivity', 'retention'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [
@@ -387,7 +387,7 @@ Il team {{teamName}}`,
     name: 'Student inactive — 90 days (last chance)',
     description: 'A final, heartfelt reach-out to students who have been away for 3 months.',
     tags: ['student', 'winback', 'inactivity', 'retention', 'last chance'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     template: {
       name: 'One last message from us',
       body_mode: 'markdown',
@@ -479,7 +479,7 @@ Il team {{teamName}}`,
     name: 'Membership expired — re-engagement',
     description: 'Fires the moment a contact\'s membership status changes to "expired".',
     tags: ['membership', 'expired', 'renewal', 'retention'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     template: {
       name: 'Your membership has expired',
       body_mode: 'markdown',
@@ -565,7 +565,7 @@ Il team {{teamName}}`,
     name: '1st class — welcome to the family',
     description: 'Celebrates a contact\'s first completed class and invites them to join.',
     tags: ['milestone', 'first class', 'welcome', 'conversion'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     template: {
       name: 'You did it — first class done!',
       body_mode: 'markdown',
@@ -665,7 +665,7 @@ Il team {{teamName}}`,
     name: '5 classes — finding your rhythm',
     description: 'Sends a congratulatory email after a contact completes 5 classes.',
     tags: ['milestone', '5 classes', 'congratulations'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     template: {
       name: '5 classes — you\'re finding your rhythm!',
       body_mode: 'markdown',
@@ -745,7 +745,7 @@ Il team {{teamName}}`,
     name: '10 classes — thank you!',
     description: 'Celebrates 10 completed classes and requests a review.',
     tags: ['milestone', '10 classes', 'thank you', 'review'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [{ type: 'sessions_attended_exactly', value: 10 }],
@@ -759,7 +759,7 @@ Il team {{teamName}}`,
     name: '25 classes — committed!',
     description: 'Recognises the dedication of reaching 25 classes.',
     tags: ['milestone', '25 classes', 'committed', 'congratulations'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     template: {
       name: '25 classes — you\'re committed!',
       body_mode: 'markdown',
@@ -843,7 +843,7 @@ Il team {{teamName}}`,
     name: '50 classes — legend status',
     description: 'A major celebration for contacts who reach 50 classes.',
     tags: ['milestone', '50 classes', 'legend', 'congratulations'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     template: {
       name: '50 classes — legend status!',
       body_mode: 'markdown',
@@ -937,7 +937,7 @@ Il team {{teamName}}`,
     name: 'Post-session feedback request',
     description: 'Sends a feedback request to participants 60 minutes after a session ends.',
     tags: ['feedback', 'review', 'session', 'coaching'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     template: {
       name: 'How was your session?',
       body_mode: 'markdown',
@@ -1015,7 +1015,7 @@ Il team {{teamName}}`,
     name: 'Notify team: new trial registered',
     description: 'Sends an internal alert to the team email when a new trial contact is created.',
     tags: ['admin', 'trial', 'internal', 'notification'],
-    requires_plan: 'club',
+    requires_plan: 'studio',
     // No email template — uses notify_team action (sends to team email address)
     rule: {
       trigger: { type: 'contact_created' },

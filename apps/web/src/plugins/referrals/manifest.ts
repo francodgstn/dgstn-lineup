@@ -6,7 +6,7 @@ export const referralsManifest: PluginManifest = {
   nameKey: 'referralsName',
   descriptionKey: 'referralsDescription',
   category: 'engagement',
-  minPlan: 'club',
+  minPlan: 'studio',
   status: 'available',
   addon: PLUGIN_ADDONS['referrals'],
   iconName: 'Gift',
@@ -16,7 +16,7 @@ export const referralsManifest: PluginManifest = {
       href: '/plugins/referrals',
       labelKey: 'referralsNavLabel',
       icon: 'Gift',
-      minPlan: 'club',
+      minPlan: 'studio',
     },
   ],
   automationTriggers: [

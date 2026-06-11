@@ -11,7 +11,7 @@ export default function OrgPage() {
   const router = useRouter()
 
   useEffect(() => {
-    router.replace(`/org/${orgId}/clubs` as Parameters<typeof router.replace>[0])
+    router.replace(`/org/${orgId}/teams` as Parameters<typeof router.replace>[0])
   }, [orgId, locale, router])
 
   return null

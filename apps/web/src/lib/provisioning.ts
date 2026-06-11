@@ -42,7 +42,7 @@ export async function provisionTeam(
   const now = serverTimestamp()
   const { uid } = user
 
-  // New teams start on a full-access Club trial so they experience the marquee
+  // New teams start on a full-access Studio trial so they experience the marquee
   // features; Coach + add-ons becomes the downgrade path at trial end.
   const trialEndsAt = Timestamp.fromDate(new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000))
 
@@ -59,7 +59,7 @@ export async function provisionTeam(
     sport_type: sportType || '',
     links: defaultLinks,
     settings: {},
-    plan: 'club',
+    plan: 'studio',
     plan_status: 'trial',
     trial_ends_at: trialEndsAt,
     created: now,

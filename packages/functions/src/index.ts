@@ -77,19 +77,19 @@ export { generateCoachSlots, generateCoachSlotsScheduled, onCoachAvailabilityWri
 // SaaS billing (Linyup's own platform subscriptions — Stripe)
 export { createCheckoutSession, handleStripeWebhook, cancelSaasSubscription, getSaasInvoices, reactivateSaasSubscription, getBillingPortalUrl, activatePluginAddon, deactivatePluginAddon, syncContactOverage, extendTrial, handleTrialLifecycle } from './saas-billing'
 
-// Organizations (multi-club tier)
+// Organizations (multi-team tier)
 export {
   createOrganization,
-  inviteClubToOrg,
+  inviteTeamToOrg,
   acceptOrgInvitation,
   declineOrgInvitation,
-  removeClubFromOrg,
+  removeTeamFromOrg,
   createOrgCheckoutSession,
   getOrgInvitationDetails,
-  requestClubAccess,
+  requestTeamAccess,
 } from './orgs'
 
-// Team-level billing (clubs charging their own students — Payrexx)
+// Team-level billing (teams charging their own students — Payrexx)
 export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'
 
 // SMTP configuration (team / org-level outbound email settings)

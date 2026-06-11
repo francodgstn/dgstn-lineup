@@ -1,7 +1,7 @@
 // Ported from hmd-lineup/functions/src/previewAutomationRule/index.js
 // Dry-run preview: returns the list of contacts that would be targeted if the
 // given rule ran right now. Does NOT send emails or create alerts.
-// Requires club+ plan.
+// Requires studio+ plan.
 import * as admin from 'firebase-admin'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
@@ -34,7 +34,7 @@ export const previewAutomationRule = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'You are not a member of this team.')
   }
 
-  await requirePlan(teamId, 'club')
+  await requirePlan(teamId, 'studio')
 
   const db = admin.firestore()
 

@@ -683,7 +683,7 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
                 onClick={() => openUpgradeModal({ feature: 'advanced_dashboard' })}
                 className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
               >
-                {t('upgradeToClub')}
+                {t('upgradeToStudio')}
               </button>
             </div>
           ) : checkinsLoading ? (

@@ -21,7 +21,7 @@ import {
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
 
-const VALID_PLANS: SaasPlan[] = ['coach', 'club', 'organization']
+const VALID_PLANS: SaasPlan[] = ['coach', 'studio', 'organization']
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -98,7 +98,7 @@ export const createCheckoutSession = onCall(async (request) => {
   const hostingUrl = getHostingUrl()
   const idempotencyKey = `checkout:${teamId}:${plan}:${Math.floor(Date.now() / 60000)}` // 1-minute window
 
-  // Coach carries any active (trial) add-ons into the paid subscription; Club/Org
+  // Coach carries any active (trial) add-ons into the paid subscription; Studio/Org
   // include all plugins, so no add-on line items are needed for them.
   const addonLookupKeys = plan === 'coach' ? await activeAddonLookupKeys(teamId) : []
 
@@ -475,7 +475,7 @@ export const getSaasInvoices = onCall(async (request) => {
 // activatePluginAddon — Coach activates a paid add-on plugin
 //   • paid coach → adds a Stripe subscription item + writes the install
 //   • trialing / no subscription → writes the install free (exploration)
-// Club/Org include all plugins and install client-side, not via this function.
+// Studio/Org include all plugins and install client-side, not via this function.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const activatePluginAddon = onCall(async (request) => {
@@ -495,7 +495,7 @@ export const activatePluginAddon = onCall(async (request) => {
   const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(teamId).get()
   const plan = teamSnap.data()?.plan as SaasPlan | undefined
   if (plan !== 'coach') {
-    throw new HttpsError('failed-precondition', 'Add-ons apply to the Coach plan; Club/Org include all plugins')
+    throw new HttpsError('failed-precondition', 'Add-ons apply to the Coach plan; Studio/Org include all plugins')
   }
 
   const installRef = admin.firestore()
@@ -867,4 +867,4 @@ export const handleTrialLifecycle = onSchedule(
       }
     }
   },
-)
+)

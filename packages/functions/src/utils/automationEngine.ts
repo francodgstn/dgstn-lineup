@@ -1038,10 +1038,10 @@ export async function fireEventRules(
   const [teamErr, teamDoc] = await to(db.collection('teams').doc(teamId).get())
   const teamData = !teamErr && teamDoc && teamDoc.exists ? (teamDoc.data() as Record<string, unknown>) : {}
 
-  // Plan gate: automation rules require club+ plan
+  // Plan gate: automation rules require studio+ plan
   const teamPlan = (teamData.plan as string) || 'coach'
-  if (!['club', 'org', 'enterprise'].includes(teamPlan)) {
-    console.log(`[automationEngine] fireEventRules: team ${teamId} on plan '${teamPlan}' — automation requires club+, skipping`) // eslint-disable-line no-console
+  if (!['studio', 'organization'].includes(teamPlan)) {
+    console.log(`[automationEngine] fireEventRules: team ${teamId} on plan '${teamPlan}' — automation requires studio+, skipping`) // eslint-disable-line no-console
     return
   }
 

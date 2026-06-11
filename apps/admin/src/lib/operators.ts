@@ -7,7 +7,7 @@ import 'server-only'
 const DEFAULT_OPERATORS = ['franco.dgstn@gmail.com']
 
 // Seeded emulator owners — convenient sign-in when running against demo data.
-const DEMO_OPERATORS = ['coach@linyup.com', 'club@linyup.com', 'org@linyup.com']
+const DEMO_OPERATORS = ['coach@linyup.com', 'studio@linyup.com', 'org@linyup.com']
 
 const isDemo =
   process.env.USE_FIREBASE_EMULATORS === 'true' ||

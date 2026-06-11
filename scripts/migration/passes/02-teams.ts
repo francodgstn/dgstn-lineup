@@ -7,7 +7,7 @@ import { transformTeam } from '../transforms/teams'
 // Fields that must always be correct regardless of whether the doc already existed.
 // Handles the case where the emulator was seeded before migration ran.
 const ALWAYS_MERGE = {
-  plan:           'club',
+  plan:           'studio',
   plan_status:    'active',
   org_id:         ORG_ID,
   organizationId: ORG_ID,

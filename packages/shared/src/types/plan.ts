@@ -1,9 +1,11 @@
 import type { SaasPlan } from './team'
 
 // Ordered from lowest to highest — used for >= comparisons
-export const PLAN_ORDER: SaasPlan[] = ['free', 'coach', 'club', 'organization']
+export const PLAN_ORDER: SaasPlan[] = ['free', 'coach', 'studio', 'organization']
 
-// Trial: new self-service teams start on a full-access Club trial of this length.
+// Trial: new self-service teams start on a full-access Studio trial
+// of this length. NOTE: plan IDs are stable machine identifiers — display names
+// live in the `Plans` i18n namespace, see usePlanName().
 // One self-service extension of TRIAL_EXTENSION_DAYS is allowed (see extendTrial).
 export const TRIAL_DAYS = 14
 export const TRIAL_EXTENSION_DAYS = 14
@@ -30,7 +32,7 @@ export interface PlanPrice {
 export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
   free:         { baseMonthly: 0,    stripeLookupKey: null,                          includedContacts: 10,   extraContactMonthly: 0 },
   coach:        { baseMonthly: 7.99, stripeLookupKey: 'linyup_coach_monthly',        includedContacts: 30,   extraContactMonthly: 1 },
-  club:         { baseMonthly: 29.99, stripeLookupKey: 'linyup_club_monthly',         includedContacts: 100,  extraContactMonthly: 1 },
+  studio:       { baseMonthly: 29.99, stripeLookupKey: 'linyup_studio_monthly',         includedContacts: 100,  extraContactMonthly: 1 },
   organization: { baseMonthly: 149, stripeLookupKey: 'linyup_organization_monthly', includedContacts: null, extraContactMonthly: 0 },
 }
 
@@ -94,7 +96,7 @@ export type PlanFeature =
   | 'payment_tracking'
   | 'goals'
   | 'coaching'
-  // Club
+  // Studio
   | 'student_app'
   | 'gamification'
   | 'outreach_templates'
@@ -150,7 +152,7 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'goals',
     'coaching',
   ],
-  club: [
+  studio: [
     'contacts',
     'sessions',
     'public_booking',
@@ -208,7 +210,7 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
 }
 
 // ─── Plugin packaging ─────────────────────────────────────────────────────────
-// Club/Org include all internal plugins. Coach can activate a curated subset
+// Studio/Org include all internal plugins. Coach can activate a curated subset
 // (plugins with an `addon`) as paid monthly add-ons; non-curated plugins are
 // upgrade-locked for coaches. See docs/product-strategy-addons-proposal.md.
 
@@ -224,7 +226,7 @@ interface PluginAccessInput {
 }
 
 export function pluginAccessForPlan(manifest: PluginAccessInput, plan: SaasPlan | null): PluginAccess {
-  if (plan === 'club' || plan === 'organization') return { kind: 'included' }
+  if (plan === 'studio' || plan === 'organization') return { kind: 'included' }
   // Free: no add-ons (nothing to bill against) — everything is upgrade-locked.
   if (plan === 'free') return { kind: 'upgrade', minPlan: 'coach' }
   // Coach (or unknown/trialing coach): paid add-on if curated, else upgrade.

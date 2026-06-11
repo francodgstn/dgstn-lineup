@@ -5,7 +5,7 @@ export const whatsappManifest: PluginManifest = {
   nameKey: 'whatsappName',
   descriptionKey: 'whatsappDescription',
   category: 'communications',
-  minPlan: 'club',
+  minPlan: 'studio',
   status: 'coming_soon',
   iconName: 'MessageCircle',
   automationTriggers: [

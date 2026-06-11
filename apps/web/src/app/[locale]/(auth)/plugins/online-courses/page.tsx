@@ -19,8 +19,8 @@ import {
 import { toast } from 'sonner'
 import { GraduationCap, Plus, ImageIcon, X } from 'lucide-react'
 import type { Course, CourseStatus } from '@linyup/shared'
-import { useCourses, createCourse, updateCourse, countCourses } from '@/plugins/club-courses/hooks'
-import { getClubCoursesLimits } from '@/plugins/club-courses/limits'
+import { useCourses, createCourse, updateCourse, countCourses } from '@/plugins/online-courses/hooks'
+import { getOnlineCoursesLimits } from '@/plugins/online-courses/limits'
 
 async function uploadFile(file: File, path: string): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
@@ -71,7 +71,7 @@ function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) 
   )
 }
 
-export default function ClubCoursesPage() {
+export default function OnlineCoursesPage() {
   const t = useTranslations('Courses')
   const { user, currentTeamId } = useAuth()
   const router = useRouter()
@@ -85,7 +85,7 @@ export default function ClubCoursesPage() {
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
 
-  const limits = getClubCoursesLimits()
+  const limits = getOnlineCoursesLimits()
   const atCourseCap = courses.length >= limits.maxCoursesPerTeam
 
   function clearCover() {
@@ -133,7 +133,7 @@ export default function ClubCoursesPage() {
     onSuccess: (courseId) => {
       queryClient.invalidateQueries({ queryKey: ['courses', currentTeamId] })
       closeCreate()
-      router.push(`/plugins/club-courses/${courseId}` as Route)
+      router.push(`/plugins/online-courses/${courseId}` as Route)
     },
     onError: (err: unknown) => {
       toast.error(err instanceof Error && err.message === 'LIMIT' ? t('limitCoursesReached', { max: limits.maxCoursesPerTeam }) : t('errorCreate'))
@@ -201,7 +201,7 @@ export default function ClubCoursesPage() {
             <CourseCard
               key={course.id}
               course={course}
-              onOpen={() => router.push(`/plugins/club-courses/${course.id}` as Route)}
+              onOpen={() => router.push(`/plugins/online-courses/${course.id}` as Route)}
             />
           ))}
         </div>

@@ -33,7 +33,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
 import { ConfigPanel as WhatsappConfigPanel } from '@/plugins/whatsapp/ConfigPanel'
-import { ConfigPanel as ClubWebsiteConfigPanel } from '@/plugins/club-website/ConfigPanel'
+import { ConfigPanel as WebsiteConfigPanel } from '@/plugins/website/ConfigPanel'
 
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 
@@ -225,9 +225,9 @@ function PluginConfigDialog({
   if (!manifest) return null
 
   const CONFIG_PANELS: Record<string, React.ComponentType> = {
-    'ai-insights':  AiInsightsConfigPanel,
-    'whatsapp':     WhatsappConfigPanel,
-    'club-website': ClubWebsiteConfigPanel,
+    'ai-insights': AiInsightsConfigPanel,
+    'whatsapp':    WhatsappConfigPanel,
+    'website':     WebsiteConfigPanel,
   }
   const ConfigPanel = CONFIG_PANELS[manifest.id] ?? null
 
@@ -285,7 +285,7 @@ export default function PluginsPage() {
     onSuccess: (_, manifest) => toast.success(t(manifest.nameKey as Parameters<typeof t>[0]) + ' installed'),
   })
 
-  // ── Remove mutation (Club/Org included plugins — client-side) ──
+  // ── Remove mutation (Studio/Org included plugins — client-side) ──
   const removeMutation = useMutation({
     mutationFn: async (pluginId: string) => {
       if (!currentTeamId) throw new Error('Not authenticated')

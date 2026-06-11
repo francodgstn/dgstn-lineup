@@ -73,11 +73,11 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 
 ### Features not yet started
 - **Stripe billing** — `SaasSubscription` type is stubbed, `saas_subscriptions` rules deny all
-- **Organisation tier** — multi-club hierarchy, `organizations/` collection stub only
+- **Organisation tier** — multi-team hierarchy, `organizations/` collection stub only
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~15 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Outreach/automation engine** — not started
-- **Coaching page** — stub only; needs full implementation (see `docs/product-strategy.md` for scope). Coach plan: availability templates + portal-based slot booking + .ics emails. Club plan: mobile app integration + push reminders. Source: `C:\git\hmd\hmd-lineup\functions\src\{bookCoachSlot,cancelCoachBooking,generateCoachSlots,trackCoachBookings}\` and `src\routes\CoachSlots\`
+- **Coaching page** — stub only; needs full implementation (see `docs/product-strategy.md` for scope). Coach plan: availability templates + portal-based slot booking + .ics emails. Studio plan: mobile app integration + push reminders. Source: `C:\git\hmd\hmd-lineup\functions\src\{bookCoachSlot,cancelCoachBooking,generateCoachSlots,trackCoachBookings}\` and `src\routes\CoachSlots\`
 
 ---
 
@@ -147,9 +147,18 @@ Never add `getAuth()` back to `firebase.ts`.
 ### SaaS plan tiers (Phase 2)
 
 ```typescript
-type SaasPlan = 'coach' | 'club' | 'org' | 'enterprise'
+type SaasPlan = 'free' | 'coach' | 'studio' | 'organization'
 // stored in teams/{teamId}.plan + saas_subscriptions/{teamId}
 ```
+
+**Plan IDs vs display names:** plan IDs are stable machine identifiers
+(Firestore data, security rules, Stripe lookup keys) and must not change once
+real customer data exists. Marketing names live in the `Plans` namespace of
+`apps/web/messages/*.json`, resolved via `usePlanName()`
+(`apps/web/src/hooks/usePlanName.ts`) — never hardcode plan display names in
+components or copy. History: the tier was `club` until 2026-06; it was fully
+renamed (ID + display) to `studio` while the product was pre-launch with seed
+data only. Post-launch, renames must be display-only.
 
 ---
 
@@ -170,7 +179,7 @@ For local development use the Firebase emulators — no real project needed.
 
 Auth: `localhost:9099` | Firestore: `localhost:8080` | Storage: `localhost:9199` | UI: `localhost:4000`
 
-`.env.local` sets `NEXT_PUBLIC_USE_EMULATORS=true`. Emulator connections are guarded by this flag + a `globalThis` flag to prevent HMR double-connect. Storage is wired up in `firebase.ts` (`connectStorageEmulator`, port 9199) — needed for file/image uploads (e.g. Club Courses media + attachments).
+`.env.local` sets `NEXT_PUBLIC_USE_EMULATORS=true`. Emulator connections are guarded by this flag + a `globalThis` flag to prevent HMR double-connect. Storage is wired up in `firebase.ts` (`connectStorageEmulator`, port 9199) — needed for file/image uploads (e.g. Online Courses media + attachments).
 
 Start from repo root (Java required — use external terminal if VS Code's integrated terminal can't find Java). Include `storage` whenever you need uploads:
 

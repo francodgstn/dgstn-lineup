@@ -8,7 +8,7 @@
  *   Three plan-tier accounts, each with full data:
  *
  *   coach@linyup.com  / linyup123  →  plan: coach  (trial)
- *   club@linyup.com   / linyup123  →  plan: club   (active)
+ *   studio@linyup.com   / linyup123  →  plan: studio (active)
  *   org@linyup.com    / linyup123  →  plan: organization (active)
  *
  *   Per team:
@@ -18,8 +18,8 @@
  *   - 18 contacts, 3 events, 4 group bookings + 2 coaching bookings
  *   - Past-session participants, weekly reports, goals
  *
- *   Club tier only:
- *   - Club Courses plugin installed + 2 courses (published + draft) with
+ *   Studio tier only:
+ *   - Online Courses plugin installed + 2 courses (published + draft) with
  *     modules and text/audio/video lessons
  */
 
@@ -85,7 +85,7 @@ async function seedTeam(opts: {
   teamId:     string
   teamName:   string
   teamSlug:   string
-  plan:       'coach' | 'club' | 'organization'
+  plan:       'coach' | 'studio' | 'organization'
   planStatus: 'trial' | 'active'
   accentColor: string
 }) {
@@ -100,7 +100,7 @@ async function seedTeam(opts: {
         { id: `${teamId}-sub-10class`,  name: '10-Class Pack',      description: 'Pre-paid block of 10 sessions.',            source: 'internal', price: 180, active: true },
         { id: `${teamId}-sub-dropin`,   name: 'Drop-in',            description: 'Pay per session, no commitment.',           source: 'internal', price: 25,  active: true },
       ]
-    : plan === 'club'
+    : plan === 'studio'
     ? [
         { id: `${teamId}-sub-monthly`,  name: 'Monthly Membership', description: 'Unlimited classes, billed monthly.',       source: 'internal', price: 110, active: true  },
         { id: `${teamId}-sub-quarterly`,name: 'Quarterly Plan',     description: '3-month commitment, 10% discount.',        source: 'internal', price: 300, active: true  },
@@ -117,7 +117,7 @@ async function seedTeam(opts: {
         { id: `${teamId}-sub-dropin`,   name: 'Drop-in',            description: 'Pay per session, no commitment.',           source: 'internal', price: 35,  active: true },
       ]
 
-  // Ranking systems — Training Level for coach, BJJ Belt for club/org
+  // Ranking systems — Training Level for coach, BJJ Belt for studio/org
   const rankingSystemDefs = plan === 'coach'
     ? [{
         id: 'training-level',
@@ -146,10 +146,10 @@ async function seedTeam(opts: {
   // Rank system ID used as key in contact.ranks map
   const rankSystemId = plan === 'coach' ? 'training-level' : 'bjj-belt'
 
-  // Gamification — enabled for club/org, disabled for coach
+  // Gamification — enabled for studio/org, disabled for coach
   const gamificationSettings = plan === 'coach'
     ? { enabled: false, default_base_score: 10, streak_min_sessions: 2, monthly_cap: 200, time_multipliers: [] }
-    : plan === 'club'
+    : plan === 'studio'
     ? {
         enabled: true,
         default_base_score: 10,
@@ -203,7 +203,7 @@ async function seedTeam(opts: {
   // Per-contact rank assignment — keyed by contact index.
   // Covers all students (active, almost_ready, expired); trials & external have no rank.
   // coach → Training Level (0 Beginner … 3 Expert, inferred from session count)
-  // club/org → BJJ Belt (0 White … 4 Black)
+  // studio/org → BJJ Belt (0 White … 4 Black)
   const contactRankMap: Record<number, number> = plan === 'coach'
     ? { 0: 2, 1: 2, 2: 3, 3: 1, 4: 2, 5: 0, 6: 2, 7: 0, 8: 0, 9: 1, 10: 1, 11: 2, 16: 3, 17: 1 }
     : { 0: 1, 1: 1, 2: 2, 3: 0, 4: 1, 5: 0, 6: 1, 7: 0, 8: 0, 9: 1, 10: 0, 11: 1, 16: 2, 17: 1 }
@@ -913,20 +913,20 @@ async function seedTeam(opts: {
     })
   }
 
-  // ── club courses (Club Courses LMS plugin) ─────────────────────────────────
-  // Only the club-tier account showcases the plugin (courses is a club+ feature).
-  if (plan === 'club') {
+  // ── online courses (Online Courses LMS plugin) ──────────────────────────────
+  // Only the studio-tier account showcases the plugin (courses is a studio+ feature).
+  if (plan === 'studio') {
     await seedCourses(teamId, uid)
   }
 }
 
-// ── club courses seed ───────────────────────────────────────────────────────────
+// ── online courses seed ─────────────────────────────────────────────────────────
 
 async function seedCourses(teamId: string, uid: string) {
-  // Install the Club Courses plugin for this team so it appears in the sidebar.
+  // Install the Online Courses plugin for this team so it appears in the sidebar.
   await db.collection('teams').doc(teamId)
-    .collection('installed_plugins').doc('club-courses').set({
-      pluginId:    'club-courses',
+    .collection('installed_plugins').doc('online-courses').set({
+      pluginId:    'online-courses',
       teamId,
       installedAt: ts(daysFromNow(-20)),
       installedBy: uid,
@@ -1097,14 +1097,14 @@ async function seedCourses(teamId: string, uid: string) {
 async function seedOrg() {
   const ORG_ID    = 'seed-org'
   const ORG_ADMIN = 'seed-org-uid'   // Rafael Torres (also owns seed-team-org)
-  const CLUB_A    = 'seed-team-club' // Iron Circle Gym (Anna Schmidt)
+  const CLUB_A    = 'seed-team-studio' // Iron Circle Gym (Anna Schmidt)
   const CLUB_B    = 'seed-team-org'  // Titan Combat Sports (Rafael Torres)
 
   const now        = ts(new Date())
   const periodStart = ts(daysFromNow(-30))
   const periodEnd   = ts(daysFromNow(1))
 
-  // BJJ Belt ranking system — shared across all clubs in this org
+  // BJJ Belt ranking system — shared across all teams in this org
   const bjjBelt = [{
     id:         'bjj-belt',
     name:       'BJJ Belt',
@@ -1323,13 +1323,13 @@ async function main() {
       accentColor: '#7c3aed',
     },
     {
-      uid:         'seed-club-uid',
-      email:       'club@linyup.com',
+      uid:         'seed-studio-uid',
+      email:       'studio@linyup.com',
       displayName: 'Anna Schmidt',
-      teamId:      'seed-team-club',
+      teamId:      'seed-team-studio',
       teamName:    'Iron Circle Gym',
       teamSlug:    'iron-circle-gym',
-      plan:        'club'   as const,
+      plan:        'studio'   as const,
       planStatus:  'active' as const,
       accentColor: '#dc2626',
     },
@@ -1363,12 +1363,12 @@ async function main() {
   console.log('   ├─────────────────────┼──────────────────────┼──────────────┼────────────┤')
   console.log('   │ free (at cap 10/10) │ free@linyup.com      │ linyup123    │ active     │')
   console.log('   │ coach               │ coach@linyup.com     │ linyup123    │ trial      │')
-  console.log('   │ club (in org)       │ club@linyup.com      │ linyup123    │ active     │')
+  console.log('   │ studio (in org)     │ studio@linyup.com      │ linyup123    │ active     │')
   console.log('   │ org admin           │ org@linyup.com       │ linyup123    │ active     │')
   console.log('   └─────────────────────┴──────────────────────┴──────────────┴────────────┘\n')
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com is org admin)')
-  console.log('   Clubs in org: Iron Circle Gym + Titan Combat Sports\n')
-  console.log('   Club Courses: 2 courses seeded for club@linyup.com → /plugins/club-courses\n')
+  console.log('   Teams in org: Iron Circle Gym + Titan Combat Sports\n')
+  console.log('   Online Courses: 2 courses seeded for studio@linyup.com → /plugins/online-courses\n')
   console.log('   Portals:')
   for (const a of accounts) {
     console.log(`   ${a.plan.padEnd(16)} →  http://localhost:3000/portal/${a.teamSlug}`)

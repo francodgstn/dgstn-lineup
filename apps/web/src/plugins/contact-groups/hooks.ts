@@ -2,7 +2,7 @@
 
 // Contact Groups plugin — data hooks and tree helpers.
 // Groups live in teams/{teamId}/contact_groups; nesting via parent_id.
-// Membership is a group_ids array on each contact (small clubs → the full
+// Membership is a group_ids array on each contact (small teams → the full
 // contact list is already loaded client-side, so filtering stays local).
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'

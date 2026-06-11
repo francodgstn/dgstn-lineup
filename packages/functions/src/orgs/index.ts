@@ -114,10 +114,10 @@ export const createOrganization = onCall(async (request) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// inviteClubToOrg — org admin sends invitation to a club owner
+// inviteTeamToOrg — org admin sends invitation to a team owner
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const inviteClubToOrg = onCall(async (request) => {
+export const inviteTeamToOrg = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
   const data = request.data as { orgId?: string; teamId?: string; inviteeEmail?: string }
@@ -141,12 +141,12 @@ export const inviteClubToOrg = onCall(async (request) => {
 
   if (data.teamId) {
     const team = await getTeam(data.teamId)
-    if (!team) throw new HttpsError('not-found', 'Club not found')
+    if (!team) throw new HttpsError('not-found', 'Team not found')
     teamName = team.name
 
     // Check if already in an org
     if (team.org_id) {
-      throw new HttpsError('failed-precondition', 'This club is already part of an organization')
+      throw new HttpsError('failed-precondition', 'This team is already part of an organization')
     }
 
     // Get owner email for invitation
@@ -177,13 +177,13 @@ export const inviteClubToOrg = onCall(async (request) => {
 
   const hostingUrl = getHostingUrl()
   const acceptUrl = `${hostingUrl}/org-invite/${data.orgId}/${invRef.id}`
-  const clubLabel = teamName ? `<strong>${teamName}</strong>` : 'your club'
+  const teamLabel = teamName ? `<strong>${teamName}</strong>` : 'your team'
 
   const { html, text } = buildEmailTemplate({
     title: `Invitation to join ${org.name} on Linyup`,
     body: `
-      <p>You have been invited to join ${clubLabel} to the organization <strong>${org.name}</strong> on Linyup.</p>
-      <p>By accepting, your club's billing will be managed by the organization and you'll get access to all organization plan features.</p>
+      <p>You have been invited to join ${teamLabel} to the organization <strong>${org.name}</strong> on Linyup.</p>
+      <p>By accepting, your team's billing will be managed by the organization and you'll get access to all organization plan features.</p>
       <p><a href="${acceptUrl}" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p>
       <p>This invitation expires in 7 days. If you did not expect this, you can safely ignore this email.</p>
     `,
@@ -243,7 +243,7 @@ export const acceptOrgInvitation = onCall(async (request) => {
   const teamMemberDoc = await db.collection('teams').doc(data.teamId)
     .collection('team_members').doc(request.auth.uid).get()
   if (!teamMemberDoc.exists || teamMemberDoc.data()?.role !== 'owner') {
-    throw new HttpsError('permission-denied', 'Only the club owner can accept this invitation')
+    throw new HttpsError('permission-denied', 'Only the team owner can accept this invitation')
   }
 
   const orgId = inv.orgId
@@ -309,10 +309,10 @@ export const declineOrgInvitation = onCall(async (request) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// removeClubFromOrg — org admin removes a club from the organization
+// removeTeamFromOrg — org admin removes a team from the organization
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const removeClubFromOrg = onCall(async (request) => {
+export const removeTeamFromOrg = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
   const data = request.data as { orgId?: string; teamId?: string }
@@ -328,7 +328,7 @@ export const removeClubFromOrg = onCall(async (request) => {
 
   const orgTeamDoc = await orgTeamRef.get()
   if (!orgTeamDoc.exists || orgTeamDoc.data()?.status !== 'active') {
-    throw new HttpsError('not-found', 'Club is not an active member of this organization')
+    throw new HttpsError('not-found', 'Team is not an active member of this organization')
   }
 
   const now = FieldValue.serverTimestamp()
@@ -342,7 +342,7 @@ export const removeClubFromOrg = onCall(async (request) => {
   // Reset team to a 14-day grace trial so they can subscribe independently
   batch.update(db.collection('teams').doc(data.teamId), {
     org_id: FieldValue.delete(),
-    plan: 'club',
+    plan: 'studio',
     plan_status: 'trial',
     trial_ends_at: trialEndsAt,
     updated_at: now,
@@ -410,10 +410,10 @@ export const createOrgCheckoutSession = onCall(async (request) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// requestClubAccess — org admin requests view/manage access to a sub-club
+// requestTeamAccess — org admin requests view/manage access to a member team
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const requestClubAccess = onCall(async (request) => {
+export const requestTeamAccess = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
   const data = request.data as { orgId?: string; teamId?: string; accessType?: string }
@@ -430,7 +430,7 @@ export const requestClubAccess = onCall(async (request) => {
   const orgTeamDoc = await db.collection('organizations').doc(data.orgId)
     .collection('org_teams').doc(data.teamId).get()
   if (!orgTeamDoc.exists || orgTeamDoc.data()?.status !== 'active') {
-    throw new HttpsError('not-found', 'Club is not an active member of this organization')
+    throw new HttpsError('not-found', 'Team is not an active member of this organization')
   }
 
   const now = FieldValue.serverTimestamp()
@@ -444,12 +444,12 @@ export const requestClubAccess = onCall(async (request) => {
   }
 
   // Write to both sides atomically so the team can see the request in their own settings
-  // and the org admin can see it in the org's clubs view.
+  // and the org admin can see it in the org's teams view.
   const batch = db.batch()
 
   // Org side: one doc per team, idempotent (org admin view)
   batch.set(
-    db.collection('organizations').doc(data.orgId).collection('club_access_requests').doc(data.teamId),
+    db.collection('organizations').doc(data.orgId).collection('team_access_requests').doc(data.teamId),
     requestPayload,
     { merge: false }
   )
@@ -489,8 +489,8 @@ export const requestClubAccess = onCall(async (request) => {
           title: `Access request for ${teamName} on Linyup`,
           body: `
             <p><strong>${requesterName}</strong>, an admin of the organization <strong>${orgDoc.data()?.name ?? data.orgId}</strong>,
-            has requested <strong>${accessLabel}</strong> access to your club <strong>${teamName}</strong> on Linyup.</p>
-            <p>You can review and approve or deny this request in your club's Team Settings.</p>
+            has requested <strong>${accessLabel}</strong> access to your team <strong>${teamName}</strong> on Linyup.</p>
+            <p>You can review and approve or deny this request in your team's settings.</p>
             <p><a href="${hostingUrl}/settings" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Review Request</a></p>
           `,
         })
@@ -499,7 +499,7 @@ export const requestClubAccess = onCall(async (request) => {
       }
     }
   } catch (err) {
-    console.error('requestClubAccess: email notification failed (non-fatal):', err)
+    console.error('requestTeamAccess: email notification failed (non-fatal):', err)
   }
 
   return { success: true }

@@ -73,7 +73,7 @@ export default async function OverviewPage() {
       </div>
 
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi label="Total accounts" value={String(m.accounts.total)} sub={`${m.accounts.byPlan.coach} coach · ${m.accounts.byPlan.club} club · ${m.accounts.byPlan.organization} org`} />
+        <Kpi label="Total accounts" value={String(m.accounts.total)} sub={`${m.accounts.byPlan.coach} coach · ${m.accounts.byPlan.studio} studio · ${m.accounts.byPlan.organization} org`} />
         <Kpi label="Active" value={String(m.accounts.byStatus.active)} sub={`${m.trials.active} on trial`} />
         <Kpi label="Est. MRR" value={formatChf(m.mrr.estimatedChf)} sub="active subscriptions" />
         <Kpi label="Total contacts" value={num(m.contacts.totalActive)} sub="across all teams" />

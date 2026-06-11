@@ -168,10 +168,10 @@ export default function OrgEventDetailPage() {
           {teamsQ.data && teamsQ.data.length > 1 && (
             <Select value={teamFilter} onValueChange={(v) => setTeamFilter(v ?? 'all')}>
               <SelectTrigger className="w-48 h-8 text-sm">
-                <SelectValue placeholder="All clubs" />
+                <SelectValue placeholder="All teams" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All clubs</SelectItem>
+                <SelectItem value="all">All teams</SelectItem>
                 {teamsQ.data.map((t) => (
                   <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
@@ -195,7 +195,7 @@ export default function OrgEventDetailPage() {
               <thead>
                 <tr className="border-b bg-muted/40">
                   <th className="text-left font-medium text-muted-foreground px-4 py-2.5">Participant</th>
-                  <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">Club</th>
+                  <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">Team</th>
                   <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden md:table-cell">Checked in</th>
                   <th className="text-right font-medium text-muted-foreground px-4 py-2.5">Status</th>
                   {isAdmin && <th className="px-4 py-2.5 w-12" />}

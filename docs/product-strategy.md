@@ -43,7 +43,7 @@ The system is structured around **business maturity**, not arbitrary feature gro
   * **"Powered by Linyup" badge** on the public portal (every free portal is a
     referral surface; removing the badge is a paid perk)
 * CHF 0, no payment method, no Stripe subscription
-* Lifecycle: every signup still starts on the 14-day full-access Club trial; on
+* Lifecycle: every signup still starts on the 14-day full-access Studio trial; on
   expiry the team **downgrades to Free** (data kept, no wall, no purge). Cancelled
   paid subscriptions also land here.
 
@@ -123,7 +123,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 
 * Max 1 team manager
 * No advanced automation
-* No student app (clients book via portal/web; app is Club)
+* No student app (clients book via portal/web; app is Studio)
 
 **Product Intent:**
 
@@ -137,7 +137,16 @@ outgrows it quickly, converting exactly when the product has proven its value.
 
 ---
 
-### Tier 2 — Club (Core Revenue Tier)
+### Tier 2 — Studio (Core Revenue Tier)
+
+> **Naming (2026-06):** this tier was renamed **Club → Studio** to appeal to the
+> broader sport & wellness segment (yoga/pilates/PT studios) without excluding
+> sports clubs. Because the product was pre-launch (seed data only), the rename
+> was applied **in full**: plan ID `studio`, Stripe lookup key
+> `linyup_studio_monthly`, seeds and migration scripts aligned. Display names
+> still live solely in the `Plans` i18n namespace (`apps/web/messages/*.json`)
+> via `usePlanName()` — once real customers exist, any future rename must be
+> display-only (plan IDs become immutable).
 
 **Persona:**
 
@@ -212,7 +221,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 **Important:**
 👉 This is the **primary monetization tier** — most users should land here eventually.
 
-> **Plan code:** `club`
+> **Plan code:** `studio`
 
 ---
 
@@ -290,7 +299,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 |--------------|-------------|-------------------|---------------------|
 | Free         | CHF 0       | 10 (hard cap)     | — (blocked, upgrade) |
 | Coach        | CHF 7.99    | 30                | CHF 0.5–1 / student |
-| Club         | CHF 19–39   | ~100              | CHF 0.5–1 / student |
+| Studio       | CHF 19–39   | ~100              | CHF 0.5–1 / student |
 | Organization | CHF 99–149  | pooled            | volume pricing      |
 
 > **Implementation note:** the per-active-student variable fee is **not yet
@@ -299,25 +308,25 @@ outgrows it quickly, converting exactly when the product has proven its value.
 
 ### Plugin add-ons (Coach plan)
 
-Plugins extend a deliberately bare Coach base. **Club and Org include all
+Plugins extend a deliberately bare Coach base. **Studio and Org include all
 internal plugins** at no extra cost; **Coach** can activate a curated subset
 (engagement/content plugins) as **paid monthly add-ons**, each billed as a Stripe
 subscription item on top of the Coach base.
 
 Add-on prices are **anchored** so that a coach wanting two or more add-ons
-reaches or exceeds the Coach→Club delta — making Club the rational choice.
+reaches or exceeds the Coach→Studio delta — making Studio the rational choice.
 
 | Add-on | Coach price / mo |
 |--------|------------------|
 | Gamification | CHF 5 |
 | Referrals    | CHF 5 |
-| Club Courses | CHF 8 |
-| Club Website | CHF 8 |
+| Online Courses | CHF 8 |
+| Website | CHF 8 |
 
-*Indicative placeholders. Marquee Club features — student app, automation,
+*Indicative placeholders. Marquee Studio features — student app, automation,
 multiple managers, advanced analytics — are **never** sold à la carte.*
 
-**Mechanics:** plugin **installation is the gate**. Club/Org owners install
+**Mechanics:** plugin **installation is the gate**. Studio/Org owners install
 freely; Coach activations go through a Cloud Function that adds the Stripe item
 (so paid value can't be self-granted). During the **trial**, coaches activate
 add-ons **free** to explore; on conversion the active add-ons carry into the paid
@@ -335,7 +344,7 @@ Only if you provide real billing + subscription value — otherwise skip to avoi
 ### Trial Strategy
 
 * **Freemium + trial combined** (decision 2026-06): every signup starts on a
-  14-day full-access Club trial; on expiry the team downgrades to the **Free
+  14-day full-access Studio trial; on expiry the team downgrades to the **Free
   plan** (10-contact hard cap) instead of being walled and purged.
 * The trial sells the full product; Free keeps non-converters in the funnel at
   near-zero marginal cost and converts them when they outgrow the cap.
@@ -352,18 +361,18 @@ The system must naturally push users upward:
   * Wants plugin add-ons (gamification, referrals, …)
   * Wants the "Powered by Linyup" badge off their portal
 
-* **Coach → Club — hard pulls (Club-only, never à la carte):**
+* **Coach → Studio — hard pulls (Studio-only, never à la carte):**
   * Wants a branded client mobile app (in-app booking, push reminders, coaching history)
   * Wants automated outreach (inactivity follow-ups, onboarding sequences)
   * Needs multiple coaches or managers on the team
   * Wants advanced + AI-driven analytics
 
-* **Coach → Club — anchored upsells (available as Coach add-ons):**
+* **Coach → Studio — anchored upsells (available as Coach add-ons):**
   * Gamification and the referral program are purchasable as paid add-ons on
-    Coach, priced so that wanting both approaches the Club price — they pull
-    toward Club rather than blocking it.
+    Coach, priced so that wanting both approaches the Studio price — they pull
+    toward Studio rather than blocking it.
 
-* **Club → Organization trigger:**
+* **Studio → Organization trigger:**
   * Manages multiple locations
   * Needs centralized control
 

@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl'
 import { Check, ChevronRight, Zap } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
+import { usePlanName } from '@/hooks/usePlanName'
 import { PLAN_ORDER, type SaasPlan } from '@linyup/shared'
 import { Link } from '@/i18n/navigation'
 
@@ -68,7 +69,7 @@ const PLAN_SECTIONS: Record<SaasPlan, FeatureSection[]> = {
     },
   ],
 
-  club: [
+  studio: [
     {
       heading: 'Advanced billing',
       items: [
@@ -119,25 +120,20 @@ const PLAN_SECTIONS: Record<SaasPlan, FeatureSection[]> = {
 }
 
 // ─── labels / colours ─────────────────────────────────────────────────────────
-
-const PLAN_LABELS: Record<SaasPlan, string> = {
-  free:         'Free',
-  coach:        'Coach',
-  club:         'Club',
-  organization: 'Organization',
-}
+// Plan display names come from the `Plans` i18n namespace via usePlanName() —
+// never hardcode them here (the 'studio' tier is sold as "Studio").
 
 const PLAN_TAGLINES: Record<SaasPlan, string> = {
   free:         'Just getting started',
   coach:        'Solo operators & personal trainers',
-  club:         'Growing gyms & clubs',
+  studio:       'Growing studios, gyms & clubs',
   organization: 'Multi-location & franchises',
 }
 
 const PLAN_INCLUDES: Partial<Record<SaasPlan, string>> = {
   coach:        'Everything in Free, with 30 contacts, plus:',
-  club:         'Everything in Coach, plus:',
-  organization: 'Everything in Club, plus:',
+  studio:       'Everything in Coach, plus:',
+  organization: 'Everything in Studio, plus:',
 }
 
 const PLAN_COLOR: Record<SaasPlan, {
@@ -161,7 +157,7 @@ const PLAN_COLOR: Record<SaasPlan, {
     heading:  'text-sky-700 dark:text-sky-400',
     includes: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/20 dark:border-sky-800 dark:text-sky-300',
   },
-  club: {
+  studio: {
     ring:     'border-amber-300 dark:border-amber-700',
     badge:    'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
     check:    'text-amber-500',
@@ -181,6 +177,7 @@ const PLAN_COLOR: Record<SaasPlan, {
 
 function PlanCard({ plan, isCurrent, currentPlan }: { plan: SaasPlan; isCurrent: boolean; currentPlan: SaasPlan | null }) {
   const t = useTranslations('Upgrade')
+  const planName = usePlanName()
   const colors = PLAN_COLOR[plan]
   const sections = PLAN_SECTIONS[plan]
   const includes = PLAN_INCLUDES[plan]
@@ -198,7 +195,7 @@ function PlanCard({ plan, isCurrent, currentPlan }: { plan: SaasPlan; isCurrent:
 
       {/* Plan header */}
       <div className="mb-4">
-        <p className="text-xl font-bold">{PLAN_LABELS[plan]}</p>
+        <p className="text-xl font-bold">{planName(plan)}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{PLAN_TAGLINES[plan]}</p>
       </div>
 

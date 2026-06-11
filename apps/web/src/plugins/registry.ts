@@ -5,20 +5,20 @@
 import type { PluginManifest } from '@linyup/shared'
 import { aiInsightsManifest } from './ai-insights/manifest'
 import { whatsappManifest } from './whatsapp/manifest'
-import { clubWebsiteManifest } from './club-website/manifest'
+import { websiteManifest } from './website/manifest'
 import { hmdFightingCupManifest } from './hmd-fighting-cup/manifest'
 import { referralsManifest } from './referrals/manifest'
-import { clubCoursesManifest } from './club-courses/manifest'
+import { onlineCoursesManifest } from './online-courses/manifest'
 import { gamificationManifest } from './gamification/manifest'
 import { contactGroupsManifest } from './contact-groups/manifest'
 
 export const PLUGIN_REGISTRY: PluginManifest[] = [
   aiInsightsManifest,
   whatsappManifest,
-  clubWebsiteManifest,
+  websiteManifest,
   hmdFightingCupManifest,
   referralsManifest,
-  clubCoursesManifest,
+  onlineCoursesManifest,
   gamificationManifest,
   contactGroupsManifest,
 ]

@@ -4,6 +4,7 @@ import { Lock, Check } from 'lucide-react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Link } from '@/i18n/navigation'
 import { usePlan } from '@/hooks/usePlan'
+import { usePlanName } from '@/hooks/usePlanName'
 import type { PlanFeature, SaasPlan } from '@linyup/shared'
 
 interface UpgradeModalProps {
@@ -13,17 +14,10 @@ interface UpgradeModalProps {
   minPlan?: SaasPlan
 }
 
-const PLAN_LABELS: Record<SaasPlan, string> = {
-  free: 'Free',
-  coach: 'Coach',
-  club: 'Club',
-  organization: 'Organization',
-}
-
 const PLAN_COLOR: Record<SaasPlan, { icon: string; badge: string; check: string }> = {
   free:         { icon: 'text-slate-500',  badge: 'bg-slate-50 dark:bg-slate-900/20', check: 'text-slate-500' },
   coach:        { icon: 'text-sky-500',    badge: 'bg-sky-50 dark:bg-sky-900/20',    check: 'text-sky-500' },
-  club:         { icon: 'text-amber-500',  badge: 'bg-amber-50 dark:bg-amber-900/20', check: 'text-amber-500' },
+  studio:       { icon: 'text-amber-500',  badge: 'bg-amber-50 dark:bg-amber-900/20', check: 'text-amber-500' },
   organization: { icon: 'text-violet-500', badge: 'bg-violet-50 dark:bg-violet-900/20', check: 'text-violet-500' },
 }
 
@@ -46,7 +40,7 @@ const PLAN_CONTENT: Record<SaasPlan, { tagline: string; features: string[] }> = 
       'Goals, check-ins & progress tracking',
     ],
   },
-  club: {
+  studio: {
     tagline: 'Scale with engagement tools, automation, and a mobile app.',
     features: [
       'Student mobile app (iOS & Android)',
@@ -66,10 +60,11 @@ const PLAN_CONTENT: Record<SaasPlan, { tagline: string; features: string[] }> = 
 
 export function UpgradeModal({ open, onClose, feature, minPlan }: UpgradeModalProps) {
   const { minimumPlanFor } = usePlan()
+  const planName = usePlanName()
   const required: SaasPlan = minPlan ?? (feature ? minimumPlanFor(feature) : 'coach')
   const colors = PLAN_COLOR[required]
   const content = PLAN_CONTENT[required]
-  const label = PLAN_LABELS[required]
+  const label = planName(required)
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>

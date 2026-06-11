@@ -50,15 +50,15 @@
       "audience": "Per istruttori singoli e coach privati.",
       "features": ["Tutto di Free", "30 contatti inclusi", "Coaching 1:1 e membri del team"]
     },
-    "club": {
-      "name": "Club",
-      "audience": "Per palestre e club con più coach e corsi.",
+    "studio": {
+      "name": "Studio",
+      "audience": "Per studi, palestre e club con più coach e corsi.",
       "features": ["Tutto di Coach", "Contatti illimitati", "Automazioni e gamification", "Tendenze e analisi"]
     },
     "org": {
       "name": "Organizzazione",
       "audience": "Per club multi-sede, federazioni e franchising.",
-      "features": ["Tutto di Club", "Gerarchia multi-club", "Classifiche ed eventi a livello di organizzazione"]
+      "features": ["Tutto di Studio", "Gerarchia multi-team", "Classifiche ed eventi a livello di organizzazione"]
     }
   },
   "cta": {

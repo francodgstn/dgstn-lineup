@@ -109,7 +109,7 @@ export default async function AccountDetailPage({
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Contact usage is tracked per team (orgs aggregate their clubs).
+                Contact usage is tracked per team (orgs aggregate their teams).
               </p>
             )}
             <Field label="Created" value={formatDate(account.createdMs)} />

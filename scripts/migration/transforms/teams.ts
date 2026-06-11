@@ -4,7 +4,7 @@ export function transformTeam(id: string, src: Record<string, unknown>): Record<
   return {
     ...src,
     // SaaS fields — conservative defaults; adjust after billing setup
-    plan: 'club',
+    plan: 'studio',
     plan_status: 'active',
     trial_ends_at: null,
     stripe_customer_id: null,

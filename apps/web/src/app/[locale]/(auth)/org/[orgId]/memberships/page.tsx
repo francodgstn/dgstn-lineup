@@ -419,7 +419,7 @@ export default function OrgMembershipsPage() {
             <thead>
               <tr className="border-b bg-muted/40">
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colName')}</th>
-                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colClub')}</th>
+                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colTeam')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colStatus')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">{t('colExpires')}</th>
               </tr>

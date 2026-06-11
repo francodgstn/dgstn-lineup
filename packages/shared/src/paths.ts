@@ -66,7 +66,7 @@ export const COACH_SLOT_BOOKINGS_SUBCOLLECTION = 'bookings'
 
 export const CATEGORIES_COLLECTION = 'categories'
 
-// Club Courses plugin (lightweight LMS)
+// Online Courses plugin (lightweight LMS)
 export const COURSES_COLLECTION = 'courses'
 export const COURSE_MODULES_SUBCOLLECTION = 'modules'
 export const COURSE_LESSONS_SUBCOLLECTION = 'lessons'

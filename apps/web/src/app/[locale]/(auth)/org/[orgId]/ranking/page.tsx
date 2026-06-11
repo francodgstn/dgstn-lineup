@@ -236,7 +236,7 @@ export default function OrgRankingPage() {
         <div>
           <h2 className="text-lg font-semibold">Ranking systems</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Shared across all clubs in this organization. These override individual club ranking settings.
+            Shared across all teams in this organization. These override individual team ranking settings.
           </p>
         </div>
         {isAdmin && (
@@ -318,7 +318,7 @@ export default function OrgRankingPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Delete ranking system?</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground py-1">
-            Contacts in all clubs who have ranks assigned to this system will lose those ranks.
+            Contacts in all teams who have ranks assigned to this system will lose those ranks.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
