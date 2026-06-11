@@ -160,14 +160,12 @@ export function normalizeRule(ruleId: string, ruleData: Record<string, unknown>)
 
   // Normalise conditions
   if (Array.isArray(ruleData.conditions)) {
-    conditions = (ruleData.conditions as AutomationCondition[]).map((c) => {
-      // legacy type aliases → canonical bio_link_booking_no_show
-      // (pre-bio-link rename rules stored 'portal_booking_pending' / 'portal_booking_no_show')
-      const ct = (c as { type: string }).type
-      return ct === 'portal_booking_pending' || ct === 'portal_booking_no_show'
+    conditions = (ruleData.conditions as AutomationCondition[]).map((c) =>
+      // legacy hmd-lineup alias → canonical bio_link_booking_no_show
+      (c as { type: string }).type === 'portal_booking_pending'
         ? { ...c, type: 'bio_link_booking_no_show' as const }
         : c
-    })
+    )
   } else if (ruleData.trigger_type === 'no_show_trial_booking') {
     conditions = [
       {
