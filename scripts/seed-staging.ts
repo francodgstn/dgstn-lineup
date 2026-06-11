@@ -1556,7 +1556,7 @@ async function seedTeam(opts: TeamSeed) {
         lastname: b.lastname,
         phone: '',
         is_new_contact: true,
-        fromPortal: true,
+        fromBioLink: true,
         joinedAt: ts(daysFromNow(-2)),
         status: 'pending',
         booking_token: `tok-${teamId}-${i}`,

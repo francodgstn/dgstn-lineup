@@ -21,7 +21,7 @@ export interface SystemRule {
   template_system_key: string
   name: string
   conditions: Array<
-    | { type: 'portal_booking_no_show'; delay_days: number }
+    | { type: 'bio_link_booking_no_show'; delay_days: number }
     | { type: 'sessions_attended_exactly'; value: number }
     | { type: 'sessions_attended_min'; value: number }
     | { type: 'sessions_attended_max'; value: number }
@@ -128,7 +128,7 @@ The {{teamName}} team`,
 
 // ─── Rules ────────────────────────────────────────────────────────────────────
 // All use trigger.type: 'schedule_daily'.
-// The portal_booking_no_show condition is handled by the engine's booking scan path
+// The bio_link_booking_no_show condition is handled by the engine's booking scan path
 // (runBookingRule) — it is not a different trigger type.
 
 export const SYSTEM_RULES: SystemRule[] = [
@@ -137,7 +137,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     template_system_key: 'sys_rebook_nudge',
     name: 'Trial no-show — 1-day follow-up',
     conditions: [
-      { type: 'portal_booking_no_show', delay_days: 1 },
+      { type: 'bio_link_booking_no_show', delay_days: 1 },
       { type: 'sessions_attended_exactly', value: 0 },
       { type: 'contact_type', value: 'trial' },
     ],
@@ -148,7 +148,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     template_system_key: 'sys_rebook_nudge',
     name: 'Trial no-show — 5-day reminder',
     conditions: [
-      { type: 'portal_booking_no_show', delay_days: 5 },
+      { type: 'bio_link_booking_no_show', delay_days: 5 },
       { type: 'sessions_attended_exactly', value: 0 },
       { type: 'contact_type', value: 'trial' },
     ],
@@ -214,9 +214,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     system_key: 'sys_rule_milestone_10',
     template_system_key: 'sys_milestone_10',
     name: '10 classes milestone',
-    conditions: [
-      { type: 'sessions_attended_exactly', value: 10 },
-    ],
+    conditions: [{ type: 'sessions_attended_exactly', value: 10 }],
     active: false,
   },
 ]

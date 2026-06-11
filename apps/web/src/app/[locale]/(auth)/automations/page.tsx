@@ -200,7 +200,7 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'tag', label: 'Has tag', input: 'text' },
   { value: 'field_equals', label: 'Field equals', input: 'field_equals' },
   { value: 'birthday_today', label: 'Birthday today', input: 'none' },
-  { value: 'portal_booking_no_show', label: 'Bio-link booking no-show', input: 'none' },
+  { value: 'bio_link_booking_no_show', label: 'Bio-link booking no-show', input: 'none' },
 ]
 
 const CONTACT_TYPE_VALUES = ['trial', 'student', 'external']
@@ -533,7 +533,7 @@ function ConditionEditor({
                           ? 'active'
                           : next === 'subscription'
                             ? 'any'
-                            : next === 'portal_booking_no_show' || next === 'birthday_today'
+                            : next === 'bio_link_booking_no_show' || next === 'birthday_today'
                               ? ''
                               : next === 'tag' || next === 'field_equals'
                                 ? ''
@@ -1240,7 +1240,7 @@ const PLACEHOLDER_GROUPS = [
       { key: 'teamName', hint: 'Team name' },
       { key: 'bookingUrl', hint: 'Trial booking page' },
       { key: 'membershipUrl', hint: 'Membership signup' },
-      { key: 'portalUrl', hint: 'Team portal' },
+      { key: 'bioLinkUrl', hint: 'Bio-link page' },
       { key: 'websiteUrl', hint: 'Website (if set)' },
       { key: 'reviewUrl', hint: 'Review page (if set)' },
     ],

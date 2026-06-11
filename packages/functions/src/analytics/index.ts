@@ -5,8 +5,11 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { format } from 'date-fns'
 import { to } from '../utils/async'
 import { getActiveContacts, countByField } from '../utils/contacts'
-import { CONTACT_WEEKLY_REPORTS_SUBCOLLECTION, PARTICIPANTS_SUBCOLLECTION, TEAM_WEEKLY_REPORTS_SUBCOLLECTION } from '@linyup/shared'
-
+import {
+  CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
+  PARTICIPANTS_SUBCOLLECTION,
+  TEAM_WEEKLY_REPORTS_SUBCOLLECTION,
+} from '@linyup/shared'
 
 const DATE_FORMAT = 'PPP'
 
@@ -15,10 +18,14 @@ const DATE_FORMAT = 'PPP'
 async function logActivity(teamId: string, entry: Record<string, unknown>): Promise<void> {
   const db = admin.firestore()
   const [err] = await to(
-    db.collection('teams').doc(teamId).collection('activity_log').add({
-      ...entry,
-      created_at: FieldValue.serverTimestamp(),
-    }),
+    db
+      .collection('teams')
+      .doc(teamId)
+      .collection('activity_log')
+      .add({
+        ...entry,
+        created_at: FieldValue.serverTimestamp(),
+      })
   )
   if (err) console.error('logActivity error:', err)
 }
@@ -43,9 +50,11 @@ export const trackBookings = onDocumentWritten(
     let bookingData: Record<string, unknown>
 
     if (!oldData && newData) {
-      activityEvent = 'booking_created'; bookingData = newData
+      activityEvent = 'booking_created'
+      bookingData = newData
     } else if (oldData && !newData) {
-      activityEvent = 'booking_cancelled'; bookingData = oldData
+      activityEvent = 'booking_cancelled'
+      bookingData = oldData
     } else if (oldData && newData) {
       const newStatus = newData.status as string | undefined
       const oldStatus = oldData.status as string | undefined
@@ -68,7 +77,9 @@ export const trackBookings = onDocumentWritten(
     // ── Coaching session: maintain bookings_count and status ─────────────────
     if (session.activityType === 'coaching') {
       const [, confirmedSnap] = await to(
-        db.collection('sessions').doc(sessionId)
+        db
+          .collection('sessions')
+          .doc(sessionId)
           .collection('bookings')
           .where('status', '==', 'confirmed')
           .get()
@@ -76,18 +87,24 @@ export const trackBookings = onDocumentWritten(
       if (confirmedSnap) {
         const count = confirmedSnap.size
         const maxParticipants = (session.max_participants as number) || 1
-        const newStatus = session.status === 'cancelled' ? 'cancelled'
-          : count >= maxParticipants ? 'full' : 'open'
-        await to(db.collection('sessions').doc(sessionId).update({
-          bookings_count: count,
-          status: newStatus,
-        }))
+        const newStatus =
+          session.status === 'cancelled' ? 'cancelled' : count >= maxParticipants ? 'full' : 'open'
+        await to(
+          db.collection('sessions').doc(sessionId).update({
+            bookings_count: count,
+            status: newStatus,
+          })
+        )
       }
     }
 
-    const contactFullname = `${(bookingData.firstname as string) || ''} ${(bookingData.lastname as string) || ''}`.trim() || event.params.bookingId
+    const contactFullname =
+      `${(bookingData.firstname as string) || ''} ${(bookingData.lastname as string) || ''}`.trim() ||
+      event.params.bookingId
     const sessionStart = session.start as Timestamp | undefined
-    const sessionDateLabel = sessionStart ? format(sessionStart.toDate(), DATE_FORMAT) : 'unknown date'
+    const sessionDateLabel = sessionStart
+      ? format(sessionStart.toDate(), DATE_FORMAT)
+      : 'unknown date'
     const isCoaching = session.activityType === 'coaching'
 
     const descMap: Record<string, string> = {
@@ -106,12 +123,12 @@ export const trackBookings = onDocumentWritten(
         session_date: sessionStart ?? null,
         session_id: sessionId,
         activity_type: session.activityType || 'group_class',
-        from_portal: bookingData.fromPortal === true,
+        from_bio_link: bookingData.fromBioLink === true,
         authenticated_booking: bookingData.authenticated_booking === true,
       },
       refs: { contact: bookingData.contact || event.params.bookingId, session: sessionId },
     })
-  },
+  }
 )
 
 // ─── trackSessions ────────────────────────────────────────────────────────────
@@ -120,7 +137,9 @@ export const trackSessions = onDocumentWritten('sessions/{sessionId}', async (ev
   const newData = event.data?.after.exists ? event.data.after.data() : null
   const oldData = event.data?.before.exists ? event.data.before.data() : null
 
-  const teamId = ((newData?.teamId || newData?.teacher || oldData?.teamId || oldData?.teacher) as string | undefined)
+  const teamId = (newData?.teamId || newData?.teacher || oldData?.teamId || oldData?.teacher) as
+    | string
+    | undefined
   if (!teamId) return
 
   const increment = newData && !oldData ? 1 : !newData && oldData ? -1 : 0
@@ -131,19 +150,22 @@ export const trackSessions = onDocumentWritten('sessions/{sessionId}', async (ev
   const month = sessionDate ? format(sessionDate.toDate(), 'yyyy-MM') : null
   if (!month) return
 
-  const activityType = ((newData?.activityType || oldData?.activityType) as string | undefined) || 'group_class'
+  const activityType =
+    ((newData?.activityType || oldData?.activityType) as string | undefined) || 'group_class'
 
   // Upsert a monthly session counter for the team — total + per-type breakdown
   const counterRef = db.collection('teams').doc(teamId).collection('session_counts').doc(month)
-  await to(counterRef.set(
-    {
-      month,
-      sessions_count: FieldValue.increment(increment),
-      [`sessions_count_by_type.${activityType}`]: FieldValue.increment(increment),
-      updated_at: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  ))
+  await to(
+    counterRef.set(
+      {
+        month,
+        sessions_count: FieldValue.increment(increment),
+        [`sessions_count_by_type.${activityType}`]: FieldValue.increment(increment),
+        updated_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+  )
 })
 
 // ─── trackContacts ────────────────────────────────────────────────────────────
@@ -152,7 +174,9 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
   const newData = event.data?.after.exists ? event.data.after.data() : null
   const oldData = event.data?.before.exists ? event.data.before.data() : null
 
-  const teamId = ((newData?.teamId || newData?.teacher || oldData?.teamId || oldData?.teacher) as string | undefined)
+  const teamId = (newData?.teamId || newData?.teacher || oldData?.teamId || oldData?.teacher) as
+    | string
+    | undefined
   if (!teamId) return
 
   // No logging after anonymization (GDPR)
@@ -186,88 +210,114 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
 
   // Soft-delete
   if (!oldData.deleted_at && newData.deleted_at) {
-    promises.push(logActivity(teamId, {
-      event: 'contact_delete',
-      parameters: {
-        description: `${fullname} was moved to trash.`,
-        contact_firstname: firstname,
-        contact_lastname: lastname,
-      },
-      refs: baseRefs,
-    }))
+    promises.push(
+      logActivity(teamId, {
+        event: 'contact_delete',
+        parameters: {
+          description: `${fullname} was moved to trash.`,
+          contact_firstname: firstname,
+          contact_lastname: lastname,
+        },
+        refs: baseRefs,
+      })
+    )
   }
 
   // Archive / unarchive
   if (!oldData.archived_at && newData.archived_at) {
-    promises.push(logActivity(teamId, {
-      event: 'contact_archive',
-      parameters: {
-        description: `${fullname} was archived.`,
-        contact_firstname: firstname,
-        contact_lastname: lastname,
-      },
-      refs: baseRefs,
-    }))
+    promises.push(
+      logActivity(teamId, {
+        event: 'contact_archive',
+        parameters: {
+          description: `${fullname} was archived.`,
+          contact_firstname: firstname,
+          contact_lastname: lastname,
+        },
+        refs: baseRefs,
+      })
+    )
     // Trial dropout: trial contact archived without converting
     if (oldData.type === 'trial') {
       const weekLabel = format(new Date(), "R-'W'II")
       promises.push(
-        db.collection('teams').doc(teamId).collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION).doc(weekLabel)
+        db
+          .collection('teams')
+          .doc(teamId)
+          .collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION)
+          .doc(weekLabel)
           .set({ trial_dropouts_count: FieldValue.increment(1) }, { merge: true })
           .then(() => undefined)
-          .catch(err => { console.error('trackContacts: trial_dropouts_count update failed', err) }),
+          .catch((err) => {
+            console.error('trackContacts: trial_dropouts_count update failed', err)
+          })
       )
     }
   } else if (oldData.archived_at && !newData.archived_at) {
-    promises.push(logActivity(teamId, {
-      event: 'contact_unarchive',
-      parameters: {
-        description: `${fullname} was restored from archive.`,
-        contact_firstname: firstname,
-        contact_lastname: lastname,
-      },
-      refs: baseRefs,
-    }))
+    promises.push(
+      logActivity(teamId, {
+        event: 'contact_unarchive',
+        parameters: {
+          description: `${fullname} was restored from archive.`,
+          contact_firstname: firstname,
+          contact_lastname: lastname,
+        },
+        refs: baseRefs,
+      })
+    )
   }
 
   // Contact type change
   if (oldData.type && newData.type && oldData.type !== newData.type) {
-    promises.push(logActivity(teamId, {
-      event: 'contact_type_change',
-      parameters: {
-        description: `${fullname} changed from ${oldData.type as string} to ${newData.type as string}.`,
-        contact_firstname: firstname,
-        contact_lastname: lastname,
-        contact_type: { before: oldData.type, after: newData.type },
-      },
-      refs: baseRefs,
-    }))
+    promises.push(
+      logActivity(teamId, {
+        event: 'contact_type_change',
+        parameters: {
+          description: `${fullname} changed from ${oldData.type as string} to ${newData.type as string}.`,
+          contact_firstname: firstname,
+          contact_lastname: lastname,
+          contact_type: { before: oldData.type, after: newData.type },
+        },
+        refs: baseRefs,
+      })
+    )
     // Trial conversion: trial contact promoted to student
     if (oldData.type === 'trial' && newData.type === 'student') {
       const weekLabel = format(new Date(), "R-'W'II")
       promises.push(
-        db.collection('teams').doc(teamId).collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION).doc(weekLabel)
+        db
+          .collection('teams')
+          .doc(teamId)
+          .collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION)
+          .doc(weekLabel)
           .set({ trial_conversions_count: FieldValue.increment(1) }, { merge: true })
           .then(() => undefined)
-          .catch(err => { console.error('trackContacts: trial_conversions_count update failed', err) }),
+          .catch((err) => {
+            console.error('trackContacts: trial_conversions_count update failed', err)
+          })
       )
     }
   }
 
   // Subscription change
   if ((oldData.subscription_type_id ?? null) !== (newData.subscription_type_id ?? null)) {
-    const before = (oldData.subscription_type_name ?? oldData.subscription_type_id ?? 'none') as string
-    const after = (newData.subscription_type_name ?? newData.subscription_type_id ?? 'none') as string
-    promises.push(logActivity(teamId, {
-      event: 'subscription_change',
-      parameters: {
-        description: `${fullname} subscription changed from "${before}" to "${after}".`,
-        contact_firstname: firstname,
-        contact_lastname: lastname,
-        subscription: { before, after },
-      },
-      refs: baseRefs,
-    }))
+    const before = (oldData.subscription_type_name ??
+      oldData.subscription_type_id ??
+      'none') as string
+    const after = (newData.subscription_type_name ??
+      newData.subscription_type_id ??
+      'none') as string
+    promises.push(
+      logActivity(teamId, {
+        event: 'subscription_change',
+        parameters: {
+          description: `${fullname} subscription changed from "${before}" to "${after}".`,
+          contact_firstname: firstname,
+          contact_lastname: lastname,
+          subscription: { before, after },
+        },
+        refs: baseRefs,
+      })
+    )
   }
 
   // Rank changes — one log entry per system that changed
@@ -278,17 +328,19 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
     const before = oldRanks[systemId] ?? null
     const after = newRanks[systemId] ?? null
     if (before !== after) {
-      promises.push(logActivity(teamId, {
-        event: 'rank_change',
-        parameters: {
-          description: `${fullname} rank changed in system "${systemId}".`,
-          contact_firstname: firstname,
-          contact_lastname: lastname,
-          systemId,
-          rank: { before, after },
-        },
-        refs: baseRefs,
-      }))
+      promises.push(
+        logActivity(teamId, {
+          event: 'rank_change',
+          parameters: {
+            description: `${fullname} rank changed in system "${systemId}".`,
+            contact_firstname: firstname,
+            contact_lastname: lastname,
+            systemId,
+            rank: { before, after },
+          },
+          refs: baseRefs,
+        })
+      )
     }
   }
 
@@ -304,9 +356,12 @@ export const trackSessionParticipants = onDocumentWritten(
     const newData = event.data?.after.exists ? event.data.after.data() : null
     const oldData = event.data?.before.exists ? event.data.before.data() : null
 
-    const activityEvent = !oldData && newData ? 'session_participant_add'
-      : oldData && !newData ? 'session_participant_delete'
-        : null
+    const activityEvent =
+      !oldData && newData
+        ? 'session_participant_add'
+        : oldData && !newData
+          ? 'session_participant_delete'
+          : null
     if (!activityEvent) return
 
     const participantData = newData ?? oldData!
@@ -328,7 +383,9 @@ export const trackSessionParticipants = onDocumentWritten(
     const fullname = `${firstname} ${lastname}`.trim() || contactId
 
     const sessionStart = session.start as Timestamp | undefined
-    const sessionDateLabel = sessionStart ? format(sessionStart.toDate(), DATE_FORMAT) : 'unknown date'
+    const sessionDateLabel = sessionStart
+      ? format(sessionStart.toDate(), DATE_FORMAT)
+      : 'unknown date'
 
     // Update denormalized counters on the contact
     const counterUpdate: Record<string, unknown> = {
@@ -339,9 +396,10 @@ export const trackSessionParticipants = onDocumentWritten(
     }
     await to(db.collection('contacts').doc(contactId).update(counterUpdate))
 
-    const description = activityEvent === 'session_participant_add'
-      ? `${fullname} attended a session on ${sessionDateLabel}.`
-      : `${fullname} was removed from a session on ${sessionDateLabel}.`
+    const description =
+      activityEvent === 'session_participant_add'
+        ? `${fullname} attended a session on ${sessionDateLabel}.`
+        : `${fullname} was removed from a session on ${sessionDateLabel}.`
 
     await logActivity(teamId, {
       event: activityEvent,
@@ -353,7 +411,7 @@ export const trackSessionParticipants = onDocumentWritten(
       },
       refs: { contact: contactId, session: sessionId, user: teamId },
     })
-  },
+  }
 )
 
 // ─── weeklyReports ────────────────────────────────────────────────────────────
@@ -370,13 +428,19 @@ export const weeklyReports = onSchedule(
     const now = new Date()
     const weekLabel = format(now, `R-'W'II`)
 
-    const [teamsErr, teamsSnap] = await to(db.collection('teams').where('archived_at', '==', null).get())
+    const [teamsErr, teamsSnap] = await to(
+      db.collection('teams').where('archived_at', '==', null).get()
+    )
     if (teamsErr || !teamsSnap || teamsSnap.empty) return
 
     for (const teamDoc of teamsSnap.docs) {
       const teamId = teamDoc.id
       try {
-        const reportRef = db.collection('teams').doc(teamId).collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION).doc(weekLabel)
+        const reportRef = db
+          .collection('teams')
+          .doc(teamId)
+          .collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION)
+          .doc(weekLabel)
 
         // If a report already exists for this week, skip — never overwrite, to preserve
         // any increments applied mid-week by event triggers (trackContacts, trackSessions).
@@ -391,16 +455,17 @@ export const weeklyReports = onSchedule(
         const contacts_count_by_subscription_type = countByField(contacts, 'subscription_type_id')
         const contacts_count_by_recurrence = countByField(
           contacts.filter((c) => c.subscription_type_id),
-          'subscription_recurrence',
+          'subscription_recurrence'
         )
 
         const weekStart = Timestamp.fromMillis(now.getTime() - 7 * 24 * 3600 * 1000)
         const [, sessionsSnap] = await to(
-          db.collection('sessions')
+          db
+            .collection('sessions')
             .where('teamId', '==', teamId)
             .where('start', '>=', weekStart)
             .where('start', '<=', Timestamp.fromDate(now))
-            .get(),
+            .get()
         )
         const sessions_count = sessionsSnap?.size ?? 0
 
@@ -415,12 +480,13 @@ export const weeklyReports = onSchedule(
 
         // Bookings in the same window — count by session type
         const [, bookingsSnap] = await to(
-          db.collectionGroup('bookings')
+          db
+            .collectionGroup('bookings')
             .where('teamId', '==', teamId)
             .where('joinedAt', '>=', weekStart)
             .where('joinedAt', '<=', Timestamp.fromDate(now))
             .where('status', '==', 'confirmed')
-            .get(),
+            .get()
         )
         const bookings_count_by_type: Record<string, number> = {}
         const bookings_count = bookingsSnap?.size ?? 0
@@ -432,7 +498,8 @@ export const weeklyReports = onSchedule(
             if (!sessionRef) continue
             if (!sessionTypeCache[sessionRef.id]) {
               const [, sDoc] = await to(sessionRef.get())
-              sessionTypeCache[sessionRef.id] = (sDoc?.data()?.activityType as string | undefined) || 'group_class'
+              sessionTypeCache[sessionRef.id] =
+                (sDoc?.data()?.activityType as string | undefined) || 'group_class'
             }
             const t = sessionTypeCache[sessionRef.id]
             bookings_count_by_type[t] = (bookings_count_by_type[t] ?? 0) + 1
@@ -462,7 +529,7 @@ export const weeklyReports = onSchedule(
 
           for (const sessionDoc of sessionsSnap.docs) {
             const [, partsSnap] = await to(
-              sessionDoc.ref.collection(PARTICIPANTS_SUBCOLLECTION).get(),
+              sessionDoc.ref.collection(PARTICIPANTS_SUBCOLLECTION).get()
             )
             if (!partsSnap || partsSnap.empty) continue
             for (const partDoc of partsSnap.docs) {
@@ -487,7 +554,7 @@ export const weeklyReports = onSchedule(
                 iso_week: weekLabel,
                 sessions_count: sessions_count_contact,
                 generated_at: FieldValue.serverTimestamp(),
-              }),
+              })
             )
           }
         }
@@ -495,5 +562,5 @@ export const weeklyReports = onSchedule(
         console.error(`weeklyReports: error for team ${teamId}:`, err)
       }
     }
-  },
+  }
 )

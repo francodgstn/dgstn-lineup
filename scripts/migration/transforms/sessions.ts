@@ -57,7 +57,7 @@ export function transformBooking(
   // need to surface both field names.
   const contactId = (src.contact as string | undefined) ?? docId
 
-  return {
+  const out: Record<string, unknown> = {
     ...src,
     id: docId,
     contact: contactId,
@@ -67,4 +67,14 @@ export function transformBooking(
     joinedAt: src.joinedAt ?? src.created_at ?? null,
     booking_token: src.booking_token ?? null,
   }
+
+  // HMD's source booking flag is `fromPortal`; our model uses `fromBioLink`
+  // (queried + Firestore-indexed). Map it so migrated bookings match no-show
+  // scans and bio-link automation rules.
+  if ('fromPortal' in out) {
+    out.fromBioLink = out.fromPortal
+    delete out.fromPortal
+  }
+
+  return out
 }

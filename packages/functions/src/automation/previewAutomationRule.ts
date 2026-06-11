@@ -53,12 +53,12 @@ export const previewAutomationRule = onCall(async (request) => {
   const now = new Date()
   const matched: MatchedContact[] = []
 
-  const hasBookingCondition = rule.conditions.some((c) => c.type === 'portal_booking_no_show')
+  const hasBookingCondition = rule.conditions.some((c) => c.type === 'bio_link_booking_no_show')
 
   if (hasBookingCondition) {
     // Preview for booking-based rules: find matching no_show bio-link bookings in the delay window
-    const bookingCond = rule.conditions.find((c) => c.type === 'portal_booking_no_show') as
-      | { type: 'portal_booking_no_show'; delay_days?: number; delay_hours?: number }
+    const bookingCond = rule.conditions.find((c) => c.type === 'bio_link_booking_no_show') as
+      | { type: 'bio_link_booking_no_show'; delay_days?: number; delay_hours?: number }
       | undefined
     const delayDays =
       bookingCond?.delay_days || Math.round((bookingCond?.delay_hours || 24) / 24) || 1
@@ -96,7 +96,7 @@ export const previewAutomationRule = onCall(async (request) => {
       const [bookErr, bookSnap] = await to(
         sessionDoc.ref
           .collection('bookings')
-          .where('fromPortal', '==', true)
+          .where('fromBioLink', '==', true)
           .where('status', '==', 'no_show')
           .get()
       )

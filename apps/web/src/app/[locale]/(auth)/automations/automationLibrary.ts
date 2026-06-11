@@ -15,9 +15,7 @@
 // dialog re-reads this at load time — no migration needed.
 
 import type { LucideIcon } from 'lucide-react'
-import {
-  UserPlus, RefreshCw, Trophy, CalendarCheck, Settings2,
-} from 'lucide-react'
+import { UserPlus, RefreshCw, Trophy, CalendarCheck, Settings2 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,11 +26,11 @@ export type SupportedLanguage = 'en' | 'de' | 'fr' | 'it'
 
 export interface TemplateContent {
   subject: string
-  body: string   // markdown
+  body: string // markdown
 }
 
 export type LibraryAction =
-  | { type: 'send_email'; template_key: string }     // resolved to templateId at install time
+  | { type: 'send_email'; template_key: string } // resolved to templateId at install time
   | { type: 'update_field'; field: string; value: string }
   | { type: 'notify_team'; subject: string; body: string }
   | { type: 'log_activity'; message: string }
@@ -41,7 +39,7 @@ export interface LibraryItem {
   library_key: string
   category: LibraryCategory
   name: string
-  description: string   // 1-line shown on card
+  description: string // 1-line shown on card
   tags: string[]
   requires_plan: 'coach' | 'studio'
   /** Defined only for items that own their email template. Migrated items reference
@@ -63,12 +61,15 @@ export interface LibraryItem {
 // Category metadata
 // ---------------------------------------------------------------------------
 
-export const CATEGORY_META: Record<LibraryCategory, { label: string; icon: LucideIcon; color: string }> = {
-  trial:      { label: 'Trial Conversion', icon: UserPlus,      color: 'text-blue-500' },
-  retention:  { label: 'Retention',        icon: RefreshCw,     color: 'text-green-500' },
-  milestones: { label: 'Milestones',       icon: Trophy,        color: 'text-amber-500' },
-  coaching:   { label: 'Coaching',         icon: CalendarCheck, color: 'text-purple-500' },
-  admin:      { label: 'Internal / Admin', icon: Settings2,     color: 'text-slate-500' },
+export const CATEGORY_META: Record<
+  LibraryCategory,
+  { label: string; icon: LucideIcon; color: string }
+> = {
+  trial: { label: 'Trial Conversion', icon: UserPlus, color: 'text-blue-500' },
+  retention: { label: 'Retention', icon: RefreshCw, color: 'text-green-500' },
+  milestones: { label: 'Milestones', icon: Trophy, color: 'text-amber-500' },
+  coaching: { label: 'Coaching', icon: CalendarCheck, color: 'text-purple-500' },
+  admin: { label: 'Internal / Admin', icon: Settings2, color: 'text-slate-500' },
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +77,6 @@ export const CATEGORY_META: Record<LibraryCategory, { label: string; icon: Lucid
 // ---------------------------------------------------------------------------
 
 export const AUTOMATION_LIBRARY: LibraryItem[] = [
-
   // ── TRIAL CONVERSION ──────────────────────────────────────────────────────
 
   {
@@ -182,7 +182,7 @@ Il team {{teamName}}`,
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [
-        { type: 'portal_booking_no_show', delay_days: 1 },
+        { type: 'bio_link_booking_no_show', delay_days: 1 },
         { type: 'sessions_attended_exactly', value: 0 },
         { type: 'contact_type', value: 'trial' },
       ],
@@ -262,7 +262,7 @@ Il team {{teamName}}`,
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [
-        { type: 'portal_booking_no_show', delay_days: 3 },
+        { type: 'bio_link_booking_no_show', delay_days: 3 },
         { type: 'sessions_attended_exactly', value: 0 },
         { type: 'contact_type', value: 'trial' },
       ],
@@ -280,7 +280,7 @@ Il team {{teamName}}`,
     rule: {
       trigger: { type: 'schedule_daily' },
       conditions: [
-        { type: 'portal_booking_no_show', delay_days: 5 },
+        { type: 'bio_link_booking_no_show', delay_days: 5 },
         { type: 'sessions_attended_exactly', value: 0 },
         { type: 'contact_type', value: 'trial' },
       ],
@@ -310,7 +310,7 @@ Il team {{teamName}}`,
     library_key: 'sys_rule_trial_7d',
     category: 'trial',
     name: 'Trial attended — 7-day nudge',
-    description: 'Nudges a trial contact who hasn\'t subscribed 7 days after their first class.',
+    description: "Nudges a trial contact who hasn't subscribed 7 days after their first class.",
     tags: ['trial', 'nudge', 'conversion', 'inactivity'],
     requires_plan: 'studio',
     rule: {
@@ -563,7 +563,7 @@ Il team {{teamName}}`,
     library_key: 'lib_milestone_1st',
     category: 'milestones',
     name: '1st class — welcome to the family',
-    description: 'Celebrates a contact\'s first completed class and invites them to join.',
+    description: "Celebrates a contact's first completed class and invites them to join.",
     tags: ['milestone', 'first class', 'welcome', 'conversion'],
     requires_plan: 'studio',
     template: {
@@ -611,7 +611,7 @@ Bis zum nächsten Mal!
 Das {{teamName}}-Team`,
         },
         fr: {
-          subject: 'Votre premier cours chez {{teamName}} — {{firstname}}, vous l\'avez fait !',
+          subject: "Votre premier cours chez {{teamName}} — {{firstname}}, vous l'avez fait !",
           body: `Bonjour {{firstname}},
 
 Vous êtes venu·e, et c'est la partie la plus difficile. Bienvenue chez **{{teamName}}** !
@@ -631,7 +631,7 @@ Et si vous avez apprécié votre expérience, un avis rapide nous aiderait beauc
 L'équipe {{teamName}}`,
         },
         it: {
-          subject: 'Il tuo primo allenamento a {{teamName}} — {{firstname}}, ce l\'hai fatta!',
+          subject: "Il tuo primo allenamento a {{teamName}} — {{firstname}}, ce l'hai fatta!",
           body: `Ciao {{firstname}},
 
 Sei venuto/a — ed è la parte più difficile. Benvenuto/a a **{{teamName}}**!
@@ -667,11 +667,11 @@ Il team {{teamName}}`,
     tags: ['milestone', '5 classes', 'congratulations'],
     requires_plan: 'studio',
     template: {
-      name: '5 classes — you\'re finding your rhythm!',
+      name: "5 classes — you're finding your rhythm!",
       body_mode: 'markdown',
       translations: {
         en: {
-          subject: '5 classes at {{teamName}}, {{firstname}} — you\'re finding your rhythm!',
+          subject: "5 classes at {{teamName}}, {{firstname}} — you're finding your rhythm!",
           body: `Hi {{firstname}},
 
 Five classes in — you are officially finding your rhythm at **{{teamName}}** and we could not be happier to have you with us!
@@ -686,7 +686,8 @@ See you on the mat,
 The {{teamName}} team`,
         },
         de: {
-          subject: '5 Trainingseinheiten bei {{teamName}}, {{firstname}} — du findest deinen Rhythmus!',
+          subject:
+            '5 Trainingseinheiten bei {{teamName}}, {{firstname}} — du findest deinen Rhythmus!',
           body: `Hallo {{firstname}},
 
 Fünf Trainingseinheiten absolviert — du findest deinen Rhythmus bei **{{teamName}}** und wir freuen uns sehr, dich dabei zu haben!
@@ -761,11 +762,11 @@ Il team {{teamName}}`,
     tags: ['milestone', '25 classes', 'committed', 'congratulations'],
     requires_plan: 'studio',
     template: {
-      name: '25 classes — you\'re committed!',
+      name: "25 classes — you're committed!",
       body_mode: 'markdown',
       translations: {
         en: {
-          subject: '25 classes, {{firstname}} — you\'re truly committed!',
+          subject: "25 classes, {{firstname}} — you're truly committed!",
           body: `Hi {{firstname}},
 
 **25 classes** at **{{teamName}}** — that is no accident. It takes real commitment to show up consistently, and you have it.
@@ -849,7 +850,7 @@ Il team {{teamName}}`,
       body_mode: 'markdown',
       translations: {
         en: {
-          subject: '50 classes, {{firstname}} — you\'re a legend at {{teamName}}!',
+          subject: "50 classes, {{firstname}} — you're a legend at {{teamName}}!",
           body: `Hi {{firstname}},
 
 **50 classes.** Let that sink in.
@@ -971,7 +972,7 @@ Bis zum nächsten Mal!
 Das {{teamName}}-Team`,
         },
         fr: {
-          subject: 'Comment s\'est passé votre cours chez {{teamName}}, {{firstname}} ?',
+          subject: "Comment s'est passé votre cours chez {{teamName}}, {{firstname}} ?",
           body: `Bonjour {{firstname}},
 
 Merci d'avoir participé à notre cours aujourd'hui chez **{{teamName}}** ! Nous espérons que la séance s'est bien passée.
@@ -1020,18 +1021,19 @@ Il team {{teamName}}`,
     rule: {
       trigger: { type: 'contact_created' },
       conditions: [{ type: 'contact_type', value: 'trial' }],
-      actions: [{
-        type: 'notify_team',
-        subject: 'New trial registration: {{firstname}} {{lastname}}',
-        body: `A new trial contact has registered at **{{teamName}}**.
+      actions: [
+        {
+          type: 'notify_team',
+          subject: 'New trial registration: {{firstname}} {{lastname}}',
+          body: `A new trial contact has registered at **{{teamName}}**.
 
 **Name:** {{firstname}} {{lastname}}
 
 Check the contact in your Linyup dashboard to follow up.`,
-      }],
+        },
+      ],
     },
   },
-
 ]
 
 // ---------------------------------------------------------------------------

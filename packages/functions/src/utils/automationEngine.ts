@@ -40,7 +40,7 @@ export type AutomationTriggerType =
   | PluginTriggerId
 
 export type AutomationCondition =
-  | { type: 'portal_booking_no_show'; delay_days?: number; delay_hours?: number }
+  | { type: 'bio_link_booking_no_show'; delay_days?: number; delay_hours?: number }
   | { type: 'sessions_attended_exactly'; value: number }
   | { type: 'sessions_attended_min'; value: number }
   | { type: 'sessions_attended_max'; value: number }
@@ -49,15 +49,15 @@ export type AutomationCondition =
   | { type: 'contact_type'; value: string }
   | { type: 'membership_status'; value: string }
   | { type: 'subscription'; value: string }
-  | { type: 'subscription_missing' }            // legacy alias → subscription: none
-  | { type: 'subscription_set' }                // legacy alias → subscription: any
+  | { type: 'subscription_missing' } // legacy alias → subscription: none
+  | { type: 'subscription_set' } // legacy alias → subscription: any
   | { type: 'tag'; value: string }
   | { type: 'field_equals'; field: string; value: unknown }
   // Subscription renewal
-  | { type: 'subscription_expires_in'; days: number }  // expires in ≤ N days (and not expired)
+  | { type: 'subscription_expires_in'; days: number } // expires in ≤ N days (and not expired)
   // Lifecycle
-  | { type: 'days_since_created'; value: number }       // created N+ days ago
-  | { type: 'birthday_today' }                          // birthdate day+month matches today
+  | { type: 'days_since_created'; value: number } // created N+ days ago
+  | { type: 'birthday_today' } // birthdate day+month matches today
 
 export type AutomationAction =
   | { type: 'send_email'; templateId: string }
@@ -78,7 +78,7 @@ export interface AutomationRule {
   trigger: {
     type: AutomationTriggerType
     delayMinutes?: number
-    webhook_endpoint_id?: string   // inbound_webhook: which endpoint fires this rule
+    webhook_endpoint_id?: string // inbound_webhook: which endpoint fires this rule
   }
   conditions: AutomationCondition[]
   actions: AutomationAction[]
@@ -120,9 +120,9 @@ export interface AutomationContext {
 }
 
 export interface RunRuleOptions {
-  dryRun?: boolean         // evaluate conditions but do not execute actions or mark sent
+  dryRun?: boolean // evaluate conditions but do not execute actions or mark sent
   triggerTier?: 'event' | 'delayed' | 'scheduled' | 'manual'
-  force?: boolean          // bypass dedup (used by triggerAutomationRule callable)
+  force?: boolean // bypass dedup (used by triggerAutomationRule callable)
 }
 
 export interface RuleStats {
@@ -160,16 +160,18 @@ export function normalizeRule(ruleId: string, ruleData: Record<string, unknown>)
 
   // Normalise conditions
   if (Array.isArray(ruleData.conditions)) {
-    conditions = (ruleData.conditions as AutomationCondition[]).map((c) =>
-      // legacy type alias
-      (c as { type: string }).type === 'portal_booking_pending'
-        ? { ...c, type: 'portal_booking_no_show' as const }
+    conditions = (ruleData.conditions as AutomationCondition[]).map((c) => {
+      // legacy type aliases → canonical bio_link_booking_no_show
+      // (pre-bio-link rename rules stored 'portal_booking_pending' / 'portal_booking_no_show')
+      const ct = (c as { type: string }).type
+      return ct === 'portal_booking_pending' || ct === 'portal_booking_no_show'
+        ? { ...c, type: 'bio_link_booking_no_show' as const }
         : c
-    )
+    })
   } else if (ruleData.trigger_type === 'no_show_trial_booking') {
     conditions = [
       {
-        type: 'portal_booking_no_show',
+        type: 'bio_link_booking_no_show',
         delay_days: Math.round(((ruleData.delay_hours as number) || 24) / 24) || 1,
       },
       { type: 'sessions_attended_max', value: 0 },
@@ -194,9 +196,10 @@ export function normalizeRule(ruleId: string, ruleData: Record<string, unknown>)
     }
   }
 
-  const trigger = ruleData.trigger && typeof ruleData.trigger === 'object'
-    ? (ruleData.trigger as { type: AutomationTriggerType; delayMinutes?: number })
-    : { type: triggerType }
+  const trigger =
+    ruleData.trigger && typeof ruleData.trigger === 'object'
+      ? (ruleData.trigger as { type: AutomationTriggerType; delayMinutes?: number })
+      : { type: triggerType }
 
   return {
     id: ruleId,
@@ -230,7 +233,7 @@ function resolveTimestampMs(ts: unknown): number | null {
 /**
  * Evaluates non-booking conditions against a contact.
  * Returns true only when ALL applicable conditions pass (AND logic).
- * portal_booking_no_show conditions are skipped — they are handled by
+ * bio_link_booking_no_show conditions are skipped — they are handled by
  * the booking-based execution path.
  */
 export function evaluateContactConditions(
@@ -240,7 +243,7 @@ export function evaluateContactConditions(
 ): boolean {
   for (const cond of conditions) {
     switch (cond.type) {
-      case 'portal_booking_no_show':
+      case 'bio_link_booking_no_show':
         // handled separately in booking path
         continue
 
@@ -285,7 +288,11 @@ export function evaluateContactConditions(
       case 'subscription':
         if (cond.value === 'none' && contact.subscription_type_id) return false
         if (cond.value === 'any' && !contact.subscription_type_id) return false
-        if (cond.value !== 'none' && cond.value !== 'any' && contact.subscription_type_id !== cond.value)
+        if (
+          cond.value !== 'none' &&
+          cond.value !== 'any' &&
+          contact.subscription_type_id !== cond.value
+        )
           return false
         break
 
@@ -371,7 +378,12 @@ async function resolveActionResources(
       const [tmplErr, tmplDoc] = await to(
         teamRef.collection('outreach_templates').doc(action.templateId).get()
       )
-      if (!tmplErr && tmplDoc && tmplDoc.exists && (tmplDoc.data() as Record<string, unknown>).active) {
+      if (
+        !tmplErr &&
+        tmplDoc &&
+        tmplDoc.exists &&
+        (tmplDoc.data() as Record<string, unknown>).active
+      ) {
         template = tmplDoc.data() as Record<string, unknown>
         language = (template.language as string) || language
       } else {
@@ -537,15 +549,22 @@ async function executeActionsForContact(
         const ALLOWED_UPDATE_FIELDS = ['type', 'membership_status'] as const
         const field = action.field
         if (!(ALLOWED_UPDATE_FIELDS as readonly string[]).includes(field)) {
-          console.log(`[automationEngine] update_field: field '${field}' not in allowlist, skipping`)
+          console.log(
+            `[automationEngine] update_field: field '${field}' not in allowlist, skipping`
+          )
         } else {
-          await admin.firestore().collection('contacts').doc(contactId).update({ [field]: action.value })
+          await admin
+            .firestore()
+            .collection('contacts')
+            .doc(contactId)
+            .update({ [field]: action.value })
           await to(
             logActivity(teamId, {
               date: FieldValue.serverTimestamp(),
               event: 'automation_update_field',
               parameters: {
-                description: `Automation set '${field}' to '${String(action.value)}' for ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
+                description:
+                  `Automation set '${field}' to '${String(action.value)}' for ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
                 field,
                 value: action.value,
                 rule_id: ruleId,
@@ -563,7 +582,9 @@ async function executeActionsForContact(
         const settings = (teamData.settings as Record<string, unknown>) || {}
         const toEmail = (settings.teamEmail as string) || (teamData.email as string) || ''
         if (!toEmail) {
-          console.log(`[automationEngine] notify_team: no team email configured for team ${teamId}, skipping`)
+          console.log(
+            `[automationEngine] notify_team: no team email configured for team ${teamId}, skipping`
+          )
         } else {
           const subject = substituteVariables(action.subject, contact, teamName, now, teamData)
           const rawBody = substituteVariables(action.body, contact, teamName, now, teamData)
@@ -592,15 +613,20 @@ async function executeActionsForContact(
 
       // assign_tag — add a tag to the contact's tags array
       if (action.type === 'assign_tag') {
-        await admin.firestore().collection('contacts').doc(contactId).update({
-          tags: FieldValue.arrayUnion(action.tag),
-        })
+        await admin
+          .firestore()
+          .collection('contacts')
+          .doc(contactId)
+          .update({
+            tags: FieldValue.arrayUnion(action.tag),
+          })
         await to(
           logActivity(teamId, {
             date: FieldValue.serverTimestamp(),
             event: 'automation_assign_tag',
             parameters: {
-              description: `Automation added tag '${action.tag}' to ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
+              description:
+                `Automation added tag '${action.tag}' to ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
               tag: action.tag,
               rule_id: ruleId,
               automated: true,
@@ -613,15 +639,20 @@ async function executeActionsForContact(
 
       // remove_tag — remove a tag from the contact's tags array
       if (action.type === 'remove_tag') {
-        await admin.firestore().collection('contacts').doc(contactId).update({
-          tags: FieldValue.arrayRemove(action.tag),
-        })
+        await admin
+          .firestore()
+          .collection('contacts')
+          .doc(contactId)
+          .update({
+            tags: FieldValue.arrayRemove(action.tag),
+          })
         await to(
           logActivity(teamId, {
             date: FieldValue.serverTimestamp(),
             event: 'automation_remove_tag',
             parameters: {
-              description: `Automation removed tag '${action.tag}' from ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
+              description:
+                `Automation removed tag '${action.tag}' from ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
               tag: action.tag,
               rule_id: ruleId,
               automated: true,
@@ -646,7 +677,9 @@ async function executeActionsForContact(
           })
           executed++
         } else {
-          console.log(`[automationEngine] No handler registered for plugin action '${action.type}', skipping`)
+          console.log(
+            `[automationEngine] No handler registered for plugin action '${action.type}', skipping`
+          )
         }
       }
 
@@ -654,7 +687,9 @@ async function executeActionsForContact(
       if (action.type === 'webhook') {
         const url = action.url
         if (!url?.startsWith('https://')) {
-          console.log(`[automationEngine] webhook: skipping non-HTTPS or empty URL for rule ${ruleId}`)
+          console.log(
+            `[automationEngine] webhook: skipping non-HTTPS or empty URL for rule ${ruleId}`
+          )
         } else {
           const payload = {
             event: 'automation_rule_fired',
@@ -695,7 +730,10 @@ async function executeActionsForContact(
         }
       }
     } catch (err) {
-      console.error(`[automationEngine] Action '${action.type}' failed for contact ${contactId}:`, (err as Error).message)
+      console.error(
+        `[automationEngine] Action '${action.type}' failed for contact ${contactId}:`,
+        (err as Error).message
+      )
       failed++
     }
   }
@@ -704,7 +742,7 @@ async function executeActionsForContact(
 }
 
 // ---------------------------------------------------------------------------
-// Booking-based rule path (portal_booking_no_show)
+// Booking-based rule path (bio_link_booking_no_show)
 // ---------------------------------------------------------------------------
 
 async function runBookingRule(
@@ -717,11 +755,12 @@ async function runBookingRule(
 ): Promise<void> {
   const db = admin.firestore()
 
-  const bookingCond = rule.conditions.find((c) => c.type === 'portal_booking_no_show') as
-    | { type: 'portal_booking_no_show'; delay_days?: number; delay_hours?: number }
+  const bookingCond = rule.conditions.find((c) => c.type === 'bio_link_booking_no_show') as
+    | { type: 'bio_link_booking_no_show'; delay_days?: number; delay_hours?: number }
     | undefined
 
-  const delayDays = bookingCond?.delay_days || Math.round(((bookingCond?.delay_hours || 24)) / 24) || 1
+  const delayDays =
+    bookingCond?.delay_days || Math.round((bookingCond?.delay_hours || 24) / 24) || 1
   const delayHours = delayDays * 24
   const windowEnd = new Date(now.getTime() - (delayHours - 12) * 3600000)
   const windowStart = new Date(now.getTime() - (delayHours + 36) * 3600000)
@@ -761,7 +800,9 @@ async function runBookingRule(
 
   const resolved = await resolveActionResources(rule.actions, teamId, teamData)
   if (!hasResolvableActions(rule.actions, resolved)) {
-    console.error(`[automationEngine] Rule ${rule.id}: no executable action resources found, skipping`)
+    console.error(
+      `[automationEngine] Rule ${rule.id}: no executable action resources found, skipping`
+    )
     stats.errors++
     return
   }
@@ -770,17 +811,22 @@ async function runBookingRule(
     const [bookingsErr, bookingsSnap] = await to(
       sessionDoc.ref
         .collection('bookings')
-        .where('fromPortal', '==', true)
+        .where('fromBioLink', '==', true)
         .where('status', '==', 'no_show')
         .get()
     )
     if (bookingsErr) {
-      console.error(`[automationEngine] Error fetching bookings for session ${sessionDoc.id}:`, bookingsErr)
+      console.error(
+        `[automationEngine] Error fetching bookings for session ${sessionDoc.id}:`,
+        bookingsErr
+      )
       stats.errors++
       continue
     }
 
-    const eligible = bookingsSnap!.docs.filter((d) => options.force || !d.data().noShowOutreachSentAt)
+    const eligible = bookingsSnap!.docs.filter(
+      (d) => options.force || !d.data().noShowOutreachSentAt
+    )
 
     for (const bookingDoc of eligible) {
       stats.processed++
@@ -797,15 +843,27 @@ async function runBookingRule(
       if (contactId) {
         const [cErr, cDoc] = await to(db.collection('contacts').doc(contactId).get())
         if (!cErr && cDoc && cDoc.exists) {
-          contact = { id: contactId, ...cDoc.data() as Omit<ContactData, 'id'> }
+          contact = { id: contactId, ...(cDoc.data() as Omit<ContactData, 'id'>) }
         }
       }
 
-      if (!contact.email) { stats.skipped++; continue }
-      if (contact.email_unsubscribed) { stats.skipped++; continue }
-      if (!evaluateContactConditions(rule.conditions, contact, now)) { stats.skipped++; continue }
+      if (!contact.email) {
+        stats.skipped++
+        continue
+      }
+      if (contact.email_unsubscribed) {
+        stats.skipped++
+        continue
+      }
+      if (!evaluateContactConditions(rule.conditions, contact, now)) {
+        stats.skipped++
+        continue
+      }
 
-      if (options.dryRun) { stats.sent++; continue }
+      if (options.dryRun) {
+        stats.sent++
+        continue
+      }
 
       const { executed, failed } = await executeActionsForContact(
         contactId || bookingDoc.id,
@@ -840,19 +898,29 @@ async function runContactRule(
 ): Promise<void> {
   const db = admin.firestore()
 
-  console.log(`[automationEngine] rule=${rule.id} team=${teamId}: evaluating ${contacts.length} contacts`)
+  console.log(
+    `[automationEngine] rule=${rule.id} team=${teamId}: evaluating ${contacts.length} contacts`
+  )
 
   const resolved = await resolveActionResources(rule.actions, teamId, teamData)
   if (!hasResolvableActions(rule.actions, resolved)) {
-    console.error(`[automationEngine] Rule ${rule.id}: no executable action resources found, skipping`)
+    console.error(
+      `[automationEngine] Rule ${rule.id}: no executable action resources found, skipping`
+    )
     stats.errors++
     return
   }
 
   for (const contact of contacts) {
     if (contact.deleted_at || contact.archived_at) continue
-    if (!contact.email) { stats.skipped++; continue }
-    if (contact.email_unsubscribed) { stats.skipped++; continue }
+    if (!contact.email) {
+      stats.skipped++
+      continue
+    }
+    if (contact.email_unsubscribed) {
+      stats.skipped++
+      continue
+    }
 
     // Dedup — skip if rule already fired for this contact recently (unless force=true)
     if (!options.force) {
@@ -860,19 +928,29 @@ async function runContactRule(
       if (lastSent) {
         const lastMs = resolveTimestampMs(lastSent)
         if (lastMs !== null) {
-          const windowMs = options.triggerTier === 'scheduled'
-            ? 30 * 86400000  // 30-day window: lets re-engagement rules re-fire (e.g. inactivity)
-            : 7 * 86400000   // 7-day window for event-triggered rules
-          if (now.getTime() - lastMs < windowMs) { stats.skipped++; continue }
+          const windowMs =
+            options.triggerTier === 'scheduled'
+              ? 30 * 86400000 // 30-day window: lets re-engagement rules re-fire (e.g. inactivity)
+              : 7 * 86400000 // 7-day window for event-triggered rules
+          if (now.getTime() - lastMs < windowMs) {
+            stats.skipped++
+            continue
+          }
         }
       }
     }
 
-    if (!evaluateContactConditions(rule.conditions, contact, now)) { stats.skipped++; continue }
+    if (!evaluateContactConditions(rule.conditions, contact, now)) {
+      stats.skipped++
+      continue
+    }
 
     stats.processed++
 
-    if (options.dryRun) { stats.sent++; continue }
+    if (options.dryRun) {
+      stats.sent++
+      continue
+    }
 
     const { executed, failed } = await executeActionsForContact(
       contact.id,
@@ -889,9 +967,12 @@ async function runContactRule(
     // Mark rule as sent for this contact
     if (executed > 0) {
       await to(
-        db.collection('contacts').doc(contact.id).update({
-          [`outreach_rules_sent.${rule.id}`]: FieldValue.serverTimestamp(),
-        })
+        db
+          .collection('contacts')
+          .doc(contact.id)
+          .update({
+            [`outreach_rules_sent.${rule.id}`]: FieldValue.serverTimestamp(),
+          })
       )
     }
 
@@ -905,7 +986,7 @@ async function runContactRule(
 
 /**
  * Runs an automation rule against the supplied contacts.
- * For portal_booking_no_show rules, `contacts` is ignored — bookings are
+ * For bio_link_booking_no_show rules, `contacts` is ignored — bookings are
  * queried internally based on the condition's delay window.
  *
  * @param rule      Normalised AutomationRule
@@ -933,7 +1014,7 @@ export async function runRule(
     console.log(`[automationEngine] Rule ${rule.id} has no conditions, skipping`)
     stats.skipped++
   } else {
-    const hasBookingCondition = rule.conditions.some((c) => c.type === 'portal_booking_no_show')
+    const hasBookingCondition = rule.conditions.some((c) => c.type === 'bio_link_booking_no_show')
 
     if (hasBookingCondition) {
       await runBookingRule(rule, teamId, teamData, now, stats, options)
@@ -1002,7 +1083,9 @@ export async function enqueueDelayedRule(
     { scheduleTime }
   )
 
-  console.log(`[automationEngine] enqueued delayed rule=${rule.id} session=${sessionId} at=${scheduleTime.toISOString()}`) // eslint-disable-line no-console
+  console.log(
+    `[automationEngine] enqueued delayed rule=${rule.id} session=${sessionId} at=${scheduleTime.toISOString()}`
+  ) // eslint-disable-line no-console
 }
 
 // ---------------------------------------------------------------------------
@@ -1031,17 +1114,23 @@ export async function fireEventRules(
       .get()
   )
   if (rulesErr || !rulesSnap) {
-    console.error(`[automationEngine] fireEventRules: error loading rules for team ${teamId}:`, rulesErr)
+    console.error(
+      `[automationEngine] fireEventRules: error loading rules for team ${teamId}:`,
+      rulesErr
+    )
     return
   }
 
   const [teamErr, teamDoc] = await to(db.collection('teams').doc(teamId).get())
-  const teamData = !teamErr && teamDoc && teamDoc.exists ? (teamDoc.data() as Record<string, unknown>) : {}
+  const teamData =
+    !teamErr && teamDoc && teamDoc.exists ? (teamDoc.data() as Record<string, unknown>) : {}
 
   // Plan gate: automation rules require studio+ plan
   const teamPlan = (teamData.plan as string) || 'coach'
   if (!['studio', 'organization'].includes(teamPlan)) {
-    console.log(`[automationEngine] fireEventRules: team ${teamId} on plan '${teamPlan}' — automation requires studio+, skipping`) // eslint-disable-line no-console
+    console.log(
+      `[automationEngine] fireEventRules: team ${teamId} on plan '${teamPlan}' — automation requires studio+, skipping`
+    ) // eslint-disable-line no-console
     return
   }
 
@@ -1054,16 +1143,15 @@ export async function fireEventRules(
       triggerType === 'inbound_webhook' &&
       rule.trigger.webhook_endpoint_id &&
       rule.trigger.webhook_endpoint_id !== _context?.webhook_endpoint_id
-    ) continue
+    )
+      continue
 
     const log = await runRule(rule, subjects, teamId, teamData, {
       triggerTier: 'event',
     })
 
     // Write log and update rule metadata
-    await to(
-      db.collection('teams').doc(teamId).collection('automation_logs').add(log)
-    )
+    await to(db.collection('teams').doc(teamId).collection('automation_logs').add(log))
     await to(
       db.collection('teams').doc(teamId).collection('automation_rules').doc(rule.id).update({
         last_run_at: FieldValue.serverTimestamp(),

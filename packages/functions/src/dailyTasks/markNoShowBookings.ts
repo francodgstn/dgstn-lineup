@@ -32,7 +32,7 @@ export async function markNoShowBookings(): Promise<{
 
   for (const sessionDoc of sessSnap!.docs) {
     const [bookErr, bookSnap] = await to(
-      sessionDoc.ref.collection('bookings').where('fromPortal', '==', true).get()
+      sessionDoc.ref.collection('bookings').where('fromBioLink', '==', true).get()
     )
     if (bookErr) {
       console.error(

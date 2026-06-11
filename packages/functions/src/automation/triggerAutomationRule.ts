@@ -45,13 +45,12 @@ export const triggerAutomationRule = onCall(async (request) => {
   }
 
   const [teamErr, teamDoc] = await to(db.collection('teams').doc(teamId).get())
-  const teamData = !teamErr && teamDoc && teamDoc.exists
-    ? (teamDoc.data() as Record<string, unknown>)
-    : {}
+  const teamData =
+    !teamErr && teamDoc && teamDoc.exists ? (teamDoc.data() as Record<string, unknown>) : {}
 
   // Load contacts for contact-based rules
   const contacts: ContactData[] = []
-  const hasBookingCondition = rule.conditions.some((c) => c.type === 'portal_booking_no_show')
+  const hasBookingCondition = rule.conditions.some((c) => c.type === 'bio_link_booking_no_show')
   if (!hasBookingCondition) {
     const [contactsErr, contactsSnap] = await to(
       db.collection('contacts').where('teamId', '==', teamId).get()
@@ -89,7 +88,8 @@ export const triggerAutomationRule = onCall(async (request) => {
     })
   )
 
-  console.log(`[triggerAutomationRule] rule=${ruleId} team=${teamId}`, { // eslint-disable-line no-console
+  console.log(`[triggerAutomationRule] rule=${ruleId} team=${teamId}`, {
+    // eslint-disable-line no-console
     matched: log.contacts_matched,
     executed: log.actions_executed,
     failed: log.actions_failed,

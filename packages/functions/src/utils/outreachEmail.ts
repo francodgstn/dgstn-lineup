@@ -20,7 +20,10 @@ const MEMBERSHIP_STATUS_LABELS: Record<string, string> = {
   expired: 'Expired',
 }
 
-const URL_PLACEHOLDER_KEYS = /\{\{(bookingUrl|membershipUrl|portalUrl|websiteUrl|reviewUrl)\}\}/g
+// `portalUrl` is a deprecated alias of `bioLinkUrl`, kept so email templates saved
+// before the bio-link rename still resolve. New templates should use `{{bioLinkUrl}}`.
+const URL_PLACEHOLDER_KEYS =
+  /\{\{(bookingUrl|membershipUrl|bioLinkUrl|portalUrl|websiteUrl|reviewUrl)\}\}/g
 
 type ContactLike = Record<string, unknown>
 type TeamDataLike = Record<string, unknown>
@@ -41,10 +44,12 @@ export function substituteVariables(
   const websiteUrl = socialLinks.find((l) => l.platform === 'website')?.url || ''
   const reviewUrl = socialLinks.find((l) => l.platform === 'review')?.url || ''
 
+  const bioLinkUrl = slug ? `${baseUrl}/public/bio-link/${slug}` : ''
   const urlMap: Record<string, string> = {
     bookingUrl: slug ? `${baseUrl}/public/bio-link/${slug}/booking` : '',
     membershipUrl: slug ? `${baseUrl}/public/bio-link/${slug}/membership-signup` : '',
-    portalUrl: slug ? `${baseUrl}/public/bio-link/${slug}` : '',
+    bioLinkUrl,
+    portalUrl: bioLinkUrl, // deprecated alias — see URL_PLACEHOLDER_KEYS
     websiteUrl,
     reviewUrl,
   }
