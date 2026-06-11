@@ -104,6 +104,9 @@ export { generateReferralCodes, confirmReferral, getMyReferralCode, getMyReferra
 // Portal
 export { getInTouchForm } from './portal/getInTouchForm'
 
+// Website plugin (studio site builder) — publish/unpublish the public snapshot
+export { publishWebsite, unpublishWebsite } from './website'
+
 // Automation engine (Phase 1–3: scheduled, manual callables, event triggers, delayed via Cloud Tasks)
 export {
   triggerAutomationRule,

@@ -17,6 +17,8 @@ import {
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   CONTACTS_COLLECTION,
+  SITE_DRAFTS_COLLECTION,
+  SITE_PUBLISHED_COLLECTION,
 } from '@linyup/shared'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
@@ -778,7 +780,7 @@ export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> 
   if (dryRun) {
     const c = await db.collection('referrals').where('team_id', '==', teamId).count().get()
     console.log(`${tag} team ${teamId}: would delete ${c.data().count} referrals`)
-    console.log(`${tag} team ${teamId}: would delete saas_subscription + checkout attempts + team doc & subcollections + Storage teams/${teamId}/`)
+    console.log(`${tag} team ${teamId}: would delete saas_subscription + checkout attempts + site draft + published site + team doc & subcollections + Storage teams/${teamId}/`)
     return
   }
   const refSnap = await db.collection('referrals').where('team_id', '==', teamId).get()
@@ -788,6 +790,9 @@ export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> 
   const attempts = await db.collection('saas_checkout_attempts').where('teamId', '==', teamId).get()
   for (const d of attempts.docs) await d.ref.delete()
   await db.collection('saas_subscriptions').doc(teamId).delete().catch(() => undefined)
+  // Website plugin: private draft + public snapshot (both keyed by teamId).
+  await db.collection(SITE_DRAFTS_COLLECTION).doc(teamId).delete().catch(() => undefined)
+  await db.collection(SITE_PUBLISHED_COLLECTION).doc(teamId).delete().catch(() => undefined)
 
   // Team doc + ALL its subcollections (team_members, installed_plugins, …).
   await db.recursiveDelete(db.collection(TEAMS_COLLECTION).doc(teamId))

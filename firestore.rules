@@ -815,6 +815,25 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------
+    // Website plugin — studio site builder
+    // ----------------------------------------------
+
+    // PRIVATE working copy. Keyed by teamId. Builder reads/writes the draft;
+    // never exposed publicly. Managers and owners only.
+    match /site_drafts/{teamId} {
+      allow read, write: if hasTeamRole(teamId, 'manager');
+    }
+
+    // PUBLIC snapshot of a published site. Keyed by teamId. World-readable so
+    // the public /site/[slug] route (and any future headless website app) can
+    // render it. Written ONLY by the publishWebsite Cloud Function, which
+    // whitelists fields — clients can never write restricted data here.
+    match /site_published/{teamId} {
+      allow read;            // fully public
+      allow write: if false; // Cloud Functions only
+    }
+
+    // ----------------------------------------------
     // SaaS Subscriptions (Lineup-specific)
     // Billing state managed exclusively by Cloud Functions (Stripe webhook handler)
     // entity_id may be a teamId or an orgId depending on entity_type

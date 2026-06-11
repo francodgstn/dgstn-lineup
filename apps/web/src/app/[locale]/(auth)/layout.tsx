@@ -50,6 +50,7 @@ const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
   Puzzle,
   Trophy,
   FolderTree,
+  Globe,
 }
 
 // ─── nav config ───────────────────────────────────────────────────────────────

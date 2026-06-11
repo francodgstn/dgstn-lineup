@@ -70,3 +70,9 @@ export const CATEGORIES_COLLECTION = 'categories'
 export const COURSES_COLLECTION = 'courses'
 export const COURSE_MODULES_SUBCOLLECTION = 'modules'
 export const COURSE_LESSONS_SUBCOLLECTION = 'lessons'
+
+// Website plugin (studio site builder)
+// site_drafts: PRIVATE working copy (manager+). site_published: PUBLIC snapshot
+// (public read, written only by the publishWebsite Cloud Function). Both keyed by teamId.
+export const SITE_DRAFTS_COLLECTION = 'site_drafts'
+export const SITE_PUBLISHED_COLLECTION = 'site_published'

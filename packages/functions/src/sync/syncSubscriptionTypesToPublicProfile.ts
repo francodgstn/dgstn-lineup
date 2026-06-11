@@ -43,10 +43,19 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
       throw queryErr
     }
 
-    const aggregatorTypes = snapshot!.docs.map((d) => ({
-      id: d.id,
-      name: d.data().name as string,
-    }))
+    const aggregatorTypes = snapshot!.docs.map((d) => {
+      const data = d.data()
+      // description powers the Website plugin's Pricing section cards; name is
+      // used by the booking portal. Omit description when absent (no undefined).
+      const entry: { id: string; name: string; description?: string } = {
+        id: d.id,
+        name: data.name as string,
+      }
+      if (typeof data.description === 'string' && data.description) {
+        entry.description = data.description
+      }
+      return entry
+    })
 
     const [updateErr] = await to(
       publicProfileRef.set({ aggregator_subscription_types: aggregatorTypes }, { merge: true })

@@ -5,10 +5,13 @@ export const websiteManifest: PluginManifest = {
   id: 'website',
   nameKey: 'websiteName',
   descriptionKey: 'websiteDescription',
-  category: 'content',
+  category: 'website',
   minPlan: 'studio',
-  status: 'coming_soon',
+  status: 'available',
   addon: PLUGIN_ADDONS['website'],
   iconName: 'Globe',
   hasOwnerConfig: true,
+  navContributions: [
+    { href: '/plugins/website', labelKey: 'websiteNavLabel', icon: 'Globe', section: 'configure' },
+  ],
 }
