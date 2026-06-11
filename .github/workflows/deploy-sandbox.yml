@@ -5,8 +5,9 @@ name: Deploy Sandbox
 # Cloud Functions + Firestore rules/indexes + Storage rules + RTDB rules.
 #
 # Runs on pushes to main that touch backend config, and on manual dispatch.
-# Demo *data* is NOT reseeded here (that would wipe the running demo) — reseed
-# manually with `pnpm reset:sandbox && pnpm seed:sandbox`.
+# Demo *data* is reseeded ONLY on a manual run with reseed_demo=true (it wipes
+# the running demo + all auth users) — auto-deploys never touch data. You can
+# also reseed locally with `pnpm reset:sandbox && pnpm seed:sandbox`.
 
 on:
   push:
@@ -20,6 +21,11 @@ on:
       - 'firebase.json'
       - '.github/workflows/deploy-sandbox.yml'
   workflow_dispatch:
+    inputs:
+      reseed_demo:
+        description: 'DESTRUCTIVE: wipe & reseed the sandbox demo data after deploy'
+        type: boolean
+        default: false
 
 # Required for keyless auth to GCP via Workload Identity Federation (OIDC).
 permissions:
@@ -79,3 +85,17 @@ jobs:
       # instance").
       - name: Deploy to Firebase (Sandbox)
         run: npx firebase-tools deploy --project sandbox --only functions,firestore,storage --non-interactive --force
+
+      # Optional demo reseed — manual dispatch + reseed_demo=true only, so routine
+      # backend deploys never wipe the running demo. Reuses the ADC from the auth
+      # step; the deploy SA's roles/firebase.admin covers Firestore + Auth writes.
+      # GOOGLE_CLOUD_PROJECT is pinned to satisfy reset-sandbox-db.ts's project
+      # guard regardless of what the auth step exported. Runs after deploy so the
+      # fresh data lands against the just-deployed rules/indexes (e.g. fromBioLink).
+      - name: Reseed demo data (destructive)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reseed_demo }}
+        env:
+          GOOGLE_CLOUD_PROJECT: linyup-sandbox
+        run: |
+          pnpm reset:sandbox
+          pnpm seed:sandbox
