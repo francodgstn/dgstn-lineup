@@ -5,17 +5,31 @@ import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
-  ChevronLeft, ChevronRight, Clock, MapPin, Users, User,
-  Pencil, Trash2, CalendarDays, CalendarRange,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  MapPin,
+  Users,
+  Pencil,
+  Trash2,
+  CalendarDays,
 } from 'lucide-react'
-import type { Route } from 'next'
-import { useRouter } from '@/i18n/navigation'
 import type { Session, Activity, Event } from '@linyup/shared'
 import { SessionPeekSheet } from '@/components/sessions/SessionPeekSheet'
+import { EventPeekSheet } from '@/components/events/EventPeekSheet'
 
 // ─── colour palette ───────────────────────────────────────────────────────────
 
-const PALETTE = ['#7C3AED', '#EC4899', '#3B82F6', '#10B981', '#F59E0B', '#F43F5E', '#0EA5E9', '#22C55E']
+const PALETTE = [
+  '#7C3AED',
+  '#EC4899',
+  '#3B82F6',
+  '#10B981',
+  '#F59E0B',
+  '#F43F5E',
+  '#0EA5E9',
+  '#22C55E',
+]
 
 function activityAccent(activityId?: string | null, activities: Activity[] = []): string {
   const custom = activities.find((a) => a.id === activityId)?.color
@@ -28,17 +42,17 @@ function activityAccent(activityId?: string | null, activities: Activity[] = [])
 
 const EVENT_TYPE_COLOR: Record<string, string> = {
   competition: '#EF4444',
-  camp:        '#F97316',
-  exam:        '#8B5CF6',
-  seminar:     '#3B82F6',
-  workshop:    '#10B981',
+  camp: '#F97316',
+  exam: '#8B5CF6',
+  seminar: '#3B82F6',
+  workshop: '#10B981',
 }
 
 // ─── calendar helpers ─────────────────────────────────────────────────────────
 
 function buildMonthGrid(year: number, month: number): Date[][] {
-  const first  = new Date(year, month, 1)
-  const last   = new Date(year, month + 1, 0)
+  const first = new Date(year, month, 1)
+  const last = new Date(year, month + 1, 0)
   const offset = (first.getDay() + 6) % 7 // Mon=0 … Sun=6
   // Pad with real prev/next-month days so every week is complete
   const total = Math.ceil((offset + last.getDate()) / 7) * 7
@@ -50,7 +64,9 @@ function buildMonthGrid(year: number, month: number): Date[][] {
 
 const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate()
 
 function addDays(d: Date, n: number) {
   const r = new Date(d)
@@ -73,7 +89,6 @@ function itemMs(item: DayItem) {
   return (item.data.start as unknown as { toDate(): Date } | undefined)?.toDate().getTime() ?? 0
 }
 
-type DetailMode = 'day' | 'week'
 type DayItem = { kind: 'session'; data: Session } | { kind: 'event'; data: Event }
 
 // ─── StatusBadge ──────────────────────────────────────────────────────────────
@@ -81,9 +96,18 @@ type DayItem = { kind: 'session'; data: Session } | { kind: 'event'; data: Event
 function StatusBadge({ status }: { status: string }) {
   const t = useTranslations('Calendar')
   const cfg: Record<string, { cls: string; label: string }> = {
-    open:      { cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', label: t('statusOpen') },
-    full:      { cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',         label: t('statusFull') },
-    cancelled: { cls: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',                 label: t('statusCancelled') },
+    open: {
+      cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+      label: t('statusOpen'),
+    },
+    full: {
+      cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+      label: t('statusFull'),
+    },
+    cancelled: {
+      cls: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
+      label: t('statusCancelled'),
+    },
   }
   const { cls, label } = cfg[status] ?? { cls: 'bg-muted text-muted-foreground', label: status }
   return (
@@ -107,7 +131,17 @@ interface DayCellProps {
   onClick: (d: Date) => void
 }
 
-function DayCell({ day, count, isSelected, isToday, isOutside, inWeek, bandStart, bandEnd, onClick }: DayCellProps) {
+function DayCell({
+  day,
+  count,
+  isSelected,
+  isToday,
+  isOutside,
+  inWeek,
+  bandStart,
+  bandEnd,
+  onClick,
+}: DayCellProps) {
   const dotColor = isSelected ? 'rgba(255,255,255,0.8)' : 'var(--primary)'
   const muted = isOutside && !isSelected
 
@@ -122,17 +156,23 @@ function DayCell({ day, count, isSelected, isToday, isOutside, inWeek, bandStart
         isSelected
           ? 'bg-primary text-primary-foreground'
           : cn(isToday && 'text-primary font-semibold', !inWeek && 'hover:bg-muted'),
-        muted && 'text-muted-foreground/50',
+        muted && 'text-muted-foreground/50'
       )}
     >
       <span className="text-sm leading-none">{day.getDate()}</span>
       {count > 0 && (
         <div className={cn('flex items-center justify-center h-2', muted && 'opacity-40')}>
           {/* front dot */}
-          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+          <div
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: dotColor }}
+          />
           {/* back dot — offset behind front, lower opacity → "stacked" look */}
           {count > 1 && (
-            <div className="w-1.5 h-1.5 rounded-full shrink-0 -ml-0.5" style={{ backgroundColor: dotColor, opacity: 0.4 }} />
+            <div
+              className="w-1.5 h-1.5 rounded-full shrink-0 -ml-0.5"
+              style={{ backgroundColor: dotColor, opacity: 0.4 }}
+            />
           )}
         </div>
       )}
@@ -160,7 +200,7 @@ function SessionCard({ session, activities, onOpen, onEdit, onDelete }: SessionC
       tabIndex={0}
       onClick={() => onOpen(session)}
       onKeyDown={(e) => e.key === 'Enter' && onOpen(session)}
-      className="flex gap-3 rounded-xl border bg-card p-3.5 hover:bg-accent/20 transition-colors group cursor-pointer"
+      className="flex gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors group cursor-pointer"
     >
       {/* activity colour strip */}
       <div className="w-1 rounded-full shrink-0 self-stretch" style={{ backgroundColor: color }} />
@@ -168,7 +208,9 @@ function SessionCard({ session, activities, onOpen, onEdit, onDelete }: SessionC
       <div className="flex-1 min-w-0 space-y-1.5">
         {/* row 1: name + status */}
         <div className="flex items-center justify-between gap-2">
-          <span className="font-medium text-sm truncate">{session.activityName ?? t('noActivity')}</span>
+          <span className="font-medium text-sm truncate">
+            {session.activityName ?? t('noActivity')}
+          </span>
           <StatusBadge status={session.status ?? 'open'} />
         </div>
 
@@ -195,14 +237,24 @@ function SessionCard({ session, activities, onOpen, onEdit, onDelete }: SessionC
           </span>
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button
-              variant="ghost" size="icon" className="h-7 w-7"
-              onClick={(e) => { e.stopPropagation(); onEdit(session) }}
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(session)
+              }}
             >
               <Pencil className="h-3.5 w-3.5" />
             </Button>
             <Button
-              variant="ghost" size="icon" className="h-7 w-7"
-              onClick={(e) => { e.stopPropagation(); onDelete(session) }}
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(session)
+              }}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -215,17 +267,16 @@ function SessionCard({ session, activities, onOpen, onEdit, onDelete }: SessionC
 
 // ─── EventCard ────────────────────────────────────────────────────────────────
 
-function EventCard({ event }: { event: Event }) {
-  const router = useRouter()
+function EventCard({ event, onOpen }: { event: Event; onOpen: (e: Event) => void }) {
   const color = EVENT_TYPE_COLOR[event.type] ?? '#6B7280'
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => router.push(`/events/${event.id}` as Route)}
-      onKeyDown={(e) => e.key === 'Enter' && router.push(`/events/${event.id}` as Route)}
-      className="flex gap-3 rounded-xl border bg-card p-3.5 hover:bg-accent/20 transition-colors cursor-pointer"
+      onClick={() => onOpen(event)}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen(event)}
+      className="flex gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors cursor-pointer"
     >
       <div className="w-1 rounded-full shrink-0 self-stretch" style={{ backgroundColor: color }} />
       <div className="flex-1 min-w-0 space-y-1.5">
@@ -272,7 +323,11 @@ interface PositionedSession {
  * sessions form a cluster; within a cluster each session is greedily assigned
  * the first free column and all cluster members share the column count.
  */
-function layoutDaySessions(daySessions: Session[], rangeStartHour: number, rangeEndHour: number): PositionedSession[] {
+function layoutDaySessions(
+  daySessions: Session[],
+  rangeStartHour: number,
+  rangeEndHour: number
+): PositionedSession[] {
   const rangeStartMin = rangeStartHour * 60
   const rangeEndMin = rangeEndHour * 60
   const items = daySessions
@@ -295,7 +350,10 @@ function layoutDaySessions(daySessions: Session[], rangeStartHour: number, range
     const colEnds: number[] = []
     const cols = cluster.map((it) => {
       let c = colEnds.findIndex((end) => end <= it.startMin)
-      if (c === -1) { c = colEnds.length; colEnds.push(0) }
+      if (c === -1) {
+        c = colEnds.length
+        colEnds.push(0)
+      }
       colEnds[c] = it.endMin
       return c
     })
@@ -330,6 +388,8 @@ interface SessionsCalendarProps {
   events?: Event[]
   onEdit: (s: Session) => void
   onDelete: (s: Session) => void
+  onEventEdit?: (e: Event) => void
+  onEventDelete?: (e: Event) => void
   viewYear?: number
   viewMonth?: number
   onNavigate?: (year: number, month: number) => void
@@ -341,27 +401,32 @@ export default function SessionsCalendar({
   events = [],
   onEdit,
   onDelete,
-  viewYear:  externalYear,
+  onEventEdit,
+  onEventDelete,
+  viewYear: externalYear,
   viewMonth: externalMonth,
   onNavigate,
 }: SessionsCalendarProps) {
   const t = useTranslations('Calendar')
   const tCommon = useTranslations('Common')
-  const router = useRouter()
   const today = useMemo(() => new Date(), [])
 
-  const [internalYear,  setInternalYear ] = useState(() => today.getFullYear())
+  const [internalYear, setInternalYear] = useState(() => today.getFullYear())
   const [internalMonth, setInternalMonth] = useState(() => today.getMonth())
-  const [selected,      setSelected     ] = useState<Date>(() => new Date(today))
-  // Default to the week view — gives the most useful at-a-glance schedule.
-  const [mode,          setMode         ] = useState<DetailMode>('week')
+  const [selected, setSelected] = useState<Date>(() => new Date(today))
   const [peekSessionId, setPeekSessionId] = useState<string | null>(null)
+  const [peekEventId, setPeekEventId] = useState<string | null>(null)
 
-  const viewYear  = externalYear  ?? internalYear
+  const viewYear = externalYear ?? internalYear
   const viewMonth = externalMonth ?? internalMonth
 
   function navigate(y: number, m: number) {
-    if (onNavigate) { onNavigate(y, m) } else { setInternalYear(y); setInternalMonth(m) }
+    if (onNavigate) {
+      onNavigate(y, m)
+    } else {
+      setInternalYear(y)
+      setInternalMonth(m)
+    }
   }
 
   /** Select a date and keep the mini calendar (and data window) on its month. */
@@ -395,38 +460,30 @@ export default function SessionsCalendar({
   }, [events])
 
   const daySessions = useMemo(
-    () => (sessionsByDate.get(dateKey(selected)) ?? []).slice().sort((a, b) =>
-      itemMs({ kind: 'session', data: a }) - itemMs({ kind: 'session', data: b })),
-    [sessionsByDate, selected],
+    () =>
+      (sessionsByDate.get(dateKey(selected)) ?? [])
+        .slice()
+        .sort(
+          (a, b) => itemMs({ kind: 'session', data: a }) - itemMs({ kind: 'session', data: b })
+        ),
+    [sessionsByDate, selected]
   )
   const dayEvents = useMemo(
-    () => (eventsByDate.get(dateKey(selected)) ?? []).slice().sort((a, b) =>
-      itemMs({ kind: 'event', data: a }) - itemMs({ kind: 'event', data: b })),
-    [eventsByDate, selected],
+    () =>
+      (eventsByDate.get(dateKey(selected)) ?? [])
+        .slice()
+        .sort((a, b) => itemMs({ kind: 'event', data: a }) - itemMs({ kind: 'event', data: b })),
+    [eventsByDate, selected]
   )
 
   const weeks = useMemo(() => buildMonthGrid(viewYear, viewMonth), [viewYear, viewMonth])
 
-  // Month-wide stats for the displayed month (sessions query window covers prev/current/next month)
-  const monthStats = useMemo(() => {
-    const inMonth = (ts?: { toDate(): Date } | null) => {
-      const d = ts?.toDate()
-      return !!d && d.getFullYear() === viewYear && d.getMonth() === viewMonth
-    }
-    let groupClasses = 0
-    let coaching = 0
-    for (const s of sessions) {
-      if (!inMonth(s.start)) continue
-      if (s.activityType === 'coaching') coaching++
-      else groupClasses++
-    }
-    const eventCount = events.filter((e) => inMonth(e.start as unknown as { toDate(): Date })).length
-    return { groupClasses, coaching, eventCount }
-  }, [sessions, events, viewYear, viewMonth])
-
   const weekStart = useMemo(() => startOfWeek(selected), [selected])
-  const weekEnd   = useMemo(() => addDays(weekStart, 6), [weekStart])
-  const weekDays  = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
+  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
+    [weekStart]
+  )
 
   // Week time grid: hour range (8–20 by default, stretched to fit) + positioned blocks per day
   const weekGrid = useMemo(() => {
@@ -437,7 +494,8 @@ export default function SessionsCalendar({
         const st = (s.start as { toDate(): Date }).toDate()
         startHour = Math.min(startHour, st.getHours())
         const en = (s.end as { toDate(): Date } | undefined)?.toDate()
-        const endH = en && sameDay(en, st) ? en.getHours() + (en.getMinutes() > 0 ? 1 : 0) : st.getHours() + 1
+        const endH =
+          en && sameDay(en, st) ? en.getHours() + (en.getMinutes() > 0 ? 1 : 0) : st.getHours() + 1
         endHour = Math.max(endHour, Math.min(endH, 24))
       }
     }
@@ -450,20 +508,33 @@ export default function SessionsCalendar({
   }, [weekDays, sessionsByDate, eventsByDate])
 
   const gridHeight = (weekGrid.endHour - weekGrid.startHour) * HOUR_PX
-  const hourCount  = weekGrid.endHour - weekGrid.startHour
+  const hourCount = weekGrid.endHour - weekGrid.startHour
 
   // Locale-aware labels
-  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString([], { month: 'long', year: 'numeric' })
+  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString([], {
+    month: 'long',
+    year: 'numeric',
+  })
   const weekdayNarrow = useMemo(
     // 2024-01-01 is a Monday — derives Mon-first narrow labels from the browser locale
-    () => Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString([], { weekday: 'narrow' })),
-    [],
+    () =>
+      Array.from({ length: 7 }, (_, i) =>
+        new Date(2024, 0, 1 + i).toLocaleDateString([], { weekday: 'narrow' })
+      ),
+    []
   )
 
   function weekRangeLabel() {
     const sameMonth = weekStart.getMonth() === weekEnd.getMonth()
-    const startStr = weekStart.toLocaleDateString([], sameMonth ? { day: 'numeric' } : { day: 'numeric', month: 'short' })
-    const endStr = weekEnd.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
+    const startStr = weekStart.toLocaleDateString(
+      [],
+      sameMonth ? { day: 'numeric' } : { day: 'numeric', month: 'short' }
+    )
+    const endStr = weekEnd.toLocaleDateString([], {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
     return `${startStr} – ${endStr}`
   }
 
@@ -477,19 +548,19 @@ export default function SessionsCalendar({
   }
 
   function step(dir: 1 | -1) {
-    selectDate(addDays(selected, dir * (mode === 'day' ? 1 : 7)))
+    selectDate(addDays(selected, dir * 7))
   }
   function goToday() {
     selectDate(new Date(today))
   }
 
   const openSessionPeek = (s: Session) => setPeekSessionId(s.id)
+  const openEventPeek = (e: Event) => setPeekEventId(e.id)
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-
-      {/* ── Calendar pane ── */}
-      <div className="lg:w-72 shrink-0">
+      {/* ── Calendar pane (right on desktop) ── */}
+      <div className="lg:order-2 lg:w-72 shrink-0">
         {/* Month navigation */}
         <div className="flex items-center justify-between mb-3 px-0.5">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={prevMonth}>
@@ -504,7 +575,10 @@ export default function SessionsCalendar({
         {/* Weekday labels */}
         <div className="grid grid-cols-7 mb-1">
           {weekdayNarrow.map((label, i) => (
-            <div key={i} className="text-center text-[11px] font-medium text-muted-foreground py-1 select-none">
+            <div
+              key={i}
+              className="text-center text-[11px] font-medium text-muted-foreground py-1 select-none"
+            >
               {label}
             </div>
           ))}
@@ -513,14 +587,17 @@ export default function SessionsCalendar({
         {/* Day grid */}
         {weeks.map((week, wi) => {
           const inBand = (d: Date) =>
-            mode === 'week' && d.getTime() >= weekStart.getTime() && d.getTime() <= weekEnd.getTime()
+            d.getTime() >= weekStart.getTime() && d.getTime() <= weekEnd.getTime()
           return (
             <div key={wi} className="grid grid-cols-7">
               {week.map((day, di) => (
                 <DayCell
                   key={di}
                   day={day}
-                  count={(sessionsByDate.get(dateKey(day))?.length ?? 0) + (eventsByDate.get(dateKey(day))?.length ?? 0)}
+                  count={
+                    (sessionsByDate.get(dateKey(day))?.length ?? 0) +
+                    (eventsByDate.get(dateKey(day))?.length ?? 0)
+                  }
                   isSelected={sameDay(day, selected)}
                   isToday={sameDay(day, today)}
                   isOutside={day.getMonth() !== viewMonth}
@@ -534,85 +611,20 @@ export default function SessionsCalendar({
           )
         })}
 
-        {/* Month overview — desktop only, fills the space under the mini calendar */}
-        <div className="hidden lg:block mt-6 pt-4 border-t">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 select-none">
-            {t('monthSummary')}
+        {/* Selected-day detail — the day agenda, anchored under the calendar */}
+        <div className="mt-6 pt-4 border-t">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-3 select-none capitalize">
+            {selected.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
-          <div className="space-y-0.5">
-            <div className="flex items-center justify-between py-1">
-              <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Users className="h-3.5 w-3.5" />{t('monthGroupClasses')}
-              </span>
-              <span className="text-sm font-semibold tabular-nums">{monthStats.groupClasses}</span>
-            </div>
-            {monthStats.coaching > 0 && (
-              <div className="flex items-center justify-between py-1">
-                <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <User className="h-3.5 w-3.5" />{t('monthCoaching')}
-                </span>
-                <span className="text-sm font-semibold tabular-nums">{monthStats.coaching}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between py-1">
-              <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CalendarRange className="h-3.5 w-3.5" />{t('monthEvents')}
-              </span>
-              <span className="text-sm font-semibold tabular-nums">{monthStats.eventCount}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Detail pane ── */}
-      <div className="flex-1 min-w-0">
-        {/* Detail header: stepper + title + today + day/week toggle */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-          <div className="flex items-center gap-1 min-w-0">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => step(-1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => step(1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <h3 className="font-semibold text-base truncate ml-1">
-              {mode === 'day'
-                ? selected.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-                : weekRangeLabel()}
-            </h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={goToday}>
-              {tCommon('today')}
-            </Button>
-            <div className="flex gap-1 p-1 bg-muted rounded-lg">
-              {(['day', 'week'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={cn(
-                    'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
-                    mode === m ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {t(m === 'day' ? 'modeDay' : 'modeWeek')}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Day mode ── */}
-        {mode === 'day' && (
-          daySessions.length === 0 && dayEvents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-              <CalendarDays className="h-8 w-8 opacity-30" />
+          {daySessions.length === 0 && dayEvents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2">
+              <CalendarDays className="h-7 w-7 opacity-30" />
               <p className="text-sm">{t('emptyDay')}</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="-mx-2 space-y-0.5">
               {dayEvents.map((e) => (
-                <EventCard key={e.id} event={e} />
+                <EventCard key={e.id} event={e} onOpen={openEventPeek} />
               ))}
               {daySessions.map((s) => (
                 <SessionCard
@@ -625,145 +637,199 @@ export default function SessionsCalendar({
                 />
               ))}
             </div>
-          )
-        )}
+          )}
+        </div>
+      </div>
 
-        {/* ── Week mode — timetable grid ── */}
-        {mode === 'week' && (
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <div className="min-w-[640px]">
+      {/* ── Detail pane (left on desktop) ── */}
+      <div className="lg:order-1 flex-1 min-w-0">
+        {/* Week header: stepper + range + today */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-1 min-w-0">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => step(-1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => step(1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <h3 className="font-semibold text-base truncate ml-1">{weekRangeLabel()}</h3>
+          </div>
+          <Button variant="ghost" size="sm" onClick={goToday}>
+            {tCommon('today')}
+          </Button>
+        </div>
 
-                {/* Day headers — click to zoom into day mode */}
+        {/* ── Week timetable grid ── */}
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <div className="min-w-[640px]">
+              {/* Day headers — click to focus that day in the detail panel */}
+              <div className="grid border-b" style={WEEK_GRID_COLS}>
+                <div />
+                {weekGrid.days.map(({ day }) => {
+                  const isToday = sameDay(day, today)
+                  const isSelected = sameDay(day, selected)
+                  return (
+                    <button
+                      key={dateKey(day)}
+                      onClick={() => selectDate(day)}
+                      className={cn(
+                        'flex flex-col items-center gap-0.5 py-2 border-l group min-w-0 transition-colors',
+                        isSelected && 'bg-primary/[0.07]'
+                      )}
+                      title={day.toLocaleDateString([], {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                      })}
+                    >
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {day.toLocaleDateString([], { weekday: 'short' })}
+                      </span>
+                      <span
+                        className={cn(
+                          'h-6 w-6 rounded-full flex items-center justify-center text-sm font-semibold transition-colors',
+                          isToday
+                            ? 'bg-primary text-primary-foreground'
+                            : isSelected
+                              ? 'bg-primary/15 text-primary'
+                              : 'group-hover:bg-muted'
+                        )}
+                      >
+                        {day.getDate()}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Events strip */}
+              {weekGrid.hasEvents && (
                 <div className="grid border-b" style={WEEK_GRID_COLS}>
                   <div />
-                  {weekGrid.days.map(({ day }) => {
-                    const isToday = sameDay(day, today)
-                    return (
-                      <button
-                        key={dateKey(day)}
-                        onClick={() => { selectDate(day); setMode('day') }}
-                        className="flex flex-col items-center gap-0.5 py-2 border-l group min-w-0"
-                        title={t('modeDay')}
-                      >
-                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                          {day.toLocaleDateString([], { weekday: 'short' })}
-                        </span>
-                        <span className={cn(
-                          'h-6 w-6 rounded-full flex items-center justify-center text-sm font-semibold transition-colors',
-                          isToday ? 'bg-primary text-primary-foreground' : 'group-hover:bg-muted',
-                        )}>
-                          {day.getDate()}
-                        </span>
-                      </button>
-                    )
-                  })}
+                  {weekGrid.days.map(({ day, events: dayEvts }) => (
+                    <div
+                      key={dateKey(day)}
+                      className={cn(
+                        'border-l px-1 py-1 space-y-1 min-w-0',
+                        sameDay(day, selected) && 'bg-primary/[0.07]'
+                      )}
+                    >
+                      {dayEvts.map((e) => {
+                        const color = EVENT_TYPE_COLOR[e.type] ?? '#6B7280'
+                        return (
+                          <button
+                            key={e.id}
+                            onClick={() => openEventPeek(e)}
+                            className="w-full truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-left transition-opacity hover:opacity-80"
+                            style={{ backgroundColor: `${color}1F`, color }}
+                            title={e.title}
+                          >
+                            {e.title}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Time grid */}
+              <div className="grid" style={WEEK_GRID_COLS}>
+                {/* Hour axis */}
+                <div className="relative" style={{ height: gridHeight }}>
+                  {Array.from({ length: hourCount }, (_, i) => (
+                    <span
+                      key={i}
+                      className="absolute right-1.5 text-[10px] text-muted-foreground tabular-nums select-none"
+                      style={{ top: i * HOUR_PX + 2 }}
+                    >
+                      {String(weekGrid.startHour + i).padStart(2, '0')}:00
+                    </span>
+                  ))}
                 </div>
 
-                {/* Events strip */}
-                {weekGrid.hasEvents && (
-                  <div className="grid border-b" style={WEEK_GRID_COLS}>
-                    <div />
-                    {weekGrid.days.map(({ day, events: dayEvts }) => (
-                      <div key={dateKey(day)} className="border-l px-1 py-1 space-y-1 min-w-0">
-                        {dayEvts.map((e) => {
-                          const color = EVENT_TYPE_COLOR[e.type] ?? '#6B7280'
-                          return (
-                            <button
-                              key={e.id}
-                              onClick={() => router.push(`/events/${e.id}` as Route)}
-                              className="w-full truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-left transition-opacity hover:opacity-80"
-                              style={{ backgroundColor: `${color}1F`, color }}
-                              title={e.title}
-                            >
-                              {e.title}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {/* Day columns */}
+                {weekGrid.days.map(({ day, blocks }) => {
+                  const isToday = sameDay(day, today)
+                  const isSelected = sameDay(day, selected)
+                  const now = new Date()
+                  const nowTop =
+                    ((now.getHours() * 60 + now.getMinutes()) / 60 - weekGrid.startHour) * HOUR_PX
+                  return (
+                    <div
+                      key={dateKey(day)}
+                      className={cn(
+                        'relative border-l',
+                        // Selected day (from the mini calendar) gets a stronger tint than today.
+                        isSelected ? 'bg-primary/[0.07]' : isToday && 'bg-primary/[0.03]'
+                      )}
+                      style={{ height: gridHeight }}
+                    >
+                      {/* Hour lines */}
+                      {Array.from({ length: hourCount }, (_, i) => (
+                        <div
+                          key={i}
+                          className="absolute inset-x-0 border-t border-border/60"
+                          style={{ top: i * HOUR_PX }}
+                        />
+                      ))}
 
-                {/* Time grid */}
-                <div className="grid" style={WEEK_GRID_COLS}>
-                  {/* Hour axis */}
-                  <div className="relative" style={{ height: gridHeight }}>
-                    {Array.from({ length: hourCount }, (_, i) => (
-                      <span
-                        key={i}
-                        className="absolute right-1.5 text-[10px] text-muted-foreground tabular-nums select-none"
-                        style={{ top: i * HOUR_PX + 2 }}
-                      >
-                        {String(weekGrid.startHour + i).padStart(2, '0')}:00
-                      </span>
-                    ))}
-                  </div>
+                      {/* Now indicator */}
+                      {isToday && nowTop >= 0 && nowTop <= gridHeight && (
+                        <div
+                          className="absolute inset-x-0 z-10 pointer-events-none"
+                          style={{ top: nowTop }}
+                        >
+                          <div className="h-px bg-red-500" />
+                          <div className="absolute -top-[2.5px] left-0 h-1.5 w-1.5 rounded-full bg-red-500" />
+                        </div>
+                      )}
 
-                  {/* Day columns */}
-                  {weekGrid.days.map(({ day, blocks }) => {
-                    const isToday = sameDay(day, today)
-                    const now = new Date()
-                    const nowTop = ((now.getHours() * 60 + now.getMinutes()) / 60 - weekGrid.startHour) * HOUR_PX
-                    return (
-                      <div
-                        key={dateKey(day)}
-                        className={cn('relative border-l', isToday && 'bg-primary/[0.03]')}
-                        style={{ height: gridHeight }}
-                      >
-                        {/* Hour lines */}
-                        {Array.from({ length: hourCount }, (_, i) => (
-                          <div key={i} className="absolute inset-x-0 border-t border-border/60" style={{ top: i * HOUR_PX }} />
-                        ))}
-
-                        {/* Now indicator */}
-                        {isToday && nowTop >= 0 && nowTop <= gridHeight && (
-                          <div className="absolute inset-x-0 z-10 pointer-events-none" style={{ top: nowTop }}>
-                            <div className="h-px bg-red-500" />
-                            <div className="absolute -top-[2.5px] left-0 h-1.5 w-1.5 rounded-full bg-red-500" />
-                          </div>
-                        )}
-
-                        {/* Session blocks */}
-                        {blocks.map(({ session: s, top, height, col, cols }) => {
-                          const color = activityAccent(s.activityId, activities)
-                          const cancelled = s.status === 'cancelled'
-                          return (
-                            <button
-                              key={s.id}
-                              onClick={() => openSessionPeek(s)}
+                      {/* Session blocks */}
+                      {blocks.map(({ session: s, top, height, col, cols }) => {
+                        const color = activityAccent(s.activityId, activities)
+                        const cancelled = s.status === 'cancelled'
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => openSessionPeek(s)}
+                            className={cn(
+                              'absolute z-[5] rounded-md border-l-2 px-1.5 py-0.5 text-left overflow-hidden transition-opacity hover:opacity-75',
+                              cancelled && 'opacity-50'
+                            )}
+                            style={{
+                              top: top + 1,
+                              height: height - 2,
+                              left: `calc(${(col / cols) * 100}% + 2px)`,
+                              width: `calc(${100 / cols}% - 4px)`,
+                              backgroundColor: `${color}1F`,
+                              borderLeftColor: color,
+                            }}
+                          >
+                            <p
                               className={cn(
-                                'absolute z-[5] rounded-md border-l-2 px-1.5 py-0.5 text-left overflow-hidden transition-opacity hover:opacity-75',
-                                cancelled && 'opacity-50',
+                                'text-[11px] font-medium truncate leading-tight',
+                                cancelled && 'line-through'
                               )}
-                              style={{
-                                top: top + 1,
-                                height: height - 2,
-                                left: `calc(${(col / cols) * 100}% + 2px)`,
-                                width: `calc(${100 / cols}% - 4px)`,
-                                backgroundColor: `${color}1F`,
-                                borderLeftColor: color,
-                              }}
                             >
-                              <p className={cn('text-[11px] font-medium truncate leading-tight', cancelled && 'line-through')}>
-                                {s.activityName ?? t('noActivity')}
+                              {s.activityName ?? t('noActivity')}
+                            </p>
+                            {height >= 36 && (
+                              <p className="text-[10px] text-muted-foreground truncate">
+                                {formatTs(s.start)} – {formatTs(s.end)}
                               </p>
-                              {height >= 36 && (
-                                <p className="text-[10px] text-muted-foreground truncate">
-                                  {formatTs(s.start)} – {formatTs(s.end)}
-                                </p>
-                              )}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* ── Session preview ── */}
@@ -771,8 +837,28 @@ export default function SessionsCalendar({
         sessionId={peekSessionId}
         onClose={() => setPeekSessionId(null)}
         activities={activities}
-        onEdit={(s) => { setPeekSessionId(null); onEdit(s) }}
-        onDelete={(s) => { setPeekSessionId(null); onDelete(s) }}
+        onEdit={(s) => {
+          setPeekSessionId(null)
+          onEdit(s)
+        }}
+        onDelete={(s) => {
+          setPeekSessionId(null)
+          onDelete(s)
+        }}
+      />
+
+      {/* ── Event preview ── */}
+      <EventPeekSheet
+        eventId={peekEventId}
+        onClose={() => setPeekEventId(null)}
+        onEdit={(e) => {
+          setPeekEventId(null)
+          onEventEdit?.(e)
+        }}
+        onDelete={(e) => {
+          setPeekEventId(null)
+          onEventDelete?.(e)
+        }}
       />
     </div>
   )
