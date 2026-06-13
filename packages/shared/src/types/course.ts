@@ -12,12 +12,18 @@ export type LessonType = 'text' | 'audio' | 'video'
 // everything else is an external embed/link.
 export type MediaSource = 'youtube' | 'vimeo' | 'url' | 'upload'
 
-// Future paid-access hook — modelled now, NOT enforced in the MVP.
+// Access gating for a course, enforced by Firestore/Storage rules and the public
+// Space web area:
+//  - 'free'         → open to anyone, no login (incl. media)
+//  - 'registered'   → any signed-in contact of the team (display: "Sign-in required");
+//                     does NOT require an active membership
+//  - 'subscription' → a signed-in contact whose subscription_type_id is one of
+//                     subscriptionTypeIds
 // subscriptionTypeIds is an array so it is ready for the planned move to multiple
 // concurrent active subscriptions per contact.
 export interface CourseAccessRule {
-  type: 'free' | 'members' | 'subscription'
-  subscriptionTypeIds?: string[] // team subscription_types ids; future gating
+  type: 'free' | 'registered' | 'subscription'
+  subscriptionTypeIds?: string[] // team subscription_types ids
 }
 
 export interface Course {
@@ -30,7 +36,7 @@ export interface Course {
   summary?: string
   coverImageUrl?: string
   status: CourseStatus
-  accessRule: CourseAccessRule // default { type: 'members' }
+  accessRule: CourseAccessRule // default { type: 'registered' }
   // Denormalised counters — maintained client-side, used for usage limits + list UI.
   moduleCount?: number
   lessonCount?: number

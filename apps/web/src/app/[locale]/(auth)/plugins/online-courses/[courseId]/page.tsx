@@ -40,6 +40,7 @@ import {
   type LessonInput,
 } from '@/plugins/online-courses/hooks'
 import { getOnlineCoursesLimits } from '@/plugins/online-courses/limits'
+import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 
 const LESSON_ICON: Record<LessonType, typeof FileText> = {
   text: FileText,
@@ -529,14 +530,15 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
 // ─── Settings tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  courseId, teamId, title, summary, coverImageUrl, accessType, status,
+  courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, status,
 }: {
   courseId: string
   teamId: string
   title: string
   summary: string
   coverImageUrl: string | null
-  accessType: 'free' | 'members' | 'subscription'
+  accessType: 'free' | 'registered' | 'subscription'
+  subscriptionTypeIds?: string[]
   status: CourseStatus
 }) {
   const t = useTranslations('Courses')
@@ -545,19 +547,29 @@ function SettingsTab({
   const [localTitle, setLocalTitle] = useState(title)
   const [localSummary, setLocalSummary] = useState(summary)
   const [localAccess, setLocalAccess] = useState(accessType)
+  const [localSubIds, setLocalSubIds] = useState<string[]>(initialSubIds ?? [])
   const [uploading, setUploading] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const coverRef = useRef<HTMLInputElement>(null)
 
+  const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['course', courseId] })
-  const dirty = localTitle !== title || localSummary !== summary || localAccess !== accessType
+  const dirty =
+    localTitle !== title ||
+    localSummary !== summary ||
+    localAccess !== accessType ||
+    JSON.stringify(localSubIds.slice().sort()) !==
+      JSON.stringify((initialSubIds ?? []).slice().sort())
 
   const saveMutation = useMutation({
     mutationFn: () => updateCourse(courseId, {
       title: localTitle.trim(),
       summary: localSummary.trim(),
-      accessRule: { type: localAccess },
+      accessRule: localAccess === 'subscription'
+        ? { type: 'subscription', subscriptionTypeIds: localSubIds }
+        : { type: localAccess },
     }),
     onSuccess: () => { invalidate(); toast.success(t('settingsSaved')) },
     onError: () => toast.error(t('errorSave')),
@@ -622,18 +634,45 @@ function SettingsTab({
         <Label>{t('fieldAccess')}</Label>
         <RadioGroup value={localAccess} onValueChange={(v) => setLocalAccess(v as typeof localAccess)}>
           <div className="flex items-center gap-2">
-            <RadioGroupItem value="members" id="access-members" />
-            <Label htmlFor="access-members" className="font-normal">{t('accessMembers')}</Label>
+            <RadioGroupItem value="registered" id="access-registered" />
+            <Label htmlFor="access-registered" className="font-normal">{t('accessRegistered')}</Label>
           </div>
           <div className="flex items-center gap-2">
             <RadioGroupItem value="free" id="access-free" />
             <Label htmlFor="access-free" className="font-normal">{t('accessFree')}</Label>
           </div>
-          <div className="flex items-center gap-2 opacity-50">
-            <RadioGroupItem value="subscription" id="access-sub" disabled />
-            <Label htmlFor="access-sub" className="font-normal">{t('accessSubscription')} — {t('comingSoon')}</Label>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="subscription" id="access-sub" />
+            <Label htmlFor="access-sub" className="font-normal">{t('accessSubscription')}</Label>
           </div>
         </RadioGroup>
+
+        {localAccess === 'subscription' && (
+          <div className="mt-3 space-y-2 rounded-md border bg-muted/30 p-3">
+            <p className="text-xs font-medium">{t('accessSubscriptionTypesLabel')}</p>
+            {subscriptionTypes.length === 0 ? (
+              <p className="text-xs text-muted-foreground">{t('accessNoSubscriptionTypes')}</p>
+            ) : (
+              <div className="space-y-1.5">
+                {subscriptionTypes.map((st) => (
+                  <label key={st.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSubIds.includes(st.id)}
+                      onChange={(e) => {
+                        setLocalSubIds((prev) =>
+                          e.target.checked ? [...prev, st.id] : prev.filter((id) => id !== st.id)
+                        )
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 accent-primary"
+                    />
+                    <span className="text-sm">{st.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2">
@@ -746,7 +785,8 @@ export default function CourseBuilderPage() {
             title={course.title}
             summary={course.summary ?? ''}
             coverImageUrl={course.coverImageUrl ?? null}
-            accessType={course.accessRule?.type ?? 'members'}
+            accessType={course.accessRule?.type ?? 'registered'}
+            subscriptionTypeIds={course.accessRule?.subscriptionTypeIds}
             status={course.status}
           />
         </TabsContent>

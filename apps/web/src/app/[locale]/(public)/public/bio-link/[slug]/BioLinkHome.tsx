@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { GraduationCap } from 'lucide-react'
 import {
   Instagram,
   Facebook,
@@ -64,6 +65,7 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
   const [team, setTeam] = useState<BioLinkTeamData | null>(teamProp ?? null)
   const [loading, setLoading] = useState(!teamProp)
   const [systemDark, setSystemDark] = useState(false)
+  const [hasCourses, setHasCourses] = useState(false)
 
   // Fetch team from public_profile subcollection — no auth required
   useEffect(() => {
@@ -76,7 +78,20 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
     )
     getDocs(q)
       .then((snap) => {
-        if (!snap.empty) setTeam(snap.docs[0].data() as BioLinkTeamData)
+        if (!snap.empty) {
+          setTeam(snap.docs[0].data() as BioLinkTeamData)
+          const teamId = snap.docs[0].ref.parent.parent?.id
+          if (teamId) {
+            // Check for published courses
+            const cq = query(
+              collectionGroup(db, 'public_profile'),
+              where('type', '==', 'course'),
+              where('teamId', '==', teamId),
+              limit(1)
+            )
+            getDocs(cq).then((cs) => setHasCourses(!cs.empty)).catch(() => {})
+          }
+        }
       })
       .catch(() => {
         /* leave team null → not-found state */
@@ -293,6 +308,38 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
                 </a>
               )
             })}
+          </div>
+        )}
+
+        {/* Courses link — shown when team has ≥1 published course */}
+        {hasCourses && (
+          <div className={visibleLinks.length > 0 ? 'mt-3' : 'mt-7'}>
+            <a
+              href={onLinkClick ? undefined : `/public/space/${slug}`}
+              onClick={
+                onLinkClick
+                  ? (e) => {
+                      e.preventDefault()
+                      onLinkClick('external', `/public/space/${slug}`)
+                    }
+                  : undefined
+              }
+              className="flex items-center gap-4 rounded-2xl px-5 py-4 transition-all hover:scale-[1.015] hover:shadow-lg cursor-pointer"
+              style={{ background: cardBg, border: `1px solid ${cardBorder}`, textDecoration: 'none', display: 'flex' }}
+            >
+              <div
+                className="h-9 w-9 rounded-lg flex-shrink-0 flex items-center justify-center"
+                style={{ background: iconBg, color: accent }}
+              >
+                <GraduationCap className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm leading-tight" style={{ color: textMain }}>
+                  Courses
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: textMuted }} />
+            </a>
           </div>
         )}
 

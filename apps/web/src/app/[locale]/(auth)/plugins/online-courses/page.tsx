@@ -37,8 +37,15 @@ const STATUS_BADGE: Record<CourseStatus, string> = {
   archived: 'bg-amber-100 text-amber-700',
 }
 
+const ACCESS_BADGE: Record<string, string> = {
+  free: 'bg-green-100 text-green-700',
+  registered: 'bg-blue-100 text-blue-700',
+  subscription: 'bg-purple-100 text-purple-700',
+}
+
 function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) {
   const t = useTranslations('Courses')
+  const accessType = course.accessRule?.type ?? 'registered'
   return (
     <button
       type="button"
@@ -63,9 +70,14 @@ function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) 
         {course.summary && (
           <p className="text-xs text-muted-foreground line-clamp-2">{course.summary}</p>
         )}
-        <p className="text-xs text-muted-foreground mt-auto pt-1">
-          {t('lessonCount', { count: course.lessonCount ?? 0 })}
-        </p>
+        <div className="flex items-center justify-between mt-auto pt-1">
+          <p className="text-xs text-muted-foreground">
+            {t('lessonCount', { count: course.lessonCount ?? 0 })}
+          </p>
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ACCESS_BADGE[accessType] ?? ''}`}>
+            {accessType === 'free' ? t('accessFree') : accessType === 'subscription' ? t('accessSubscription') : t('accessRegistered')}
+          </span>
+        </div>
       </div>
     </button>
   )

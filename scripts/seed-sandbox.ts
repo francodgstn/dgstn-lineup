@@ -2713,7 +2713,7 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       title: `${primary} Foundations`,
       summary: `A self-paced introduction to ${primary.toLowerCase()} — watch, learn, and practise between classes.`,
       status: 'published' as const,
-      access: 'members' as const,
+      access: 'registered' as const,
       createdDaysAgo: 90,
       modules: [
         {
