@@ -2704,7 +2704,10 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       updated_at: ts(daysFromNow(-12)),
     })
 
-  // ── online courses plugin: 1 published + 1 draft course, each with modules ──
+  // ── online courses plugin: 2 published courses (1 free, 1 sign-in required),
+  // each with modules. Published courses also get a courses/{id}/public_profile/{id}
+  // summary so the public Space lists them even before syncCoursePublicProfile is
+  // deployed/triggered. ──
   const primary = activities[0]?.name ?? 'Training'
   const coach = instructors[0] ?? 'Your coach'
   const courses = [
@@ -2713,7 +2716,7 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       title: `${primary} Foundations`,
       summary: `A self-paced introduction to ${primary.toLowerCase()} — watch, learn, and practise between classes.`,
       status: 'published' as const,
-      access: 'registered' as const,
+      access: 'free' as const,
       createdDaysAgo: 90,
       modules: [
         {
@@ -2771,8 +2774,8 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       id: `${teamId}-course-welcome`,
       title: `Getting started at ${teamName}`,
       summary: 'Our values, etiquette, and how to get the most from your membership.',
-      status: 'draft' as const,
-      access: 'free' as const,
+      status: 'published' as const,
+      access: 'registered' as const,
       createdDaysAgo: 30,
       modules: [
         {
@@ -2862,6 +2865,27 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       createdBy: uid,
       archived_at: null,
     })
+
+    // Mirror what syncCoursePublicProfile writes, so the public "Space" web area can
+    // list published courses even before the trigger is deployed against the project.
+    if (c.status === 'published') {
+      await courseRef
+        .collection('public_profile')
+        .doc(c.id)
+        .set({
+          type: 'course',
+          teamId,
+          slug: `${c.id}`,
+          title: c.title,
+          summary: c.summary,
+          coverImageUrl: null,
+          accessType: c.access,
+          subscriptionTypeIds: [],
+          moduleCount,
+          lessonCount,
+          order: 0,
+        })
+    }
   }
 }
 
