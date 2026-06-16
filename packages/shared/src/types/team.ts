@@ -43,6 +43,9 @@ export interface TeamLink {
   iconName?: string
   isBookingLink?: boolean
   isMembershipLink?: boolean
+  // System link to the public Space (online courses). Only meaningful when the
+  // online-courses plugin is active; routes to /public/space/{slug}.
+  isCoursesLink?: boolean
 }
 
 export type SocialPlatform =

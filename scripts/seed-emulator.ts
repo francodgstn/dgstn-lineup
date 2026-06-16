@@ -406,6 +406,18 @@ async function seedTeam(opts: {
           iconName: 'UserCheck',
           url: null,
         },
+        // Courses system link — only the studio tier installs the online-courses plugin.
+        ...(plan === 'studio'
+          ? [
+              {
+                label: 'Online Courses',
+                isCoursesLink: true,
+                showInBioLink: true,
+                iconName: 'GraduationCap',
+                url: null,
+              },
+            ]
+          : []),
       ],
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
     })
@@ -445,6 +457,17 @@ async function seedTeam(opts: {
           iconName: 'UserCheck',
           url: null,
         },
+        ...(plan === 'studio'
+          ? [
+              {
+                label: 'Online Courses',
+                isCoursesLink: true,
+                showInBioLink: true,
+                iconName: 'GraduationCap',
+                url: null,
+              },
+            ]
+          : []),
       ],
       bookingSettings: {
         flowType: 'activity-first',

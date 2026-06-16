@@ -1475,6 +1475,15 @@ async function seedDemoTeam(profile: SectorProfile) {
       iconName: 'UserCheck',
       url: null,
     },
+    // Courses system link — every sandbox team installs the online-courses plugin.
+    {
+      label: 'Online Courses',
+      description: 'Watch and learn between classes',
+      isCoursesLink: true,
+      showInBioLink: true,
+      iconName: 'GraduationCap',
+      url: null,
+    },
   ]
   const bioLinkBackground = { type: 'gradient', color: portalGradient }
 

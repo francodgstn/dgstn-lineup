@@ -35,6 +35,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       showInBioLink: link.showInBioLink !== false,
       isBookingLink: link.isBookingLink || false,
       isMembershipLink: link.isMembershipLink || false,
+      isCoursesLink: link.isCoursesLink || false,
     })),
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,

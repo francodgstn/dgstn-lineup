@@ -7,6 +7,7 @@ import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useForm, useFieldArray, Controller, useWatch, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -70,6 +71,7 @@ const linkSchema = z.object({
   iconName: z.string().optional(),
   isBookingLink: z.boolean().optional(),
   isMembershipLink: z.boolean().optional(),
+  isCoursesLink: z.boolean().optional(),
 })
 
 const bookingSchema = z.object({
@@ -393,132 +395,94 @@ function AppearanceTab({
 function LinksTab({
   control,
   register,
-  team,
 }: {
   control: ReturnType<typeof useForm<FormData>>['control']
   register: ReturnType<typeof useForm<FormData>>['register']
-  team: Team
 }) {
   const t = useTranslations('BioLink')
   const { fields, append, remove, move } = useFieldArray({ control, name: 'links' })
 
-  const bookingIdx = fields.findIndex(
-    (f) => (f as typeof f & { isBookingLink?: boolean }).isBookingLink
-  )
-  const membershipIdx = fields.findIndex(
-    (f) => (f as typeof f & { isMembershipLink?: boolean }).isMembershipLink
-  )
-
+  // System links (booking, membership, courses) and custom links share ONE list
+  // so they can be reordered freely. System links carry a badge, have no URL and
+  // cannot be deleted; custom links have a URL and a delete button.
   return (
-    <div className="space-y-6">
-      {/* Booking & membership special links */}
-      {[
-        { idx: bookingIdx, badge: t('bookingLink') },
-        { idx: membershipIdx, badge: t('membershipLink') },
-      ]
-        .filter(({ idx }) => idx >= 0)
-        .map(({ idx, badge }) => (
-          <div key={idx} className="rounded-lg border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary" className="text-xs">
-                {badge}
-              </Badge>
-              <Controller
-                control={control}
-                name={`links.${idx}.showInBioLink`}
-                render={({ field }) => (
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={field.value}
-                      onChange={(e) => field.onChange(e.target.checked)}
-                      className="accent-primary"
-                    />
-                    {t('showOnBioLink')}
-                  </label>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t('tabLinks')}</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => append({ label: '', description: '', url: '', showInBioLink: true })}
+        >
+          <Plus className="h-4 w-4 mr-1" />
+          {t('addLink')}
+        </Button>
+      </div>
+
+      {fields.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center border border-dashed rounded-lg py-6">
+          {t('noCustomLinks')}
+        </p>
+      )}
+
+      {fields.map((field, i) => {
+        const f = field as typeof field & {
+          isBookingLink?: boolean
+          isMembershipLink?: boolean
+          isCoursesLink?: boolean
+        }
+        const systemBadge = f.isBookingLink
+          ? t('bookingLink')
+          : f.isMembershipLink
+            ? t('membershipLink')
+            : f.isCoursesLink
+              ? t('coursesLink')
+              : null
+        const isSystem = systemBadge !== null
+        return (
+          <div key={field.id} className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                {isSystem && (
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    {systemBadge}
+                  </Badge>
                 )}
-              />
-            </div>
-            <div className="flex gap-2 items-start">
-              <Controller
-                control={control}
-                name={`links.${idx}.iconName`}
-                render={({ field }) => <IconPicker value={field.value} onChange={field.onChange} />}
-              />
-              <div className="flex-1 grid grid-cols-2 gap-2">
-                <Input
-                  {...register(`links.${idx}.label`)}
-                  placeholder={t('linkLabel')}
-                  className="h-9 text-sm"
-                />
-                <Input
-                  {...register(`links.${idx}.description`)}
-                  placeholder={t('linkDesc')}
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-        ))}
-
-      {/* Custom links */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">{t('customLinks')}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => append({ label: '', description: '', url: '', showInBioLink: true })}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            {t('addLink')}
-          </Button>
-        </div>
-
-        {fields.filter((_, i) => i !== bookingIdx && i !== membershipIdx).length === 0 && (
-          <p className="text-sm text-muted-foreground text-center border border-dashed rounded-lg py-6">
-            {t('noCustomLinks')}
-          </p>
-        )}
-
-        {fields.map((field, i) => {
-          if (i === bookingIdx || i === membershipIdx) return null
-          return (
-            <div key={field.id} className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
                 <Controller
                   control={control}
                   name={`links.${i}.showInBioLink`}
-                  render={({ field: f }) => (
+                  render={({ field: cf }) => (
                     <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none text-muted-foreground">
                       <input
                         type="checkbox"
-                        checked={f.value}
-                        onChange={(e) => f.onChange(e.target.checked)}
+                        checked={cf.value}
+                        onChange={(e) => cf.onChange(e.target.checked)}
                         className="accent-primary"
                       />
                       {t('showOnBioLink')}
                     </label>
                   )}
                 />
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => move(i, i - 1)}
-                    disabled={i === 0}
-                    className="p-1 rounded hover:bg-muted disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => move(i, i + 1)}
-                    disabled={i === fields.length - 1}
-                    className="p-1 rounded hover:bg-muted disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => move(i, i - 1)}
+                  disabled={i === 0}
+                  className="p-1 rounded hover:bg-muted disabled:opacity-30 transition-colors"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(i, i + 1)}
+                  disabled={i === fields.length - 1}
+                  className="p-1 rounded hover:bg-muted disabled:opacity-30 transition-colors"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+                {!isSystem && (
                   <button
                     type="button"
                     onClick={() => remove(i)}
@@ -526,39 +490,41 @@ function LinksTab({
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
-                </div>
+                )}
               </div>
-              <div className="flex gap-2 items-start">
-                <Controller
-                  control={control}
-                  name={`links.${i}.iconName`}
-                  render={({ field: f }) => <IconPicker value={f.value} onChange={f.onChange} />}
-                />
-                <div className="flex-1 space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      {...register(`links.${i}.label`)}
-                      placeholder={t('linkLabel')}
-                      className="h-9 text-sm"
-                    />
-                    <Input
-                      {...register(`links.${i}.description`)}
-                      placeholder={t('linkDesc')}
-                      className="h-9 text-sm"
-                    />
-                  </div>
+            </div>
+            <div className="flex gap-2 items-start">
+              <Controller
+                control={control}
+                name={`links.${i}.iconName`}
+                render={({ field: cf }) => <IconPicker value={cf.value} onChange={cf.onChange} />}
+              />
+              <div className="flex-1 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    {...register(`links.${i}.label`)}
+                    placeholder={t('linkLabel')}
+                    className="h-9 text-sm"
+                  />
+                  <Input
+                    {...register(`links.${i}.description`)}
+                    placeholder={t('linkDesc')}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                {!isSystem && (
                   <Input
                     {...register(`links.${i}.url`)}
                     type="url"
                     placeholder="https://"
                     className="h-9 text-sm font-mono"
                   />
-                </div>
+                )}
               </div>
             </div>
-          )
-        })}
-      </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -691,6 +657,11 @@ function BookingTab({
             label: 'Show fitness app field',
             desc: "Ask new guests which fitness app they're coming from (e.g. Fitpass, ClassPass).",
           },
+          {
+            name: 'booking.coachingEnabled' as const,
+            label: 'Show coaching slots',
+            desc: 'Show coaching slots in the bio-link booking flow.',
+          },
         ] as const
       ).map(({ name, label, desc }) => (
         <div key={name} className="flex items-center justify-between rounded-lg border p-3">
@@ -751,25 +722,6 @@ function BookingTab({
         </div>
       </div>
 
-      {/* Coaching bio-link toggle */}
-      <div className="flex items-center gap-2">
-        <Controller
-          name="booking.coachingEnabled"
-          control={control}
-          render={({ field }) => (
-            <input
-              type="checkbox"
-              id="coachingEnabled"
-              checked={field.value ?? false}
-              onChange={field.onChange}
-              className="accent-primary"
-            />
-          )}
-        />
-        <label htmlFor="coachingEnabled" className="text-sm cursor-pointer">
-          Show coaching slots in bio-link booking
-        </label>
-      </div>
     </div>
   )
 }
@@ -884,6 +836,8 @@ type Tab = 'appearance' | 'links' | 'social' | 'booking'
 export default function TeamBioLinkEditorPage() {
   const { currentTeamId } = useAuth()
   const { data: team, isLoading } = useTeam(currentTeamId)
+  const { isInstalled } = useInstalledPlugins()
+  const coursesActive = isInstalled('online-courses')
   const qc = useQueryClient()
   const t = useTranslations('BioLink')
 
@@ -908,13 +862,13 @@ export default function TeamBioLinkEditorPage() {
     formState: { isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: getDefaults(team ?? null),
+    defaultValues: getDefaults(team ?? null, coursesActive),
   })
 
-  // Re-populate form when team data arrives
+  // Re-populate form when team data arrives or the courses plugin state resolves.
   useEffect(() => {
-    if (team) reset(getDefaults(team))
-  }, [team?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (team) reset(getDefaults(team, coursesActive))
+  }, [team?.id, coursesActive]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live preview values
   const formValues = useWatch({ control })
@@ -1145,7 +1099,7 @@ export default function TeamBioLinkEditorPage() {
                 onHeroRemove={handleHeroRemove}
               />
             )}
-            {tab === 'links' && <LinksTab control={control} register={register} team={team} />}
+            {tab === 'links' && <LinksTab control={control} register={register} />}
             {tab === 'social' && <SocialTab register={register} />}
             {tab === 'booking' && <BookingTab control={control} register={register} />}
           </form>
@@ -1198,7 +1152,40 @@ function stripUndefined<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj)) as T
 }
 
-function getDefaults(team: Team | null): FormData {
+// Normalises stored links and reconciles the courses system link with the
+// online-courses plugin state: present (default-injected) when active, removed
+// when inactive. Booking/membership system links are always preserved.
+function buildLinks(rawLinks: Team['links'], coursesPluginActive: boolean): FormData['links'] {
+  const links = (rawLinks ?? [])
+    .map((l) => ({
+      label: typeof l.label === 'string' ? l.label : '',
+      description: typeof l.description === 'string' ? l.description : undefined,
+      url: typeof l.url === 'string' ? l.url : '',
+      showInBioLink:
+        l.showInBioLink === true || l.showInBioLink === false ? l.showInBioLink : false,
+      iconName: typeof l.iconName === 'string' ? l.iconName : undefined,
+      isBookingLink: l.isBookingLink === true ? (true as const) : undefined,
+      isMembershipLink: l.isMembershipLink === true ? (true as const) : undefined,
+      isCoursesLink: l.isCoursesLink === true ? (true as const) : undefined,
+    }))
+    .filter((l) => coursesPluginActive || !l.isCoursesLink)
+
+  if (coursesPluginActive && !links.some((l) => l.isCoursesLink)) {
+    links.push({
+      label: 'Courses',
+      description: undefined,
+      url: '',
+      showInBioLink: true,
+      iconName: 'GraduationCap',
+      isBookingLink: undefined,
+      isMembershipLink: undefined,
+      isCoursesLink: true,
+    })
+  }
+  return links
+}
+
+function getDefaults(team: Team | null, coursesPluginActive = false): FormData {
   const sl = team?.socialLinks ?? []
   const getSocial = (p: SocialPlatform) => sl.find((s) => s.platform === p)?.url ?? ''
 
@@ -1230,17 +1217,10 @@ function getDefaults(team: Team | null): FormData {
     whatsapp: getSocial('whatsapp'),
     website: getSocial('website'),
     review: getSocial('review'),
-    // Sanitize each link to ensure all required fields are valid for the schema
-    links: (team?.links ?? []).map((l) => ({
-      label: typeof l.label === 'string' ? l.label : '',
-      description: typeof l.description === 'string' ? l.description : undefined,
-      url: typeof l.url === 'string' ? l.url : '',
-      showInBioLink:
-        l.showInBioLink === true || l.showInBioLink === false ? l.showInBioLink : false,
-      iconName: typeof l.iconName === 'string' ? l.iconName : undefined,
-      isBookingLink: l.isBookingLink === true ? true : undefined,
-      isMembershipLink: l.isMembershipLink === true ? true : undefined,
-    })),
+    // Sanitize each link to ensure all required fields are valid for the schema.
+    // The courses system link only exists while the online-courses plugin is
+    // active: drop it when inactive, and inject a default when active & missing.
+    links: buildLinks(team?.links ?? [], coursesPluginActive),
     booking: {
       flowType,
       windowMonths,
