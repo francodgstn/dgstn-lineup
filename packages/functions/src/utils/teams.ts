@@ -181,8 +181,8 @@ export async function createTeamRecord(
 
   const defaultLinks = [
     {
-      label: 'Book a Trial Class',
-      description: "Try a class and see if it's right for you",
+      label: 'Book Now',
+      description: 'Reserve your spot in a session',
       url: '',
       showInBioLink: true,
       isBookingLink: true,

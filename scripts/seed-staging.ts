@@ -707,8 +707,8 @@ async function seedTeam(opts: TeamSeed) {
   const teamLanguage = 'en'
   const portalLinks = [
     {
-      label: 'Book a Free Trial',
-      description: "Try a class and see if it's right for you",
+      label: 'Book Now',
+      description: 'Reserve your spot in a session',
       isBookingLink: true,
       isMembershipLink: false,
       showInBioLink: true,

@@ -8,6 +8,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'fi
 import { db, storage } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { useSaveShortcut } from '@/hooks/useSaveShortcut'
 import { useForm, useFieldArray, Controller, useWatch, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -873,6 +874,11 @@ export default function TeamBioLinkEditorPage() {
   // Live preview values
   const formValues = useWatch({ control })
 
+  // Ctrl/Cmd+S saves the bio-link form (when there are unsaved changes).
+  useSaveShortcut(() => {
+    if (isDirty && !isSubmitting) handleSubmit(onSubmit, onInvalidForm)()
+  })
+
   // ── image helpers ────────────────────────────────────────────────────────
 
   async function uploadImage(file: File, path: string): Promise<string> {
@@ -1172,7 +1178,7 @@ function buildLinks(rawLinks: Team['links'], coursesPluginActive: boolean): Form
 
   if (coursesPluginActive && !links.some((l) => l.isCoursesLink)) {
     links.push({
-      label: 'Courses',
+      label: 'Online Courses',
       description: undefined,
       url: '',
       showInBioLink: true,

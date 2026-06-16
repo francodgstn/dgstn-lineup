@@ -9,6 +9,7 @@ import { storage } from '@/lib/firebase'
 import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useAuth } from '@/contexts/AuthContext'
+import { useSaveShortcut } from '@/hooks/useSaveShortcut'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
@@ -168,6 +169,11 @@ function LessonPanel({
   const acceptFor = featured === 'video' ? 'video/*' : 'audio/*'
   const mediaIncomplete = featured !== 'none' && !mediaUrl.trim()
   const canSave = !!title.trim() && !mediaIncomplete && !saving && !uploadingMedia && !uploadingAttach
+
+  // Ctrl/Cmd+S saves the lesson currently being edited.
+  useSaveShortcut(() => {
+    if (canSave) handleSave()
+  })
 
   return (
     <div className="rounded-lg border bg-card lg:sticky lg:top-4">
@@ -573,6 +579,11 @@ function SettingsTab({
     }),
     onSuccess: () => { invalidate(); toast.success(t('settingsSaved')) },
     onError: () => toast.error(t('errorSave')),
+  })
+
+  // Ctrl/Cmd+S saves the settings (when there are unsaved changes).
+  useSaveShortcut(() => {
+    if (dirty && !saveMutation.isPending) saveMutation.mutate()
   })
 
   async function handleCover(e: React.ChangeEvent<HTMLInputElement>) {

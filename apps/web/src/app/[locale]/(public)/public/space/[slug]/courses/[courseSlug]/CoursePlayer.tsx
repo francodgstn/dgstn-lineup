@@ -352,10 +352,10 @@ export default function CoursePlayer({ courseSlug }: Props) {
                   <MediaPlayer lesson={selectedLesson} />
                 )}
 
-                {/* Rich-text body */}
+                {/* Rich-text body — same .prose-notes styling as the editor (WYSIWYG) */}
                 {selectedLesson.body && (
                   <div
-                    className="prose prose-sm max-w-none dark:prose-invert"
+                    className="prose-notes prose-relaxed max-w-none"
                     dangerouslySetInnerHTML={{ __html: selectedLesson.body }}
                   />
                 )}

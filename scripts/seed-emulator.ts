@@ -391,7 +391,7 @@ async function seedTeam(opts: {
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
       links: [
         {
-          label: 'Book a Free Trial',
+          label: 'Book Now',
           isBookingLink: true,
           isMembershipLink: false,
           showInBioLink: true,
@@ -442,7 +442,7 @@ async function seedTeam(opts: {
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
       links: [
         {
-          label: 'Book a Free Trial',
+          label: 'Book Now',
           isBookingLink: true,
           isMembershipLink: false,
           showInBioLink: true,
@@ -2028,7 +2028,7 @@ async function seedFreeTeam() {
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
       links: [
         {
-          label: 'Book a Free Trial',
+          label: 'Book Now',
           isBookingLink: true,
           isMembershipLink: false,
           showInBioLink: true,
@@ -2058,7 +2058,7 @@ async function seedFreeTeam() {
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
       links: [
         {
-          label: 'Book a Free Trial',
+          label: 'Book Now',
           isBookingLink: true,
           isMembershipLink: false,
           showInBioLink: true,

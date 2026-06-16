@@ -1458,8 +1458,8 @@ async function seedDemoTeam(profile: SectorProfile) {
   // ── team doc + public profile ─────────────────────────────────────────────
   const portalLinks = [
     {
-      label: 'Book a Free Trial',
-      description: "Try a class and see if it's right for you",
+      label: 'Book Now',
+      description: 'Reserve your spot in a session',
       isBookingLink: true,
       isMembershipLink: false,
       showInBioLink: true,
@@ -2648,7 +2648,7 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       subheadline: description,
       align: 'center',
       overlay: 45,
-      cta: { label: 'Book a Free Trial', action: 'booking' },
+      cta: { label: 'Book Now', action: 'booking' },
     },
     {
       id: `${teamId}-sec-about`,
