@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { collection, doc, getDoc, getDocs, query, orderBy, FirestoreError } from 'firebase/firestore'
+import { collection, collectionGroup, doc, getDoc, getDocs, query, where, orderBy, limit, FirestoreError } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
@@ -96,19 +96,28 @@ function MediaPlayer({ lesson }: { lesson: Lesson }) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
-  courseId: string
-  slug: string
+  courseSlug: string
 }
 
 type GateReason = 'registered' | 'subscription' | null
 
-export default function CoursePlayer({ courseId, slug }: Props) {
+// Always-readable public summary (from courses/{id}/public_profile/{id}). Lets us
+// render a branded gated screen even when the full course doc read is denied.
+interface CourseSummary {
+  title: string
+  coverImageUrl?: string
+  accessType: 'free' | 'registered' | 'subscription'
+}
+
+export default function CoursePlayer({ courseSlug }: Props) {
   const t = useTranslations('Space')
-  const { isAuthenticated, openSignIn } = useSpaceAuth()
+  const { slug, teamId, isAuthenticated, openSignIn } = useSpaceAuth()
+  const [summary, setSummary] = useState<CourseSummary | null>(null)
   const [course, setCourse] = useState<Course | null>(null)
   const [modules, setModules] = useState<CourseModule[]>([])
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
   const [gateReason, setGateReason] = useState<GateReason>(null)
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
@@ -118,15 +127,42 @@ export default function CoursePlayer({ courseId, slug }: Props) {
     let cancelled = false
     setLoading(true)
     setGateReason(null)
+    setNotFound(false)
 
     async function load() {
+      // Resolve courseId + public summary (client-side, always readable).
+      let courseId: string | null = null
+      let accessType: CourseSummary['accessType'] = 'registered'
       try {
-        const courseRef = doc(db, COURSES_COLLECTION, courseId)
-        const courseSnap = await getDoc(courseRef)
+        const ppSnap = await getDocs(
+          query(
+            collectionGroup(db, 'public_profile'),
+            where('type', '==', 'course'),
+            where('teamId', '==', teamId),
+            where('slug', '==', courseSlug),
+            limit(1)
+          )
+        )
         if (cancelled) return
-        if (!courseSnap.exists()) { setLoading(false); return }
-        const courseData = { id: courseSnap.id, ...courseSnap.data() } as Course
-        setCourse(courseData)
+        if (!ppSnap.empty) {
+          const pp = ppSnap.docs[0].data() as CourseSummary
+          courseId = ppSnap.docs[0].ref.parent.parent?.id ?? null
+          accessType = pp.accessType ?? 'registered'
+          setSummary({ title: pp.title, coverImageUrl: pp.coverImageUrl, accessType })
+        }
+      } catch {
+        // fall through to not-found
+      }
+      if (cancelled) return
+      if (!courseId) { setNotFound(true); setLoading(false); return }
+
+      // Attempt the gated reads. A permission-denied means this tier is locked
+      // for the current visitor — show the gate that matches the access tier.
+      try {
+        const courseSnap = await getDoc(doc(db, COURSES_COLLECTION, courseId))
+        if (cancelled) return
+        if (!courseSnap.exists()) { setNotFound(true); setLoading(false); return }
+        setCourse({ id: courseSnap.id, ...courseSnap.data() } as Course)
 
         const [modSnap, lesSnap] = await Promise.all([
           getDocs(query(collection(db, COURSES_COLLECTION, courseId, COURSE_MODULES_SUBCOLLECTION), orderBy('order', 'asc'))),
@@ -141,9 +177,9 @@ export default function CoursePlayer({ courseId, slug }: Props) {
       } catch (err: unknown) {
         if (cancelled) return
         if (err instanceof FirestoreError && err.code === 'permission-denied') {
-          // Determine gate reason from previously-fetched course data (or default)
-          // We'll show a gated UI — check if course was already loaded
-          setGateReason('registered')
+          setGateReason(accessType === 'subscription' ? 'subscription' : 'registered')
+        } else {
+          setNotFound(true)
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -152,16 +188,7 @@ export default function CoursePlayer({ courseId, slug }: Props) {
 
     load()
     return () => { cancelled = true }
-  }, [courseId, isAuthenticated])
-
-  // If we have the course but not lessons due to gating, determine reason
-  useEffect(() => {
-    if (!course || gateReason) return
-    const accessType = course.accessRule?.type
-    if (!isAuthenticated && accessType !== 'free') {
-      setGateReason(accessType === 'subscription' ? 'subscription' : 'registered')
-    }
-  }, [course, isAuthenticated, gateReason])
+  }, [courseSlug, teamId, isAuthenticated])
 
   const selectedLesson = useMemo(
     () => lessons.find((l) => l.id === selectedLessonId) ?? null,
@@ -176,7 +203,7 @@ export default function CoursePlayer({ courseId, slug }: Props) {
     )
   }
 
-  if (!course) {
+  if (notFound || (!course && !gateReason)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
         <p className="text-sm text-muted-foreground">{t('notFound')}</p>
@@ -189,7 +216,7 @@ export default function CoursePlayer({ courseId, slug }: Props) {
 
   // ─── Gated view ────────────────────────────────────────────────────────────
 
-  if (gateReason === 'registered' || (gateReason === null && !isAuthenticated && course.accessRule?.type !== 'free')) {
+  if (gateReason === 'registered') {
     return (
       <div className="min-h-screen">
         <div className="max-w-[640px] mx-auto px-5 py-10 space-y-6">
@@ -200,15 +227,15 @@ export default function CoursePlayer({ courseId, slug }: Props) {
             <ChevronLeft className="h-4 w-4" />
             {t('backToCourses')}
           </Link>
-          {course.coverImageUrl && (
+          {summary?.coverImageUrl && (
             <div className="aspect-video rounded-xl overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={course.coverImageUrl} alt="" className="w-full h-full object-cover" />
+              <img src={summary.coverImageUrl} alt="" className="w-full h-full object-cover" />
             </div>
           )}
           <div className="rounded-xl border bg-card p-6 text-center space-y-4">
             <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-            <h1 className="text-xl font-bold">{course.title}</h1>
+            <h1 className="text-xl font-bold">{summary?.title}</h1>
             <p className="text-sm text-muted-foreground">{t('gatedRegisteredTitle')}</p>
             <p className="text-sm text-muted-foreground">{t('gatedRegisteredDesc')}</p>
             <button
@@ -237,7 +264,7 @@ export default function CoursePlayer({ courseId, slug }: Props) {
           </Link>
           <div className="rounded-xl border bg-card p-6 text-center space-y-4">
             <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-            <h1 className="text-xl font-bold">{course.title}</h1>
+            <h1 className="text-xl font-bold">{summary?.title}</h1>
             <p className="text-sm text-muted-foreground">{t('gatedSubscriptionTitle')}</p>
             <p className="text-sm text-muted-foreground">{t('gatedSubscriptionDesc')}</p>
           </div>
@@ -247,6 +274,8 @@ export default function CoursePlayer({ courseId, slug }: Props) {
   }
 
   // ─── Player view ───────────────────────────────────────────────────────────
+
+  if (!course) return null
 
   return (
     <div className="min-h-screen bg-background">

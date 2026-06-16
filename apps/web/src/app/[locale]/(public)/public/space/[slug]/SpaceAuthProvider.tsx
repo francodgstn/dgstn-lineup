@@ -3,7 +3,9 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import { signInWithCustomToken, signOut } from 'firebase/auth'
-import { functions } from '@/lib/firebase'
+import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore'
+import { useTranslations } from 'next-intl'
+import { functions, db } from '@/lib/firebase'
 import { auth } from '@/lib/firebase-auth'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -29,6 +31,8 @@ type LoginResult =
 export type SpaceAuthStep = 'idle' | 'email' | 'code' | 'selectContact' | 'authenticated'
 
 interface SpaceAuthContextValue {
+  slug: string
+  teamId: string
   step: SpaceAuthStep
   contact: SpaceContact | null
   isAuthenticated: boolean
@@ -90,12 +94,22 @@ function clearSession() {
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
+// Resolves the team by slug CLIENT-SIDE (the Firebase client SDK must not be used
+// for server-side reads — see the bio-link pattern / CLAUDE.md), then provides the
+// contact-session auth context to the whole Space (home + course player).
 interface Props {
-  teamId: string
+  slug: string
   children: ReactNode
 }
 
-export function SpaceAuthProvider({ teamId, children }: Props) {
+type TeamStatus = 'loading' | 'found' | 'notfound'
+
+export function SpaceAuthProvider({ slug, children }: Props) {
+  const t = useTranslations('Space')
+
+  const [teamId, setTeamId] = useState<string | null>(null)
+  const [teamStatus, setTeamStatus] = useState<TeamStatus>('loading')
+
   const [step, setStep] = useState<SpaceAuthStep>('idle')
   const [contact, setContact] = useState<SpaceContact | null>(null)
   const [matchedContacts, setMatchedContacts] = useState<MatchedContact[]>([])
@@ -104,6 +118,35 @@ export function SpaceAuthProvider({ teamId, children }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [codeId, setCodeId] = useState('')
   const [pendingCode, setPendingCode] = useState('')
+
+  // Resolve the team by slug (unauthenticated, public_profile collection group).
+  useEffect(() => {
+    let cancelled = false
+    setTeamStatus('loading')
+    const q = query(
+      collectionGroup(db, 'public_profile'),
+      where('slug', '==', slug),
+      where('type', '==', 'team'),
+      limit(1)
+    )
+    getDocs(q)
+      .then((snap) => {
+        if (cancelled) return
+        const resolved = snap.empty ? null : (snap.docs[0].ref.parent.parent?.id ?? null)
+        if (resolved) {
+          setTeamId(resolved)
+          setTeamStatus('found')
+        } else {
+          setTeamStatus('notfound')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTeamStatus('notfound')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [slug])
 
   // Restore session on mount
   useEffect(() => {
@@ -124,6 +167,10 @@ export function SpaceAuthProvider({ teamId, children }: Props) {
   const sendCode = useCallback(
     async (email: string) => {
       setError(null)
+      if (!teamId) {
+        setError('Team not loaded yet. Please try again.')
+        return
+      }
       try {
         const fn = httpsCallable<{ email: string; teamId: string }, { codeId: string }>(
           functions,
@@ -145,10 +192,10 @@ export function SpaceAuthProvider({ teamId, children }: Props) {
     async (code: string) => {
       setError(null)
       try {
-        const fn = httpsCallable<
-          { codeId: string; code: string },
-          LoginResult
-        >(functions, 'loginContactWithCode')
+        const fn = httpsCallable<{ codeId: string; code: string }, LoginResult>(
+          functions,
+          'loginContactWithCode'
+        )
         const result = await fn({ codeId, code })
         const data = result.data
 
@@ -230,7 +277,26 @@ export function SpaceAuthProvider({ teamId, children }: Props) {
 
   const clearError = useCallback(() => setError(null), [])
 
+  if (teamStatus === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (teamStatus === 'notfound' || !teamId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
+        <p className="text-lg font-semibold">{t('notFound')}</p>
+        <p className="text-sm text-muted-foreground">{t('notFoundDesc')}</p>
+      </div>
+    )
+  }
+
   const value: SpaceAuthContextValue = {
+    slug,
+    teamId,
     step,
     contact,
     isAuthenticated: step === 'authenticated' && contact !== null,

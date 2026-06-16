@@ -57,14 +57,9 @@ function hasAccess(
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-interface Props {
-  slug: string
-  teamId: string
-}
-
-export default function SpaceHome({ slug, teamId }: Props) {
+export default function SpaceHome() {
   const t = useTranslations('Space')
-  const { isAuthenticated, contact, logout, openSignIn } = useSpaceAuth()
+  const { slug, teamId, isAuthenticated, contact, logout, openSignIn } = useSpaceAuth()
   const [team, setTeam] = useState<TeamData | null>(null)
   const [courses, setCourses] = useState<PublicCourseCard[]>([])
   const [loading, setLoading] = useState(true)
