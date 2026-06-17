@@ -139,3 +139,10 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | `coach_availability` / `coach_slots` | **Skipped** — coaching was preview-only; configure fresh |
 | `checkins` | **Skipped** — old checkins are session-level; new schema is event-level |
 | `saas_subscriptions` | **Not migrated** — create one per team manually after migration |
+| `courses` (Online Courses) | **Not migrated** — net-new in Linyup; create courses in-app post-migration |
+
+> **Online Courses / public Space:** courses don't exist in hmd-lineup, so there is nothing
+> to migrate. The web Space + course gating only depend on already-migrated contact fields —
+> `email`, `membership_active`, and `subscription_type_id` — so contacts can log in and unlock
+> gated courses. The verify pass already spot-checks contacts; confirm migrated contacts have
+> a non-empty `email` (required for the passwordless contact login).

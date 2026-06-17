@@ -1,6 +1,25 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // ── helpers ────────────────────────────────────────────────────────────────
+    function isTeamMemberStorage(teamId) {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/teams/$(teamId)/team_members/$(request.auth.uid));
+    }
+    // A valid contact session (custom token) scoped to a team — used by the public
+    // "Space" web area so a signed-in contact can fetch gated course media.
+    function isContactSessionForTeam(teamId) {
+      return request.auth != null
+        && request.auth.token.teamId == teamId
+        && request.auth.token.sessionExpires != null
+        && request.auth.token.sessionExpires >= request.time.toMillis();
+    }
+    // True when the course doc (root collection, id == path courseId) is published & free.
+    function isPublishedFreeCourse(courseId) {
+      return firestore.get(/databases/(default)/documents/courses/$(courseId)).data.status == 'published'
+        && firestore.get(/databases/(default)/documents/courses/$(courseId)).data.accessRule.type == 'free';
+    }
+
     match /users/{userId}/{allPaths=**} {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if request.auth != null && request.auth.uid == userId
@@ -8,14 +27,27 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*|application/pdf');
     }
 
+    // Course media lives under teams/{teamId}/courses/{courseId}/... This more-specific
+    // match adds PUBLIC read of free published-course media, and contact-session read of
+    // gated media, on top of staff access. (Storage grants if ANY matching rule allows;
+    // the broad teams/{teamId} match below still applies for writes + staff reads.)
+    // Subscription-tier gating is NOT re-checked here: a media URL is only discoverable
+    // by first passing the Firestore lesson read, which does enforce the subscription.
+    match /teams/{teamId}/courses/{courseId}/{allPaths=**} {
+      allow read: if isPublishedFreeCourse(courseId)
+        || isTeamMemberStorage(teamId)
+        || isContactSessionForTeam(teamId);
+      allow write: if isTeamMemberStorage(teamId)
+        && request.resource.size < 50 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|audio/.*|video/.*|application/pdf');
+    }
+
     match /teams/{teamId}/{allPaths=**} {
       // Only members of this specific team may access its files
-      allow read: if request.auth != null
-        && firestore.exists(/databases/(default)/documents/teams/$(teamId)/team_members/$(request.auth.uid));
+      allow read: if isTeamMemberStorage(teamId);
       // Course media (audio/video) lives under teams/{teamId}/courses/... so we allow
       // larger files and audio/video content types here, scoped to team members.
-      allow write: if request.auth != null
-        && firestore.exists(/databases/(default)/documents/teams/$(teamId)/team_members/$(request.auth.uid))
+      allow write: if isTeamMemberStorage(teamId)
         && request.resource.size < 50 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|audio/.*|video/.*|application/pdf');
     }

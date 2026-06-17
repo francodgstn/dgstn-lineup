@@ -4,6 +4,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { assertVerifiableCode } from './verificationCode'
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,29 +23,7 @@ export const verifyMembershipCode = onCall(async (request) => {
   }
 
   const codeRef = admin.firestore().collection('verification_codes').doc(data.codeId)
-  const codeDoc = await codeRef.get()
-  if (!codeDoc.exists) throw new HttpsError('not-found', 'Invalid code')
-
-  const codeData = codeDoc.data()!
-
-  if (codeData.used) throw new HttpsError('failed-precondition', 'Code already used')
-
-  const now = Timestamp.now()
-  if (codeData.expiresAt.toMillis() < now.toMillis()) {
-    throw new HttpsError('deadline-exceeded', 'Code has expired. Please request a new code.')
-  }
-
-  if ((codeData.attempts || 0) >= 5) {
-    throw new HttpsError('resource-exhausted', 'Too many failed attempts. Please request a new code.')
-  }
-
-  if (codeData.code !== data.code) {
-    await codeRef.update({ attempts: FieldValue.increment(1) })
-    const remaining = 5 - ((codeData.attempts || 0) + 1)
-    throw new HttpsError('invalid-argument', `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`)
-  }
-
-  await codeRef.update({ verified: true, verifiedAt: FieldValue.serverTimestamp() })
+  const codeData = await assertVerifiableCode(codeRef, data.code)
 
   return { verified: true, email: codeData.email, teamId: codeData.team_id }
 })

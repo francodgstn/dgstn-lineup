@@ -59,6 +59,9 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - Bio-link routes tagged `force-dynamic`; `apps/web/.env.local` created with placeholders
 - Self-service signup wizard (`app/signup/page.tsx`) — 2-step: account → team → dashboard
 - Firebase emulator wired up for local dev (`demo-linyup` project, no real Firebase project needed)
+- Public **Space** area (`/public/{slug}/space`) — contacts browse/consume published Online
+  Courses on the web (interim surface until the mobile app ships). Free courses are anonymous;
+  gated courses use the passwordless contact-session login. See "Public Space" under Key patterns.
 
 ---
 
@@ -117,9 +120,9 @@ import { regionalFunctions } from '../utils/functions'
 export const myFn = regionalFunctions.firestore.document('…').onCreate(…)
 ```
 
-### Public bio-link — ONLY read `public_profile` subcollections
+### Public tenant routes — ONLY read `public_profile` subcollections
 
-Bio-link routes (`/public/bio-link/*`) must never query main collections. Always use:
+Public tenant routes (`/public/{slug}/*`) must never query main collections. Always use:
 
 ```typescript
 // resolve team by slug
@@ -132,6 +135,46 @@ const q = query(
 ```
 
 See `hmd-lineup/docs/portal-security.md` for full rules and patterns.
+
+### Public tenant route structure
+
+Routes are **tenant-first**: `/public/{slug}` is the team root and renders the team's chosen
+default surface (`Team.default_public_surface`, defaults to `'bio-link'`). The root reads
+`TeamPublicProfile.active_public_surfaces` (computed by `syncTeamPublicProfile` on team write)
+to avoid redirecting to a dead surface. Sub-routes are siblings: `/public/{slug}/site`,
+`/public/{slug}/space`, `/public/{slug}/booking`, `/public/{slug}/signup`,
+`/public/{slug}/manage-booking`, `/public/{slug}/contact-update`, `/public/{slug}/coaching`.
+Token-only routes stay standalone: `/public/event-invitation` and `/public/team-invitation/{token}`.
+
+### Public Space — web access to Online Courses
+
+`/public/{slug}/space` is a minimal, team-branded public area (sibling to `/public/{slug}`
+bio-link root and `/public/{slug}/site`) where a team's **contacts** browse and consume
+**published** courses without the mobile app. It resolves the team by slug with the same
+`public_profile` collection-group query as the other public routes, and lists courses from
+world-readable
+`courses/{courseId}/public_profile/{courseId}` summaries written by `syncCoursePublicProfile`
+(`packages/functions/src/sync/`). Never list the root `courses` collection publicly.
+
+**Course access tiers** (`Course.accessRule.type` in `packages/shared/src/types/course.ts`):
+
+| Tier | Stored value | Display | Who can read |
+|---|---|---|---|
+| Free | `free` | "Free" | Anyone, no login — incl. media |
+| Sign-in required | `registered` | "Sign-in required" | Any signed-in contact of the team |
+| Subscription | `subscription` | "Subscription" | Contact whose `subscription_type_id` ∈ `accessRule.subscriptionTypeIds` |
+
+History: the middle tier was `members` until 2026-06; renamed (value + display) to
+`registered` while pre-launch with seed data only. The stored enum value is the stable
+machine identifier — post-launch, renames must be display-only.
+
+**Contact auth on the web** reuses the mobile contact-session mechanism: passwordless email
+code (`sendMembershipVerificationCode`) → `loginContactWithCode` (matches the existing
+contact, handles same-email selection, mints a session via `buildContactSession`) →
+`signInWithCustomToken`. The custom-token claims `{ contactId, teamId, sessionExpires }`
+are what Firestore + Storage rules check (`isContactOfTeam` / `canReadPublishedCourse` in
+`firestore.rules`; `isContactSessionForTeam` / `isPublishedFreeCourse` in `storage.rules`).
+Enforcement lives in the rules; the UI lock states are UX only.
 
 ### Firebase client SDK — server/client split
 

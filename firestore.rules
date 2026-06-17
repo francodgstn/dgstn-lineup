@@ -122,6 +122,34 @@ service cloud.firestore {
              && request.auth.token.email == res.data.email;
     }
 
+    // A valid contact session (custom token) scoped to a given team. Used by the
+    // public "Space" web area so a contact can read gated courses for their team.
+    function isContactOfTeam(teamId) {
+      return request.auth != null
+             && request.auth.token.teamId == teamId
+             && request.auth.token.sessionExpires != null
+             && request.auth.token.sessionExpires >= request.time.toMillis();
+    }
+
+    // The calling contact's single active subscription type id (custom-token session).
+    // Costs one extra get() — only evaluated for the 'subscription' course tier.
+    function callerContactSubscriptionTypeId() {
+      return get(/databases/$(database)/documents/contacts/$(request.auth.token.contactId)).data.get('subscription_type_id', '');
+    }
+
+    // Whether the public web (anonymous or a contact session) may read a course doc.
+    //  - free         → anyone
+    //  - registered   → any signed-in contact of the owning team
+    //  - subscription → signed-in contact whose subscription_type_id is allowed
+    function canReadPublishedCourse(c) {
+      return c.status == 'published' && (
+           c.accessRule.type == 'free'
+        || (c.accessRule.type == 'registered' && isContactOfTeam(c.teamId))
+        || (c.accessRule.type == 'subscription' && isContactOfTeam(c.teamId)
+            && c.accessRule.subscriptionTypeIds.hasAny([callerContactSubscriptionTypeId()]))
+      );
+    }
+
 
     // Helper functions
     //-------------------------------------------------------
@@ -789,27 +817,35 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------
-    // Online Courses plugin (lightweight LMS) — authoring only (admin web)
-    // Team members read; managers+ write. Org-scope read added in a later slice.
+    // Online Courses plugin (lightweight LMS)
+    // Authoring (admin web): team members read, managers+ write.
+    // Public consumption (Space web area): published courses are readable per their
+    // accessRule tier — free (anyone), registered (signed-in contact of the team),
+    // subscription (contact with an allowed subscription_type_id). See
+    // canReadPublishedCourse(). The public course LIST is served from the
+    // world-readable courses/{id}/public_profile/{id} summaries, never this collection.
     // ----------------------------------------------
     match /courses/{courseId} {
-      // Single document GET: resource.data is available, verify team membership directly
-      allow get: if isAuthed() && isTeamMember(resource.data.teamId);
+      // Single document GET: resource.data is available — staff OR public-by-tier.
+      allow get: if (isAuthed() && isTeamMember(resource.data.teamId))
+                 || canReadPublishedCourse(resource.data);
       // Collection LIST: resource.data is NOT available for query rules.
-      // Security relies on the app always filtering by teamId == user's team.
+      // Staff only; the public Space lists via public_profile (collection group).
       allow list: if isAuthed();
       allow create: if hasTeamRole(request.resource.data.teamId, 'manager');
       allow update, delete: if hasTeamRole(resource.data.teamId, 'manager');
 
-      // modules + lessons inherit the parent course's team
+      // modules + lessons inherit the parent course's team + public access tier
       match /modules/{moduleId} {
-        allow read: if isAuthed()
-          && isTeamMember(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId);
+        allow read: if (isAuthed()
+            && isTeamMember(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId))
+          || canReadPublishedCourse(get(/databases/$(database)/documents/courses/$(courseId)).data);
         allow write: if hasTeamRole(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId, 'manager');
       }
       match /lessons/{lessonId} {
-        allow read: if isAuthed()
-          && isTeamMember(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId);
+        allow read: if (isAuthed()
+            && isTeamMember(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId))
+          || canReadPublishedCourse(get(/databases/$(database)/documents/courses/$(courseId)).data);
         allow write: if hasTeamRole(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId, 'manager');
       }
     }

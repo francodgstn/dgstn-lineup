@@ -2976,7 +2976,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   const handleCopyUpdateLink = () => {
     if (!team?.slug) return
-    const url = `${window.location.origin}/public/bio-link/${team.slug}/contact-update?contactId=${id}`
+    const url = `${window.location.origin}/public/${team.slug}/contact-update?contactId=${id}`
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 2000)

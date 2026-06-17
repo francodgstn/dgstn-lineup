@@ -221,13 +221,16 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
             {visibleLinks.map((link, i) => {
               const isBooking = link.isBookingLink
               const isMembership = link.isMembershipLink
+              const isCourses = link.isCoursesLink
               const href = isBooking
-                ? `/public/bio-link/${slug}/booking`
+                ? `/public/${slug}/booking`
                 : isMembership
-                  ? `/public/bio-link/${slug}/signup`
-                  : link.url
+                  ? `/public/${slug}/signup`
+                  : isCourses
+                    ? `/public/${slug}/space`
+                    : link.url
 
-              const isInternal = isBooking || isMembership
+              const isInternal = isBooking || isMembership || isCourses
               const cardStyle = isBooking
                 ? { background: accent, border: 'none' }
                 : { background: cardBg, border: `1px solid ${cardBorder}` }
@@ -266,7 +269,13 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
                     <DynamicIcon
                       name={
                         link.iconName ??
-                        (isBooking ? 'CalendarDays' : isMembership ? 'UserPlus' : 'Link2')
+                        (isBooking
+                          ? 'CalendarDays'
+                          : isMembership
+                            ? 'UserPlus'
+                            : isCourses
+                              ? 'GraduationCap'
+                              : 'Link2')
                       }
                       className="h-4 w-4"
                     />

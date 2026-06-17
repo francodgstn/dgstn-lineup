@@ -99,7 +99,7 @@ export async function createCourse(input: {
     title: input.title,
     slug: slugify(input.title),
     status: 'draft' as const,
-    accessRule: { type: 'members' as const },
+    accessRule: { type: 'registered' as const },
     moduleCount: 0,
     lessonCount: 0,
     created_at: serverTimestamp(),

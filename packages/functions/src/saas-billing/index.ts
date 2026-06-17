@@ -6,6 +6,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { getSecret } from '../utils/secrets'
 import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
+import { unpublishSiteForTeam, deleteAllCoursePublicProfiles } from '../utils/plugins'
 import { StripeAdapter } from '../utils/gateway/stripe'
 import type { SaasPlan } from '@linyup/shared'
 import {
@@ -823,12 +824,28 @@ async function downgradeTeamToFree(teamId: string, opts: { fromTrial: boolean })
     .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
     .where('status', '==', 'active')
     .get()
+
+  const activePluginIds = installs.docs.map((d) => d.id)
+
   for (const d of installs.docs) {
     await d.ref.set(
       { status: 'inactive', updated_at: FieldValue.serverTimestamp() },
       { merge: true }
     )
   }
+
+  // Tear down plugin-specific public artefacts that would otherwise remain
+  // visible after a downgrade (the plugin-status trigger only fires on
+  // installed_plugins writes; it runs in parallel with this path so we also
+  // tear down here to guarantee the artefacts are removed synchronously).
+  const teardowns: Promise<void>[] = []
+  if (activePluginIds.includes('website')) {
+    teardowns.push(unpublishSiteForTeam(teamId))
+  }
+  if (activePluginIds.includes('online-courses')) {
+    teardowns.push(deleteAllCoursePublicProfiles(teamId))
+  }
+  await Promise.all(teardowns)
 }
 
 // All team-scoped top-level collections keyed by `teamId`. recursiveDelete on

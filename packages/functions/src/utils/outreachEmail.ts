@@ -42,9 +42,9 @@ export function substituteVariables(
   const reviewUrl = socialLinks.find((l) => l.platform === 'review')?.url || ''
 
   const urlMap: Record<string, string> = {
-    bookingUrl: slug ? `${baseUrl}/public/bio-link/${slug}/booking` : '',
-    membershipUrl: slug ? `${baseUrl}/public/bio-link/${slug}/membership-signup` : '',
-    bioLinkUrl: slug ? `${baseUrl}/public/bio-link/${slug}` : '',
+    bookingUrl: slug ? `${baseUrl}/public/${slug}/booking` : '',
+    membershipUrl: slug ? `${baseUrl}/public/${slug}/membership-signup` : '',
+    bioLinkUrl: slug ? `${baseUrl}/public/${slug}` : '',
     websiteUrl,
     reviewUrl,
   }

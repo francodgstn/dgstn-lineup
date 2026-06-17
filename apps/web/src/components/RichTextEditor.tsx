@@ -7,10 +7,12 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
+import { TableKit } from '@tiptap/extension-table'
 import { DragHandle } from '@tiptap/extension-drag-handle-react'
 import {
   Bold, Italic, Strikethrough, Type, Heading1, Heading2, Heading3,
   List, ListOrdered, ListChecks, Quote, Code, Minus, ImageIcon, GripVertical,
+  Table as TableIcon, Trash2,
 } from 'lucide-react'
 import { SlashCommand } from './editor/SlashCommand'
 import { SlashCommandList, type SlashItem, type SlashCommandListRef } from './editor/SlashCommandList'
@@ -94,10 +96,39 @@ function Toolbar({ editor, onImage }: { editor: Editor | null; onImage?: () => v
       <ToolbarButton title="Divider" onClick={() => run((c) => c.setHorizontalRule())}>
         <Minus className="h-3.5 w-3.5" />
       </ToolbarButton>
+      <ToolbarButton
+        title="Insert table"
+        active={editor.isActive('table')}
+        onClick={() => run((c) => c.insertTable({ rows: 3, cols: 3, withHeaderRow: true }))}
+      >
+        <TableIcon className="h-3.5 w-3.5" />
+      </ToolbarButton>
       {onImage && (
         <ToolbarButton title="Image" onClick={onImage}>
           <ImageIcon className="h-3.5 w-3.5" />
         </ToolbarButton>
+      )}
+
+      {/* Table editing controls — only while the cursor is inside a table */}
+      {editor.isActive('table') && (
+        <>
+          <div className="w-px h-4 bg-border mx-1" />
+          <ToolbarButton title="Add column" onClick={() => run((c) => c.addColumnAfter())}>
+            <span className="text-[10px] font-semibold px-0.5">+Col</span>
+          </ToolbarButton>
+          <ToolbarButton title="Add row" onClick={() => run((c) => c.addRowAfter())}>
+            <span className="text-[10px] font-semibold px-0.5">+Row</span>
+          </ToolbarButton>
+          <ToolbarButton title="Delete column" onClick={() => run((c) => c.deleteColumn())}>
+            <span className="text-[10px] font-semibold px-0.5">−Col</span>
+          </ToolbarButton>
+          <ToolbarButton title="Delete row" onClick={() => run((c) => c.deleteRow())}>
+            <span className="text-[10px] font-semibold px-0.5">−Row</span>
+          </ToolbarButton>
+          <ToolbarButton title="Delete table" onClick={() => run((c) => c.deleteTable())}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </ToolbarButton>
+        </>
       )}
     </div>
   )
@@ -120,6 +151,7 @@ function buildSlashItems(opts: {
     { title: 'Quote', icon: Quote, command: ({ editor, range }) => (editor as Editor).chain().focus().deleteRange(range as Range).toggleBlockquote().run() },
     { title: 'Code block', icon: Code, command: ({ editor, range }) => (editor as Editor).chain().focus().deleteRange(range as Range).toggleCodeBlock().run() },
     { title: 'Divider', icon: Minus, command: ({ editor, range }) => (editor as Editor).chain().focus().deleteRange(range as Range).setHorizontalRule().run() },
+    { title: 'Table', icon: TableIcon, command: ({ editor, range }) => (editor as Editor).chain().focus().deleteRange(range as Range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
   ]
   if (opts.requestImage) {
     items.push({
@@ -206,6 +238,7 @@ export const RichTextEditor = memo(function RichTextEditor({
       ResizableImage,
       TaskList,
       TaskItem.configure({ nested: true }),
+      TableKit.configure({ table: { resizable: true } }),
       SlashCommand.configure({
         suggestion: {
           char: '/',

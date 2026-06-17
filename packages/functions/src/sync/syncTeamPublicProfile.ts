@@ -1,5 +1,13 @@
 // Keeps teams/{teamId}/public_profile/{teamId} in sync when a team document changes
+import * as admin from 'firebase-admin'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
+import {
+  TEAMS_COLLECTION,
+  INSTALLED_PLUGINS_SUBCOLLECTION,
+  SITE_PUBLISHED_COLLECTION,
+  COURSES_COLLECTION,
+} from '@linyup/shared'
+import type { PublicSurface, ActivePublicSurfaces } from '@linyup/shared'
 
 export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (event) => {
   const { teamId } = event.params
@@ -11,8 +19,60 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   }
 
   const data = event.data!.after.data()!
+  const db = admin.firestore()
 
-  const publicProfile = {
+  // ── active_public_surfaces computation ──────────────────────────────────────
+  // Each check uses limit(1) to avoid full scans.
+
+  // site: website plugin active AND a published site exists
+  const [websitePluginSnap, sitePublishedSnap] = await Promise.all([
+    db
+      .doc(
+        `${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/website`
+      )
+      .get(),
+    db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).get(),
+  ])
+  const siteActive =
+    websitePluginSnap.exists &&
+    websitePluginSnap.data()?.status === 'active' &&
+    sitePublishedSnap.exists
+
+  // space: online-courses plugin active AND ≥1 published, non-archived course
+  const onlineCoursesPluginSnap = await db
+    .doc(
+      `${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/online-courses`
+    )
+    .get()
+  let spaceActive = false
+  if (onlineCoursesPluginSnap.exists && onlineCoursesPluginSnap.data()?.status === 'active') {
+    const publishedCourseSnap = await db
+      .collection(COURSES_COLLECTION)
+      .where('teamId', '==', teamId)
+      .where('status', '==', 'published')
+      .where('archived_at', '==', null)
+      .limit(1)
+      .get()
+    spaceActive = !publishedCourseSnap.empty
+  }
+
+  // booking: base feature — available whenever booking settings have been configured
+  // (bookingSettings lands on the public_profile via syncBookingSettings; here we
+  // mirror the same signal used elsewhere: the settings sub-doc existence / field).
+  // Default to true — booking works on every plan, plugin-free.
+  const bookingActive = true
+
+  const active_public_surfaces: ActivePublicSurfaces = {
+    site: siteActive,
+    space: spaceActive,
+    booking: bookingActive,
+  }
+
+  // ── default_public_surface ───────────────────────────────────────────────────
+  // Copy only when set (never write undefined to Firestore).
+  const defaultSurface = data.default_public_surface as PublicSurface | undefined
+
+  const publicProfile: Record<string, unknown> = {
     type: 'team',
     name: data.name || '',
     description: data.description || '',
@@ -35,6 +95,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       showInBioLink: link.showInBioLink !== false,
       isBookingLink: link.isBookingLink || false,
       isMembershipLink: link.isMembershipLink || false,
+      isCoursesLink: link.isCoursesLink || false,
     })),
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,
@@ -44,7 +105,14 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     showBranding: (data.plan ?? 'free') === 'free',
     // Billing currency for the website pricing table (bio-link/website never read teams/).
     default_currency: (data.default_currency as string | undefined) || null,
+    active_public_surfaces,
     updated_at: event.data!.after.updateTime,
+  }
+
+  // Only write default_public_surface when explicitly set; omit the key entirely
+  // if unset so existing docs with no preference are not polluted with undefined.
+  if (defaultSurface !== undefined) {
+    publicProfile.default_public_surface = defaultSurface
   }
 
   // Merge so sibling syncs that write other public_profile fields with merge

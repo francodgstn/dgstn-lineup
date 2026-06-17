@@ -28,11 +28,13 @@ export { generateApiKey } from './auth/generateApiKey'
 export { syncTeamPublicProfile } from './sync/syncTeamPublicProfile'
 export { syncSessionPublicProfile } from './sync/syncSessionPublicProfile'
 export { syncActivityPublicProfile } from './sync/syncActivityPublicProfile'
+export { syncCoursePublicProfile } from './sync/syncCoursePublicProfile'
 export { indexUser } from './sync/indexUser'
 export { syncSubscriptionTypesToPublicProfile } from './sync/syncSubscriptionTypesToPublicProfile'
 export { onContactSubscriptionChange } from './sync/onContactSubscriptionChange'
 export { onSessionUpdate } from './sync/onSessionUpdate'
 export { onActivityTypeChange } from './sync/onActivityTypeChange'
+export { onInstalledPluginStatusChange } from './sync/onInstalledPluginStatusChange'
 
 // Booking
 export {
@@ -92,6 +94,7 @@ export { dailyTasks } from './dailyTasks'
 
 // Auth / Membership
 export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'
+export { loginContactWithCode } from './auth/loginContactWithCode'
 
 // Coaching (1:1 slots) — booking/cancellation handled by bookSession/cancelBooking
 export {

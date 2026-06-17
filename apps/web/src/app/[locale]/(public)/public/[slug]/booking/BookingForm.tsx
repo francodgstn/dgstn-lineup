@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
-import type { BookingSettings } from '@linyup/shared'
+import { usePublicTeam } from '../PublicTeamProvider'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -413,12 +413,12 @@ function StickyBar({
 // ─── component ───────────────────────────────────────────────────────────────
 
 export default function BookingForm({ slug, preSelectedActivitySlug, initialDate }: Props) {
-  // Team data (loaded from public_profile)
-  const [teamId, setTeamId] = useState<string | null>(null)
-  const [teamName, setTeamName] = useState('')
-  const [accentColor, setAccentColor] = useState<string | null>(null)
-  const [bookingSettings, setBookingSettings] = useState<BookingSettings | undefined>(undefined)
-  const [showBranding, setShowBranding] = useState(false)
+  // Team already resolved once by the parent PublicTeamProvider (the layout).
+  const { teamId, team } = usePublicTeam()
+  const teamName = team.name || ''
+  const accentColor = team.bioLinkAccentColor ?? null
+  const bookingSettings = team.bookingSettings
+  const showBranding = team.showBranding === true
 
   const bookingWindowMonths = bookingSettings?.windowMonths ?? 2
   const showPhone = bookingSettings?.showPhone !== false
@@ -464,42 +464,16 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     return () => clearTimeout(t)
   }, [countdown])
 
-  // Load team + activities + sessions
+  // Load activities + sessions for the resolved team
   useEffect(() => {
     async function loadData() {
       try {
-        // Resolve team
-        const teamQ = query(
-          collectionGroup(db, 'public_profile'),
-          where('slug', '==', slug),
-          where('type', '==', 'team'),
-          limit(1)
-        )
-        const teamSnap = await getDocs(teamQ)
-        if (teamSnap.empty) {
-          setLoadingData(false)
-          return
-        }
-        const teamDoc = teamSnap.docs[0]
-        const resolvedTeamId = teamDoc.ref.parent.parent?.id
-        if (!resolvedTeamId) {
-          setLoadingData(false)
-          return
-        }
-        const teamData = teamDoc.data()
-        setTeamId(resolvedTeamId)
-        setTeamName(teamData.name || '')
-        setAccentColor(teamData.bioLinkAccentColor ?? null)
-        setBookingSettings(teamData.bookingSettings ?? undefined)
-        setShowBranding(teamData.showBranding === true)
-
-        const bs: BookingSettings | undefined = teamData.bookingSettings ?? undefined
-        const windowMonths = bs?.windowMonths ?? 2
+        const windowMonths = bookingSettings?.windowMonths ?? 2
 
         // Load activities
         const actQ = query(
           collectionGroup(db, 'public_profile'),
-          where('teamId', '==', resolvedTeamId),
+          where('teamId', '==', teamId),
           where('type', '==', 'activity')
         )
         const actSnap = await getDocs(actQ)
@@ -526,7 +500,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
         const sessQ = query(
           collectionGroup(db, 'public_profile'),
-          where('teamId', '==', resolvedTeamId),
+          where('teamId', '==', teamId),
           where('type', '==', 'session'),
           where('allowBooking', '==', true),
           where('start', '>=', Timestamp.now()),
@@ -563,7 +537,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     }
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug])
+  }, [teamId])
 
   // Sessions filtered by selected activity
   const activitySessions = useMemo(() => {
@@ -766,7 +740,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   function backFromSessions() {
     if (preSelectedActivitySlug || activities.length === 1) {
-      window.location.href = `/public/bio-link/${slug}`
+      window.location.href = `/public/${slug}`
     } else {
       setStep('activities')
     }

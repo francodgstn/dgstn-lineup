@@ -51,7 +51,7 @@ export function ctaHref(
   slug: string
 ): string | undefined {
   if (!cta) return undefined
-  if (cta.action === 'booking') return `/public/bio-link/${slug}/booking`
-  if (cta.action === 'membership') return `/public/bio-link/${slug}/signup`
+  if (cta.action === 'booking') return `/public/${slug}/booking`
+  if (cta.action === 'membership') return `/public/${slug}/signup`
   return cta.url || undefined
 }

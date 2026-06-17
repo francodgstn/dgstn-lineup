@@ -19,8 +19,14 @@
  *   - Past-session participants, weekly reports, goals
  *
  *   Studio tier only:
- *   - Online Courses plugin installed + 2 courses (published + draft) with
- *     modules and text/audio/video lessons
+ *   - Online Courses plugin installed + 4 courses with modules and
+ *     text/audio/video lessons, spanning every access tier:
+ *       • "BJJ Fundamentals"  → published, free (anonymous Space access)
+ *       • "Competition Game Plan" → published, registered (sign-in required)
+ *       • "Inside the Black Belt Curriculum" → published, subscription
+ *         (Monthly Membership only — e.g. Luca Ferrari, contact 0)
+ *       • "Strength & Conditioning for Fighters" → draft
+ *     Published courses also get a courses/{id}/public_profile/{id} summary.
  */
 
 // emulator env vars must be set BEFORE admin.initializeApp()
@@ -385,7 +391,7 @@ async function seedTeam(opts: {
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
       links: [
         {
-          label: 'Book a Free Trial',
+          label: 'Book Now',
           isBookingLink: true,
           isMembershipLink: false,
           showInBioLink: true,
@@ -400,6 +406,18 @@ async function seedTeam(opts: {
           iconName: 'UserCheck',
           url: null,
         },
+        // Courses system link — only the studio tier installs the online-courses plugin.
+        ...(plan === 'studio'
+          ? [
+              {
+                label: 'Online Courses',
+                isCoursesLink: true,
+                showInBioLink: true,
+                iconName: 'GraduationCap',
+                url: null,
+              },
+            ]
+          : []),
       ],
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
     })
@@ -424,7 +442,7 @@ async function seedTeam(opts: {
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
       links: [
         {
-          label: 'Book a Free Trial',
+          label: 'Book Now',
           isBookingLink: true,
           isMembershipLink: false,
           showInBioLink: true,
@@ -439,6 +457,17 @@ async function seedTeam(opts: {
           iconName: 'UserCheck',
           url: null,
         },
+        ...(plan === 'studio'
+          ? [
+              {
+                label: 'Online Courses',
+                isCoursesLink: true,
+                showInBioLink: true,
+                iconName: 'GraduationCap',
+                url: null,
+              },
+            ]
+          : []),
       ],
       bookingSettings: {
         flowType: 'activity-first',
@@ -1573,7 +1602,8 @@ async function seedCourses(teamId: string, uid: string) {
     title: string
     summary: string
     status: 'draft' | 'published'
-    accessType: 'free' | 'members'
+    accessType: 'free' | 'registered' | 'subscription'
+    subscriptionTypeIds?: string[]
     modules: ModuleSeed[]
   }
 
@@ -1583,7 +1613,7 @@ async function seedCourses(teamId: string, uid: string) {
       summary:
         'A beginner-friendly path through the core positions, escapes and submissions of Brazilian Jiu-Jitsu.',
       status: 'published',
-      accessType: 'members',
+      accessType: 'free',
       modules: [
         {
           title: 'Getting Started',
@@ -1643,7 +1673,7 @@ async function seedCourses(teamId: string, uid: string) {
       summary:
         'Build the engine: mobility, strength and recovery routines tailored for grapplers and strikers.',
       status: 'draft',
-      accessType: 'members',
+      accessType: 'registered',
       modules: [
         {
           title: 'Mobility Foundations',
@@ -1664,6 +1694,82 @@ async function seedCourses(teamId: string, uid: string) {
         },
       ],
     },
+    {
+      // Published, "Sign-in required": any signed-in contact of the team can view.
+      title: 'Competition Game Plan',
+      summary:
+        'Prepare for your first tournament: rule sets, weight cuts, bracket strategy and managing nerves on the day.',
+      status: 'published',
+      accessType: 'registered',
+      modules: [
+        {
+          title: 'Before the Mats',
+          summary: 'Everything to sort out in the weeks before you compete.',
+          lessons: [
+            {
+              title: 'Choosing the right tournament',
+              type: 'text',
+              body: '<h3>Choosing your first tournament</h3><p>Pick a beginner-friendly, single-elimination event close to home. Read the rule set in full before you register, and double-check the weigh-in format.</p>',
+            },
+            {
+              title: 'Managing the weight cut',
+              type: 'video',
+              mediaSource: 'youtube',
+              mediaUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+              durationSeconds: 480,
+            },
+          ],
+        },
+        {
+          title: 'On the Day',
+          lessons: [
+            {
+              title: 'Warm-up & nerves checklist',
+              type: 'text',
+              body: '<h3>On the day</h3><ol><li>Arrive early, find the bullpen.</li><li>Warm up ~2 matches before yours.</li><li>Breathe — box breathing 4-4-4-4.</li><li>Trust your A-game; keep it simple.</li></ol>',
+              attachments: [
+                {
+                  name: 'competition-day-checklist.pdf',
+                  url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+                  size: 13264,
+                  contentType: 'application/pdf',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      // Published, subscription-gated: only contacts holding the Monthly Membership
+      // subscription type may view. Luca Ferrari (contact 0, active, monthly) can.
+      title: 'Inside the Black Belt Curriculum',
+      summary:
+        'A members-only deep dive into the advanced systems we drill in our competition classes.',
+      status: 'published',
+      accessType: 'subscription',
+      subscriptionTypeIds: [`${teamId}-sub-monthly`],
+      modules: [
+        {
+          title: 'Advanced Guard Systems',
+          summary: 'The connected guard retention and attacking framework.',
+          lessons: [
+            {
+              title: 'The retention framework',
+              type: 'video',
+              mediaSource: 'vimeo',
+              mediaUrl: 'https://vimeo.com/76979871',
+              durationSeconds: 900,
+            },
+            {
+              title: 'Drilling plan (12 weeks)',
+              type: 'text',
+              body: '<h3>12-week drilling plan</h3><p>Two focused drilling blocks per week, 20 minutes each. Rotate through retention, recomposition and attacking sequences. Log your reps and review every fourth week.</p>',
+            },
+          ],
+        },
+      ],
+    },
   ]
 
   for (let ci = 0; ci < courseSeeds.length; ci++) {
@@ -1674,6 +1780,11 @@ async function seedCourses(teamId: string, uid: string) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')
     const lessonCount = cs.modules.reduce((n, m) => n + m.lessons.length, 0)
+    const courseSlug = `${slug}-${ci}`
+    const accessRule = {
+      type: cs.accessType,
+      ...(cs.subscriptionTypeIds ? { subscriptionTypeIds: cs.subscriptionTypeIds } : {}),
+    }
 
     await db
       .collection('courses')
@@ -1682,10 +1793,10 @@ async function seedCourses(teamId: string, uid: string) {
         scope: 'team',
         teamId,
         title: cs.title,
-        slug: `${slug}-${ci}`,
+        slug: courseSlug,
         summary: cs.summary,
         status: cs.status,
-        accessRule: { type: cs.accessType },
+        accessRule,
         moduleCount: cs.modules.length,
         lessonCount,
         order: ci,
@@ -1694,6 +1805,29 @@ async function seedCourses(teamId: string, uid: string) {
         createdBy: uid,
         archived_at: null,
       })
+
+    // Mirror what syncCoursePublicProfile writes, so the public "Space" web area can
+    // list published courses without the Functions emulator running during seeding.
+    if (cs.status === 'published') {
+      await db
+        .collection('courses')
+        .doc(courseId)
+        .collection('public_profile')
+        .doc(courseId)
+        .set({
+          type: 'course',
+          teamId,
+          slug: courseSlug,
+          title: cs.title,
+          summary: cs.summary,
+          coverImageUrl: null,
+          accessType: cs.accessType,
+          subscriptionTypeIds: cs.subscriptionTypeIds ?? [],
+          moduleCount: cs.modules.length,
+          lessonCount,
+          order: ci,
+        })
+    }
 
     for (let mi = 0; mi < cs.modules.length; mi++) {
       const m = cs.modules[mi]
@@ -1894,7 +2028,7 @@ async function seedFreeTeam() {
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
       links: [
         {
-          label: 'Book a Free Trial',
+          label: 'Book Now',
           isBookingLink: true,
           isMembershipLink: false,
           showInBioLink: true,
@@ -1924,7 +2058,7 @@ async function seedFreeTeam() {
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
       links: [
         {
-          label: 'Book a Free Trial',
+          label: 'Book Now',
           isBookingLink: true,
           isMembershipLink: false,
           showInBioLink: true,
@@ -2098,10 +2232,10 @@ async function main() {
   )
   console.log('   Portals:')
   for (const a of accounts) {
-    console.log(`   ${a.plan.padEnd(16)} →  http://localhost:3000/public/bio-link/${a.teamSlug}`)
+    console.log(`   ${a.plan.padEnd(16)} →  http://localhost:3000/public/${a.teamSlug}`)
   }
   console.log(
-    `   ${'free'.padEnd(16)} →  http://localhost:3000/public/bio-link/sunrise-yoga-studio  (shows "Powered by Linyup")`
+    `   ${'free'.padEnd(16)} →  http://localhost:3000/public/sunrise-yoga-studio  (shows "Powered by Linyup")`
   )
   console.log('')
 }

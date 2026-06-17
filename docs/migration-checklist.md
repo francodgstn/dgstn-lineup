@@ -201,7 +201,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 > activity. Coach slot generation remains a backend concern. The bio-link-side booking flow is intact.
 - ✅ Activity `type` field (group_class | coaching) — selectable in Activities form; sessions inherit `activityType`
 - ✅ Coach slot generation functions (`generateCoachSlots`, `generateCoachSlotsScheduled`)
-- ✅ Coach booking flow (bio-link: `/public/bio-link/[slug]/coaching` + cancel page)
+- ✅ Coach booking flow (bio-link: `/public/[slug]/coaching` + cancel page)
 - ~~Admin `/coaching` page~~ — intentionally removed; coaching sessions live in the Sessions page
 
 ### Gamification (studio+)
@@ -222,7 +222,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ Public profile page
 - ✅ Session booking flow
 - ✅ Trial sign-up form
-- ✅ Contact update request form (`/public/bio-link/[slug]/contact-update?contactId=…`) — email verify → 3-step form → `requestContactUpdate`; "Copy update link" button on contact detail page
+- ✅ Contact update request form (`/public/[slug]/contact-update?contactId=…`) — email verify → 3-step form → `requestContactUpdate`; "Copy update link" button on contact detail page
 - ✅ Event RSVP page — `/public/event-invitation?token=…` (studio+)
 
 ---

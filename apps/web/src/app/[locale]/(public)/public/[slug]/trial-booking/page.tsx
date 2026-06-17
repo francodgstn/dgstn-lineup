@@ -7,7 +7,7 @@ interface Props {
   params: Promise<{ slug: string }>
 }
 
-export default async function MembershipSignupPage({ params }: Props) {
+export default async function TrialBookingRedirectPage({ params }: Props) {
   const { slug } = await params
-  redirect(`/public/bio-link/${slug}/signup` as Route)
+  redirect(`/public/${slug}/booking` as Route)
 }

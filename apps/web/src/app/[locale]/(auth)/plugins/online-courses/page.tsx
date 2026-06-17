@@ -9,7 +9,6 @@ import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,7 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { GraduationCap, Plus, ImageIcon, X } from 'lucide-react'
+import { GraduationCap, Plus, ImageIcon, X, ExternalLink } from 'lucide-react'
 import type { Course, CourseStatus } from '@linyup/shared'
 import { useCourses, createCourse, updateCourse, countCourses } from '@/plugins/online-courses/hooks'
 import { getOnlineCoursesLimits } from '@/plugins/online-courses/limits'
@@ -37,8 +36,15 @@ const STATUS_BADGE: Record<CourseStatus, string> = {
   archived: 'bg-amber-100 text-amber-700',
 }
 
+const ACCESS_BADGE: Record<string, string> = {
+  free: 'bg-green-100 text-green-700',
+  registered: 'bg-blue-100 text-blue-700',
+  subscription: 'bg-purple-100 text-purple-700',
+}
+
 function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) {
   const t = useTranslations('Courses')
+  const accessType = course.accessRule?.type ?? 'registered'
   return (
     <button
       type="button"
@@ -63,9 +69,14 @@ function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) 
         {course.summary && (
           <p className="text-xs text-muted-foreground line-clamp-2">{course.summary}</p>
         )}
-        <p className="text-xs text-muted-foreground mt-auto pt-1">
-          {t('lessonCount', { count: course.lessonCount ?? 0 })}
-        </p>
+        <div className="flex items-center justify-between mt-auto pt-1">
+          <p className="text-xs text-muted-foreground">
+            {t('lessonCount', { count: course.lessonCount ?? 0 })}
+          </p>
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ACCESS_BADGE[accessType] ?? ''}`}>
+            {accessType === 'free' ? t('accessFree') : accessType === 'subscription' ? t('accessSubscription') : t('accessRegistered')}
+          </span>
+        </div>
       </div>
     </button>
   )
@@ -73,7 +84,7 @@ function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) 
 
 export default function OnlineCoursesPage() {
   const t = useTranslations('Courses')
-  const { user, currentTeamId } = useAuth()
+  const { user, currentTeamId, team } = useAuth()
   const router = useRouter()
   const queryClient = useQueryClient()
 
@@ -87,6 +98,13 @@ export default function OnlineCoursesPage() {
 
   const limits = getOnlineCoursesLimits()
   const atCourseCap = courses.length >= limits.maxCoursesPerTeam
+
+  // Public Space shortcut (like the bio-link / website pages).
+  const spaceUrl = team?.slug
+    ? typeof window !== 'undefined'
+      ? `${window.location.origin}/public/${team.slug}/space`
+      : `/public/${team.slug}/space`
+    : null
 
   function clearCover() {
     if (coverPreview) URL.revokeObjectURL(coverPreview)
@@ -157,7 +175,19 @@ export default function OnlineCoursesPage() {
           <GraduationCap className="h-5 w-5 text-muted-foreground" />
           <div>
             <h1 className="text-2xl font-semibold">{t('title')}</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{t('subtitle')}</p>
+            {spaceUrl ? (
+              <a
+                href={spaceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-0.5 flex items-center gap-1 text-sm text-primary hover:underline"
+              >
+                {spaceUrl.replace(/^https?:\/\//, '')}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : (
+              <p className="text-sm text-muted-foreground mt-0.5">{t('subtitle')}</p>
+            )}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">

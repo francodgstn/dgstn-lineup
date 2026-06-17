@@ -1458,8 +1458,8 @@ async function seedDemoTeam(profile: SectorProfile) {
   // ── team doc + public profile ─────────────────────────────────────────────
   const portalLinks = [
     {
-      label: 'Book a Free Trial',
-      description: "Try a class and see if it's right for you",
+      label: 'Book Now',
+      description: 'Reserve your spot in a session',
       isBookingLink: true,
       isMembershipLink: false,
       showInBioLink: true,
@@ -1473,6 +1473,15 @@ async function seedDemoTeam(profile: SectorProfile) {
       isMembershipLink: true,
       showInBioLink: true,
       iconName: 'UserCheck',
+      url: null,
+    },
+    // Courses system link — every sandbox team installs the online-courses plugin.
+    {
+      label: 'Online Courses',
+      description: 'Watch and learn between classes',
+      isCoursesLink: true,
+      showInBioLink: true,
+      iconName: 'GraduationCap',
       url: null,
     },
   ]
@@ -2639,7 +2648,7 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       subheadline: description,
       align: 'center',
       overlay: 45,
-      cta: { label: 'Book a Free Trial', action: 'booking' },
+      cta: { label: 'Book Now', action: 'booking' },
     },
     {
       id: `${teamId}-sec-about`,
@@ -2704,7 +2713,10 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       updated_at: ts(daysFromNow(-12)),
     })
 
-  // ── online courses plugin: 1 published + 1 draft course, each with modules ──
+  // ── online courses plugin: 2 published courses (1 free, 1 sign-in required),
+  // each with modules. Published courses also get a courses/{id}/public_profile/{id}
+  // summary so the public Space lists them even before syncCoursePublicProfile is
+  // deployed/triggered. ──
   const primary = activities[0]?.name ?? 'Training'
   const coach = instructors[0] ?? 'Your coach'
   const courses = [
@@ -2713,7 +2725,7 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       title: `${primary} Foundations`,
       summary: `A self-paced introduction to ${primary.toLowerCase()} — watch, learn, and practise between classes.`,
       status: 'published' as const,
-      access: 'members' as const,
+      access: 'free' as const,
       createdDaysAgo: 90,
       modules: [
         {
@@ -2771,8 +2783,8 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       id: `${teamId}-course-welcome`,
       title: `Getting started at ${teamName}`,
       summary: 'Our values, etiquette, and how to get the most from your membership.',
-      status: 'draft' as const,
-      access: 'free' as const,
+      status: 'published' as const,
+      access: 'registered' as const,
       createdDaysAgo: 30,
       modules: [
         {
@@ -2862,6 +2874,27 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       createdBy: uid,
       archived_at: null,
     })
+
+    // Mirror what syncCoursePublicProfile writes, so the public "Space" web area can
+    // list published courses even before the trigger is deployed against the project.
+    if (c.status === 'published') {
+      await courseRef
+        .collection('public_profile')
+        .doc(c.id)
+        .set({
+          type: 'course',
+          teamId,
+          slug: `${c.id}`,
+          title: c.title,
+          summary: c.summary,
+          coverImageUrl: null,
+          accessType: c.access,
+          subscriptionTypeIds: [],
+          moduleCount,
+          lessonCount,
+          order: 0,
+        })
+    }
   }
 }
 
@@ -3040,7 +3073,7 @@ async function main() {
   console.log('   All accounts: plan=studio, status=active (full feature set, no trial wall).')
   console.log('   Portals:')
   for (const p of SECTOR_PROFILES) {
-    console.log(`   ${p.teamName.padEnd(26)} → /public/bio-link/${p.teamSlug}`)
+    console.log(`   ${p.teamName.padEnd(26)} → /public/${p.teamSlug}`)
   }
   console.log('')
 }
