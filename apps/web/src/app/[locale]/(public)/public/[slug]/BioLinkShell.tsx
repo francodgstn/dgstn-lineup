@@ -1,5 +1,7 @@
 'use client'
 
+import { Link } from '@/i18n/navigation'
+
 interface BioLinkShellProps {
   teamName: string
   slug: string
@@ -50,9 +52,9 @@ export function BioLinkShell({
         {showBranding === true && (
           <p className="pt-4 text-center text-[11px] text-muted-foreground">
             Powered by{' '}
-            <a href="/" className="hover:underline font-medium">
+            <Link href="/" className="hover:underline font-medium">
               Linyup
-            </a>
+            </Link>
           </p>
         )}
       </div>

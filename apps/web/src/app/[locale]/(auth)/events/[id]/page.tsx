@@ -657,7 +657,7 @@ export default function EventDetailPage() {
                   <p className="text-xs text-muted-foreground mt-0.5">{a.email}</p>
                 )}
                 {a.notes && (
-                  <p className="text-xs text-muted-foreground/70 italic mt-0.5">"{a.notes}"</p>
+                  <p className="text-xs text-muted-foreground/70 italic mt-0.5">&quot;{a.notes}&quot;</p>
                 )}
               </div>
               {a.respondedAt && (

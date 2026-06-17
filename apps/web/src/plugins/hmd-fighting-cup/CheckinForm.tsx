@@ -182,7 +182,7 @@ export function CheckinForm({
 
         {allCategories.length > 0 && eligibleCategories.length === 0 && (
           <p className="text-xs text-amber-600">
-            No categories match this competitor's profile. Check weight, age, gender, and rank.
+            No categories match this competitor&apos;s profile. Check weight, age, gender, and rank.
           </p>
         )}
       </div>

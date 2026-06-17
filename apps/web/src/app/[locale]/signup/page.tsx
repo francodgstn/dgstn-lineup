@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { useRouter } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -310,9 +310,9 @@ export default function SignupPage() {
         {step === 'account' && (
           <p className="text-center text-xs text-muted-foreground">
             {t('alreadyHaveAccount')}{' '}
-            <a href="/login" className="text-primary hover:underline">
+            <Link href="/login" className="text-primary hover:underline">
               {t('signIn')}
-            </a>
+            </Link>
           </p>
         )}
       </div>

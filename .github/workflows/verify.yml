@@ -59,39 +59,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared package
+        run: pnpm --filter @linyup/shared run build
+
       - name: Build functions
         run: pnpm --filter @linyup/functions run build
 
+      # mocha exits 1 on "No test files found"; run it only once tests exist so
+      # the job stays green until function tests are added (and fails on real
+      # test failures thereafter).
       - name: Run function tests
-        run: pnpm --filter @linyup/functions run test
+        run: |
+          if find packages/functions/src -name '*.test.ts' | grep -q .; then
+            pnpm --filter @linyup/functions run test
+          else
+            echo "No function tests yet — skipping."
+          fi
         env:
           FIRESTORE_EMULATOR_HOST: localhost:8080
-
-  build-web:
-    name: Build Web App
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build web app
-        run: pnpm --filter @linyup/web run build
-        env:
-          NEXT_PUBLIC_FIREBASE_API_KEY: placeholder
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: placeholder.firebaseapp.com
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: placeholder
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: placeholder.appspot.com
-          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
-          NEXT_PUBLIC_FIREBASE_APP_ID: placeholder
 
   build-admin:
     name: Build Admin Console

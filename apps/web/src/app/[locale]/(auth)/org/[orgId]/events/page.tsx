@@ -339,7 +339,7 @@ export default function OrgEventsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete event?</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleting?.title} will be removed from all clubs' event lists.
+              {deleting?.title} will be removed from all clubs&apos; event lists.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
