@@ -3073,7 +3073,7 @@ async function main() {
   console.log('   All accounts: plan=studio, status=active (full feature set, no trial wall).')
   console.log('   Portals:')
   for (const p of SECTOR_PROFILES) {
-    console.log(`   ${p.teamName.padEnd(26)} → /public/bio-link/${p.teamSlug}`)
+    console.log(`   ${p.teamName.padEnd(26)} → /public/${p.teamSlug}`)
   }
   console.log('')
 }

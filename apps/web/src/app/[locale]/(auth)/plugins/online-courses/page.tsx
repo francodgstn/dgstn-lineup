@@ -102,8 +102,8 @@ export default function OnlineCoursesPage() {
   // Public Space shortcut (like the bio-link / website pages).
   const spaceUrl = team?.slug
     ? typeof window !== 'undefined'
-      ? `${window.location.origin}/public/space/${team.slug}`
-      : `/public/space/${team.slug}`
+      ? `${window.location.origin}/public/${team.slug}/space`
+      : `/public/${team.slug}/space`
     : null
 
   function clearCover() {

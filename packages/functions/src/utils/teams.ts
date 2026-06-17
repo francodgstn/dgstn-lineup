@@ -2,6 +2,7 @@
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import type { Team, TeamMember, TeamRole } from '@linyup/shared'
+import { isReservedSlug } from '@linyup/shared'
 
 export async function isAdmin(userId: string): Promise<boolean> {
   const userDoc = await admin.firestore().collection('users').doc(userId).get()
@@ -167,15 +168,21 @@ export async function createTeamRecord(
       .slice(0, 50)
 
     if (baseSlug.length >= 3) {
+      // Ensure the auto-generated slug never equals a reserved literal route
+      // segment (e.g. 'booking', 'site', 'team-invitation', 'bio-link').
+      const candidateSlug = isReservedSlug(baseSlug)
+        ? `${baseSlug.slice(0, 44)}-team`
+        : baseSlug
+
       const existing = await admin
         .firestore()
         .collection('teams')
-        .where('slug', '==', baseSlug)
+        .where('slug', '==', candidateSlug)
         .limit(1)
         .get()
       slug = existing.empty
-        ? baseSlug
-        : `${baseSlug.slice(0, 44)}-${teamId.slice(0, 4).toLowerCase()}`
+        ? candidateSlug
+        : `${candidateSlug.slice(0, 44)}-${teamId.slice(0, 4).toLowerCase()}`
     }
   }
 

@@ -2232,10 +2232,10 @@ async function main() {
   )
   console.log('   Portals:')
   for (const a of accounts) {
-    console.log(`   ${a.plan.padEnd(16)} →  http://localhost:3000/public/bio-link/${a.teamSlug}`)
+    console.log(`   ${a.plan.padEnd(16)} →  http://localhost:3000/public/${a.teamSlug}`)
   }
   console.log(
-    `   ${'free'.padEnd(16)} →  http://localhost:3000/public/bio-link/sunrise-yoga-studio  (shows "Powered by Linyup")`
+    `   ${'free'.padEnd(16)} →  http://localhost:3000/public/sunrise-yoga-studio  (shows "Powered by Linyup")`
   )
   console.log('')
 }

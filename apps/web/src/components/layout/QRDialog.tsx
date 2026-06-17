@@ -27,7 +27,7 @@ export function QRDialog({
 
   const bioLinkUrl =
     typeof window !== 'undefined' && team?.slug
-      ? `${window.location.origin}/public/bio-link/${team.slug}`
+      ? `${window.location.origin}/public/${team.slug}`
       : ''
 
   const checkinValue = team?.slug ? JSON.stringify({ team: team.slug }) : ''

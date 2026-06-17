@@ -172,7 +172,7 @@ export const getMyReferralCode = onCall(async (request) => {
 
   const code = await ensureReferralCode(contactId, teamId)
   const teamSlug = team?.slug
-  const referralUrl = `${getHostingUrl()}/public/bio-link/${teamSlug}/booking?referral=${code}`
+  const referralUrl = `${getHostingUrl()}/public/${teamSlug}/booking?referral=${code}`
 
   console.log(`Referral code ${code} returned for contact ${contactId}`)
   return { code, referralUrl }

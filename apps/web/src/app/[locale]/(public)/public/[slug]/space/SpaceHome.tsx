@@ -1,15 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { collectionGroup, query, where, getDocs, limit } from 'firebase/firestore'
+import { collectionGroup, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { GraduationCap, Lock, LogOut } from 'lucide-react'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
-import type { BioLinkBackground } from '@linyup/shared'
 import { useSpaceAuth } from './SpaceAuthProvider'
+import { usePublicTeam } from '../PublicTeamProvider'
 import SignInDialog from './SignInDialog'
 
 // ─── Public course card data (from public_profile subcollection) ───────────────
@@ -25,17 +25,6 @@ export interface PublicCourseCard {
   moduleCount?: number
   lessonCount?: number
   order?: number
-}
-
-// ─── Team data ────────────────────────────────────────────────────────────────
-
-interface TeamData {
-  name: string
-  profileImage?: string
-  showBranding?: boolean
-  bioLinkBackground?: BioLinkBackground
-  bioLinkTheme?: string
-  bioLinkAccentColor?: string
 }
 
 // ─── Access check helper ──────────────────────────────────────────────────────
@@ -60,26 +49,12 @@ function hasAccess(
 export default function SpaceHome() {
   const t = useTranslations('Space')
   const { slug, teamId, isAuthenticated, contact, logout, openSignIn } = useSpaceAuth()
-  const [team, setTeam] = useState<TeamData | null>(null)
+  // Team branding already resolved once by the parent PublicTeamProvider (layout).
+  const { team } = usePublicTeam()
   const [courses, setCourses] = useState<PublicCourseCard[]>([])
   const [loading, setLoading] = useState(true)
   const [signInOpen, setSignInOpen] = useState(false)
   const [systemDark, setSystemDark] = useState(false)
-
-  useEffect(() => {
-    // Load team public profile
-    const q = query(
-      collectionGroup(db, 'public_profile'),
-      where('slug', '==', slug),
-      where('type', '==', 'team'),
-      limit(1)
-    )
-    getDocs(q)
-      .then((snap) => {
-        if (!snap.empty) setTeam(snap.docs[0].data() as TeamData)
-      })
-      .catch(() => {})
-  }, [slug])
 
   useEffect(() => {
     // Load published courses for this team from public_profile
@@ -327,7 +302,7 @@ function CourseCard({
 
   if (accessible) {
     return (
-      <Link href={`/public/space/${slug}/courses/${course.slug}` as Route}>
+      <Link href={`/public/${slug}/space/courses/${course.slug}` as Route}>
         {content}
       </Link>
     )

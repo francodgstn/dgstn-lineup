@@ -99,7 +99,7 @@ export default function SignInDialog({ open, onOpenChange, slug }: Props) {
             <p className="font-semibold">{t('signInDialogRequiresSignup')}</p>
             <p className="text-sm text-muted-foreground">{t('signInDialogRequiresSignupDesc')}</p>
             <Link
-              href={`/public/bio-link/${slug}/membership-signup` as Route}
+              href={`/public/${slug}/membership-signup` as Route}
               className="inline-block text-sm text-primary hover:underline"
             >
               {t('signInDialogSignupLink')} →

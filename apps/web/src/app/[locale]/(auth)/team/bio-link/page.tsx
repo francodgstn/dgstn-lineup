@@ -25,7 +25,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { IconPicker } from '@/components/ui/icon-picker'
-import BioLinkHome from '../../../(public)/public/bio-link/[slug]/BioLinkHome'
+import BioLinkHome from '../../../(public)/public/[slug]/BioLinkHome'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import type { Team, SocialPlatform, BookingSettings } from '@linyup/shared'
@@ -1036,8 +1036,8 @@ export default function TeamBioLinkEditorPage() {
 
   const bioLinkUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}/public/bio-link/${team.slug}`
-      : `/public/bio-link/${team.slug}`
+      ? `${window.location.origin}/public/${team.slug}`
+      : `/public/${team.slug}`
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'appearance', label: t('tabAppearance') },
@@ -1139,7 +1139,7 @@ export default function TeamBioLinkEditorPage() {
               <BioLinkHome
                 team={previewTeam}
                 slug={team.slug}
-                onLinkClick={(type) => {
+                onLinkClick={(type: 'booking' | 'signup' | 'external') => {
                   if (type === 'booking') setPreviewPage('booking')
                 }}
               />

@@ -4,14 +4,14 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { functions } from '@/lib/firebase'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
+import { usePublicTeam } from '../PublicTeamProvider'
 
 // ─── steps ───────────────────────────────────────────────────────────────────
 
-type Step = 'email' | 'code' | 'details' | 'success'
+type Step = 'loading' | 'not-found' | 'email' | 'code' | 'form' | 'success'
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
@@ -28,10 +28,7 @@ const detailsSchema = z.object({
   lastname: z.string().min(1, 'Required').max(60),
   phone: z.string().max(30).optional(),
   birthdate: z.string().optional(),
-  notes: z.string().max(500).optional(),
-  privacyConsent: z.literal(true, {
-    errorMap: () => ({ message: 'You must accept the privacy policy' }),
-  }),
+  note: z.string().max(500).optional(),
 })
 
 type EmailValues = z.infer<typeof emailSchema>
@@ -42,14 +39,15 @@ type DetailsValues = z.infer<typeof detailsSchema>
 
 interface Props {
   slug: string
+  contactId: string
 }
 
-export default function SignupForm({ slug }: Props) {
-  const [teamId, setTeamId] = useState<string | null>(null)
-  const [teamName, setTeamName] = useState('')
-  const [accentColor, setAccentColor] = useState<string | null>(null)
-  const [showBranding, setShowBranding] = useState(false)
-  const [loadingTeam, setLoadingTeam] = useState(true)
+export default function ContactUpdateForm({ slug, contactId }: Props) {
+  // Team already resolved once by the parent PublicTeamProvider (the layout).
+  const { teamId, team } = usePublicTeam()
+  const teamName = team.name || slug
+  const accentColor = team.bioLinkAccentColor ?? null
+  const showBranding = team.showBranding === true
 
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
@@ -57,43 +55,16 @@ export default function SignupForm({ slug }: Props) {
   const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
-  // Resolve team from public_profile
-  useEffect(() => {
-    const q = query(
-      collectionGroup(db, 'public_profile'),
-      where('slug', '==', slug),
-      where('type', '==', 'team'),
-      limit(1)
-    )
-    getDocs(q)
-      .then((snap) => {
-        if (!snap.empty) {
-          const doc = snap.docs[0]
-          const id = doc.ref.parent.parent?.id
-          const data = doc.data()
-          if (id) setTeamId(id)
-          setTeamName(data.name || '')
-          setAccentColor(data.bioLinkAccentColor ?? null)
-          setShowBranding(data.showBranding === true)
-        }
-      })
-      .catch(() => {
-        /* leave defaults */
-      })
-      .finally(() => setLoadingTeam(false))
-  }, [slug])
-
+  // Countdown timer for resend button
   useEffect(() => {
     if (countdown <= 0) return
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
     return () => clearTimeout(t)
   }, [countdown])
 
-  const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
-  const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
-  const detailsForm = useForm<DetailsValues>({ resolver: zodResolver(detailsSchema) })
+  // ── Email step ──────────────────────────────────────────────────────────────
 
-  // ── Email step ─────────────────────────────────────────────────────────────
+  const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
 
   const onSendCode = async (values: EmailValues) => {
     if (!teamId) return
@@ -114,7 +85,9 @@ export default function SignupForm({ slug }: Props) {
     }
   }
 
-  // ── Code step ──────────────────────────────────────────────────────────────
+  // ── Code step ───────────────────────────────────────────────────────────────
+
+  const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
 
   const onVerifyCode = async (values: CodeValues) => {
     setError(null)
@@ -124,7 +97,7 @@ export default function SignupForm({ slug }: Props) {
         'verifyMembershipCode'
       )
       await fn({ codeId, code: values.code })
-      setStep('details')
+      setStep('form')
     } catch (err: unknown) {
       const e = err as { message?: string }
       setError(e.message || 'Incorrect code. Please try again.')
@@ -149,48 +122,71 @@ export default function SignupForm({ slug }: Props) {
     }
   }
 
-  // ── Details step ───────────────────────────────────────────────────────────
+  // ── Details step ────────────────────────────────────────────────────────────
+
+  const detailsForm = useForm<DetailsValues>({ resolver: zodResolver(detailsSchema) })
 
   const onSubmitDetails = async (values: DetailsValues) => {
+    if (!teamId) return
     setError(null)
     try {
       const fn = httpsCallable<
         {
           codeId: string
-          contactDetails: Omit<DetailsValues, 'privacyConsent'> & { privacyConsent: boolean }
+          contactId: string
+          teamId: string
+          contactDetails: Omit<DetailsValues, 'note'>
+          note?: string
         },
-        { success: boolean }
-      >(functions, 'completeMembershipSignup')
+        { success: boolean; requestId: string }
+      >(functions, 'requestContactUpdate')
 
       await fn({
         codeId,
+        contactId,
+        teamId,
         contactDetails: {
           firstname: values.firstname,
           lastname: values.lastname,
           phone: values.phone || undefined,
           birthdate: values.birthdate || undefined,
-          notes: values.notes || undefined,
-          privacyConsent: true,
         },
+        note: values.note || undefined,
       })
       setStep('success')
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to complete signup. Please try again.')
+      setError(e.message || 'Failed to submit update. Please try again.')
     }
   }
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ── Shared field styling ────────────────────────────────────────────────────
 
-  if (loadingTeam) {
+  const inputClass =
+    'w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary'
+
+  // ── Render: loading ─────────────────────────────────────────────────────────
+
+  if (step === 'loading') {
     return (
-      <BioLinkShell teamName="" slug={slug} accentColor={null} showBranding={showBranding}>
-        <div className="flex justify-center py-12">
-          <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-        </div>
-      </BioLinkShell>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
     )
   }
+
+  if (step === 'not-found') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-center space-y-2">
+          <p className="text-lg font-semibold">Team not found</p>
+          <p className="text-muted-foreground text-sm">This link may be invalid or expired.</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Render: email step ──────────────────────────────────────────────────────
 
   if (step === 'email') {
     return (
@@ -201,9 +197,9 @@ export default function SignupForm({ slug }: Props) {
         showBranding={showBranding}
       >
         <div>
-          <h1 className="text-2xl font-bold">Register at {teamName}</h1>
+          <h1 className="text-2xl font-bold">Update your details</h1>
           <p className="text-muted-foreground mt-1">
-            Enter your email to get started. We&apos;ll send a quick verification code.
+            Verify your email to update your personal information with <strong>{teamName}</strong>.
           </p>
         </div>
 
@@ -215,7 +211,7 @@ export default function SignupForm({ slug }: Props) {
               {...emailForm.register('email')}
               autoComplete="email"
               placeholder="your@email.com"
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className={inputClass}
             />
             {emailForm.formState.errors.email && (
               <p className="text-xs text-destructive">{emailForm.formState.errors.email.message}</p>
@@ -239,6 +235,8 @@ export default function SignupForm({ slug }: Props) {
       </BioLinkShell>
     )
   }
+
+  // ── Render: code step ───────────────────────────────────────────────────────
 
   if (step === 'code') {
     return (
@@ -278,7 +276,7 @@ export default function SignupForm({ slug }: Props) {
                 },
               })}
               placeholder="000000"
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-center tracking-widest text-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+              className={`${inputClass} text-center tracking-widest text-lg font-mono`}
             />
             {codeForm.formState.errors.code && (
               <p className="text-xs text-destructive">{codeForm.formState.errors.code.message}</p>
@@ -313,7 +311,9 @@ export default function SignupForm({ slug }: Props) {
     )
   }
 
-  if (step === 'details') {
+  // ── Render: details form ────────────────────────────────────────────────────
+
+  if (step === 'form') {
     return (
       <BioLinkShell
         teamName={teamName}
@@ -324,8 +324,14 @@ export default function SignupForm({ slug }: Props) {
         <div>
           <h1 className="text-2xl font-bold">Your details</h1>
           <p className="text-muted-foreground mt-1">
-            Just a few things and you&apos;re all set at <strong>{teamName}</strong>.
+            Submit your updated information. Your manager will review and apply the changes.
           </p>
+        </div>
+
+        {/* Info banner */}
+        <div className="rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-800 px-4 py-3 text-sm text-blue-800 dark:text-blue-300">
+          Your manager will compare the submitted data with what&apos;s currently on file before
+          approving the update.
         </div>
 
         <form onSubmit={detailsForm.handleSubmit(onSubmitDetails)} className="space-y-4">
@@ -349,7 +355,7 @@ export default function SignupForm({ slug }: Props) {
                 type="text"
                 {...detailsForm.register('firstname')}
                 autoComplete="given-name"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className={inputClass}
               />
               {detailsForm.formState.errors.firstname && (
                 <p className="text-xs text-destructive">
@@ -365,7 +371,7 @@ export default function SignupForm({ slug }: Props) {
                 type="text"
                 {...detailsForm.register('lastname')}
                 autoComplete="family-name"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className={inputClass}
               />
               {detailsForm.formState.errors.lastname && (
                 <p className="text-xs text-destructive">
@@ -383,7 +389,7 @@ export default function SignupForm({ slug }: Props) {
               type="tel"
               {...detailsForm.register('phone')}
               autoComplete="tel"
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className={inputClass}
             />
           </div>
 
@@ -391,41 +397,20 @@ export default function SignupForm({ slug }: Props) {
             <label className="text-sm font-medium">
               Date of birth <span className="text-muted-foreground font-normal">(optional)</span>
             </label>
-            <input
-              type="date"
-              {...detailsForm.register('birthdate')}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+            <input type="date" {...detailsForm.register('birthdate')} className={inputClass} />
           </div>
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Anything else? <span className="text-muted-foreground font-normal">(optional)</span>
+              Note for your manager{' '}
+              <span className="text-muted-foreground font-normal">(optional)</span>
             </label>
             <textarea
-              {...detailsForm.register('notes')}
+              {...detailsForm.register('note')}
               rows={3}
-              placeholder="Health notes, questions for the coach…"
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              placeholder="e.g. I changed my address, updated phone number…"
+              className={`${inputClass} resize-none`}
             />
-          </div>
-
-          <div className="space-y-1">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                {...detailsForm.register('privacyConsent')}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-primary"
-              />
-              <span className="text-sm text-muted-foreground">
-                I agree to the processing of my personal data by {teamName}.
-              </span>
-            </label>
-            {detailsForm.formState.errors.privacyConsent && (
-              <p className="text-xs text-destructive">
-                {detailsForm.formState.errors.privacyConsent.message}
-              </p>
-            )}
           </div>
 
           {error && (
@@ -439,14 +424,14 @@ export default function SignupForm({ slug }: Props) {
             disabled={detailsForm.formState.isSubmitting}
             accentColor={accentColor}
           >
-            {detailsForm.formState.isSubmitting ? 'Saving…' : 'Complete registration'}
+            {detailsForm.formState.isSubmitting ? 'Submitting…' : 'Submit update request'}
           </BioLinkButton>
         </form>
       </BioLinkShell>
     )
   }
 
-  // ── Success ─────────────────────────────────────────────────────────────────
+  // ── Render: success ─────────────────────────────────────────────────────────
 
   return (
     <BioLinkShell
@@ -455,10 +440,10 @@ export default function SignupForm({ slug }: Props) {
       accentColor={accentColor}
       showBranding={showBranding}
     >
-      <div className="py-8 text-center space-y-5">
+      <div className="space-y-6 text-center py-8">
         <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
           <svg
-            className="w-8 h-8 text-green-600 dark:text-green-400"
+            className="w-8 h-8 text-green-600"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -467,14 +452,14 @@ export default function SignupForm({ slug }: Props) {
           </svg>
         </div>
         <div>
-          <h1 className="text-2xl font-bold">You&apos;re registered!</h1>
+          <h1 className="text-2xl font-bold">Request submitted!</h1>
           <p className="text-muted-foreground mt-2">
-            Welcome to <strong>{teamName}</strong>. Your details have been saved. The team will be
-            in touch soon.
+            Your manager at <strong>{teamName}</strong> will review your details and apply the
+            update. You&apos;ll receive an email once it&apos;s been processed.
           </p>
         </div>
         <a
-          href={`/public/bio-link/${slug}`}
+          href={`/public/${slug}`}
           className="inline-block text-sm text-primary hover:underline"
         >
           ← Back to bio link

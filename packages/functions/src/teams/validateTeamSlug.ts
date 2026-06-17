@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { isReservedSlug } from '@linyup/shared'
 import { regionalFunctions } from '../utils/functions'
 
 export const validateTeamSlug = regionalFunctions.https.onCall(
@@ -12,6 +13,11 @@ export const validateTeamSlug = regionalFunctions.https.onCall(
 
     if (normalized.length < 3) return { available: false, reason: 'Slug must be at least 3 characters' }
     if (normalized.length > 50) return { available: false, reason: 'Slug must be at most 50 characters' }
+
+    // Reject reserved route segments that would collide with public URL structure
+    if (isReservedSlug(normalized)) {
+      return { available: false, reason: 'This URL is reserved and cannot be used' }
+    }
 
     const snap = await admin.firestore().collection('teams').where('slug', '==', normalized).limit(1).get()
 

@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { hasTeamRole } from '../utils/teams'
+import { unpublishSiteForTeam } from '../utils/plugins'
 import {
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
@@ -277,10 +278,13 @@ export const unpublishWebsite = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'Manager access required')
   }
 
+  // Delegate core teardown to shared helper (also used by plugin-status trigger
+  // and plan downgrade). We additionally record the uid of who triggered it.
+  await unpublishSiteForTeam(teamId)
+  // Stamp the user who initiated unpublish onto the draft (non-critical; merge).
   const fs = admin.firestore()
-  await fs.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).delete()
   await fs.doc(`${SITE_DRAFTS_COLLECTION}/${teamId}`).set(
-    { enabled: false, updated_at: FieldValue.serverTimestamp(), updatedBy: uid },
+    { updatedBy: uid },
     { merge: true },
   )
 

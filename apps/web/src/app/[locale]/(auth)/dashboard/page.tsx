@@ -443,7 +443,7 @@ function QuickActions({ teamSlug }: { teamSlug?: string }) {
     {
       label: t('actionViewBioLink'),
       icon: BookOpen,
-      href: (teamSlug ? `/public/bio-link/${teamSlug}` : '/team/bio-link') as Route,
+      href: (teamSlug ? `/public/${teamSlug}` : '/team/bio-link') as Route,
     },
   ]
 

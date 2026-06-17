@@ -68,7 +68,7 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
       })
 
     const hostingUrl = process.env.HOSTING_URL || 'https://linyup.com'
-    const invitationUrl = `${hostingUrl}/public/bio-link/team-invitation/${token}`
+    const invitationUrl = `${hostingUrl}/public/team-invitation/${token}`
 
     const { html, text } = buildEmailTemplate({
       title: `You've been invited to join ${team.name} on Linyup`,

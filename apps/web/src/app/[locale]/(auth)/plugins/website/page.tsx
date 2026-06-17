@@ -405,8 +405,8 @@ export default function WebsiteBuilderPage() {
   const slug = team?.slug ?? draft.slug
   const siteUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}/public/site/${slug}`
-      : `/public/site/${slug}`
+      ? `${window.location.origin}/public/${slug}/site`
+      : `/public/${slug}/site`
   const status = dirty
     ? t('statusUnsaved')
     : draft.enabled

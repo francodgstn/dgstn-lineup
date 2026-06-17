@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
 import type { User } from 'firebase/auth'
-import { TRIAL_DAYS } from '@linyup/shared'
+import { TRIAL_DAYS, isReservedSlug } from '@linyup/shared'
 import { db } from './firebase'
 
 /**
@@ -38,7 +38,8 @@ export async function provisionTeam(
 ): Promise<string> {
   const teamRef = doc(collection(db, 'teams'))
   const teamId = teamRef.id
-  const slug = slugify(teamName)
+  const rawSlug = slugify(teamName)
+  const slug = isReservedSlug(rawSlug) ? `${rawSlug}-team` : rawSlug
   const now = serverTimestamp()
   const { uid } = user
 

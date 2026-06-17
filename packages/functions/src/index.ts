@@ -34,6 +34,7 @@ export { syncSubscriptionTypesToPublicProfile } from './sync/syncSubscriptionTyp
 export { onContactSubscriptionChange } from './sync/onContactSubscriptionChange'
 export { onSessionUpdate } from './sync/onSessionUpdate'
 export { onActivityTypeChange } from './sync/onActivityTypeChange'
+export { onInstalledPluginStatusChange } from './sync/onInstalledPluginStatusChange'
 
 // Booking
 export {

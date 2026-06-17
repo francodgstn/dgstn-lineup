@@ -8,6 +8,20 @@ export type SaasPlan = 'free' | 'coach' | 'studio' | 'organization'
 // more — the value remains so old docs still typecheck and admin filters work.
 export type SaasStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'expired'
 
+// Public surfaces a team can expose at `/public/{slug}/…`. 'bio-link' is the
+// team root (renders inline at `/public/{slug}`); the others are sibling routes
+// that the root redirects to when chosen as the default.
+export type PublicSurface = 'bio-link' | 'site' | 'space' | 'booking'
+
+// Denormalized onto TeamPublicProfile so the public root page (which may only
+// read world-readable public_profile, never the private installed_plugins) can
+// tell which non-bio-link surfaces are actually live before redirecting to one.
+export interface ActivePublicSurfaces {
+  site: boolean
+  space: boolean
+  booking: boolean
+}
+
 export interface RankLevel {
   value: number
   label: string
@@ -111,6 +125,9 @@ export interface Team {
   default_currency?: string
   // Organization membership
   org_id?: string
+  // Which public surface `/public/{slug}` resolves to. Defaults to 'bio-link'
+  // (always present, every plan) when unset. See PublicSurface.
+  default_public_surface?: PublicSurface
   // Timestamps
   created: Timestamp
   createdBy: string
@@ -157,6 +174,13 @@ export interface TeamPublicProfile {
   // Denormalized from teams/{id}.default_currency by syncTeamPublicProfile so the
   // public website pricing table can format prices without reading teams/.
   default_currency?: string
+  // Which surface the team root `/public/{slug}` resolves to (mirrors
+  // teams/{id}.default_public_surface). Unset → 'bio-link'.
+  default_public_surface?: PublicSurface
+  // Which non-bio-link surfaces are currently live (plugin active + published
+  // content). Computed by syncTeamPublicProfile; the public root reads this to
+  // avoid redirecting to a dead surface and to fall back to the bio-link.
+  active_public_surfaces?: ActivePublicSurfaces
 }
 
 export interface TeamInvitation {

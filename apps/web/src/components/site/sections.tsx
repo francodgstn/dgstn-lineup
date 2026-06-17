@@ -333,7 +333,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
             activities.map((a) => {
               const href =
                 section.showBooking && a.slug
-                  ? `/public/bio-link/${slug}/booking/${a.slug}`
+                  ? `/public/${slug}/booking/${a.slug}`
                   : undefined
               return (
                 <div
@@ -462,7 +462,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
     }
   }, [teamId])
 
-  const href = preview ? undefined : `/public/bio-link/${slug}/signup`
+  const href = preview ? undefined : `/public/${slug}/signup`
 
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
@@ -637,7 +637,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
         </div>
         <div className="mt-8 text-center">
           <a
-            {...linkProps(preview ? undefined : `/public/bio-link/${slug}/booking`, preview)}
+            {...linkProps(preview ? undefined : `/public/${slug}/booking`, preview)}
             className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
             style={{ background: palette.accent, color: palette.onAccent }}
           >

@@ -414,7 +414,7 @@ export default function MembershipSignupForm({ teamId, teamName, slug }: Props) 
         </p>
       </div>
       <a
-        href={`/public/bio-link/${slug}`}
+        href={`/public/${slug}`}
         className="inline-block text-sm text-primary hover:underline"
       >
         ← Back to bio link

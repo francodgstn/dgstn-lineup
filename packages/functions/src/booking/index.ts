@@ -621,7 +621,7 @@ export const bookSession = onCall(async (request) => {
   const bookingToken = generateSecureToken()
   const teamSlug: string | null = team.slug || null
   const manageBookingUrl = teamSlug
-    ? `${getHostingUrl()}/public/bio-link/${teamSlug}/manage-booking?token=${bookingToken}`
+    ? `${getHostingUrl()}/public/${teamSlug}/manage-booking?token=${bookingToken}`
     : null
   const subscriptionTypeId =
     typeof data.subscription_type_id === 'string' && data.subscription_type_id
@@ -982,7 +982,7 @@ export const cancelBooking = onCall(async (request) => {
   await cancelBatch.commit()
 
   const rebookUrl = teamSlug
-    ? `${getHostingUrl()}/public/bio-link/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`
+    ? `${getHostingUrl()}/public/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`
     : null
 
   const sessionEnd = (session.end as Timestamp).toDate()
@@ -1279,7 +1279,7 @@ export const rebookSession = onCall(async (request) => {
   }
 
   const manageBookingUrl = teamSlug
-    ? `${getHostingUrl()}/public/bio-link/${teamSlug}/manage-booking?token=${newBookingToken}`
+    ? `${getHostingUrl()}/public/${teamSlug}/manage-booking?token=${newBookingToken}`
     : null
 
   const oldSessionStart = (oldSession.start as Timestamp).toDate()

@@ -207,7 +207,7 @@ export default function CoursePlayer({ courseSlug }: Props) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
         <p className="text-sm text-muted-foreground">{t('notFound')}</p>
-        <Link href={`/public/space/${slug}` as Route} className="text-sm text-primary hover:underline">
+        <Link href={`/public/${slug}/space` as Route} className="text-sm text-primary hover:underline">
           {t('backToCourses')}
         </Link>
       </div>
@@ -221,7 +221,7 @@ export default function CoursePlayer({ courseSlug }: Props) {
       <div className="min-h-screen">
         <div className="max-w-[640px] mx-auto px-5 py-10 space-y-6">
           <Link
-            href={`/public/space/${slug}` as Route}
+            href={`/public/${slug}/space` as Route}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -256,7 +256,7 @@ export default function CoursePlayer({ courseSlug }: Props) {
       <div className="min-h-screen">
         <div className="max-w-[640px] mx-auto px-5 py-10 space-y-6">
           <Link
-            href={`/public/space/${slug}` as Route}
+            href={`/public/${slug}/space` as Route}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -282,7 +282,7 @@ export default function CoursePlayer({ courseSlug }: Props) {
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* Back link */}
         <Link
-          href={`/public/space/${slug}` as Route}
+          href={`/public/${slug}/space` as Route}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />

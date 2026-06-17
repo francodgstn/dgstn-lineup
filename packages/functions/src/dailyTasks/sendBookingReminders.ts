@@ -169,7 +169,7 @@ export async function sendBookingReminders(): Promise<{
         const bookingToken = (booking.booking_token as string) || null
         const manageBookingUrl =
           team.slug && bookingToken
-            ? `${getHostingUrl()}/public/bio-link/${team.slug}/manage-booking?token=${bookingToken}`
+            ? `${getHostingUrl()}/public/${team.slug}/manage-booking?token=${bookingToken}`
             : null
 
         const { html, text } = buildBookingReminderEmail({

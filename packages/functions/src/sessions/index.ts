@@ -187,7 +187,7 @@ async function cancelSingleSession(
 
     const rebookUrl =
       teamData.slug && sessionData.activityId
-        ? `${getHostingUrl()}/public/bio-link/${teamData.slug}/booking?activity=${sessionData.activityId}`
+        ? `${getHostingUrl()}/public/${teamData.slug}/booking?activity=${sessionData.activityId}`
         : null
 
     for (const bookingDoc of bookingsToNotify) {

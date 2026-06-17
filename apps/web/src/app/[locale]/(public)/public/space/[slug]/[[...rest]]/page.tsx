@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation'
 import type { Route } from 'next'
 
-// Back-compat shim: the public website moved from `/public/site/{slug}` to
-// `/public/{slug}/site`. Redirect old links, preserving any query string.
+// Back-compat shim: Space moved from `/public/space/{slug}` to
+// `/public/{slug}/space`. Redirect old links (incl. `/courses/{courseSlug}`),
+// preserving any query string.
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  params: Promise<{ slug: string }>
+  params: Promise<{ slug: string; rest?: string[] }>
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
@@ -21,7 +22,8 @@ function toQuery(sp: Record<string, string | string[] | undefined>): string {
   return qs ? `?${qs}` : ''
 }
 
-export default async function SiteLegacyRedirect({ params, searchParams }: Props) {
-  const { slug } = await params
-  redirect(`/public/${slug}/site${toQuery(await searchParams)}` as Route)
+export default async function SpaceLegacyRedirect({ params, searchParams }: Props) {
+  const { slug, rest } = await params
+  const suffix = rest && rest.length ? `/${rest.join('/')}` : ''
+  redirect(`/public/${slug}/space${suffix}${toQuery(await searchParams)}` as Route)
 }

@@ -59,7 +59,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - Bio-link routes tagged `force-dynamic`; `apps/web/.env.local` created with placeholders
 - Self-service signup wizard (`app/signup/page.tsx`) — 2-step: account → team → dashboard
 - Firebase emulator wired up for local dev (`demo-linyup` project, no real Firebase project needed)
-- Public **Space** area (`/public/space/[slug]`) — contacts browse/consume published Online
+- Public **Space** area (`/public/{slug}/space`) — contacts browse/consume published Online
   Courses on the web (interim surface until the mobile app ships). Free courses are anonymous;
   gated courses use the passwordless contact-session login. See "Public Space" under Key patterns.
 
@@ -120,9 +120,9 @@ import { regionalFunctions } from '../utils/functions'
 export const myFn = regionalFunctions.firestore.document('…').onCreate(…)
 ```
 
-### Public bio-link — ONLY read `public_profile` subcollections
+### Public tenant routes — ONLY read `public_profile` subcollections
 
-Bio-link routes (`/public/bio-link/*`) must never query main collections. Always use:
+Public tenant routes (`/public/{slug}/*`) must never query main collections. Always use:
 
 ```typescript
 // resolve team by slug
@@ -136,12 +136,23 @@ const q = query(
 
 See `hmd-lineup/docs/portal-security.md` for full rules and patterns.
 
+### Public tenant route structure
+
+Routes are **tenant-first**: `/public/{slug}` is the team root and renders the team's chosen
+default surface (`Team.default_public_surface`, defaults to `'bio-link'`). The root reads
+`TeamPublicProfile.active_public_surfaces` (computed by `syncTeamPublicProfile` on team write)
+to avoid redirecting to a dead surface. Sub-routes are siblings: `/public/{slug}/site`,
+`/public/{slug}/space`, `/public/{slug}/booking`, `/public/{slug}/signup`,
+`/public/{slug}/manage-booking`, `/public/{slug}/contact-update`, `/public/{slug}/coaching`.
+Token-only routes stay standalone: `/public/event-invitation` and `/public/team-invitation/{token}`.
+
 ### Public Space — web access to Online Courses
 
-`/public/space/[slug]` is a minimal, team-branded public area (sibling to `/public/bio-link`
-and `/public/site`) where a team's **contacts** browse and consume **published** courses
-without the mobile app. It resolves the team by slug with the same `public_profile`
-collection-group query as bio-link, and lists courses from world-readable
+`/public/{slug}/space` is a minimal, team-branded public area (sibling to `/public/{slug}`
+bio-link root and `/public/{slug}/site`) where a team's **contacts** browse and consume
+**published** courses without the mobile app. It resolves the team by slug with the same
+`public_profile` collection-group query as the other public routes, and lists courses from
+world-readable
 `courses/{courseId}/public_profile/{courseId}` summaries written by `syncCoursePublicProfile`
 (`packages/functions/src/sync/`). Never list the root `courses` collection publicly.
 

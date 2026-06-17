@@ -25,7 +25,7 @@ export function BioLinkShell({
       {/* Top nav */}
       <div className="border-b bg-card px-5 py-3">
         <a
-          href={`/public/bio-link/${slug}`}
+          href={`/public/${slug}`}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <svg

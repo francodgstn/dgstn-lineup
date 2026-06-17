@@ -53,7 +53,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { TEAMS_COLLECTION, ALERT_PRESETS_SUBCOLLECTION } from '@linyup/shared'
+import {
+  TEAMS_COLLECTION,
+  ALERT_PRESETS_SUBCOLLECTION,
+  COURSES_COLLECTION,
+  SITE_DRAFTS_COLLECTION,
+  isReservedSlug,
+} from '@linyup/shared'
 import type {
   Team,
   AlertScheduleType,
@@ -61,6 +67,7 @@ import type {
   RankLevel,
   TeamIntegration,
   PaymentGatewayType,
+  PublicSurface,
 } from '@linyup/shared'
 import {
   CalendarDays,
@@ -126,6 +133,9 @@ const generalSchema = z.object({
     .min(3, 'At least 3 characters')
     .max(50, 'Max 50 characters')
     .regex(SLUG_REGEX, 'Only lowercase letters, numbers and hyphens'),
+  default_public_surface: z
+    .enum(['bio-link', 'site', 'space', 'booking'])
+    .default('bio-link'),
 })
 type GeneralData = z.infer<typeof generalSchema>
 
@@ -152,6 +162,7 @@ type GatewayFormData = z.infer<typeof gatewaySchema>
 // ─── data helpers ─────────────────────────────────────────────────────────────
 
 async function isSlugAvailable(slug: string, teamId: string): Promise<boolean> {
+  if (isReservedSlug(slug)) return false
   const snap = await getDocs(query(collection(db, TEAMS_COLLECTION), where('slug', '==', slug)))
   return snap.docs.every((d) => d.id === teamId)
 }
@@ -199,6 +210,36 @@ function useGatewayIntegrations(teamId: string | null) {
   })
 }
 
+// ─── data helpers for GeneralForm surface picker ─────────────────────────────
+
+function useHasPublishedCourse(teamId: string | null) {
+  return useQuery<boolean>({
+    queryKey: ['has-published-course', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, COURSES_COLLECTION),
+          where('teamId', '==', teamId),
+          where('status', '==', 'published'),
+        ),
+      )
+      return !snap.empty
+    },
+  })
+}
+
+function useIsSiteEnabled(teamId: string | null) {
+  return useQuery<boolean>({
+    queryKey: ['site-draft-enabled', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, SITE_DRAFTS_COLLECTION, teamId!))
+      return snap.exists() && snap.data()?.enabled === true
+    },
+  })
+}
+
 // ─── general form ─────────────────────────────────────────────────────────────
 
 function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
@@ -207,6 +248,26 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
   const [slugError, setSlugError] = useState<string | null>(null)
   const [slugChecking, setSlugChecking] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  const { isInstalled } = useInstalledPlugins()
+  const { data: hasPublishedCourse = false } = useHasPublishedCourse(teamId)
+  const { data: isSiteEnabled = false } = useIsSiteEnabled(teamId)
+
+  // Surfaces available depend on installed plugins + live state.
+  // bio-link is always available.
+  // booking is always available (booking is a core feature, not a plugin).
+  // site: only if website plugin installed AND draft is enabled (= published).
+  // space: only if online-courses plugin installed AND ≥1 published non-archived course.
+  const availableSurfaces: { value: PublicSurface; label: string }[] = [
+    { value: 'bio-link', label: t('defaultSurfaceBioLink') },
+    { value: 'booking', label: t('defaultSurfaceBooking') },
+    ...(isInstalled('website') && isSiteEnabled
+      ? [{ value: 'site' as PublicSurface, label: t('defaultSurfaceSite') }]
+      : []),
+    ...(isInstalled('online-courses') && hasPublishedCourse
+      ? [{ value: 'space' as PublicSurface, label: t('defaultSurfaceSpace') }]
+      : []),
+  ]
 
   const {
     register,
@@ -220,6 +281,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
       description: team.description ?? '',
       sport_type: team.sport_type ?? '',
       slug: team.slug,
+      default_public_surface: (team.default_public_surface as PublicSurface | undefined) ?? 'bio-link',
     },
   })
 
@@ -229,7 +291,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
     setSlugError(null)
     const available = await isSlugAvailable(slug, teamId)
     setSlugChecking(false)
-    if (!available) setSlugError(t('slugTaken'))
+    if (!available) setSlugError(isReservedSlug(slug) ? t('slugReserved') : t('slugTaken'))
   }
 
   async function onSubmit(data: GeneralData) {
@@ -239,6 +301,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
       description: data.description ?? '',
       sport_type: data.sport_type ?? '',
       slug: data.slug,
+      default_public_surface: data.default_public_surface,
     })
     await qc.invalidateQueries({ queryKey: ['team', teamId] })
     setSaved(true)
@@ -297,7 +360,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
         <Label htmlFor="slug">{t('slug')}</Label>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground shrink-0 select-none">
-            /public/bio-link/
+            /public/
           </span>
           <Input
             id="slug"
@@ -313,6 +376,32 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           <p className="text-destructive text-xs">{errors.slug.message}</p>
         )}
         <p className="text-xs text-muted-foreground">{t('slugHelp')}</p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="default_public_surface">{t('defaultPublicSurface')}</Label>
+        <Controller
+          name="default_public_surface"
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={field.value}
+              onValueChange={(v) => field.onChange(v as PublicSurface)}
+            >
+              <SelectTrigger className="w-full" id="default_public_surface">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableSurfaces.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+        <p className="text-xs text-muted-foreground">{t('defaultPublicSurfaceHelp')}</p>
       </div>
 
       <div className="flex items-center gap-3 pt-2">

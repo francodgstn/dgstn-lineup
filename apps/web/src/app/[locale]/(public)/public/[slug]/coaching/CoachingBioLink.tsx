@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
+import { usePublicTeam } from '../PublicTeamProvider'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -463,7 +464,8 @@ function ConfirmationScreen({ firstname, email }: { firstname: string; email: st
 
 export default function CoachingBioLink({ slug }: { slug: string }) {
   const t = useTranslations('CoachingBioLink')
-  const [teamId, setTeamId] = useState<string | null>(null)
+  // Team already resolved once by the parent PublicTeamProvider (the layout).
+  const { teamId } = usePublicTeam()
   const [slots, setSlots] = useState<PublicSlot[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [confirmed, setConfirmed] = useState<{ firstname: string; email: string } | null>(null)
@@ -471,28 +473,12 @@ export default function CoachingBioLink({ slug }: { slug: string }) {
   useEffect(() => {
     async function load() {
       try {
-        // 1. Resolve teamId from the team's public_profile
-        const teamQ = query(
-          collectionGroup(db, 'public_profile'),
-          where('slug', '==', slug),
-          where('type', '==', 'team'),
-          limit(1)
-        )
-        const teamSnap = await getDocs(teamQ)
-        if (teamSnap.empty) {
-          setSlots([])
-          setLoading(false)
-          return
-        }
-        const resolvedTeamId = teamSnap.docs[0].ref.parent.parent!.id
-        setTeamId(resolvedTeamId)
-
-        // 2. Fetch upcoming open coaching sessions via sessions/{id}/public_profile
+        // Fetch upcoming open coaching sessions via sessions/{id}/public_profile
         const now = Timestamp.now()
         const windowEnd = Timestamp.fromMillis(now.toMillis() + 60 * 24 * 60 * 60_000)
         const slotsQ = query(
           collectionGroup(db, 'public_profile'),
-          where('teamId', '==', resolvedTeamId),
+          where('teamId', '==', teamId),
           where('type', '==', 'coaching_session'),
           where('status', '==', 'open'),
           where('start', '>=', now),
@@ -528,7 +514,7 @@ export default function CoachingBioLink({ slug }: { slug: string }) {
       }
     }
     load()
-  }, [slug])
+  }, [teamId])
 
   if (confirmed) {
     return <ConfirmationScreen firstname={confirmed.firstname} email={confirmed.email} />
