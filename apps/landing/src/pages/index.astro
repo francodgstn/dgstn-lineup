@@ -5,11 +5,18 @@ import Logo from '~/components/Logo.astro';
 const FIREBASE_PROJECT_ID = import.meta.env.PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-linyup';
 const FIREBASE_API_KEY    = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
 
-// Live demo playground (sandbox env). The sneak peek embeds the real app via
-// /preview, which auto-signs into one of these demo teams; keep the keys in
-// sync with DEMO_ACCOUNTS in apps/web/src/lib/demo.ts.
+// Live demo playground (sandbox env). Each chip links straight to /preview?team=,
+// which auto-signs into that demo team and lands on the dashboard. Keep the keys
+// and labels in sync with DEMO_ACCOUNTS in apps/web/src/lib/demo.ts.
 const DEMO_URL = import.meta.env.PUBLIC_DEMO_URL ?? 'https://demo.linyup.com';
-const DEMO_TEAMS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance'];
+const DEMO_STUDIOS = [
+  { key: 'grappling', label: 'Martial arts', accent: '#dc2626' },
+  { key: 'crossfit',  label: 'CrossFit',     accent: '#0f172a' },
+  { key: 'tennis',    label: 'Tennis',       accent: '#16a34a' },
+  { key: 'yoga',      label: 'Yoga',         accent: '#9333ea' },
+  { key: 'pilates',   label: 'Pilates',      accent: '#0d9488' },
+  { key: 'dance',     label: 'Dance',        accent: '#db2777' },
+];
 ---
 
 <BaseLayout
@@ -69,6 +76,31 @@ const DEMO_TEAMS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance
       </p>
     </section>
 
+    <!-- ── Try the demo (direct, pick by type) ───────────────────────── -->
+    <section class="demo-cta">
+      <p class="demo-eyebrow">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-14 9V3z"/></svg>
+        No signup — explore a live demo
+      </p>
+      <h2 class="demo-title">Pick the type closest to yours and jump straight in</h2>
+
+      <div class="demo-chips">
+        {DEMO_STUDIOS.map((studio) => (
+          <a
+            class="demo-chip"
+            href={`${DEMO_URL}/preview?team=${studio.key}`}
+            target="_blank"
+            rel="noopener"
+            style={`--chip-accent: ${studio.accent}`}
+          >
+            <span class="demo-chip-dot"></span>
+            {studio.label}
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+        ))}
+      </div>
+    </section>
+
     <!-- ── Feature highlights ────────────────────────────────────────── -->
     <section class="features">
       <div class="feature">
@@ -101,59 +133,6 @@ const DEMO_TEAMS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance
         </div>
       </div>
     </section>
-
-    <!-- ── UI sneak peek (live demo embed) ───────────────────────────── -->
-    <section class="preview-wrap">
-      <div class="preview-head">
-        <p class="preview-label">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-          Sneak peek — live demo
-        </p>
-        <a class="preview-open" href={`${DEMO_URL}/try`} target="_blank" rel="noopener">
-          Open the demo
-          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10M7 17 17 7"/></svg>
-        </a>
-      </div>
-
-      <div class="browser">
-        <!-- browser chrome -->
-        <div class="browser-bar">
-          <span class="dot dot-r"></span>
-          <span class="dot dot-y"></span>
-          <span class="dot dot-g"></span>
-          <div class="browser-url">demo.linyup.com/dashboard</div>
-        </div>
-
-        <!-- live demo (real app, random team each load) -->
-        <div class="preview-stage">
-          <iframe
-            id="demo-preview"
-            class="preview-frame"
-            title="Linyup live demo"
-            loading="lazy"
-            referrerpolicy="no-referrer"
-          ></iframe>
-          <!-- non-interactive teaser: clicking anywhere opens the real demo -->
-          <a
-            class="preview-hit"
-            href={`${DEMO_URL}/try`}
-            target="_blank"
-            rel="noopener"
-            aria-label="Open the live demo"
-          ></a>
-        </div>
-
-        <!-- fade out bottom to suggest more below -->
-        <div class="preview-fade" aria-hidden="true"></div>
-      </div>
-    </section>
-
-    <script define:vars={{ demoUrl: DEMO_URL, demoTeams: DEMO_TEAMS }}>
-      // Pick a random demo team per page load and boot the live preview.
-      const team = demoTeams[Math.floor(Math.random() * demoTeams.length)];
-      const frame = document.getElementById('demo-preview');
-      if (frame) frame.src = `${demoUrl}/preview?team=${team}`;
-    </script>
 
     <!-- ── Footer note ───────────────────────────────────────────────── -->
     <footer class="pre-footer">
@@ -451,119 +430,84 @@ const DEMO_TEAMS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance
     margin: 0;
   }
 
-  /* ── Preview ────────────────────────────────────────────────────────── */
-  .preview-wrap {
+  /* ── Try the demo (type chips) ──────────────────────────────────────── */
+  .demo-cta {
     position: relative;
     z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
     width: 100%;
-    max-width: 960px;
-    padding: 0 24px 120px;
+    max-width: 720px;
+    padding: 0 24px 96px;
   }
 
-  .preview-label {
+  .demo-eyebrow {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.10em;
     text-transform: uppercase;
     color: oklch(0.72 0.14 292);
-    margin: 0 0 16px;
+    margin: 0 0 14px;
+  }
+  .demo-eyebrow svg { color: oklch(0.72 0.22 292); }
+
+  .demo-title {
+    font-size: clamp(20px, 3vw, 26px);
+    font-weight: 700;
+    line-height: 1.3;
+    color: #fff;
+    margin: 0 0 28px;
+    text-wrap: balance;
   }
 
-  .browser {
-    position: relative;
-    border-radius: 14px;
-    overflow: hidden;
-    border: 1px solid oklch(1 0 0 / 0.12);
-    box-shadow:
-      0 0 0 1px oklch(0 0 0 / 0.4),
-      0 32px 80px oklch(0 0 0 / 0.5),
-      0 0 60px oklch(0.48 0.22 292 / 0.12);
-  }
-
-  .browser-bar {
+  .demo-chips {
     display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 14px;
-    background: oklch(0.16 0.04 292);
-    border-bottom: 1px solid oklch(1 0 0 / 0.08);
-  }
-  .dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-  }
-  .dot-r { background: #ff5f57; }
-  .dot-y { background: #febc2e; }
-  .dot-g { background: #28c840; }
-  .browser-url {
-    flex: 1;
-    text-align: center;
-    font-size: 11px;
-    color: oklch(0.55 0.04 288);
-    background: oklch(0.12 0.03 292);
-    border-radius: 6px;
-    padding: 3px 12px;
-    max-width: 280px;
-    margin: 0 auto;
-  }
-
-  /* ── Live demo preview ──────────────────────────────────────────────── */
-  .preview-head {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 12px;
-    margin: 0 0 16px;
+    width: 100%;
   }
-  .preview-head .preview-label { margin: 0; }
 
-  .preview-open {
+  .demo-chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: 9px;
+    font-size: 15px;
     font-weight: 600;
-    color: oklch(0.85 0.12 292);
-    background: oklch(0.48 0.22 292 / 0.20);
-    border: 1px solid oklch(0.55 0.18 292 / 0.30);
-    border-radius: 9999px;
-    padding: 6px 14px;
+    color: #fff;
     text-decoration: none;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    background: oklch(1 0 0 / 0.06);
+    border: 1px solid oklch(1 0 0 / 0.14);
+    border-radius: 9999px;
+    padding: 11px 20px;
+    backdrop-filter: blur(8px);
+    transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
   }
-  .preview-open:hover {
-    background: oklch(0.48 0.22 292 / 0.32);
-    border-color: oklch(0.55 0.18 292 / 0.50);
+  .demo-chip:hover {
+    background: oklch(1 0 0 / 0.12);
+    border-color: oklch(0.62 0.18 292 / 0.55);
+    transform: translateY(-2px);
   }
-
-  .preview-stage {
-    position: relative;
-    background: oklch(0.11 0.04 292);
+  .demo-chip-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--chip-accent, oklch(0.72 0.20 292));
+    box-shadow: 0 0 8px var(--chip-accent, oklch(0.72 0.20 292));
+    flex-shrink: 0;
   }
-  .preview-frame {
-    display: block;
-    width: 100%;
-    height: 520px;
-    border: 0;
-    background: oklch(0.11 0.04 292);
+  .demo-chip svg {
+    color: oklch(0.70 0.06 288);
+    transition: transform 0.16s ease, color 0.16s ease;
+    flex-shrink: 0;
   }
-  /* The embed is a teaser, not an interactive session: a transparent hit area
-     covers it so any click opens the real demo in a new tab. */
-  .preview-hit {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-  }
-
-  .preview-fade {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: 100px;
-    background: linear-gradient(to bottom, transparent, oklch(0.11 0.04 292));
-    pointer-events: none;
+  .demo-chip:hover svg {
+    color: #fff;
+    transform: translateX(3px);
   }
 
   /* ── Footer ─────────────────────────────────────────────────────────── */
@@ -585,14 +529,11 @@ const DEMO_TEAMS = ['grappling', 'crossfit', 'tennis', 'yoga', 'pilates', 'dance
   /* ── Responsive ─────────────────────────────────────────────────────── */
   @media (max-width: 720px) {
     .features { grid-template-columns: 1fr; }
-    .preview-frame { height: 420px; }
   }
 
   @media (max-width: 540px) {
     h1 { font-size: 38px; }
     .cta-form { flex-direction: column; }
     .email-input, .btn-cta { width: 100%; justify-content: center; }
-    .preview-head { flex-direction: column; align-items: flex-start; }
-    .preview-frame { height: 380px; }
   }
 </style>

@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { signIn } from '@/lib/auth'
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, isDemoMode, type DemoAccount, type DemoSector } from '@/lib/demo'
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, isDemoMode, type DemoAccount } from '@/lib/demo'
 import { Logo } from '@/components/Logo'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -54,11 +54,9 @@ export default function TryPage() {
     }
   }
 
-  const sectors: DemoSector[] = ['sport', 'wellness']
-
   return (
     <div className="min-h-screen bg-muted/40 px-4 py-12">
-      <div className="mx-auto w-full max-w-4xl space-y-10">
+      <div className="mx-auto w-full max-w-3xl space-y-10">
         <div className="space-y-3 text-center">
           <div className="flex justify-center"><Logo size={32} /></div>
           <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
@@ -71,53 +69,38 @@ export default function TryPage() {
           </div>
         )}
 
-        {sectors.map((sector) => (
-          <section key={sector} className="space-y-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {sector === 'sport' ? t('sportLabel') : t('wellnessLabel')}
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {DEMO_ACCOUNTS.filter((a) => a.sector === sector).map((account) => {
-                const Icon = TEAM_ICONS[account.key] ?? Target
-                const isEntering = entering === account.key
-                return (
-                  <Card key={account.key} className="transition-shadow hover:shadow-md">
-                    <CardContent className="flex h-full flex-col gap-3 p-5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                          <Icon className="size-5 text-muted-foreground" aria-hidden="true" />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="truncate font-semibold leading-tight">{account.teamName}</h3>
-                          <p className="text-xs text-muted-foreground">{account.sportType}</p>
-                        </div>
-                      </div>
-                      <p className="flex-1 text-sm text-muted-foreground">{account.blurb}</p>
-                      <Button
-                        variant="outline"
-                        className="mt-1 w-full"
-                        onClick={() => enterAs(account)}
-                        disabled={entering !== null}
-                      >
-                        {isEntering ? (
-                          <>
-                            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                            {t('entering')}
-                          </>
-                        ) : (
-                          <>
-                            {t('enterDemo')}
-                            <ArrowRight className="size-4" aria-hidden="true" />
-                          </>
-                        )}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          </section>
-        ))}
+        {/* Type-only picker: a lead picks the business type closest to theirs and
+            jumps straight in — no studio name or blurb to wade through. */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {DEMO_ACCOUNTS.map((account) => {
+            const Icon = TEAM_ICONS[account.key] ?? Target
+            const isEntering = entering === account.key
+            return (
+              <Card key={account.key} className="transition-shadow hover:shadow-md">
+                <CardContent className="p-2">
+                  <Button
+                    variant="ghost"
+                    className="h-auto w-full justify-start gap-3 px-3 py-3"
+                    onClick={() => enterAs(account)}
+                    disabled={entering !== null}
+                  >
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      {isEntering ? (
+                        <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
+                      ) : (
+                        <Icon className="size-5 text-muted-foreground" aria-hidden="true" />
+                      )}
+                    </span>
+                    <span className="flex-1 truncate text-left font-medium">
+                      {isEntering ? t('entering') : account.label}
+                    </span>
+                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  </Button>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
 
         <p className="text-center text-xs text-muted-foreground">
           {t('ownAccount')}{' '}

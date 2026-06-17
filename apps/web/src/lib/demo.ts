@@ -25,6 +25,9 @@ export interface DemoAccount {
   teamName: string
   sector: DemoSector
   sportType: string
+  /** Concise, distinct business-type label shown on the lead-facing demo picker
+   *  (kept in sync with DEMO_STUDIOS in apps/landing/src/pages/index.astro). */
+  label: string
   blurb: string
   accent: string // matches the seeded bioLinkAccentColor
 }
@@ -37,6 +40,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     teamName: 'Ronin Grappling Academy',
     sector: 'sport',
     sportType: 'Martial arts',
+    label: 'Martial arts',
     blurb: 'A BJJ & no-gi gym with belt ranks, tournaments and packed mat schedules.',
     accent: '#dc2626',
   },
@@ -46,6 +50,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     teamName: 'Forge CrossFit',
     sector: 'sport',
     sportType: 'CrossFit / Fitness',
+    label: 'CrossFit',
     blurb: 'A functional-fitness box with WODs, performance levels and throwdowns.',
     accent: '#0f172a',
   },
@@ -55,6 +60,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     teamName: 'Baseline Tennis Academy',
     sector: 'sport',
     sportType: 'Tennis',
+    label: 'Tennis',
     blurb: 'Group clinics, junior development and rating bands across the courts.',
     accent: '#16a34a',
   },
@@ -65,6 +71,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     teamName: 'Lotus Yoga Studio',
     sector: 'wellness',
     sportType: 'Yoga / Pilates',
+    label: 'Yoga',
     blurb: 'Vinyasa, Yin and meditation with class packs, retreats and workshops.',
     accent: '#9333ea',
   },
@@ -74,6 +81,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     teamName: 'Core Pilates Studio',
     sector: 'wellness',
     sportType: 'Yoga / Pilates',
+    label: 'Pilates',
     blurb: 'Reformer and mat classes with progression levels and small-group flows.',
     accent: '#0d9488',
   },
@@ -83,6 +91,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     teamName: 'Rhythm Dance Studio',
     sector: 'wellness',
     sportType: 'Dance',
+    label: 'Dance',
     blurb: 'Ballet, contemporary and hip-hop with grades, terms and a spring showcase.',
     accent: '#db2777',
   },

@@ -54,11 +54,8 @@
     "tryDemo": "Live-Demo ansehen →"
   },
   "Try": {
-    "title": "Entdecken Sie Linyup mit Live-Demo-Teams",
-    "subtitle": "Wählen Sie ein Team und steigen Sie direkt in ein voll gefülltes Konto ein — ohne Anmeldung. Jedes ist ein echtes Beispiel aus Sport und Wellness.",
-    "sportLabel": "Sport",
-    "wellnessLabel": "Wellness",
-    "enterDemo": "Demo öffnen",
+    "title": "Testen Sie Linyup mit einer Live-Demo",
+    "subtitle": "Wählen Sie die Art, die Ihrem Studio am nächsten kommt, und steigen Sie direkt in ein voll gefülltes Konto ein — ohne Anmeldung.",
     "entering": "Wird geöffnet…",
     "openDemo": "Demo öffnen",
     "previewFailed": "Die Live-Vorschau konnte nicht gestartet werden.",
