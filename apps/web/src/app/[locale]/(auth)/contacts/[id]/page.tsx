@@ -2428,7 +2428,7 @@ function AlertPresetPicker({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Select date for "{dateStep?.name}"</DialogTitle>
+            <DialogTitle>Select date for &quot;{dateStep?.name}&quot;</DialogTitle>
           </DialogHeader>
           <div className="py-2">
             <DatePicker value={pickedDate} onChange={setPickedDate} />

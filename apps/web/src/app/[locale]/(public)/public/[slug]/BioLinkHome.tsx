@@ -15,6 +15,7 @@ import {
   Music2,
   ChevronRight,
 } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import type { TeamLink, SocialLink, BioLinkTheme, BioLinkBackground } from '@linyup/shared'
@@ -310,9 +311,9 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
         {team.showBranding === true && (
           <p className="mt-12 text-center text-[11px]" style={{ color: textMuted }}>
             Powered by{' '}
-            <a href="/" className="hover:underline font-medium" style={{ color: textMuted }}>
+            <Link href="/" className="hover:underline font-medium" style={{ color: textMuted }}>
               Linyup
-            </a>
+            </Link>
           </p>
         )}
       </div>

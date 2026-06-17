@@ -54,11 +54,8 @@
     "tryDemo": "Découvrir une démo en direct →"
   },
   "Try": {
-    "title": "Découvrez Linyup avec des équipes de démonstration",
-    "subtitle": "Choisissez une équipe et entrez directement dans un compte entièrement rempli — sans inscription. Chacune est un exemple réel dans le sport et le bien-être.",
-    "sportLabel": "Sport",
-    "wellnessLabel": "Bien-être",
-    "enterDemo": "Ouvrir la démo",
+    "title": "Essayez Linyup avec une démo en direct",
+    "subtitle": "Choisissez le type le plus proche de votre studio et entrez directement dans un compte entièrement rempli — sans inscription.",
     "entering": "Ouverture…",
     "openDemo": "Ouvrir la démo",
     "previewFailed": "Impossible de démarrer l'aperçu en direct.",

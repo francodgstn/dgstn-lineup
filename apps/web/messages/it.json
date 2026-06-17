@@ -54,11 +54,8 @@
     "tryDemo": "Esplora una demo dal vivo →"
   },
   "Try": {
-    "title": "Esplora Linyup con team demo dal vivo",
-    "subtitle": "Scegli un team ed entra subito in un account completo — senza registrazione. Ognuno è un esempio reale tra sport e benessere.",
-    "sportLabel": "Sport",
-    "wellnessLabel": "Benessere",
-    "enterDemo": "Apri la demo",
+    "title": "Prova Linyup con una demo dal vivo",
+    "subtitle": "Scegli il tipo più vicino al tuo studio ed entra subito in un account completo — senza registrazione.",
     "entering": "Apertura…",
     "openDemo": "Apri la demo",
     "previewFailed": "Impossibile avviare l'anteprima dal vivo.",

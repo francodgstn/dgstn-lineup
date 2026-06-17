@@ -54,11 +54,8 @@
     "tryDemo": "Explore a live demo →"
   },
   "Try": {
-    "title": "Explore Linyup with live demo teams",
-    "subtitle": "Pick a team and step straight into a fully-loaded account — no signup. Each one is a real example across sport and wellness.",
-    "sportLabel": "Sport",
-    "wellnessLabel": "Wellness",
-    "enterDemo": "Open demo",
+    "title": "Try Linyup with a live demo",
+    "subtitle": "Pick the type closest to your studio and step straight into a fully-loaded account — no signup.",
     "entering": "Entering…",
     "openDemo": "Open the demo",
     "previewFailed": "Could not start the live preview.",

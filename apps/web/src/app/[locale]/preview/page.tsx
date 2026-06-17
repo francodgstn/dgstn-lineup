@@ -25,6 +25,9 @@ function PreviewSplash({ failed }: { failed: boolean }) {
       {failed ? (
         <>
           <p className="text-sm text-muted-foreground">{t('previewFailed')}</p>
+          {/* Intentional full top-frame navigation to break out of the landing
+              page's preview iframe — not an in-app SPA link. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a
             href="/try"
             target="_top"
