@@ -6,65 +6,135 @@
   "nav": {
     "features": "Funzionalità",
     "pricing": "Prezzi",
+    "demo": "Demo live",
     "login": "Accedi",
-    "cta": "Inizia gratis"
+    "cta": "Accesso anticipato"
   },
   "hero": {
-    "tagline": "Per coach, palestre e studi",
+    "tagline": "Per coach e studi.",
     "title": "Gestisci le tue lezioni. Conosci i tuoi studenti. Fai crescere il tuo studio.",
-    "subtitle": "Linyup è lo strumento di gestione all-in-one per coach e studi — sessioni, contatti, prenotazioni e app mobile per studenti, tutto in un posto.",
+    "subtitle": "Lo strumento moderno e semplice con tutto ciò di cui coach e studi hanno bisogno per funzionare senza intoppi e crescere.",
     "cta": "Inizia gratis",
-    "ctaSecondary": "Scopri le funzionalità"
+    "ctaSecondary": "Scopri le funzionalità",
+    "comingSoon": "Disponibile a breve",
+    "emailPlaceholder": "Il tuo indirizzo email",
+    "emailCta": "Accesso anticipato",
+    "emailSending": "Invio…",
+    "emailSuccess": "Sei in lista! Ti contatteremo presto.",
+    "emailError": "Qualcosa è andato storto — riprova.",
+    "emailModalSub": "Linyup sta per arrivare — lascia la tua email e ti avviseremo appena è pronto.",
+    "demoEyebrow": "Senza registrazione — esplora uno studio demo live",
+    "demoStudios": {
+      "grappling": "Arti marziali",
+      "crossfit": "CrossFit",
+      "tennis": "Tennis",
+      "yoga": "Yoga",
+      "pilates": "Pilates",
+      "dance": "Danza"
+    }
   },
   "features": {
     "title": "Tutto ciò di cui hai bisogno per gestire uno studio moderno",
     "subtitle": "Dal coach solo all'organizzazione multi-sede, Linyup si adatta al tuo modo di lavorare.",
-    "sessions": {
-      "title": "Sessioni",
-      "description": "Pianifica e monitora le lezioni senza sforzo. Crea sessioni ricorrenti, gestisci le presenze e vedi l'intera settimana in un colpo d'occhio."
-    },
-    "contacts": {
-      "title": "Contatti",
-      "description": "Conosci ogni studente. Pagine di profilo, note, cronologia attività e stato abbonamento — tutto ciò che serve per costruire relazioni durature."
-    },
-    "mobile": {
-      "title": "App mobile per studenti",
-      "description": "Gli studenti prenotano sessioni, fanno il check-in e rimangono connessi su iOS e Android. Niente più caos su WhatsApp."
+    "comingSoon": "Disponibile a breve",
+    "cards": {
+      "sessions": { "title": "Sessioni", "description": "Pianifica le lezioni e traccia le presenze.", "detail": "Crea il tuo orario settimanale in pochi minuti — lezioni ricorrenti, limiti di posti e presenze in un unico calendario." },
+      "calendar": { "title": "Calendario", "description": "Tutta la settimana in un colpo d'occhio.", "detail": "Tutta la settimana del tuo studio in una vista a colori per attività e istruttore — mai più doppie prenotazioni." },
+      "contacts": { "title": "Contatti", "description": "Ogni profilo studente in un solo posto.", "detail": "Un profilo completo per ogni studente — note, cronologia, gradi e stato dell'abbonamento, sempre a portata di clic." },
+      "bookings": { "title": "Prenotazioni", "description": "Gli studenti prenotano online.", "detail": "Gli studenti riservano il posto con un tocco e tu ottieni un elenco chiaro e in tempo reale per ogni sessione." },
+      "checkins": { "title": "Check-in", "description": "Check-in QR veloce all'ingresso.", "detail": "Registra gli studenti con una scansione — niente fogli o tabelle, solo presenze sempre precise." },
+      "trials": { "title": "Prove", "description": "Trasforma le prove in clienti fissi.", "detail": "Cattura ogni iscrizione di prova e guidala verso l'abbonamento con follow-up integrati che convertono." },
+      "memberships": { "title": "Abbonamenti", "description": "Gestisci piani e rinnovi.", "detail": "Vendi piani mensili, trimestrali o annuali e traccia ogni rinnovo automaticamente — senza alcun foglio di calcolo." },
+      "payments": { "title": "Pagamenti", "description": "Incassa senza rincorrere nessuno.", "detail": "Collega il tuo provider di pagamento e lascia che le quote si incassino da sole — basta rincorrere i ritardi." },
+      "biolink": { "title": "Bio link", "description": "Un link per tutto ciò che offri.", "detail": "Un unico link condivisibile con orario, prenotazioni e iscrizioni — perfetto per la tua bio Instagram o TikTok." },
+      "website": { "title": "Sito web", "description": "Un sito di prenotazione pronto all'uso.", "detail": "Lancia un sito curato per il tuo studio con orario e prezzi integrati — senza designer né codice." },
+      "mobileApp": { "title": "App mobile", "description": "App iOS e Android per i tuoi studenti.", "detail": "I tuoi studenti hanno un'app iOS e Android col tuo brand per prenotare, fare check-in e restare aggiornati ovunque." },
+      "automations": { "title": "Automazioni", "description": "Il lavoro ripetitivo in pilota automatico.", "detail": "Imposta una volta e lascia che Linyup dia il benvenuto, invii promemoria e recuperi i membri inattivi — in automatico." },
+      "gamification": { "title": "Gamification", "description": "Premia le serie, fidelizza gli studenti.", "detail": "Punti, serie e badge che trasformano il semplice presentarsi in un'abitudine che i tuoi studenti adorano." },
+      "rankings": { "title": "Classifiche", "description": "Cinture e classifiche che motivano.", "detail": "Traccia cinture, livelli e classifiche che spingono i membri verso il prossimo traguardo — e li fanno tornare." },
+      "referrals": { "title": "Referral", "description": "I membri diventano i tuoi promotori.", "detail": "Premia i membri che portano amici — referral tracciati e accreditati in automatico. Il tuo miglior canale di crescita." },
+      "courses": { "title": "Corsi online", "description": "Vendi programmi di più settimane.", "detail": "Trasforma le tue competenze in corsi online di più settimane che i tuoi membri acquistano e seguono al proprio ritmo." },
+      "events": { "title": "Eventi", "description": "Gare, stage e workshop.", "detail": "Organizza gare, stage, esami e workshop — con iscrizioni, inviti e check-in già integrati." },
+      "eventForms": { "title": "Moduli evento", "description": "Campi di iscrizione personalizzati.", "detail": "Raccogli all'iscrizione esattamente le informazioni che ti servono, con campi personalizzati per ogni tipo di evento." },
+      "groups": { "title": "Gruppi", "description": "Organizza i membri in coorti.", "detail": "Organizza i membri in squadre, livelli o comitati per una comunicazione mirata e una gestione senza sforzo." },
+      "customFields": { "title": "Campi personalizzati", "description": "Traccia esattamente i dati che ti servono.", "detail": "Aggiungi i campi di cui il tuo studio ha davvero bisogno e traccia qualsiasi dato su qualsiasi contatto." },
+      "analytics": { "title": "Analisi", "description": "Tendenze ed engagement a colpo d'occhio.", "detail": "Vedi presenze, retention e tendenze di engagement per sapere sempre cosa funziona — e cosa richiede attenzione." },
+      "whatsapp": { "title": "WhatsApp", "description": "Raggiungi gli studenti dove già sono.", "detail": "Invia promemoria, aggiornamenti e messaggi di riattivazione su WhatsApp, proprio dove i tuoi studenti già sono." },
+      "aiInsights": { "title": "Insight AI", "description": "Individua il rischio di abbandono in anticipo.", "detail": "Lascia che l'AI individui i membri a rischio abbandono e prepari il messaggio giusto per riconquistarli in tempo." },
+      "team": { "title": "Team e ruoli", "description": "Invita coach, assegna i permessi.", "detail": "Invita coach e manager con i permessi giusti per ogni ruolo — ognuno vede esattamente ciò che deve." }
     }
+  },
+  "migration": {
+    "eyebrow": "Arrivi da un'altra piattaforma?",
+    "title": "Migriamo i tuoi dati per te",
+    "subtitle": "Spostarsi da un altro strumento è la parte peggiore di un cambio — quindi lascia fare a noi. Trasferiamo i tuoi contatti, l'orario, gli abbonamenti e lo storico. Tu devi solo controllare il risultato e dirci cosa modificare.",
+    "badge": "Migrazione completa gratuita per i primi iscritti",
+    "send": { "title": "Inviaci i tuoi dati", "detail": "Un export o un foglio di calcolo dal tuo strumento attuale — qualsiasi cosa tu abbia già." },
+    "migrate": { "title": "Pensiamo noi al lavoro pesante", "detail": "Mappiamo e importiamo i tuoi contatti, l'orario, gli abbonamenti e lo storico in Linyup." },
+    "review": { "title": "Tu controlli e indichi", "detail": "Controlla il risultato e dicci semplicemente cosa modificare. Niente va online finché non è perfetto." },
+    "cta": "Parliamo della tua migrazione"
   },
   "plans": {
     "title": "Piani per ogni fase",
-    "subtitle": "I dettagli sui prezzi arriveranno presto. Iscriviti all'accesso anticipato per essere tra i primi a saperlo.",
-    "comingSoon": "Prezzi in arrivo",
+    "subtitle": "Piani semplici che crescono con te.",
+    "trialNote": "Prova gratuita di 14 giorni · Nessuna carta di credito.",
+    "migrationNote": "Cambi piattaforma? Migriamo i tuoi dati per te — gratis.",
+    "perMonth": "/mese",
+    "afterPromo": "dopo 3 mesi",
+    "promoBadge": "Offerta lancio",
     "earlyAccessCta": "Accesso anticipato",
-    "earlyAccessNote": "Gratuito durante l'accesso anticipato. Nessuna carta di credito richiesta.",
     "mostPopular": "Il più popolare",
-    "freePrice": "Gratuito per sempre",
+    "cmpToggle": "Confronta tutte le funzionalità",
+    "cmpUsage": "Utilizzo e accesso",
+    "cmpCore": "Gestisci lo studio",
+    "cmpGrowth": "Cresci e fidelizza",
+    "cmpOrg": "Multi-sede",
+    "cmpContacts": "Contatti attivi",
+    "cmpMembers": "Più membri del team",
+    "cmpBranding": "Rimuovi il marchio Linyup",
+    "cmpMigration": "Migrazione dati gratuita",
+    "cmpCoaching": "Coaching 1:1 e appuntamenti",
+    "cmpGoals": "Obiettivi e progressi",
+    "cmpMultiTeam": "Più team",
+    "cmpCentralAdmin": "Amministrazione centrale e dati unificati",
+    "cmpCrossTeam": "Eventi e messaggi tra team",
+    "cmpApi": "Accesso API",
+    "cmpPermissions": "Ruoli e permessi avanzati",
+    "cmpUnlimited": "Illimitati",
+    "cmpAddon": "Opzione",
+    "cmpSoon": "A breve",
     "free": {
       "name": "Free",
+      "price": "Gratuito",
       "audience": "Per coach che stanno iniziando.",
-      "features": ["Fino a 10 contatti", "Portale di prenotazione pubblico", "Sessioni e abbonamenti"]
+      "features": ["Fino a 10 contatti", "Pagina di prenotazione e bio link", "Sessioni, abbonamenti e obiettivi"]
     },
     "coach": {
       "name": "Coach",
+      "price": "CHF 7.99",
+      "promoPrice": "CHF 4.00",
       "audience": "Per istruttori singoli e coach privati.",
-      "features": ["Tutto di Free", "30 contatti inclusi", "Coaching 1:1 e membri del team"]
+      "features": ["Tutto di Free", "30 contatti", "Coaching 1:1 e appuntamenti"]
     },
     "studio": {
       "name": "Studio",
+      "price": "CHF 29.99",
+      "promoPrice": "CHF 15.00",
       "audience": "Per studi e palestre con più coach e corsi.",
-      "features": ["Tutto di Coach", "Contatti illimitati", "Automazioni e gamification", "Tendenze e analisi"]
+      "features": ["Tutto di Coach", "App mobile e automazioni", "Gamification, referral e analisi"]
     },
     "org": {
       "name": "Organizzazione",
+      "price": "CHF 149",
+      "promoPrice": "CHF 74.50",
       "audience": "Per studi multi-sede, federazioni e franchising.",
-      "features": ["Tutto di Studio", "Gerarchia multi-team", "Classifiche ed eventi a livello di organizzazione"]
+      "features": ["Tutto di Studio", "Contatti e team illimitati", "Amministrazione centrale e API"]
     }
   },
   "cta": {
     "title": "Pronto per iniziare?",
     "subtitle": "Unisciti ai coach e agli studi che già usano Linyup per gestire la propria attività.",
-    "button": "Inizia gratis"
+    "button": "Accesso anticipato"
   },
   "footer": {
     "tagline": "Lo strumento di gestione moderno per coach e studi.",

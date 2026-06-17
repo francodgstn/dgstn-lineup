@@ -11,6 +11,17 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang);
 const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
+const DEMO_URL = import.meta.env.PUBLIC_DEMO_URL ?? 'https://demo.linyup.com';
+
+// Demo studios for the "Live demo" dropdown — same targets/labels as the hero chips.
+const DEMO_STUDIOS = [
+  { key: 'grappling', accent: '#dc2626' },
+  { key: 'crossfit', accent: '#0f172a' },
+  { key: 'tennis', accent: '#16a34a' },
+  { key: 'yoga', accent: '#9333ea' },
+  { key: 'pilates', accent: '#0d9488' },
+  { key: 'dance', accent: '#db2777' },
+] as const;
 ---
 
 <header>
@@ -22,6 +33,26 @@ const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
     <nav class="nav-links">
       <a href={getLocalizedPath('/#features', lang)}>{t('nav.features')}</a>
       <a href={getLocalizedPath('/#pricing', lang)}>{t('nav.pricing')}</a>
+      <div class="nav-dropdown">
+        <button type="button" class="nav-dropdown-trigger" aria-haspopup="true">
+          {t('nav.demo')} <i data-lucide="chevron-down"></i>
+        </button>
+        <div class="nav-dropdown-menu">
+          {
+            DEMO_STUDIOS.map((studio) => (
+              <a
+                href={`${DEMO_URL}/preview?team=${studio.key}`}
+                target="_blank"
+                rel="noopener"
+                style={`--chip-accent: ${studio.accent}`}
+              >
+                <span class="dot"></span>
+                {t(`hero.demoStudios.${studio.key}`)}
+              </a>
+            ))
+          }
+        </div>
+      </div>
     </nav>
 
     <div class="nav-right">
@@ -37,7 +68,7 @@ const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
         </svg>
       </button>
       <a class="btn btn-ghost login" href={`${APP_URL}/login`}>{t('nav.login')}</a>
-      <a class="btn btn-primary" href={`${APP_URL}/signup`}>{t('nav.cta')}</a>
+      <button class="btn btn-primary" type="button" data-early-access>{t('nav.cta')}</button>
     </div>
   </div>
 </header>
@@ -57,6 +88,74 @@ const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
   .nav-links a { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
   .nav-links a:hover { color: var(--foreground); }
   .nav-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+
+  /* "Live demo" dropdown (hover/focus, desktop only) */
+  .nav-dropdown { position: relative; display: inline-flex; align-items: center; }
+  .nav-dropdown-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--muted-foreground);
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+  .nav-dropdown-trigger:hover { color: var(--foreground); }
+  .nav-dropdown-trigger :global(svg) { width: 14px; height: 14px; transition: transform 0.15s ease; }
+  .nav-dropdown:hover .nav-dropdown-trigger :global(svg),
+  .nav-dropdown:focus-within .nav-dropdown-trigger :global(svg) { transform: rotate(180deg); }
+
+  .nav-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    min-width: 200px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    z-index: 30;
+  }
+  /* Invisible bridge so the menu stays open while the cursor crosses the gap */
+  .nav-dropdown-menu::before { content: ''; position: absolute; left: 0; right: 0; top: -10px; height: 10px; }
+  .nav-dropdown:hover .nav-dropdown-menu,
+  .nav-dropdown:focus-within .nav-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+  }
+  .nav-dropdown-menu a {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--foreground);
+    white-space: nowrap;
+  }
+  .nav-dropdown-menu a:hover { background: var(--purple-50); color: var(--primary); }
+  .nav-dropdown-menu .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--chip-accent, var(--primary));
+    box-shadow: 0 0 6px var(--chip-accent, var(--primary));
+    flex-shrink: 0;
+  }
 
   .theme-btn {
     display: inline-flex;

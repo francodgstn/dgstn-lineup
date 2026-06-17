@@ -1,0 +1,211 @@
+---
+import type { Language } from '~/i18n';
+import { useTranslations } from '~/i18n';
+
+interface Props {
+  lang: Language;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+// Posts to Firestore early_access_requests (same as the hero form).
+const FIREBASE_PROJECT_ID = import.meta.env.PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-linyup';
+const FIREBASE_API_KEY = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
+---
+
+<!-- Shared early-access capture modal. Opened by any [data-early-access] trigger. -->
+<div class="ea-overlay" id="early-access-modal" hidden>
+  <div class="ea-dialog" role="dialog" aria-modal="true" aria-labelledby="ea-title">
+    <button class="ea-close" type="button" aria-label="Close"><i data-lucide="x"></i></button>
+    <span class="ea-badge">{t('hero.comingSoon')}</span>
+    <h3 id="ea-title">{t('hero.emailCta')}</h3>
+    <p class="ea-sub">{t('hero.emailModalSub')}</p>
+    <form class="ea-form" id="ea-form" novalidate>
+      <input
+        class="ea-input"
+        type="email"
+        id="ea-email"
+        name="email"
+        placeholder={t('hero.emailPlaceholder')}
+        autocomplete="email"
+        required
+      />
+      <button class="btn btn-primary btn-lg" type="submit" id="ea-submit">
+        {t('hero.emailCta')} <i data-lucide="arrow-right"></i>
+      </button>
+    </form>
+    <p class="ea-status" id="ea-status" aria-live="polite"></p>
+  </div>
+</div>
+
+<script
+  define:vars={{
+    projectId: FIREBASE_PROJECT_ID,
+    apiKey: FIREBASE_API_KEY,
+    msgSending: t('hero.emailSending'),
+    msgSuccess: t('hero.emailSuccess'),
+    msgError: t('hero.emailError'),
+    ctaLabel: t('hero.emailCta'),
+  }}
+>
+  const modal = document.getElementById('early-access-modal');
+  if (modal) {
+    const form = modal.querySelector('#ea-form');
+    const input = modal.querySelector('#ea-email');
+    const btn = modal.querySelector('#ea-submit');
+    const status = modal.querySelector('#ea-status');
+
+    const open = () => {
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+      if (input) input.focus();
+    };
+    const close = () => {
+      modal.hidden = true;
+      document.body.style.overflow = '';
+    };
+
+    document.querySelectorAll('[data-early-access]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        open();
+      });
+    });
+    modal.querySelector('.ea-close')?.addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.hidden) close();
+    });
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = input.value.trim();
+      if (!email) return;
+
+      btn.disabled = true;
+      btn.textContent = msgSending;
+      status.textContent = '';
+      status.className = 'ea-status';
+
+      try {
+        const url =
+          projectId === 'demo-linyup'
+            ? `http://localhost:8080/v1/projects/${projectId}/databases/(default)/documents/early_access_requests`
+            : `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/early_access_requests?key=${apiKey}`;
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: {
+              email: { stringValue: email },
+              createdAt: { timestampValue: new Date().toISOString() },
+              source: { stringValue: 'landing-cta' },
+            },
+          }),
+        });
+
+        // 409 = already on the list; treat as success.
+        if (!res.ok && res.status !== 409) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
+        }
+
+        form.style.display = 'none';
+        status.textContent = msgSuccess;
+        status.className = 'ea-status success';
+      } catch (err) {
+        console.error('Early access submit error:', err);
+        status.textContent = msgError;
+        status.className = 'ea-status error';
+        btn.disabled = false;
+        btn.textContent = ctaLabel;
+      }
+    });
+  }
+</script>
+
+<style>
+  .ea-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: oklch(0 0 0 / 0.5);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    animation: ea-fade 0.15s ease;
+  }
+  .ea-overlay[hidden] { display: none; }
+  .ea-dialog {
+    position: relative;
+    width: 100%;
+    max-width: 440px;
+    background: var(--card);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    padding: 36px 32px 32px;
+    text-align: center;
+    animation: ea-pop 0.18s ease;
+  }
+  .ea-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .ea-close:hover { background: var(--purple-50); }
+  .ea-close :global(svg) { width: 18px; height: 18px; }
+  .ea-badge {
+    display: inline-block;
+    margin-bottom: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary);
+    background: var(--purple-50);
+    border: 1px solid var(--purple-200);
+    padding: 4px 11px;
+    border-radius: var(--radius-pill);
+  }
+  .ea-dialog h3 { font-family: var(--font-display); font-weight: 600; font-size: 24px; margin: 0 0 8px; }
+  .ea-sub { font-size: 15px; line-height: 1.55; color: var(--muted-foreground); margin: 0 0 22px; }
+  .ea-form { display: flex; flex-direction: column; gap: 10px; }
+  .ea-input {
+    height: 48px;
+    padding: 0 16px;
+    border-radius: var(--radius-lg);
+    font-size: 15px;
+    font-family: inherit;
+    background: var(--background);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .ea-input::placeholder { color: var(--muted-foreground); }
+  .ea-input:focus { border-color: var(--primary); }
+  .ea-form .btn { justify-content: center; }
+  .ea-status { margin: 14px 0 0; min-height: 20px; font-size: 14px; color: var(--muted-foreground); }
+  .ea-status.success { color: var(--success-fg); }
+  .ea-status.error { color: var(--warning-fg); }
+
+  @keyframes ea-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes ea-pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+</style>

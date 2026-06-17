@@ -8,7 +8,6 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
-const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
 ---
 
 <section class="cta-band">
@@ -16,9 +15,9 @@ const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
     <div class="cta-inner">
       <h2>{t('cta.title')}</h2>
       <p>{t('cta.subtitle')}</p>
-      <a class="btn btn-white btn-lg" href={`${APP_URL}/signup`}>
+      <button class="btn btn-white btn-lg" type="button" data-early-access>
         {t('cta.button')} <i data-lucide="arrow-right"></i>
-      </a>
+      </button>
     </div>
   </div>
 </section>

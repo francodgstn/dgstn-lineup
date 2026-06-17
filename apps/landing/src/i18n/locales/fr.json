@@ -6,65 +6,135 @@
   "nav": {
     "features": "Fonctionnalités",
     "pricing": "Tarifs",
+    "demo": "Démo live",
     "login": "Connexion",
-    "cta": "Commencer gratuitement"
+    "cta": "Accès anticipé"
   },
   "hero": {
-    "tagline": "Pour coaches, salles de sport et studios",
+    "tagline": "Pour coaches et studios.",
     "title": "Planifiez vos cours. Connaissez vos élèves. Développez votre studio.",
-    "subtitle": "Linyup est l'outil de gestion tout-en-un pour coaches et studios — sessions, contacts, réservations et application mobile étudiante, tout en un.",
+    "subtitle": "L'outil moderne et simple avec tout ce dont les coaches et studios ont besoin pour fonctionner sans accroc et se développer.",
     "cta": "Commencer gratuitement",
-    "ctaSecondary": "Voir les fonctionnalités"
+    "ctaSecondary": "Voir les fonctionnalités",
+    "comingSoon": "Bientôt disponible",
+    "emailPlaceholder": "Votre adresse e-mail",
+    "emailCta": "Accès anticipé",
+    "emailSending": "Envoi…",
+    "emailSuccess": "Vous êtes sur la liste ! On vous contacte bientôt.",
+    "emailError": "Une erreur s'est produite — réessayez.",
+    "emailModalSub": "Linyup arrive bientôt — laissez votre e-mail et nous vous préviendrons dès que c'est prêt.",
+    "demoEyebrow": "Sans inscription — explorez un studio démo en direct",
+    "demoStudios": {
+      "grappling": "Arts martiaux",
+      "crossfit": "CrossFit",
+      "tennis": "Tennis",
+      "yoga": "Yoga",
+      "pilates": "Pilates",
+      "dance": "Danse"
+    }
   },
   "features": {
     "title": "Tout ce qu'il vous faut pour gérer un studio moderne",
     "subtitle": "Du coach solo à l'organisation multi-sites, Linyup s'adapte à votre façon de travailler.",
-    "sessions": {
-      "title": "Sessions",
-      "description": "Planifiez et suivez vos cours sans effort. Créez des sessions récurrentes, gérez les présences et visualisez toute votre semaine d'un coup d'œil."
-    },
-    "contacts": {
-      "title": "Contacts",
-      "description": "Connaissez chaque élève. Pages de profil, notes, historique d'activité et statut d'abonnement — tout ce qu'il faut pour construire des relations durables."
-    },
-    "mobile": {
-      "title": "Application mobile étudiante",
-      "description": "Les élèves réservent des sessions, s'enregistrent et restent connectés sur iOS et Android. Fini le chaos WhatsApp."
+    "comingSoon": "Bientôt disponible",
+    "cards": {
+      "sessions": { "title": "Sessions", "description": "Planifiez les cours et suivez les présences.", "detail": "Construisez votre planning hebdomadaire en quelques minutes — cours récurrents, limites de places et présences dans un seul calendrier." },
+      "calendar": { "title": "Calendrier", "description": "Toute votre semaine d'un coup d'œil.", "detail": "Toute la semaine de votre studio dans une vue couleur par activité et instructeur — fini les doubles réservations." },
+      "contacts": { "title": "Contacts", "description": "Chaque profil d'élève au même endroit.", "detail": "Un profil complet pour chaque élève — notes, historique, grades et statut d'abonnement, toujours à portée de clic." },
+      "bookings": { "title": "Réservations", "description": "Vos élèves réservent en ligne.", "detail": "Vos élèves réservent leur place en un geste et vous obtenez une liste claire et en temps réel pour chaque session." },
+      "checkins": { "title": "Enregistrements", "description": "Check-in QR rapide à l'entrée.", "detail": "Enregistrez vos élèves d'un simple scan — sans paperasse ni tableur, juste un suivi de présence précis." },
+      "trials": { "title": "Essais", "description": "Transformez les essais en habitués.", "detail": "Captez chaque inscription d'essai et menez-la vers l'abonnement grâce à des relances intégrées qui convertissent." },
+      "memberships": { "title": "Abonnements", "description": "Gérez formules et renouvellements.", "detail": "Vendez des formules mensuelles, trimestrielles ou annuelles et suivez chaque renouvellement automatiquement." },
+      "payments": { "title": "Paiements", "description": "Encaissez sans relancer.", "detail": "Connectez votre prestataire de paiement et laissez les cotisations se collecter seules — fini les relances." },
+      "biolink": { "title": "Bio link", "description": "Un seul lien pour toute votre offre.", "detail": "Un lien partageable avec votre planning, vos réservations et vos inscriptions — parfait pour votre bio Instagram ou TikTok." },
+      "website": { "title": "Site web", "description": "Un site de réservation clé en main.", "detail": "Lancez un site de studio soigné avec planning et tarifs intégrés — sans designer ni code." },
+      "mobileApp": { "title": "Appli mobile", "description": "App iOS & Android pour vos élèves.", "detail": "Vos élèves disposent d'une app iOS et Android à votre marque pour réserver, s'enregistrer et rester informés." },
+      "automations": { "title": "Automatisations", "description": "Le travail répétitif en pilote auto.", "detail": "Configurez une fois et laissez Linyup accueillir, relancer et reconquérir vos membres — automatiquement." },
+      "gamification": { "title": "Gamification", "description": "Récompensez les séries, fidélisez.", "detail": "Points, séries et badges qui transforment la simple présence en une habitude que vos élèves adorent." },
+      "rankings": { "title": "Classements", "description": "Ceintures & classements motivants.", "detail": "Suivez ceintures, niveaux et classements qui poussent vos membres vers leur prochain palier — et les font revenir." },
+      "referrals": { "title": "Parrainage", "description": "Vos membres deviennent ambassadeurs.", "detail": "Récompensez les membres qui amènent des amis — parrainages suivis et crédités automatiquement. Votre meilleur canal de croissance." },
+      "courses": { "title": "Cours en ligne", "description": "Vendez des programmes sur plusieurs semaines.", "detail": "Transformez votre savoir-faire en cours en ligne sur plusieurs semaines que vos membres achètent et suivent à leur rythme." },
+      "events": { "title": "Événements", "description": "Compétitions, stages & ateliers.", "detail": "Organisez compétitions, stages, passages de grade et ateliers — inscriptions, invitations et check-in inclus." },
+      "eventForms": { "title": "Formulaires", "description": "Champs d'inscription personnalisés.", "detail": "Collectez exactement les informations dont vous avez besoin à l'inscription, avec des champs personnalisés par type d'événement." },
+      "groups": { "title": "Groupes", "description": "Organisez vos membres en cohortes.", "detail": "Organisez vos membres en équipes, niveaux ou comités pour une communication ciblée et une gestion sans effort." },
+      "customFields": { "title": "Champs perso", "description": "Suivez exactement les données utiles.", "detail": "Ajoutez les champs dont votre studio a vraiment besoin et suivez n'importe quelle donnée sur n'importe quel contact." },
+      "analytics": { "title": "Analyses", "description": "Tendances & engagement en un clin d'œil.", "detail": "Visualisez présences, rétention et engagement pour toujours savoir ce qui marche — et ce qui demande votre attention." },
+      "whatsapp": { "title": "WhatsApp", "description": "Touchez vos élèves là où ils sont.", "detail": "Envoyez rappels, actualités et messages de réengagement sur WhatsApp, là où vos élèves sont déjà." },
+      "aiInsights": { "title": "Insights IA", "description": "Anticipez le risque de désabonnement.", "detail": "Laissez l'IA repérer les membres à risque de départ et rédiger le message idéal pour les reconquérir à temps." },
+      "team": { "title": "Équipe & rôles", "description": "Invitez des coaches, gérez les accès.", "detail": "Invitez coaches et gestionnaires avec les bonnes permissions par rôle — chacun voit exactement ce qu'il doit voir." }
     }
+  },
+  "migration": {
+    "eyebrow": "Vous venez d'une autre plateforme ?",
+    "title": "Nous migrons vos données pour vous",
+    "subtitle": "Déménager depuis un autre outil est la pire partie d'un changement — alors laissez-nous faire. Nous reprenons vos contacts, votre planning, vos abonnements et votre historique. Vous n'avez qu'à vérifier le résultat et nous dire quoi ajuster.",
+    "badge": "Migration clé en main offerte aux premiers inscrits",
+    "send": { "title": "Envoyez-nous vos données", "detail": "Un export ou un tableur depuis votre outil actuel — tout ce que vous avez déjà." },
+    "migrate": { "title": "On s'occupe du gros du travail", "detail": "Nous mappons et importons vos contacts, votre planning, vos abonnements et votre historique dans Linyup." },
+    "review": { "title": "Vous vérifiez & indiquez", "detail": "Vérifiez le résultat et dites-nous simplement quoi ajuster. Rien n'est publié tant que ce n'est pas parfait." },
+    "cta": "Parlons de votre migration"
   },
   "plans": {
     "title": "Des formules pour chaque étape",
-    "subtitle": "Les tarifs arrivent bientôt. Rejoignez l'accès anticipé pour être parmi les premiers informés.",
-    "comingSoon": "Tarifs à venir",
-    "earlyAccessCta": "Rejoindre l'accès anticipé",
-    "earlyAccessNote": "Gratuit pendant l'accès anticipé. Aucune carte de crédit requise.",
+    "subtitle": "Des formules simples qui évoluent avec vous.",
+    "trialNote": "Essai gratuit de 14 jours · Sans carte de crédit.",
+    "migrationNote": "Vous changez de plateforme ? Nous migrons vos données pour vous — gratuitement.",
+    "perMonth": "/mois",
+    "afterPromo": "après 3 mois",
+    "promoBadge": "Offre de lancement",
+    "earlyAccessCta": "Accès anticipé",
     "mostPopular": "Le plus populaire",
-    "freePrice": "Gratuit pour toujours",
+    "cmpToggle": "Comparer toutes les fonctionnalités",
+    "cmpUsage": "Usage & accès",
+    "cmpCore": "Gérer votre studio",
+    "cmpGrowth": "Développer & fidéliser",
+    "cmpOrg": "Multi-sites",
+    "cmpContacts": "Contacts actifs",
+    "cmpMembers": "Plusieurs membres d'équipe",
+    "cmpBranding": "Retirer la marque Linyup",
+    "cmpMigration": "Migration de données offerte",
+    "cmpCoaching": "Coaching 1:1 & rendez-vous",
+    "cmpGoals": "Objectifs & progression",
+    "cmpMultiTeam": "Plusieurs équipes",
+    "cmpCentralAdmin": "Administration centrale & vue unifiée",
+    "cmpCrossTeam": "Événements & messages inter-équipes",
+    "cmpApi": "Accès API",
+    "cmpPermissions": "Rôles & permissions avancés",
+    "cmpUnlimited": "Illimité",
+    "cmpAddon": "Option",
+    "cmpSoon": "Bientôt",
     "free": {
       "name": "Free",
+      "price": "Gratuit",
       "audience": "Pour les coaches qui débutent.",
-      "features": ["Jusqu'à 10 contacts", "Portail de réservation public", "Sessions & abonnements"]
+      "features": ["Jusqu'à 10 contacts", "Page de réservation & bio link", "Sessions, abonnements & objectifs"]
     },
     "coach": {
       "name": "Coach",
+      "price": "CHF 7.99",
+      "promoPrice": "CHF 4.00",
       "audience": "Pour les instructeurs solos et coaches privés.",
-      "features": ["Tout de Free", "30 contacts inclus", "Coaching 1:1 & membres d'équipe"]
+      "features": ["Tout de Free", "30 contacts", "Coaching 1:1 & rendez-vous"]
     },
     "studio": {
       "name": "Studio",
+      "price": "CHF 29.99",
+      "promoPrice": "CHF 15.00",
       "audience": "Pour les studios et salles de sport avec plusieurs coaches et cours.",
-      "features": ["Tout de Coach", "Contacts illimités", "Automatisations & gamification", "Tendances & analyses"]
+      "features": ["Tout de Coach", "Appli mobile & automatisations", "Gamification, parrainage & analyses"]
     },
     "org": {
       "name": "Organisation",
+      "price": "CHF 149",
+      "promoPrice": "CHF 74.50",
       "audience": "Pour les studios multi-sites, fédérations et franchises.",
-      "features": ["Tout de Studio", "Hiérarchie multi-équipes", "Classements & événements à l'échelle de l'organisation"]
+      "features": ["Tout de Studio", "Contacts & équipes illimités", "Administration centrale & API"]
     }
   },
   "cta": {
     "title": "Prêt à vous lancer ?",
     "subtitle": "Rejoignez les coaches et studios qui utilisent déjà Linyup pour gérer leur activité.",
-    "button": "Commencer gratuitement"
+    "button": "Accès anticipé"
   },
   "footer": {
     "tagline": "L'outil de gestion moderne pour coaches et studios.",

@@ -2,15 +2,23 @@
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Nav from '~/components/Nav.astro';
 import Hero from '~/components/Hero.astro';
+import Migration from '~/components/Migration.astro';
 import Features from '~/components/Features.astro';
 import Pricing from '~/components/Pricing.astro';
 import CTA from '~/components/CTA.astro';
 import Footer from '~/components/Footer.astro';
-import { defaultLang, useTranslations } from '~/i18n';
+import EarlyAccessModal from '~/components/EarlyAccessModal.astro';
+import { languages, defaultLang, useTranslations } from '~/i18n';
+import type { Language } from '~/i18n';
 
-// Root page = default locale (English). Other locales are served from
-// /[lang]/index.astro via getStaticPaths. Both share the same components.
-const lang = defaultLang;
+export function getStaticPaths() {
+  // Generate pages for all non-default locales (/de, /fr, /it)
+  return Object.keys(languages)
+    .filter((l) => l !== defaultLang)
+    .map((l) => ({ params: { lang: l } }));
+}
+
+const { lang } = Astro.params as { lang: Language };
 const t = useTranslations(lang);
 ---
 
@@ -24,7 +32,9 @@ const t = useTranslations(lang);
     <Hero lang={lang} />
     <Features lang={lang} />
     <Pricing lang={lang} />
+    <Migration lang={lang} />
     <CTA lang={lang} />
   </main>
   <Footer lang={lang} />
+  <EarlyAccessModal lang={lang} />
 </BaseLayout>

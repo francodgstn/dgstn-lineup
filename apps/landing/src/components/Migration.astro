@@ -1,0 +1,114 @@
+---
+import type { Language } from '~/i18n';
+import { useTranslations } from '~/i18n';
+
+interface Props {
+  lang: Language;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+// Three-step "done-for-you" migration story. Icons are lucide names.
+const steps = [
+  { key: 'send', icon: 'upload' },
+  { key: 'migrate', icon: 'wand-sparkles' },
+  { key: 'review', icon: 'check-check' },
+] as const;
+---
+
+<section id="migration" class="mig-sec">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow"><i data-lucide="arrow-left-right"></i> {t('migration.eyebrow')}</span>
+      <h2>{t('migration.title')}</h2>
+      <p>{t('migration.subtitle')}</p>
+    </div>
+
+    <ol class="mig-steps">
+      {
+        steps.map((step, i) => (
+          <li class="mig-step">
+            <span class="mig-step-icon">
+              <i data-lucide={step.icon}></i>
+              <span class="mig-step-num">{i + 1}</span>
+            </span>
+            <h3>{t(`migration.${step.key}.title`)}</h3>
+            <p>{t(`migration.${step.key}.detail`)}</p>
+          </li>
+        ))
+      }
+    </ol>
+
+    <div class="mig-foot">
+      <span class="eyebrow mig-badge"><i data-lucide="sparkles"></i> {t('migration.badge')}</span>
+      <button class="btn btn-primary" type="button" data-early-access>
+        {t('migration.cta')} <i data-lucide="arrow-right"></i>
+      </button>
+    </div>
+  </div>
+</section>
+
+<style>
+  .mig-sec { padding: 80px 0; }
+
+  /* Eyebrow above the shared section heading */
+  .sec-head .eyebrow { margin-bottom: 16px; }
+
+  .mig-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0 auto;
+    max-width: 920px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    text-align: center;
+  }
+  .mig-step { display: flex; flex-direction: column; align-items: center; }
+  .mig-step-icon {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    background: var(--purple-50);
+    color: var(--primary);
+    border: 1px solid var(--purple-100);
+    margin-bottom: 16px;
+  }
+  .mig-step-icon :global(svg) { width: 26px; height: 26px; }
+  .mig-step-num {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    background: var(--primary);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 50%;
+    border: 2px solid var(--background);
+  }
+  .mig-step h3 { font-family: var(--font-display); font-weight: 600; font-size: 18px; }
+  .mig-step p { font-size: 14.5px; line-height: 1.55; color: var(--muted-foreground); margin: 8px 0 0; max-width: 30ch; }
+
+  /* Badge stacked above the CTA, both centred — avoids the baseline mismatch
+     between the short uppercase pill and the taller button on one row. */
+  .mig-foot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    margin-top: 44px;
+  }
+
+  @media (max-width: 860px) {
+    .mig-sec { padding: 56px 0; }
+    .mig-steps { grid-template-columns: 1fr; gap: 32px; }
+  }
+</style>

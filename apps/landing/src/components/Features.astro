@@ -8,45 +8,306 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
+const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
 
-const featureList = [
-  { key: 'sessions', icon: 'calendar-range' },
-  { key: 'contacts', icon: 'users' },
-  { key: 'mobile', icon: 'smartphone' },
-] as const;
+// ~24 features across 3 rows. Titles/descriptions come from
+// features.cards.<key>.{title,description}; icons are Lucide names.
+// `soon: true` marks features that aren't available yet (shown in the modal).
+const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
+  // Row 0 — scrolls left
+  [
+    { key: 'sessions', icon: 'calendar-range' },
+    { key: 'calendar', icon: 'calendar-days' },
+    { key: 'contacts', icon: 'users' },
+    { key: 'bookings', icon: 'clipboard-list' },
+    { key: 'checkins', icon: 'qr-code' },
+    { key: 'trials', icon: 'sparkles' },
+    { key: 'memberships', icon: 'badge-check' },
+    { key: 'payments', icon: 'credit-card' },
+  ],
+  // Row 1 — scrolls right
+  [
+    { key: 'biolink', icon: 'link' },
+    { key: 'website', icon: 'globe' },
+    { key: 'mobileApp', icon: 'smartphone' },
+    { key: 'automations', icon: 'workflow' },
+    { key: 'gamification', icon: 'trophy' },
+    { key: 'rankings', icon: 'medal' },
+    { key: 'referrals', icon: 'gift' },
+    { key: 'courses', icon: 'graduation-cap' },
+  ],
+  // Row 2 — scrolls left
+  [
+    { key: 'events', icon: 'calendar-heart' },
+    { key: 'eventForms', icon: 'file-text' },
+    { key: 'groups', icon: 'users-round' },
+    { key: 'customFields', icon: 'list-plus' },
+    { key: 'analytics', icon: 'bar-chart-3' },
+    { key: 'whatsapp', icon: 'message-circle', soon: true },
+    { key: 'aiInsights', icon: 'brain', soon: true },
+    { key: 'team', icon: 'user-plus' },
+  ],
+];
 ---
 
 <section id="features">
+  {/* Section heading hidden for now — restore with features.title / features.subtitle:
   <div class="wrap">
     <div class="sec-head">
       <h2>{t('features.title')}</h2>
       <p>{t('features.subtitle')}</p>
     </div>
-    <div class="features">
-      {
-        featureList.map(({ key, icon }) => (
-          <div class="feature">
-            <div class="ficon"><i data-lucide={icon} /></div>
-            <h3>{t(`features.${key}.title`)}</h3>
-            <p>{t(`features.${key}.description`)}</p>
+  </div>
+  */}
+
+  <div class="marquee">
+    {
+      featureRows.map((row, i) => (
+        <div class="marquee-row">
+          <div class:list={['marquee-track', i % 2 === 0 ? 'dir-left' : 'dir-right', `row-${i}`]}>
+            {/* Render the card set twice for a seamless -50% loop */}
+            {[...row, ...row].map(({ key, icon, soon }, j) => (
+              <button
+                type="button"
+                class="fcard"
+                data-title={t(`features.cards.${key}.title`)}
+                data-detail={t(`features.cards.${key}.detail`)}
+                data-soon={soon ? 'true' : undefined}
+                aria-hidden={j >= row.length ? 'true' : undefined}
+                tabindex={j >= row.length ? -1 : undefined}
+              >
+                <div class="ficon"><i data-lucide={icon} /></div>
+                <div class="fcard-text">
+                  <h3>{t(`features.cards.${key}.title`)}</h3>
+                  <p>{t(`features.cards.${key}.description`)}</p>
+                </div>
+              </button>
+            ))}
           </div>
-        ))
-      }
+        </div>
+      ))
+    }
+  </div>
+
+  <!-- Feature detail modal (populated on card click) -->
+  <div class="fmodal-overlay" id="feature-modal" hidden>
+    <div class="fmodal" role="dialog" aria-modal="true" aria-labelledby="fmodal-title">
+      <button class="fmodal-close" type="button" aria-label="Close"><i data-lucide="x"></i></button>
+      <div class="ficon fmodal-icon" id="fmodal-icon"></div>
+      {/* Screenshot slot for later: add an <img>/<div class="fmodal-shot"> here. */}
+      <h3 id="fmodal-title"></h3>
+      <span class="fmodal-soon" id="fmodal-soon" hidden>{t('features.comingSoon')}</span>
+      <p id="fmodal-detail"></p>
+      <a class="btn btn-primary btn-block" href={`${APP_URL}/signup`}>{t('hero.cta')}</a>
     </div>
   </div>
 </section>
 
-<style>
-  section { padding: 80px 0; }
-  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-  .feature { background: var(--card); border-radius: var(--radius-xl); box-shadow: var(--ring-card), var(--shadow-sm); padding: 28px; }
-  .ficon { width: 48px; height: 48px; border-radius: 12px; background: var(--purple-50); color: var(--primary); display: flex; align-items: center; justify-content: center; border: 1px solid var(--purple-100); }
-  .ficon :global(svg) { width: 24px; height: 24px; }
-  .feature h3 { font-family: var(--font-display); font-weight: 600; font-size: 22px; margin: 18px 0 8px; }
-  .feature p { font-size: 14.5px; line-height: 1.6; color: var(--muted-foreground); margin: 0; }
+<script>
+  const modal = document.getElementById('feature-modal');
+  if (modal) {
+    const titleEl = modal.querySelector('#fmodal-title');
+    const detailEl = modal.querySelector('#fmodal-detail');
+    const iconEl = modal.querySelector('#fmodal-icon');
+    const soonEl = modal.querySelector<HTMLElement>('#fmodal-soon');
+    const closeBtn = modal.querySelector('.fmodal-close');
 
+    const close = () => {
+      modal.hidden = true;
+      document.body.style.overflow = '';
+    };
+    const open = (card: HTMLElement) => {
+      if (titleEl) titleEl.textContent = card.dataset.title ?? '';
+      if (detailEl) detailEl.textContent = card.dataset.detail ?? '';
+      if (soonEl) soonEl.hidden = card.dataset.soon !== 'true';
+      // Reuse the card's already-rendered Lucide SVG so we don't re-run createIcons.
+      const srcIcon = card.querySelector('.ficon');
+      if (iconEl) iconEl.innerHTML = srcIcon ? srcIcon.innerHTML : '';
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+    };
+
+    document.querySelectorAll<HTMLElement>('.marquee .fcard').forEach((card) => {
+      card.addEventListener('click', () => open(card));
+    });
+    closeBtn?.addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.hidden) close();
+    });
+  }
+</script>
+
+<style>
+  section { padding: 24px 0 80px; overflow: hidden; }
+
+  /* ── Marquee ─────────────────────────────────────────────────────────── */
+  .marquee {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    /* Fade cards in/out at the section edges */
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 8%, #000 92%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 8%, #000 92%, transparent 100%);
+  }
+
+  .marquee-row { overflow: hidden; width: 100%; }
+
+  .marquee-track {
+    display: flex;
+    gap: 18px;
+    width: max-content;
+    will-change: transform;
+  }
+  .marquee-track:hover { animation-play-state: paused; }
+
+  .dir-left { animation: marquee-left 60s linear infinite; }
+  .dir-right { animation: marquee-right 70s linear infinite; }
+
+  /* Per-row duration + phase offset so rows don't line up into a rigid grid */
+  .row-0 { animation-duration: 60s; animation-delay: -4s; }
+  .row-1 { animation-duration: 70s; animation-delay: -22s; }
+  .row-2 { animation-duration: 65s; animation-delay: -11s; }
+
+  @keyframes marquee-left {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes marquee-right {
+    from { transform: translateX(-50%); }
+    to { transform: translateX(0); }
+  }
+
+  /* ── Card ────────────────────────────────────────────────────────────── */
+  .fcard {
+    flex: 0 0 auto;
+    width: 280px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card);
+    border: 0;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--ring-card), var(--shadow-sm);
+    padding: 16px 18px;
+    text-align: left;
+    font-family: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .fcard:hover { transform: translateY(-3px); box-shadow: var(--ring-card), var(--shadow-md); }
+  .fcard:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .ficon {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    background: var(--purple-50);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--purple-100);
+  }
+  .ficon :global(svg) { width: 24px; height: 24px; }
+  .fcard-text { min-width: 0; }
+  .fcard h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 16px;
+    margin: 0 0 3px;
+    line-height: 1.2;
+  }
+  .fcard p {
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--muted-foreground);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Reduced motion: stop animating, allow manual horizontal scroll ───── */
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-row { overflow-x: auto; }
+    .marquee-track { animation: none; transform: none; }
+  }
+
+  /* ── Detail modal ────────────────────────────────────────────────────── */
+  .fmodal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: oklch(0 0 0 / 0.5);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    animation: fmodal-fade 0.15s ease;
+  }
+  .fmodal-overlay[hidden] { display: none; }
+  .fmodal {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    background: var(--card);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    padding: 32px;
+    text-align: center;
+    animation: fmodal-pop 0.18s ease;
+  }
+  .fmodal-icon { width: 56px; height: 56px; margin: 0 auto 18px; }
+  .fmodal-icon :global(svg) { width: 28px; height: 28px; }
+  .fmodal h3 { font-family: var(--font-display); font-weight: 600; font-size: 24px; margin: 0 0 10px; }
+  .fmodal-soon {
+    display: inline-block;
+    margin: 0 0 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    background: var(--purple-50);
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+  }
+  .fmodal-soon[hidden] { display: none; }
+  .fmodal p { font-size: 15px; line-height: 1.6; color: var(--muted-foreground); margin: 0 0 22px; }
+  .fmodal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .fmodal-close:hover { background: var(--purple-50); }
+  .fmodal-close :global(svg) { width: 18px; height: 18px; }
+  @keyframes fmodal-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fmodal-pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+  /* ── Mobile ──────────────────────────────────────────────────────────── */
   @media (max-width: 860px) {
-    section { padding: 56px 0; }
-    .features { grid-template-columns: 1fr; }
+    section { padding: 16px 0 56px; }
+    .marquee { gap: 14px; }
+    .marquee-track { gap: 14px; }
+    .fcard { width: 240px; padding: 14px 16px; }
+    .fcard h3 { font-size: 15px; }
   }
 </style>

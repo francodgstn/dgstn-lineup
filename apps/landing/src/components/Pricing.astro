@@ -9,7 +9,6 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang);
 const tList = useTranslationList(lang);
-const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
 
 const plans = [
   { key: 'free', featured: false },
@@ -17,6 +16,71 @@ const plans = [
   { key: 'studio', featured: true },
   { key: 'org', featured: false },
 ] as const;
+
+// Full feature comparison (collapsed by default). Columns follow `plans` order:
+// [free, coach, studio, organization]. Cell values: true = ✓, false = —, or a
+// sentinel/literal string ('unlimited' | 'addon' | 'soon', or a contact count).
+// Row labels reuse the already-translated marquee titles where possible.
+type CmpVal = boolean | string;
+const COMPARE: { heading: string; rows: { label: string; values: CmpVal[] }[] }[] = [
+  {
+    heading: 'plans.cmpUsage',
+    rows: [
+      { label: 'plans.cmpContacts', values: ['10', '30', '100', 'unlimited'] },
+      { label: 'plans.cmpMembers', values: [false, false, true, true] },
+      { label: 'plans.cmpBranding', values: [false, true, true, true] },
+      { label: 'plans.cmpMigration', values: [false, true, true, true] },
+    ],
+  },
+  {
+    heading: 'plans.cmpCore',
+    rows: [
+      { label: 'features.cards.sessions.title', values: [true, true, true, true] },
+      { label: 'features.cards.contacts.title', values: [true, true, true, true] },
+      { label: 'features.cards.bookings.title', values: [true, true, true, true] },
+      { label: 'features.cards.biolink.title', values: [true, true, true, true] },
+      { label: 'plans.cmpCoaching', values: [true, true, true, true] },
+      { label: 'features.cards.checkins.title', values: [true, true, true, true] },
+      { label: 'features.cards.memberships.title', values: [true, true, true, true] },
+      { label: 'features.cards.payments.title', values: [true, true, true, true] },
+      { label: 'plans.cmpGoals', values: [true, true, true, true] },
+    ],
+  },
+  {
+    heading: 'plans.cmpGrowth',
+    rows: [
+      { label: 'features.cards.mobileApp.title', values: [false, false, true, true] },
+      { label: 'features.cards.automations.title', values: [false, false, true, true] },
+      { label: 'features.cards.gamification.title', values: [false, 'addon', true, true] },
+      { label: 'features.cards.referrals.title', values: [false, 'addon', true, true] },
+      { label: 'features.cards.courses.title', values: [false, 'addon', true, true] },
+      { label: 'features.cards.website.title', values: [false, 'addon', true, true] },
+      { label: 'features.cards.groups.title', values: [false, 'addon', true, true] },
+      { label: 'features.cards.customFields.title', values: [false, 'addon', true, true] },
+      { label: 'features.cards.analytics.title', values: [false, false, true, true] },
+      { label: 'features.cards.aiInsights.title', values: [false, false, 'soon', 'soon'] },
+      { label: 'features.cards.whatsapp.title', values: [false, false, 'soon', 'soon'] },
+    ],
+  },
+  {
+    heading: 'plans.cmpOrg',
+    rows: [
+      { label: 'plans.cmpMultiTeam', values: [false, false, false, true] },
+      { label: 'plans.cmpCentralAdmin', values: [false, false, false, true] },
+      { label: 'plans.cmpCrossTeam', values: [false, false, false, true] },
+      { label: 'plans.cmpApi', values: [false, false, false, true] },
+      { label: 'plans.cmpPermissions', values: [false, false, false, true] },
+    ],
+  },
+];
+
+// Sentinel/literal → display text; null means render a ✓/— icon instead.
+const cmpText = (v: CmpVal): string | null => {
+  if (v === 'unlimited') return t('plans.cmpUnlimited');
+  if (v === 'addon') return t('plans.cmpAddon');
+  if (v === 'soon') return t('plans.cmpSoon');
+  return typeof v === 'string' ? v : null;
+};
 ---
 
 <section id="pricing" class="plans-sec">
@@ -25,53 +89,225 @@ const plans = [
       <h2>{t('plans.title')}</h2>
       <p>{t('plans.subtitle')}</p>
     </div>
+
+    <div class="trial-wrap">
+      <span class="eyebrow trial-note"><i data-lucide="badge-check"></i> {t('plans.trialNote')}</span>
+      <span class="eyebrow trial-note mig-note"><i data-lucide="arrow-left-right"></i> {t('plans.migrationNote')}</span>
+    </div>
+
     <div class="plans">
       {
-        plans.map(({ key, featured }) => (
+        plans.map(({ key, featured }) => {
+          // Split "CHF 15.00" into currency label + amount so the currency can
+          // sit on its own small line above (keeps the number + /mo on one line).
+          const [currency, ...amountParts] = t(`plans.${key}.promoPrice`).split(' ');
+          const amount = amountParts.join(' ');
+          return (
           <div class:list={['plan', { featured }]}>
             {featured && <span class="plan-tag">{t('plans.mostPopular')}</span>}
             <h3>{t(`plans.${key}.name`)}</h3>
             <p class="aud">{t(`plans.${key}.audience`)}</p>
+
+            <div class="price-block">
+              {key === 'free' ? (
+                <span class="amount">{t('plans.free.price')}</span>
+              ) : (
+                <>
+                  <span class="currency">{currency}</span>
+                  <div class="amount-line">
+                    <span class="amount-row">
+                      <span class="amount">{amount}<sup class="price-star">*</sup></span>
+                      <span class="period">{t('plans.perMonth')}</span>
+                    </span>
+                    <span class="price-tag"><i data-lucide="sparkles"></i> {t('plans.promoBadge')}</span>
+                  </div>
+                </>
+              )}
+            </div>
+            {key !== 'free' && (
+              <p class="price-note">
+                * {t(`plans.${key}.price`)}{t('plans.perMonth')} {t('plans.afterPromo')}
+              </p>
+            )}
+
             <ul class="feat-list">
               {tList(`plans.${key}.features`).map((feat) => (
                 <li><i data-lucide="check" /> {feat}</li>
               ))}
             </ul>
-            <div class="price">{key === 'free' ? t('plans.freePrice') : t('plans.comingSoon')}</div>
-            <a
+
+            <button
               class:list={['btn', 'btn-block', featured ? 'btn-primary' : 'btn-outline']}
-              href={`${APP_URL}/signup`}
+              type="button"
+              data-early-access
             >
               {t('plans.earlyAccessCta')}
-            </a>
+            </button>
           </div>
-        ))
+          );
+        })
       }
     </div>
-    <p class="early-note">{t('plans.earlyAccessNote')}</p>
+
+    <!-- Full feature comparison — collapsed by default -->
+    <details class="compare">
+      <summary class="compare-summary">
+        <span>{t('plans.cmpToggle')}</span>
+        <i data-lucide="chevron-down"></i>
+      </summary>
+      <div class="compare-scroll">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th class="feat-col"></th>
+              {plans.map(({ key }) => <th>{t(`plans.${key}.name`)}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {
+              COMPARE.map((group) => (
+                <Fragment>
+                  <tr class="cmp-group">
+                    <th colspan={plans.length + 1}>{t(group.heading)}</th>
+                  </tr>
+                  {group.rows.map((row) => (
+                    <tr>
+                      <th scope="row">{t(row.label)}</th>
+                      {row.values.map((v) => {
+                        const txt = cmpText(v);
+                        return (
+                          <td>
+                            {txt !== null ? (
+                              <span class="cell-txt">{txt}</span>
+                            ) : v === true ? (
+                              <span class="cell-yes"><i data-lucide="check"></i></span>
+                            ) : (
+                              <span class="cell-no">–</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </Fragment>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </details>
   </div>
 </section>
 
 <style>
   .plans-sec { padding: 80px 0; background: var(--purple-50); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  .plans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: start; }
+
+  /* Trial + migration note pills under the section head */
+  .trial-wrap { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: -24px 0 36px; }
+  .trial-note { background: var(--card); }
+  .mig-note { color: var(--purple-700); background: var(--purple-50); border-color: var(--purple-200); }
+  .mig-note :global(svg) { color: var(--primary); }
+
+  .plans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: stretch; }
   .plan { background: var(--card); border-radius: var(--radius-xl); box-shadow: var(--ring-card), var(--shadow-sm); padding: 28px; display: flex; flex-direction: column; }
   .plan.featured { box-shadow: var(--shadow-lg); border: 2px solid var(--primary); position: relative; }
   .plan-tag { position: absolute; top: -11px; left: 28px; background: var(--primary); color: #fff; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 10px; border-radius: 99px; }
   .plan h3 { font-family: var(--font-display); font-weight: 600; font-size: 26px; }
-  .plan .aud { font-size: 14px; color: var(--muted-foreground); margin: 8px 0 18px; min-height: 42px; }
-  .feat-list { list-style: none; padding: 0; margin: 0 0 18px; display: flex; flex-direction: column; gap: 9px; }
+  .plan .aud { font-size: 14px; color: var(--muted-foreground); margin: 8px 0 16px; min-height: 42px; }
+
+  /* Price block — currency on its own small line, then amount + /mo (no wrap) */
+  .price-block { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .currency { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground); line-height: 1; }
+  .amount-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .amount-row { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+  .amount { font-family: var(--font-display); font-weight: 600; font-size: 34px; line-height: 1; color: var(--heading); }
+  .price-star { color: var(--primary); font-weight: 700; font-size: 0.5em; }
+  .period { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
+
+  /* "Offer" chip next to the discounted price */
+  .price-tag {
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--purple-700);
+    background: var(--purple-50);
+    border: 1px solid var(--purple-200);
+    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+  }
+  .price-tag :global(svg) { width: 12px; height: 12px; }
+  .plan.featured .price-tag { background: var(--primary); color: #fff; border-color: transparent; }
+
+  /* Regular price after the promo period (paid cards) */
+  .price-note { margin: 6px 0 0; font-size: 13px; color: var(--muted-foreground); }
+
+  .feat-list { list-style: none; padding: 0; margin: 18px 0; display: flex; flex-direction: column; gap: 9px; }
   .feat-list li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; }
   .feat-list :global(svg) { width: 16px; height: 16px; color: var(--success-fg); flex-shrink: 0; }
-  .plan .price { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--muted-foreground); padding: 14px 0 18px; border-top: 1px solid var(--border); margin-top: auto; }
-  .early-note { text-align: center; font-size: 13px; color: var(--muted-foreground); margin-top: 24px; }
+
+  /* CTA pinned to the bottom so cards with differing content stay aligned */
+  .plan .btn { margin-top: auto; }
 
   @media (max-width: 1100px) {
     .plans { grid-template-columns: repeat(2, 1fr); }
   }
 
+  /* ── Feature comparison (collapsible) ────────────────────────────────── */
+  .compare {
+    margin-top: 40px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--ring-card), var(--shadow-sm);
+    overflow: hidden;
+  }
+  .compare-summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--primary);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+  }
+  .compare-summary::-webkit-details-marker { display: none; }
+  .compare-summary :global(svg) { width: 16px; height: 16px; transition: transform 0.2s ease; }
+  .compare[open] .compare-summary :global(svg) { transform: rotate(180deg); }
+
+  .compare-scroll { overflow-x: auto; }
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 660px; }
+  .compare-table th,
+  .compare-table td { padding: 11px 16px; text-align: center; border-top: 1px solid var(--border); }
+  .compare-table thead th { font-family: var(--font-display); font-size: 16px; color: var(--heading); }
+  .compare-table thead th:first-child { border-top: 0; }
+  .compare-table tbody th[scope='row'] { text-align: left; font-weight: 500; color: var(--foreground); }
+  .cmp-group th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    background: var(--purple-50);
+  }
+  .cell-yes { color: var(--success-fg); display: inline-flex; }
+  .cell-yes :global(svg) { width: 18px; height: 18px; }
+  .cell-no { color: var(--muted-foreground); opacity: 0.45; }
+  .cell-txt { font-size: 13px; font-weight: 600; color: var(--foreground); }
+
   @media (max-width: 860px) {
     .plans-sec { padding: 56px 0; }
     .plans { grid-template-columns: 1fr; }
+    .trial-wrap { margin: -12px 0 28px; }
   }
 </style>
