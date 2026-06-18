@@ -61,9 +61,9 @@
     "dashboardAlt": "La dashboard Linyup di una scuola di arti marziali",
     "shots": {
       "schedule": { "title": "Tutta la settimana a colpo d'occhio", "detail": "Ogni lezione, sala e coach in un unico calendario a colori." },
-      "contacts": { "title": "Conosci ogni studente", "detail": "Profili, gradi, cronologia e abbonamento in un solo posto." },
-      "gamification": { "title": "Classifica e premia gli studenti", "detail": "Punti, serie e classifiche che li fanno tornare." },
-      "subscriptions": { "title": "Tieni d'occhio gli abbonamenti", "detail": "Vedi chi ha quale piano e non perdere un rinnovo." }
+      "contact": { "title": "Segui i progressi di ogni studente", "detail": "Presenze, serie e un radar delle performance su ogni profilo." },
+      "courses": { "title": "Vendi corsi online", "detail": "Trasforma le tue competenze in corsi che i membri seguono al proprio ritmo." },
+      "biolink": { "title": "Crea il tuo bio-link", "detail": "Un link condivisibile per orario, prenotazioni e iscrizioni — con anteprima live." }
     }
   },
   "features": {

@@ -61,9 +61,9 @@
     "dashboardAlt": "Das Linyup-Dashboard einer Kampfsportschule",
     "shots": {
       "schedule": { "title": "Die ganze Woche im Blick", "detail": "Jede Klasse, jeder Raum und jeder Coach in einem farbcodierten Kalender." },
-      "contacts": { "title": "Kenne jeden Schüler", "detail": "Profile, Ränge, Verlauf und Mitgliedsstatus an einem Ort." },
-      "gamification": { "title": "Schüler einstufen & belohnen", "detail": "Punkte, Streaks und Ranglisten, die zum Wiederkommen motivieren." },
-      "subscriptions": { "title": "Jede Mitgliedschaft im Griff", "detail": "Sieh, wer welchen Plan hat, und verpasse keine Verlängerung." }
+      "contact": { "title": "Den Fortschritt jedes Schülers verfolgen", "detail": "Anwesenheit, Streaks und ein Leistungsradar auf jedem Profil." },
+      "courses": { "title": "Online-Kurse verkaufen", "detail": "Verpacke dein Wissen in Kurse, die Mitglieder im eigenen Tempo durchgehen." },
+      "biolink": { "title": "Deinen Bio-Link bauen", "detail": "Ein teilbarer Bio-Link für Plan, Buchung und Anmeldung — mit Live-Vorschau." }
     }
   },
   "features": {

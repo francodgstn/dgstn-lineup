@@ -61,9 +61,9 @@
     "dashboardAlt": "Le tableau de bord Linyup d'une école d'arts martiaux",
     "shots": {
       "schedule": { "title": "Toute votre semaine en un coup d'œil", "detail": "Chaque cours, salle et coach dans un seul calendrier en couleurs." },
-      "contacts": { "title": "Connaissez chaque élève", "detail": "Profils, grades, historique et abonnement au même endroit." },
-      "gamification": { "title": "Classez et récompensez vos élèves", "detail": "Points, séries et classements qui les font revenir." },
-      "subscriptions": { "title": "Gardez l'œil sur les abonnements", "detail": "Voyez qui a quelle formule et ne ratez aucun renouvellement." }
+      "contact": { "title": "Suivez la progression de chaque élève", "detail": "Présences, séries et un radar de performance sur chaque profil." },
+      "courses": { "title": "Vendez des cours en ligne", "detail": "Transformez votre savoir en cours que vos membres suivent à leur rythme." },
+      "biolink": { "title": "Créez votre bio-link", "detail": "Un lien partageable pour planning, réservation et inscription — avec aperçu en direct." }
     }
   },
   "features": {

@@ -61,9 +61,9 @@
     "dashboardAlt": "The Linyup dashboard for a martial arts studio",
     "shots": {
       "schedule": { "title": "See your whole week", "detail": "Every class, room, and coach in one colour-coded calendar." },
-      "contacts": { "title": "Know every student", "detail": "Profiles, ranks, history, and membership status in one place." },
-      "gamification": { "title": "Rank and reward students", "detail": "Points, streaks, and leaderboards that keep them coming back." },
-      "subscriptions": { "title": "Track every membership", "detail": "See who's on what plan and never miss a renewal." }
+      "contact": { "title": "Track every student's progress", "detail": "Attendance, streaks, and a performance radar on every profile." },
+      "courses": { "title": "Sell online courses", "detail": "Package your curriculum into courses members follow at their own pace." },
+      "biolink": { "title": "Build your bio-link", "detail": "One shareable link for schedule, booking and sign-up — with live preview." }
     }
   },
   "features": {

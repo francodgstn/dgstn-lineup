@@ -2,9 +2,9 @@
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
 import schedule from '../assets/product/schedule.webp';
-import contacts from '../assets/product/contacts.webp';
-import gamification from '../assets/product/gamification.webp';
-import subscriptions from '../assets/product/subscriptions.webp';
+import contact from '../assets/product/contact.webp';
+import courses from '../assets/product/courses.webp';
+import biolink from '../assets/product/biolink.webp';
 
 interface Props {
   lang: Language;
@@ -17,9 +17,9 @@ const t = useTranslations(lang);
 // showcase.shots.<key>.{title,detail}; icons are Lucide names.
 const shots = [
   { key: 'schedule', img: schedule, icon: 'calendar-days' },
-  { key: 'contacts', img: contacts, icon: 'users' },
-  { key: 'gamification', img: gamification, icon: 'trophy' },
-  { key: 'subscriptions', img: subscriptions, icon: 'badge-check' },
+  { key: 'contact', img: contact, icon: 'user-round' },
+  { key: 'courses', img: courses, icon: 'graduation-cap' },
+  { key: 'biolink', img: biolink, icon: 'link' },
 ] as const;
 ---
 
