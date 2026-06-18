@@ -50,7 +50,7 @@
     --card:              oklch(0.208 0.020 288);
     --sidebar:           oklch(0.182 0.018 288);
     --border:            oklch(0.290 0.024 288);
-    --muted-foreground:  oklch(0.600 0.028 288);
+    --muted-foreground:  oklch(0.672 0.030 288);
     --heading:           oklch(0.930 0.018 288);
     --primary:           oklch(0.680 0.200 292);
     --primary-hover:     oklch(0.720 0.180 292);
@@ -128,7 +128,9 @@ i[data-lucide] { display: inline-flex; }
 .btn-primary:active { transform: translateY(1px); }
 .btn-ghost { color: var(--foreground); }
 .btn-ghost:hover { color: var(--primary); }
-.btn-outline { border-color: var(--border); background: var(--card); }
+/* Explicit color — <button> doesn't inherit it, so without this the label fell
+   back to the UA system text color (dark) and vanished on the dark card in dark mode. */
+.btn-outline { border-color: var(--border); background: var(--card); color: var(--foreground); }
 .btn-outline:hover { background: var(--purple-50); }
 .btn-white { background: #fff; color: var(--purple-900); }
 .btn-white:hover { background: var(--purple-50); }

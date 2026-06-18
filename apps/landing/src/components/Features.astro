@@ -8,7 +8,6 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
-const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
 
 // ~24 features across 3 rows. Titles/descriptions come from
 // features.cards.<key>.{title,description}; icons are Lucide names.
@@ -98,7 +97,7 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
       <h3 id="fmodal-title"></h3>
       <span class="fmodal-soon" id="fmodal-soon" hidden>{t('features.comingSoon')}</span>
       <p id="fmodal-detail"></p>
-      <a class="btn btn-primary btn-block" href={`${APP_URL}/signup`}>{t('hero.cta')}</a>
+      <button class="btn btn-primary btn-block" type="button" data-early-access>{t('plans.earlyAccessCta')}</button>
     </div>
   </div>
 </section>
@@ -153,7 +152,11 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
     mask-image: linear-gradient(to right, transparent 0, #000 8%, #000 92%, transparent 100%);
   }
 
-  .marquee-row { overflow: hidden; width: 100%; }
+  /* Clip the wide track horizontally, but let each card's hover-raise (and its
+     shadow) paint a few px beyond the row box — plain `overflow:hidden` cut the
+     lifted top edge. The horizontal bleed is hidden by the section's overflow
+     and the marquee edge mask. */
+  .marquee-row { overflow: clip; overflow-clip-margin: 14px; width: 100%; }
 
   .marquee-track {
     display: flex;

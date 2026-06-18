@@ -22,14 +22,14 @@ const plans = [
 // sentinel/literal string ('unlimited' | 'addon' | 'soon', or a contact count).
 // Row labels reuse the already-translated marquee titles where possible.
 type CmpVal = boolean | string;
-const COMPARE: { heading: string; rows: { label: string; values: CmpVal[] }[] }[] = [
+const COMPARE: { heading: string; rows: { label: string; note?: string; values: CmpVal[] }[] }[] = [
   {
     heading: 'plans.cmpUsage',
     rows: [
-      { label: 'plans.cmpContacts', values: ['10', '30', '100', 'unlimited'] },
-      { label: 'plans.cmpMembers', values: [false, false, true, true] },
-      { label: 'plans.cmpBranding', values: [false, true, true, true] },
+      { label: 'plans.cmpContacts', note: 'plans.cmpContactsNote', values: ['10', '30', '100', 'unlimited'] },
       { label: 'plans.cmpMigration', values: [false, true, true, true] },
+      { label: 'plans.cmpBranding', values: [false, false, true, true] },
+      { label: 'plans.cmpMembers', values: [false, false, true, true] },
     ],
   },
   {
@@ -172,7 +172,10 @@ const cmpText = (v: CmpVal): string | null => {
                   </tr>
                   {group.rows.map((row) => (
                     <tr>
-                      <th scope="row">{t(row.label)}</th>
+                      <th scope="row">
+                        {t(row.label)}
+                        {row.note && <span class="row-note">{t(row.note)}</span>}
+                      </th>
                       {row.values.map((v) => {
                         const txt = cmpText(v);
                         return (
@@ -291,6 +294,7 @@ const cmpText = (v: CmpVal): string | null => {
   .compare-table thead th { font-family: var(--font-display); font-size: 16px; color: var(--heading); }
   .compare-table thead th:first-child { border-top: 0; }
   .compare-table tbody th[scope='row'] { text-align: left; font-weight: 500; color: var(--foreground); }
+  .row-note { display: block; margin-top: 3px; font-size: 11.5px; font-weight: 400; line-height: 1.4; color: var(--muted-foreground); max-width: 30ch; }
   .cmp-group th {
     text-align: left;
     font-size: 11px;
