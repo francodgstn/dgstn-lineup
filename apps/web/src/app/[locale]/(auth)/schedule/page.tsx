@@ -25,7 +25,9 @@ import {
   TEAMS_COLLECTION,
   TEAM_MEMBERS_SUBCOLLECTION,
 } from '@linyup/shared'
-import type { Session, Activity, Event, EventType } from '@linyup/shared'
+import type { Session, Activity, Event } from '@linyup/shared'
+import { useEventTypes } from '@/hooks/useEventTypes'
+import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -75,10 +77,6 @@ import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
-
-// ─── constants ────────────────────────────────────────────────────────────────
-
-const EVENT_TYPES: EventType[] = ['competition', 'camp', 'exam', 'seminar', 'workshop']
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -133,7 +131,8 @@ function getItemMs(item: ListItem) {
 const eventSchema = z
   .object({
     title: z.string().min(1, 'Required').max(120),
-    type: z.enum(['competition', 'camp', 'exam', 'seminar', 'workshop']),
+    // Open string: built-in slug, installed-plugin type id, or team-custom type id.
+    type: z.string().min(1, 'Required'),
     scope: z.enum(['team', 'org']).default('team'),
     start: z.date({ required_error: 'Required' }),
     end: z.date({ required_error: 'Required' }),
@@ -302,6 +301,21 @@ function EventFormDialog({
         },
   })
 
+  const { types } = useEventTypes(teamId)
+  // Keep the event's current type selectable even if its plugin was uninstalled
+  // (or it's an unknown/legacy type) — otherwise editing would silently drop it.
+  const typeOptions =
+    editing && editing.type && !types.some((x) => x.id === editing.type)
+      ? [...types, { id: editing.type, name: prettyEventType(editing.type), source: 'builtin' as const }]
+      : types
+  const labelForType = (id: string) =>
+    eventTypeLabel(
+      id,
+      (k) => t.has(k as Parameters<typeof t>[0]),
+      (k) => t(k as Parameters<typeof t>[0]),
+      typeOptions.find((x) => x.id === id)?.name,
+    )
+
   const onSubmit = async (data: EventForm) => {
     const payload = {
       title: data.title,
@@ -394,16 +408,16 @@ function EventFormDialog({
                   <SelectTrigger className="w-full">
                     <span className="flex flex-1 text-left text-sm truncate">
                       {field.value ? (
-                        t(`type_${field.value}` as Parameters<typeof t>[0])
+                        labelForType(field.value)
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {EVENT_TYPES.map((tp) => (
-                      <SelectItem key={tp} value={tp}>
-                        {t(`type_${tp}` as Parameters<typeof t>[0])}
+                    {typeOptions.map((tp) => (
+                      <SelectItem key={tp.id} value={tp.id}>
+                        {labelForType(tp.id)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -657,7 +671,11 @@ function ListItemRow({
                 {e.title}
               </Link>
               <Badge variant="secondary" className="text-xs shrink-0">
-                {tE(`type_${e.type}` as Parameters<typeof tE>[0])}
+                {eventTypeLabel(
+                  e.type,
+                  (k) => tE.has(k as Parameters<typeof tE>[0]),
+                  (k) => tE(k as Parameters<typeof tE>[0]),
+                )}
               </Badge>
               {e.scope === 'org' && (
                 <Badge variant="outline" className="text-xs shrink-0">

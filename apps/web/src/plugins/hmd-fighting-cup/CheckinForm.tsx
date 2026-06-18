@@ -1,30 +1,12 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { collection, getDocs, orderBy, query } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { EVENT_CATEGORIES_SUBCOLLECTION, EVENTS_COLLECTION } from '@linyup/shared'
 import type { EventCategory, Contact } from '@linyup/shared'
-
-function useFightingCupCategories(eventId: string) {
-  return useQuery<EventCategory[]>({
-    queryKey: ['event-categories', eventId],
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, EVENTS_COLLECTION, eventId, EVENT_CATEGORIES_SUBCOLLECTION),
-          orderBy('sort_order'),
-        ),
-      )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventCategory)
-    },
-  })
-}
+import { useFightingCupCategories } from './useCategories'
 
 function contactAge(contact: Contact): number | null {
   if (!contact.birthdate) return null
@@ -94,6 +76,17 @@ export function CheckinForm({
     [allCategories, contact, weightNum],
   )
 
+  // Fields needed to place a competitor accurately. Surfaced as a warning so the
+  // organizer knows why categories may be filtered out (parity with the legacy
+  // pre-check-in validation, but non-blocking — categories may not need them all).
+  const missingFields = useMemo(() => {
+    const m: string[] = []
+    if (weightNum == null) m.push('weight')
+    if (!contact.birthdate) m.push('date of birth')
+    if (!contact.gender) m.push('gender')
+    return m
+  }, [weightNum, contact.birthdate, contact.gender])
+
   function toggleCat(id: string) {
     setSelectedCats((prev) => {
       const next = new Set(prev)
@@ -149,6 +142,12 @@ export function CheckinForm({
         {allCategories.length === 0 && (
           <p className="text-sm text-muted-foreground italic">
             No categories configured for this event. Add categories in the Categories tab.
+          </p>
+        )}
+
+        {allCategories.length > 0 && missingFields.length > 0 && (
+          <p className="text-xs text-amber-600">
+            Missing {missingFields.join(', ')} — some categories may be hidden until set on this contact.
           </p>
         )}
 

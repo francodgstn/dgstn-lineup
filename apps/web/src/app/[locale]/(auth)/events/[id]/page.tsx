@@ -32,8 +32,10 @@ import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { EVENTS_COLLECTION } from '@linyup/shared'
-import type { Event, EventType, RankingSystem, Team } from '@linyup/shared'
+import type { Event, RankingSystem, Team } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { useEventTypes } from '@/hooks/useEventTypes'
+import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { CheckinPanel } from '@/components/events/CheckinPanel'
 import dynamic from 'next/dynamic'
 import type { Route } from 'next'
@@ -69,12 +71,11 @@ interface EventInvitation {
 
 // ─── edit schema ──────────────────────────────────────────────────────────────
 
-const EVENT_TYPES: EventType[] = ['competition', 'camp', 'exam', 'seminar', 'workshop']
-
 const editSchema = z
   .object({
     title: z.string().min(1, 'Required').max(120),
-    type: z.enum(['competition', 'camp', 'exam', 'seminar', 'workshop']),
+    // Open string: built-in slug, installed-plugin type id, or team-custom type id.
+    type: z.string().min(1, 'Required'),
     start: z.date({ required_error: 'Required' }),
     end: z.date({ required_error: 'Required' }),
     location: z.string().max(120).optional(),
@@ -142,6 +143,21 @@ function EditEventDialog({
   onSaved: () => void
 }) {
   const t = useTranslations('Events')
+  const { currentTeamId } = useAuth()
+  const { types } = useEventTypes(currentTeamId)
+  // Keep the event's current type selectable even if its plugin was uninstalled
+  // (or it's an unknown/legacy type) — otherwise editing would silently drop it.
+  const typeOptions =
+    event.type && !types.some((x) => x.id === event.type)
+      ? [...types, { id: event.type, name: prettyEventType(event.type), source: 'builtin' as const }]
+      : types
+  const labelForType = (id: string) =>
+    eventTypeLabel(
+      id,
+      (k) => t.has(k as Parameters<typeof t>[0]),
+      (k) => t(k as Parameters<typeof t>[0]),
+      typeOptions.find((x) => x.id === id)?.name,
+    )
   const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm<EditFormData>({
     resolver: zodResolver(editSchema),
     defaultValues: {
@@ -192,14 +208,14 @@ function EditEventDialog({
                   <SelectTrigger className="w-full">
                     <span className="flex flex-1 text-left text-sm truncate">
                       {field.value
-                        ? t(`type_${field.value}` as Parameters<typeof t>[0])
+                        ? labelForType(field.value)
                         : <span className="text-muted-foreground">—</span>}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {EVENT_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {t(`type_${type}` as Parameters<typeof t>[0])}
+                    {typeOptions.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {labelForType(type.id)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -483,7 +499,12 @@ export default function EventDetailPage() {
           <div className="flex items-center gap-2 flex-wrap mb-1.5">
             <h1 className="text-2xl font-bold tracking-tight">{event.title}</h1>
             <Badge variant="secondary" className="capitalize shrink-0">
-              {t(`type_${event.type}` as Parameters<typeof t>[0])}
+              {eventTypeLabel(
+                event.type,
+                (k) => t.has(k as Parameters<typeof t>[0]),
+                (k) => t(k as Parameters<typeof t>[0]),
+                eventPlugin?.eventType ? prettyEventType(eventPlugin.eventType.id) : undefined,
+              )}
             </Badge>
             {event.status && (
               <Badge variant={statusVariant(event.status)} className="shrink-0">
@@ -616,6 +637,7 @@ export default function EventDetailPage() {
           eventId={id}
           eventTitle={event.title}
           eventType={event.type}
+          eventDate={startDate}
           rankingSystems={rankingSystems}
           orgId={event.orgId ?? (team as Team & { org_id?: string })?.org_id}
         />

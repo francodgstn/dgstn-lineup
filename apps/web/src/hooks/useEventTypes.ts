@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase'
 import { TEAMS_COLLECTION, EVENT_TYPES_SUBCOLLECTION, BUILTIN_EVENT_TYPES } from '@linyup/shared'
 import type { EventTypeConfig } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 
 export interface SelectableEventType {
   id: string       // used as event.type in Firestore
@@ -26,6 +27,10 @@ export function useEventTypes(teamId: string | null): {
   types: SelectableEventType[]
   isLoading: boolean
 } {
+  // Plugin-contributed event types are only offered when the plugin is installed
+  // for the current team — installing/removing the plugin controls availability.
+  const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
+
   const { data: customTypes = [], isLoading } = useQuery<EventTypeConfig[]>({
     queryKey: ['event-types', teamId],
     enabled: !!teamId,
@@ -46,7 +51,7 @@ export function useEventTypes(teamId: string | null): {
   }))
 
   const pluginTypes: SelectableEventType[] = PLUGIN_REGISTRY
-    .filter((p) => p.eventType)
+    .filter((p) => p.eventType && isInstalled(p.id))
     .map((p) => ({
       id: p.eventType!.id,
       name: p.eventType!.id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
@@ -62,6 +67,6 @@ export function useEventTypes(teamId: string | null): {
 
   return {
     types: [...builtins, ...pluginTypes, ...teamTypes],
-    isLoading,
+    isLoading: isLoading || pluginsLoading,
   }
 }

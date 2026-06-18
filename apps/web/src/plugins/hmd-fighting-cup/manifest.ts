@@ -9,14 +9,9 @@ export const hmdFightingCupManifest: PluginManifest = {
   status: 'available',
   iconName: 'Trophy',
   hasOwnerConfig: false,
-  navContributions: [
-    {
-      href: '/plugins/hmd-fighting-cup',
-      labelKey: 'hmdFightingCupNavLabel',
-      icon: 'Trophy',
-      minPlan: 'studio',
-    },
-  ],
+  // No navContributions: this plugin adds no sidebar entry. It surfaces purely
+  // as an event type (below) — the Categories tab, custom check-in form, and
+  // lineup exports all live on the event detail page.
   eventType: {
     id: 'hmd_fighting_cup',
     nameKey: 'hmdFightingCupEventTypeName',

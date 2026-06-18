@@ -217,12 +217,14 @@ export function CheckinPanel({
   eventId,
   eventTitle,
   eventType,
+  eventDate = '',
   rankingSystems = [],
   orgId,
 }: {
   eventId: string
   eventTitle: string
   eventType: EventType
+  eventDate?: string
   rankingSystems?: RankingSystem[]
   orgId?: string
 }) {
@@ -269,6 +271,32 @@ export function CheckinPanel({
     }
     return null
   }, [formType])
+
+  // Plugin-provided lineup exports (e.g. fighting cup PDF + competitors CSV).
+  // Replaces the generic CSV button when the event type declares export support.
+  const exportPlugin = useMemo(
+    () =>
+      PLUGIN_REGISTRY.find(
+        (p) =>
+          p.eventType?.id === eventType &&
+          (p.eventType.hasPdfExport || p.eventType.hasCsvExport),
+      ),
+    [eventType],
+  )
+
+  const PluginExports = useMemo((): ComponentType<{
+    eventId: string
+    eventTitle: string
+    eventDate: string
+    checkins: EventCheckin[]
+  }> | null => {
+    if (!exportPlugin) return null
+    const pluginId = exportPlugin.id
+    return dynamic(
+      () => import(`@/plugins/${pluginId}/Exports`).then((m) => ({ default: m.Exports })),
+      { ssr: false },
+    )
+  }, [exportPlugin])
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['event-checkins', eventId] })
 
@@ -328,15 +356,24 @@ export function CheckinPanel({
           )}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => exportCsv(checkins, eventTitle)}
-            disabled={checkins.length === 0}
-          >
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Export CSV
-          </Button>
+          {PluginExports ? (
+            <PluginExports
+              eventId={eventId}
+              eventTitle={eventTitle}
+              eventDate={eventDate}
+              checkins={checkins}
+            />
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportCsv(checkins, eventTitle)}
+              disabled={checkins.length === 0}
+            >
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Export CSV
+            </Button>
+          )}
           <Button size="sm" onClick={() => setAddDialogOpen(true)}>
             <UserPlus className="h-3.5 w-3.5 mr-1.5" />
             Add checkin

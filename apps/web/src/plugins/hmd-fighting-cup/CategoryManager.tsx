@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import {
-  collection, getDocs, addDoc, updateDoc, deleteDoc, doc,
-  orderBy, query, serverTimestamp,
+  collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { Button } from '@/components/ui/button'
@@ -20,26 +19,12 @@ import {
 import { Plus, Pencil, Trash2, GripVertical } from 'lucide-react'
 import { EVENTS_COLLECTION, EVENT_CATEGORIES_SUBCOLLECTION } from '@linyup/shared'
 import type { EventCategory } from '@linyup/shared'
+import { useFightingCupCategories } from './useCategories'
 
 const COLORS = [
   '#EF4444', '#F97316', '#EAB308', '#22C55E',
   '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280',
 ]
-
-function useFightingCupCategories(eventId: string) {
-  return useQuery<EventCategory[]>({
-    queryKey: ['event-categories', eventId],
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, EVENTS_COLLECTION, eventId, EVENT_CATEGORIES_SUBCOLLECTION),
-          orderBy('sort_order'),
-        ),
-      )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventCategory)
-    },
-  })
-}
 
 const DEFAULT_CAT: Omit<EventCategory, 'id'> = {
   name: '',
