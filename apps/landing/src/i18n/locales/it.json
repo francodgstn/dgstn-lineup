@@ -11,9 +11,9 @@
     "cta": "Accesso anticipato"
   },
   "hero": {
-    "tagline": "Per coach e studi.",
+    "tagline": "Pensato per le scuole di arti marziali",
     "title": "Gestisci le tue lezioni. Conosci i tuoi studenti. Fai crescere il tuo studio.",
-    "subtitle": "Lo strumento moderno e semplice con tutto ciò di cui coach e studi hanno bisogno per funzionare senza intoppi e crescere.",
+    "subtitle": "Moderno, creato dai coach — e migriamo i tuoi dati per te, gratis.",
     "cta": "Inizia gratis",
     "ctaSecondary": "Scopri le funzionalità",
     "comingSoon": "Disponibile a breve",
@@ -23,7 +23,9 @@
     "emailSuccess": "Sei in lista! Ti contatteremo presto.",
     "emailError": "Qualcosa è andato storto — riprova.",
     "emailModalSub": "Linyup sta per arrivare — lascia la tua email e ti avviseremo appena è pronto.",
-    "demoEyebrow": "Senza registrazione — esplora uno studio demo live",
+    "demoEyebrow": "Prova una demo live — senza registrazione",
+    "demoPrimary": "Entra in un dojo live",
+    "demoAlso": "Pensato anche per",
     "demoStudios": {
       "grappling": "Arti marziali",
       "crossfit": "CrossFit",
@@ -33,9 +35,43 @@
       "dance": "Danza"
     }
   },
+  "heroFeatures": {
+    "eyebrow": "L'essenziale",
+    "title": "Pensato per gestire il tuo dojo",
+    "subtitle": "Gli essenziali di ogni giorno di cui ha bisogno ogni scuola di arti marziali — e ogni studio. Semplice di default.",
+    "cards": {
+      "sessions": { "title": "Pianifica le tue lezioni", "benefit": "Lezioni ricorrenti, posti e presenze in un unico calendario." },
+      "bookings": { "title": "Accetta prenotazioni online", "benefit": "Gli studenti riservano il posto con un tocco." },
+      "memberships": { "title": "Gestisci gli abbonamenti", "benefit": "Vendi piani e traccia ogni rinnovo automaticamente." },
+      "payments": { "title": "Incassa i pagamenti", "benefit": "Le quote si incassano da sole — niente più solleciti." },
+      "rankings": { "title": "Traccia cinture e gradi", "benefit": "Valuta gli studenti e tienili motivati verso la prossima cintura." },
+      "mobileApp": { "title": "Dai un'app ai tuoi studenti", "benefit": "Un'app iOS e Android col tuo brand per prenotare e fare check-in." },
+      "checkins": { "title": "Registra gli studenti", "benefit": "Una scansione QR veloce all'ingresso — niente fogli." },
+      "automations": { "title": "Automatizza il lavoro ripetitivo", "benefit": "Dai il benvenuto, ricorda e recupera i membri in automatico." }
+    }
+  },
+  "proof": {
+    "label": "La fiducia dei nostri club fondatori",
+    "cta": "Il tuo club qui"
+  },
+  "showcase": {
+    "eyebrow": "In azione",
+    "title": "Uno sguardo reale dentro Linyup",
+    "subtitle": "Niente mockup — schermate reali di una scuola di arti marziali che usa Linyup.",
+    "dashboardAlt": "La dashboard Linyup di una scuola di arti marziali",
+    "shots": {
+      "schedule": { "title": "Tutta la settimana a colpo d'occhio", "detail": "Ogni lezione, sala e coach in un unico calendario a colori." },
+      "contacts": { "title": "Conosci ogni studente", "detail": "Profili, gradi, cronologia e abbonamento in un solo posto." },
+      "gamification": { "title": "Classifica e premia gli studenti", "detail": "Punti, serie e classifiche che li fanno tornare." },
+      "subscriptions": { "title": "Tieni d'occhio gli abbonamenti", "detail": "Vedi chi ha quale piano e non perdere un rinnovo." }
+    }
+  },
   "features": {
     "title": "Tutto ciò di cui hai bisogno per gestire uno studio moderno",
     "subtitle": "Dal coach solo all'organizzazione multi-sede, Linyup si adatta al tuo modo di lavorare.",
+    "moreEyebrow": "E c'è di più",
+    "moreTitle": "Tutto ciò che Linyup fa in più",
+    "moreSubtitle": "Tocca una funzionalità per vedere come funziona.",
     "comingSoon": "Disponibile a breve",
     "cards": {
       "sessions": { "title": "Sessioni", "description": "Pianifica le lezioni e traccia le presenze.", "detail": "Crea il tuo orario settimanale in pochi minuti — lezioni ricorrenti, limiti di posti e presenze in un unico calendario." },

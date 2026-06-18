@@ -1,0 +1,83 @@
+---
+import type { Language } from '~/i18n';
+import { useTranslations } from '~/i18n';
+import dashboard from '../assets/product/dashboard.webp';
+
+interface Props {
+  lang: Language;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<section class="heroshot">
+  <div class="wrap">
+    <figure class="frame">
+      <div class="frame-bar" aria-hidden="true">
+        <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+        <span class="frame-url"><i data-lucide="lock"></i> app.linyup.com/dashboard</span>
+      </div>
+      <img
+        class="frame-img"
+        src={dashboard.src}
+        width={dashboard.width}
+        height={dashboard.height}
+        alt={t('showcase.dashboardAlt')}
+        loading="eager"
+        decoding="async"
+      />
+    </figure>
+  </div>
+</section>
+
+<style>
+  .heroshot { padding: 12px 0 8px; }
+
+  .frame {
+    margin: 0 auto;
+    max-width: 1000px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .frame-bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 38px;
+    padding: 0 14px;
+    background: color-mix(in oklch, var(--sidebar) 60%, var(--card));
+    border-bottom: 1px solid var(--border);
+  }
+  .tdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .tdot.r { background: #ff5f57; }
+  .tdot.y { background: #febc2e; }
+  .tdot.g { background: #28c840; }
+  .frame-url {
+    margin-left: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+    background: var(--background);
+    border: 1px solid var(--border);
+    padding: 3px 12px;
+    border-radius: var(--radius-pill);
+  }
+  .frame-url :global(svg) { width: 12px; height: 12px; }
+
+  .frame-img { display: block; width: 100%; height: auto; }
+
+  @media (max-width: 860px) {
+    .heroshot { padding: 4px 0; }
+    .frame { border-radius: 10px; }
+    .frame-bar { height: 32px; }
+    /* Crop the image's right side slightly so the dashboard reads on small screens */
+    .frame-img { width: 100%; }
+  }
+</style>

@@ -11,9 +11,9 @@
     "cta": "Get early access"
   },
   "hero": {
-    "tagline": "For coaches and studios.",
+    "tagline": "Built for martial arts schools",
     "title": "Run your classes. Know your students. Grow your studio.",
-    "subtitle": "The modern, simple tool with everything coaches and studios need to run smoothly and grow.",
+    "subtitle": "Modern, built by coaches, and your data migrated for you — free.",
     "cta": "Start for free",
     "ctaSecondary": "See features",
     "comingSoon": "Coming soon",
@@ -23,7 +23,9 @@
     "emailSuccess": "You're on the list! We'll be in touch soon.",
     "emailError": "Something went wrong — please try again.",
     "emailModalSub": "Linyup is launching soon — leave your email and we'll let you know the moment it's ready.",
-    "demoEyebrow": "No signup — explore a live demo studio",
+    "demoEyebrow": "Try a live demo — no signup",
+    "demoPrimary": "Step into a live dojo",
+    "demoAlso": "Also built for",
     "demoStudios": {
       "grappling": "Martial arts",
       "crossfit": "CrossFit",
@@ -33,9 +35,43 @@
       "dance": "Dance"
     }
   },
+  "heroFeatures": {
+    "eyebrow": "The essentials",
+    "title": "Built to run your dojo",
+    "subtitle": "The day-to-day essentials every martial arts school needs — and every studio too. Simple by default.",
+    "cards": {
+      "sessions": { "title": "Plan your classes", "benefit": "Recurring sessions, capacity, and attendance in one calendar." },
+      "bookings": { "title": "Take bookings online", "benefit": "Students reserve their spot in a tap." },
+      "memberships": { "title": "Manage memberships", "benefit": "Sell plans and track every renewal automatically." },
+      "payments": { "title": "Collect payments", "benefit": "Dues collect themselves — no more chasing." },
+      "rankings": { "title": "Track belts & ranks", "benefit": "Grade students and keep them chasing the next belt." },
+      "mobileApp": { "title": "Give students an app", "benefit": "A branded iOS and Android app to book and check in." },
+      "checkins": { "title": "Check students in", "benefit": "A quick QR scan at the door — no clipboards." },
+      "automations": { "title": "Automate the busywork", "benefit": "Welcome, remind, and win back members on autopilot." }
+    }
+  },
+  "proof": {
+    "label": "Trusted by our founding clubs",
+    "cta": "Your club here"
+  },
+  "showcase": {
+    "eyebrow": "See it in action",
+    "title": "A real look inside Linyup",
+    "subtitle": "Not mockups — real screens from a martial arts studio running on Linyup.",
+    "dashboardAlt": "The Linyup dashboard for a martial arts studio",
+    "shots": {
+      "schedule": { "title": "See your whole week", "detail": "Every class, room, and coach in one colour-coded calendar." },
+      "contacts": { "title": "Know every student", "detail": "Profiles, ranks, history, and membership status in one place." },
+      "gamification": { "title": "Rank and reward students", "detail": "Points, streaks, and leaderboards that keep them coming back." },
+      "subscriptions": { "title": "Track every membership", "detail": "See who's on what plan and never miss a renewal." }
+    }
+  },
   "features": {
     "title": "Everything you need to run a modern studio",
     "subtitle": "From solo coach to multi-location organisation, Linyup adapts to the way you work.",
+    "moreEyebrow": "And there's more",
+    "moreTitle": "Everything else Linyup does",
+    "moreSubtitle": "Tap any feature to see how it works.",
     "comingSoon": "Coming soon",
     "cards": {
       "sessions": { "title": "Sessions", "description": "Schedule classes and track attendance.", "detail": "Build your weekly timetable in minutes — recurring classes, capacity limits, and attendance, all in one calendar." },

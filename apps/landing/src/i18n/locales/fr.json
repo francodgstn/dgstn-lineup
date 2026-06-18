@@ -11,9 +11,9 @@
     "cta": "Accès anticipé"
   },
   "hero": {
-    "tagline": "Pour coaches et studios.",
+    "tagline": "Conçu pour les écoles d'arts martiaux",
     "title": "Planifiez vos cours. Connaissez vos élèves. Développez votre studio.",
-    "subtitle": "L'outil moderne et simple avec tout ce dont les coaches et studios ont besoin pour fonctionner sans accroc et se développer.",
+    "subtitle": "Moderne, conçu par des coaches — et nous migrons vos données pour vous, gratuitement.",
     "cta": "Commencer gratuitement",
     "ctaSecondary": "Voir les fonctionnalités",
     "comingSoon": "Bientôt disponible",
@@ -23,7 +23,9 @@
     "emailSuccess": "Vous êtes sur la liste ! On vous contacte bientôt.",
     "emailError": "Une erreur s'est produite — réessayez.",
     "emailModalSub": "Linyup arrive bientôt — laissez votre e-mail et nous vous préviendrons dès que c'est prêt.",
-    "demoEyebrow": "Sans inscription — explorez un studio démo en direct",
+    "demoEyebrow": "Essayez une démo live — sans inscription",
+    "demoPrimary": "Entrez dans un dojo en direct",
+    "demoAlso": "Aussi conçu pour",
     "demoStudios": {
       "grappling": "Arts martiaux",
       "crossfit": "CrossFit",
@@ -33,9 +35,43 @@
       "dance": "Danse"
     }
   },
+  "heroFeatures": {
+    "eyebrow": "L'essentiel",
+    "title": "Conçu pour gérer votre dojo",
+    "subtitle": "Les essentiels du quotidien dont chaque école d'arts martiaux a besoin — et chaque studio aussi. Simple par défaut.",
+    "cards": {
+      "sessions": { "title": "Planifiez vos cours", "benefit": "Cours récurrents, places et présences dans un seul calendrier." },
+      "bookings": { "title": "Prenez des réservations en ligne", "benefit": "Vos élèves réservent leur place en un geste." },
+      "memberships": { "title": "Gérez les abonnements", "benefit": "Vendez des formules et suivez chaque renouvellement automatiquement." },
+      "payments": { "title": "Encaissez les paiements", "benefit": "Les cotisations se collectent seules — fini les relances." },
+      "rankings": { "title": "Suivez ceintures & grades", "benefit": "Évaluez vos élèves et gardez-les motivés vers la ceinture suivante." },
+      "mobileApp": { "title": "Offrez une app à vos élèves", "benefit": "Une app iOS et Android à votre marque pour réserver et s'enregistrer." },
+      "checkins": { "title": "Enregistrez vos élèves", "benefit": "Un scan QR rapide à l'entrée — sans paperasse." },
+      "automations": { "title": "Automatisez le travail répétitif", "benefit": "Accueillez, relancez et reconquérez vos membres automatiquement." }
+    }
+  },
+  "proof": {
+    "label": "La confiance de nos clubs fondateurs",
+    "cta": "Votre club ici"
+  },
+  "showcase": {
+    "eyebrow": "En action",
+    "title": "Un vrai aperçu de Linyup",
+    "subtitle": "Pas des maquettes — de vrais écrans d'une école d'arts martiaux qui tourne sur Linyup.",
+    "dashboardAlt": "Le tableau de bord Linyup d'une école d'arts martiaux",
+    "shots": {
+      "schedule": { "title": "Toute votre semaine en un coup d'œil", "detail": "Chaque cours, salle et coach dans un seul calendrier en couleurs." },
+      "contacts": { "title": "Connaissez chaque élève", "detail": "Profils, grades, historique et abonnement au même endroit." },
+      "gamification": { "title": "Classez et récompensez vos élèves", "detail": "Points, séries et classements qui les font revenir." },
+      "subscriptions": { "title": "Gardez l'œil sur les abonnements", "detail": "Voyez qui a quelle formule et ne ratez aucun renouvellement." }
+    }
+  },
   "features": {
     "title": "Tout ce qu'il vous faut pour gérer un studio moderne",
     "subtitle": "Du coach solo à l'organisation multi-sites, Linyup s'adapte à votre façon de travailler.",
+    "moreEyebrow": "Et ce n'est pas tout",
+    "moreTitle": "Tout ce que Linyup fait aussi",
+    "moreSubtitle": "Touchez une fonctionnalité pour voir comment elle marche.",
     "comingSoon": "Bientôt disponible",
     "cards": {
       "sessions": { "title": "Sessions", "description": "Planifiez les cours et suivez les présences.", "detail": "Construisez votre planning hebdomadaire en quelques minutes — cours récurrents, limites de places et présences dans un seul calendrier." },

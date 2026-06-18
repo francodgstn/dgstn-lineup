@@ -11,9 +11,9 @@
     "cta": "Frühen Zugang sichern"
   },
   "hero": {
-    "tagline": "Für Trainer und Studios.",
+    "tagline": "Für Kampfsportschulen gemacht",
     "title": "Lektionen planen. Schüler kennen. Studio wachsen lassen.",
-    "subtitle": "Das moderne, einfache Tool mit allem, was Trainer und Studios brauchen, um reibungslos zu arbeiten und zu wachsen.",
+    "subtitle": "Modern, von Coaches entwickelt — und wir migrieren deine Daten für dich, kostenlos.",
     "cta": "Kostenlos starten",
     "ctaSecondary": "Funktionen ansehen",
     "comingSoon": "Bald verfügbar",
@@ -23,7 +23,9 @@
     "emailSuccess": "Du bist auf der Liste! Wir melden uns bald.",
     "emailError": "Etwas ist schiefgelaufen — bitte versuche es erneut.",
     "emailModalSub": "Linyup startet bald — hinterlasse deine E-Mail und wir melden uns, sobald es so weit ist.",
-    "demoEyebrow": "Ohne Anmeldung — erkunde ein Live-Demo-Studio",
+    "demoEyebrow": "Live-Demo testen — ohne Anmeldung",
+    "demoPrimary": "Tritt in ein Live-Dojo ein",
+    "demoAlso": "Auch gemacht für",
     "demoStudios": {
       "grappling": "Kampfsport",
       "crossfit": "CrossFit",
@@ -33,9 +35,43 @@
       "dance": "Tanz"
     }
   },
+  "heroFeatures": {
+    "eyebrow": "Das Wesentliche",
+    "title": "Gemacht, um dein Dojo zu führen",
+    "subtitle": "Die täglichen Essentials, die jede Kampfsportschule braucht — und jedes Studio. Einfach von Haus aus.",
+    "cards": {
+      "sessions": { "title": "Plane deine Klassen", "benefit": "Wiederkehrende Lektionen, Plätze und Anwesenheit in einem Kalender." },
+      "bookings": { "title": "Buchungen online annehmen", "benefit": "Schüler reservieren ihren Platz mit einem Tippen." },
+      "memberships": { "title": "Mitgliedschaften verwalten", "benefit": "Verkaufe Pläne und verfolge jede Verlängerung automatisch." },
+      "payments": { "title": "Zahlungen einziehen", "benefit": "Beiträge ziehen sich selbst ein — kein Nachhaken mehr." },
+      "rankings": { "title": "Gürtel & Ränge verfolgen", "benefit": "Prüfe Schüler und halte sie auf dem Weg zum nächsten Gürtel." },
+      "mobileApp": { "title": "Schülern eine App geben", "benefit": "Eine gebrandete iOS- und Android-App zum Buchen und Einchecken." },
+      "checkins": { "title": "Schüler einchecken", "benefit": "Ein schneller QR-Scan an der Tür — keine Klemmbretter." },
+      "automations": { "title": "Routinearbeit automatisieren", "benefit": "Begrüsse, erinnere und gewinne Mitglieder zurück — automatisch." }
+    }
+  },
+  "proof": {
+    "label": "Vertraut von unseren Gründungsclubs",
+    "cta": "Dein Club hier"
+  },
+  "showcase": {
+    "eyebrow": "In Aktion",
+    "title": "Ein echter Blick in Linyup",
+    "subtitle": "Keine Mockups — echte Screens einer Kampfsportschule, die mit Linyup läuft.",
+    "dashboardAlt": "Das Linyup-Dashboard einer Kampfsportschule",
+    "shots": {
+      "schedule": { "title": "Die ganze Woche im Blick", "detail": "Jede Klasse, jeder Raum und jeder Coach in einem farbcodierten Kalender." },
+      "contacts": { "title": "Kenne jeden Schüler", "detail": "Profile, Ränge, Verlauf und Mitgliedsstatus an einem Ort." },
+      "gamification": { "title": "Schüler einstufen & belohnen", "detail": "Punkte, Streaks und Ranglisten, die zum Wiederkommen motivieren." },
+      "subscriptions": { "title": "Jede Mitgliedschaft im Griff", "detail": "Sieh, wer welchen Plan hat, und verpasse keine Verlängerung." }
+    }
+  },
   "features": {
     "title": "Alles, was du für ein modernes Studio brauchst",
     "subtitle": "Von der Einzelperson bis zur Mehrstandort-Organisation — Linyup passt sich deiner Arbeitsweise an.",
+    "moreEyebrow": "Und es gibt mehr",
+    "moreTitle": "Alles andere, was Linyup kann",
+    "moreSubtitle": "Tippe auf eine Funktion, um zu sehen, wie sie funktioniert.",
     "comingSoon": "Bald verfügbar",
     "cards": {
       "sessions": { "title": "Lektionen", "description": "Klassen planen und Anwesenheit verfolgen.", "detail": "Erstelle deinen Wochenplan in Minuten — wiederkehrende Klassen, Platzlimits und Anwesenheit in einem Kalender." },

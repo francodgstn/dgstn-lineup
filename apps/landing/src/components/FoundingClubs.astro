@@ -1,0 +1,103 @@
+---
+import type { Language } from '~/i18n';
+import { useTranslations } from '~/i18n';
+
+interface Props {
+  lang: Language;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+// Slim social-proof band, near the top. Placeholder plates (dashed + skeleton
+// bar, icon only) read clearly as "logo goes here" rather than a fake logo —
+// swap for real founding-club logos once partners sign. The last plate is a soft
+// CTA that opens the early-access modal ([data-early-access]).
+const slots = ['swords', 'shield', 'medal', 'flame'] as const;
+---
+
+<section class="proof">
+  <div class="wrap">
+    <p class="proof-label"><i data-lucide="users-round"></i> {t('proof.label')}</p>
+    <div class="proof-logos">
+      {
+        slots.map((icon) => (
+          <div class="proof-slot" aria-hidden="true">
+            <span class="proof-slot-icon"><i data-lucide={icon} /></span>
+            <span class="proof-slot-bar" />
+          </div>
+        ))
+      }
+      <button class="proof-slot proof-slot-cta" type="button" data-early-access>
+        <i data-lucide="plus"></i> {t('proof.cta')}
+      </button>
+    </div>
+  </div>
+</section>
+
+<style>
+  .proof { padding: 26px 0 6px; }
+  .proof .wrap { text-align: center; }
+
+  .proof-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted-foreground);
+    margin: 0 0 18px;
+  }
+  .proof-label :global(svg) { width: 15px; height: 15px; }
+
+  .proof-logos {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* Placeholder logo plate — obviously a slot to fill, not a fake brand */
+  .proof-slot {
+    display: inline-flex;
+    align-items: center;
+    gap: 11px;
+    height: 46px;
+    padding: 0 20px;
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--border);
+    background: color-mix(in oklch, var(--card) 55%, transparent);
+  }
+  .proof-slot-icon { display: inline-flex; color: var(--muted-foreground); opacity: 0.7; }
+  .proof-slot-icon :global(svg) { width: 20px; height: 20px; }
+  .proof-slot-bar {
+    width: 62px;
+    height: 9px;
+    border-radius: var(--radius-pill);
+    background: var(--border);
+  }
+
+  /* Final plate doubles as a soft "become a founding club" CTA */
+  .proof-slot-cta {
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary);
+    border-style: solid;
+    border-color: var(--purple-200);
+    background: var(--purple-50);
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+  .proof-slot-cta :global(svg) { width: 15px; height: 15px; }
+  .proof-slot-cta:hover { background: var(--purple-100); transform: translateY(-2px); }
+
+  @media (max-width: 860px) {
+    .proof { padding: 18px 0 4px; }
+    /* Keep the band slim on mobile — show the first three plates + the CTA */
+    .proof-slot:nth-of-type(n + 4):not(.proof-slot-cta) { display: none; }
+  }
+</style>

@@ -49,15 +49,14 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
 ];
 ---
 
-<section id="features">
-  {/* Section heading hidden for now — restore with features.title / features.subtitle:
+<section id="more-features">
   <div class="wrap">
     <div class="sec-head">
-      <h2>{t('features.title')}</h2>
-      <p>{t('features.subtitle')}</p>
+      <span class="eyebrow"><i data-lucide="layers"></i> {t('features.moreEyebrow')}</span>
+      <h2>{t('features.moreTitle')}</h2>
+      <p>{t('features.moreSubtitle')}</p>
     </div>
   </div>
-  */}
 
   <div class="marquee">
     {
@@ -140,7 +139,10 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
 </script>
 
 <style>
-  section { padding: 24px 0 80px; overflow: hidden; }
+  section { padding: 72px 0 80px; overflow: hidden; }
+
+  /* Eyebrow above the shared section heading */
+  .sec-head .eyebrow { margin-bottom: 16px; }
 
   /* ── Marquee ─────────────────────────────────────────────────────────── */
   .marquee {
@@ -307,7 +309,7 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
 
   /* ── Mobile ──────────────────────────────────────────────────────────── */
   @media (max-width: 860px) {
-    section { padding: 16px 0 56px; }
+    section { padding: 48px 0 56px; }
     .marquee { gap: 14px; }
     .marquee-track { gap: 14px; }
     .fcard { width: 240px; padding: 14px 16px; }

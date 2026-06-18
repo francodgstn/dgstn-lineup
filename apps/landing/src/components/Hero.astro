@@ -14,11 +14,12 @@ const DEMO_URL = import.meta.env.PUBLIC_DEMO_URL ?? 'https://demo.linyup.com';
 const FIREBASE_PROJECT_ID = import.meta.env.PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-linyup';
 const FIREBASE_API_KEY = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
 
-// Live demo playground (sandbox). Each chip links straight to /preview?team=,
+// Live demo playground (sandbox). Each link goes straight to /preview?team=,
 // which auto-signs into that demo studio. Keep keys in sync with the pre-launch
 // page and DEMO_ACCOUNTS in apps/web/src/lib/demo.ts.
-const DEMO_STUDIOS = [
-  { key: 'grappling', accent: '#dc2626' },
+// Martial arts is the default vertical; the rest are framed as "also built for".
+const DEMO_PRIMARY = { key: 'grappling', accent: '#dc2626' } as const;
+const DEMO_ALSO = [
   { key: 'crossfit', accent: '#0f172a' },
   { key: 'tennis', accent: '#16a34a' },
   { key: 'yoga', accent: '#9333ea' },
@@ -62,25 +63,43 @@ const DEMO_STUDIOS = [
     </form>
     <p class="form-status" id="form-status" aria-live="polite"></p>
 
-    <!-- Live demo shortcut — jump into a demo studio by type, no signup -->
+    <!-- Live demo shortcut — martial arts is the default; the rest are "also built for" -->
     <div class="demo-cta">
       <p class="demo-eyebrow"><i data-lucide="play-circle"></i> {t('hero.demoEyebrow')}</p>
-      <div class="demo-chips">
-        {
-          DEMO_STUDIOS.map((studio) => (
-            <a
-              class="demo-chip"
-              href={`${DEMO_URL}/preview?team=${studio.key}`}
-              target="_blank"
-              rel="noopener"
-              style={`--chip-accent: ${studio.accent}`}
-            >
-              <span class="demo-chip-dot"></span>
-              {t(`hero.demoStudios.${studio.key}`)}
-              <i data-lucide="arrow-right"></i>
-            </a>
-          ))
-        }
+
+      <a
+        class="demo-primary"
+        href={`${DEMO_URL}/preview?team=${DEMO_PRIMARY.key}`}
+        target="_blank"
+        rel="noopener"
+        style={`--chip-accent: ${DEMO_PRIMARY.accent}`}
+      >
+        <span class="demo-primary-icon"><i data-lucide="swords"></i></span>
+        <span class="demo-primary-text">
+          <strong>{t(`hero.demoStudios.${DEMO_PRIMARY.key}`)}</strong>
+          <span>{t('hero.demoPrimary')}</span>
+        </span>
+        <i data-lucide="arrow-right"></i>
+      </a>
+
+      <div class="demo-also">
+        <span class="demo-also-label">{t('hero.demoAlso')}</span>
+        <div class="demo-chips">
+          {
+            DEMO_ALSO.map((studio) => (
+              <a
+                class="demo-chip"
+                href={`${DEMO_URL}/preview?team=${studio.key}`}
+                target="_blank"
+                rel="noopener"
+                style={`--chip-accent: ${studio.accent}`}
+              >
+                <span class="demo-chip-dot"></span>
+                {t(`hero.demoStudios.${studio.key}`)}
+              </a>
+            ))
+          }
+        </div>
       </div>
     </div>
   </div>
@@ -255,6 +274,53 @@ const DEMO_STUDIOS = [
     margin: 0 0 16px;
   }
   .demo-eyebrow :global(svg) { width: 15px; height: 15px; color: var(--primary); }
+
+  /* Default vertical — martial arts, presented as the selected demo */
+  .demo-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 13px;
+    text-align: left;
+    padding: 11px 16px 11px 11px;
+    background: var(--card);
+    border: 1.5px solid color-mix(in oklch, var(--primary) 50%, transparent);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--ring-card), var(--shadow-md);
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  }
+  .demo-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--ring-card), var(--shadow-lg);
+    border-color: var(--primary);
+  }
+  .demo-primary-icon {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 11px;
+    background: var(--chip-accent, var(--primary));
+    color: #fff;
+  }
+  .demo-primary-icon :global(svg) { width: 21px; height: 21px; }
+  .demo-primary-text { display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
+  .demo-primary-text strong { font-size: 15px; font-weight: 700; color: var(--foreground); }
+  .demo-primary-text span { font-size: 12.5px; color: var(--muted-foreground); }
+  .demo-primary > :global(svg) { width: 18px; height: 18px; color: var(--primary); margin-left: 4px; transition: transform 0.16s ease; }
+  .demo-primary:hover > :global(svg) { transform: translateX(3px); }
+
+  /* Also built for — the other verticals, secondary */
+  .demo-also { margin-top: 22px; }
+  .demo-also-label {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted-foreground);
+    margin: 0 0 12px;
+  }
 
   .demo-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
   .demo-chip {

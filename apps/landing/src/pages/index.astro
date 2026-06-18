@@ -2,6 +2,10 @@
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Nav from '~/components/Nav.astro';
 import Hero from '~/components/Hero.astro';
+import HeroShot from '~/components/HeroShot.astro';
+import FoundingClubs from '~/components/FoundingClubs.astro';
+import HeroFeatures from '~/components/HeroFeatures.astro';
+import ProductShowcase from '~/components/ProductShowcase.astro';
 import Migration from '~/components/Migration.astro';
 import Features from '~/components/Features.astro';
 import Pricing from '~/components/Pricing.astro';
@@ -24,9 +28,13 @@ const t = useTranslations(lang);
   <Nav lang={lang} />
   <main>
     <Hero lang={lang} />
-    <Features lang={lang} />
+    <HeroShot lang={lang} />
+    <FoundingClubs lang={lang} />
+    <HeroFeatures lang={lang} />
+    <ProductShowcase lang={lang} />
     <Pricing lang={lang} />
     <Migration lang={lang} />
+    <Features lang={lang} />
     <CTA lang={lang} />
   </main>
   <Footer lang={lang} />
