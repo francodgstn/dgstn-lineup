@@ -561,9 +561,9 @@ service cloud.firestore {
         }
       }
 
-      // Training check-ins subcollection
+      // Performance check-ins subcollection
       // Coaches have full CRUD. Students can create and update their own check-ins (filled_by must be 'student').
-      match /training_checkins/{checkinId} {
+      match /performance_checkins/{checkinId} {
         allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
                       || isSelfContact(contactId);

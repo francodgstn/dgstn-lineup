@@ -4,7 +4,7 @@ export type GoalType = 'goal' | 'task'
 export type GoalStatus = 'open' | 'in_progress' | 'achieved' | 'abandoned'
 export type GoalCreatedBy = 'coach' | 'student'
 
-export interface TrainingIndicator {
+export interface PerformanceIndicator {
   key: string
   label: string
 }

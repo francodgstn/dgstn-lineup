@@ -15,7 +15,7 @@ import {
 } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FirestoreService } from '../../services/firestore';
-import { Goal, GoalEvaluation, GoalStatus, TrainingIndicator } from '../../types';
+import { Goal, GoalEvaluation, GoalStatus, PerformanceIndicator } from '../../types';
 import { Timestamp } from 'firebase/firestore';
 
 interface Props {
@@ -41,7 +41,7 @@ const STATUS_COLORS: Record<GoalStatus, string> = {
 
 const ALL_STATUSES: GoalStatus[] = ['open', 'in_progress', 'achieved', 'abandoned'];
 
-const DEFAULT_CATEGORIES: TrainingIndicator[] = [
+const DEFAULT_CATEGORIES: PerformanceIndicator[] = [
   { key: 'technique', label: 'Technique' },
   { key: 'attitude', label: 'Attitude' },
   { key: 'attendance', label: 'Attendance' },
@@ -251,7 +251,7 @@ const AddEvalModal: React.FC<EvalModalProps> = ({
 
 interface AddGoalModalProps {
   visible: boolean;
-  categoryOptions: TrainingIndicator[];
+  categoryOptions: PerformanceIndicator[];
   initialTitle?: string;
   initialDescription?: string | null;
   initialCategories?: string[];
@@ -425,7 +425,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
 interface GoalCardProps {
   goal: Goal;
   contactId: string;
-  categoryOptions: TrainingIndicator[];
+  categoryOptions: PerformanceIndicator[];
   onEvaluationAdded: () => void;
   onEditGoal?: () => void;
   onDeleteGoal?: () => void;
@@ -661,7 +661,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, contactId, categoryOptions, o
 export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
   const theme = useTheme();
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [categoryOptions, setCategoryOptions] = useState<TrainingIndicator[]>(DEFAULT_CATEGORIES);
+  const [categoryOptions, setCategoryOptions] = useState<PerformanceIndicator[]>(DEFAULT_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);

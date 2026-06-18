@@ -1602,7 +1602,7 @@
       "density": "SPARSE_ALL"
     },
     {
-      "collectionGroup": "training_checkins",
+      "collectionGroup": "performance_checkins",
       "queryScope": "COLLECTION",
       "fields": [
         {

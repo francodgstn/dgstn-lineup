@@ -9,10 +9,10 @@ export interface ProfileResult {
 const AXIS_KEYS = ['consistency', 'effort', 'focus', 'recharge', 'sense_of_progress'] as const;
 
 /**
- * Detects the training profile from a set of axis scores (1–5).
+ * Detects the performance profile from a set of axis scores (1–5).
  * Rules are checked top-to-bottom; first match wins.
  */
-export function detectTrainingProfile(scores: Record<string, number>): ProfileResult {
+export function detectPerformanceProfile(scores: Record<string, number>): ProfileResult {
   const C = scores['consistency'] ?? 3;
   const E = scores['effort'] ?? 3;
   const F = scores['focus'] ?? 3;

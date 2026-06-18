@@ -52,7 +52,7 @@ import {
   ALERT_PRESETS_SUBCOLLECTION,
   TEAM_ACTIVITY_LOG_SUBCOLLECTION,
   CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
-  CONTACT_TRAINING_CHECKINS_SUBCOLLECTION,
+  CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION,
 } from '@linyup/shared'
 import type {
   Contact,
@@ -368,9 +368,9 @@ function useContactWeeklyReports(contactId: string, weeks = 16) {
   })
 }
 
-// ─── training check-ins ───────────────────────────────────────────────────────
+// ─── performance check-ins ───────────────────────────────────────────────────
 
-interface TrainingCheckin {
+interface PerformanceCheckin {
   id: string
   scores: Record<string, number>
   notes?: string
@@ -380,7 +380,7 @@ interface TrainingCheckin {
   profile_key?: string
 }
 
-const DEFAULT_TRAINING_INDICATORS = [
+const DEFAULT_PERFORMANCE_INDICATORS = [
   { key: 'consistency' },
   { key: 'effort' },
   { key: 'focus' },
@@ -388,7 +388,7 @@ const DEFAULT_TRAINING_INDICATORS = [
   { key: 'sense_of_progress' },
 ]
 
-function detectTrainingProfile(scores: Record<string, number>) {
+function detectPerformanceProfile(scores: Record<string, number>) {
   const C = scores['consistency'] ?? 3
   const E = scores['effort'] ?? 3
   const F = scores['focus'] ?? 3
@@ -407,18 +407,18 @@ function detectTrainingProfile(scores: Record<string, number>) {
   return { profile_key, primary_lever: sorted[0][0], anchor: sorted[sorted.length - 1][0] }
 }
 
-function useContactTrainingCheckins(contactId: string) {
-  return useQuery<TrainingCheckin[]>({
-    queryKey: ['contact-training-checkins', contactId],
+function useContactPerformanceCheckins(contactId: string) {
+  return useQuery<PerformanceCheckin[]>({
+    queryKey: ['contact-performance-checkins', contactId],
     queryFn: async () => {
       const snap = await getDocs(
         query(
-          collection(db, CONTACTS_COLLECTION, contactId, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION),
+          collection(db, CONTACTS_COLLECTION, contactId, CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION),
           orderBy('taken_at', 'desc'),
           limit(20)
         )
       )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TrainingCheckin)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as PerformanceCheckin)
     },
   })
 }
@@ -605,9 +605,9 @@ function AddCheckinDialog({
   const save = async () => {
     setSaving(true)
     try {
-      const profile = detectTrainingProfile(scores)
+      const profile = detectPerformanceProfile(scores)
       await addDoc(
-        collection(db, CONTACTS_COLLECTION, contactId, CONTACT_TRAINING_CHECKINS_SUBCOLLECTION),
+        collection(db, CONTACTS_COLLECTION, contactId, CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION),
         {
           scores,
           notes: notes.trim() || null,
@@ -629,14 +629,14 @@ function AddCheckinDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>{t('trainingCheckinTitle')}</DialogTitle>
+          <DialogTitle>{t('performanceCheckinTitle')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          {DEFAULT_TRAINING_INDICATORS.map((ind) => (
+          {DEFAULT_PERFORMANCE_INDICATORS.map((ind) => (
             <div key={ind.key} className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">
-                  {t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0])}
+                  {t(`performanceIndicator_${ind.key}` as Parameters<typeof t>[0])}
                 </label>
                 <span className="text-sm font-bold tabular-nums">{scores[ind.key] ?? 3}/5</span>
               </div>
@@ -659,7 +659,7 @@ function AddCheckinDialog({
             </div>
           ))}
           <div className="space-y-1">
-            <label className="text-sm font-medium">{t('trainingCheckinNotes')}</label>
+            <label className="text-sm font-medium">{t('performanceCheckinNotes')}</label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
           </div>
         </div>
@@ -683,7 +683,7 @@ function AddCheckinDialog({
   )
 }
 
-// ─── stats tab (full-width attendance + training) ────────────────────────────
+// ─── stats tab (full-width attendance + performance) ─────────────────────────
 
 function isoWeekLabel(isoWeek: string) {
   const [year, week] = isoWeek.split('-W').map(Number)
@@ -712,7 +712,7 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
     contact.id,
     selectedPeriod.weeks
   )
-  const { data: checkins = [], isLoading: checkinsLoading } = useContactTrainingCheckins(contact.id)
+  const { data: checkins = [], isLoading: checkinsLoading } = useContactPerformanceCheckins(contact.id)
   const { hasFeature } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
   const qc = useQueryClient()
@@ -726,20 +726,20 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
   const latestStudent = checkins.find((c) => c.filled_by === 'student') ?? null
   const hasBoth = !!latestCoach && !!latestStudent
 
-  const radarData = DEFAULT_TRAINING_INDICATORS.map((ind) =>
+  const radarData = DEFAULT_PERFORMANCE_INDICATORS.map((ind) =>
     hasBoth
       ? {
-          subject: t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0]),
+          subject: t(`performanceIndicator_${ind.key}` as Parameters<typeof t>[0]),
           coach: latestCoach?.scores?.[ind.key] ?? 0,
           student: latestStudent?.scores?.[ind.key] ?? 0,
         }
       : {
-          subject: t(`trainingIndicator_${ind.key}` as Parameters<typeof t>[0]),
+          subject: t(`performanceIndicator_${ind.key}` as Parameters<typeof t>[0]),
           value: (latestCoach || latestStudent)?.scores?.[ind.key] ?? 0,
         }
   )
 
-  const trainingUnlocked = hasFeature('advanced_dashboard')
+  const performanceUnlocked = hasFeature('advanced_dashboard')
 
   // Tooltip style — inline style prop resolves CSS vars; SVG attrs do not
   const tooltipStyle = {
@@ -815,33 +815,33 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
           )}
         </div>
 
-        {/* ── Training profile ── */}
+        {/* ── Performance profile ── */}
         <div className="rounded-xl border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('statsPanelTraining')}
+              {t('statsPanelPerformance')}
             </p>
-            {trainingUnlocked && checkins.length > 0 && (
+            {performanceUnlocked && checkins.length > 0 && (
               <button
                 type="button"
                 onClick={() => setAddCheckinOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" />
-                {t('addTrainingCheckin')}
+                {t('addPerformanceCheckin')}
               </button>
             )}
           </div>
 
-          {!trainingUnlocked ? (
+          {!performanceUnlocked ? (
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
                 <Lock className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-sm font-medium">{t('trainingProfileLockedTitle')}</p>
+                <p className="text-sm font-medium">{t('performanceProfileLockedTitle')}</p>
                 <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-                  {t('trainingProfileLockedDesc')}
+                  {t('performanceProfileLockedDesc')}
                 </p>
               </div>
               <button
@@ -856,14 +856,14 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
             <div className="h-[260px] rounded-lg bg-muted animate-pulse" />
           ) : checkins.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center rounded-lg border border-dashed">
-              <p className="text-sm text-muted-foreground max-w-xs">{t('noTrainingCheckins')}</p>
+              <p className="text-sm text-muted-foreground max-w-xs">{t('noPerformanceCheckins')}</p>
               <button
                 type="button"
                 onClick={() => setAddCheckinOpen(true)}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
               >
                 <Plus className="h-4 w-4" />
-                {t('addTrainingCheckin')}
+                {t('addPerformanceCheckin')}
               </button>
             </div>
           ) : (
@@ -914,7 +914,7 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
         onOpenChange={setAddCheckinOpen}
         contactId={contact.id}
         onSaved={() =>
-          qc.invalidateQueries({ queryKey: ['contact-training-checkins', contact.id] })
+          qc.invalidateQueries({ queryKey: ['contact-performance-checkins', contact.id] })
         }
       />
     </div>

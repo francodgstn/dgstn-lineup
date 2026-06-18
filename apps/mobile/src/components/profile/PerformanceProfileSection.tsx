@@ -15,8 +15,8 @@ import {
 } from 'react-native-paper';
 import Svg, { Circle, Line, Polygon, Polyline, Text as SvgText } from 'react-native-svg';
 import { FirestoreService } from '../../services/firestore';
-import { TrainingIndicator, TrainingCheckin, ProfileKey } from '../../types';
-import { detectTrainingProfile } from '../../utils/trainingProfile';
+import { PerformanceIndicator, PerformanceCheckin, ProfileKey } from '../../types';
+import { detectPerformanceProfile } from '../../utils/performanceProfile';
 import { Timestamp } from 'firebase/firestore';
 
 interface Props {
@@ -27,12 +27,12 @@ interface Props {
 // ─── Axis question copy ───────────────────────────────────────────────────────
 
 const AXIS_QUESTIONS: Record<string, string> = {
-  consistency: 'How consistently did I show up to training, relative to what I intended?',
+  consistency: 'How consistently did I show up to my sessions, relative to what I intended?',
   effort: 'How much of my capacity did I genuinely invest during sessions?',
-  focus: 'How mentally present and attentive was I during training?',
+  focus: 'How mentally present and attentive was I during sessions?',
   recharge: 'How well did I recharge between sessions — sleep, rest, and taking care of my body?',
   sense_of_progress:
-    'When I look back at this period, does my training feel like it moved me forward in a way that mattered to me?',
+    'When I look back at this period, does my practice feel like it moved me forward in a way that mattered to me?',
 };
 
 const AXIS_LABELS: Record<string, string> = {
@@ -96,7 +96,7 @@ const PROFILE_DISPLAY: Record<ProfileKey, ProfileDisplay> = {
 // ─── Radar Chart ──────────────────────────────────────────────────────────────
 
 interface RadarChartProps {
-  indicators: TrainingIndicator[];
+  indicators: PerformanceIndicator[];
   studentScores: Record<string, number>;
   coachScores?: Record<string, number>;
   size?: number;
@@ -215,7 +215,7 @@ const RadarChartSVG: React.FC<RadarChartProps> = ({
 // ─── Score input row ──────────────────────────────────────────────────────────
 
 const ScoreRow: React.FC<{
-  indicator: TrainingIndicator;
+  indicator: PerformanceIndicator;
   value: number;
   onChange: (v: number) => void;
 }> = ({ indicator, value, onChange }) => {
@@ -260,8 +260,8 @@ const ScoreRow: React.FC<{
 // ─── Check-in history row ─────────────────────────────────────────────────────
 
 const CheckinHistoryRow: React.FC<{
-  checkin: TrainingCheckin;
-  indicators: TrainingIndicator[];
+  checkin: PerformanceCheckin;
+  indicators: PerformanceIndicator[];
 }> = ({ checkin, indicators }) => {
   const theme = useTheme();
   const date = checkin.taken_at?.toDate
@@ -326,22 +326,22 @@ const CheckinHistoryRow: React.FC<{
   );
 };
 
-// ─── Training Check-in Modal ──────────────────────────────────────────────────
+// ─── Performance Check-in Modal ───────────────────────────────────────────────
 
-type TrainingContextValue = 'self' | '1to1';
+type PerformanceContextValue = 'self' | '1to1';
 
 interface CheckinModalProps {
   visible: boolean;
-  indicators: TrainingIndicator[];
+  indicators: PerformanceIndicator[];
   onDismiss: () => void;
-  onSubmit: (scores: Record<string, number>, notes: string, context: TrainingContextValue) => Promise<void>;
+  onSubmit: (scores: Record<string, number>, notes: string, context: PerformanceContextValue) => Promise<void>;
 }
 
-const TrainingCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicators, onDismiss, onSubmit }) => {
+const PerformanceCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicators, onDismiss, onSubmit }) => {
   const theme = useTheme();
   const [scores, setScores] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState('');
-  const [context, setContext] = useState<TrainingContextValue>('self');
+  const [context, setContext] = useState<PerformanceContextValue>('self');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -378,7 +378,7 @@ const TrainingCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicators
       >
         <ScrollView showsVerticalScrollIndicator={false}>
           <Text variant="titleMedium" style={{ fontWeight: '700', marginBottom: 16 }}>
-            Rate my training
+            Rate my performance
           </Text>
 
           {indicators.map(ind => (
@@ -430,7 +430,7 @@ const TrainingCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicators
 
 const CHART_COLORS = ['#3B82F6', '#F97316', '#8B5CF6', '#22C55E', '#EAB308', '#EF4444', '#06B6D4'];
 
-const TrendChart: React.FC<{ checkins: TrainingCheckin[]; indicators: TrainingIndicator[] }> = ({
+const TrendChart: React.FC<{ checkins: PerformanceCheckin[]; indicators: PerformanceIndicator[] }> = ({
   checkins,
   indicators,
 }) => {
@@ -528,15 +528,15 @@ const TrendChart: React.FC<{ checkins: TrainingCheckin[]; indicators: TrainingIn
   );
 };
 
-// ─── TrainingProfileSection ───────────────────────────────────────────────────
+// ─── PerformanceProfileSection ───────────────────────────────────────────────────
 
-export const TrainingProfileSection: React.FC<Props> = ({ contactId, teamId }) => {
+export const PerformanceProfileSection: React.FC<Props> = ({ contactId, teamId }) => {
   const theme = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   // Fill card width: screenWidth minus 20px outer scroll padding each side, then bleed through the 16px card padding
   const chartSize = screenWidth - 40;
-  const [checkins, setCheckins] = useState<TrainingCheckin[]>([]);
-  const [indicators, setIndicators] = useState<TrainingIndicator[]>([]);
+  const [checkins, setCheckins] = useState<PerformanceCheckin[]>([]);
+  const [indicators, setIndicators] = useState<PerformanceIndicator[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'history'>('profile');
@@ -545,8 +545,8 @@ export const TrainingProfileSection: React.FC<Props> = ({ contactId, teamId }) =
     setLoading(true);
     try {
       const [data, inds] = await Promise.all([
-        FirestoreService.getTrainingCheckins(contactId, 10),
-        teamId ? FirestoreService.getTeamTrainingIndicators(teamId) : Promise.resolve([]),
+        FirestoreService.getPerformanceCheckins(contactId, 10),
+        teamId ? FirestoreService.getTeamPerformanceIndicators(teamId) : Promise.resolve([]),
       ]);
       setCheckins(data);
       setIndicators(inds);
@@ -559,8 +559,8 @@ export const TrainingProfileSection: React.FC<Props> = ({ contactId, teamId }) =
     loadData();
   }, [loadData]);
 
-  const handleSubmit = async (scores: Record<string, number>, notes: string, context: TrainingContextValue) => {
-    await FirestoreService.addTrainingCheckin(contactId, {
+  const handleSubmit = async (scores: Record<string, number>, notes: string, context: PerformanceContextValue) => {
+    await FirestoreService.addPerformanceCheckin(contactId, {
       taken_at: Timestamp.now(),
       filled_by: 'student',
       scores,
@@ -605,7 +605,7 @@ export const TrainingProfileSection: React.FC<Props> = ({ contactId, teamId }) =
       {/* Section heading with tab switcher */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingHorizontal: 4 }}>
         <Text variant="titleLarge" style={{ fontWeight: '800', color: theme.colors.onSurface }}>
-          Training Profile
+          Performance Profile
         </Text>
         <View style={{ flexDirection: 'row', backgroundColor: theme.colors.surfaceVariant, borderRadius: 12, padding: 4 }}>
           <TouchableOpacity onPress={() => setActiveTab('profile')} style={tabStyle(activeTab === 'profile')}>
@@ -640,7 +640,7 @@ export const TrainingProfileSection: React.FC<Props> = ({ contactId, teamId }) =
               ) : (
                 <View style={{ alignItems: 'center', paddingVertical: 28, gap: 6 }}>
                   <Text variant="titleMedium" style={{ color: theme.colors.onSurface, fontWeight: '700', textAlign: 'center' }}>
-                    How is your training going?
+                    How is your performance going?
                   </Text>
                   <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
                     Rate yourself across five dimensions and start building your profile.
@@ -681,7 +681,7 @@ export const TrainingProfileSection: React.FC<Props> = ({ contactId, teamId }) =
         </View>
       </Surface>
 
-      <TrainingCheckinModal
+      <PerformanceCheckinModal
         visible={showModal}
         indicators={indicators}
         onDismiss={() => setShowModal(false)}

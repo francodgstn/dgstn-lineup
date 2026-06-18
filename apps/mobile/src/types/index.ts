@@ -202,7 +202,7 @@ export interface ContactAlert {
 
 export type GoalStatus = 'open' | 'in_progress' | 'achieved' | 'abandoned';
 export type GoalCreatedBy = 'coach' | 'student';
-export type TrainingContext = 'self' | '1to1';
+export type PerformanceContext = 'self' | '1to1';
 
 export type ProfileKey = 'burnout_risk' | 'overreaching' | 'stuck' | 'coasting' | 'inconsistent' | 'balanced' | 'default';
 
@@ -227,19 +227,19 @@ export interface Goal {
   target_date?: any; // Firestore Timestamp or null
 }
 
-export interface TrainingIndicator {
+export interface PerformanceIndicator {
   key: string;
   label: string;
   icon?: string;
 }
 
-export interface TrainingCheckin {
+export interface PerformanceCheckin {
   id: string;
   taken_at: any;
   filled_by: 'coach' | 'student';
   scores: Record<string, number>;
   notes?: string | null;
-  context: TrainingContext;
+  context: PerformanceContext;
   profile_key?: ProfileKey;
   primary_lever?: string;
   anchor?: string;

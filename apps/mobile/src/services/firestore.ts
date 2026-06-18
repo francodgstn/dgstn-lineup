@@ -1,10 +1,10 @@
 import { db, getFunctions } from '../config/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit } from 'firebase/firestore';
-import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, TrainingCheckin, TrainingIndicator, CoachSlot, CoachSlotWithStatus } from '../types';
-import { detectTrainingProfile } from '../utils/trainingProfile';
+import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, PerformanceCheckin, PerformanceIndicator, CoachSlot, CoachSlotWithStatus } from '../types';
+import { detectPerformanceProfile } from '../utils/performanceProfile';
 import { httpsCallable } from 'firebase/functions';
 
-const DEFAULT_TRAINING_INDICATORS: TrainingIndicator[] = [
+const DEFAULT_PERFORMANCE_INDICATORS: PerformanceIndicator[] = [
   { key: 'consistency', label: 'Consistency' },
   { key: 'effort', label: 'Effort' },
   { key: 'focus', label: 'Focus' },
@@ -942,28 +942,28 @@ export const FirestoreService = {
     }
   },
 
-  // Training check-ins
+  // Performance check-ins
 
-  async getTrainingCheckins(contactId: string, limitCount: number = 10): Promise<TrainingCheckin[]> {
+  async getPerformanceCheckins(contactId: string, limitCount: number = 10): Promise<PerformanceCheckin[]> {
     try {
-      const checkinsRef = collection(db, 'contacts', contactId, 'training_checkins');
+      const checkinsRef = collection(db, 'contacts', contactId, 'performance_checkins');
       const q = query(checkinsRef, orderBy('taken_at', 'desc'), limit(limitCount));
       const snapshot = await getDocs(q);
       return snapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data(),
-      } as TrainingCheckin));
+      } as PerformanceCheckin));
     } catch (error) {
-      console.error('Error fetching training check-ins:', error);
+      console.error('Error fetching performance check-ins:', error);
       return [];
     }
   },
 
-  async addTrainingCheckin(contactId: string, data: Omit<TrainingCheckin, 'id'>): Promise<void> {
+  async addPerformanceCheckin(contactId: string, data: Omit<PerformanceCheckin, 'id'>): Promise<void> {
     try {
-      const checkinsRef = collection(db, 'contacts', contactId, 'training_checkins');
+      const checkinsRef = collection(db, 'contacts', contactId, 'performance_checkins');
 
-      const profile = detectTrainingProfile(data.scores);
+      const profile = detectPerformanceProfile(data.scores);
       const payload = { ...data, ...profile };
 
       // Enforce one-per-day per author: overwrite if exists
@@ -982,42 +982,42 @@ export const FirestoreService = {
       const existingSnap = await getDocs(existingQ);
 
       if (!existingSnap.empty) {
-        const existingDocRef = doc(db, 'contacts', contactId, 'training_checkins', existingSnap.docs[0].id);
+        const existingDocRef = doc(db, 'contacts', contactId, 'performance_checkins', existingSnap.docs[0].id);
         await updateDoc(existingDocRef, { ...payload });
         return;
       }
 
       await addDoc(checkinsRef, payload);
     } catch (error) {
-      console.error('Error adding training check-in:', error);
+      console.error('Error adding performance check-in:', error);
       throw error;
     }
   },
 
-  async getTeamTrainingIndicators(teamId: string): Promise<TrainingIndicator[]> {
+  async getTeamPerformanceIndicators(teamId: string): Promise<PerformanceIndicator[]> {
     try {
       const teamRef = doc(db, 'teams', teamId);
       const teamSnap = await getDoc(teamRef);
-      if (!teamSnap.exists()) return DEFAULT_TRAINING_INDICATORS;
-      const indicators = teamSnap.data()?.training_indicators;
+      if (!teamSnap.exists()) return DEFAULT_PERFORMANCE_INDICATORS;
+      const indicators = teamSnap.data()?.performance_indicators;
       if (Array.isArray(indicators) && indicators.length > 0) {
-        return indicators as TrainingIndicator[];
+        return indicators as PerformanceIndicator[];
       }
-      return DEFAULT_TRAINING_INDICATORS;
+      return DEFAULT_PERFORMANCE_INDICATORS;
     } catch (error) {
-      console.error('Error fetching team training indicators:', error);
-      return DEFAULT_TRAINING_INDICATORS;
+      console.error('Error fetching team performance indicators:', error);
+      return DEFAULT_PERFORMANCE_INDICATORS;
     }
   },
 
-  async getTeamGoalCategories(teamId: string): Promise<TrainingIndicator[] | null> {
+  async getTeamGoalCategories(teamId: string): Promise<PerformanceIndicator[] | null> {
     try {
       const teamRef = doc(db, 'teams', teamId);
       const teamSnap = await getDoc(teamRef);
       if (!teamSnap.exists()) return null;
       const categories = teamSnap.data()?.goal_categories;
       if (Array.isArray(categories) && categories.length > 0) {
-        return categories as TrainingIndicator[];
+        return categories as PerformanceIndicator[];
       }
       return null;
     } catch (error) {

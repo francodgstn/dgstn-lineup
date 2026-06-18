@@ -52,7 +52,7 @@ import { TeamCard } from '../components/profile/TeamCard';
 import { TeamQrScannerModal } from '../components/profile/TeamQrScannerModal';
 import { SessionPickerModal } from '../components/profile/SessionPickerModal';
 import { GoalsSection } from '../components/profile/GoalsSection';
-import { TrainingProfileSection } from '../components/profile/TrainingProfileSection';
+import { PerformanceProfileSection } from '../components/profile/PerformanceProfileSection';
 
 type TabType = 'DASH' | 'FEED' | 'TRAIN' | 'TEAM' | 'SELF';
 
@@ -917,7 +917,7 @@ export const ProfileScreen: React.FC = () => {
           contact={contact}
         />
 
-        <TrainingProfileSection contactId={contact.id} teamId={contact.teamId || ''} />
+        <PerformanceProfileSection contactId={contact.id} teamId={contact.teamId || ''} />
 
         {teamProfile?.coachingEnabled && coachSlots.length > 0 && (
           <View>

@@ -3,13 +3,16 @@ import { sourceDb, targetDb } from '../config'
 import { BatchWriter } from '../batch-writer'
 import { transformContact } from '../transforms/contacts'
 
-const CONTACT_SUBCOLLECTIONS = [
+// Most subcollections keep their name. HMD stored the performance radar data as
+// 'training_checkins'; Linyup renamed it to 'performance_checkins', so that one
+// reads from the old name and writes to the new.
+const CONTACT_SUBCOLLECTIONS: Array<string | { from: string; to: string }> = [
   'subscription_history',
   'goals',
   'monthly_scores',
   'contact_alerts',
   'contact_weekly_reports',
-  'training_checkins',
+  { from: 'training_checkins', to: 'performance_checkins' },
 ]
 
 export async function pass05Contacts(
@@ -36,14 +39,16 @@ export async function pass05Contacts(
 
       // Subcollections
       for (const sub of CONTACT_SUBCOLLECTIONS) {
-        const subSnap = await src.collection('contacts').doc(d.id).collection(sub).get()
+        const fromName = typeof sub === 'string' ? sub : sub.from
+        const toName = typeof sub === 'string' ? sub : sub.to
+        const subSnap = await src.collection('contacts').doc(d.id).collection(fromName).get()
         for (const sd of subSnap.docs) {
-          const subRef = tgt.collection('contacts').doc(d.id).collection(sub).doc(sd.id)
+          const subRef = tgt.collection('contacts').doc(d.id).collection(toName).doc(sd.id)
           if (!cfg.dryRun) {
             const existing = await subRef.get()
             if (existing.exists) { bw.skip(); continue }
           }
-          const data = transformSubcollectionDoc(sub, sd.id, sd.data() as Record<string, unknown>)
+          const data = transformSubcollectionDoc(fromName, sd.id, sd.data() as Record<string, unknown>)
           bw.set(subRef, data)
         }
       }

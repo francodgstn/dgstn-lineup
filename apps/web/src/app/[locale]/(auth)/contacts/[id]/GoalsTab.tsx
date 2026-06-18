@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION } from '@linyup/shared'
-import type { Goal, GoalEvaluation, GoalStatus, GoalType, TrainingIndicator } from '@linyup/shared'
+import type { Goal, GoalEvaluation, GoalStatus, GoalType, PerformanceIndicator } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -27,7 +27,7 @@ import {
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const DEFAULT_CATEGORIES: TrainingIndicator[] = [
+const DEFAULT_CATEGORIES: PerformanceIndicator[] = [
   { key: 'technique', label: 'Technique' },
   { key: 'attitude', label: 'Attitude' },
   { key: 'attendance', label: 'Attendance' },
@@ -195,7 +195,7 @@ function EvalDialog({ open, goalStatus, initial, onClose, onSubmit }: EvalDialog
 interface GoalFormDialogProps {
   open: boolean
   type: GoalType
-  categories: TrainingIndicator[]
+  categories: PerformanceIndicator[]
   initial?: Goal
   onClose: () => void
   onSubmit: (data: { title: string; description: string; categories: string[]; targetDate: Date | null }) => Promise<void>
@@ -303,7 +303,7 @@ function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: 
 interface GoalCardProps {
   goal: Goal
   contactId: string
-  categories: TrainingIndicator[]
+  categories: PerformanceIndicator[]
   onChanged: () => void
 }
 

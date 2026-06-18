@@ -145,7 +145,8 @@ Subcollections under `teams/{teamId}`:
 
 Subcollections under `contacts/{id}`:
 `subscription_history`, `goals`, `monthly_scores`, `contact_alerts`,
-`contact_weekly_reports`, `training_checkins`, `goals/{goalId}/evaluations`
+`contact_weekly_reports`, `training_checkins` (→ written as `performance_checkins`
+in Linyup), `goals/{goalId}/evaluations`
 
 Subcollections under `sessions/{id}`:
 `participants/{contactId}`, `bookings/{contactId}`
