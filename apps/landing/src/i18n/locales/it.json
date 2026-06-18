@@ -51,8 +51,8 @@
     }
   },
   "proof": {
-    "label": "La fiducia dei nostri club fondatori",
-    "cta": "Il tuo club qui"
+    "label": "Diventa uno dei nostri club fondatori — assicurati uno sconto di lancio speciale",
+    "cta": "Prenota il tuo posto"
   },
   "showcase": {
     "eyebrow": "In azione",
@@ -63,7 +63,7 @@
       "schedule": { "title": "Tutta la settimana a colpo d'occhio", "detail": "Ogni lezione, sala e coach in un unico calendario a colori." },
       "contact": { "title": "Segui i progressi di ogni studente", "detail": "Presenze, serie e un radar delle performance su ogni profilo." },
       "courses": { "title": "Vendi corsi online", "detail": "Trasforma le tue competenze in corsi che i membri seguono al proprio ritmo." },
-      "biolink": { "title": "Crea il tuo bio-link", "detail": "Un link condivisibile per orario, prenotazioni e iscrizioni — con anteprima live." }
+      "biolink": { "title": "Crea il tuo bio-link", "detail": "Un link condivisibile a orario, prenotazioni, corsi online e sito web — con anteprima live." }
     }
   },
   "features": {

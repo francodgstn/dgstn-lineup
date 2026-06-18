@@ -51,8 +51,8 @@
     }
   },
   "proof": {
-    "label": "La confiance de nos clubs fondateurs",
-    "cta": "Votre club ici"
+    "label": "Devenez l'un de nos clubs fondateurs — profitez d'une remise de lancement spéciale",
+    "cta": "Réservez votre place"
   },
   "showcase": {
     "eyebrow": "En action",
@@ -63,7 +63,7 @@
       "schedule": { "title": "Toute votre semaine en un coup d'œil", "detail": "Chaque cours, salle et coach dans un seul calendrier en couleurs." },
       "contact": { "title": "Suivez la progression de chaque élève", "detail": "Présences, séries et un radar de performance sur chaque profil." },
       "courses": { "title": "Vendez des cours en ligne", "detail": "Transformez votre savoir en cours que vos membres suivent à leur rythme." },
-      "biolink": { "title": "Créez votre bio-link", "detail": "Un lien partageable pour planning, réservation et inscription — avec aperçu en direct." }
+      "biolink": { "title": "Créez votre bio-link", "detail": "Un lien partageable vers planning, réservation, cours en ligne et site web — avec aperçu en direct." }
     }
   },
   "features": {

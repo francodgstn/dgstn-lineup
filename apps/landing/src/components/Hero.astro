@@ -1,6 +1,7 @@
 ---
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
+import GiIcon from './GiIcon.astro';
 
 interface Props {
   lang: Language;
@@ -74,7 +75,7 @@ const DEMO_ALSO = [
         rel="noopener"
         style={`--chip-accent: ${DEMO_PRIMARY.accent}`}
       >
-        <span class="demo-primary-icon"><i data-lucide="swords"></i></span>
+        <span class="demo-primary-icon"><GiIcon /></span>
         <span class="demo-primary-text">
           <strong>{t(`hero.demoStudios.${DEMO_PRIMARY.key}`)}</strong>
           <span>{t('hero.demoPrimary')}</span>
@@ -263,7 +264,8 @@ const DEMO_ALSO = [
   /* Live demo shortcut — type chips (narrow so they wrap into a few rows) */
   .demo-cta { max-width: 540px; margin: 36px auto 0; }
   .demo-eyebrow {
-    display: inline-flex;
+    display: flex;
+    justify-content: center;
     align-items: center;
     gap: 7px;
     font-size: 12px;
@@ -271,47 +273,49 @@ const DEMO_ALSO = [
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--muted-foreground);
-    margin: 0 0 16px;
+    margin: 0 0 18px;
   }
   .demo-eyebrow :global(svg) { width: 15px; height: 15px; color: var(--primary); }
 
-  /* Default vertical — martial arts, presented as the selected demo */
+  /* Default vertical — martial arts. Kept compact + soft (pill, hairline border,
+     tinted icon) so it reads as part of the demo group, not a heavy standalone CTA. */
   .demo-primary {
     display: inline-flex;
     align-items: center;
-    gap: 13px;
+    gap: 10px;
     text-align: left;
-    padding: 11px 16px 11px 11px;
+    padding: 7px 14px 7px 7px;
     background: var(--card);
-    border: 1.5px solid color-mix(in oklch, var(--primary) 50%, transparent);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--ring-card), var(--shadow-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--ring-card), var(--shadow-sm);
     transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
   }
   .demo-primary:hover {
     transform: translateY(-2px);
-    box-shadow: var(--ring-card), var(--shadow-lg);
-    border-color: var(--primary);
+    box-shadow: var(--ring-card), var(--shadow-md);
+    border-color: color-mix(in oklch, var(--chip-accent, var(--primary)) 45%, transparent);
   }
   .demo-primary-icon {
-    width: 42px;
-    height: 42px;
+    width: 32px;
+    height: 32px;
     flex-shrink: 0;
     display: grid;
     place-items: center;
-    border-radius: 11px;
-    background: var(--chip-accent, var(--primary));
-    color: #fff;
+    border-radius: 9px;
+    background: color-mix(in oklch, var(--chip-accent, var(--primary)) 14%, var(--card));
+    color: var(--chip-accent, var(--primary));
+    border: 1px solid color-mix(in oklch, var(--chip-accent, var(--primary)) 22%, transparent);
   }
-  .demo-primary-icon :global(svg) { width: 21px; height: 21px; }
-  .demo-primary-text { display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
-  .demo-primary-text strong { font-size: 15px; font-weight: 700; color: var(--foreground); }
-  .demo-primary-text span { font-size: 12.5px; color: var(--muted-foreground); }
-  .demo-primary > :global(svg) { width: 18px; height: 18px; color: var(--primary); margin-left: 4px; transition: transform 0.16s ease; }
-  .demo-primary:hover > :global(svg) { transform: translateX(3px); }
+  .demo-primary-icon :global(svg) { width: 18px; height: 18px; }
+  .demo-primary-text { display: flex; flex-direction: column; gap: 0; line-height: 1.2; }
+  .demo-primary-text strong { font-size: 13.5px; font-weight: 700; color: var(--foreground); }
+  .demo-primary-text span { font-size: 11.5px; color: var(--muted-foreground); }
+  .demo-primary > :global(svg) { width: 15px; height: 15px; color: var(--muted-foreground); margin-left: 4px; transition: transform 0.16s ease, color 0.16s ease; }
+  .demo-primary:hover > :global(svg) { transform: translateX(3px); color: var(--chip-accent, var(--primary)); }
 
   /* Also built for — the other verticals, secondary */
-  .demo-also { margin-top: 22px; }
+  .demo-also { margin-top: 18px; }
   .demo-also-label {
     display: block;
     font-size: 11.5px;

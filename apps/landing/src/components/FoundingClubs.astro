@@ -1,6 +1,7 @@
 ---
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
+import GiIcon from './GiIcon.astro';
 
 interface Props {
   lang: Language;
@@ -9,21 +10,21 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang);
 
-// Slim social-proof band, near the top. Placeholder plates (dashed + skeleton
-// bar, icon only) read clearly as "logo goes here" rather than a fake logo —
-// swap for real founding-club logos once partners sign. The last plate is a soft
-// CTA that opens the early-access modal ([data-early-access]).
-const slots = ['swords', 'shield', 'medal', 'flame'] as const;
+// Slim founding-club invite band, near the top. Placeholder plates (dashed +
+// skeleton bar, icon only) read clearly as "your logo here" rather than a fake
+// logo. The last plate is a CTA that opens the early-access modal
+// ([data-early-access]) — the whole band is an invitation, not social proof.
+const slots = ['gi', 'shield', 'medal', 'flame'] as const;
 ---
 
 <section class="proof">
   <div class="wrap">
-    <p class="proof-label"><i data-lucide="users-round"></i> {t('proof.label')}</p>
+    <p class="proof-label"><i data-lucide="badge-percent"></i> {t('proof.label')}</p>
     <div class="proof-logos">
       {
         slots.map((icon) => (
           <div class="proof-slot" aria-hidden="true">
-            <span class="proof-slot-icon"><i data-lucide={icon} /></span>
+            <span class="proof-slot-icon">{icon === 'gi' ? <GiIcon /> : <i data-lucide={icon} />}</span>
             <span class="proof-slot-bar" />
           </div>
         ))

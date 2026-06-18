@@ -51,8 +51,8 @@
     }
   },
   "proof": {
-    "label": "Trusted by our founding clubs",
-    "cta": "Your club here"
+    "label": "Be one of our founding clubs — lock in a special launch discount",
+    "cta": "Claim your spot"
   },
   "showcase": {
     "eyebrow": "See it in action",
@@ -63,7 +63,7 @@
       "schedule": { "title": "See your whole week", "detail": "Every class, room, and coach in one colour-coded calendar." },
       "contact": { "title": "Track every student's progress", "detail": "Attendance, streaks, and a performance radar on every profile." },
       "courses": { "title": "Sell online courses", "detail": "Package your curriculum into courses members follow at their own pace." },
-      "biolink": { "title": "Build your bio-link", "detail": "One shareable link for schedule, booking and sign-up — with live preview." }
+      "biolink": { "title": "Build your bio-link", "detail": "One shareable link to your schedule, booking, online courses and website — with live preview." }
     }
   },
   "features": {

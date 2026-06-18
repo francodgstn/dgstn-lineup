@@ -51,8 +51,8 @@
     }
   },
   "proof": {
-    "label": "Vertraut von unseren Gründungsclubs",
-    "cta": "Dein Club hier"
+    "label": "Werde einer unserer Gründungsclubs — sichere dir einen speziellen Launch-Rabatt",
+    "cta": "Platz sichern"
   },
   "showcase": {
     "eyebrow": "In Aktion",
@@ -63,7 +63,7 @@
       "schedule": { "title": "Die ganze Woche im Blick", "detail": "Jede Klasse, jeder Raum und jeder Coach in einem farbcodierten Kalender." },
       "contact": { "title": "Den Fortschritt jedes Schülers verfolgen", "detail": "Anwesenheit, Streaks und ein Leistungsradar auf jedem Profil." },
       "courses": { "title": "Online-Kurse verkaufen", "detail": "Verpacke dein Wissen in Kurse, die Mitglieder im eigenen Tempo durchgehen." },
-      "biolink": { "title": "Deinen Bio-Link bauen", "detail": "Ein teilbarer Bio-Link für Plan, Buchung und Anmeldung — mit Live-Vorschau." }
+      "biolink": { "title": "Deinen Bio-Link bauen", "detail": "Ein teilbarer Link zu Plan, Buchung, Online-Kursen und Website — mit Live-Vorschau." }
     }
   },
   "features": {
