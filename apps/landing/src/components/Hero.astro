@@ -1,7 +1,7 @@
 ---
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
-import GiIcon from './GiIcon.astro';
+import GloveIcon from './GloveIcon.astro';
 
 interface Props {
   lang: Language;
@@ -75,7 +75,7 @@ const DEMO_ALSO = [
         rel="noopener"
         style={`--chip-accent: ${DEMO_PRIMARY.accent}`}
       >
-        <span class="demo-primary-icon"><GiIcon /></span>
+        <span class="demo-primary-icon"><GloveIcon /></span>
         <span class="demo-primary-text">
           <strong>{t(`hero.demoStudios.${DEMO_PRIMARY.key}`)}</strong>
           <span>{t('hero.demoPrimary')}</span>

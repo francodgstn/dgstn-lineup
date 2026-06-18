@@ -41,7 +41,10 @@ const t = useTranslations(lang);
     overflow: hidden;
     background: var(--card);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg);
+    /* Fade the bottom into the page — show a "peek" of the dashboard, fading out
+       just above the midline (drop-shadow removed; it can't be masked cleanly). */
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 46%, transparent 88%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 46%, transparent 88%);
   }
 
   .frame-bar {

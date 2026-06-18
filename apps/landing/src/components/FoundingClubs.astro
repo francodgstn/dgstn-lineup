@@ -1,7 +1,7 @@
 ---
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
-import GiIcon from './GiIcon.astro';
+import GloveIcon from './GloveIcon.astro';
 
 interface Props {
   lang: Language;
@@ -14,7 +14,7 @@ const t = useTranslations(lang);
 // skeleton bar, icon only) read clearly as "your logo here" rather than a fake
 // logo. The last plate is a CTA that opens the early-access modal
 // ([data-early-access]) — the whole band is an invitation, not social proof.
-const slots = ['gi', 'shield', 'medal', 'flame'] as const;
+const slots = ['glove', 'shield', 'medal', 'flame'] as const;
 ---
 
 <section class="proof">
@@ -24,7 +24,7 @@ const slots = ['gi', 'shield', 'medal', 'flame'] as const;
       {
         slots.map((icon) => (
           <div class="proof-slot" aria-hidden="true">
-            <span class="proof-slot-icon">{icon === 'gi' ? <GiIcon /> : <i data-lucide={icon} />}</span>
+            <span class="proof-slot-icon">{icon === 'glove' ? <GloveIcon /> : <i data-lucide={icon} />}</span>
             <span class="proof-slot-bar" />
           </div>
         ))
