@@ -172,6 +172,7 @@ function buildSection(d: Dict, id: string, type: string): WebsiteSection | null 
         heading: optStr(d.heading, 200),
         source: 'sessions',
         windowDays: num(d.windowDays, 1, 60, 7),
+        maxItems: num(d.maxItems, 0, 50, 0) || undefined,
         activityId: optStr(d.activityId, 64),
       }) as unknown as WebsiteSection
     }

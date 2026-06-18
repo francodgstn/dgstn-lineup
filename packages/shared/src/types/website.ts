@@ -104,6 +104,8 @@ export interface ScheduleSection extends SectionBase {
   source: 'sessions'
   /** How many days ahead to show. Defaults to 7 when unset. */
   windowDays?: number
+  /** Cap on how many sessions to list (keeps a busy schedule short). Unset/0 = no cap. */
+  maxItems?: number
   /** Optional activity filter (activity id). */
   activityId?: string
 }

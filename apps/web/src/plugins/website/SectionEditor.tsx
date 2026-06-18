@@ -324,16 +324,33 @@ function ScheduleFields({ s, onChange }: { s: ScheduleSection; onChange: (p: Pat
         The schedule is pulled live from your upcoming bookable sessions.
       </p>
       <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="Schedule" className="h-9" /></Field>
-      <Field label="Days ahead">
-        <Select value={String(s.windowDays ?? 7)} onValueChange={(v) => onChange({ windowDays: Number(v) })}>
-          <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">7 days</SelectItem>
-            <SelectItem value="14">14 days</SelectItem>
-            <SelectItem value="30">30 days</SelectItem>
-          </SelectContent>
-        </Select>
-      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Days ahead">
+          <Select value={String(s.windowDays ?? 7)} onValueChange={(v) => onChange({ windowDays: Number(v) })}>
+            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7">7 days</SelectItem>
+              <SelectItem value="14">14 days</SelectItem>
+              <SelectItem value="30">30 days</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Max classes">
+          {/* 0 = no cap. Keeps a busy schedule from listing dozens of rows. */}
+          <Select value={String(s.maxItems ?? 0)} onValueChange={(v) => onChange({ maxItems: Number(v) || undefined })}>
+            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">No limit</SelectItem>
+              <SelectItem value="3">3</SelectItem>
+              <SelectItem value="5">5</SelectItem>
+              <SelectItem value="8">8</SelectItem>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="15">15</SelectItem>
+              <SelectItem value="20">20</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
     </div>
   )
 }

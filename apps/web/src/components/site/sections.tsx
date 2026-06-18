@@ -587,6 +587,9 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
     }
   }, [teamId, section.windowDays, section.activityId])
 
+  // Cap how many sessions are listed (0/unset = show all in the window).
+  const visible = section.maxItems ? sessions.slice(0, section.maxItems) : sessions
+
   return (
     <section id={section.id} className="py-20" style={{ background: palette.surface }}>
       <div className="mx-auto max-w-3xl px-6">
@@ -596,12 +599,12 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
             <p className="text-center text-sm" style={{ color: palette.muted }}>
               Loading…
             </p>
-          ) : sessions.length === 0 ? (
+          ) : visible.length === 0 ? (
             <p className="text-center text-sm" style={{ color: palette.muted }}>
               No upcoming sessions.
             </p>
           ) : (
-            sessions.map((s) => (
+            visible.map((s) => (
               <div
                 key={s.id}
                 className="flex items-center gap-4 rounded-xl border px-4 py-3"
