@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
+import sanitizeHtml from 'sanitize-html'
 import { hasTeamRole } from '../utils/teams'
 import { unpublishSiteForTeam } from '../utils/plugins'
 import {
@@ -52,6 +53,32 @@ function clean<T extends Dict>(obj: T): T {
   return obj
 }
 
+// Allowlist matching the RichTextEditor's output (headings, lists, marks,
+// blockquote/code, tables, links, images incl. ResizableImage width, and Tiptap
+// task lists). Everything else — <script>, styles, event handlers, non-http(s)
+// URLs — is stripped before the HTML reaches the fully-public site_published doc.
+const RICH_TEXT_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: [
+    'p', 'br', 'hr', 'strong', 'em', 's', 'u', 'blockquote', 'code', 'pre',
+    'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'a', 'img',
+    'table', 'thead', 'tbody', 'tr', 'td', 'th', 'div', 'span', 'label', 'input',
+  ],
+  allowedAttributes: {
+    a: ['href', 'target', 'rel'],
+    img: ['src', 'alt', 'width', 'height'],
+    input: ['type', 'checked', 'disabled'],
+    ul: ['data-type'],
+    li: ['data-type', 'data-checked'],
+    '*': ['data-type', 'data-checked'],
+  },
+  allowedSchemes: ['http', 'https'],
+  allowedSchemesByTag: { img: ['http', 'https'] },
+}
+
+function sanitizeRichHtml(html: string): string {
+  return html ? sanitizeHtml(html, RICH_TEXT_OPTIONS) : ''
+}
+
 function sanitizeCta(v: unknown): Dict | undefined {
   const d = asDict(v)
   const label = optStr(d.label, 120)
@@ -88,13 +115,17 @@ function buildSection(d: Dict, id: string, type: string): WebsiteSection | null 
         cta: sanitizeCta(d.cta),
       }) as unknown as WebsiteSection
     }
+    // Generic content block. 'about' is the legacy literal — normalized to
+    // 'content' on publish. Heading is optional; drop only when fully empty.
+    case 'content':
     case 'about': {
       const heading = optStr(d.heading, 200)
-      if (!heading) return null
+      const body = sanitizeRichHtml(str(d.body, 50000))
+      const imageUrl = safeUrl(d.imageUrl)
+      if (!heading && !body && !imageUrl) return null
       return clean({
-        id, type: 'about', heading,
-        body: str(d.body, 5000),
-        imageUrl: safeUrl(d.imageUrl),
+        id, type: 'content', heading, body,
+        imageUrl,
         imageSide: oneOf(d.imageSide, ['left', 'right'] as const, 'left'),
       }) as unknown as WebsiteSection
     }

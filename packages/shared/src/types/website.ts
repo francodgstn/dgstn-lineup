@@ -54,13 +54,20 @@ export interface HeroSection extends SectionBase {
   cta?: SiteCta
 }
 
-export interface AboutSection extends SectionBase {
-  type: 'about'
-  heading: string
-  body: string
+/** Generic free-form content block: a rich-text body (HTML, produced by the
+ *  shared RichTextEditor) plus an optional title and optional side image. The
+ *  legacy 'about' literal is still accepted so existing sites keep rendering;
+ *  publish normalizes them to 'content'. */
+export interface ContentSection extends SectionBase {
+  type: 'content' | 'about'
+  heading?: string
+  body: string // rich text (HTML)
   imageUrl?: string
   imageSide: 'left' | 'right'
 }
+
+/** @deprecated Renamed to ContentSection (a generic content block). */
+export type AboutSection = ContentSection
 
 export interface GallerySection extends SectionBase {
   type: 'gallery'
@@ -115,7 +122,7 @@ export interface ContactSection extends SectionBase {
 
 export type WebsiteSection =
   | HeroSection
-  | AboutSection
+  | ContentSection
   | GallerySection
   | ActivitiesSection
   | PricingSection

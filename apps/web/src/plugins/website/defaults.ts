@@ -10,7 +10,7 @@ export const SECTION_LIBRARY: {
   icon: string
 }[] = [
   { type: 'hero', labelKey: 'sectionHero', descKey: 'sectionHeroDesc', icon: 'Image' },
-  { type: 'about', labelKey: 'sectionAbout', descKey: 'sectionAboutDesc', icon: 'FileText' },
+  { type: 'content', labelKey: 'sectionContent', descKey: 'sectionContentDesc', icon: 'FileText' },
   { type: 'gallery', labelKey: 'sectionGallery', descKey: 'sectionGalleryDesc', icon: 'Images' },
   {
     type: 'activities',
@@ -38,8 +38,9 @@ export function newSection(type: WebsiteSectionType): WebsiteSection {
   switch (type) {
     case 'hero':
       return { id, type, headline: 'Welcome', align: 'center', overlay: 40 }
+    case 'content':
     case 'about':
-      return { id, type, heading: 'About us', body: '', imageSide: 'left' }
+      return { id, type: 'content', body: '', imageSide: 'left' }
     case 'gallery':
       return { id, type, images: [], columns: 3 }
     case 'activities':
@@ -74,6 +75,6 @@ export function emptyDraft(team: {
     name: team.name,
     enabled: false,
     meta,
-    sections: [newSection('hero'), newSection('about'), newSection('contact')],
+    sections: [newSection('hero'), newSection('content'), newSection('contact')],
   }
 }

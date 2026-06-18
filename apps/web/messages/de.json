@@ -1522,6 +1522,8 @@
     "sectionHeroDesc": "Große Überschrift, Bild und Call-to-Action.",
     "sectionAbout": "Über uns",
     "sectionAboutDesc": "Erzähle deine Geschichte mit Text und Bild.",
+    "sectionContent": "Inhalt",
+    "sectionContentDesc": "Ein Rich-Text-Abschnitt mit optionalem Titel und Bild.",
     "sectionGallery": "Galerie",
     "sectionGalleryDesc": "Ein Raster aus Fotos.",
     "sectionActivities": "Aktivitäten",

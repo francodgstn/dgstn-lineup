@@ -1527,6 +1527,8 @@
     "sectionHeroDesc": "Big headline, image and a call-to-action.",
     "sectionAbout": "About",
     "sectionAboutDesc": "Tell your story with text and an image.",
+    "sectionContent": "Content",
+    "sectionContentDesc": "A rich-text section with an optional title and image.",
     "sectionGallery": "Gallery",
     "sectionGalleryDesc": "A grid of photos.",
     "sectionActivities": "Activities",

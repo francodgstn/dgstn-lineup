@@ -34,7 +34,7 @@ import {
 import type {
   WebsiteSection,
   HeroSection,
-  AboutSection,
+  ContentSection,
   GallerySection,
   ActivitiesSection,
   PricingSection,
@@ -163,39 +163,45 @@ function Heading({
   )
 }
 
-// ─── About ──────────────────────────────────────────────────────────────────
+// ─── Content (generic rich-text block) ───────────────────────────────────────
 
-function AboutBlock({ section, ctx }: { section: AboutSection; ctx: RenderCtx }) {
+function ContentBlock({ section, ctx }: { section: ContentSection; ctx: RenderCtx }) {
   const { palette } = ctx
   const imageRight = section.imageSide === 'right'
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
         <div className={`grid items-center gap-10 ${section.imageUrl ? '@3xl:grid-cols-2' : ''}`}>
-          {section.imageUrl && imageRight && <AboutText section={section} palette={palette} />}
+          {section.imageUrl && imageRight && <ContentText section={section} palette={palette} />}
           {section.imageUrl && (
             <div className="overflow-hidden rounded-2xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={section.imageUrl} alt="" className="h-full w-full object-cover" />
             </div>
           )}
-          {(!section.imageUrl || !imageRight) && <AboutText section={section} palette={palette} />}
+          {(!section.imageUrl || !imageRight) && <ContentText section={section} palette={palette} />}
         </div>
       </div>
     </section>
   )
 }
 
-function AboutText({ section, palette }: { section: AboutSection; palette: SitePalette }) {
+function ContentText({ section, palette }: { section: ContentSection; palette: SitePalette }) {
   return (
     <div>
-      <h2 className="text-3xl font-bold tracking-tight" style={{ color: palette.text }}>
-        {section.heading}
-      </h2>
+      {section.heading && (
+        <h2 className="text-3xl font-bold tracking-tight" style={{ color: palette.text }}>
+          {section.heading}
+        </h2>
+      )}
       {section.body && (
-        <p className="mt-4 whitespace-pre-line leading-relaxed" style={{ color: palette.muted }}>
-          {section.body}
-        </p>
+        // Body is rich HTML — sanitized at publish time. .site-prose styles it
+        // with the site palette (color inherited; links use --site-accent).
+        <div
+          className={`site-prose leading-relaxed ${section.heading ? 'mt-4' : ''}`}
+          style={{ color: palette.text, '--site-accent': palette.accent } as React.CSSProperties}
+          dangerouslySetInnerHTML={{ __html: section.body }}
+        />
       )}
     </div>
   )
@@ -731,8 +737,9 @@ export function SectionBlock({ section, ctx }: { section: WebsiteSection; ctx: R
   switch (section.type) {
     case 'hero':
       return <HeroBlock section={section} ctx={ctx} />
+    case 'content':
     case 'about':
-      return <AboutBlock section={section} ctx={ctx} />
+      return <ContentBlock section={section} ctx={ctx} />
     case 'gallery':
       return <GalleryBlock section={section} ctx={ctx} />
     case 'activities':
@@ -751,8 +758,9 @@ export function SectionBlock({ section, ctx }: { section: WebsiteSection; ctx: R
 /** Default nav label per section type (used when a section has no heading). */
 export function sectionNavLabel(section: WebsiteSection): string {
   switch (section.type) {
+    case 'content':
     case 'about':
-      return section.heading || 'About'
+      return section.heading || 'Content'
     case 'gallery':
       return section.heading || 'Gallery'
     case 'activities':

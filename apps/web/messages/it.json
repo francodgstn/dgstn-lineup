@@ -1512,6 +1512,8 @@
     "sectionHeroDesc": "Titolo grande, immagine e call-to-action.",
     "sectionAbout": "Chi siamo",
     "sectionAboutDesc": "Racconta la tua storia con testo e immagine.",
+    "sectionContent": "Contenuto",
+    "sectionContentDesc": "Una sezione di testo formattato con titolo e immagine opzionali.",
     "sectionGallery": "Galleria",
     "sectionGalleryDesc": "Una griglia di foto.",
     "sectionActivities": "Attività",

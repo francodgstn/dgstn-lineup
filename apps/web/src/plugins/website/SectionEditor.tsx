@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ImageIcon, X, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -11,9 +11,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import type {
-  WebsiteSection, HeroSection, AboutSection, GallerySection,
+  WebsiteSection, HeroSection, ContentSection, GallerySection,
   ActivitiesSection, PricingSection, ScheduleSection, ContactSection, SiteCta,
 } from '@linyup/shared'
+import { RichTextEditor } from '@/components/RichTextEditor'
 import { uploadSiteImage } from './hooks'
 import { getWebsiteLimits } from './limits'
 
@@ -164,14 +165,29 @@ function HeroFields({ s, teamId, onChange }: { s: HeroSection; teamId: string; o
   )
 }
 
-function AboutFields({ s, teamId, onChange }: { s: AboutSection; teamId: string; onChange: (p: Patch) => void }) {
+function ContentFields({ s, teamId, onChange }: { s: ContentSection; teamId: string; onChange: (p: Patch) => void }) {
+  // RichTextEditor is uncontrolled after mount and memoized: pass STABLE
+  // callbacks (latest onChange via a ref) so typing never re-mounts it, and key
+  // it by section id so switching sections loads the right body.
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+  const handleBody = useCallback((html: string) => onChangeRef.current({ body: html }), [])
+  const handleUpload = useCallback((file: File) => uploadSiteImage(teamId, s.id, file), [teamId, s.id])
+
   return (
     <div className="space-y-3">
-      <Field label="Heading">
-        <Input value={s.heading} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
+      <Field label="Title (optional)">
+        <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
       </Field>
-      <Field label="Body">
-        <Textarea value={s.body} onChange={(e) => onChange({ body: e.target.value })} rows={5} />
+      <Field label="Content">
+        <RichTextEditor
+          key={s.id}
+          value={s.body}
+          onChange={handleBody}
+          onUploadImage={handleUpload}
+          minHeight={240}
+          placeholder="Write your content, or press “/” for formatting…"
+        />
       </Field>
       <ImageField label="Image (optional)" url={s.imageUrl} teamId={teamId} sectionId={s.id} onChange={(u) => onChange({ imageUrl: u })} />
       {s.imageUrl && (
@@ -352,7 +368,8 @@ export function SectionEditor({
 }) {
   switch (section.type) {
     case 'hero':     return <HeroFields s={section} teamId={teamId} onChange={onChange} />
-    case 'about':    return <AboutFields s={section} teamId={teamId} onChange={onChange} />
+    case 'content':
+    case 'about':    return <ContentFields s={section} teamId={teamId} onChange={onChange} />
     case 'gallery':  return <GalleryFields s={section} teamId={teamId} onChange={onChange} />
     case 'activities': return <ActivitiesFields s={section} onChange={onChange} />
     case 'pricing':  return <PricingFields s={section} onChange={onChange} />

@@ -237,8 +237,9 @@ function sectionSummary(s: WebsiteSection): string {
   switch (s.type) {
     case 'hero':
       return s.headline
+    case 'content':
     case 'about':
-      return s.heading
+      return s.heading || 'Content'
     case 'gallery':
       return `${s.images.length} photo(s)`
     case 'activities':

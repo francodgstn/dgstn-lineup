@@ -2652,7 +2652,7 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
     },
     {
       id: `${teamId}-sec-about`,
-      type: 'about',
+      type: 'content',
       heading: `About ${teamName}`,
       imageSide: 'left',
       body: `<p>${description}</p><p>Our coaches welcome every level — drop in for a free trial class, find your rhythm, and become part of a community that keeps showing up. Sessions run throughout the week at ${locations[0]}.</p>`,

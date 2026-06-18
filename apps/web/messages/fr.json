@@ -1522,6 +1522,8 @@
     "sectionHeroDesc": "Grand titre, image et appel à l'action.",
     "sectionAbout": "À propos",
     "sectionAboutDesc": "Racontez votre histoire avec du texte et une image.",
+    "sectionContent": "Contenu",
+    "sectionContentDesc": "Une section de texte enrichi avec titre et image en option.",
     "sectionGallery": "Galerie",
     "sectionGalleryDesc": "Une grille de photos.",
     "sectionActivities": "Activités",
