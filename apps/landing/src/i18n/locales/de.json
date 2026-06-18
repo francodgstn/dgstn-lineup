@@ -126,7 +126,7 @@
     "cmpGrowth": "Wachsen & binden",
     "cmpOrg": "Mehrere Standorte",
     "cmpContacts": "Kontakte",
-    "cmpContactsNote": "Weiche Grenze — zusätzliche Kontakte nur CHF 1/Monat pro Kontakt (Coach & Studio).",
+    "cmpContactsNote": "Zählt nur aktive (nicht archivierte) Kontakte. Studio kann +250er-Blöcke für CHF 10/Monat hinzufügen; archivierte Kontakte werden nach 2 Jahren automatisch anonymisiert.",
     "cmpMembers": "Mehrere Teammitglieder",
     "cmpBranding": "Linyup-Branding entfernen",
     "cmpMigration": "Kostenlose Datenmigration",
@@ -144,14 +144,14 @@
       "name": "Free",
       "price": "Kostenlos",
       "audience": "Für Coaches, die gerade erst starten.",
-      "features": ["Bis zu 10 Kontakte", "Buchungsseite & Bio-Link", "Lektionen, Abos & Ziele"]
+      "features": ["Bis zu 15 Kontakte", "Buchungsseite & Bio-Link", "Lektionen, Abos & Ziele"]
     },
     "coach": {
       "name": "Coach",
       "price": "CHF 7.99",
       "promoPrice": "CHF 4.00",
       "audience": "Für Einzeltrainer und Privatcoaches.",
-      "features": ["Alles aus Free", "30 Kontakte", "1:1-Coaching & Termine"]
+      "features": ["Alles aus Free", "50 Kontakte", "1:1-Coaching & Termine"]
     },
     "studio": {
       "name": "Studio",

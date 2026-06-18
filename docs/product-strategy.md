@@ -36,7 +36,7 @@ The system is structured around **business maturity**, not arbitrary feature gro
 **Model:**
 
 * Full Coach feature set, differentiated by **limits**, not feature flags:
-  * **10 active contacts — hard cap** (manual adds blocked at the limit; public
+  * **15 active contacts — hard cap** (manual adds blocked at the limit; public
     bio link signups still land, so the cap breach itself becomes the upgrade prompt)
   * **Single user** (no team member invitations)
   * **No plugin add-ons** (catalogue browsable, everything upgrade-locked)
@@ -48,7 +48,7 @@ The system is structured around **business maturity**, not arbitrary feature gro
   paid subscriptions also land here.
 
 **Why it exists:** the contact cap scales with customer success — Free is
-genuinely useful at ≤10 clients and any economically real coaching business
+genuinely useful at ≤15 clients and any economically real coaching business
 outgrows it quickly, converting exactly when the product has proven its value.
 
 > **Plan code:** `free`
@@ -58,7 +58,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 **Persona:**
 
 * Solo coach, personal trainer, or small independent instructor
-* 10–60 active clients
+* 10–50 active clients
 * May run group sessions, 1:1 appointments, or both
 * Sells memberships, session packages, or monthly retainers — often all three
 
@@ -151,7 +151,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 **Persona:**
 
 * Gym / club (e.g. boxing, martial arts, fitness studio)
-* 50–300 students
+* 50–250+ students (buy contact blocks beyond 250)
 * Wants growth + retention
 
 **Goal:**
@@ -279,32 +279,67 @@ outgrows it quickly, converting exactly when the product has proven its value.
 
 ## 3. Pricing Strategy
 
-### Model: Hybrid SaaS + Usage-Based
+### Model: Flat tiers + contact caps (no per-head metering)
 
 **Components:**
 
-1. Base subscription fee (per tier)
-2. Variable fee per active student
-3. Optional per-plugin add-ons (Coach plan — see *Plugin add-ons* below)
+1. Base subscription fee per tier
+2. A contact cap per tier (counts **active, non-archived** contacts only)
+3. Studio-only **contact blocks** — buy more room in flat +250 increments
+4. Optional per-plugin add-ons (Coach plan — see *Plugin add-ons* below)
 
-### Pricing Logic
+There is **no per-active-contact metering**. The earlier "variable fee per
+active student" model was dropped: per-head billing is unpredictable for the
+customer and operationally fiddly. Instead each tier has a generous cap, and
+growth is monetised by moving up a tier (or, for Studio, buying flat blocks).
 
-* Pricing scales with **customer success**
-* "Active student" = core billing metric
-* Keeps entry barrier low while capturing upside
+### What counts as a contact
 
-### Suggested Pricing Structure
+* A **contact** is any non-archived person record. Two contact types: **trial**
+  and **student** (the old "external" type is merged into the general contact
+  type). Trials **do** count toward the cap but keep a distinct `trial` status
+  flag for the trial→student funnel and automations.
+* Use the word **"contacts"** everywhere in product and pricing copy — reserve
+  **"members"** for the Organisation context (member teams / locations).
+* **Guardians are not contact records.** Guardian / emergency info is stored as
+  fields on the contact (name + phone), never as a separate counted record.
 
-| Tier         | Base Price  | Included Students | Additional Students |
-|--------------|-------------|-------------------|---------------------|
-| Free         | CHF 0       | 10 (hard cap)     | — (blocked, upgrade) |
-| Coach        | CHF 7.99    | 30                | CHF 0.5–1 / student |
-| Studio       | CHF 19–39   | ~100              | CHF 0.5–1 / student |
-| Organization | CHF 99–149  | pooled            | volume pricing      |
+### Archived contacts & retention
 
-> **Implementation note:** the per-active-student variable fee is **not yet
-> built** — current billing is a flat per-plan price. Per-student metered billing
-> remains separate, unscheduled work.
+* Archived contacts **do not count** toward the cap — studios can archive freely.
+* Archived contacts are **auto-anonymised after 2 years** by default (retention
+  policy). Frame this as a **privacy feature**, not a limit: nDSG / GDPR data
+  minimisation — *"old archived contacts are automatically anonymised, so you
+  don't hoard ex-students' data."* A differentiator vs international tools.
+
+### Pricing Structure
+
+| Tier         | Base Price | Included Contacts | Over the cap |
+|--------------|------------|-------------------|--------------|
+| Free         | CHF 0      | 15 (hard cap)     | Blocked — prompt to upgrade to Coach / Studio |
+| Coach        | CHF 7.99   | 50                | Prompt to upgrade to Studio (no overage charge) |
+| Studio       | CHF 29.99  | 250               | Add +250-contact blocks at ~CHF 10/mo each, or upgrade to Organisation |
+| Organization | CHF 149    | Unlimited         | — |
+
+* **Free (15)** — hard cap. Manual adds are blocked at the limit; public bio-link
+  signups still land, so the breach itself becomes the upsell.
+* **Coach (50)** — when exceeded, prompt to upgrade to Studio (the coach has
+  grown past a solo operation into a studio). No per-contact charge.
+* **Studio (250)** — **never hard-block** an active Studio for being slightly
+  over. Prompt to add a flat **+250 block (~CHF 10/mo)** for predictable extra
+  room, or to move to Organisation when going multi-location.
+* **Organisation** — unlimited contacts.
+
+> **Implementation status (2026-06):** the new caps (15 / 50 / 250 / unlimited)
+> are live in `PLAN_PRICING` and the Free hard cap is enforced. The Studio
+> **contact block** is declared in the Stripe catalog (`STUDIO_CONTACT_BLOCK` →
+> `linyup_studio_contact_block_monthly`) but not yet wired into runtime billing
+> or the contacts-page UI. A **legacy per-student soft overage**
+> (`syncContactOverage`, `linyup_extra_student_monthly`) is still deployed and is
+> pending removal / migration to the block model — see `docs/stripe-catalog.md`.
+
+> **Founder pricing** (free 6 months, then CHF 15/mo Studio locked for life) is a
+> private founding-club deal — keep it **off** the public pricing page.
 
 ### Plugin add-ons (Coach plan)
 
@@ -345,7 +380,7 @@ Only if you provide real billing + subscription value — otherwise skip to avoi
 
 * **Freemium + trial combined** (decision 2026-06): every signup starts on a
   14-day full-access Studio trial; on expiry the team downgrades to the **Free
-  plan** (10-contact hard cap) instead of being walled and purged.
+  plan** (15-contact hard cap) instead of being walled and purged.
 * The trial sells the full product; Free keeps non-converters in the funnel at
   near-zero marginal cost and converts them when they outgrow the cap.
 
@@ -356,12 +391,14 @@ Only if you provide real billing + subscription value — otherwise skip to avoi
 The system must naturally push users upward:
 
 * **Free → Coach triggers:**
-  * Hits the 10-contact hard cap (the primary, success-aligned trigger)
+  * Hits the 15-contact hard cap (the primary, success-aligned trigger)
   * Wants a second team member on the account
   * Wants plugin add-ons (gamification, referrals, …)
   * Wants the "Powered by Linyup" badge off their bio link
 
 * **Coach → Studio — hard pulls (Studio-only, never à la carte):**
+  * Outgrows the 50-contact cap — no per-contact overage on Coach, so growth past
+    a solo operation means moving up to Studio
   * Wants a branded client mobile app (in-app booking, push reminders, coaching history)
   * Wants automated outreach (inactivity follow-ups, onboarding sequences)
   * Needs multiple coaches or managers on the team
@@ -375,6 +412,8 @@ The system must naturally push users upward:
 * **Studio → Organization trigger:**
   * Manages multiple locations
   * Needs centralized control
+  * Consistently exceeds 250 contacts and prefers one multi-location account
+    over stacking +250 contact blocks
 
 Features must be distributed to **create pull**, not force upgrades artificially.
 

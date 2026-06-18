@@ -22,54 +22,102 @@ export interface PlanPrice {
   baseMonthly: number
   /** null = the plan is never billed (free) and stripe:sync skips it. */
   stripeLookupKey: string | null
-  /** Included active (non-archived) contacts; null = unlimited (org/pooled). */
+  /**
+   * Included contacts. The cap counts ACTIVE (non-archived) contacts only —
+   * archived contacts never count and are auto-anonymised after 2 years (see
+   * the retention policy). Both contact types (trial + student) count; a trial
+   * keeps a distinct status flag but is a normal contact for the cap.
+   * null = unlimited (organisation). Over-cap behaviour is per-tier and carries
+   * NO per-contact charge — see `contactOverageForPlan`.
+   */
   includedContacts: number | null
-  /** Overage price per extra contact beyond `includedContacts`, CHF/month.
-   *  Indicative — actual overage billing is a later phase (currently soft cap). */
-  extraContactMonthly: number
 }
 
 export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
-  free: { baseMonthly: 0, stripeLookupKey: null, includedContacts: 10, extraContactMonthly: 0 },
+  free: { baseMonthly: 0, stripeLookupKey: null, includedContacts: 15 },
   coach: {
     baseMonthly: 7.99,
     stripeLookupKey: 'linyup_coach_monthly',
-    includedContacts: 30,
-    extraContactMonthly: 1,
+    includedContacts: 50,
   },
   studio: {
     baseMonthly: 29.99,
     stripeLookupKey: 'linyup_studio_monthly',
-    includedContacts: 100,
-    extraContactMonthly: 1,
+    includedContacts: 250,
   },
   organization: {
     baseMonthly: 149,
     stripeLookupKey: 'linyup_organization_monthly',
     includedContacts: null,
-    extraContactMonthly: 0,
   },
 }
 
-// Free has no payment method to bill overage against, so its contact cap is
-// HARD: manual contact creation is blocked at the limit (public bio-link
-// submissions still land — the breach is the upgrade prompt). Paid plans keep
-// the soft cap + per-extra-contact billing.
+// Free has no payment method to bill against, so its contact cap is HARD:
+// manual contact creation is blocked at the limit (public bio-link submissions
+// still land — the breach is the upgrade prompt). Paid tiers are never
+// hard-blocked; they get a tier-specific over-cap prompt (contactOverageForPlan).
 export function planHasHardContactCap(plan: SaasPlan | null): boolean {
   return plan === 'free'
 }
 
-// Single shared per-extra-contact overage price (same across plans for now).
-// Billed via a Stripe subscription item whose quantity = contacts over the
-// included count (synced by the syncContactOverage scheduled function).
-// If per-plan overage prices ever diverge, switch to per-plan lookup keys.
+// ─── Over-cap behaviour (NO per-contact metering) ───────────────────────────────
+// When a team exceeds includedContacts the response depends on the tier — there
+// is no per-head overage charge:
+//   free   → hard cap, prompt to upgrade (planHasHardContactCap).
+//   coach  → prompt to upgrade to Studio (grown past a solo coach).
+//   studio → buy optional +N-contact blocks (STUDIO_CONTACT_BLOCK) for more
+//            room, or upgrade to Organisation. Never hard-blocked mid-month.
+//   org    → unlimited.
+export interface ContactBlock {
+  /** Contacts added per block. */
+  size: number
+  /** Flat CHF/month per block. */
+  monthly: number
+  /** Stripe Price lookup key (provisioned by scripts/stripe-sync.ts). */
+  stripeLookupKey: string
+}
+
+/** Studio add-on: buy room in predictable flat blocks, not per-head. */
+export const STUDIO_CONTACT_BLOCK: ContactBlock = {
+  size: 250,
+  monthly: 10,
+  stripeLookupKey: 'linyup_studio_contact_block_monthly',
+}
+
+export type ContactOverage =
+  | { kind: 'hard' } // free: blocked, upgrade
+  | { kind: 'upgrade'; to: SaasPlan } // coach: prompt next tier
+  | { kind: 'block'; block: ContactBlock } // studio: buy blocks (or upgrade)
+  | { kind: 'unlimited' } // organisation
+
+export function contactOverageForPlan(plan: SaasPlan | null): ContactOverage {
+  switch (plan) {
+    case 'coach':
+      return { kind: 'upgrade', to: 'studio' }
+    case 'studio':
+      return { kind: 'block', block: STUDIO_CONTACT_BLOCK }
+    case 'organization':
+      return { kind: 'unlimited' }
+    default:
+      return { kind: 'hard' } // free / unknown
+  }
+}
+
+/**
+ * @deprecated Legacy per-student soft overage. The pricing strategy moved to
+ * tier-specific over-cap behaviour with NO per-contact metering (see
+ * `contactOverageForPlan` / `STUDIO_CONTACT_BLOCK`). These constants and the
+ * `syncContactOverage` scheduled function that still consumes them are pending
+ * removal — do not build new behaviour on them.
+ */
 export const EXTRA_CONTACT_MONTHLY = 1
 export const EXTRA_CONTACT_STRIPE_LOOKUP_KEY = 'linyup_extra_student_monthly'
 
-// ─── Contact cap (included students + overage) ──────────────────────────────────
-// Soft cap: usage is tracked and surfaced; nothing is blocked. Counting basis is
-// active (non-archived, non-deleted) contacts. Overage beyond the included count
-// is billed per-student on paid plans (trials are free).
+// ─── Contact usage (cap meter) ──────────────────────────────────────────────────
+// Usage is tracked and surfaced in the UI. Counting basis is ACTIVE
+// (non-archived, non-deleted) contacts; archived contacts never count. What the
+// app does at/over the cap is tier-specific (contactOverageForPlan) — only Free
+// hard-blocks.
 
 export interface ContactUsage {
   used: number

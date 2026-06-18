@@ -126,7 +126,7 @@
     "cmpGrowth": "Cresci e fidelizza",
     "cmpOrg": "Multi-sede",
     "cmpContacts": "Contatti",
-    "cmpContactsNote": "Limite flessibile — contatti aggiuntivi a soli CHF 1/mese ciascuno (Coach & Studio).",
+    "cmpContactsNote": "Conta solo i contatti attivi (non archiviati). Studio può aggiungere blocchi da +250 per CHF 10/mese; i contatti archiviati vengono anonimizzati automaticamente dopo 2 anni.",
     "cmpMembers": "Più membri del team",
     "cmpBranding": "Rimuovi il marchio Linyup",
     "cmpMigration": "Migrazione dati gratuita",
@@ -144,14 +144,14 @@
       "name": "Free",
       "price": "Gratuito",
       "audience": "Per coach che stanno iniziando.",
-      "features": ["Fino a 10 contatti", "Pagina di prenotazione e bio link", "Sessioni, abbonamenti e obiettivi"]
+      "features": ["Fino a 15 contatti", "Pagina di prenotazione e bio link", "Sessioni, abbonamenti e obiettivi"]
     },
     "coach": {
       "name": "Coach",
       "price": "CHF 7.99",
       "promoPrice": "CHF 4.00",
       "audience": "Per istruttori singoli e coach privati.",
-      "features": ["Tutto di Free", "30 contatti", "Coaching 1:1 e appuntamenti"]
+      "features": ["Tutto di Free", "50 contatti", "Coaching 1:1 e appuntamenti"]
     },
     "studio": {
       "name": "Studio",

@@ -12,10 +12,22 @@ reproducible.
   via trial expiry or subscription cancellation, never via checkout.
 - Add-ons → `PLUGIN_ADDONS` in `packages/shared/src/types/plugin-addons.ts`
   (`{ coachPriceMonthly, stripeLookupKey }`).
+- Studio contact block → `STUDIO_CONTACT_BLOCK` in
+  `packages/shared/src/types/plan.ts`
+  (`{ size: 250, monthly: 10, stripeLookupKey: 'linyup_studio_contact_block_monthly' }`).
+  A Studio team that grows past its included cap buys room in flat **+250
+  blocks** (Stripe quantity = number of blocks) — there is **no per-contact
+  metering**. Coach over its cap is prompted to upgrade to Studio instead; Free
+  is a hard cap. See `contactOverageForPlan`.
+- _Legacy_ per-student overage → `EXTRA_CONTACT_STRIPE_LOOKUP_KEY`
+  (`linyup_extra_student_monthly`). **Deprecated** by the block model above; the
+  price is still provisioned only because the `syncContactOverage` scheduled
+  function references the lookup key. Remove from the catalog once that function
+  is retired or migrated to the block model.
 
 These same maps drive the web UI, the billing Cloud Functions, and the sync
-script — one definition, no drift. Lookup-key convention: `linyup_<plan>_monthly`
-and `linyup_addon_<pluginId>_monthly`.
+script — one definition, no drift. Lookup-key convention: `linyup_<plan>_monthly`,
+`linyup_addon_<pluginId>_monthly`, and `linyup_studio_contact_block_monthly`.
 
 ## Sync
 `scripts/stripe-sync.ts` (`pnpm stripe:sync`) provisions a Stripe Product +
