@@ -259,8 +259,16 @@ $GITHUB_SHA`). So the prod web app can never ship ahead of the backend it calls.
 > must NOT auto-deploy on push. In **Console → App Hosting → backend → ⚙ Settings →
 > Deployment / rollouts**, turn **automatic rollouts off** (leave the GitHub repo
 > connected — manual rollouts still build from it). Leave staging backends on
-> auto-rollout. The prod deploy SA already has `firebaseapphosting.admin`, so the
-> workflow can create rollouts.
+> auto-rollout. The prod deploy SA needs `firebaseapphosting.admin` **plus two
+> Developer Connect roles** to create rollouts: `apphosting:rollouts:create …
+> --git-commit` resolves the commit through the git repository link
+> (`developerconnect.admin` → `gitRepositoryLinks.get` + `fetchGitRefs`) and
+> fetches a repo read token (`developerconnect.readTokenAccessor` →
+> `gitRepositoryLinks.fetchReadToken`, which `admin` does NOT include).
+> `firebaseapphosting.admin` covers neither, so without both it 403s — first on
+> `.get`, then on `:fetchReadToken`. All three roles are in the deploy SA's
+> `deploy_sa_roles` (`infra/modules/iam/variables.tf`) — run `terraform apply`
+> on prod after adding the Developer Connect roles.
 
 ---
 

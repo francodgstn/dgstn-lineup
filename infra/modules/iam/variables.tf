@@ -14,6 +14,17 @@ variable "deploy_sa_roles" {
   default = [
     "roles/firebase.admin",
     "roles/firebaseapphosting.admin",
+    # Prod rolls out App Hosting via the CLI (deploy-prod.yml:
+    # `apphosting:rollouts:create … --git-commit $GITHUB_SHA`). Creating the
+    # rollout reads the Developer Connect git repository link + git refs
+    # (developerconnect.admin) AND fetches a repo read token
+    # (developerconnect.gitRepositoryLinks.fetchReadToken, which admin does NOT
+    # include — only readTokenAccessor does). firebaseapphosting.admin covers
+    # neither, so BOTH roles below are required; without them the prod rollout
+    # 403s (first on .get, then on :fetchReadToken). (Staging/sandbox use
+    # auto-rollout and never exercise this, but the grants are harmless there.)
+    "roles/developerconnect.admin",
+    "roles/developerconnect.readTokenAccessor",
     "roles/cloudfunctions.developer",
     "roles/run.admin",
     # Scheduled functions (onSchedule) create/update Cloud Scheduler jobs;
