@@ -1,7 +1,18 @@
 # Firebase App Hosting config for the operator console (@linyup/admin).
 # Deploy as a SEPARATE backend (rootDirectory: apps/admin) on its own domain
-# (e.g. ops.linyup.app). The backend's runtime service account must be granted
-# Firestore read access (roles/datastore.viewer) — the Admin SDK uses ADC.
+# (e.g. ops.linyup.app).
+#
+# Runtime identity: point this backend at the dedicated `linyup-admin` service
+# account (NOT the shared firebase-app-hosting-compute SA used by apps/web). That
+# SA and all its IAM are managed in Terraform (infra/modules/iam + secrets):
+#   - roles/datastore.user                     — read accounts/metrics + write
+#                                                 app_settings/global_settings
+#   - roles/secretmanager.secretVersionAdder   — set the `smtp-password` secret
+#     on smtp-password                            from the Settings page
+#   - roles/firebaseapphosting.computeRunner + firebase.sdkAdminServiceAgent +
+#     developerconnect.readTokenAccessor       — required for an App Hosting backend
+# Terraform creates the `smtp-password` secret CONTAINER, so no create permission
+# is needed at runtime. See the "Operator console" section in infra/README.md.
 runConfig:
   minInstances: 0
   maxInstances: 2
@@ -14,25 +25,32 @@ env:
     availability:
       - RUNTIME
 
-  # Public client Firebase config for the login page. Replace with the real
-  # project values at deploy time (mirror apps/web).
-  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: ''
+  # Public client Firebase config — used ONLY by the login page (Google sign-in).
+  # These are public values (they ship in the JS bundle), reused from the same
+  # Firebase web app as apps/web. The admin client reads only these four keys
+  # (apiKey, authDomain, projectId, appId) — no storage/messaging/database — so
+  # the rest of `terraform output -json firebase_web_config` is not needed here.
+  #
+  # Base file = STAGING (mirrors apps/web/apphosting.yaml). Prod values live in
+  # apphosting.prod.yaml. Source: `cd infra/environments/<env> &&
+  # terraform output -json firebase_web_config`.
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: linyup-staging
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: ''
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: ''
+    value: linyup-staging.firebaseapp.com
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: ''
+    value: 1:157648925506:web:5e3aa70930d777f8374edb
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyAuMHWbGKmyL78xVfrStkIctShzqrd4zcg
     availability:
       - BUILD
       - RUNTIME

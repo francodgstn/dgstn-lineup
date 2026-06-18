@@ -21,6 +21,21 @@ export const AUTOMATION_RULES_SUBCOLLECTION = 'automation_rules'
 export const AUTOMATION_LOGS_SUBCOLLECTION = 'automation_logs'
 export const TEAM_REBUILD_JOBS_SUBCOLLECTION = 'rebuild_jobs'
 
+// Platform-wide operator configuration (SMTP, etc.). Single well-known doc.
+// Read by Cloud Functions (getAppSettings) and written by the operator console.
+export const APP_SETTINGS_COLLECTION = 'app_settings'
+export const GLOBAL_SETTINGS_DOC = 'global_settings'
+// Public, world-readable subset of app settings (e.g. the signup flag). Kept in
+// a SEPARATE doc from global_settings so the public read rule never exposes the
+// private operator/SMTP config.
+export const PUBLIC_SETTINGS_DOC = 'public'
+
+// Signup gating (limited-launch). Both are Admin-SDK only (PII / security).
+// signup_allowlist: emails permitted to create a Linyup account while public
+// signup is closed. signup_invites: write-to-send-an-invite-email queue.
+export const SIGNUP_ALLOWLIST_COLLECTION = 'signup_allowlist'
+export const SIGNUP_INVITES_COLLECTION = 'signup_invites'
+
 // SaaS-specific (new in Linyup)
 export const SAAS_SUBSCRIPTIONS_COLLECTION = 'saas_subscriptions'
 // Daily platform-wide operator metric snapshots (doc id = YYYY-MM-DD).

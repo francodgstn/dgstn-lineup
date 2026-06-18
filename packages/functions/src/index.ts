@@ -24,6 +24,10 @@ export { sendMembershipVerificationCode } from './auth/sendMembershipVerificatio
 export { validateAuthToken } from './auth/validateAuthToken'
 export { generateApiKey } from './auth/generateApiKey'
 
+// Signup gating (limited launch) — blocking function + invite email trigger
+export { beforeSignup } from './auth/beforeSignup'
+export { onSignupInviteCreated } from './auth/onSignupInviteCreated'
+
 // Sync triggers
 export { syncTeamPublicProfile } from './sync/syncTeamPublicProfile'
 export { syncSessionPublicProfile } from './sync/syncSessionPublicProfile'

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import type { UserCredential } from 'firebase/auth'
 import { Mail, Loader2, ArrowLeft } from 'lucide-react'
 import { signInWithProvider, sendMagicLink, type SocialProvider } from '@/lib/auth'
+import { isSignupClosedError } from '@/lib/signupGate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -72,7 +73,10 @@ export function SocialAuthButtons({
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
         return
       }
-      if (code === 'auth/account-exists-with-different-credential') {
+      if (isSignupClosedError(err)) {
+        // Provider sign-in that would create a NEW account, blocked server-side.
+        setError(t('errorSignupClosed'))
+      } else if (code === 'auth/account-exists-with-different-credential') {
         setError(t('errorAccountExists'))
       } else {
         setError(t('errorProvider'))

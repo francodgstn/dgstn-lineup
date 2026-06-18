@@ -11,6 +11,11 @@ output "functions_runtime_sa" {
   value       = module.iam.functions_runtime_email
 }
 
+output "admin_runtime_sa" {
+  description = "Admin console (App Hosting) runtime service account email. Point the apps/admin backend at this SA."
+  value       = module.iam.admin_runtime_email
+}
+
 output "project_number" {
   description = "Numeric project number."
   value       = local.project_number

@@ -1645,7 +1645,9 @@
     "errorProvider": "Échec de la connexion. Veuillez réessayer.",
     "errorAccountExists": "Un compte existe déjà avec cet e-mail via une autre méthode de connexion.",
     "errorInvalidEmail": "Saisissez une adresse e-mail valide.",
-    "errorMagicLink": "Impossible d'envoyer le lien de connexion. Veuillez réessayer."
+    "errorMagicLink": "Impossible d'envoyer le lien de connexion. Veuillez réessayer.",
+    "errorSignupClosed": "Les inscriptions sont actuellement sur invitation uniquement. Si vous avez été invité, utilisez l'adresse e-mail exacte de votre invitation.",
+    "signupClosedNotice": "L'inscription est actuellement sur invitation uniquement. Si vous avez été invité, continuez ci-dessous avec l'adresse e-mail de votre invitation."
   },
   "Onboarding": {
     "replayTour": "Revoir la visite",

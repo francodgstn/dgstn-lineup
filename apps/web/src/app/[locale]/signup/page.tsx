@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { signUp } from '@/lib/auth'
 import { provisionTeam, userHasTeam } from '@/lib/provisioning'
+import { usePublicSignupEnabled, isSignupClosedError } from '@/lib/signupGate'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -70,6 +71,7 @@ function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
   const [error, setError] = useState<string | null>(null)
   const t = useTranslations('Signup')
   const tAuth = useTranslations('Auth')
+  const { enabled: signupEnabled } = usePublicSignupEnabled()
   const {
     register,
     handleSubmit,
@@ -88,7 +90,9 @@ function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
       })
     } catch (err) {
       const e = err as { code?: string }
-      if (e.code === 'auth/email-already-in-use') {
+      if (isSignupClosedError(err)) {
+        setError(tAuth('errorSignupClosed'))
+      } else if (e.code === 'auth/email-already-in-use') {
         setError(t('errorEmailInUse'))
       } else {
         setError(t('errorAccountGeneric'))
@@ -98,6 +102,14 @@ function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
 
   return (
     <div className="space-y-4">
+      {/* Invite-only notice while public signup is closed. The form stays usable
+          so an allowlisted invitee can finish; the server is the real gate. */}
+      {!signupEnabled && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+          {tAuth('signupClosedNotice')}
+        </p>
+      )}
+
       <SocialAuthButtons
         onAuthed={async (cred) => {
           const hasTeam = await userHasTeam(cred.user.uid)

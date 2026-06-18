@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import { Loader2 } from 'lucide-react'
 import { isMagicLink, completeMagicLink } from '@/lib/auth'
+import { isSignupClosedError } from '@/lib/signupGate'
 import { userHasTeam } from '@/lib/provisioning'
 import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,7 @@ export default function AuthFinishPage() {
   const router = useRouter()
   const t = useTranslations('Auth')
   const [state, setState] = useState<State>('working')
+  const [closed, setClosed] = useState(false)
   const [email, setEmail] = useState('')
 
   async function complete(fallbackEmail?: string) {
@@ -31,6 +33,8 @@ export default function AuthFinishPage() {
       if ((err as Error).message === 'missing-email') {
         setState('need-email')
       } else {
+        // A magic link for a brand-new account, blocked server-side, lands here.
+        setClosed(isSignupClosedError(err))
         setState('error')
       }
     }
@@ -77,7 +81,9 @@ export default function AuthFinishPage() {
 
         {state === 'error' && (
           <div className="space-y-3">
-            <p className="text-sm text-destructive">{t('linkExpired')}</p>
+            <p className="text-sm text-destructive">
+              {closed ? t('errorSignupClosed') : t('linkExpired')}
+            </p>
             <Button variant="outline" onClick={() => router.replace('/login')}>
               {t('backToLogin')}
             </Button>

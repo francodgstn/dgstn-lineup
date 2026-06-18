@@ -1650,7 +1650,9 @@
     "errorProvider": "Could not sign in. Please try again.",
     "errorAccountExists": "An account already exists with this email using a different sign-in method.",
     "errorInvalidEmail": "Enter a valid email address.",
-    "errorMagicLink": "Could not send the sign-in link. Please try again."
+    "errorMagicLink": "Could not send the sign-in link. Please try again.",
+    "errorSignupClosed": "Signups are currently invite-only. If you were invited, use the exact email address from your invitation.",
+    "signupClosedNotice": "Signup is currently invite-only. If you've been invited, continue below using the email address from your invitation."
   },
   "Onboarding": {
     "replayTour": "Replay tour",

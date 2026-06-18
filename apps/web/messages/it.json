@@ -1635,7 +1635,9 @@
     "errorProvider": "Accesso non riuscito. Riprova.",
     "errorAccountExists": "Esiste già un account con questa e-mail tramite un altro metodo di accesso.",
     "errorInvalidEmail": "Inserisci un indirizzo e-mail valido.",
-    "errorMagicLink": "Impossibile inviare il link di accesso. Riprova."
+    "errorMagicLink": "Impossibile inviare il link di accesso. Riprova.",
+    "errorSignupClosed": "Le registrazioni sono attualmente solo su invito. Se hai ricevuto un invito, usa l'indirizzo email esatto dell'invito.",
+    "signupClosedNotice": "La registrazione è attualmente solo su invito. Se hai ricevuto un invito, continua qui sotto con l'indirizzo email dell'invito."
   },
   "Onboarding": {
     "replayTour": "Rivedi il tour",

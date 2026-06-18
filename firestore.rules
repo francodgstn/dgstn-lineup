@@ -170,6 +170,23 @@ service cloud.firestore {
     //	resource.data --> current data in db
     //	request.resource.data --> data in the request
 
+    // Signup gating (limited launch).
+    // app_settings/public: world-readable signup flag so apps/web can adapt its
+    // UX. Only this ONE doc is public — global_settings (SMTP/operator config)
+    // stays default-deny. Writes happen only via the operator console (Admin SDK).
+    match /app_settings/public {
+      allow read: if true;
+      allow write: if false;
+    }
+    // signup_allowlist (emails are PII) and signup_invites are touched ONLY by
+    // the Admin SDK (operator console + Cloud Functions, which bypass rules).
+    match /signup_allowlist/{email} {
+      allow read, write: if false;
+    }
+    match /signup_invites/{inviteId} {
+      allow read, write: if false;
+    }
+
     // Private user profiles
     match /users/{userId} {
       // Users can only read their own profile; admins can read any. Restricts PII (email) exposure.

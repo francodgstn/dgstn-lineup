@@ -1,0 +1,43 @@
+# Firebase App Hosting — environment-specific config for the PROD admin backend.
+#
+# App Hosting merges this over the base apphosting.yaml when the admin backend's
+# "Environment name" is set to `prod` (Console → App Hosting → backend → settings,
+# or `apphosting:backends:create --environment prod`). Values here take precedence.
+#
+# Mirrors apps/web/apphosting.prod.yaml. The NEXT_PUBLIC_FIREBASE_* values are
+# public client config (Google sign-in only) reused from the linyup-prod web app;
+# source: `cd infra/environments/prod && terraform output -json firebase_web_config`.
+
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 80
+
+env:
+  # Operator allowlist (comma-separated).
+  - variable: OPERATOR_EMAILS
+    value: franco.dgstn@gmail.com
+    availability:
+      - RUNTIME
+
+  # Public client Firebase config for the login page (apiKey/authDomain/projectId/appId only).
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: linyup-prod
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: linyup-prod.firebaseapp.com
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:576514050360:web:f85b1c9c1dc0d7efbc99cd
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyCAYQcDgB9wBXylM33jbCfHfR7uQpw3tUE
+    availability:
+      - BUILD
+      - RUNTIME

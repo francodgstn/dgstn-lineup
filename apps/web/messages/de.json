@@ -1645,7 +1645,9 @@
     "errorProvider": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
     "errorAccountExists": "Mit dieser E-Mail besteht bereits ein Konto mit einer anderen Anmeldemethode.",
     "errorInvalidEmail": "Gib eine gültige E-Mail-Adresse ein.",
-    "errorMagicLink": "Anmeldelink konnte nicht gesendet werden. Bitte versuche es erneut."
+    "errorMagicLink": "Anmeldelink konnte nicht gesendet werden. Bitte versuche es erneut.",
+    "errorSignupClosed": "Die Registrierung ist derzeit nur auf Einladung möglich. Falls du eingeladen wurdest, verwende die genaue E-Mail-Adresse aus deiner Einladung.",
+    "signupClosedNotice": "Die Registrierung ist derzeit nur auf Einladung möglich. Falls du eingeladen wurdest, fahre unten mit der E-Mail-Adresse aus deiner Einladung fort."
   },
   "Onboarding": {
     "replayTour": "Tour erneut ansehen",

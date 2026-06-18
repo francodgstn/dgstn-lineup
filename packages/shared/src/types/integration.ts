@@ -43,6 +43,26 @@ export interface SmtpIntegration {
   updatedAt: Timestamp
 }
 
+// Platform-wide ("global") SMTP fallback, stored at
+// app_settings/global_settings.nodemailer_smtp. It is the bottom of the
+// team → org → global hierarchy resolved by getSmtpTransporter. The non-secret
+// fields live here; the password lives in the `smtp-password` Secret Manager
+// secret (read by getSMTPConfig). Edited from the operator console (apps/admin).
+export interface GlobalSmtpSettings {
+  host: string
+  port: number
+  secure: boolean          // true = TLS on connect (465), false = STARTTLS (587)
+  auth: {
+    user: string
+  }
+  // True once a password has been written to the `smtp-password` secret.
+  // The password itself is never stored in Firestore.
+  password_set?: boolean
+  password_updated_at?: Timestamp
+  updated_at?: Timestamp
+  updated_by?: string      // operator email that last saved the config
+}
+
 export interface TeamIntegration {
   id: string
   teamId: string

@@ -105,6 +105,7 @@ module "secrets" {
   project_id       = var.project_id
   secret_ids       = var.secret_ids
   runtime_sa_email = module.iam.functions_runtime_email
+  admin_sa_email   = module.iam.admin_runtime_email
 
   depends_on = [module.services]
 }

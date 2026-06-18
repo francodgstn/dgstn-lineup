@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { signIn, resetPassword } from '@/lib/auth'
 import { userHasTeam } from '@/lib/provisioning'
+import { usePublicSignupEnabled } from '@/lib/signupGate'
 import { isDemoMode } from '@/lib/demo'
 import { Logo } from '@/components/Logo'
 import { SocialAuthButtons, AuthDivider } from '@/components/auth/SocialAuthButtons'
@@ -23,6 +24,7 @@ export default function LoginPage() {
   const router = useRouter()
   const t = useTranslations('Login')
   const tAuth = useTranslations('Auth')
+  const { enabled: signupEnabled } = usePublicSignupEnabled()
   const [error, setError] = useState<string | null>(null)
   const [resetSent, setResetSent] = useState(false)
 
@@ -136,12 +138,16 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
-          {t('noAccount')}{' '}
-          <Link href="/signup" className="text-primary hover:underline">
-            {t('createAccount')}
-          </Link>
-        </p>
+        {/* Hide the public signup CTA while signup is closed. Invited users
+            reach /signup directly via their invite email; the server enforces. */}
+        {signupEnabled && (
+          <p className="text-center text-xs text-muted-foreground">
+            {t('noAccount')}{' '}
+            <Link href="/signup" className="text-primary hover:underline">
+              {t('createAccount')}
+            </Link>
+          </p>
+        )}
 
         {isDemoMode() && (
           <p className="text-center text-xs text-muted-foreground">

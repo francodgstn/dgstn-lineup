@@ -47,3 +47,23 @@ resource "google_firebase_hosting_site" "landing" {
 
   depends_on = [google_firebase_project.this]
 }
+
+# ── Identity Platform (GCIP) ──────────────────────────────────────────────────
+# REQUIRED for the `beforeSignup` (beforeUserCreated) blocking function that
+# gates new-user signup. Creating this upgrades the project's Firebase Auth to
+# Identity Platform. The blocking-function TRIGGER is registered by
+# `firebase deploy --only functions` (it writes config.blocking_functions), so we
+# ignore that field to avoid Terraform reverting the deploy on each apply. We
+# also ignore sign_in so Terraform never disturbs the Console-managed providers
+# (Email/Google/Apple/Facebook). Requires identitytoolkit.googleapis.com (already
+# in each env's `apis`) and a Blaze project (already true via Functions/App Hosting).
+resource "google_identity_platform_config" "this" {
+  provider = google-beta
+  project  = var.project_id
+
+  depends_on = [google_firebase_project.this]
+
+  lifecycle {
+    ignore_changes = [blocking_functions, sign_in]
+  }
+}

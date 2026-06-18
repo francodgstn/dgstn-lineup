@@ -59,8 +59,19 @@ jobs:
           PUBLIC_FIREBASE_PROJECT_ID: linyup-prod
           PUBLIC_FIREBASE_API_KEY: ${{ vars.PROD_FIREBASE_API_KEY }}
 
-      # The Next.js web app is NOT deployed here — Firebase App Hosting builds
-      # and deploys it automatically when it detects a push to the connected
-      # GitHub branch. This workflow only covers what App Hosting doesn't handle.
+      # Backend first: functions, Firestore rules/indexes, and the static landing
+      # site. The App Hosting apps (web + admin) are rolled out AFTER this so the
+      # frontend never goes live ahead of the backend it depends on.
       - name: Deploy to Firebase (Production)
         run: npx firebase-tools deploy --project production --only functions,hosting:landing,firestore --non-interactive --force
+
+      # App Hosting (Next.js SSR) — web + admin. Auto-rollout is DISABLED on the
+      # PROD backends (see infra/README.md §6), so prod ships ONLY through this
+      # gated workflow, in lockstep with the backend deploy above. We roll out the
+      # exact commit being deployed ($GITHUB_SHA) rather than a branch tip, so a
+      # concurrent merge can't sneak into the production rollout.
+      - name: Roll out web app (App Hosting, prod)
+        run: npx firebase-tools apphosting:rollouts:create linyup-web --project production --git-commit "$GITHUB_SHA" --non-interactive
+
+      - name: Roll out operator console (App Hosting, prod)
+        run: npx firebase-tools apphosting:rollouts:create linyup-admin --project production --git-commit "$GITHUB_SHA" --non-interactive

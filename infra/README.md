@@ -200,11 +200,67 @@ npx firebase-tools apphosting:secrets:grantaccess firebase-api-key \\
   --project linyup-staging --backend linyup-web
 ```
 
+### 5c. Operator console — apps/admin App Hosting backend (once, per env)
+
+The internal **operator console** (`apps/admin`, `@linyup/admin`) is a SEPARATE
+App Hosting backend in the same project, on its own domain (e.g. `ops.linyup.com`).
+Unlike `apps/web`, it **writes** Firestore (`app_settings/global_settings` via the
+Settings page) and **writes** the `smtp-password` secret, so it must run as the
+**dedicated `linyup-admin` service account** — created with all its IAM by
+Terraform — instead of the shared `firebase-app-hosting-compute` SA. This keeps
+those elevated grants off the customer web app's identity.
+
+```bash
+# The SA + its roles already exist after `terraform apply`:
+terraform output -raw admin_runtime_sa
+#   → linyup-admin@<project>.iam.gserviceaccount.com
+
+# Create the backend (root-dir apps/admin). Set its runtime SA to linyup-admin:
+npx firebase-tools apphosting:backends:create \
+  --project linyup-staging \
+  --app <WEB_APP_ID> \
+  --backend linyup-admin \
+  --primary-region us-central1 \
+  --root-dir apps/admin \
+  --service-account "$(terraform output -raw admin_runtime_sa)" \
+  --non-interactive
+```
+
+> If your firebase-tools version has no `--service-account` flag, create the
+> backend normally, then set the service account in **Firebase Console → App
+> Hosting → linyup-admin → ⚙ Settings → Service account → `linyup-admin@…`**.
+
+Then connect the GitHub repo (Console, root directory `apps/admin`, branch `main`)
+exactly as for `linyup-web` above. The `OPERATOR_EMAILS` + public
+`NEXT_PUBLIC_FIREBASE_*` config are already set in `apps/admin/apphosting.yaml`
+(staging) and `apphosting.prod.yaml` (prod) — for a prod backend, set its
+**Environment name** to `prod` (Console → App Hosting → backend → settings) so the
+prod overrides apply, mirroring `apps/web`.
+
+**No `apphosting:secrets:grantaccess` is needed** for the SMTP password — Terraform
+already grants `linyup-admin` `secretVersionAdder` on `smtp-password` (write). The
+console never reads the value back (it tracks a `password_set` flag in Firestore).
+
 ### 6. Enable CI
 
-Merge to `main` → `.github/workflows/deploy.yml` runs a keyless deploy. Production
-deploys run via `.github/workflows/deploy-prod.yml` (manual `workflow_dispatch`
-or a `v*` tag), gated on the `production` GitHub environment's required reviewer.
+**Staging — auto from `main`.** Merge to `main` → `.github/workflows/deploy.yml`
+runs a keyless deploy of functions/rules/landing, and the **staging** App Hosting
+backends (web + admin) auto-roll out from `main` via their GitHub connection. Fast
+feedback; no gate.
+
+**Production — one gated release, everything in lockstep.** `deploy-prod.yml`
+(manual `workflow_dispatch` or a `v*` tag, gated on the `production` GitHub
+environment's required reviewer) deploys functions/rules/landing **and** triggers
+the App Hosting rollout for web + admin (`apphosting:rollouts:create … --git-commit
+$GITHUB_SHA`). So the prod web app can never ship ahead of the backend it calls.
+
+> **Prerequisite — disable auto-rollout on the PROD App Hosting backends.** For
+> the gate to mean anything, the prod `linyup-web` and `linyup-admin` backends
+> must NOT auto-deploy on push. In **Console → App Hosting → backend → ⚙ Settings →
+> Deployment / rollouts**, turn **automatic rollouts off** (leave the GitHub repo
+> connected — manual rollouts still build from it). Leave staging backends on
+> auto-rollout. The prod deploy SA already has `firebaseapphosting.admin`, so the
+> workflow can create rollouts.
 
 ---
 
