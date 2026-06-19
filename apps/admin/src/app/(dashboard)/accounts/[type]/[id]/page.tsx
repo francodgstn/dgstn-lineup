@@ -12,7 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { StatusBadge, PlanBadge } from '@/components/status-badge'
+import { StatusBadge, PlanBadge, PaymentsBadge } from '@/components/status-badge'
+import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
@@ -116,6 +117,59 @@ export default async function AccountDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {account.payments && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Payments · member → studio (Stripe Connect)</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <Field label="Status" value={<PaymentsBadge status={account.payments.status} />} />
+              <Field
+                label="Onboarding"
+                value={account.payments.model ? account.payments.model.toUpperCase() : '—'}
+              />
+              <Field
+                label="Charges / payouts"
+                value={`${account.payments.chargesEnabled ? 'on' : 'off'} / ${account.payments.payoutsEnabled ? 'on' : 'off'}`}
+              />
+              <Field
+                label="Collected (gross)"
+                value={formatChf(account.payments.grossCollectedChf)}
+              />
+              <Field
+                label="Linyup fees earned"
+                value={formatChf(account.payments.platformFeesChf)}
+              />
+              <Field label="Refunded" value={formatChf(account.payments.refundedChf)} />
+              <Field label="Payments" value={account.payments.paymentsCount} />
+              <Field label="Active subscriptions" value={account.payments.activeSubscriptions} />
+              <Field
+                label="Connected account"
+                value={
+                  <code className="text-xs">{account.payments.connectAccountId ?? '—'}</code>
+                }
+              />
+            </div>
+
+            {account.payments.requirementsDue.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Outstanding requirements
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {account.payments.requirementsDue.map((r) => (
+                    <Badge key={r} variant="warning" className="font-normal">
+                      {r}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="py-0">
         <div className="px-4 pt-4">

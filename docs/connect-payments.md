@@ -104,6 +104,15 @@ is admin/function-only in `firestore.rules`). Absent/`true` = allowed; only an
 explicit `false` blocks. The **Payments** nav entry appears once a team has started
 onboarding (a connected account exists).
 
+## Operator console (apps/admin)
+
+The accounts **list** shows a per-team Connect status badge (Enabled / Restricted /
+Pending / Not set up / Disabled). The account **detail** page has a "Payments · member
+→ studio" card: onboarding model, charges/payouts enabled, connected-account id,
+outstanding requirements, and aggregated totals (gross collected, Linyup fees earned,
+refunded, payment count, active subscriptions). The admin app reads via the Admin SDK
+(server-side), so no Firestore rule changes are needed.
+
 ---
 
 ## Selling subscription types (membership linkage)
