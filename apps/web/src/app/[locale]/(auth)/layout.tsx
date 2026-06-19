@@ -66,6 +66,9 @@ type NavItem = {
   requiresOrg?: boolean
   // Only shown when the team has the Stripe Connect feature flag enabled.
   requiresConnect?: boolean
+  // Active only on an exact path match (not prefix) — for hub routes like
+  // /plugins whose children (/plugins/website, …) have their own nav items.
+  exact?: boolean
 }
 
 type NavSection = { labelKey: string; items: NavItem[] }
@@ -93,7 +96,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/team/event-types', labelKey: 'eventTypes', icon: CalendarRange },
       { href: '/team/subscriptions', labelKey: 'subscriptions', icon: Tag },
       { href: '/automations', labelKey: 'automations', icon: Workflow },
-      { href: '/plugins', labelKey: 'plugins', icon: Puzzle },
+      { href: '/plugins', labelKey: 'plugins', icon: Puzzle, exact: true },
     ],
   },
   {
@@ -127,7 +130,9 @@ function NavLink({
 
   const isActive =
     !isLocked &&
-    (item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href))
+    (item.href === '/dashboard' || item.exact
+      ? pathname === item.href
+      : pathname.startsWith(item.href))
 
   if (isLocked) {
     return (
