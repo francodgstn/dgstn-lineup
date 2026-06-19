@@ -189,14 +189,16 @@ Confirmed against Stripe test mode (2026-06-19, run via the guarded integration 
   lets a studio sign into an existing Stripe account or create a new one (both framings).
 - ✅ **Direct charge + refund** — one-off direct charge with `application_fee_amount`, then a
   partial refund with proportional fee reversal, both succeed on the connected account.
-- ✅ **Enablement derivation** — `normalizeAccount()` correctly maps the `card_payments`
-  capability → `charges_enabled` and surfaces the exact `requirements_currently_due` list for
-  the finish-setup UI. (Note: test mode permits charges on a still-`restricted` account;
-  production blocks them, which `requireChargeableAccount` enforces by gating on `enabled`.)
-- ⏳ **TWINT** — the `twint_payments` capability is requested and tracked, but only activates
-  once the account is **fully** KYC-onboarded (it shows `restricted` alongside `card_payments`
-  until then). Confirming activation + the **one-active-mandate-per-studio↔member** recurring
-  behavior needs a fully-onboarded account + a real TWINT Checkout payment (redirect-based,
+- ✅ **Enablement derivation** — on a fully-onboarded account, `normalizeAccount()` correctly
+  produced `status: enabled`, `charges_enabled: true`, `payouts_enabled: true` from the active
+  capabilities + empty requirements; on a restricted account it surfaces the exact
+  `requirements_currently_due` list for the finish-setup UI. (Test mode permits charges on a
+  still-`restricted` account; production blocks them, which `requireChargeableAccount` enforces
+  by gating on `enabled`.)
+- ✅ **TWINT capability** — after full KYC onboarding, `twint_payments` flips to `active`
+  alongside `card_payments`, confirming TWINT works under direct charges + Connect.
+- ⏳ **TWINT recurring** — the only remaining manual check: the **one-active-mandate-per-
+  studio↔member** behavior on subscriptions needs a real TWINT Checkout payment (redirect-based,
   so not server-automatable).
 
 ---
