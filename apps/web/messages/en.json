@@ -36,6 +36,7 @@
     "plugins": "Plugins",
     "settings": "Settings",
     "billing": "Billing",
+    "payments": "Payments",
     "signOut": "Sign out"
   },
   "Login": {
@@ -1793,5 +1794,44 @@
     "downgradeBannerBody": "Everything is still here. You can keep working with up to 10 active contacts and one user. Upgrade to lift the limits.",
     "downgradeBannerCta": "See plans",
     "dismiss": "Dismiss"
+  },
+  "ConnectPayments": {
+    "title": "Accept payments",
+    "description": "Collect memberships, drop-ins and shop payments from your members. Money goes straight to your own Stripe account.",
+    "feeNote": "Linyup's fee is {pct}% per payment.",
+    "statusEnabled": "Ready",
+    "statusIncomplete": "Setup needed",
+    "chooseModel": "Choose how to set up",
+    "managedTitle": "Create a new account",
+    "managedDesc": "Guided Stripe setup — Stripe handles verification.",
+    "byoTitle": "Use my Stripe account",
+    "byoDesc": "Connect your existing Stripe account with full dashboard access.",
+    "startSetup": "Start setup",
+    "finishSetup": "Finish setup",
+    "refreshStatus": "Refresh",
+    "readyBody": "Your account is set up and can accept payments.",
+    "chargesEnabled": "Charges enabled",
+    "payoutsEnabled": "Payouts enabled",
+    "incompleteBody": "Your payment account needs a few more details before you can accept payments."
+  },
+  "PaymentsDashboard": {
+    "title": "Payments",
+    "paymentsHeading": "One-off payments",
+    "noPayments": "No payments yet.",
+    "payment": "Payment",
+    "fee": "Fee",
+    "refunded": "Refunded",
+    "disputed": "Disputed",
+    "status_succeeded": "Paid",
+    "status_partially_refunded": "Partly refunded",
+    "status_refunded": "Refunded",
+    "status_failed": "Failed",
+    "status_pending": "Pending",
+    "refund": "Refund",
+    "subscriptionsHeading": "Memberships",
+    "membership": "Membership",
+    "refundConfirmTitle": "Refund this payment?",
+    "refundConfirmBody": "This refunds {amount} to the member and reverses the platform fee proportionally.",
+    "cancel": "Cancel"
   }
 }

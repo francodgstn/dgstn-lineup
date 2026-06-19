@@ -20,6 +20,7 @@ import {
   Globe,
   Settings,
   CreditCard,
+  Wallet,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -63,6 +64,8 @@ type NavItem = {
   icon: React.ElementType
   minPlan?: SaasPlan
   requiresOrg?: boolean
+  // Only shown when the team has the Stripe Connect feature flag enabled.
+  requiresConnect?: boolean
 }
 
 type NavSection = { labelKey: string; items: NavItem[] }
@@ -76,6 +79,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/schedule', labelKey: 'calendar', icon: Calendar },
       { href: '/bookings', labelKey: 'bookings', icon: ClipboardList },
       { href: '/contacts', labelKey: 'contacts', icon: Users },
+      { href: '/payments', labelKey: 'payments', icon: Wallet, requiresConnect: true },
     ],
   },
   {
@@ -480,6 +484,7 @@ function SidebarContent({
   const t = useTranslations('Nav')
   const { team } = useAuth()
   const inOrg = !!team?.org_id
+  const connectOn = team?.payments?.connectEnabled === true
 
   // Plugin nav entries: those targeting a built-in section render inside it;
   // the rest fall back to the default "Plugins" group below.
@@ -542,7 +547,7 @@ function SidebarContent({
               {!secCollapsed && (
                 <div className="space-y-0.5">
                   {section.items
-                    .filter((item) => !item.requiresOrg || inOrg)
+                    .filter((item) => (!item.requiresOrg || inOrg) && (!item.requiresConnect || connectOn))
                     .map((item) => (
                       <NavLink
                         key={item.href}

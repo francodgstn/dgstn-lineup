@@ -36,6 +36,7 @@
     "plugins": "Plugin",
     "settings": "Impostazioni",
     "billing": "Fatturazione",
+    "payments": "Pagamenti",
     "signOut": "Esci"
   },
   "Login": {
@@ -1778,5 +1779,44 @@
     "downgradeBannerBody": "È tutto ancora qui. Puoi continuare a lavorare con fino a 10 contatti attivi e un utente. Esegui l'upgrade per rimuovere i limiti.",
     "downgradeBannerCta": "Vedi i piani",
     "dismiss": "Chiudi"
+  },
+  "ConnectPayments": {
+    "title": "Accetta pagamenti",
+    "description": "Incassa abbonamenti, ingressi singoli e acquisti dai tuoi membri. Il denaro va direttamente sul tuo account Stripe.",
+    "feeNote": "La commissione di Linyup è del {pct}% per pagamento.",
+    "statusEnabled": "Pronto",
+    "statusIncomplete": "Configurazione necessaria",
+    "chooseModel": "Scegli la configurazione",
+    "managedTitle": "Crea un nuovo account",
+    "managedDesc": "Configurazione Stripe guidata — Stripe gestisce la verifica.",
+    "byoTitle": "Usa il mio account Stripe",
+    "byoDesc": "Collega il tuo account Stripe esistente con accesso completo alla dashboard.",
+    "startSetup": "Avvia la configurazione",
+    "finishSetup": "Completa la configurazione",
+    "refreshStatus": "Aggiorna",
+    "readyBody": "Il tuo account è configurato e può accettare pagamenti.",
+    "chargesEnabled": "Pagamenti attivi",
+    "payoutsEnabled": "Pagamenti in uscita attivi",
+    "incompleteBody": "Il tuo account di pagamento necessita di altri dettagli prima di poter accettare pagamenti."
+  },
+  "PaymentsDashboard": {
+    "title": "Pagamenti",
+    "paymentsHeading": "Pagamenti singoli",
+    "noPayments": "Ancora nessun pagamento.",
+    "payment": "Pagamento",
+    "fee": "Commissione",
+    "refunded": "Rimborsato",
+    "disputed": "Contestato",
+    "status_succeeded": "Pagato",
+    "status_partially_refunded": "Parzialmente rimborsato",
+    "status_refunded": "Rimborsato",
+    "status_failed": "Fallito",
+    "status_pending": "In sospeso",
+    "refund": "Rimborsa",
+    "subscriptionsHeading": "Abbonamenti",
+    "membership": "Abbonamento",
+    "refundConfirmTitle": "Rimborsare questo pagamento?",
+    "refundConfirmBody": "Questo rimborsa {amount} al membro e annulla proporzionalmente la commissione della piattaforma.",
+    "cancel": "Annulla"
   }
 }

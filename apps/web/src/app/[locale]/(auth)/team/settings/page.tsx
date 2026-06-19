@@ -81,6 +81,7 @@ import {
   EyeOff,
   Mail,
 } from 'lucide-react'
+import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
 import { useSmtpSettings } from '@/hooks/useSmtpSettings'
@@ -1277,6 +1278,10 @@ function PaymentsTab({ teamId }: { teamId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* Stripe Connect — collect payments from members (settles on the studio's
+          balance + platform fee). Renders only when enabled per team. */}
+      <ConnectPaymentsCard teamId={teamId} />
+
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{t('paymentsGateway')}</p>
         <Button size="sm" onClick={openAdd}>

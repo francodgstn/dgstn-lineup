@@ -71,6 +71,14 @@ service cloud.firestore {
              (role == 'viewer' && (userRole == 'owner' || userRole == 'manager' || userRole == 'viewer'));
     }
 
+    // The team's `payments` map (Stripe Connect feature flag + connected-account
+    // mirror) is managed only by Cloud Functions (Admin SDK) and platform admins.
+    // Owners must not self-toggle connectEnabled (the feature ships dark, enabled
+    // per studio by an operator) or forge the connected-account mirror.
+    function paymentsUnchanged() {
+      return request.resource.data.get('payments', {}) == resource.data.get('payments', {});
+    }
+
     // Organization Helper functions
     //-------------------------------------------------------
 
@@ -237,8 +245,10 @@ service cloud.firestore {
                isTeamMember(teamId)
                || resource.data.get('createdBy', null) == request.auth.uid);
 
-      // Only team owners can update team details
-      allow update: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner');
+      // Only team owners can update team details. The `payments` map (Connect
+      // feature flag + account mirror) is reserved for Cloud Functions / admins.
+      allow update: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner')
+                    && (paymentsUnchanged() || hasRole('admin'));
 
       // Only users with admin role can create teams, OR the user is provisioning their own first team
       allow create: if isAuthed() && (hasRole('admin') || request.resource.data.createdBy == request.auth.uid);
@@ -417,6 +427,18 @@ service cloud.firestore {
       // Payment events (Payrexx) — immutable audit trail written by handlePayrexxWebhook.
       // Managers and owners can read; no client writes allowed.
       match /payment_events/{eventId} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
+      // Stripe Connect member payments / subscriptions (member → studio).
+      // Reconciled from Stripe webhooks via the Admin SDK; clients never write.
+      // Managers and owners can read for the payments dashboard.
+      match /member_payments/{paymentId} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+      match /member_subscriptions/{subscriptionId} {
         allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
         allow write: if false;
       }
@@ -901,6 +923,22 @@ service cloud.firestore {
     match /saas_checkout_attempts/{docId} {
       allow read:  if false;
       allow write: if false; // Cloud Function only
+    }
+
+    // ----------------------------------------------
+    // Stripe Connect (member → studio payments)
+    // ----------------------------------------------
+    // Connected-account state, keyed by Stripe account id (acct_...). Written only
+    // by Cloud Functions; managers/owners of the owning team can read their own.
+    match /connect_accounts/{accountId} {
+      allow read: if resource.data.teamId != null
+                  && (hasTeamRole(resource.data.teamId, 'manager') || hasTeamRole(resource.data.teamId, 'owner'));
+      allow write: if false; // Cloud Functions only
+    }
+
+    // Webhook idempotency markers (doc id = Stripe event id). Functions only.
+    match /connect_webhook_events/{eventId} {
+      allow read, write: if false;
     }
 
     // ----------------------------------------------
