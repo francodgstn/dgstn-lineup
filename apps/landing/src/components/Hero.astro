@@ -1,7 +1,6 @@
 ---
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
-import GloveIcon from './GloveIcon.astro';
 
 interface Props {
   lang: Language;
@@ -18,14 +17,14 @@ const FIREBASE_API_KEY = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
 // Live demo playground (sandbox). Each link goes straight to /preview?team=,
 // which auto-signs into that demo studio. Keep keys in sync with the pre-launch
 // page and DEMO_ACCOUNTS in apps/web/src/lib/demo.ts.
-// Martial arts is the default vertical; the rest are framed as "also built for".
-const DEMO_PRIMARY = { key: 'grappling', accent: '#dc2626' } as const;
-const DEMO_ALSO = [
-  { key: 'crossfit', accent: '#0f172a' },
-  { key: 'tennis', accent: '#16a34a' },
-  { key: 'yoga', accent: '#9333ea' },
-  { key: 'pilates', accent: '#0d9488' },
+// All activities are equal peers — no default vertical, and martial arts is not first.
+const DEMO_STUDIOS = [
   { key: 'dance', accent: '#db2777' },
+  { key: 'crossfit', accent: '#0f172a' },
+  { key: 'yoga', accent: '#9333ea' },
+  { key: 'tennis', accent: '#16a34a' },
+  { key: 'pilates', accent: '#0d9488' },
+  { key: 'grappling', accent: '#dc2626' },
 ] as const;
 ---
 
@@ -64,43 +63,25 @@ const DEMO_ALSO = [
     </form>
     <p class="form-status" id="form-status" aria-live="polite"></p>
 
-    <!-- Live demo shortcut — martial arts is the default; the rest are "also built for" -->
+    <!-- Live demo shortcut — every activity is an equal peer; no default vertical -->
     <div class="demo-cta">
       <p class="demo-eyebrow"><i data-lucide="play-circle"></i> {t('hero.demoEyebrow')}</p>
-
-      <a
-        class="demo-primary"
-        href={`${DEMO_URL}/preview?team=${DEMO_PRIMARY.key}`}
-        target="_blank"
-        rel="noopener"
-        style={`--chip-accent: ${DEMO_PRIMARY.accent}`}
-      >
-        <span class="demo-primary-icon"><GloveIcon /></span>
-        <span class="demo-primary-text">
-          <strong>{t(`hero.demoStudios.${DEMO_PRIMARY.key}`)}</strong>
-          <span>{t('hero.demoPrimary')}</span>
-        </span>
-        <i data-lucide="arrow-right"></i>
-      </a>
-
-      <div class="demo-also">
-        <span class="demo-also-label">{t('hero.demoAlso')}</span>
-        <div class="demo-chips">
-          {
-            DEMO_ALSO.map((studio) => (
-              <a
-                class="demo-chip"
-                href={`${DEMO_URL}/preview?team=${studio.key}`}
-                target="_blank"
-                rel="noopener"
-                style={`--chip-accent: ${studio.accent}`}
-              >
-                <span class="demo-chip-dot"></span>
-                {t(`hero.demoStudios.${studio.key}`)}
-              </a>
-            ))
-          }
-        </div>
+      <p class="demo-intro">{t('hero.demoIntro')}</p>
+      <div class="demo-chips">
+        {
+          DEMO_STUDIOS.map((studio) => (
+            <a
+              class="demo-chip"
+              href={`${DEMO_URL}/preview?team=${studio.key}`}
+              target="_blank"
+              rel="noopener"
+              style={`--chip-accent: ${studio.accent}`}
+            >
+              <span class="demo-chip-dot"></span>
+              {t(`hero.demoStudios.${studio.key}`)}
+            </a>
+          ))
+        }
       </div>
     </div>
   </div>
@@ -230,7 +211,9 @@ const DEMO_ALSO = [
   h1.title {
     font-family: "Anton", var(--font-sans);
     font-weight: 400;
-    font-size: 66px;
+    /* Fluid: scales smoothly from 66px (desktop) down to a 44px floor, so the
+       triad doesn't drop abruptly or shrink too far on small screens. */
+    font-size: clamp(44px, 9.5vw, 66px);
     line-height: 0.98;
     letter-spacing: 0.005em;
     text-transform: uppercase;
@@ -262,7 +245,9 @@ const DEMO_ALSO = [
   .form-status.error { color: var(--warning-fg); }
 
   /* Live demo shortcut — type chips (narrow so they wrap into a few rows) */
-  .demo-cta { max-width: 540px; margin: 36px auto 0; }
+  /* Wide enough for all demo chips to sit on one line on large screens; the
+     flex row still wraps on narrower viewports. */
+  .demo-cta { max-width: 700px; margin: 36px auto 0; }
   .demo-eyebrow {
     display: flex;
     justify-content: center;
@@ -277,54 +262,8 @@ const DEMO_ALSO = [
   }
   .demo-eyebrow :global(svg) { width: 15px; height: 15px; color: var(--primary); }
 
-  /* Default vertical — martial arts. Kept compact + soft (pill, hairline border,
-     tinted icon) so it reads as part of the demo group, not a heavy standalone CTA. */
-  .demo-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    text-align: left;
-    padding: 7px 14px 7px 7px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
-    box-shadow: var(--ring-card), var(--shadow-sm);
-    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
-  }
-  .demo-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--ring-card), var(--shadow-md);
-    border-color: color-mix(in oklch, var(--chip-accent, var(--primary)) 45%, transparent);
-  }
-  .demo-primary-icon {
-    width: 32px;
-    height: 32px;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    border-radius: 9px;
-    background: color-mix(in oklch, var(--chip-accent, var(--primary)) 14%, var(--card));
-    color: var(--chip-accent, var(--primary));
-    border: 1px solid color-mix(in oklch, var(--chip-accent, var(--primary)) 22%, transparent);
-  }
-  .demo-primary-icon :global(svg) { width: 18px; height: 18px; }
-  .demo-primary-text { display: flex; flex-direction: column; gap: 0; line-height: 1.2; }
-  .demo-primary-text strong { font-size: 13.5px; font-weight: 700; color: var(--foreground); }
-  .demo-primary-text span { font-size: 11.5px; color: var(--muted-foreground); }
-  .demo-primary > :global(svg) { width: 15px; height: 15px; color: var(--muted-foreground); margin-left: 4px; transition: transform 0.16s ease, color 0.16s ease; }
-  .demo-primary:hover > :global(svg) { transform: translateX(3px); color: var(--chip-accent, var(--primary)); }
-
-  /* Also built for — the other verticals, secondary */
-  .demo-also { margin-top: 18px; }
-  .demo-also-label {
-    display: block;
-    font-size: 11.5px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--muted-foreground);
-    margin: 0 0 12px;
-  }
+  /* Intro line — all activities presented as equal peers (no default vertical) */
+  .demo-intro { font-size: 14px; line-height: 1.5; color: var(--muted-foreground); margin: 0 0 18px; }
 
   .demo-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
   .demo-chip {
@@ -359,7 +298,6 @@ const DEMO_ALSO = [
 
   @media (max-width: 860px) {
     .hero { padding: 56px 0 40px; }
-    h1.title { font-size: 40px; }
     .sub { font-size: 17px; }
     .coming-soon { top: 14px; right: 14px; font-size: 11px; padding: 5px 11px; }
   }

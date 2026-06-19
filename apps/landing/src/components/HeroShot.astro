@@ -18,15 +18,17 @@ const t = useTranslations(lang);
         <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
         <span class="frame-url"><i data-lucide="lock"></i> app.linyup.com/dashboard</span>
       </div>
-      <img
-        class="frame-img"
-        src={dashboard.src}
-        width={dashboard.width}
-        height={dashboard.height}
-        alt={t('showcase.dashboardAlt')}
-        loading="eager"
-        decoding="async"
-      />
+      <div class="frame-crop" style={`aspect-ratio: ${dashboard.width} / ${Math.round(dashboard.height / 3)}`}>
+        <img
+          class="frame-img"
+          src={dashboard.src}
+          width={dashboard.width}
+          height={dashboard.height}
+          alt={t('showcase.dashboardAlt')}
+          loading="eager"
+          decoding="async"
+        />
+      </div>
     </figure>
   </div>
 </section>
@@ -41,11 +43,16 @@ const t = useTranslations(lang);
     overflow: hidden;
     background: var(--card);
     border: 1px solid var(--border);
-    /* Fade the bottom into the page — show a "peek" of the dashboard, fading out
-       just above the midline (drop-shadow removed; it can't be masked cleanly). */
-    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 46%, transparent 88%);
-    mask-image: linear-gradient(to bottom, #000 0, #000 46%, transparent 88%);
+    /* Fade the cropped bottom edge (border included) into the page — a long,
+       soft gradient so more of the dashboard shows through in transparency. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 42%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 42%, transparent 100%);
   }
+
+  /* Show only the top ~quarter of the dashboard as a "peek". The crop box height
+     is a quarter of the image's proportion (aspect-ratio set inline from the
+     intrinsic size); the full-width image overflows and is clipped to its top. */
+  .frame-crop { overflow: hidden; }
 
   .frame-bar {
     display: flex;

@@ -11,9 +11,9 @@
     "cta": "Get early access"
   },
   "hero": {
-    "tagline": "Built for martial arts schools",
+    "tagline": "For new and growing clubs",
     "title": "Run your classes. Know your students. Grow your studio.",
-    "subtitle": "Modern, built by coaches, and your data migrated for you — free.",
+    "subtitle": "Less admin, more coaching — the modern, affordable platform for coaches and small studios.",
     "cta": "Start for free",
     "ctaSecondary": "See features",
     "comingSoon": "Coming soon",
@@ -24,8 +24,7 @@
     "emailError": "Something went wrong — please try again.",
     "emailModalSub": "Linyup is launching soon — leave your email and we'll let you know the moment it's ready.",
     "demoEyebrow": "Try a live demo — no signup",
-    "demoPrimary": "Step into a live dojo",
-    "demoAlso": "Also built for",
+    "demoIntro": "Works for dance, fitness, yoga, tennis, martial arts and more — pick a studio to explore:",
     "demoStudios": {
       "grappling": "Martial arts",
       "crossfit": "CrossFit",
@@ -37,17 +36,17 @@
   },
   "heroFeatures": {
     "eyebrow": "The essentials",
-    "title": "Built to run your dojo",
-    "subtitle": "Everything a martial arts school needs to run, and every studio too. Simple by default.",
+    "title": "Built to run your club",
+    "subtitle": "Everything a coach or small studio needs to run — whatever you teach. Simple by default.",
     "cards": {
       "sessions": { "title": "Plan your classes", "benefit": "Recurring sessions, capacity, and attendance in one calendar." },
       "bookings": { "title": "Take bookings online", "benefit": "Students reserve their spot in a tap." },
       "memberships": { "title": "Manage memberships", "benefit": "Sell plans and track every renewal automatically." },
       "payments": { "title": "Collect payments", "benefit": "Dues collect themselves — no more chasing." },
-      "rankings": { "title": "Track belts & ranks", "benefit": "Grade students and keep them chasing the next belt." },
+      "rankings": { "title": "Track ranks & levels", "benefit": "Grade students and keep them chasing the next level." },
       "mobileApp": { "title": "Give students an app", "benefit": "A branded iOS and Android app to book and check in." },
       "checkins": { "title": "Check students in", "benefit": "A quick QR scan at the door — no clipboards." },
-      "automations": { "title": "Automate the busywork", "benefit": "Welcome, remind, and win back members on autopilot." }
+      "automations": { "title": "Automate the busywork", "benefit": "Welcome, remind, and win back contacts on autopilot." }
     }
   },
   "proof": {
@@ -57,12 +56,12 @@
   "showcase": {
     "eyebrow": "See it in action",
     "title": "A real look inside Linyup",
-    "subtitle": "Not mockups — real screens from a martial arts studio running on Linyup.",
-    "dashboardAlt": "The Linyup dashboard for a martial arts studio",
+    "subtitle": "Not mockups — real screens from a studio running on Linyup.",
+    "dashboardAlt": "The Linyup dashboard",
     "shots": {
       "schedule": { "title": "See your whole week", "detail": "Every class, room, and coach in one colour-coded calendar." },
       "contact": { "title": "Track every student's progress", "detail": "Attendance, streaks, and a performance radar on every profile." },
-      "courses": { "title": "Sell online courses", "detail": "Package your curriculum into courses members follow at their own pace." },
+      "courses": { "title": "Sell online courses", "detail": "Package your curriculum into courses contacts follow at their own pace." },
       "biolink": { "title": "Build your bio-link", "detail": "One shareable link to your schedule, booking, online courses and website — with live preview." }
     }
   },
@@ -85,18 +84,18 @@
       "biolink": { "title": "Bio link", "description": "One link for everything you offer.", "detail": "One shareable link with your schedule, booking, and sign-up — perfect for your Instagram or TikTok bio." },
       "website": { "title": "Website", "description": "A booking site, ready out of the box.", "detail": "Launch a polished studio website with your schedule and pricing built in — no designer, no code." },
       "mobileApp": { "title": "Mobile app", "description": "iOS & Android app for your students.", "detail": "Your students get a branded iOS and Android app to book, check in, and stay in the loop wherever they are." },
-      "automations": { "title": "Automations", "description": "Put the busywork on autopilot.", "detail": "Set it once and let Linyup welcome new members, send reminders, and win back lapsed ones — automatically." },
+      "automations": { "title": "Automations", "description": "Put the busywork on autopilot.", "detail": "Set it once and let Linyup welcome new contacts, send reminders, and win back lapsed ones — automatically." },
       "gamification": { "title": "Gamification", "description": "Reward streaks, keep students hooked.", "detail": "Points, streaks, and badges that turn simply showing up into a habit your students genuinely love." },
-      "rankings": { "title": "Rankings", "description": "Belts & leaderboards that motivate.", "detail": "Track belts, levels, and leaderboards that keep members chasing their next milestone — and coming back." },
-      "referrals": { "title": "Referrals", "description": "Turn members into your marketers.", "detail": "Reward members for bringing friends, with referrals tracked and credited automatically. Your best growth channel." },
-      "courses": { "title": "Courses", "description": "Sell structured multi-week programs.", "detail": "Package your expertise into multi-week online courses your members can buy and follow at their own pace." },
-      "events": { "title": "Events", "description": "Run competitions, camps & workshops.", "detail": "Run competitions, camps, gradings, and workshops with sign-ups, invitations, and check-in all built in." },
+      "rankings": { "title": "Rankings", "description": "Levels & leaderboards that motivate.", "detail": "Track ranks, levels, and leaderboards that keep contacts chasing their next milestone — and coming back." },
+      "referrals": { "title": "Referrals", "description": "Turn contacts into your marketers.", "detail": "Reward contacts for bringing friends, with referrals tracked and credited automatically. Your best growth channel." },
+      "courses": { "title": "Courses", "description": "Sell structured multi-week programs.", "detail": "Package your expertise into multi-week online courses your contacts can buy and follow at their own pace." },
+      "events": { "title": "Events", "description": "Run competitions, camps & workshops.", "detail": "Run competitions, camps, and workshops with sign-ups, invitations, and check-in all built in." },
       "eventForms": { "title": "Event forms", "description": "Custom sign-up & check-in fields.", "detail": "Collect exactly the information you need at sign-up with fully custom fields for every event type." },
-      "groups": { "title": "Groups", "description": "Organise members into cohorts.", "detail": "Organise members into squads, levels, or committees for targeted communication and effortless management." },
+      "groups": { "title": "Groups", "description": "Organise contacts into cohorts.", "detail": "Organise contacts into squads, levels, or committees for targeted communication and effortless management." },
       "customFields": { "title": "Custom fields", "description": "Track exactly the data you need.", "detail": "Add the fields your studio actually needs and track any data on any contact — your CRM, your rules." },
       "analytics": { "title": "Analytics", "description": "Trends & engagement at a glance.", "detail": "See attendance, retention, and engagement trends so you always know what's working — and what needs attention." },
       "whatsapp": { "title": "WhatsApp", "description": "Reach students where they already are.", "detail": "Send reminders, updates, and re-engagement messages on WhatsApp, right where your students already are." },
-      "aiInsights": { "title": "AI insights", "description": "Spot churn risk before it happens.", "detail": "Let AI flag members at risk of leaving and even draft the perfect message to win them back before they're gone." },
+      "aiInsights": { "title": "AI insights", "description": "Spot churn risk before it happens.", "detail": "Let AI flag contacts at risk of leaving and even draft the perfect message to win them back before they're gone." },
       "team": { "title": "Team & roles", "description": "Invite coaches, assign permissions.", "detail": "Invite coaches and managers with the right permissions for each role — everyone sees exactly what they should." }
     }
   },
@@ -115,6 +114,7 @@
     "subtitle": "Simple plans that scale with you.",
     "trialNote": "14-day free trial · No credit card required.",
     "migrationNote": "Switching platforms? We migrate your data for you — free.",
+    "swissNote": "Swiss-made · prices in CHF · EN/DE/FR/IT",
     "perMonth": "/mo",
     "afterPromo": "after 3 months",
     "promoBadge": "Launch offer",

@@ -13,14 +13,15 @@ const t = useTranslations(lang);
 const APP_URL = import.meta.env.PUBLIC_APP_URL ?? 'https://app.linyup.com';
 const DEMO_URL = import.meta.env.PUBLIC_DEMO_URL ?? 'https://demo.linyup.com';
 
-// Demo studios for the "Live demo" dropdown — same targets/labels as the hero chips.
+// Demo studios for the "Live demo" dropdown — same targets/labels/order as the
+// hero chips. Equal peers, martial arts not first.
 const DEMO_STUDIOS = [
-  { key: 'grappling', accent: '#dc2626' },
-  { key: 'crossfit', accent: '#0f172a' },
-  { key: 'tennis', accent: '#16a34a' },
-  { key: 'yoga', accent: '#9333ea' },
-  { key: 'pilates', accent: '#0d9488' },
   { key: 'dance', accent: '#db2777' },
+  { key: 'crossfit', accent: '#0f172a' },
+  { key: 'yoga', accent: '#9333ea' },
+  { key: 'tennis', accent: '#16a34a' },
+  { key: 'pilates', accent: '#0d9488' },
+  { key: 'grappling', accent: '#dc2626' },
 ] as const;
 ---
 

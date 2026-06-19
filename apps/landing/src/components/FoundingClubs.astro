@@ -1,7 +1,6 @@
 ---
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
-import GloveIcon from './GloveIcon.astro';
 
 interface Props {
   lang: Language;
@@ -14,7 +13,7 @@ const t = useTranslations(lang);
 // skeleton bar, icon only) read clearly as "your logo here" rather than a fake
 // logo. The last plate is a CTA that opens the early-access modal
 // ([data-early-access]) — the whole band is an invitation, not social proof.
-const slots = ['glove', 'shield', 'medal', 'flame'] as const;
+const slots = ['dumbbell', 'shield', 'medal', 'flame'] as const;
 ---
 
 <section class="proof">
@@ -24,7 +23,7 @@ const slots = ['glove', 'shield', 'medal', 'flame'] as const;
       {
         slots.map((icon) => (
           <div class="proof-slot" aria-hidden="true">
-            <span class="proof-slot-icon">{icon === 'glove' ? <GloveIcon /> : <i data-lucide={icon} />}</span>
+            <span class="proof-slot-icon"><i data-lucide={icon} /></span>
             <span class="proof-slot-bar" />
           </div>
         ))
@@ -37,7 +36,7 @@ const slots = ['glove', 'shield', 'medal', 'flame'] as const;
 </section>
 
 <style>
-  .proof { padding: 26px 0 6px; }
+  .proof { padding: 56px 0 48px; }
   .proof .wrap { text-align: center; }
 
   .proof-label {
@@ -97,7 +96,7 @@ const slots = ['glove', 'shield', 'medal', 'flame'] as const;
   .proof-slot-cta:hover { background: var(--purple-100); transform: translateY(-2px); }
 
   @media (max-width: 860px) {
-    .proof { padding: 18px 0 4px; }
+    .proof { padding: 36px 0 28px; }
     /* Keep the band slim on mobile — show the first three plates + the CTA */
     .proof-slot:nth-of-type(n + 4):not(.proof-slot-cta) { display: none; }
   }
