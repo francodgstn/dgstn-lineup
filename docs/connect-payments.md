@@ -94,15 +94,36 @@ STRIPE_CONNECT_WEBHOOK_SECRET=whsec_...   # from `stripe listen` (Connect), see 
 
 ---
 
-## Enabling the feature for a studio
+## Enabling the feature
 
-The feature is **off by default**. An operator (admin role) sets the flag — owners
-cannot self-enable it (enforced in `firestore.rules`: the team `payments` map is
-admin/function-only):
+**Self-serve.** Any team owner can set it up from **Settings → Payments** ("Set up
+payments") and onboard their Stripe account — no operator action needed. The card is
+visible by default. An operator can **disable** a team (kill-switch) by setting
+`teams/{teamId}.payments.connectEnabled = false` (admin-only; the team `payments` map
+is admin/function-only in `firestore.rules`). Absent/`true` = allowed; only an
+explicit `false` blocks. The **Payments** nav entry appears once a team has started
+onboarding (a connected account exists).
 
-```
-teams/{teamId}.payments.connectEnabled = true
-```
+---
+
+## Selling subscription types (membership linkage)
+
+Connect is the payment rail for the team's **subscription types** (the membership
+catalog, `teams/{teamId}/subscription_types`). `createMembershipPayment` resolves a
+chosen `subscription_type` + price and routes by recurrence:
+
+- **Recurring** (`weekly`/`biweekly`/`monthly`/`quarterly`/`annual`) → a Stripe
+  subscription on the connected account (interval + `interval_count`).
+- **One-off** (`one_time`, `per_class`) → a single direct charge. A `one_time` price
+  carries `included_months`; on payment the member's `membership_expiration` is set to
+  `now + included_months` (e.g. "intro offer: CHF 100, 2 months incl.").
+
+On a successful payment the webhook **updates the buyer's contact** (mirroring
+`handlePayrexxWebhook`): `subscription_type_id`, `subscription_price_id`,
+`subscription_amount`, `subscription_recurrence`, `membership_expiration`,
+`last_payment_at`, plus an `activity_log` entry. The contact is resolved by
+`metadata.contactId` (preferred) or by email. Managers create a payment link from the
+**Payments dashboard → "Create payment link"** (pick type + price + member email).
 
 ---
 
@@ -112,10 +133,11 @@ teams/{teamId}.payments.connectEnabled = true
 |---|---|---|---|
 | `startConnectOnboarding` | callable | owner | Create the connected account (once) + return a hosted Account Link URL. |
 | `getConnectStatus` | callable | owner | Refresh status from Stripe, persist, return charges/payouts enabled + outstanding requirements. |
-| `createMemberPayment` | callable | manager+ | One-off direct-charge Checkout Session (+ `application_fee_amount`). |
-| `createMemberSubscription` | callable | manager+ | Subscription Checkout Session (+ `application_fee_percent`). |
+| `createMembershipPayment` | callable | manager+ | Sell a subscription type + price → routes recurring/one-off, links the contact on payment. |
+| `createMemberPayment` | callable | manager+ | Ad-hoc one-off direct-charge Checkout Session (+ `application_fee_amount`). |
+| `createMemberSubscription` | callable | manager+ | Ad-hoc subscription Checkout Session (+ `application_fee_percent`). |
 | `refundMemberPayment` | callable | manager+ | Refund a charge, reversing the platform fee proportionally. |
-| `handleConnectWebhook` | onRequest (public) | Stripe | Verify + reconcile account / payment / subscription / refund / dispute state. |
+| `handleConnectWebhook` | onRequest (public) | Stripe | Verify + reconcile account / payment / subscription / refund / dispute state + contact membership. |
 
 ### Data model
 

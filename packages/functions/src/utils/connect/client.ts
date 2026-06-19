@@ -274,6 +274,7 @@ export async function createSubscriptionCheckoutSession(params: {
   amount: number // per-period Rappen
   currency?: string
   interval: 'day' | 'week' | 'month' | 'year'
+  intervalCount?: number // e.g. 2 for biweekly, 3 for quarterly
   applicationFeePercent: number // from takeRatePercent(tier)
   productName: string
   successUrl: string
@@ -292,7 +293,7 @@ export async function createSubscriptionCheckoutSession(params: {
           price_data: {
             currency: params.currency ?? PHASE1_CURRENCY,
             unit_amount: params.amount,
-            recurring: { interval: params.interval },
+            recurring: { interval: params.interval, interval_count: params.intervalCount ?? 1 },
             product_data: { name: params.productName },
           },
         },

@@ -22,13 +22,14 @@ export function ConnectPaymentsCard({ teamId }: { teamId: string }) {
   const { team } = useAuth()
   const { plan } = usePlan()
 
-  const flagOn = team?.payments?.connectEnabled === true
-  const { data: status, isLoading, refetch, isRefetching } = useConnectStatus(teamId, flagOn)
+  // Self-serve: owners can set up payments by default. An operator can disable a
+  // team by setting payments.connectEnabled === false (kill-switch).
+  const notDisabled = team?.payments?.connectEnabled !== false
+  const { data: status, isLoading, refetch, isRefetching } = useConnectStatus(teamId, notDisabled)
   const start = useStartConnectOnboarding()
   const [model, setModel] = useState<ConnectOnboardingModel>('managed')
 
-  // Ship dark: invisible until enabled per studio.
-  if (!flagOn) return null
+  if (!notDisabled) return null
 
   const feePct = plan ? takeRatePercent(plan) : null
 

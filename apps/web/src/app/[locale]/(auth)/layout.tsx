@@ -484,7 +484,10 @@ function SidebarContent({
   const t = useTranslations('Nav')
   const { team } = useAuth()
   const inOrg = !!team?.org_id
-  const connectOn = team?.payments?.connectEnabled === true
+  // Show the Payments dashboard once a team has started Connect onboarding
+  // (an account exists), as long as it isn't operator-disabled.
+  const connectOn =
+    !!team?.payments?.connectAccountId && team?.payments?.connectEnabled !== false
 
   // Plugin nav entries: those targeting a built-in section render inside it;
   // the rest fall back to the default "Plugins" group below.

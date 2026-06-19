@@ -42,16 +42,17 @@ export interface EnabledTeam {
 }
 
 /**
- * Loads the team and enforces the per-team Connect feature flag
- * (teams/{teamId}.payments.connectEnabled). Throws unless the flag is on, so the
- * feature ships dark until an operator enables it per studio.
+ * Loads the team and enforces the Connect kill-switch. Connect is self-serve:
+ * owners can set it up by default; an operator can disable a team by setting
+ * teams/{teamId}.payments.connectEnabled === false (admin-only, see firestore.rules).
+ * Only an explicit `false` blocks — absent/true is allowed.
  */
 export async function loadEnabledTeam(teamId: string): Promise<EnabledTeam> {
   const snap = await admin.firestore().collection(TEAMS_COLLECTION).doc(teamId).get()
   if (!snap.exists) throw new HttpsError('not-found', 'Team not found')
   const data = snap.data()!
-  if (data.payments?.connectEnabled !== true) {
-    throw new HttpsError('failed-precondition', 'Connect payments are not enabled for this team')
+  if (data.payments?.connectEnabled === false) {
+    throw new HttpsError('failed-precondition', 'Connect payments are disabled for this team')
   }
   return {
     id: snap.id,

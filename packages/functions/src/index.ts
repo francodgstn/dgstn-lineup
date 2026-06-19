@@ -138,7 +138,11 @@ export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'
 
 // Stripe Connect (member → studio payments; studio's own Stripe balance + platform fee)
 export { startConnectOnboarding, getConnectStatus } from './connect'
-export { createMemberPayment, createMemberSubscription } from './connect/payments'
+export {
+  createMemberPayment,
+  createMemberSubscription,
+  createMembershipPayment,
+} from './connect/payments'
 export { refundMemberPayment } from './connect/refunds'
 export { handleConnectWebhook } from './connect/webhook'
 

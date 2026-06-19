@@ -353,6 +353,7 @@
     "performanceIndicator_sense_of_progress": "Progression",
     "subscriptionTerminationReason": "Raison de fin",
     "recurrence_per_class": "Par séance",
+    "recurrence_one_time": "Unique",
     "recurrence_weekly": "Hebdomadaire",
     "recurrence_biweekly": "Bihebdomadaire",
     "recurrence_monthly": "Mensuel",
@@ -767,6 +768,7 @@
     "subTypePricingDesc": "Ajoutez un ou plusieurs prix. Laissez vide pour seulement suivre le nom du plan.",
     "subTypeAddPrice": "Ajouter un prix",
     "subTypePriceLabelPlaceholder": "Libellé (optionnel) — ex. Offre découverte",
+    "subTypeIncludedMonths": "Mois inclus",
     "subTypePriceMoveUp": "Monter",
     "subTypePriceMoveDown": "Descendre",
     "subTypePriceRemove": "Supprimer le prix",
@@ -1827,6 +1829,15 @@
     "membership": "Abonnement",
     "refundConfirmTitle": "Rembourser ce paiement ?",
     "refundConfirmBody": "Cela rembourse {amount} au membre et annule les frais de plateforme au prorata.",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "createLink": "Créer un lien de paiement",
+    "createLinkTitle": "Créer un lien de paiement",
+    "selectType": "Type d'abonnement",
+    "selectPrice": "Prix",
+    "memberEmail": "E-mail du membre (facultatif)",
+    "monthsShort": "mois",
+    "generate": "Générer le lien",
+    "linkReady": "Partagez ce lien avec le membre pour payer :",
+    "done": "Terminé"
   }
 }

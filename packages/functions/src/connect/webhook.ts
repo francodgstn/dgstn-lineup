@@ -19,6 +19,7 @@ import { onRequest } from 'firebase-functions/v2/https'
 import {
   CONNECT_ACCOUNTS_COLLECTION,
   CONNECT_WEBHOOK_EVENTS_COLLECTION,
+  CONTACTS_COLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
@@ -69,6 +70,75 @@ function memberSubscriptionRef(teamId: string, subscriptionId: string) {
     .doc(subscriptionId)
 }
 
+// ─── contact membership linkage (mirror of handlePayrexxWebhook) ─────────────────
+// A membership payment carries metadata.kind === 'membership' + subscriptionTypeId.
+// On success we update the buying contact's membership, just like Payrexx does.
+
+function addMonths(months: number): Timestamp {
+  const d = new Date()
+  d.setMonth(d.getMonth() + months)
+  return Timestamp.fromDate(d)
+}
+
+/** Resolve the contact: prefer metadata.contactId (verified to belong to the team),
+ * else fall back to an email lookup (teamId + email), mirroring Payrexx. */
+async function resolveContactId(
+  teamId: string,
+  md: Record<string, string>,
+  fallbackEmail?: string | null
+): Promise<string | null> {
+  if (md.contactId) {
+    const snap = await admin.firestore().collection(CONTACTS_COLLECTION).doc(md.contactId).get()
+    if (snap.exists && snap.data()?.teamId === teamId) return md.contactId
+  }
+  if (fallbackEmail) {
+    const q = await admin
+      .firestore()
+      .collection(CONTACTS_COLLECTION)
+      .where('teamId', '==', teamId)
+      .where('email', '==', fallbackEmail)
+      .limit(1)
+      .get()
+    if (!q.empty) return q.docs[0].id
+  }
+  return null
+}
+
+async function applyMembership(
+  teamId: string,
+  md: Record<string, string>,
+  opts: { amountRappen: number; membershipExpiration: Timestamp | null; fallbackEmail?: string | null }
+): Promise<void> {
+  if (md.kind !== 'membership' || !md.subscriptionTypeId) return
+  const contactId = await resolveContactId(teamId, md, opts.fallbackEmail)
+  if (!contactId) {
+    console.log(`[connect] membership payment: no contact matched (team=${teamId})`)
+    return
+  }
+  const db = admin.firestore()
+  const update: Record<string, unknown> = {
+    last_payment_at: FieldValue.serverTimestamp(),
+    subscription_type_id: md.subscriptionTypeId,
+    subscription_type_name: md.subscriptionTypeName ?? null,
+    subscription_price_id: md.priceId ?? null,
+    subscription_recurrence: md.recurrence ?? null,
+    subscription_amount: Math.round(opts.amountRappen) / 100, // contact stores major units
+    subscription_type_updated_at: FieldValue.serverTimestamp(),
+  }
+  if (opts.membershipExpiration) update.membership_expiration = opts.membershipExpiration
+  await db.collection(CONTACTS_COLLECTION).doc(contactId).set(update, { merge: true })
+  await db
+    .collection(CONTACTS_COLLECTION)
+    .doc(contactId)
+    .collection('activity_log')
+    .add({
+      type: 'payment_received',
+      source: 'stripe_connect',
+      message: `Membership payment received${md.subscriptionTypeName ? ` · ${md.subscriptionTypeName}` : ''}`,
+      timestamp: FieldValue.serverTimestamp(),
+    })
+}
+
 // ─── per-event-type handlers ─────────────────────────────────────────────────────
 
 async function handlePaymentIntent(
@@ -97,6 +167,16 @@ async function handlePaymentIntent(
     },
     { merge: true }
   )
+
+  // A successful one-off membership charge updates the buyer's contact membership.
+  if (status === 'succeeded') {
+    const months = md.includedMonths ? parseInt(md.includedMonths, 10) : 0
+    await applyMembership(team.teamId, md, {
+      amountRappen: pi.amount ?? 0,
+      membershipExpiration: months > 0 ? addMonths(months) : null,
+      fallbackEmail: (pi.receipt_email as string | undefined) ?? null,
+    })
+  }
 }
 
 async function handleChargeRefunded(team: TeamRef, charge: any, eventId: string): Promise<void> {
@@ -169,6 +249,17 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
     },
     { merge: true }
   )
+
+  // While the recurring membership is active, keep the contact's membership in
+  // sync (expiry tracks the current period end). Cancellations don't extend it.
+  if (sub.status === 'active' || sub.status === 'trialing') {
+    await applyMembership(team.teamId, md, {
+      amountRappen: item?.price?.unit_amount ?? 0,
+      membershipExpiration: sub.current_period_end
+        ? Timestamp.fromMillis((sub.current_period_end as number) * 1000)
+        : null,
+    })
+  }
 }
 
 async function handleInvoice(

@@ -35,12 +35,22 @@ import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Globe } from 'lucide-reac
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { formatCurrency } from '@/lib/format'
 
-const RECURRENCES = ['per_class', 'weekly', 'biweekly', 'monthly', 'quarterly', 'annual'] as const
+const RECURRENCES = [
+  'per_class',
+  'one_time',
+  'weekly',
+  'biweekly',
+  'monthly',
+  'quarterly',
+  'annual',
+] as const
 
 const priceSchema = z.object({
   id: z.string(),
   amount: z.coerce.number().positive(),
   recurrence: z.enum(RECURRENCES),
+  // Months of membership granted by a one_time price (e.g. intro offer).
+  included_months: z.coerce.number().int().positive().optional(),
   label: z.string().max(40).optional(),
   active: z.boolean().optional(),
 })
@@ -66,6 +76,7 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
       id: p.id,
       amount: p.amount,
       recurrence: p.recurrence,
+      included_months: p.included_months,
       label: p.label ?? '',
       active: p.active ?? true,
     })),
@@ -122,6 +133,9 @@ function SubTypeDialog({
         active: p.active ?? true,
       }
       if (p.label?.trim()) entry.label = p.label.trim()
+      if (p.recurrence === 'one_time' && p.included_months) {
+        entry.included_months = p.included_months
+      }
       return entry
     })
     const payload = {
@@ -278,6 +292,16 @@ function SubTypeDialog({
                           ))}
                         </SelectContent>
                       </Select>
+                      {watch(`prices.${i}.recurrence`) === 'one_time' && (
+                        <Input
+                          type="number"
+                          step="1"
+                          min="1"
+                          {...register(`prices.${i}.included_months`)}
+                          className="w-[130px]"
+                          placeholder={t('subTypeIncludedMonths')}
+                        />
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Input

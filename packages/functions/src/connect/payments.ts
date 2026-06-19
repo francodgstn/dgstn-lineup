@@ -10,8 +10,17 @@
 // member_payments / member_subscriptions records are written by the webhook
 // (Phase E) from Stripe events — never from client-reported success.
 
+import * as admin from 'firebase-admin'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { computePlatformFee, takeRatePercent } from '@linyup/shared'
+import {
+  computePlatformFee,
+  takeRatePercent,
+  recurrenceToStripeInterval,
+  isRecurringRecurrence,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  TEAMS_COLLECTION,
+  type SubscriptionType,
+} from '@linyup/shared'
 import { getHostingUrl } from '../utils/env'
 import {
   createOneOffCheckoutSession,
@@ -165,5 +174,110 @@ export const createMemberSubscription = onCall(async (request) => {
   } catch (err) {
     console.error('[connect] createMemberSubscription failed:', err)
     throw new HttpsError('internal', 'Failed to create the subscription')
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createMembershipPayment — sell one of the team's subscription types to a member.
+// Resolves the chosen price, routes recurring→subscription / one-off→single charge,
+// and embeds metadata so the webhook updates the member's contact membership.
+// ─────────────────────────────────────────────────────────────────────────────
+export const createMembershipPayment = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+
+  const data = request.data as {
+    teamId?: string
+    subscriptionTypeId?: string
+    priceId?: string
+    contactId?: string
+    customerEmail?: string
+    successUrl?: string
+    cancelUrl?: string
+    locale?: string
+    idempotencyKey?: string
+  }
+  if (!data?.teamId || !data?.subscriptionTypeId || !data?.priceId) {
+    throw new HttpsError('invalid-argument', 'teamId, subscriptionTypeId and priceId are required')
+  }
+  const { teamId, subscriptionTypeId, priceId } = data
+  const locale = data.locale ?? 'en'
+
+  await assertManager(request.auth.uid, teamId)
+  const team = await loadEnabledTeam(teamId)
+  const { accountId, model } = requireChargeableAccount(team)
+
+  // Resolve the subscription type + the chosen price.
+  const typeSnap = await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(SUBSCRIPTION_TYPES_SUBCOLLECTION)
+    .doc(subscriptionTypeId)
+    .get()
+  if (!typeSnap.exists) throw new HttpsError('not-found', 'Subscription type not found')
+  const subType = typeSnap.data() as SubscriptionType
+  const price = (subType.prices ?? []).find((p) => p.id === priceId)
+  if (!price) throw new HttpsError('not-found', 'Price not found on this subscription type')
+
+  // Amount: subscription prices are stored in MAJOR units (e.g. 49.9) → Rappen.
+  const amount = Math.round(price.amount * 100)
+  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
+    throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
+  }
+
+  const { successUrl, cancelUrl } = resultUrls(locale, data.successUrl, data.cancelUrl)
+  const productName = price.label ? `${subType.name} — ${price.label}` : subType.name
+
+  // Metadata the webhook reads to update the member's contact membership.
+  const metadata: Record<string, string> = {
+    teamId,
+    kind: 'membership',
+    subscriptionTypeId,
+    subscriptionTypeName: subType.name,
+    priceId,
+    recurrence: price.recurrence,
+  }
+  if (data.contactId) metadata.contactId = data.contactId
+  if (price.included_months) metadata.includedMonths = String(price.included_months)
+
+  const interval = recurrenceToStripeInterval(price.recurrence)
+  const idempotencyKey =
+    data.idempotencyKey ??
+    `membership:${teamId}:${request.auth.uid}:${priceId}:${Math.floor(Date.now() / 60000)}`
+
+  try {
+    if (isRecurringRecurrence(price.recurrence) && interval) {
+      const session = await createSubscriptionCheckoutSession({
+        accountId,
+        amount,
+        interval: interval.interval,
+        intervalCount: interval.interval_count,
+        applicationFeePercent: takeRatePercent(team.plan),
+        productName,
+        successUrl,
+        cancelUrl,
+        customerEmail: data.customerEmail,
+        metadata,
+        idempotencyKey,
+      })
+      return { url: session.url, sessionId: session.sessionId, recurring: true }
+    }
+
+    // per_class / one_time → single charge.
+    const session = await createOneOffCheckoutSession({
+      accountId,
+      amount,
+      applicationFeeAmount: computePlatformFee({ tier: team.plan, amount, model }),
+      productName,
+      successUrl,
+      cancelUrl,
+      customerEmail: data.customerEmail,
+      metadata,
+      idempotencyKey,
+    })
+    return { url: session.url, sessionId: session.sessionId, recurring: false }
+  } catch (err) {
+    console.error('[connect] createMembershipPayment failed:', err)
+    throw new HttpsError('internal', 'Failed to create the membership payment')
   }
 })

@@ -58,6 +58,25 @@ export function useStartConnectOnboarding() {
   })
 }
 
+export function useCreateMembershipPayment() {
+  return useMutation({
+    mutationFn: async (vars: {
+      teamId: string
+      subscriptionTypeId: string
+      priceId: string
+      contactId?: string
+      customerEmail?: string
+      locale?: string
+    }) => {
+      const fn = httpsCallable<typeof vars, { url: string; sessionId: string; recurring: boolean }>(
+        functions,
+        'createMembershipPayment'
+      )
+      return (await fn(vars)).data
+    },
+  })
+}
+
 export function useMemberPayments(teamId: string | null) {
   return useQuery({
     queryKey: ['member-payments', teamId],

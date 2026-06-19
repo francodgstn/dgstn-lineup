@@ -358,6 +358,7 @@
     "performanceIndicator_sense_of_progress": "Progress",
     "subscriptionTerminationReason": "Reason for ending",
     "recurrence_per_class": "Per class",
+    "recurrence_one_time": "One-time",
     "recurrence_weekly": "Weekly",
     "recurrence_biweekly": "Biweekly",
     "recurrence_monthly": "Monthly",
@@ -772,6 +773,7 @@
     "subTypePricingDesc": "Add one or more prices. Leave empty to just track the plan name.",
     "subTypeAddPrice": "Add price",
     "subTypePriceLabelPlaceholder": "Label (optional) — e.g. Intro offer",
+    "subTypeIncludedMonths": "Months incl.",
     "subTypePriceMoveUp": "Move up",
     "subTypePriceMoveDown": "Move down",
     "subTypePriceRemove": "Remove price",
@@ -1832,6 +1834,15 @@
     "membership": "Membership",
     "refundConfirmTitle": "Refund this payment?",
     "refundConfirmBody": "This refunds {amount} to the member and reverses the platform fee proportionally.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "createLink": "Create payment link",
+    "createLinkTitle": "Create a payment link",
+    "selectType": "Membership type",
+    "selectPrice": "Price",
+    "memberEmail": "Member email (optional)",
+    "monthsShort": "mo",
+    "generate": "Generate link",
+    "linkReady": "Share this link with the member to pay:",
+    "done": "Done"
   }
 }
