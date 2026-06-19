@@ -195,7 +195,19 @@ export interface SubscriptionType {
   source?: 'internal' | 'aggregator'
   active?: boolean
   public?: boolean // show on the bio-link / website pricing table (default off)
+  // Display order (lower = first), respected by the manager list, the website
+  // pricing table, and any other place that lists subscription types. Absent
+  // values sort last (by name) until the studio reorders.
+  order?: number
   prices?: SubscriptionPrice[] // optional; absent = the simple "just a container" flow
+}
+
+/** Stable sort for subscription types: explicit `order` first (asc), then name. */
+export function compareSubscriptionTypes(a: SubscriptionType, b: SubscriptionType): number {
+  const ao = a.order ?? Number.MAX_SAFE_INTEGER
+  const bo = b.order ?? Number.MAX_SAFE_INTEGER
+  if (ao !== bo) return ao - bo
+  return (a.name ?? '').localeCompare(b.name ?? '')
 }
 
 // ─── subscription history (contacts/{id}/subscription_history) ────────────────

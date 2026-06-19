@@ -769,6 +769,8 @@
     "subTypeAddPrice": "Aggiungi prezzo",
     "subTypePriceLabelPlaceholder": "Etichetta (opzionale) — es. Offerta intro",
     "subTypeIncludedMonths": "Mesi incl.",
+    "subTypeMoveUp": "Sposta su",
+    "subTypeMoveDown": "Sposta giù",
     "subTypePriceMoveUp": "Sposta su",
     "subTypePriceMoveDown": "Sposta giù",
     "subTypePriceRemove": "Rimuovi prezzo",

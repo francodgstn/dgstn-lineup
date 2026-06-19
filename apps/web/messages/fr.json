@@ -769,6 +769,8 @@
     "subTypeAddPrice": "Ajouter un prix",
     "subTypePriceLabelPlaceholder": "Libellé (optionnel) — ex. Offre découverte",
     "subTypeIncludedMonths": "Mois inclus",
+    "subTypeMoveUp": "Monter",
+    "subTypeMoveDown": "Descendre",
     "subTypePriceMoveUp": "Monter",
     "subTypePriceMoveDown": "Descendre",
     "subTypePriceRemove": "Supprimer le prix",

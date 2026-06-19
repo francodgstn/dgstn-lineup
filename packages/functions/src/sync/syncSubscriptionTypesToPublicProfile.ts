@@ -32,7 +32,6 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
         .collection(SUBSCRIPTION_TYPES_SUBCOLLECTION)
         .where('public', '==', true)
         .where('active', '==', true)
-        .orderBy('name')
         .get()
     )
 
@@ -41,8 +40,19 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
       throw queryErr
     }
 
+    // Order by the studio-set `order` (asc), then name. Sorted in memory so docs
+    // without an `order` field aren't excluded (a Firestore orderBy would drop
+    // them) and no composite index is required. The website pricing table renders
+    // this array in order.
+    const docsSorted = [...snapshot!.docs].sort((a, b) => {
+      const ao = (a.data().order as number | undefined) ?? Number.MAX_SAFE_INTEGER
+      const bo = (b.data().order as number | undefined) ?? Number.MAX_SAFE_INTEGER
+      if (ao !== bo) return ao - bo
+      return String(a.data().name ?? '').localeCompare(String(b.data().name ?? ''))
+    })
+
     type PublicPrice = { amount: number; recurrence: string; label?: string }
-    const publicTypes = snapshot!.docs.map((d) => {
+    const publicTypes = docsSorted.map((d) => {
       const data = d.data()
       // name + description power the website Pricing cards / booking bio-link;
       // prices feed the automatic pricing table. Omit absent fields (no undefined).

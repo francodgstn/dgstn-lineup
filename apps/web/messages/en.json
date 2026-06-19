@@ -774,6 +774,8 @@
     "subTypeAddPrice": "Add price",
     "subTypePriceLabelPlaceholder": "Label (optional) — e.g. Intro offer",
     "subTypeIncludedMonths": "Months incl.",
+    "subTypeMoveUp": "Move up",
+    "subTypeMoveDown": "Move down",
     "subTypePriceMoveUp": "Move up",
     "subTypePriceMoveDown": "Move down",
     "subTypePriceRemove": "Remove price",
