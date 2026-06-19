@@ -71,7 +71,9 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
     description: editing?.description ?? '',
     source: editing?.source ?? 'internal',
     active: editing?.active ?? true,
-    public: editing?.public ?? false,
+    // New subscription types default to visible on the public pricing page;
+    // existing ones keep whatever was saved.
+    public: editing ? (editing.public ?? false) : true,
     prices: (editing?.prices ?? []).map((p) => ({
       id: p.id,
       amount: p.amount,
