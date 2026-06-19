@@ -11,9 +11,9 @@
     "cta": "Accesso anticipato"
   },
   "hero": {
-    "tagline": "Pensato per le scuole di arti marziali",
+    "tagline": "Per club nuovi e in crescita",
     "title": "Gestisci le tue lezioni. Conosci i tuoi studenti. Fai crescere il tuo studio.",
-    "subtitle": "Moderno, creato dai coach — e migriamo i tuoi dati per te, gratis.",
+    "subtitle": "Meno burocrazia, più coaching — la piattaforma moderna e conveniente per coach e piccoli studi.",
     "cta": "Inizia gratis",
     "ctaSecondary": "Scopri le funzionalità",
     "comingSoon": "Disponibile a breve",
@@ -24,8 +24,7 @@
     "emailError": "Qualcosa è andato storto — riprova.",
     "emailModalSub": "Linyup sta per arrivare — lascia la tua email e ti avviseremo appena è pronto.",
     "demoEyebrow": "Prova una demo live — senza registrazione",
-    "demoPrimary": "Entra in un dojo live",
-    "demoAlso": "Pensato anche per",
+    "demoIntro": "Funziona per danza, fitness, yoga, tennis, arti marziali e altro — scegli uno studio da esplorare:",
     "demoStudios": {
       "grappling": "Arti marziali",
       "crossfit": "CrossFit",
@@ -37,17 +36,17 @@
   },
   "heroFeatures": {
     "eyebrow": "L'essenziale",
-    "title": "Pensato per gestire il tuo dojo",
-    "subtitle": "Tutto ciò che serve a una scuola di arti marziali, e a ogni studio. Semplice di default.",
+    "title": "Pensato per gestire il tuo club",
+    "subtitle": "Tutto ciò che serve a un coach o a un piccolo studio — qualunque cosa insegni. Semplice di default.",
     "cards": {
       "sessions": { "title": "Pianifica le tue lezioni", "benefit": "Lezioni ricorrenti, posti e presenze in un unico calendario." },
       "bookings": { "title": "Accetta prenotazioni online", "benefit": "Gli studenti riservano il posto con un tocco." },
       "memberships": { "title": "Gestisci gli abbonamenti", "benefit": "Vendi piani e traccia ogni rinnovo automaticamente." },
       "payments": { "title": "Incassa i pagamenti", "benefit": "Le quote si incassano da sole — niente più solleciti." },
-      "rankings": { "title": "Traccia cinture e gradi", "benefit": "Valuta gli studenti e tienili motivati verso la prossima cintura." },
+      "rankings": { "title": "Traccia gradi e livelli", "benefit": "Valuta gli studenti e tienili motivati verso il livello successivo." },
       "mobileApp": { "title": "Dai un'app ai tuoi studenti", "benefit": "Un'app iOS e Android col tuo brand per prenotare e fare check-in." },
       "checkins": { "title": "Registra gli studenti", "benefit": "Una scansione QR veloce all'ingresso — niente fogli." },
-      "automations": { "title": "Automatizza il lavoro ripetitivo", "benefit": "Dai il benvenuto, ricorda e recupera i membri in automatico." }
+      "automations": { "title": "Automatizza il lavoro ripetitivo", "benefit": "Dai il benvenuto, ricorda e recupera i contatti in automatico." }
     }
   },
   "proof": {
@@ -57,12 +56,12 @@
   "showcase": {
     "eyebrow": "In azione",
     "title": "Uno sguardo reale dentro Linyup",
-    "subtitle": "Niente mockup — schermate reali di una scuola di arti marziali che usa Linyup.",
-    "dashboardAlt": "La dashboard Linyup di una scuola di arti marziali",
+    "subtitle": "Niente mockup — schermate reali di uno studio che usa Linyup.",
+    "dashboardAlt": "La dashboard Linyup",
     "shots": {
       "schedule": { "title": "Tutta la settimana a colpo d'occhio", "detail": "Ogni lezione, sala e coach in un unico calendario a colori." },
       "contact": { "title": "Segui i progressi di ogni studente", "detail": "Presenze, serie e un radar delle performance su ogni profilo." },
-      "courses": { "title": "Vendi corsi online", "detail": "Trasforma le tue competenze in corsi che i membri seguono al proprio ritmo." },
+      "courses": { "title": "Vendi corsi online", "detail": "Trasforma le tue competenze in corsi che i contatti seguono al proprio ritmo." },
       "biolink": { "title": "Crea il tuo bio-link", "detail": "Un link condivisibile a orario, prenotazioni, corsi online e sito web — con anteprima live." }
     }
   },
@@ -85,18 +84,18 @@
       "biolink": { "title": "Bio link", "description": "Un link per tutto ciò che offri.", "detail": "Un unico link condivisibile con orario, prenotazioni e iscrizioni — perfetto per la tua bio Instagram o TikTok." },
       "website": { "title": "Sito web", "description": "Un sito di prenotazione pronto all'uso.", "detail": "Lancia un sito curato per il tuo studio con orario e prezzi integrati — senza designer né codice." },
       "mobileApp": { "title": "App mobile", "description": "App iOS e Android per i tuoi studenti.", "detail": "I tuoi studenti hanno un'app iOS e Android col tuo brand per prenotare, fare check-in e restare aggiornati ovunque." },
-      "automations": { "title": "Automazioni", "description": "Il lavoro ripetitivo in pilota automatico.", "detail": "Imposta una volta e lascia che Linyup dia il benvenuto, invii promemoria e recuperi i membri inattivi — in automatico." },
+      "automations": { "title": "Automazioni", "description": "Il lavoro ripetitivo in pilota automatico.", "detail": "Imposta una volta e lascia che Linyup dia il benvenuto, invii promemoria e recuperi i contatti inattivi — in automatico." },
       "gamification": { "title": "Gamification", "description": "Premia le serie, fidelizza gli studenti.", "detail": "Punti, serie e badge che trasformano il semplice presentarsi in un'abitudine che i tuoi studenti adorano." },
-      "rankings": { "title": "Classifiche", "description": "Cinture e classifiche che motivano.", "detail": "Traccia cinture, livelli e classifiche che spingono i membri verso il prossimo traguardo — e li fanno tornare." },
-      "referrals": { "title": "Referral", "description": "I membri diventano i tuoi promotori.", "detail": "Premia i membri che portano amici — referral tracciati e accreditati in automatico. Il tuo miglior canale di crescita." },
-      "courses": { "title": "Corsi online", "description": "Vendi programmi di più settimane.", "detail": "Trasforma le tue competenze in corsi online di più settimane che i tuoi membri acquistano e seguono al proprio ritmo." },
-      "events": { "title": "Eventi", "description": "Gare, stage e workshop.", "detail": "Organizza gare, stage, esami e workshop — con iscrizioni, inviti e check-in già integrati." },
+      "rankings": { "title": "Classifiche", "description": "Livelli e classifiche che motivano.", "detail": "Traccia gradi, livelli e classifiche che spingono i contatti verso il prossimo traguardo — e li fanno tornare." },
+      "referrals": { "title": "Referral", "description": "I contatti diventano i tuoi promotori.", "detail": "Premia i contatti che portano amici — referral tracciati e accreditati in automatico. Il tuo miglior canale di crescita." },
+      "courses": { "title": "Corsi online", "description": "Vendi programmi di più settimane.", "detail": "Trasforma le tue competenze in corsi online di più settimane che i tuoi contatti acquistano e seguono al proprio ritmo." },
+      "events": { "title": "Eventi", "description": "Gare, stage e workshop.", "detail": "Organizza gare, stage e workshop — con iscrizioni, inviti e check-in già integrati." },
       "eventForms": { "title": "Moduli evento", "description": "Campi di iscrizione personalizzati.", "detail": "Raccogli all'iscrizione esattamente le informazioni che ti servono, con campi personalizzati per ogni tipo di evento." },
-      "groups": { "title": "Gruppi", "description": "Organizza i membri in coorti.", "detail": "Organizza i membri in squadre, livelli o comitati per una comunicazione mirata e una gestione senza sforzo." },
+      "groups": { "title": "Gruppi", "description": "Organizza i contatti in coorti.", "detail": "Organizza i contatti in squadre, livelli o comitati per una comunicazione mirata e una gestione senza sforzo." },
       "customFields": { "title": "Campi personalizzati", "description": "Traccia esattamente i dati che ti servono.", "detail": "Aggiungi i campi di cui il tuo studio ha davvero bisogno e traccia qualsiasi dato su qualsiasi contatto." },
       "analytics": { "title": "Analisi", "description": "Tendenze ed engagement a colpo d'occhio.", "detail": "Vedi presenze, retention e tendenze di engagement per sapere sempre cosa funziona — e cosa richiede attenzione." },
       "whatsapp": { "title": "WhatsApp", "description": "Raggiungi gli studenti dove già sono.", "detail": "Invia promemoria, aggiornamenti e messaggi di riattivazione su WhatsApp, proprio dove i tuoi studenti già sono." },
-      "aiInsights": { "title": "Insight AI", "description": "Individua il rischio di abbandono in anticipo.", "detail": "Lascia che l'AI individui i membri a rischio abbandono e prepari il messaggio giusto per riconquistarli in tempo." },
+      "aiInsights": { "title": "Insight AI", "description": "Individua il rischio di abbandono in anticipo.", "detail": "Lascia che l'AI individui i contatti a rischio abbandono e prepari il messaggio giusto per riconquistarli in tempo." },
       "team": { "title": "Team e ruoli", "description": "Invita coach, assegna i permessi.", "detail": "Invita coach e manager con i permessi giusti per ogni ruolo — ognuno vede esattamente ciò che deve." }
     }
   },
@@ -115,6 +114,7 @@
     "subtitle": "Piani semplici che crescono con te.",
     "trialNote": "Prova gratuita di 14 giorni · Nessuna carta di credito.",
     "migrationNote": "Cambi piattaforma? Migriamo i tuoi dati per te — gratis.",
+    "swissNote": "Swiss made · prezzi in CHF · EN/DE/FR/IT",
     "perMonth": "/mese",
     "afterPromo": "dopo 3 mesi",
     "promoBadge": "Offerta lancio",
