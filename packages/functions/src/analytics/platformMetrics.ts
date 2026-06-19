@@ -82,7 +82,6 @@ export const capturePlatformMetrics = onSchedule(
         createdMs: team.created?.toMillis?.() ?? 0,
         trialEndsAtMs: sub?.trial_ends_at?.toMillis?.() ?? team.trial_ends_at?.toMillis?.() ?? null,
         contactCount: contactCount.get(doc.id) ?? 0,
-        overageQty: sub?.gateway_data?.overage?.quantity ?? 0,
       })
     }
 
@@ -96,7 +95,6 @@ export const capturePlatformMetrics = onSchedule(
         createdMs: org.created?.toMillis?.() ?? 0,
         trialEndsAtMs: sub?.trial_ends_at?.toMillis?.() ?? null,
         contactCount: null,
-        overageQty: 0,
       })
     }
 

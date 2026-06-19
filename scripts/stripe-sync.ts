@@ -23,13 +23,7 @@
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply --reprice   # also reprice drift
  */
 import Stripe from 'stripe'
-import {
-  PLAN_PRICING,
-  PLUGIN_ADDONS,
-  STUDIO_CONTACT_BLOCK,
-  EXTRA_CONTACT_MONTHLY,
-  EXTRA_CONTACT_STRIPE_LOOKUP_KEY,
-} from '@linyup/shared'
+import { PLAN_PRICING, PLUGIN_ADDONS, STUDIO_CONTACT_BLOCK } from '@linyup/shared'
 
 const CURRENCY = 'chf'
 const APPLY = process.argv.includes('--apply')
@@ -77,16 +71,6 @@ const catalog: CatalogEntry[] = [
     name: `Linyup +${STUDIO_CONTACT_BLOCK.size} contacts`,
     lookupKey: STUDIO_CONTACT_BLOCK.stripeLookupKey,
     chf: STUDIO_CONTACT_BLOCK.monthly,
-  },
-  // LEGACY per-student overage (quantity-based). The pricing strategy moved to
-  // flat Studio blocks above; this entry is kept only because the
-  // syncContactOverage scheduled function still references the lookup key.
-  // Remove once that function is retired/migrated to the block model.
-  {
-    kind: 'plan',
-    name: 'Linyup extra student',
-    lookupKey: EXTRA_CONTACT_STRIPE_LOOKUP_KEY,
-    chf: EXTRA_CONTACT_MONTHLY,
   },
 ]
 

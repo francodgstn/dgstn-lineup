@@ -117,7 +117,6 @@ export {
   getBillingPortalUrl,
   activatePluginAddon,
   deactivatePluginAddon,
-  syncContactOverage,
   extendTrial,
   handleTrialLifecycle,
 } from './saas-billing'

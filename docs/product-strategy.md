@@ -331,12 +331,14 @@ growth is monetised by moving up a tier (or, for Studio, buying flat blocks).
 * **Organisation** — unlimited contacts.
 
 > **Implementation status (2026-06):** the new caps (15 / 50 / 250 / unlimited)
-> are live in `PLAN_PRICING` and the Free hard cap is enforced. The Studio
-> **contact block** is declared in the Stripe catalog (`STUDIO_CONTACT_BLOCK` →
-> `linyup_studio_contact_block_monthly`) but not yet wired into runtime billing
-> or the contacts-page UI. A **legacy per-student soft overage**
-> (`syncContactOverage`, `linyup_extra_student_monthly`) is still deployed and is
-> pending removal / migration to the block model — see `docs/stripe-catalog.md`.
+> are live in `PLAN_PRICING` and enforced — Free hard-blocks, while Coach and
+> Studio show tier-specific over-cap prompts (upgrade / add a block) on the
+> contacts page. The **legacy per-student soft overage** (`syncContactOverage`,
+> `linyup_extra_student_monthly`) has been **removed** — there is no per-contact
+> metering. The Studio **contact block** price is provisioned
+> (`STUDIO_CONTACT_BLOCK` → `linyup_studio_contact_block_monthly`); the remaining
+> piece is the in-app "add a block" purchase flow (the over-cap banner already
+> surfaces the option).
 
 > **Founder pricing** (free 6 months, then CHF 15/mo Studio locked for life) is a
 > private founding-club deal — keep it **off** the public pricing page.

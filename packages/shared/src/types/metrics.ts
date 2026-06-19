@@ -1,5 +1,5 @@
 import type { SaasPlan, SaasStatus } from './team'
-import { PLAN_PRICING, EXTRA_CONTACT_MONTHLY } from './plan'
+import { PLAN_PRICING } from './plan'
 
 // ─── Platform-wide operator metrics ─────────────────────────────────────────
 // A single source of truth for the operator console. The same pure reducer
@@ -18,8 +18,6 @@ export interface AccountMetricInput {
   trialEndsAtMs: number | null
   /** Active contacts (teams only); null for orgs (they aggregate their teams). */
   contactCount: number | null
-  /** Contact-overage units billed on top of the plan (0 if none). */
-  overageQty: number
 }
 
 export interface PlatformMetrics {
@@ -81,9 +79,10 @@ export function computePlatformMetrics(
       }
     }
 
-    // MRR: only paying (active) subscriptions count.
+    // MRR: only paying (active) subscriptions count. Flat per-plan base — there
+    // is no per-contact overage (caps are enforced by upgrade/blocks, not metering).
     if (a.status === 'active' && a.plan) {
-      const amount = PLAN_PRICING[a.plan].baseMonthly + a.overageQty * EXTRA_CONTACT_MONTHLY
+      const amount = PLAN_PRICING[a.plan].baseMonthly
       estimatedChf += amount
       mrrByPlan[a.plan] += amount
     }

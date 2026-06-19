@@ -32,8 +32,6 @@ export interface AccountRow {
   includedContacts: number | null
   ownerEmail: string | null
   createdMs: number
-  /** Contact-overage units (for MRR); 0 if none. */
-  overageQty: number
 }
 
 export type OverviewMetrics = PlatformMetrics & { recentSignups: AccountRow[] }
@@ -109,7 +107,6 @@ async function loadAccounts(): Promise<LoadResult> {
       includedContacts: plan ? PLAN_PRICING[plan].includedContacts : null,
       ownerEmail: ownerEmail.get(team.createdBy) ?? null,
       createdMs: team.created?.toMillis?.() ?? 0,
-      overageQty: sub?.gateway_data?.overage?.quantity ?? 0,
     })
   }
 
@@ -129,7 +126,6 @@ async function loadAccounts(): Promise<LoadResult> {
       includedContacts: plan ? PLAN_PRICING[plan].includedContacts : null,
       ownerEmail: ownerEmail.get(org.createdBy) ?? null,
       createdMs: org.created?.toMillis?.() ?? 0,
-      overageQty: sub?.gateway_data?.overage?.quantity ?? 0,
     })
   }
 
@@ -166,7 +162,6 @@ function toMetricInput(r: AccountRow): AccountMetricInput {
     createdMs: r.createdMs,
     trialEndsAtMs: r.trialEndsAtMs,
     contactCount: r.contactCount,
-    overageQty: r.overageQty,
   }
 }
 

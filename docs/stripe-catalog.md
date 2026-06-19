@@ -19,11 +19,12 @@ reproducible.
   blocks** (Stripe quantity = number of blocks) — there is **no per-contact
   metering**. Coach over its cap is prompted to upgrade to Studio instead; Free
   is a hard cap. See `contactOverageForPlan`.
-- _Legacy_ per-student overage → `EXTRA_CONTACT_STRIPE_LOOKUP_KEY`
-  (`linyup_extra_student_monthly`). **Deprecated** by the block model above; the
-  price is still provisioned only because the `syncContactOverage` scheduled
-  function references the lookup key. Remove from the catalog once that function
-  is retired or migrated to the block model.
+- _Removed:_ the legacy per-student overage (`linyup_extra_student_monthly`) and
+  its `syncContactOverage` scheduled function were retired when pricing moved to
+  the block model — there is no per-contact metering. Any
+  `linyup_extra_student_monthly` price already created in a Stripe account is now
+  orphaned (safe to archive in the Stripe dashboard); the sync script no longer
+  manages it.
 
 These same maps drive the web UI, the billing Cloud Functions, and the sync
 script — one definition, no drift. Lookup-key convention: `linyup_<plan>_monthly`,

@@ -103,16 +103,6 @@ export function contactOverageForPlan(plan: SaasPlan | null): ContactOverage {
   }
 }
 
-/**
- * @deprecated Legacy per-student soft overage. The pricing strategy moved to
- * tier-specific over-cap behaviour with NO per-contact metering (see
- * `contactOverageForPlan` / `STUDIO_CONTACT_BLOCK`). These constants and the
- * `syncContactOverage` scheduled function that still consumes them are pending
- * removal — do not build new behaviour on them.
- */
-export const EXTRA_CONTACT_MONTHLY = 1
-export const EXTRA_CONTACT_STRIPE_LOOKUP_KEY = 'linyup_extra_student_monthly'
-
 // ─── Contact usage (cap meter) ──────────────────────────────────────────────────
 // Usage is tracked and surfaced in the UI. Counting basis is ACTIVE
 // (non-archived, non-deleted) contacts; archived contacts never count. What the

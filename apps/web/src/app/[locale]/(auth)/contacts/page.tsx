@@ -23,7 +23,7 @@ import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, CONTACT_REQUESTS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION, ORGANIZATIONS_COLLECTION,
   ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES,
-  CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, EXTRA_CONTACT_MONTHLY,
+  CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, contactOverageForPlan,
   planHasHardContactCap,
 } from '@linyup/shared'
 import type { Contact, ContactGroup, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
@@ -1417,7 +1417,7 @@ type TabId = 'active' | 'archived' | 'deleted' | 'requests'
 
 export default function ContactsPage() {
   const { currentTeamId, user, team } = useAuth()
-  const { isAtLeast, plan, isTrialing } = usePlan()
+  const { isAtLeast, plan } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
   const qc = useQueryClient()
   const t = useTranslations('Contacts')
@@ -1433,10 +1433,12 @@ export default function ContactsPage() {
   const inOrg = !!team?.org_id
   const { data: statusDefs } = useOrgMembershipStatuses(team?.org_id)
 
-  // Contact cap usage: counts active = non-archived, non-deleted. Paid plans
-  // have a soft cap (warn + overage billing); Free has a HARD cap — manual
-  // creation is blocked, while portal signups still land (and may go over).
+  // Contact cap usage: counts active = non-archived, non-deleted. Over-cap
+  // behaviour is tier-specific (contactOverageForPlan) and never per-contact
+  // metered: Free hard-blocks manual adds (portal signups still land), Coach is
+  // prompted to upgrade, Studio can buy +contact blocks. Org is unlimited.
   const usage = contactUsageForPlan(plan, active.length)
+  const overage = contactOverageForPlan(plan)
   const freeCapBlocked = planHasHardContactCap(plan) && usage.atOrOverLimit && !loadingActive
   const planIdx = plan ? PLAN_ORDER.indexOf(plan) : -1
   const nextPlan: SaasPlan | null = planIdx >= 0 && planIdx < PLAN_ORDER.length - 1 ? PLAN_ORDER[planIdx + 1] : null
@@ -1683,21 +1685,24 @@ export default function ContactsPage() {
         </button>
       </div>
 
-      {/* Contact-cap warning. Paid plans: soft cap (informational, overage is
-          billed). Free plan: hard cap — manual adds are blocked, portal
-          signups still arrive. */}
+      {/* Contact-cap warning. Tier-specific, never per-contact metered: Free
+          hard-blocks (portal signups still arrive), Coach is prompted to
+          upgrade, Studio can buy +contact blocks. Org is unlimited (no banner). */}
       {!loadingActive && usage.atOrOverLimit && !usage.isUnlimited && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/[0.04] px-4 py-3 flex items-start justify-between gap-3">
           <div className="text-sm">
             <p className="font-medium">{t('capWarnTitle')}</p>
             <p className="text-muted-foreground">
-              {freeCapBlocked
+              {overage.kind === 'hard'
                 ? t('capWarnBodyFreeHard', { used: usage.used, included: usage.included ?? 0 })
-                : t(isTrialing ? 'capWarnBodyTrial' : 'capWarnBodyBilled', {
-                    used: usage.used,
-                    included: usage.included ?? 0,
-                    price: EXTRA_CONTACT_MONTHLY,
-                  })}
+                : overage.kind === 'block'
+                  ? t('capWarnBodyBlock', {
+                      used: usage.used,
+                      included: usage.included ?? 0,
+                      blockSize: overage.block.size,
+                      blockPrice: overage.block.monthly,
+                    })
+                  : t('capWarnBodyUpgrade', { used: usage.used, included: usage.included ?? 0 })}
             </p>
           </div>
           {nextPlan && (
