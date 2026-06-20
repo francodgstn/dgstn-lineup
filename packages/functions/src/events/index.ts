@@ -188,6 +188,7 @@ export const sendEventInvitations = onCall(async (request) => {
       try {
         await sendEmail({
           to: email,
+          teamId,
           subject: emailContent.subject,
           html: emailContent.html,
           text: emailContent.text,

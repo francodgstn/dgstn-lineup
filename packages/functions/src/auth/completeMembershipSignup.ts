@@ -127,7 +127,7 @@ export const completeMembershipSignup = onCall(async (request) => {
       title: `Welcome to ${teamName}!`,
       body: `<p>Hi ${sanitized.firstname},</p><p>Thanks for signing up with <strong>${teamName}</strong>. Your membership request has been received and is under review.</p><p>We'll be in touch soon.</p>`,
     })
-    await sendEmail({ to: email, subject: `Welcome to ${teamName}!`, html, text })
+    await sendEmail({ to: email, subject: `Welcome to ${teamName}!`, html, text, teamId })
     console.log(`Welcome email sent to ${email}`)
   } catch (err) {
     console.error('Error sending welcome email:', err)
@@ -140,7 +140,7 @@ export const completeMembershipSignup = onCall(async (request) => {
         title: `New Member Signup: ${sanitized.firstname} ${sanitized.lastname}`,
         body: `<p>A new membership request has been submitted.</p><p><strong>Name:</strong> ${sanitized.firstname} ${sanitized.lastname}</p><p><strong>Email:</strong> ${email}</p>${sanitized.phone ? `<p><strong>Phone:</strong> ${sanitized.phone}</p>` : ''}`,
       })
-      await sendEmail({ to: ownerEmail, subject: `New Member Signup: ${sanitized.firstname} ${sanitized.lastname}`, html, text })
+      await sendEmail({ to: ownerEmail, subject: `New Member Signup: ${sanitized.firstname} ${sanitized.lastname}`, html, text, teamId })
     } catch (err) {
       console.error('Error sending owner notification:', err)
     }

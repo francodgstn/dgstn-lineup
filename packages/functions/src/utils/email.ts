@@ -1,171 +1,58 @@
-import * as admin from 'firebase-admin'
-import nodemailer from 'nodemailer'
-import { defineString } from 'firebase-functions/params'
-import { getSMTPConfig } from './secrets'
-import { decryptPassword } from './crypto'
-import { getAppSettings } from './app_settings'
-import type { SmtpIntegration } from '@linyup/shared'
+// Thin façade over the provider-agnostic mail service (src/mail/). Kept so the
+// many existing call sites can keep importing { sendEmail, sendBatchEmails,
+// buildEmailTemplate } from '../utils/email'. Transport is Brevo; there is no
+// SMTP/nodemailer here any more.
+//
+//   • Pass `teamId` to send AS the studio (Managed or verified BYO domain).
+//   • Omit `teamId` to send Linyup system mail (from hello@linyup.com).
+import { sendStudioMail, sendSystemMail, type SendOutcome } from '../mail/mailService'
+import type { MailAttachment } from '../mail/types'
 
-const testModeEnabled = defineString('TEST_MODE', {
-  description: 'Redirect all emails to a single test address',
-  default: 'false',
-})
+export { idempotencyKey } from '../mail/mailService'
 
-const testEmail = defineString('TEST_EMAIL', {
-  description: 'Recipient when test mode is enabled',
-  default: '',
-})
-
-const DEFAULT_SENDER = {
-  name: 'Linyup',
-  email: 'noreply@linyup.com',
-}
-
-export async function getEmailTransporter() {
-  const appSettings = await getAppSettings()
-  const smtpConfig = await getSMTPConfig(appSettings)
-  return nodemailer.createTransport(smtpConfig as nodemailer.TransportOptions)
-}
-
-/**
- * Resolves the SMTP transporter using a three-level hierarchy:
- *   1. Team-level config (teams/{teamId}/integrations/email_smtp)
- *      — unless use_org_smtp === true, in which case fall through to org
- *   2. Org-level config (organizations/{orgId}/integrations/email_smtp)
- *      — uses teams/{teamId}.org_id to find the org
- *   3. Global fallback (app_settings/global_settings + smtp-password secret)
- *
- * @param teamId  Optional. When omitted, falls back directly to global config.
- */
-export async function getSmtpTransporter(teamId?: string): Promise<nodemailer.Transporter> {
-  const db = admin.firestore()
-
-  if (teamId) {
-    // ── Step 1: Team-level SMTP ──────────────────────────────────────────────
-    const teamSmtpDoc = await db
-      .collection('teams').doc(teamId)
-      .collection('integrations').doc('email_smtp')
-      .get()
-
-    if (teamSmtpDoc.exists) {
-      const cfg = teamSmtpDoc.data() as SmtpIntegration
-
-      if (cfg.use_org_smtp !== true) {
-        const password = await decryptPassword(cfg.password_enc)
-        return nodemailer.createTransport({
-          host: cfg.host,
-          port: cfg.port,
-          secure: cfg.secure,
-          auth: { user: cfg.user, pass: password },
-        })
-      }
-
-      // use_org_smtp === true: look up the team's org_id and fall through
-      const teamDoc = await db.collection('teams').doc(teamId).get()
-      const orgId = teamDoc.data()?.org_id as string | undefined
-      if (orgId) {
-        const orgTransporter = await resolveOrgSmtpTransporter(orgId)
-        if (orgTransporter) return orgTransporter
-      }
-    }
-  }
-
-  // ── Step 2: Try org-level config when no teamId-specific config was found ──
-  // (covers the case where no team doc exists but team has an org_id)
-  if (teamId) {
-    const teamDoc = await db.collection('teams').doc(teamId).get()
-    const orgId = teamDoc.data()?.org_id as string | undefined
-    if (orgId) {
-      const orgTransporter = await resolveOrgSmtpTransporter(orgId)
-      if (orgTransporter) return orgTransporter
-    }
-  }
-
-  // ── Step 3: Global fallback ──────────────────────────────────────────────
-  return getEmailTransporter()
-}
-
-async function resolveOrgSmtpTransporter(orgId: string): Promise<nodemailer.Transporter | null> {
-  const db = admin.firestore()
-  const orgSmtpDoc = await db
-    .collection('organizations').doc(orgId)
-    .collection('integrations').doc('email_smtp')
-    .get()
-
-  if (!orgSmtpDoc.exists) return null
-
-  const cfg = orgSmtpDoc.data() as SmtpIntegration
-  const password = await decryptPassword(cfg.password_enc)
-  return nodemailer.createTransport({
-    host: cfg.host,
-    port: cfg.port,
-    secure: cfg.secure,
-    auth: { user: cfg.user, pass: password },
-  })
-}
-
-export function isTestModeEnabled() {
-  return testModeEnabled.value() === 'true'
-}
-
-export function getSenderAddress(options: { name?: string; email?: string } = {}) {
-  const name = options.name || DEFAULT_SENDER.name
-  const email = options.email || DEFAULT_SENDER.email
-  return `"${name}" <${email}>`
-}
-
-interface SendEmailOptions {
+export interface SendEmailOptions {
   to: string | string[]
   subject: string
   html?: string
   text?: string
-  from?: string
-  senderOptions?: { name?: string; email?: string }
-  transporter?: nodemailer.Transporter
-  attachments?: nodemailer.SendMailOptions['attachments']
+  // When set, the message is sent as this studio (team). When omitted, it is
+  // sent as Linyup system mail.
+  teamId?: string
+  replyTo?: string
+  attachments?: MailAttachment[]
+  tags?: string[]
+  idempotencyKey?: string
 }
 
-export async function sendEmail(options: SendEmailOptions) {
-  const { to, subject, html, text, from, senderOptions = {}, transporter: provided, attachments = [] } = options
-
-  if (!to || !subject || (!html && !text)) {
-    throw new Error('Missing required email fields: to, subject, and html/text')
-  }
-
-  const transporter = provided || (await getEmailTransporter())
-  const fromAddress = from || getSenderAddress(senderOptions)
-  const isTestMode = isTestModeEnabled()
-  const recipientEmail = isTestMode ? testEmail.value() : to
-  const originalRecipient = Array.isArray(to) ? to.join(', ') : to
-
-  if (isTestMode) {
-    console.log(`TEST MODE: Redirecting email from "${originalRecipient}" to "${recipientEmail}"`) // eslint-disable-line no-console
-  }
-
-  const mailOptions: nodemailer.SendMailOptions = { from: fromAddress, to: recipientEmail, subject, html, text }
-  if (attachments.length > 0) mailOptions.attachments = attachments
-
-  const result = await transporter.sendMail(mailOptions)
-  return { ...result, testMode: isTestMode, originalRecipient: isTestMode ? originalRecipient : undefined }
+export async function sendEmail(options: SendEmailOptions): Promise<SendOutcome> {
+  const { teamId, ...msg } = options
+  return teamId ? sendStudioMail(teamId, msg) : sendSystemMail(msg)
 }
 
-export async function sendBatchEmails(emails: SendEmailOptions[], stopOnError = false) {
-  const transporter = await getEmailTransporter()
-  const results = { total: emails.length, sent: 0, failed: 0, errors: [] as { recipient: string | string[]; error: string }[] }
+export interface BatchSendResult {
+  total: number
+  sent: number
+  failed: number
+  errors: { recipient: string | string[]; error: string }[]
+}
 
-  for (const emailOptions of emails) {
+export async function sendBatchEmails(
+  emails: SendEmailOptions[],
+  stopOnError = false,
+): Promise<BatchSendResult> {
+  const results: BatchSendResult = { total: emails.length, sent: 0, failed: 0, errors: [] }
+  for (const options of emails) {
     try {
-      await sendEmail({ ...emailOptions, transporter })
+      await sendEmail(options)
       results.sent++
     } catch (error) {
       const err = error as Error
       results.failed++
-      results.errors.push({ recipient: emailOptions.to, error: err.message })
-      console.error(`Failed to send email to ${emailOptions.to}:`, err.message) // eslint-disable-line no-console
+      results.errors.push({ recipient: options.to, error: err.message })
+      console.error(`Failed to send email to ${options.to}:`, err.message) // eslint-disable-line no-console
       if (stopOnError) throw error
     }
   }
-
   return results
 }
 

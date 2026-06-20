@@ -65,3 +65,30 @@ export async function setSecret(secretName: string, value: string): Promise<void
   })
   await client().addSecretVersion({ parent: secretPath, payload })
 }
+
+/**
+ * Reports whether the named secret has at least one accessible version (i.e. a
+ * value the runtime can read). Returns false — never throws — when the container
+ * or version is missing, so callers can render a "not configured" state. Used by
+ * the Brevo settings status reader.
+ *
+ * Throws SecretManagerUnavailableError when running against the emulators, where
+ * Secret Manager does not exist; the caller treats that as "not configured".
+ */
+export async function secretExists(secretName: string): Promise<boolean> {
+  if (useEmulators) {
+    throw new SecretManagerUnavailableError(
+      'Secret Manager is unavailable against the emulators.',
+    )
+  }
+
+  const name = `projects/${projectId}/secrets/${secretName}/versions/latest`
+  try {
+    const [version] = await client().getSecretVersion({ name })
+    // ENABLED versions are readable; DESTROYED/DISABLED are not configured.
+    return version.state === 'ENABLED' || version.state === 1
+  } catch (err) {
+    if ((err as { code?: number }).code === 5 /* NOT_FOUND */) return false
+    throw err
+  }
+}

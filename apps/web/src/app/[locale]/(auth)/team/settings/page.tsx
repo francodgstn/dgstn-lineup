@@ -77,13 +77,16 @@ import {
   Trash2,
   Star,
   Building2,
-  Eye,
-  EyeOff,
   Mail,
+  Copy,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Lock,
 } from 'lucide-react'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
-import { useSmtpSettings } from '@/hooks/useSmtpSettings'
+import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
@@ -1480,73 +1483,81 @@ function PaymentsTab({ teamId }: { teamId: string }) {
 
 const KEY_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
-function SmtpForm({ teamId, orgId }: { teamId: string; orgId?: string }) {
-  const {
-    data: smtpData,
-    isLoading,
-    save,
-    test,
-    isSaving,
-    isTesting,
-  } = useSmtpSettings('team', teamId)
+function EmailSenderForm({
+  teamId,
+  plan,
+}: {
+  teamId: string
+  plan: string | undefined
+}) {
+  const t = useTranslations('EmailSettings')
+  const { data: config, isLoading, registerDomain, checkDomain, revertToManaged, isRegistering, isChecking, isReverting } =
+    useEmailSenderSettings('team', teamId)
 
-  const [host, setHost] = useState('')
-  const [port, setPort] = useState(587)
-  const [secure, setSecure] = useState(false)
-  const [user, setUser] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [fromName, setFromName] = useState('')
-  const [fromEmail, setFromEmail] = useState('')
-  const [useOrgSmtp, setUseOrgSmtp] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [domain, setDomain] = useState('')
+  const [fromLocalPart, setFromLocalPart] = useState('info')
+  const [registerError, setRegisterError] = useState<string | null>(null)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!smtpData) return
-    setUseOrgSmtp(smtpData.use_org_smtp ?? false)
-    setHost(smtpData.host ?? '')
-    setPort(smtpData.port ?? 587)
-    setSecure(smtpData.secure ?? false)
-    setUser(smtpData.user ?? '')
-    setFromName(smtpData.from_name ?? '')
-    setFromEmail(smtpData.from_email ?? '')
-  }, [smtpData])
+  const isPaidPlan = plan === 'coach' || plan === 'studio' || plan === 'organization'
+  const isByo = config?.model === 'byo_domain'
 
-  function showToast(msg: string, ok: boolean) {
-    setToast({ msg, ok })
-    setTimeout(() => setToast(null), 3500)
-  }
-
-  async function handleSave() {
+  async function handleRegister() {
+    setRegisterError(null)
+    if (!domain.trim()) return
     try {
-      const payload: Parameters<typeof save>[0] = {
-        host,
-        port,
-        secure,
-        user,
-        from_name: fromName,
-        from_email: fromEmail,
-        use_org_smtp: useOrgSmtp,
-      }
-      if (password.trim()) payload.password = password.trim()
-      await save(payload)
-      setPassword('')
-      showToast('Settings saved.', true)
+      await registerDomain(domain.trim(), fromLocalPart.trim() || 'info')
     } catch (err) {
-      showToast((err as Error).message ?? 'Save failed.', false)
+      setRegisterError((err as Error).message ?? t('registerError'))
     }
   }
 
-  async function handleTest() {
+  async function handleCheck() {
     try {
-      const result = await test()
-      showToast(
-        result.success ? 'Test email sent successfully.' : (result.message ?? 'Test failed.'),
-        result.success
+      await checkDomain()
+    } catch {
+      // status stays as-is; user can retry
+    }
+  }
+
+  async function handleRevert() {
+    try {
+      await revertToManaged()
+    } catch {
+      // silent — cached state will update on next load
+    }
+  }
+
+  function copyToClipboard(text: string, key: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key)
+      setTimeout(() => setCopiedKey(null), 2000)
+    })
+  }
+
+  function VerificationBadge({ status }: { status: string | undefined }) {
+    if (status === 'verified') {
+      return (
+        <Badge variant="default" className="gap-1 bg-green-600 hover:bg-green-600">
+          <CheckCircle2 className="h-3 w-3" />
+          {t('statusVerified')}
+        </Badge>
       )
-    } catch (err) {
-      showToast((err as Error).message ?? 'Test failed.', false)
     }
+    if (status === 'failed') {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <XCircle className="h-3 w-3" />
+          {t('statusFailed')}
+        </Badge>
+      )
+    }
+    return (
+      <Badge variant="outline" className="gap-1 text-amber-600 border-amber-300">
+        <Clock className="h-3 w-3" />
+        {t('statusPending')}
+      </Badge>
+    )
   }
 
   if (isLoading) {
@@ -1554,156 +1565,171 @@ function SmtpForm({ teamId, orgId }: { teamId: string; orgId?: string }) {
       <div className="space-y-3">
         <Skeleton className="h-9 w-full" />
         <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-2/3" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
         <h3 className="text-sm font-semibold flex items-center gap-2">
           <Mail className="h-4 w-4" />
-          Outbound email (SMTP)
+          {t('title')}
         </h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          Configure a custom SMTP server for outreach emails. When not set, Linyup uses its own
-          email infrastructure.
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{t('subtitle')}</p>
       </div>
 
-      {orgId && (
-        <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-          <div className="space-y-0.5">
-            <Label htmlFor="use-org-smtp" className="text-sm font-medium">
-              Use organisation SMTP
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Inherit email configuration from your organisation.
-            </p>
-          </div>
-          <Switch id="use-org-smtp" checked={useOrgSmtp} onCheckedChange={setUseOrgSmtp} />
+      {/* Managed sender card — always shown */}
+      <div className={`rounded-lg border p-4 space-y-1 ${!isByo ? 'border-primary/40 bg-primary/5' : ''}`}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium">{t('managedTitle')}</p>
+          {!isByo && (
+            <Badge variant="secondary" className="text-xs">{t('active')}</Badge>
+          )}
         </div>
-      )}
+        <p className="text-xs text-muted-foreground">{t('managedDescription')}</p>
+      </div>
 
-      {useOrgSmtp && orgId ? (
-        <div className="rounded-lg border border-dashed px-4 py-5 text-center text-sm text-muted-foreground">
-          Using your organisation&apos;s email configuration.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5 col-span-2 sm:col-span-1">
-              <Label htmlFor="smtp-host">Host</Label>
-              <Input
-                id="smtp-host"
-                value={host}
-                onChange={(e) => setHost(e.target.value)}
-                placeholder="smtp.example.com"
-              />
+      {/* BYO domain section */}
+      {!isByo && (
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {t('byoSectionTitle')}
+          </p>
+
+          {!isPaidPlan ? (
+            <div className="rounded-lg border border-dashed px-4 py-4 flex items-start gap-3">
+              <Lock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">{t('byoUpsellTitle')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('byoUpsellDescription')}</p>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtp-port">Port</Label>
-              <Input
-                id="smtp-port"
-                type="number"
-                value={port}
-                onChange={(e) => setPort(Number(e.target.value))}
-                placeholder="587"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              id="smtp-secure"
-              type="checkbox"
-              checked={secure}
-              onChange={(e) => setSecure(e.target.checked)}
-              className="h-4 w-4 rounded border-input accent-primary"
-            />
-            <Label htmlFor="smtp-secure" className="cursor-pointer">
-              Use TLS (port 465)
-            </Label>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="smtp-user">Username</Label>
-            <Input
-              id="smtp-user"
-              value={user}
-              onChange={(e) => setUser(e.target.value)}
-              placeholder="user@example.com"
-              autoComplete="off"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="smtp-password">Password</Label>
-            <div className="relative">
-              <Input
-                id="smtp-password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Leave blank to keep existing password"
-                autoComplete="new-password"
-                className="pr-9"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                tabIndex={-1}
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 space-y-1">
+                  <Label htmlFor="byo-domain">{t('domainLabel')}</Label>
+                  <Input
+                    id="byo-domain"
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    placeholder="theirdojo.ch"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="byo-from-local">{t('fromLocalPartLabel')}</Label>
+                  <Input
+                    id="byo-from-local"
+                    value={fromLocalPart}
+                    onChange={(e) => setFromLocalPart(e.target.value)}
+                    placeholder="info"
+                  />
+                </div>
+              </div>
+              {fromLocalPart && domain && (
+                <p className="text-xs text-muted-foreground">
+                  {t('fromAddressPreview', { address: `${fromLocalPart || 'info'}@${domain}` })}
+                </p>
+              )}
+              {registerError && (
+                <p className="text-xs text-destructive">{registerError}</p>
+              )}
+              <Button
+                size="sm"
+                onClick={handleRegister}
+                disabled={isRegistering || !domain.trim()}
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+                {isRegistering ? t('registering') : t('registerButton')}
+              </Button>
             </div>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-1.5">
-            <Label htmlFor="smtp-from-name">From name</Label>
-            <Input
-              id="smtp-from-name"
-              value={fromName}
-              onChange={(e) => setFromName(e.target.value)}
-              placeholder="My Club"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="smtp-from-email">From email</Label>
-            <Input
-              id="smtp-from-email"
-              type="email"
-              value={fromEmail}
-              onChange={(e) => setFromEmail(e.target.value)}
-              placeholder="noreply@example.com"
-            />
-          </div>
+          )}
         </div>
       )}
 
-      <div className="flex items-center gap-2 pt-1">
-        <Button size="sm" onClick={handleSave} disabled={isSaving || isTesting}>
-          {isSaving ? 'Saving…' : 'Save settings'}
-        </Button>
-        {!useOrgSmtp && (
-          <Button size="sm" variant="outline" onClick={handleTest} disabled={isSaving || isTesting}>
-            {isTesting ? 'Sending…' : 'Send test email'}
-          </Button>
-        )}
-      </div>
+      {/* BYO domain active state */}
+      {isByo && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-medium">{t('byoActiveTitle')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('byoActiveFrom', {
+                  address: `${config.from_local_part ?? 'info'}@${config.domain}`,
+                })}
+              </p>
+            </div>
+            <VerificationBadge status={config.verification_status} />
+          </div>
 
-      {toast && (
-        <div
-          className={`fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white z-50 ${
-            toast.ok ? 'bg-green-600' : 'bg-destructive'
-          }`}
-        >
-          {toast.msg}
+          {config.verification_status !== 'verified' && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+              {t('pendingFallbackNote')}
+            </div>
+          )}
+
+          {/* DNS records table */}
+          {config.dns_records && config.dns_records.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium">{t('dnsRecordsTitle')}</p>
+              <div className="rounded-lg border overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left px-3 py-2 font-medium text-muted-foreground w-16">{t('dnsColType')}</th>
+                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">{t('dnsColHost')}</th>
+                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">{t('dnsColValue')}</th>
+                      <th className="px-2 py-2 w-8" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {config.dns_records.map((record, idx) => (
+                      <tr key={idx} className={record.verified ? 'bg-green-50/50' : ''}>
+                        <td className="px-3 py-2 font-mono text-muted-foreground">{record.type}</td>
+                        <td className="px-3 py-2 font-mono break-all max-w-[160px]">{record.host}</td>
+                        <td className="px-3 py-2 font-mono break-all max-w-[200px]">{record.value}</td>
+                        <td className="px-2 py-2">
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(record.value, `${idx}-value`)}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            title={t('copyValue')}
+                          >
+                            {copiedKey === `${idx}-value`
+                              ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                              : <Copy className="h-3.5 w-3.5" />
+                            }
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-muted-foreground">{t('dmarcNote')}</p>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCheck}
+              disabled={isChecking || isReverting}
+            >
+              {isChecking ? t('checking') : t('checkStatusButton')}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleRevert}
+              disabled={isChecking || isReverting}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {isReverting ? t('reverting') : t('revertToManagedButton')}
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -1718,8 +1744,6 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saved, setSaved] = useState(false)
-
-  const orgId = (team as unknown as { org_id?: string }).org_id
 
   useEffect(() => {
     if (team?.outreach_placeholders) {
@@ -1766,7 +1790,7 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
 
   return (
     <div className="space-y-8">
-      <SmtpForm teamId={teamId} orgId={orgId} />
+      <EmailSenderForm teamId={teamId} plan={team.plan} />
 
       <Separator />
 

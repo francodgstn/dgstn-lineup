@@ -88,7 +88,7 @@ export const manageContactUpdateRequest = onCall(async (request) => {
     if (contactEmail) {
       try {
         const emailContent = buildApprovedEmail(contactName, teamName)
-        await sendEmail({ to: contactEmail, subject: emailContent.subject, html: emailContent.html, text: emailContent.text })
+        await sendEmail({ to: contactEmail, subject: emailContent.subject, html: emailContent.html, text: emailContent.text, teamId })
         console.log(`Approval email sent to ${contactEmail}`)
       } catch (err) {
         console.error('Error sending approval email:', (err as Error).message ?? err)
@@ -105,7 +105,7 @@ export const manageContactUpdateRequest = onCall(async (request) => {
   if (contactEmail) {
     try {
       const emailContent = buildDiscardedEmail(contactName, teamName)
-      await sendEmail({ to: contactEmail, subject: emailContent.subject, html: emailContent.html, text: emailContent.text })
+      await sendEmail({ to: contactEmail, subject: emailContent.subject, html: emailContent.html, text: emailContent.text, teamId })
       console.log(`Rejection email sent to ${contactEmail}`)
     } catch (err) {
       console.error('Error sending rejection email:', (err as Error).message ?? err)

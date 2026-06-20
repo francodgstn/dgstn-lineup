@@ -191,7 +191,7 @@ export async function sendBookingReminders(): Promise<{
           it: `Promemoria: La tua lezione di ${activityName} è domani`,
         }
 
-        await sendEmail({ to: booking.email as string, subject: subjects[team.lang], html, text })
+        await sendEmail({ to: booking.email as string, subject: subjects[team.lang], html, text, teamId })
         await bookingDoc.ref.update({ reminderSentAt: FieldValue.serverTimestamp() })
 
         sent++

@@ -229,6 +229,7 @@ export const getInTouchForm = onRequest(async (req, res) => {
   try {
     await sendEmail({
       to: resolved.email,
+      teamId: resolved.teamId,
       subject: `New message from ${sanitizedFields.name ?? sanitizedFields.Name ?? team.trim()}`,
       html: buildNotificationEmail(sanitizedFields, resolved.teamName),
     })

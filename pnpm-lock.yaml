@@ -381,6 +381,9 @@ importers:
 
   packages/functions:
     dependencies:
+      '@getbrevo/brevo':
+        specifier: ^5.0.4
+        version: 5.0.4
       '@google-cloud/secret-manager':
         specifier: ^5.6.0
         version: 5.6.0
@@ -399,9 +402,6 @@ importers:
       marked:
         specifier: ^15.0.0
         version: 15.0.12
-      nodemailer:
-        specifier: ^6.9.16
-        version: 6.10.1
       posthog-node:
         specifier: ^5.35.6
         version: 5.35.6
@@ -421,9 +421,6 @@ importers:
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.18
-      '@types/nodemailer':
-        specifier: ^6.4.17
-        version: 6.4.23
       '@types/sanitize-html':
         specifier: ^2.13.0
         version: 2.16.1
@@ -2030,6 +2027,10 @@ packages:
 
   '@formatjs/intl-localematcher@0.8.6':
     resolution: {integrity: sha512-AZRgUxj0q93lyF7Z5lFS85bLINXuBLX4R3tCKicO6fSWo6cvh9GQfoR3B1WlsqQwefZ1QORTivhInx7gM6HUzQ==}
+
+  '@getbrevo/brevo@5.0.4':
+    resolution: {integrity: sha512-wN4mHE6O0Pb/d/Dh3E4MAm2zCHbLLUcFF8/wgwTeMPy9KzHBYLu7S/nsJbzd0AWL09MHn8vwue8ULL9YOzluOQ==}
+    engines: {node: '>=18.0.0'}
 
   '@google-cloud/cloud-sql-connector@1.10.0':
     resolution: {integrity: sha512-PLix9OUaeAfVOKFAqw32/ETvFPef26mcTmDu/iVShGRs+MB1JkL98SwVLHsEjzjfnZrF+BtKqnseoFw0+3LmPw==}
@@ -4157,9 +4158,6 @@ packages:
 
   '@types/node@22.19.18':
     resolution: {integrity: sha512-9v00a+dn2yWVsYDEunWC4g/TcRKVq3r8N5FuZp7u0SGrPvdN9c2yXI9bBuf5Fl0hNCb+QTIePTn5pJs2pwBOQQ==}
-
-  '@types/nodemailer@6.4.23':
-    resolution: {integrity: sha512-aFV3/NsYFLSx9mbb5gtirBSXJnAlrusoKNuPbxsASWc7vrKLmIrTQRpdcxNcSFL3VW2A2XpeLEavwb2qMi6nlQ==}
 
   '@types/qs@6.15.1':
     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
@@ -8093,10 +8091,6 @@ packages:
 
   node-releases@2.0.38:
     resolution: {integrity: sha512-3qT/88Y3FbH/Kx4szpQQ4HzUbVrHPKTLVpVocKiLfoYvw9XSGOX2FmD2d6DrXbVYyAQTF2HeF6My8jmzx7/CRw==}
-
-  nodemailer@6.10.1:
-    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
-    engines: {node: '>=6.0.0'}
 
   nopt@9.0.0:
     resolution: {integrity: sha512-Zhq3a+yFKrYwSBluL4H9XP3m3y5uvQkB/09CwDruCiRmR/UJYnn9W4R48ry0uGC70aeTPKLynBtscP9efFFcPw==}
@@ -12710,6 +12704,8 @@ snapshots:
     dependencies:
       '@formatjs/fast-memoize': 3.1.4
 
+  '@getbrevo/brevo@5.0.4': {}
+
   '@google-cloud/cloud-sql-connector@1.10.0':
     dependencies:
       '@googleapis/sqladmin': 35.2.0
@@ -14792,10 +14788,6 @@ snapshots:
   '@types/node@22.19.18':
     dependencies:
       undici-types: 6.21.0
-
-  '@types/nodemailer@6.4.23':
-    dependencies:
-      '@types/node': 22.19.18
 
   '@types/qs@6.15.1': {}
 
@@ -19875,8 +19867,6 @@ snapshots:
   node-mock-http@1.0.4: {}
 
   node-releases@2.0.38: {}
-
-  nodemailer@6.10.1: {}
 
   nopt@9.0.0:
     dependencies:

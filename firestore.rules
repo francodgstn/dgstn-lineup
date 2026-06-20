@@ -172,8 +172,8 @@ service cloud.firestore {
 
     // Signup gating (limited launch).
     // app_settings/public: world-readable signup flag so apps/web can adapt its
-    // UX. Only this ONE doc is public — global_settings (SMTP/operator config)
-    // stays default-deny. Writes happen only via the operator console (Admin SDK).
+    // UX. Only this ONE doc is public — global_settings (operator config) stays
+    // default-deny. Writes happen only via the operator console (Admin SDK).
     match /app_settings/public {
       allow read: if true;
       allow write: if false;
@@ -184,6 +184,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /signup_invites/{inviteId} {
+      allow read, write: if false;
+    }
+
+    // Mail pipeline (Brevo). Written ONLY by Cloud Functions (the event webhook +
+    // mail service, which bypass rules). Never client-readable — mail_suppressions
+    // holds recipient addresses (PII) and mail_sends is internal delivery state.
+    match /mail_suppressions/{emailHash} {
+      allow read, write: if false;
+    }
+    match /mail_sends/{idempotencyKey} {
       allow read, write: if false;
     }
 
@@ -343,9 +353,11 @@ service cloud.firestore {
         allow write: if hasTeamRole(teamId, 'owner');
       }
 
-      // Payment gateway integrations (Stripe / Payrexx config — secrets stored in Secret Manager)
+      // Integrations: payment gateways (Stripe / Payrexx — secrets in Secret
+      // Manager) and the email_sender config (Brevo sender model + BYO domain
+      // verification state — holds NO credentials).
       match /integrations/{integrationId} {
-        // Only owners can view or modify gateway configuration
+        // Only owners can view or modify integration configuration
         allow read, write: if hasTeamRole(teamId, 'owner');
       }
 
@@ -948,7 +960,8 @@ service cloud.firestore {
         allow write: if hasOrgRole(orgId, 'org_admin');
       }
 
-      // SMTP and other org-level integrations (password stored encrypted)
+      // Org-level integrations: payment gateways + email_sender config (Brevo
+      // sender model + BYO domain verification state — no credentials stored).
       match /integrations/{integrationId} {
         allow read:   if isOrgMember(orgId);
         allow write:  if hasOrgRole(orgId, 'org_admin');

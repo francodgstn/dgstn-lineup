@@ -5,7 +5,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
 import { isTeamMember } from '../utils/teams'
-import { sendEmail, getEmailTransporter } from '../utils/email'
+import { sendEmail } from '../utils/email'
 import { logActivity } from '../utils/users'
 import { substituteVariables, renderBody, buildOutreachEmail } from '../utils/outreachEmail'
 
@@ -49,7 +49,6 @@ export const sendOutreachEmail = onCall(async (request) => {
   const teamName = (teamData.name as string) || ''
 
   const stats = { total: contactIds.length, sent: 0, failed: 0, errors: [] as Array<{ contactId: string; error: string }> }
-  const transporter = await getEmailTransporter()
 
   await Promise.allSettled(
     contactIds.map(async (contactId) => {
@@ -68,7 +67,7 @@ export const sendOutreachEmail = onCall(async (request) => {
         const htmlBody = renderBody(template as { body_mode?: string }, rawBody)
         const { html, text } = buildOutreachEmail({ body: htmlBody, teamName, language: (template.language as string) || 'en', teamData })
 
-        await sendEmail({ to: contact.email as string, subject, html, text, transporter })
+        await sendEmail({ to: contact.email as string, subject, html, text, teamId })
 
         await to(
           logActivity(teamId, {

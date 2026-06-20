@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -23,15 +24,14 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Settings, IdCard, Pencil, Trash2, Plus, ChevronUp, ChevronDown, RotateCcw, Languages, Lock, Mail, Eye, EyeOff } from 'lucide-react'
+import { Settings, IdCard, Pencil, Trash2, Plus, ChevronUp, ChevronDown, RotateCcw, Languages, Lock, Mail, Copy, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import { deleteField } from 'firebase/firestore'
 import {
   ORGANIZATIONS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
   DEFAULT_ORG_MEMBERSHIP_STATUSES,
 } from '@linyup/shared'
 import type { OrgMembershipStatusDef, MembershipStatusColor, Organization } from '@linyup/shared'
-import { useSmtpSettings } from '@/hooks/useSmtpSettings'
-import { Separator } from '@/components/ui/separator'
+import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
 
 // ─── colour config ────────────────────────────────────────────────────────────
 
@@ -618,205 +618,248 @@ function MembershipLockCard({
   )
 }
 
-// ─── org smtp card ────────────────────────────────────────────────────────────
+// ─── org email sender card ────────────────────────────────────────────────────
 
-function OrgSmtpCard({ orgId, isAdmin }: { orgId: string; isAdmin: boolean }) {
-  const { data: smtpData, isLoading, save, test, isSaving, isTesting } = useSmtpSettings('org', orgId)
+function OrgEmailSenderCard({ orgId, isAdmin }: { orgId: string; isAdmin: boolean }) {
+  const t = useTranslations('EmailSettings')
+  const {
+    data: config,
+    isLoading,
+    registerDomain,
+    checkDomain,
+    revertToManaged,
+    isRegistering,
+    isChecking,
+    isReverting,
+  } = useEmailSenderSettings('org', orgId)
 
-  const [host, setHost] = useState('')
-  const [port, setPort] = useState(587)
-  const [secure, setSecure] = useState(false)
-  const [user, setUser] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [fromName, setFromName] = useState('')
-  const [fromEmail, setFromEmail] = useState('')
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [domain, setDomain] = useState('')
+  const [fromLocalPart, setFromLocalPart] = useState('info')
+  const [registerError, setRegisterError] = useState<string | null>(null)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!smtpData) return
-    setHost(smtpData.host ?? '')
-    setPort(smtpData.port ?? 587)
-    setSecure(smtpData.secure ?? false)
-    setUser(smtpData.user ?? '')
-    setFromName(smtpData.from_name ?? '')
-    setFromEmail(smtpData.from_email ?? '')
-  }, [smtpData])
+  const isByo = config?.model === 'byo_domain'
 
-  function showToastMsg(msg: string, ok: boolean) {
-    setToast({ msg, ok })
-    setTimeout(() => setToast(null), 3500)
-  }
-
-  async function handleSave() {
+  async function handleRegister() {
+    setRegisterError(null)
+    if (!domain.trim()) return
     try {
-      const payload: Parameters<typeof save>[0] = {
-        host,
-        port,
-        secure,
-        user,
-        from_name: fromName,
-        from_email: fromEmail,
-      }
-      if (password.trim()) payload.password = password.trim()
-      await save(payload)
-      setPassword('')
-      showToastMsg('Settings saved.', true)
+      await registerDomain(domain.trim(), fromLocalPart.trim() || 'info')
     } catch (err) {
-      showToastMsg((err as Error).message ?? 'Save failed.', false)
+      setRegisterError((err as Error).message ?? t('registerError'))
     }
   }
 
-  async function handleTest() {
+  async function handleCheck() {
     try {
-      const result = await test()
-      showToastMsg(result.success ? 'Test email sent successfully.' : (result.message ?? 'Test failed.'), result.success)
-    } catch (err) {
-      showToastMsg((err as Error).message ?? 'Test failed.', false)
+      await checkDomain()
+    } catch {
+      // silent — status stays as-is
     }
+  }
+
+  async function handleRevert() {
+    try {
+      await revertToManaged()
+    } catch {
+      // silent
+    }
+  }
+
+  function copyToClipboard(text: string, key: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key)
+      setTimeout(() => setCopiedKey(null), 2000)
+    })
+  }
+
+  function VerificationBadge({ status }: { status: string | undefined }) {
+    if (status === 'verified') {
+      return (
+        <Badge variant="default" className="gap-1 bg-green-600 hover:bg-green-600">
+          <CheckCircle2 className="h-3 w-3" />
+          {t('statusVerified')}
+        </Badge>
+      )
+    }
+    if (status === 'failed') {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <XCircle className="h-3 w-3" />
+          {t('statusFailed')}
+        </Badge>
+      )
+    }
+    return (
+      <Badge variant="outline" className="gap-1 text-amber-600 border-amber-300">
+        <Clock className="h-3 w-3" />
+        {t('statusPending')}
+      </Badge>
+    )
   }
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Mail className="h-4 w-4" />
-            Outbound email (SMTP)
-          </CardTitle>
-          <CardDescription>
-            Configure a shared SMTP server for all teams in this organisation. Team-level SMTP settings override this.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Mail className="h-4 w-4" />
+          {t('title')}
+        </CardTitle>
+        <CardDescription>{t('orgSubtitle')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-2/3" />
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Managed card */}
+            <div className={`rounded-lg border p-4 space-y-1 ${!isByo ? 'border-primary/40 bg-primary/5' : ''}`}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{t('managedTitle')}</p>
+                {!isByo && (
+                  <Badge variant="secondary" className="text-xs">{t('active')}</Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">{t('managedDescription')}</p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5 col-span-2 sm:col-span-1">
-                  <Label htmlFor="org-smtp-host">Host</Label>
-                  <Input
-                    id="org-smtp-host"
-                    value={host}
-                    onChange={(e) => setHost(e.target.value)}
-                    placeholder="smtp.example.com"
-                    disabled={!isAdmin}
-                  />
+
+            {/* BYO domain — register */}
+            {!isByo && isAdmin && (
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {t('byoSectionTitle')}
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2 space-y-1">
+                    <Label htmlFor="org-byo-domain">{t('domainLabel')}</Label>
+                    <Input
+                      id="org-byo-domain"
+                      value={domain}
+                      onChange={(e) => setDomain(e.target.value)}
+                      placeholder="myorg.ch"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="org-byo-from-local">{t('fromLocalPartLabel')}</Label>
+                    <Input
+                      id="org-byo-from-local"
+                      value={fromLocalPart}
+                      onChange={(e) => setFromLocalPart(e.target.value)}
+                      placeholder="info"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="org-smtp-port">Port</Label>
-                  <Input
-                    id="org-smtp-port"
-                    type="number"
-                    value={port}
-                    onChange={(e) => setPort(Number(e.target.value))}
-                    placeholder="587"
-                    disabled={!isAdmin}
-                  />
+                {fromLocalPart && domain && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('fromAddressPreview', { address: `${fromLocalPart || 'info'}@${domain}` })}
+                  </p>
+                )}
+                {registerError && (
+                  <p className="text-xs text-destructive">{registerError}</p>
+                )}
+                <Button
+                  size="sm"
+                  onClick={handleRegister}
+                  disabled={isRegistering || !domain.trim()}
+                >
+                  {isRegistering ? t('registering') : t('registerButton')}
+                </Button>
+              </div>
+            )}
+
+            {/* BYO domain active */}
+            {isByo && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm font-medium">{t('byoActiveTitle')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('byoActiveFrom', {
+                        address: `${config.from_local_part ?? 'info'}@${config.domain}`,
+                      })}
+                    </p>
+                  </div>
+                  <VerificationBadge status={config.verification_status} />
                 </div>
+
+                {config.verification_status !== 'verified' && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+                    {t('pendingFallbackNote')}
+                  </div>
+                )}
+
+                {config.dns_records && config.dns_records.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium">{t('dnsRecordsTitle')}</p>
+                    <div className="rounded-lg border overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground w-16">{t('dnsColType')}</th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">{t('dnsColHost')}</th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">{t('dnsColValue')}</th>
+                            <th className="px-2 py-2 w-8" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {config.dns_records.map((record, idx) => (
+                            <tr key={idx} className={record.verified ? 'bg-green-50/50' : ''}>
+                              <td className="px-3 py-2 font-mono text-muted-foreground">{record.type}</td>
+                              <td className="px-3 py-2 font-mono break-all max-w-[160px]">{record.host}</td>
+                              <td className="px-3 py-2 font-mono break-all max-w-[200px]">{record.value}</td>
+                              <td className="px-2 py-2">
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(record.value, `${idx}-value`)}
+                                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                  title={t('copyValue')}
+                                >
+                                  {copiedKey === `${idx}-value`
+                                    ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                                    : <Copy className="h-3.5 w-3.5" />
+                                  }
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{t('dmarcNote')}</p>
+                  </div>
+                )}
+
+                {isAdmin && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCheck}
+                      disabled={isChecking || isReverting}
+                    >
+                      {isChecking ? t('checking') : t('checkStatusButton')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleRevert}
+                      disabled={isChecking || isReverting}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {isReverting ? t('reverting') : t('revertToManagedButton')}
+                    </Button>
+                  </div>
+                )}
               </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  id="org-smtp-secure"
-                  type="checkbox"
-                  checked={secure}
-                  onChange={(e) => setSecure(e.target.checked)}
-                  className="h-4 w-4 rounded border-input accent-primary"
-                  disabled={!isAdmin}
-                />
-                <Label htmlFor="org-smtp-secure" className="cursor-pointer">Use TLS (port 465)</Label>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="org-smtp-user">Username</Label>
-                <Input
-                  id="org-smtp-user"
-                  value={user}
-                  onChange={(e) => setUser(e.target.value)}
-                  placeholder="user@example.com"
-                  autoComplete="off"
-                  disabled={!isAdmin}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="org-smtp-password">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="org-smtp-password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Leave blank to keep existing password"
-                    autoComplete="new-password"
-                    className="pr-9"
-                    disabled={!isAdmin}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-1.5">
-                <Label htmlFor="org-smtp-from-name">From name</Label>
-                <Input
-                  id="org-smtp-from-name"
-                  value={fromName}
-                  onChange={(e) => setFromName(e.target.value)}
-                  placeholder="My Organisation"
-                  disabled={!isAdmin}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="org-smtp-from-email">From email</Label>
-                <Input
-                  id="org-smtp-from-email"
-                  type="email"
-                  value={fromEmail}
-                  onChange={(e) => setFromEmail(e.target.value)}
-                  placeholder="noreply@example.com"
-                  disabled={!isAdmin}
-                />
-              </div>
-
-              {isAdmin && (
-                <div className="flex items-center gap-2 pt-1">
-                  <Button size="sm" onClick={handleSave} disabled={isSaving || isTesting}>
-                    {isSaving ? 'Saving…' : 'Save settings'}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={handleTest} disabled={isSaving || isTesting}>
-                    {isTesting ? 'Sending…' : 'Send test email'}
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white z-50 ${
-          toast.ok ? 'bg-green-600' : 'bg-destructive'
-        }`}>
-          {toast.msg}
-        </div>
-      )}
-    </>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -910,7 +953,7 @@ export default function OrgSettingsPage() {
 
       <MembershipStatusesCard orgId={orgId} isAdmin={isAdmin} />
 
-      <OrgSmtpCard orgId={orgId} isAdmin={isAdmin} />
+      <OrgEmailSenderCard orgId={orgId} isAdmin={isAdmin} />
 
       {toast && (
         <div className={`fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white z-50 ${

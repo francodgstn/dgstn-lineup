@@ -36,7 +36,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 | Web app | `src/` | React 19, MUI 7, Redux — do NOT copy this; rewrite in Next.js |
 | Student app | `student-app/` | Copied into `apps/mobile/` with branding updates |
 | Data constants | `src/constants/firebasePaths.js` | Ported to `packages/shared/src/paths.ts` |
-| SMTP utils | `functions/src/utils/email.js` | Ported to `packages/functions/src/utils/email.ts` |
+| Mail utils | `functions/src/utils/email.js` | Reworked: SMTP removed, now a thin façade over the Brevo mail service in `packages/functions/src/mail/` (see "Email sending" pattern) |
 | Secrets | `functions/src/utils/secrets.js` | Ported to `packages/functions/src/utils/secrets.ts` |
 | Teams utils | `functions/src/utils/teams.js` | Ported to `packages/functions/src/utils/teams.ts` |
 | Recurrence | `functions/src/utils/recurrence.js` | Ported — DST-safe Europe/Zurich logic, keep as-is |
@@ -186,6 +186,29 @@ Next.js SSG/SSR crashes if `getAuth()` is called at module level on the server.
 | `src/lib/firebase-auth.ts` | `auth` | Client components and `src/lib/auth.ts` only |
 
 Never add `getAuth()` back to `firebase.ts`.
+
+### Email sending — Brevo ESP (no SMTP)
+
+All outbound mail goes through **Brevo's transactional HTTP API** via a
+provider-agnostic service in `packages/functions/src/mail/`. There is **no SMTP /
+nodemailer** and **no stored mail credentials** for anyone. Full docs:
+`packages/functions/src/mail/README.md`.
+
+- Call sites send via `sendEmail(...)` from `utils/email.ts` (a thin façade).
+  **Pass `teamId` to send AS the studio**; omit it for Linyup **system mail**
+  (from `hello@linyup.com`).
+- **Sender resolution** (`mail/senderResolution.ts`, pure + unit-tested): a studio
+  sends **Managed** (studio name over a `linyup.com` address, Reply-To = the
+  studio's contact email) by default, or from a **BYO domain** once verified in
+  Brevo (paid plans only — `coach`/`studio`/`organization`). BYO falls back to
+  Managed automatically until verified.
+- Per-studio config lives at `teams|organizations/{id}/integrations/email_sender`
+  (`EmailSenderConfig`, no credentials). BYO domain-auth callables:
+  `registerSenderDomain` / `checkSenderDomain` / `useManagedSender`.
+- Brevo event webhook `handleBrevoWebhook` writes `mail_suppressions/*` on
+  bounce/block/spam so dead addresses are skipped; `mail_sends/*` is the
+  idempotency + delivery ledger. Secrets: `brevo-api-key`, `brevo-webhook-secret`
+  (Secret Manager; emulator env `BREVO_API_KEY` / `BREVO_WEBHOOK_SECRET`).
 
 ### SaaS plan tiers (Phase 2)
 

@@ -59,7 +59,7 @@ export const sendMembershipVerificationCode = onCall(async (request) => {
     `,
   })
 
-  await sendEmail({ to: normalizedEmail, subject: `Your Linyup verification code: ${code}`, html, text })
+  await sendEmail({ to: normalizedEmail, subject: `Your Linyup verification code: ${code}`, html, text, teamId })
   console.log(`Membership verification code sent to ${normalizedEmail} for team ${teamId}`)
 
   return { success: true, codeId: docRef.id }

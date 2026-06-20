@@ -121,6 +121,7 @@ export const sendBookingVerificationCode = onCall(async (request) => {
       subject: subjects[lang],
       html: emailContent.html,
       text: emailContent.text,
+      teamId,
     })
     console.log(`Booking verification email sent (team: ${teamId})`)
   } catch (err) {
@@ -772,6 +773,7 @@ export const bookSession = onCall(async (request) => {
         subject: subjects[lang],
         html: email.html,
         text: email.text,
+        teamId: data.teamId,
         attachments: [
           { filename: ical.filename, content: ical.content, contentType: ical.contentType },
         ],
@@ -805,6 +807,7 @@ export const bookSession = onCall(async (request) => {
           subject: subjects[lang],
           html: notif.html,
           text: notif.text,
+          teamId: data.teamId,
         })
       } catch (err) {
         console.error('Error sending coaching coach notification email:', err)
@@ -834,6 +837,7 @@ export const bookSession = onCall(async (request) => {
         subject: subjects[lang],
         html: confirmEmail.html,
         text: confirmEmail.text,
+        teamId: data.teamId,
       })
       console.log(`Confirmation email sent to ${sanitized.email}`)
     } catch (err) {
@@ -864,6 +868,7 @@ export const bookSession = onCall(async (request) => {
           subject: subjects[lang],
           html: notifEmail.html,
           text: notifEmail.text,
+          teamId: data.teamId,
         })
         console.log(`Owner notification sent to ${ownerEmail}`)
       } catch (err) {
@@ -999,6 +1004,7 @@ export const cancelBooking = onCall(async (request) => {
   try {
     await sendEmail({
       to: booking.email as string,
+      teamId,
       subject: `Booking Cancelled – ${activityName}`,
       html: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.</p>${rebookLine}`,
       text: `Hi ${firstname},\n\nYour booking for ${activityName} with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.\n${rebookUrl ? `Book another session: ${rebookUrl}` : ''}`,
@@ -1306,6 +1312,7 @@ export const rebookSession = onCall(async (request) => {
   try {
     await sendEmail({
       to: booking.email as string,
+      teamId,
       subject: `Booking Changed – ${activityName}`,
       html: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} has been changed.</p><p><strong>Previous date:</strong> ${oldDateStr}</p><p><strong>New date:</strong> ${newDateStr} at ${newTimeStr}</p>${locationLine}${manageLink}`,
       text: `Hi ${firstname},\n\nYour booking for ${activityName} with ${teamName} has been changed.\nPrevious date: ${oldDateStr}\nNew date: ${newDateStr} at ${newTimeStr}\n${newSession.location ? `Location: ${newSession.location}\n` : ''}${manageBookingUrl ? `Manage your booking: ${manageBookingUrl}` : ''}`,

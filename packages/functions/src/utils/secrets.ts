@@ -56,24 +56,3 @@ export async function getSecret(secretName: string, version = 'latest'): Promise
     throw new Error(`Failed to access secret: ${secretName}`)
   }
 }
-
-export async function getSMTPConfig(appSettings: Record<string, unknown>) {
-  if (!appSettings?.nodemailer_smtp) {
-    throw new Error('SMTP configuration not found in app_settings/global_settings')
-  }
-
-  const smtpSettings = appSettings.nodemailer_smtp as Record<string, unknown>
-  if (!smtpSettings.auth) {
-    throw new Error('SMTP auth configuration not found in app settings')
-  }
-
-  const smtpPassword = await getSecret('smtp-password')
-
-  return {
-    ...smtpSettings,
-    auth: {
-      ...(smtpSettings.auth as Record<string, unknown>),
-      pass: smtpPassword,
-    },
-  }
-}

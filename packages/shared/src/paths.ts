@@ -49,6 +49,16 @@ export const ORG_ACCESS_REQUESTS_SUBCOLLECTION = 'org_access_requests'
 export const ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION = 'membership_statuses'
 export const TEAM_INTEGRATIONS_SUBCOLLECTION = 'integrations'
 export const INSTALLED_PLUGINS_SUBCOLLECTION = 'installed_plugins'
+// Well-known integration doc id for a studio's email sender configuration
+// (teams|organizations/{id}/integrations/email_sender). See EmailSenderConfig.
+export const EMAIL_SENDER_INTEGRATION_DOC = 'email_sender'
+
+// Mail pipeline (Brevo). Both are Admin-SDK only — written by Cloud Functions
+// (the webhook handler + mail service), never by clients.
+// mail_suppressions: dead/complained recipients (doc id = sha256(email)).
+// mail_sends: idempotency + delivery ledger (doc id = idempotency key).
+export const MAIL_SUPPRESSIONS_COLLECTION = 'mail_suppressions'
+export const MAIL_SENDS_COLLECTION = 'mail_sends'
 
 export const PROJECTS_COLLECTION = 'projects'
 export const CONTACTS_COLLECTION = 'contacts'

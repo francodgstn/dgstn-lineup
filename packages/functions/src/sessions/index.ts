@@ -204,6 +204,7 @@ async function cancelSingleSession(
         })
         await sendEmail({
           to: booking.email as string,
+          teamId: (sessionData.teamId || sessionData.teacher) as string,
           subject: email.subject,
           html: email.html,
           text: email.text,

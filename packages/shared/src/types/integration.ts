@@ -28,39 +28,51 @@ export interface PayrexxGatewayConfig {
 
 export type PaymentGatewayConfig = StripeGatewayConfig | PayrexxGatewayConfig
 
-export type IntegrationType = 'payment_gateway' | 'email_smtp'
+export type IntegrationType = 'payment_gateway' | 'email_sender'
 
-export interface SmtpIntegration {
-  type: 'email_smtp'
-  host: string
-  port: number
-  secure: boolean        // true = TLS on connect (port 465), false = STARTTLS (port 587)
-  user: string
-  password_enc: string   // AES-256-GCM encrypted ciphertext (base64)
-  from_name: string
-  from_email: string
-  use_org_smtp?: boolean // team-level only: if true, ignore above and use org config
-  updatedAt: Timestamp
+// ─── Email sending (Brevo ESP) ────────────────────────────────────────────────
+// Outbound mail is sent through Brevo's transactional API (see
+// packages/functions/src/mail/). A studio's *sender identity* is resolved from
+// the EmailSenderConfig below; there are NO stored mail credentials for anyone —
+// the Brevo API key is server-side only (Secret Manager) and BYO domains are
+// authenticated via the studio's own DNS, never a password.
+
+// 'managed'   → send from a Linyup-controlled address on linyup.com with the
+//               studio's name as the display name and the studio's contact email
+//               as Reply-To. Zero setup; the fallback for everyone.
+// 'byo_domain'→ send from the studio's own verified domain (DKIM-authenticated in
+//               Brevo). Falls back to 'managed' automatically until verified.
+export type SenderModel = 'managed' | 'byo_domain'
+
+// Mirrors Brevo's domain authentication lifecycle. We only send as a BYO domain
+// once it is 'verified'.
+export type DomainVerificationStatus = 'pending' | 'verified' | 'failed'
+
+// A DNS record the studio must add to authenticate their domain. Surfaced to the
+// studio verbatim from Brevo's createDomain/getDomainConfiguration response.
+export interface EmailDnsRecord {
+  purpose: 'dkim' | 'brevo_code' | 'dmarc'
+  type: string   // DNS record type (TXT, CNAME, …)
+  host: string   // host_name to create
+  value: string  // record value
+  verified?: boolean // Brevo's per-record status at last check
 }
 
-// Platform-wide ("global") SMTP fallback, stored at
-// app_settings/global_settings.nodemailer_smtp. It is the bottom of the
-// team → org → global hierarchy resolved by getSmtpTransporter. The non-secret
-// fields live here; the password lives in the `smtp-password` Secret Manager
-// secret (read by getSMTPConfig). Edited from the operator console (apps/admin).
-export interface GlobalSmtpSettings {
-  host: string
-  port: number
-  secure: boolean          // true = TLS on connect (465), false = STARTTLS (587)
-  auth: {
-    user: string
-  }
-  // True once a password has been written to the `smtp-password` secret.
-  // The password itself is never stored in Firestore.
-  password_set?: boolean
-  password_updated_at?: Timestamp
-  updated_at?: Timestamp
-  updated_by?: string      // operator email that last saved the config
+// Per-studio (team or org) sender configuration. Stored at
+// teams|organizations/{id}/integrations/email_sender. Owners/org-admins only.
+// Contains NO credentials — authentication for BYO is via the studio's DNS.
+export interface EmailSenderConfig {
+  type: 'email_sender'
+  model: SenderModel
+  // BYO only ────────────────────────────────────────────────────────────────
+  domain?: string                 // e.g. 'theirdojo.ch'
+  from_local_part?: string        // local part of the From address, default 'info'
+  brevo_domain_id?: number        // Brevo's domain id (from createDomain)
+  verification_status?: DomainVerificationStatus
+  dns_records?: EmailDnsRecord[]  // records to display to the studio
+  last_checked_at?: Timestamp     // last time we polled Brevo for status
+  // ───────────────────────────────────────────────────────────────────────────
+  updatedAt: Timestamp
 }
 
 export interface TeamIntegration {

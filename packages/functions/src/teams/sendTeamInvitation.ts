@@ -80,7 +80,7 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
       `,
     })
 
-    await sendEmail({ to: email, subject: `Invitation to join ${team.name} on Linyup`, html, text })
+    await sendEmail({ to: email, subject: `Invitation to join ${team.name} on Linyup`, html, text, teamId })
 
     return { invitationId: invRef.id }
   }

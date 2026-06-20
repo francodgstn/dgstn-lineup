@@ -505,7 +505,7 @@ async function executeActionsForContact(
           language: resolved.language,
           teamData,
         })
-        await sendEmail({ to: contact.email!, subject, html, text })
+        await sendEmail({ to: contact.email!, subject, html, text, teamId })
 
         await to(
           logActivity(teamId, {
@@ -588,7 +588,7 @@ async function executeActionsForContact(
           const rawBody = substituteVariables(action.body, contact, teamName, now, teamData)
           const htmlBody = renderBody({ body_mode: 'markdown' }, rawBody)
           const { html, text } = buildOutreachEmail({ body: htmlBody, teamName, teamData })
-          await sendEmail({ to: toEmail, subject, html, text })
+          await sendEmail({ to: toEmail, subject, html, text, teamId })
           executed++
         }
       }

@@ -136,8 +136,11 @@ export {
 // Team-level billing (teams charging their own students — Payrexx)
 export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'
 
-// SMTP configuration (team / org-level outbound email settings)
-export { saveSmtpConfig, testSmtpConfig } from './smtp-settings'
+// Email sending (Brevo) — BYO domain authentication + event webhook.
+// Sender resolution + the central mail service live in ./mail and are called
+// by every send site via ../utils/email.
+export { registerSenderDomain, checkSenderDomain, useManagedSender } from './mail/domainAuth'
+export { handleBrevoWebhook } from './mail/handleBrevoWebhook'
 
 // Outreach
 export { sendOutreachEmail } from './outreach'
