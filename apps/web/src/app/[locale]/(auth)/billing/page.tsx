@@ -9,6 +9,7 @@ import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlanName } from '@/hooks/usePlanName'
+import { PlanComparison } from '@/components/plan/PlanComparison'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,7 +25,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { TEAMS_COLLECTION, PLAN_ORDER, TRIAL_EXTENSION_DAYS } from '@linyup/shared'
+import { TEAMS_COLLECTION, PLAN_ORDER, PLAN_PRICING, TRIAL_EXTENSION_DAYS } from '@linyup/shared'
 import type { SaasSubscription, SaasPlan, Team } from '@linyup/shared'
 import {
   CreditCard,
@@ -33,7 +34,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Check,
 } from 'lucide-react'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -48,33 +48,21 @@ interface Invoice {
   pdfUrl?: string
 }
 
-// ─── plan feature copy ────────────────────────────────────────────────────────
+// ─── plan card helpers ────────────────────────────────────────────────────────
+// Card copy (taglines, highlights) lives in the `Pricing` i18n namespace; price
+// and contact caps come from PLAN_PRICING (the billing source of truth) so they
+// can never drift. Suffixes map plan IDs to the message-key casing.
 
-const PLAN_HIGHLIGHTS: Record<string, string[]> = {
-  free: [
-    'Up to 10 active contacts',
-    'Single user',
-    'Public bio link & booking forms',
-    'Sessions, subscriptions & QR check-in',
-  ],
-  coach: [
-    'Everything in Free — 30 included contacts',
-    'Team members & coaching slots',
-    'No Linyup branding on your bio link',
-    'Plugin add-ons available',
-  ],
-  studio: [
-    'Everything in Coach',
-    'Student mobile app',
-    'Automations & outreach templates',
-    'Multiple managers & AI insights',
-  ],
-  organization: [
-    'Everything in Studio',
-    'Multi-team management',
-    'Cross-team events & messaging',
-    'API access & advanced permissions',
-  ],
+const PLAN_SUFFIX: Record<SaasPlan, string> = {
+  free: 'Free',
+  coach: 'Coach',
+  studio: 'Studio',
+  organization: 'Org',
+}
+
+/** CHF amount: drop the decimals for whole numbers (149), keep them otherwise (7.99). */
+function fmtPrice(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2)
 }
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
@@ -193,6 +181,7 @@ function SubscriptionCard({
   teamId: string
 }) {
   const t = useTranslations('Billing')
+  const tp = useTranslations('Pricing')
   const planName = usePlanName()
   const queryClient = useQueryClient()
 
@@ -212,6 +201,8 @@ function SubscriptionCard({
       : onFreePlan
         ? planRank('free')
         : -1
+  const currentPlanId: SaasPlan | null =
+    sub && sub.status !== 'cancelled' && sub.plan ? sub.plan : onFreePlan ? 'free' : null
 
   async function handleUpgrade(plan: string) {
     setCheckoutLoading(plan)
@@ -320,7 +311,7 @@ function SubscriptionCard({
               </div>
 
               {/* Cancelled sub → the team now runs on the Free plan */}
-              {onFreePlan && <p className="text-sm text-muted-foreground">{t('onFreePlan')}</p>}
+              {onFreePlan && <p className="text-sm text-muted-foreground">{t('onFreePlan', { count: PLAN_PRICING.free.includedContacts ?? 0 })}</p>}
 
               {/* Billing period */}
               {sub.status !== 'trial' && periodStartDate && periodEndDate && (
@@ -392,7 +383,7 @@ function SubscriptionCard({
             <div className="flex items-center gap-3 flex-wrap">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="font-semibold">{t('freePlanName')}</span>
-              <span className="text-sm text-muted-foreground">{t('onFreePlan')}</span>
+              <span className="text-sm text-muted-foreground">{t('onFreePlan', { count: PLAN_PRICING.free.includedContacts ?? 0 })}</span>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">{t('noSubscription')}</p>
@@ -405,8 +396,8 @@ function SubscriptionCard({
         <CardHeader className="pb-3">
           <CardTitle className="text-base">{t('choosePlan')}</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <CardContent className="space-y-5">
+          <div className="grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => {
               const isCurrent =
                 plan === 'free' ? onFreePlan : sub?.plan === plan && sub.status !== 'cancelled'
@@ -414,52 +405,84 @@ function SubscriptionCard({
               // Free is never "selected" via checkout — you land on it by
               // cancelling (or letting the trial lapse).
               const selectable = plan !== 'free' && !isCurrent && !isDowngrade
+              const featured = plan === 'studio'
+              const suffix = PLAN_SUFFIX[plan]
+              const price = PLAN_PRICING[plan]
+              const included = price.includedContacts
               return (
                 <div
                   key={plan}
-                  className={`rounded-lg border p-4 space-y-3 ${isCurrent ? 'border-primary bg-primary/5' : ''}`}
+                  className={`relative flex flex-col rounded-lg border p-4 ${
+                    isCurrent
+                      ? 'border-primary bg-primary/5'
+                      : featured
+                        ? 'border-primary/40'
+                        : ''
+                  }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold">{planName(plan)}</p>
+                  {featured && !isCurrent && (
+                    <span className="absolute -top-2.5 left-4 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
+                      {tp('mostPopular')}
+                    </span>
+                  )}
+
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{planName(plan)}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{tp(`tag${suffix}`)}</p>
+                    </div>
                     {isCurrent && (
-                      <Badge variant="default" className="text-xs shrink-0">
+                      <Badge variant="default" className="shrink-0 text-xs">
                         {t('currentPlanBadge')}
                       </Badge>
                     )}
                   </div>
 
-                  <ul className="space-y-1.5">
-                    {PLAN_HIGHLIGHTS[plan].map((feature) => (
-                      <li
-                        key={feature}
-                        className="flex items-start gap-1.5 text-xs text-muted-foreground"
-                      >
-                        <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
+                  {/* Price — from PLAN_PRICING (billing source of truth) */}
+                  <div className="mt-3 flex items-baseline gap-1">
+                    {price.baseMonthly === 0 ? (
+                      <span className="text-2xl font-bold">{tp('priceFree')}</span>
+                    ) : (
+                      <>
+                        <span className="text-2xl font-bold">CHF {fmtPrice(price.baseMonthly)}</span>
+                        <span className="text-xs text-muted-foreground">{tp('perMonth')}</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {included == null
+                      ? tp('unlimitedContacts')
+                      : tp('contactsLine', { count: included })}
+                  </p>
 
-                  {selectable && (
-                    <Button
-                      size="sm"
-                      className="w-full"
-                      disabled={!!checkoutLoading}
-                      onClick={() => handleUpgrade(plan)}
-                    >
-                      {checkoutLoading === plan ? t('redirecting') : t('selectPlan')}
-                    </Button>
-                  )}
-                  {isDowngrade && (
-                    <p className="text-xs text-muted-foreground text-center py-1">
-                      {plan === 'free' ? t('cancelToDowngrade') : t('contactToDowngrade')}
-                    </p>
-                  )}
+                  <div className="mt-auto pt-4">
+                    {selectable ? (
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={!!checkoutLoading}
+                        onClick={() => handleUpgrade(plan)}
+                      >
+                        {checkoutLoading === plan ? t('redirecting') : t('selectPlan')}
+                      </Button>
+                    ) : isCurrent ? (
+                      <div className="rounded-md border border-dashed py-1.5 text-center text-xs text-muted-foreground">
+                        {t('currentPlanBadge')}
+                      </div>
+                    ) : (
+                      <p className="py-1 text-center text-xs text-muted-foreground">
+                        {plan === 'free' ? t('cancelToDowngrade') : t('contactToDowngrade')}
+                      </p>
+                    )}
+                  </div>
                 </div>
               )
             })}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">{t('stripeNotice')}</p>
+
+          <PlanComparison currentPlan={currentPlanId} />
+
+          <p className="text-xs text-muted-foreground">{t('stripeNotice')}</p>
         </CardContent>
       </Card>
 
@@ -679,7 +702,7 @@ export default function BillingPage() {
   const hasGateway = !!sub?.gateway_type
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">{t('subtitle')}</p>
