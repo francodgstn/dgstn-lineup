@@ -136,6 +136,17 @@ export {
 // Team-level billing (teams charging their own students — Payrexx)
 export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'
 
+// Stripe Connect (member → studio payments; studio's own Stripe balance + platform fee)
+export { startConnectOnboarding, getConnectStatus } from './connect'
+export {
+  createMemberPayment,
+  createMemberSubscription,
+  createMembershipPayment,
+  createMembershipCheckout,
+} from './connect/payments'
+export { refundMemberPayment } from './connect/refunds'
+export { handleConnectWebhook } from './connect/webhook'
+
 // SMTP configuration (team / org-level outbound email settings)
 export { saveSmtpConfig, testSmtpConfig } from './smtp-settings'
 

@@ -134,11 +134,46 @@ export interface ContactGroup {
 
 export type SubscriptionRecurrence =
   | 'per_class'
+  | 'one_time' // a single charge (e.g. intro package); grants `included_months` of membership
   | 'weekly'
   | 'biweekly'
   | 'monthly'
   | 'quarterly'
   | 'annual'
+
+// Recurrences billed as a Stripe subscription (vs one-off charges: per_class, one_time).
+export const RECURRING_RECURRENCES: SubscriptionRecurrence[] = [
+  'weekly',
+  'biweekly',
+  'monthly',
+  'quarterly',
+  'annual',
+]
+
+export function isRecurringRecurrence(r: SubscriptionRecurrence): boolean {
+  return RECURRING_RECURRENCES.includes(r)
+}
+
+// Maps a recurring recurrence to a Stripe interval + count. Returns null for the
+// one-off recurrences (per_class, one_time), which are charged as single payments.
+export function recurrenceToStripeInterval(
+  r: SubscriptionRecurrence
+): { interval: 'week' | 'month' | 'year'; interval_count: number } | null {
+  switch (r) {
+    case 'weekly':
+      return { interval: 'week', interval_count: 1 }
+    case 'biweekly':
+      return { interval: 'week', interval_count: 2 }
+    case 'monthly':
+      return { interval: 'month', interval_count: 1 }
+    case 'quarterly':
+      return { interval: 'month', interval_count: 3 }
+    case 'annual':
+      return { interval: 'year', interval_count: 1 }
+    default:
+      return null // per_class, one_time
+  }
+}
 
 // A single price option on a subscription type (Stripe-like: product → prices).
 // Amount is in the team's default currency (Team.default_currency).
@@ -146,6 +181,9 @@ export interface SubscriptionPrice {
   id: string // client-generated; stable across edits
   amount: number // in the team default currency, e.g. 49.9
   recurrence: SubscriptionRecurrence
+  // For one_time prices: months of membership granted by the charge (e.g. an
+  // "intro offer: 100, 2 months incl." sets membership_expiration = now + 2 months).
+  included_months?: number
   label?: string // optional, e.g. "Intro offer"
   active?: boolean // default true; inactive prices are hidden from the table + assignment
 }
@@ -157,7 +195,19 @@ export interface SubscriptionType {
   source?: 'internal' | 'aggregator'
   active?: boolean
   public?: boolean // show on the bio-link / website pricing table (default off)
+  // Display order (lower = first), respected by the manager list, the website
+  // pricing table, and any other place that lists subscription types. Absent
+  // values sort last (by name) until the studio reorders.
+  order?: number
   prices?: SubscriptionPrice[] // optional; absent = the simple "just a container" flow
+}
+
+/** Stable sort for subscription types: explicit `order` first (asc), then name. */
+export function compareSubscriptionTypes(a: SubscriptionType, b: SubscriptionType): number {
+  const ao = a.order ?? Number.MAX_SAFE_INTEGER
+  const bo = b.order ?? Number.MAX_SAFE_INTEGER
+  if (ao !== bo) return ao - bo
+  return (a.name ?? '').localeCompare(b.name ?? '')
 }
 
 // ─── subscription history (contacts/{id}/subscription_history) ────────────────

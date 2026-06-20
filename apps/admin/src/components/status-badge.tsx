@@ -26,3 +26,35 @@ export function PlanBadge({ plan }: { plan: string | null }) {
   if (!plan) return <span className="text-muted-foreground">—</span>
   return <Badge variant="outline" className="capitalize">{plan}</Badge>
 }
+
+// Stripe Connect (member → studio) onboarding status for the operator console.
+export type PaymentsStatus =
+  | 'enabled'
+  | 'restricted'
+  | 'pending'
+  | 'rejected'
+  | 'not_setup'
+  | 'disabled'
+
+const PAY_VARIANT: Record<PaymentsStatus, React.ComponentProps<typeof Badge>['variant']> = {
+  enabled: 'success',
+  restricted: 'warning',
+  pending: 'default',
+  rejected: 'destructive',
+  not_setup: 'outline',
+  disabled: 'secondary',
+}
+
+const PAY_LABEL: Record<PaymentsStatus, string> = {
+  enabled: 'Enabled',
+  restricted: 'Restricted',
+  pending: 'Pending',
+  rejected: 'Rejected',
+  not_setup: 'Not set up',
+  disabled: 'Disabled',
+}
+
+export function PaymentsBadge({ status }: { status: PaymentsStatus | null }) {
+  if (!status) return <span className="text-muted-foreground">—</span>
+  return <Badge variant={PAY_VARIANT[status]}>{PAY_LABEL[status]}</Badge>
+}

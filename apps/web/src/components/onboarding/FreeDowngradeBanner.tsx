@@ -6,6 +6,7 @@ import { Zap, X } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
+import { PLAN_PRICING } from '@linyup/shared'
 
 /**
  * Dismissible notice shown after a trial lapses and the team lands on the
@@ -44,7 +45,9 @@ export function FreeDowngradeBanner() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-sky-900 dark:text-sky-200">{t('downgradeBannerTitle')}</p>
-          <p className="text-sm text-sky-800/90 dark:text-sky-300/90 mt-0.5">{t('downgradeBannerBody')}</p>
+          <p className="text-sm text-sky-800/90 dark:text-sky-300/90 mt-0.5">
+            {t('downgradeBannerBody', { count: PLAN_PRICING.free.includedContacts ?? 0 })}
+          </p>
           <Link
             href="/billing"
             className="inline-block mt-2 text-sm font-semibold text-sky-700 dark:text-sky-300 hover:underline"

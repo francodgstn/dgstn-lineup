@@ -6,7 +6,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+  writeBatch,
+} from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION } from '@linyup/shared'
 import type { SubscriptionType, SubscriptionPrice } from '@linyup/shared'
@@ -35,12 +43,22 @@ import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Globe } from 'lucide-reac
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { formatCurrency } from '@/lib/format'
 
-const RECURRENCES = ['per_class', 'weekly', 'biweekly', 'monthly', 'quarterly', 'annual'] as const
+const RECURRENCES = [
+  'per_class',
+  'one_time',
+  'weekly',
+  'biweekly',
+  'monthly',
+  'quarterly',
+  'annual',
+] as const
 
 const priceSchema = z.object({
   id: z.string(),
   amount: z.coerce.number().positive(),
   recurrence: z.enum(RECURRENCES),
+  // Months of membership granted by a one_time price (e.g. intro offer).
+  included_months: z.coerce.number().int().positive().optional(),
   label: z.string().max(40).optional(),
   active: z.boolean().optional(),
 })
@@ -61,11 +79,14 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
     description: editing?.description ?? '',
     source: editing?.source ?? 'internal',
     active: editing?.active ?? true,
-    public: editing?.public ?? false,
+    // New subscription types default to visible on the public pricing page;
+    // existing ones keep whatever was saved.
+    public: editing ? (editing.public ?? false) : true,
     prices: (editing?.prices ?? []).map((p) => ({
       id: p.id,
       amount: p.amount,
       recurrence: p.recurrence,
+      included_months: p.included_months,
       label: p.label ?? '',
       active: p.active ?? true,
     })),
@@ -78,6 +99,7 @@ function SubTypeDialog({
   teamId,
   editing,
   currency,
+  nextOrder,
   onSaved,
 }: {
   open: boolean
@@ -85,6 +107,8 @@ function SubTypeDialog({
   teamId: string
   editing: SubscriptionType | null
   currency: string
+  /** Order assigned to a newly created type so it appends to the end. */
+  nextOrder: number
   onSaved: () => void
 }) {
   const t = useTranslations('TeamSettings')
@@ -122,6 +146,9 @@ function SubTypeDialog({
         active: p.active ?? true,
       }
       if (p.label?.trim()) entry.label = p.label.trim()
+      if (p.recurrence === 'one_time' && p.included_months) {
+        entry.included_months = p.included_months
+      }
       return entry
     })
     const payload = {
@@ -140,6 +167,7 @@ function SubTypeDialog({
     } else {
       await addDoc(collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION), {
         ...payload,
+        order: nextOrder,
         created_at: serverTimestamp(),
       })
     }
@@ -149,7 +177,7 @@ function SubTypeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editing ? t('editSubscriptionType') : t('addSubscriptionType')}
@@ -278,6 +306,16 @@ function SubTypeDialog({
                           ))}
                         </SelectContent>
                       </Select>
+                      {watch(`prices.${i}.recurrence`) === 'one_time' && (
+                        <Input
+                          type="number"
+                          step="1"
+                          min="1"
+                          {...register(`prices.${i}.included_months`)}
+                          className="w-[130px]"
+                          placeholder={t('subTypeIncludedMonths')}
+                        />
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Input
@@ -372,6 +410,26 @@ export const SubscriptionTypesManager = forwardRef<
     invalidate()
   }
 
+  // Reorder a type up/down. Persists `order = position` for the whole list in one
+  // batch (normalizes any docs that never had an explicit order). The list is
+  // already sorted by `compareSubscriptionTypes` via the hook.
+  const move = async (index: number, dir: -1 | 1) => {
+    const target = index + dir
+    if (target < 0 || target >= types.length) return
+    const next = [...types]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    const batch = writeBatch(db)
+    next.forEach((st, i) => {
+      if (st.order !== i) {
+        batch.update(doc(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION, st.id), {
+          order: i,
+        })
+      }
+    })
+    await batch.commit()
+    invalidate()
+  }
+
   if (isLoading)
     return (
       <div className="space-y-2">
@@ -389,8 +447,26 @@ export const SubscriptionTypesManager = forwardRef<
         </div>
       ) : (
         <div className="space-y-2">
-          {types.map((st) => (
+          {types.map((st, index) => (
             <div key={st.id} className="flex items-center gap-3 p-3 rounded-lg border">
+              <div className="flex flex-col">
+                <button
+                  onClick={() => move(index, -1)}
+                  disabled={index === 0}
+                  className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
+                  aria-label={t('subTypeMoveUp')}
+                >
+                  <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+                <button
+                  onClick={() => move(index, 1)}
+                  disabled={index === types.length - 1}
+                  className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
+                  aria-label={t('subTypeMoveDown')}
+                >
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-medium">{st.name}</p>
@@ -457,6 +533,7 @@ export const SubscriptionTypesManager = forwardRef<
         teamId={teamId}
         editing={editing}
         currency={currency}
+        nextOrder={types.length}
         onSaved={invalidate}
       />
 

@@ -17,6 +17,7 @@ import {
   USERS_COLLECTION,
 } from '@linyup/shared'
 import { adminDb } from '@/lib/firebase-admin'
+import type { PaymentsStatus } from '@/components/status-badge'
 
 export type AccountType = 'team' | 'org'
 
@@ -32,6 +33,16 @@ export interface AccountRow {
   includedContacts: number | null
   ownerEmail: string | null
   createdMs: number
+  /** Connect (member → studio) onboarding status. Teams only; null for orgs. */
+  paymentsStatus: PaymentsStatus | null
+}
+
+/** Derive the compact Connect status from the team's payments mirror. */
+function teamPaymentsStatus(team: Team): PaymentsStatus {
+  const p = team.payments
+  if (p?.connectEnabled === false) return 'disabled'
+  if (!p?.connectAccountId) return 'not_setup'
+  return (p.connectStatus as PaymentsStatus | undefined) ?? 'pending'
 }
 
 export type OverviewMetrics = PlatformMetrics & { recentSignups: AccountRow[] }
@@ -107,6 +118,7 @@ async function loadAccounts(): Promise<LoadResult> {
       includedContacts: plan ? PLAN_PRICING[plan].includedContacts : null,
       ownerEmail: ownerEmail.get(team.createdBy) ?? null,
       createdMs: team.created?.toMillis?.() ?? 0,
+      paymentsStatus: teamPaymentsStatus(team),
     })
   }
 
@@ -126,6 +138,7 @@ async function loadAccounts(): Promise<LoadResult> {
       includedContacts: plan ? PLAN_PRICING[plan].includedContacts : null,
       ownerEmail: ownerEmail.get(org.createdBy) ?? null,
       createdMs: org.created?.toMillis?.() ?? 0,
+      paymentsStatus: null,
     })
   }
 

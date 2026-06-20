@@ -20,9 +20,14 @@ import {
   TEAM_MEMBERS_SUBCOLLECTION,
   ORG_MEMBERS_SUBCOLLECTION,
   TEAM_ACTIVITY_LOG_SUBCOLLECTION,
+  CONNECT_ACCOUNTS_COLLECTION,
+  MEMBER_PAYMENTS_SUBCOLLECTION,
+  MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
 } from '@linyup/shared'
+import type { ConnectAccount, ConnectOnboardingModel, MemberPayment } from '@linyup/shared'
 import { adminDb } from '@/lib/firebase-admin'
 import type { AccountType } from './accounts'
+import type { PaymentsStatus } from '@/components/status-badge'
 
 export interface MemberRow {
   userId: string
@@ -52,6 +57,23 @@ export interface ActivityRow {
   createdMs: number | null
 }
 
+// Stripe Connect (member → studio) view for the operator console.
+export interface PaymentsView {
+  status: PaymentsStatus
+  model: ConnectOnboardingModel | null
+  connectAccountId: string | null
+  chargesEnabled: boolean
+  payoutsEnabled: boolean
+  capabilities: Record<string, string>
+  requirementsDue: string[]
+  // Aggregates over the studio's member payments (CHF, major units).
+  paymentsCount: number
+  grossCollectedChf: number
+  platformFeesChf: number
+  refundedChf: number
+  activeSubscriptions: number
+}
+
 export interface AccountDetail {
   type: AccountType
   id: string
@@ -66,6 +88,66 @@ export interface AccountDetail {
   contactUsage: ContactUsage | null
   members: MemberRow[]
   activity: ActivityRow[]
+  payments: PaymentsView | null
+}
+
+/** Connect account state + aggregated member→studio payment totals for a team. */
+async function getTeamPayments(teamId: string, team: Team): Promise<PaymentsView> {
+  const p = team.payments
+  const connectAccountId = p?.connectAccountId ?? null
+  const teamRef = adminDb.collection(TEAMS_COLLECTION).doc(teamId)
+
+  const [payDocs, subAgg, caDoc] = await Promise.all([
+    // Cap at 1000 most-recent payments for the aggregate (operator overview).
+    teamRef.collection(MEMBER_PAYMENTS_SUBCOLLECTION).limit(1000).get(),
+    teamRef
+      .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
+      .where('status', '==', 'active')
+      .count()
+      .get(),
+    connectAccountId
+      ? adminDb.collection(CONNECT_ACCOUNTS_COLLECTION).doc(connectAccountId).get()
+      : Promise.resolve(null),
+  ])
+
+  let gross = 0
+  let fees = 0
+  let refunded = 0
+  let count = 0
+  for (const d of payDocs.docs) {
+    const mp = d.data() as MemberPayment
+    if (mp.status === 'succeeded' || mp.status === 'partially_refunded' || mp.status === 'refunded') {
+      gross += mp.amount ?? 0
+      fees += mp.application_fee_amount ?? 0
+      refunded += mp.amount_refunded ?? 0
+      count++
+    }
+  }
+
+  const ca = caDoc?.exists ? (caDoc.data() as ConnectAccount) : null
+  const status: PaymentsStatus =
+    p?.connectEnabled === false
+      ? 'disabled'
+      : !connectAccountId
+        ? 'not_setup'
+        : ((ca?.status as PaymentsStatus | undefined) ??
+          (p?.connectStatus as PaymentsStatus | undefined) ??
+          'pending')
+
+  return {
+    status,
+    model: p?.connectModel ?? ca?.model ?? null,
+    connectAccountId,
+    chargesEnabled: ca?.charges_enabled ?? false,
+    payoutsEnabled: ca?.payouts_enabled ?? false,
+    capabilities: ca?.capabilities ?? {},
+    requirementsDue: ca?.requirements_currently_due ?? [],
+    paymentsCount: count,
+    grossCollectedChf: gross / 100,
+    platformFeesChf: fees / 100,
+    refundedChf: refunded / 100,
+    activeSubscriptions: subAgg.data().count,
+  }
 }
 
 async function resolveEmails(uids: string[]): Promise<Map<string, string>> {
@@ -115,6 +197,7 @@ async function getTeamDetail(id: string): Promise<AccountDetail | null> {
   const team = teamDoc.data() as Team
   const sub = subDoc.exists ? (subDoc.data() as SaasSubscription) : null
   const plan = sub?.plan ?? team.plan ?? null
+  const payments = await getTeamPayments(id, team)
 
   const memberDocs = membersSnap.docs.map((d) => d.data() as TeamMember)
   const emails = await resolveEmails(memberDocs.map((m) => m.userId))
@@ -149,6 +232,7 @@ async function getTeamDetail(id: string): Promise<AccountDetail | null> {
     contactUsage: contactUsageForPlan(plan, contactAgg.data().count),
     members,
     activity,
+    payments,
   }
 }
 
@@ -187,6 +271,7 @@ async function getOrgDetail(id: string): Promise<AccountDetail | null> {
     contactUsage: null,
     members,
     activity: [],
+    payments: null,
   }
 }
 

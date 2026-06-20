@@ -110,7 +110,7 @@ export function UpgradeModal({ open, onClose, feature, minPlan }: UpgradeModalPr
 
         <DialogFooter className="flex-col gap-2 sm:flex-col mt-2">
           <Link
-            href="/upgrade"
+            href="/billing"
             onClick={onClose}
             className="w-full text-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
           >
@@ -124,7 +124,7 @@ export function UpgradeModal({ open, onClose, feature, minPlan }: UpgradeModalPr
               Maybe later
             </button>
             <Link
-              href="/upgrade"
+              href="/billing"
               onClick={onClose}
               className="text-xs text-primary hover:underline"
             >

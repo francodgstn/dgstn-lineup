@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { StatusBadge, PlanBadge } from '@/components/status-badge'
+import { StatusBadge, PlanBadge, PaymentsBadge } from '@/components/status-badge'
 import { formatDate } from '@/lib/format'
 import { AccountsFilters } from './accounts-filters'
 
@@ -48,6 +48,7 @@ export default async function AccountsPage({
               <TableHead>Type</TableHead>
               <TableHead>Plan</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Payments</TableHead>
               <TableHead>Contacts</TableHead>
               <TableHead>Trial ends</TableHead>
               <TableHead>Owner</TableHead>
@@ -57,7 +58,7 @@ export default async function AccountsPage({
           <TableBody>
             {accounts.length === 0 && (
               <TableRow>
-                <TableCell className="py-6 text-center text-muted-foreground" colSpan={8}>
+                <TableCell className="py-6 text-center text-muted-foreground" colSpan={9}>
                   No accounts match these filters.
                 </TableCell>
               </TableRow>
@@ -79,6 +80,9 @@ export default async function AccountsPage({
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={a.status} />
+                </TableCell>
+                <TableCell>
+                  <PaymentsBadge status={a.paymentsStatus} />
                 </TableCell>
                 <TableCell className="tabular-nums">
                   {a.contactCount == null

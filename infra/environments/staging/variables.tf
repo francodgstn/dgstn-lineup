@@ -65,6 +65,7 @@ variable "secret_ids" {
   default = [
     "stripe-secret-key",
     "stripe-webhook-secret",
+    "stripe-connect-webhook-secret",
     "smtp-password",
     "smtp-encryption-key",
     "posthog-api-key",

@@ -32,7 +32,6 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
         .collection(SUBSCRIPTION_TYPES_SUBCOLLECTION)
         .where('public', '==', true)
         .where('active', '==', true)
-        .orderBy('name')
         .get()
     )
 
@@ -41,8 +40,27 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
       throw queryErr
     }
 
-    type PublicPrice = { amount: number; recurrence: string; label?: string }
-    const publicTypes = snapshot!.docs.map((d) => {
+    // Order by the studio-set `order` (asc), then name. Sorted in memory so docs
+    // without an `order` field aren't excluded (a Firestore orderBy would drop
+    // them) and no composite index is required. The website pricing table renders
+    // this array in order.
+    const docsSorted = [...snapshot!.docs].sort((a, b) => {
+      const ao = (a.data().order as number | undefined) ?? Number.MAX_SAFE_INTEGER
+      const bo = (b.data().order as number | undefined) ?? Number.MAX_SAFE_INTEGER
+      if (ao !== bo) return ao - bo
+      return String(a.data().name ?? '').localeCompare(String(b.data().name ?? ''))
+    })
+
+    // `id` + `included_months` are needed by the public shop checkout (resolves a
+    // price by id; one-time prices grant a membership duration).
+    type PublicPrice = {
+      id: string
+      amount: number
+      recurrence: string
+      label?: string
+      included_months?: number
+    }
+    const publicTypes = docsSorted.map((d) => {
       const data = d.data()
       // name + description power the website Pricing cards / booking bio-link;
       // prices feed the automatic pricing table. Omit absent fields (no undefined).
@@ -60,14 +78,23 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
       }
       const prices: PublicPrice[] = (Array.isArray(data.prices) ? data.prices : [])
         .filter(
-          (p: { active?: boolean; amount?: unknown }) =>
-            p && p.active !== false && typeof p.amount === 'number'
+          (p: { id?: unknown; active?: boolean; amount?: unknown }) =>
+            p && p.active !== false && typeof p.amount === 'number' && typeof p.id === 'string'
         )
-        .map((p: { amount: number; recurrence: string; label?: string }) => {
-          const price: PublicPrice = { amount: p.amount, recurrence: p.recurrence }
-          if (p.label) price.label = p.label
-          return price
-        })
+        .map(
+          (p: {
+            id: string
+            amount: number
+            recurrence: string
+            label?: string
+            included_months?: number
+          }) => {
+            const price: PublicPrice = { id: p.id, amount: p.amount, recurrence: p.recurrence }
+            if (p.label) price.label = p.label
+            if (typeof p.included_months === 'number') price.included_months = p.included_months
+            return price
+          }
+        )
       if (prices.length) entry.prices = prices
       return entry
     })
