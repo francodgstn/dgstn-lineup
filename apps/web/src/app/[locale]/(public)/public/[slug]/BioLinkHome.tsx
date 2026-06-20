@@ -279,7 +279,9 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
                             ? 'UserPlus'
                             : isCourses
                               ? 'GraduationCap'
-                              : 'Link2')
+                              : isShop
+                                ? 'ShoppingBag'
+                                : 'Link2')
                       }
                       className="h-4 w-4"
                     />

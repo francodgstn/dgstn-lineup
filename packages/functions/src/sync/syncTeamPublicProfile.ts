@@ -96,6 +96,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       isBookingLink: link.isBookingLink || false,
       isMembershipLink: link.isMembershipLink || false,
       isCoursesLink: link.isCoursesLink || false,
+      isShopLink: link.isShopLink || false,
     })),
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,
