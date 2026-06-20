@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { BrevoClient } from '@getbrevo/brevo'
 import { requireOperator } from '@/lib/require-operator'
 import {
   getSecretValue,
@@ -84,20 +83,42 @@ export async function sendBrevoTestEmail(formData: FormData): Promise<SendTestRe
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 
+  // Call Brevo's transactional endpoint directly (no SDK in the admin app — keeps
+  // the bundle lean and avoids Turbopack resolving a heavy Node SDK). The mail
+  // service in packages/functions handles all real app mail; this is an
+  // operator-only sanity check of the API key + system sender.
   try {
-    const client = new BrevoClient({ apiKey, maxRetries: 1 })
-    await client.transactionalEmails.sendTransacEmail({
-      sender: { name: 'Linyup', email: BREVO_SYSTEM_SENDER },
-      to: [{ email: recipient }],
-      subject: 'Linyup system test email',
-      htmlContent:
-        '<p>This is a Linyup <strong>system</strong> test email sent via Brevo.</p>' +
-        '<p>If you received this, system mail is configured correctly.</p>',
-      textContent:
-        'This is a Linyup system test email sent via Brevo.\n\n' +
-        'If you received this, system mail is configured correctly.',
-      tags: ['test', 'system'],
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: 'Linyup', email: BREVO_SYSTEM_SENDER },
+        to: [{ email: recipient }],
+        subject: 'Linyup system test email',
+        htmlContent:
+          '<p>This is a Linyup <strong>system</strong> test email sent via Brevo.</p>' +
+          '<p>If you received this, system mail is configured correctly.</p>',
+        textContent:
+          'This is a Linyup system test email sent via Brevo.\n\n' +
+          'If you received this, system mail is configured correctly.',
+        tags: ['test', 'system'],
+      }),
     })
+
+    if (!res.ok) {
+      let detail = ''
+      try {
+        const body = (await res.json()) as { message?: string }
+        detail = body?.message ? `: ${body.message}` : ''
+      } catch {
+        /* ignore non-JSON error bodies */
+      }
+      return { ok: false, error: `Send failed (${res.status})${detail}` }
+    }
   } catch (err) {
     return { ok: false, error: `Send failed: ${err instanceof Error ? err.message : String(err)}` }
   }

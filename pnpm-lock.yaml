@@ -32,9 +32,6 @@ importers:
 
   apps/admin:
     dependencies:
-      '@getbrevo/brevo':
-        specifier: ^5.0.4
-        version: 5.0.4
       '@google-cloud/secret-manager':
         specifier: ^5.6.0
         version: 5.6.0
