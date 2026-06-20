@@ -241,6 +241,16 @@ async function handlePaymentIntent(
       chargeId: typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null),
       contactId: md.contactId ?? null,
       purpose: md.purpose ?? 'payment',
+      // Product sales (kind === 'product') carry the catalogue reference so the
+      // payments dashboard can show what was bought + which variant.
+      ...(md.kind === 'product'
+        ? {
+            kind: 'product',
+            productId: md.productId ?? null,
+            productName: md.productName ?? null,
+            variantLabel: md.variantLabel ?? null,
+          }
+        : {}),
       amount: pi.amount ?? 0,
       currency: pi.currency ?? 'chf',
       application_fee_amount: pi.application_fee_amount ?? 0,
@@ -382,6 +392,10 @@ async function handleCheckoutCompleted(
   _eventId: string
 ): Promise<void> {
   const md = (session.metadata ?? {}) as Record<string, string>
+  if (md.kind === 'product') {
+    await handleProductCheckout(team, session, md)
+    return
+  }
   if (md.kind !== 'membership' || !md.subscriptionTypeId) return
 
   const email = (session.customer_details?.email ?? session.customer_email ?? '')
@@ -438,6 +452,52 @@ async function handleCheckoutCompleted(
   }
 
   await writeContactMembership(team.teamId, contactId, md, { amountRappen, membershipExpiration })
+}
+
+/**
+ * Product purchase (kind === 'product') — a one-off shop charge for a physical
+ * product. The payment_intent handler already records the member_payments doc
+ * (with productId/variant). Here we link/create the buyer's contact by email
+ * (cap-aware, same as a membership shop purchase), stamp contactId onto the
+ * payment, and log a purchase activity entry so the studio sees who bought what.
+ * No membership/subscription state changes — products are merch, not memberships.
+ */
+async function handleProductCheckout(
+  team: TeamRef,
+  session: any,
+  md: Record<string, string>
+): Promise<void> {
+  const email = (session.customer_details?.email ?? session.customer_email ?? '')
+    .toLowerCase()
+    .trim()
+  if (!email) return // nothing to link the sale to; payment is still recorded
+
+  const name = (session.customer_details?.name as string | undefined) ?? null
+  const phone = (session.customer_details?.phone as string | undefined) ?? null
+
+  const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
+  const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
+  const contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
+  if (!contactId) return // cap-blocked — payment still recorded, studio links it later
+
+  const piId =
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id
+  if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+
+  const label = md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? 'Product')
+  await admin
+    .firestore()
+    .collection(CONTACTS_COLLECTION)
+    .doc(contactId)
+    .collection('activity_log')
+    .add({
+      type: 'product_purchased',
+      source: 'stripe_connect',
+      message: `Product purchased · ${label}`,
+      timestamp: FieldValue.serverTimestamp(),
+    })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

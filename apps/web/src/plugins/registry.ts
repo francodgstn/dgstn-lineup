@@ -9,6 +9,7 @@ import { websiteManifest } from './website/manifest'
 import { hmdFightingCupManifest } from './hmd-fighting-cup/manifest'
 import { referralsManifest } from './referrals/manifest'
 import { onlineCoursesManifest } from './online-courses/manifest'
+import { productsManifest } from './products/manifest'
 import { gamificationManifest } from './gamification/manifest'
 import { contactGroupsManifest } from './contact-groups/manifest'
 import { customFieldsManifest } from './custom-fields/manifest'
@@ -20,6 +21,7 @@ export const PLUGIN_REGISTRY: PluginManifest[] = [
   hmdFightingCupManifest,
   referralsManifest,
   onlineCoursesManifest,
+  productsManifest,
   gamificationManifest,
   contactGroupsManifest,
   customFieldsManifest,

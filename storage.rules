@@ -42,6 +42,17 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*|audio/.*|video/.*|application/pdf');
     }
 
+    // Product images live under teams/{teamId}/products/{productId}/... They are
+    // shown on the PUBLIC (anonymous, email-only) shop, so reads are open; writes
+    // stay staff-only and image-only. (Storage grants if ANY matching rule allows;
+    // the broad teams/{teamId} match below still covers staff reads/writes.)
+    match /teams/{teamId}/products/{allPaths=**} {
+      allow read: if true;
+      allow write: if isTeamMemberStorage(teamId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     match /teams/{teamId}/{allPaths=**} {
       // Only members of this specific team may access its files
       allow read: if isTeamMemberStorage(teamId);

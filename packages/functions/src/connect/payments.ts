@@ -18,9 +18,12 @@ import {
   takeRatePercent,
   recurrenceToStripeInterval,
   isRecurringRecurrence,
+  resolveProductPrice,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  PRODUCTS_SUBCOLLECTION,
   TEAMS_COLLECTION,
   type SubscriptionType,
+  type Product,
 } from '@linyup/shared'
 import { getHostingUrl } from '../utils/env'
 import {
@@ -415,6 +418,108 @@ export const createMembershipCheckout = onCall(async (request) => {
     return { url: session.url, sessionId: session.sessionId, recurring: false }
   } catch (err) {
     console.error('[connect] createMembershipCheckout failed:', err)
+    throw new HttpsError('internal', 'Failed to start checkout')
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createProductCheckout — PUBLIC (unauthenticated) one-off checkout for the
+// member-facing shop's PRODUCTS section. Mirrors createMembershipCheckout but for
+// physical products: always a single charge (never recurring) on the studio's
+// connected account. The optional variantId selects a size/colour; the price is
+// the variant override or the product's base price. The webhook links/creates the
+// buyer's contact by email and records the sale (kind === 'product').
+// ─────────────────────────────────────────────────────────────────────────────
+export const createProductCheckout = onCall(async (request) => {
+  const data = request.data as {
+    teamId?: string
+    productId?: string
+    variantId?: string
+    memberEmail?: string
+    slug?: string
+    locale?: string
+    idempotencyKey?: string
+  }
+  if (!data?.teamId || !data?.productId) {
+    throw new HttpsError('invalid-argument', 'teamId and productId are required')
+  }
+  const email = (data.memberEmail ?? '').toLowerCase().trim()
+  if (!EMAIL_RE.test(email)) {
+    throw new HttpsError('invalid-argument', 'A valid email is required')
+  }
+  const { teamId, productId } = data
+  const variantId = data.variantId
+  const locale = data.locale ?? 'en'
+
+  await checkoutRateLimit(request.rawRequest?.ip)
+
+  // No auth: the only gates are the team's Connect kill-switch + chargeable account.
+  const team = await loadEnabledTeam(teamId)
+  const { accountId, model } = requireChargeableAccount(team)
+
+  const productSnap = await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(PRODUCTS_SUBCOLLECTION)
+    .doc(productId)
+    .get()
+  if (!productSnap.exists) throw new HttpsError('not-found', 'Product not found')
+  const product = productSnap.data() as Product
+  // Only active products are sellable from the public shop.
+  if (product.active === false) {
+    throw new HttpsError('failed-precondition', 'This item is not available')
+  }
+
+  // Resolve the chosen variant (if any) and validate it is active.
+  let variantLabel: string | undefined
+  if (variantId) {
+    const variant = (product.variants ?? []).find((v) => v.id === variantId)
+    if (!variant || variant.active === false) {
+      throw new HttpsError('not-found', 'Variant not available')
+    }
+    variantLabel = variant.label
+  }
+
+  const amount = Math.round(resolveProductPrice(product, variantId) * 100)
+  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
+    throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
+  }
+
+  const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=shop` : ''
+  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery)
+  const productName = variantLabel ? `${product.name} — ${variantLabel}` : product.name
+
+  // Webhook reads this to record the sale + link/create the buyer's contact.
+  const metadata: Record<string, string> = {
+    teamId,
+    kind: 'product',
+    purpose: 'product',
+    productId,
+    productName: product.name,
+  }
+  if (variantId) metadata.variantId = variantId
+  if (variantLabel) metadata.variantLabel = variantLabel
+
+  const idempotencyKey =
+    data.idempotencyKey ??
+    `product-pub:${teamId}:${productId}:${variantId ?? '_'}:${email}:${Math.floor(Date.now() / 60000)}`
+
+  try {
+    const session = await createOneOffCheckoutSession({
+      accountId,
+      amount,
+      applicationFeeAmount: computePlatformFee({ tier: team.plan, amount, model }),
+      productName,
+      successUrl,
+      cancelUrl,
+      customerEmail: email,
+      metadata,
+      idempotencyKey,
+    })
+    return { url: session.url, sessionId: session.sessionId, recurring: false }
+  } catch (err) {
+    console.error('[connect] createProductCheckout failed:', err)
     throw new HttpsError('internal', 'Failed to start checkout')
   }
 })

@@ -392,6 +392,16 @@ service cloud.firestore {
         allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
       }
 
+      // Products subcollection (team-defined sellable products — merch/equipment).
+      // The public storefront reads the world-readable public_profile summary, never
+      // this collection; the checkout callable resolves products via the Admin SDK.
+      match /products/{productId} {
+        // Only team members can read the raw catalogue (e.g. inactive drafts).
+        allow read: if isTeamMember(teamId);
+        // Managers and owners manage the catalogue.
+        allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+      }
+
       // Subscription transition log (team-level event log for funnel/pattern analytics)
       match /subscription_transitions/{transitionId} {
         allow read: if isTeamMember(teamId) || hasRole('admin');
