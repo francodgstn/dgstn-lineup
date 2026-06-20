@@ -846,6 +846,7 @@
     "customFieldRequired": "Obbligatorio",
     "tabPayments": "Pagamenti",
     "paymentsGateway": "Gateway di pagamento",
+    "paymentsGatewayDescription": "Usa il tuo provider di pagamento esterno (es. Payrexx) per incassare i pagamenti dei membri sul tuo account.",
     "paymentsNoGateway": "Nessun gateway di pagamento configurato.",
     "paymentsAddGateway": "Aggiungi gateway",
     "paymentsEditGateway": "Modifica gateway",
@@ -1785,7 +1786,7 @@
     "dismiss": "Chiudi"
   },
   "ConnectPayments": {
-    "title": "Accetta pagamenti",
+    "title": "Accetta pagamenti con Linyup",
     "description": "Incassa abbonamenti, ingressi singoli e acquisti dai tuoi membri. Il denaro va direttamente sul tuo account Stripe.",
     "feeNote": "La commissione di Linyup è del {pct}% per pagamento.",
     "statusEnabled": "Pronto",

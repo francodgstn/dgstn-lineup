@@ -1282,8 +1282,12 @@ function PaymentsTab({ teamId }: { teamId: string }) {
           balance + platform fee). Renders only when enabled per team. */}
       <ConnectPaymentsCard teamId={teamId} />
 
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">{t('paymentsGateway')}</p>
+      <div className="rounded-lg border p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium">{t('paymentsGateway')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('paymentsGatewayDescription')}</p>
+        </div>
         <Button size="sm" onClick={openAdd}>
           <Plus className="h-4 w-4 mr-1" />
           {t('paymentsAddGateway')}
@@ -1329,6 +1333,7 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       )}
 
       <p className="text-xs text-muted-foreground">{t('paymentsSecretNote')}</p>
+      </div>
 
       {/* Add/edit dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>

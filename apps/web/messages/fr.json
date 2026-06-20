@@ -846,6 +846,7 @@
     "customFieldRequired": "Obligatoire",
     "tabPayments": "Paiements",
     "paymentsGateway": "Passerelle de paiement",
+    "paymentsGatewayDescription": "Utilisez votre propre prestataire de paiement externe (p. ex. Payrexx) pour encaisser les paiements des membres sur votre propre compte.",
     "paymentsNoGateway": "Aucune passerelle de paiement configurée.",
     "paymentsAddGateway": "Ajouter une passerelle",
     "paymentsEditGateway": "Modifier la passerelle",
@@ -1795,7 +1796,7 @@
     "dismiss": "Fermer"
   },
   "ConnectPayments": {
-    "title": "Accepter les paiements",
+    "title": "Accepter les paiements avec Linyup",
     "description": "Encaissez les abonnements, les séances à l'unité et les achats de vos membres. L'argent va directement sur votre propre compte Stripe.",
     "feeNote": "Les frais de Linyup sont de {pct}% par paiement.",
     "statusEnabled": "Prêt",

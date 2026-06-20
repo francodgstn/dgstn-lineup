@@ -851,6 +851,7 @@
     "customFieldRequired": "Required",
     "tabPayments": "Payments",
     "paymentsGateway": "Payment gateway",
+    "paymentsGatewayDescription": "Use your own external payment provider (e.g. Payrexx) to collect member payments through your own account.",
     "paymentsNoGateway": "No payment gateway configured.",
     "paymentsAddGateway": "Add gateway",
     "paymentsEditGateway": "Edit gateway",
@@ -1800,7 +1801,7 @@
     "dismiss": "Dismiss"
   },
   "ConnectPayments": {
-    "title": "Accept payments",
+    "title": "Accept payments with Linyup",
     "description": "Collect memberships, drop-ins and shop payments from your members. Money goes straight to your own Stripe account.",
     "feeNote": "Linyup's fee is {pct}% per payment.",
     "statusEnabled": "Ready",

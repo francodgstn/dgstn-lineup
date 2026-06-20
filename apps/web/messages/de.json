@@ -846,6 +846,7 @@
     "customFieldRequired": "Pflichtfeld",
     "tabPayments": "Zahlungen",
     "paymentsGateway": "Zahlungsanbieter",
+    "paymentsGatewayDescription": "Nutze deinen eigenen externen Zahlungsanbieter (z.B. Payrexx), um Mitgliederzahlungen über dein eigenes Konto einzuziehen.",
     "paymentsNoGateway": "Kein Zahlungsanbieter konfiguriert.",
     "paymentsAddGateway": "Anbieter hinzufügen",
     "paymentsEditGateway": "Anbieter bearbeiten",
@@ -1795,7 +1796,7 @@
     "dismiss": "Ausblenden"
   },
   "ConnectPayments": {
-    "title": "Zahlungen annehmen",
+    "title": "Zahlungen mit Linyup annehmen",
     "description": "Kassiere Mitgliedschaften, Drop-ins und Shop-Zahlungen von deinen Mitgliedern. Das Geld geht direkt auf dein eigenes Stripe-Konto.",
     "feeNote": "Die Gebühr von Linyup beträgt {pct}% pro Zahlung.",
     "statusEnabled": "Bereit",
