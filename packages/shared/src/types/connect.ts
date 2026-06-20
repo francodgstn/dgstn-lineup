@@ -35,9 +35,9 @@ export type ConnectOnboardingModel = 'byo' | 'managed'
 // go through computePlatformFee(). Stored in basis points (1% = 100 bps) so every
 // value is an integer and the fee math stays in integer Rappen.
 //
-// NOTE: these are PLACEHOLDER values surfaced for sign-off (Free 5 / Coach 3 /
-// Studio 2 / Org 1 %). "Studio" is the tier the brief calls "Club" (renamed
-// pre-launch; the id `studio` is the stable machine identifier).
+// Final take-rates (signed off 2026-06-20): Free 1.7 / Coach 1.2 / Studio 0.7 /
+// Org 0.4 %. "Studio" is the tier the brief calls "Club" (renamed pre-launch;
+// the id `studio` is the stable machine identifier).
 export interface ConnectTakeRate {
   /** Platform application fee in basis points (integer). 100 bps = 1%. */
   bps: number
@@ -49,10 +49,10 @@ export interface ConnectTakeRate {
 }
 
 export const CONNECT_TAKE_RATE: Record<SaasPlan, ConnectTakeRate> = {
-  free: { bps: 500, minFeeRappen: 0 }, // 5%
-  coach: { bps: 300, minFeeRappen: 0 }, // 3%
-  studio: { bps: 200, minFeeRappen: 0 }, // 2%
-  organization: { bps: 100, minFeeRappen: 0 }, // 1%
+  free: { bps: 170, minFeeRappen: 0 }, // 1.7%
+  coach: { bps: 120, minFeeRappen: 0 }, // 1.2%
+  studio: { bps: 70, minFeeRappen: 0 }, // 0.7%
+  organization: { bps: 40, minFeeRappen: 0 }, // 0.4%
 }
 
 export interface PlatformFeeInput {

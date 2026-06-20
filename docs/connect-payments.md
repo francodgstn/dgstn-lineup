@@ -40,14 +40,14 @@ This is the **third, distinct** payment concern in the codebase — keep them ap
    must use the full dashboard (Standard), so there is **one** account config (see above);
    the separate "Managed/express" account from the brief was dropped after test-mode
    confirmed the combination is unsupported.
-2. **Per-tier take-rate (placeholders, pending final sign-off):**
+2. **Per-tier take-rate (final, signed off 2026-06-20):**
 
    | Tier | Application fee |
    |---|---|
-   | Free | 5% |
-   | Coach | 3% |
-   | Studio *(brief's "Club")* | 2% |
-   | Organization | 1% |
+   | Free | 1.7% |
+   | Coach | 1.2% |
+   | Studio *(brief's "Club")* | 0.7% |
+   | Organization | 0.4% |
 
    Config lives in `packages/shared/src/types/connect.ts` → `CONNECT_TAKE_RATE`
    (basis points + optional minimum fee). The **only** fee entry points are

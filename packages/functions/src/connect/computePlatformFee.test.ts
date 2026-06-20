@@ -15,16 +15,16 @@ describe('computePlatformFee', () => {
   const CHF_100 = 10_000
 
   it('applies the configured per-tier rate on a round amount', () => {
-    assert.equal(computePlatformFee({ tier: 'free', amount: CHF_100 }), 500) // 5%
-    assert.equal(computePlatformFee({ tier: 'coach', amount: CHF_100 }), 300) // 3%
-    assert.equal(computePlatformFee({ tier: 'studio', amount: CHF_100 }), 200) // 2%
-    assert.equal(computePlatformFee({ tier: 'organization', amount: CHF_100 }), 100) // 1%
+    assert.equal(computePlatformFee({ tier: 'free', amount: CHF_100 }), 170) // 1.7%
+    assert.equal(computePlatformFee({ tier: 'coach', amount: CHF_100 }), 120) // 1.2%
+    assert.equal(computePlatformFee({ tier: 'studio', amount: CHF_100 }), 70) // 0.7%
+    assert.equal(computePlatformFee({ tier: 'organization', amount: CHF_100 }), 40) // 0.4%
   })
 
   it('floors fractional Rappen (never rounds up, never returns a float)', () => {
-    // 333 * 200 / 10000 = 6.66 → 6
+    // 333 * 70 / 10000 = 2.331 → 2
     const fee = computePlatformFee({ tier: 'studio', amount: 333 })
-    assert.equal(fee, 6)
+    assert.equal(fee, 2)
     assert.ok(Number.isInteger(fee))
   })
 
@@ -41,7 +41,7 @@ describe('computePlatformFee', () => {
     // Defensive: a misconfigured tier must not silently ship a free transaction.
     const fee = computePlatformFee({ tier: 'bogus' as never, amount: CHF_100 })
     assert.equal(fee, applyTakeRate(CHF_100, CONNECT_TAKE_RATE.free))
-    assert.equal(fee, 500)
+    assert.equal(fee, 170)
   })
 
   it('ignores the model (both byo/managed use the same take-rate in Phase 1)', () => {
