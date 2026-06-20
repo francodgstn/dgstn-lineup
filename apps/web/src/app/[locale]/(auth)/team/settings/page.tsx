@@ -1277,12 +1277,12 @@ function PaymentsTab({ teamId }: { teamId: string }) {
     )
 
   return (
-    <div className="space-y-4">
-      {/* Stripe Connect — collect payments from members (settles on the studio's
-          balance + platform fee). Renders only when enabled per team. */}
+    <div className="space-y-6">
+      {/* Accept payments with Linyup (Stripe Connect) — own card; renders only when enabled. */}
       <ConnectPaymentsCard teamId={teamId} />
 
-      <div className="rounded-lg border p-4 space-y-3">
+      <Card>
+        <CardContent className="pt-6 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium">{t('paymentsGateway')}</p>
@@ -1333,7 +1333,8 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       )}
 
       <p className="text-xs text-muted-foreground">{t('paymentsSecretNote')}</p>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Add/edit dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
@@ -1775,12 +1776,15 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
   }
 
   return (
-    <div className="space-y-8">
-      <SmtpForm teamId={teamId} orgId={orgId} />
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="pt-6">
+          <SmtpForm teamId={teamId} orgId={orgId} />
+        </CardContent>
+      </Card>
 
-      <Separator />
-
-      <div className="space-y-5">
+      <Card>
+        <CardContent className="pt-6 space-y-5">
         <div>
           <h3 className="font-semibold text-sm">Custom variables</h3>
           <p className="text-xs text-muted-foreground mt-1">
@@ -1838,7 +1842,8 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
             {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
           </Button>
         </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -1910,18 +1915,23 @@ export default function TeamSettingsPage() {
         ))}
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          {tab === 'general' && <GeneralForm team={team} teamId={currentTeamId} />}
-          {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
-          {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
-          {tab === 'payments' && <PaymentsTab teamId={currentTeamId} />}
-          {tab === 'outreach' && <OutreachTab teamId={currentTeamId} team={team} />}
-          {tab === 'custom-fields' && isInstalled('custom-fields') && (
-            <CustomFieldsTab teamId={currentTeamId} team={team} />
-          )}
-        </CardContent>
-      </Card>
+      {/* Payments + Outreach manage their own stacked cards; the rest share one wrapper. */}
+      {tab === 'payments' ? (
+        <PaymentsTab teamId={currentTeamId} />
+      ) : tab === 'outreach' ? (
+        <OutreachTab teamId={currentTeamId} team={team} />
+      ) : (
+        <Card>
+          <CardContent className="pt-6">
+            {tab === 'general' && <GeneralForm team={team} teamId={currentTeamId} />}
+            {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
+            {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
+            {tab === 'custom-fields' && isInstalled('custom-fields') && (
+              <CustomFieldsTab teamId={currentTeamId} team={team} />
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

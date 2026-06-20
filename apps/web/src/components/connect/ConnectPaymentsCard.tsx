@@ -13,6 +13,7 @@ import { usePlan } from '@/hooks/usePlan'
 import { useConnectStatus, useStartConnectOnboarding } from '@/hooks/useConnect'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 
@@ -43,7 +44,8 @@ export function ConnectPaymentsCard({ teamId }: { teamId: string }) {
     status?.connected && (status.status === 'pending' || status.status === 'restricted')
 
   return (
-    <div className="rounded-lg border p-4 space-y-4">
+    <Card>
+      <CardContent className="space-y-4 pt-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CreditCard className="h-4 w-4 text-muted-foreground" />
@@ -134,7 +136,8 @@ export function ConnectPaymentsCard({ teamId }: { teamId: string }) {
           </div>
         </div>
       )}
-    </div>
+      </CardContent>
+    </Card>
   )
 }
 
