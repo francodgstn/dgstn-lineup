@@ -101,3 +101,15 @@ export const COURSE_LESSONS_SUBCOLLECTION = 'lessons'
 // (public read, written only by the publishWebsite Cloud Function). Both keyed by teamId.
 export const SITE_DRAFTS_COLLECTION = 'site_drafts'
 export const SITE_PUBLISHED_COLLECTION = 'site_published'
+
+// Stripe Connect (member → studio payments — studio's own Stripe balance).
+// connect_accounts is TOP-LEVEL, keyed by the Stripe connected account id
+// (acct_...), so the Connect webhook resolves event.account → teamId with a
+// single direct doc get (no reverse query, no composite index). The per-payment
+// and per-subscription records live under the owning team.
+export const CONNECT_ACCOUNTS_COLLECTION = 'connect_accounts'
+export const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
+export const MEMBER_SUBSCRIPTIONS_SUBCOLLECTION = 'member_subscriptions'
+// Idempotency markers for the Connect webhook (doc id = Stripe event id).
+// Admin-SDK only; clients never read or write it.
+export const CONNECT_WEBHOOK_EVENTS_COLLECTION = 'connect_webhook_events'

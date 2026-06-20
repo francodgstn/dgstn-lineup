@@ -12,8 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { StatusBadge, PlanBadge } from '@/components/status-badge'
+import { StatusBadge, PlanBadge, PaymentsBadge } from '@/components/status-badge'
+import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
+import { ConnectToggle } from './connect-toggle'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,9 +58,12 @@ export default async function AccountDetailPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        {/* Studio → Linyup: the platform subscription the studio pays Linyup. */}
         <Card>
           <CardHeader>
-            <CardTitle>Subscription</CardTitle>
+            <CardTitle>
+              {account.type === 'org' ? 'Organization' : 'Studio'} → Linyup (platform billing)
+            </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
             {sub ? (
@@ -82,40 +87,98 @@ export default async function AccountDetailPage({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Contact usage</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {usage ? (
-              <>
-                <div className="flex items-end justify-between">
-                  <span className="text-2xl font-semibold tabular-nums">{usage.used}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {usage.isUnlimited ? 'unlimited' : `of ${usage.included} included`}
+        {/* Member → Studio: Stripe Connect (the studio collects from its members). */}
+        {account.payments && (
+          <Card>
+            <CardHeader className="flex flex-row items-start justify-between gap-2">
+              <CardTitle>Member → Studio (Stripe Connect)</CardTitle>
+              <ConnectToggle
+                teamId={account.id}
+                initialEnabled={account.payments.status !== 'disabled'}
+              />
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <Field label="Status" value={<PaymentsBadge status={account.payments.status} />} />
+                <Field
+                  label="Onboarding"
+                  value={account.payments.model ? account.payments.model.toUpperCase() : '—'}
+                />
+                <Field
+                  label="Charges / payouts"
+                  value={`${account.payments.chargesEnabled ? 'on' : 'off'} / ${account.payments.payoutsEnabled ? 'on' : 'off'}`}
+                />
+                <Field
+                  label="Collected (gross)"
+                  value={formatChf(account.payments.grossCollectedChf)}
+                />
+                <Field
+                  label="Linyup fees earned"
+                  value={formatChf(account.payments.platformFeesChf)}
+                />
+                <Field label="Refunded" value={formatChf(account.payments.refundedChf)} />
+                <Field label="Payments" value={account.payments.paymentsCount} />
+                <Field label="Active subscriptions" value={account.payments.activeSubscriptions} />
+                <Field
+                  label="Connected account"
+                  value={
+                    <code className="text-xs">{account.payments.connectAccountId ?? '—'}</code>
+                  }
+                />
+              </div>
+
+              {account.payments.requirementsDue.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Outstanding requirements
                   </span>
-                </div>
-                {!usage.isUnlimited && (
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={usage.overBy > 0 ? 'h-full bg-destructive' : 'h-full bg-primary'}
-                      style={{ width: `${usage.percent}%` }}
-                    />
+                  <div className="flex flex-wrap gap-1.5">
+                    {account.payments.requirementsDue.map((r) => (
+                      <Badge key={r} variant="warning" className="font-normal">
+                        {r}
+                      </Badge>
+                    ))}
                   </div>
-                )}
-                {usage.overBy > 0 && (
-                  <p className="text-sm text-destructive">{usage.overBy} over the included limit.</p>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Contact usage is tracked per team (orgs aggregate their teams).
-              </p>
-            )}
-            <Field label="Created" value={formatDate(account.createdMs)} />
-          </CardContent>
-        </Card>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Contact usage</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {usage ? (
+            <>
+              <div className="flex items-end justify-between">
+                <span className="text-2xl font-semibold tabular-nums">{usage.used}</span>
+                <span className="text-sm text-muted-foreground">
+                  {usage.isUnlimited ? 'unlimited' : `of ${usage.included} included`}
+                </span>
+              </div>
+              {!usage.isUnlimited && (
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={usage.overBy > 0 ? 'h-full bg-destructive' : 'h-full bg-primary'}
+                    style={{ width: `${usage.percent}%` }}
+                  />
+                </div>
+              )}
+              {usage.overBy > 0 && (
+                <p className="text-sm text-destructive">{usage.overBy} over the included limit.</p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Contact usage is tracked per team (orgs aggregate their teams).
+            </p>
+          )}
+          <Field label="Created" value={formatDate(account.createdMs)} />
+        </CardContent>
+      </Card>
 
       <Card className="py-0">
         <div className="px-4 pt-4">

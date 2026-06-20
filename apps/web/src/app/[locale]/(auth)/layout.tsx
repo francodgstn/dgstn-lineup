@@ -20,6 +20,7 @@ import {
   Globe,
   Settings,
   CreditCard,
+  Wallet,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -63,6 +64,11 @@ type NavItem = {
   icon: React.ElementType
   minPlan?: SaasPlan
   requiresOrg?: boolean
+  // Only shown when the team has the Stripe Connect feature flag enabled.
+  requiresConnect?: boolean
+  // Active only on an exact path match (not prefix) — for hub routes like
+  // /plugins whose children (/plugins/website, …) have their own nav items.
+  exact?: boolean
 }
 
 type NavSection = { labelKey: string; items: NavItem[] }
@@ -76,6 +82,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/schedule', labelKey: 'calendar', icon: Calendar },
       { href: '/bookings', labelKey: 'bookings', icon: ClipboardList },
       { href: '/contacts', labelKey: 'contacts', icon: Users },
+      { href: '/payments', labelKey: 'payments', icon: Wallet, requiresConnect: true },
     ],
   },
   {
@@ -89,7 +96,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/team/event-types', labelKey: 'eventTypes', icon: CalendarRange },
       { href: '/team/subscriptions', labelKey: 'subscriptions', icon: Tag },
       { href: '/automations', labelKey: 'automations', icon: Workflow },
-      { href: '/plugins', labelKey: 'plugins', icon: Puzzle },
+      { href: '/plugins', labelKey: 'plugins', icon: Puzzle, exact: true },
     ],
   },
   {
@@ -123,7 +130,9 @@ function NavLink({
 
   const isActive =
     !isLocked &&
-    (item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href))
+    (item.href === '/dashboard' || item.exact
+      ? pathname === item.href
+      : pathname.startsWith(item.href))
 
   if (isLocked) {
     return (
@@ -480,6 +489,10 @@ function SidebarContent({
   const t = useTranslations('Nav')
   const { team } = useAuth()
   const inOrg = !!team?.org_id
+  // Show the Payments dashboard once a team has started Connect onboarding
+  // (an account exists), as long as it isn't operator-disabled.
+  const connectOn =
+    !!team?.payments?.connectAccountId && team?.payments?.connectEnabled !== false
 
   // Plugin nav entries: those targeting a built-in section render inside it;
   // the rest fall back to the default "Plugins" group below.
@@ -542,7 +555,7 @@ function SidebarContent({
               {!secCollapsed && (
                 <div className="space-y-0.5">
                   {section.items
-                    .filter((item) => !item.requiresOrg || inOrg)
+                    .filter((item) => (!item.requiresOrg || inOrg) && (!item.requiresConnect || connectOn))
                     .map((item) => (
                       <NavLink
                         key={item.href}

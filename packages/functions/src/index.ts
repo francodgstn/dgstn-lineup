@@ -143,6 +143,17 @@ export { registerSenderDomain, checkSenderDomain, useManagedSender } from './mai
 export { sendTestEmail } from './mail/sendTestEmail'
 export { handleBrevoWebhook } from './mail/handleBrevoWebhook'
 
+// Stripe Connect (member → studio payments; studio's own Stripe balance + platform fee)
+export { startConnectOnboarding, getConnectStatus } from './connect'
+export {
+  createMemberPayment,
+  createMemberSubscription,
+  createMembershipPayment,
+  createMembershipCheckout,
+} from './connect/payments'
+export { refundMemberPayment } from './connect/refunds'
+export { handleConnectWebhook } from './connect/webhook'
+
 // Outreach
 export { sendOutreachEmail } from './outreach'
 

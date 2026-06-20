@@ -1,4 +1,6 @@
 import type { Timestamp } from './common'
+// Type-only import — no runtime cycle (connect.ts imports SaasPlan from here).
+import type { ConnectOnboardingModel, ConnectAccountStatus } from './connect'
 
 export type TeamRole = 'owner' | 'manager' | 'viewer'
 
@@ -60,6 +62,9 @@ export interface TeamLink {
   // System link to the public Space (online courses). Only meaningful when the
   // online-courses plugin is active; routes to /public/space/{slug}.
   isCoursesLink?: boolean
+  // System link to the public Shop (self-checkout). Only meaningful when the team
+  // has Stripe Connect enabled; routes to /public/{slug}/shop.
+  isShopLink?: boolean
 }
 
 export type SocialPlatform =
@@ -123,6 +128,15 @@ export interface Team {
   // Billing currency for subscription-type prices (ISO 4217, e.g. 'CHF').
   // Pre-filled from the configured payment gateway's currency when one exists.
   default_currency?: string
+  // Stripe Connect (member → studio payments) — compact mirror written by the
+  // Connect Cloud Functions. The feature flag (connectEnabled) is operator-only;
+  // full account state lives in connect_accounts/{connectAccountId}.
+  payments?: {
+    connectEnabled?: boolean
+    connectAccountId?: string
+    connectModel?: ConnectOnboardingModel
+    connectStatus?: ConnectAccountStatus
+  }
   // Organization membership
   org_id?: string
   // Which public surface `/public/{slug}` resolves to. Defaults to 'bio-link'

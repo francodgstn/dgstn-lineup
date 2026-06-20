@@ -17,6 +17,7 @@ export const RESERVED_SLUGS: readonly string[] = [
   'manage-booking',
   'space',
   'site',
+  'shop',
   // token-only public routes that sit beside `/public/{slug}`
   'event-invitation',
   'team-invitation',

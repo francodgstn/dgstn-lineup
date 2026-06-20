@@ -323,14 +323,14 @@ get a 405 — that's correct behaviour.
 
 ---
 
-## Stripe (team-level) — coming soon
+## Stripe — use Stripe Connect instead
 
-A team-level Stripe integration (for clubs with their own Stripe account) is
-planned but not yet implemented. The `StripeAdapter` stub is in
-`packages/functions/src/utils/gateway/stripe.ts`. When implemented, the flow
-will mirror Payrexx:
-- Team adds their Stripe publishable key + webhook secret in Settings
-- A `handleTeamStripeWebhook` function verifies the signature and updates
-  contacts on `checkout.session.completed` / `invoice.payment_succeeded`
+For studios that want to collect member payments via Stripe **with Linyup taking a
+platform fee**, use the first-class **Stripe Connect** integration documented in
+[connect-payments.md](connect-payments.md) — money settles on the studio's own
+Stripe balance (direct charges), onboarding is BYO or Managed, and the platform fee
+is configurable per plan tier.
 
-Until then, use Payrexx for team-level payments.
+The BYO `GatewayAdapter` path here (independent account, **no** platform fee) remains
+available via Payrexx for studios who prefer a fully self-managed gateway. The old
+"team-level Stripe gateway" stub idea is superseded by Connect.

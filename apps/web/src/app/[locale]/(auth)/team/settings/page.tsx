@@ -84,6 +84,7 @@ import {
   XCircle,
   Lock,
 } from 'lucide-react'
+import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
@@ -1279,9 +1280,17 @@ function PaymentsTab({ teamId }: { teamId: string }) {
     )
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">{t('paymentsGateway')}</p>
+    <div className="space-y-6">
+      {/* Accept payments with Linyup (Stripe Connect) — own card; renders only when enabled. */}
+      <ConnectPaymentsCard teamId={teamId} />
+
+      <Card>
+        <CardContent className="pt-6 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium">{t('paymentsGateway')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('paymentsGatewayDescription')}</p>
+        </div>
         <Button size="sm" onClick={openAdd}>
           <Plus className="h-4 w-4 mr-1" />
           {t('paymentsAddGateway')}
@@ -1327,6 +1336,8 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       )}
 
       <p className="text-xs text-muted-foreground">{t('paymentsSecretNote')}</p>
+        </CardContent>
+      </Card>
 
       {/* Add/edit dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
@@ -1860,9 +1871,8 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
     <div className="space-y-8">
       <EmailSenderForm teamId={teamId} plan={team.plan} />
 
-      <Separator />
-
-      <div className="space-y-5">
+      <Card>
+        <CardContent className="pt-6 space-y-5">
         <div>
           <h3 className="font-semibold text-sm">Custom variables</h3>
           <p className="text-xs text-muted-foreground mt-1">
@@ -1920,7 +1930,8 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
             {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
           </Button>
         </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -1992,18 +2003,23 @@ export default function TeamSettingsPage() {
         ))}
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          {tab === 'general' && <GeneralForm team={team} teamId={currentTeamId} />}
-          {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
-          {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
-          {tab === 'payments' && <PaymentsTab teamId={currentTeamId} />}
-          {tab === 'outreach' && <OutreachTab teamId={currentTeamId} team={team} />}
-          {tab === 'custom-fields' && isInstalled('custom-fields') && (
-            <CustomFieldsTab teamId={currentTeamId} team={team} />
-          )}
-        </CardContent>
-      </Card>
+      {/* Payments + Outreach manage their own stacked cards; the rest share one wrapper. */}
+      {tab === 'payments' ? (
+        <PaymentsTab teamId={currentTeamId} />
+      ) : tab === 'outreach' ? (
+        <OutreachTab teamId={currentTeamId} team={team} />
+      ) : (
+        <Card>
+          <CardContent className="pt-6">
+            {tab === 'general' && <GeneralForm team={team} teamId={currentTeamId} />}
+            {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
+            {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
+            {tab === 'custom-fields' && isInstalled('custom-fields') && (
+              <CustomFieldsTab teamId={currentTeamId} team={team} />
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
