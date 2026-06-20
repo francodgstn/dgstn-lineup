@@ -1491,13 +1491,22 @@ function EmailSenderForm({
   plan: string | undefined
 }) {
   const t = useTranslations('EmailSettings')
-  const { data: config, isLoading, registerDomain, checkDomain, revertToManaged, isRegistering, isChecking, isReverting } =
+  const { user } = useAuth()
+  const { data: config, isLoading, registerDomain, checkDomain, revertToManaged, isRegistering, isChecking, isReverting, sendTest, isSendingTest } =
     useEmailSenderSettings('team', teamId)
 
   const [domain, setDomain] = useState('')
   const [fromLocalPart, setFromLocalPart] = useState('info')
   const [registerError, setRegisterError] = useState<string | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [testRecipient, setTestRecipient] = useState(user?.email ?? '')
+  const [testResult, setTestResult] = useState<{ email: string; skipped: boolean; testMode: boolean } | null>(null)
+  const [testError, setTestError] = useState<string | null>(null)
+
+  // Populate recipient with signed-in user's email once auth resolves
+  useEffect(() => {
+    if (user?.email && !testRecipient) setTestRecipient(user.email)
+  }, [user?.email]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isPaidPlan = plan === 'coach' || plan === 'studio' || plan === 'organization'
   const isByo = config?.model === 'byo_domain'
@@ -1525,6 +1534,17 @@ function EmailSenderForm({
       await revertToManaged()
     } catch {
       // silent — cached state will update on next load
+    }
+  }
+
+  async function handleSendTest() {
+    setTestResult(null)
+    setTestError(null)
+    try {
+      const result = await sendTest(testRecipient.trim() || undefined)
+      setTestResult({ email: result.sentTo, skipped: result.skipped, testMode: result.testMode })
+    } catch (err) {
+      setTestError((err as Error).message ?? t('sendTestError'))
     }
   }
 
@@ -1732,6 +1752,54 @@ function EmailSenderForm({
           </div>
         </div>
       )}
+
+      {/* Send test email — always shown */}
+      <div className="space-y-3 pt-2 border-t">
+        <div>
+          <p className="text-sm font-medium">{t('sendTestTitle')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('sendTestDescription')}</p>
+        </div>
+        <div className="flex items-end gap-2">
+          <div className="flex-1 space-y-1">
+            <Label htmlFor="team-test-recipient">{t('recipientLabel')}</Label>
+            <Input
+              id="team-test-recipient"
+              type="email"
+              value={testRecipient}
+              onChange={(e) => {
+                setTestRecipient(e.target.value)
+                setTestResult(null)
+                setTestError(null)
+              }}
+              placeholder={user?.email ?? 'you@example.com'}
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleSendTest}
+            disabled={isSendingTest}
+            className="shrink-0"
+          >
+            {isSendingTest ? t('sendingTest') : t('sendTestButton')}
+          </Button>
+        </div>
+        {testResult && !testResult.skipped && !testResult.testMode && (
+          <p className="text-xs text-green-600 flex items-center gap-1">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {t('sendTestSuccess', { email: testResult.email })}
+          </p>
+        )}
+        {testResult?.skipped && (
+          <p className="text-xs text-amber-600">{t('sendTestSkipped')}</p>
+        )}
+        {testResult?.testMode && !testResult.skipped && (
+          <p className="text-xs text-muted-foreground">{t('sendTestTestMode')}</p>
+        )}
+        {testError && (
+          <p className="text-xs text-destructive">{testError}</p>
+        )}
+      </div>
     </div>
   )
 }

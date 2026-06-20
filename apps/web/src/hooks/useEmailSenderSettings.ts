@@ -41,15 +41,30 @@ interface UseManagedSenderResult {
   model: 'managed'
 }
 
+interface SendTestEmailPayload {
+  scope: EmailSenderScope
+  entityId: string
+  to?: string
+}
+
+export interface SendTestEmailResult {
+  success: boolean
+  sentTo: string
+  skipped: boolean
+  testMode: boolean
+}
+
 export interface UseEmailSenderSettingsResult {
   data: EmailSenderConfig | null
   isLoading: boolean
   registerDomain: (domain: string, fromLocalPart: string) => Promise<void>
   checkDomain: () => Promise<void>
   revertToManaged: () => Promise<void>
+  sendTest: (to?: string) => Promise<SendTestEmailResult>
   isRegistering: boolean
   isChecking: boolean
   isReverting: boolean
+  isSendingTest: boolean
 }
 
 function senderDocRef(scope: EmailSenderScope, entityId: string) {
@@ -115,6 +130,17 @@ export function useEmailSenderSettings(
     },
   })
 
+  const { mutateAsync: sendTestMutation, isPending: isSendingTest } = useMutation({
+    mutationFn: async (to?: string) => {
+      const fn = httpsCallable<SendTestEmailPayload, SendTestEmailResult>(
+        functions,
+        'sendTestEmail'
+      )
+      const result = await fn({ scope, entityId: entityId!, ...(to ? { to } : {}) })
+      return result.data
+    },
+  })
+
   return {
     data,
     isLoading,
@@ -122,8 +148,10 @@ export function useEmailSenderSettings(
       registerDomainMutation({ domain, fromLocalPart }),
     checkDomain: () => checkDomainMutation(),
     revertToManaged: () => revertToManagedMutation(),
+    sendTest: (to?: string) => sendTestMutation(to),
     isRegistering,
     isChecking,
     isReverting,
+    isSendingTest,
   }
 }

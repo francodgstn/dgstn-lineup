@@ -1820,6 +1820,15 @@
     "checkStatusButton": "Vérifier le statut",
     "checking": "Vérification…",
     "revertToManagedButton": "Revenir à Géré",
-    "reverting": "Annulation…"
+    "reverting": "Annulation…",
+    "sendTestTitle": "Envoyer un e-mail de test",
+    "sendTestDescription": "Envoyez un e-mail de test avec la configuration d'expéditeur actuelle pour vérifier qu'elle fonctionne.",
+    "recipientLabel": "Destinataire",
+    "sendTestButton": "Envoyer le test",
+    "sendingTest": "Envoi en cours…",
+    "sendTestSuccess": "E-mail de test envoyé à {email}",
+    "sendTestSkipped": "Test ignoré — cette adresse est supprimée.",
+    "sendTestTestMode": "Envoyé en mode test — aucun e-mail réel n'a été livré.",
+    "sendTestError": "Impossible d'envoyer l'e-mail de test. Veuillez réessayer."
   }
 }

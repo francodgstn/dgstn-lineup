@@ -1820,6 +1820,15 @@
     "checkStatusButton": "Status prüfen",
     "checking": "Wird geprüft…",
     "revertToManagedButton": "Zurück zu Verwaltet",
-    "reverting": "Wird zurückgesetzt…"
+    "reverting": "Wird zurückgesetzt…",
+    "sendTestTitle": "Test-E-Mail senden",
+    "sendTestDescription": "Sende eine Test-E-Mail mit der aktuellen Absenderkonfiguration, um sie zu überprüfen.",
+    "recipientLabel": "Empfänger",
+    "sendTestButton": "Test senden",
+    "sendingTest": "Wird gesendet…",
+    "sendTestSuccess": "Test-E-Mail wurde an {email} gesendet",
+    "sendTestSkipped": "Test übersprungen – diese Adresse ist gesperrt.",
+    "sendTestTestMode": "Im Testmodus gesendet – keine echte E-Mail wurde zugestellt.",
+    "sendTestError": "Test-E-Mail konnte nicht gesendet werden. Bitte erneut versuchen."
   }
 }

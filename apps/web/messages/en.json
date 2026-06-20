@@ -1825,6 +1825,15 @@
     "checkStatusButton": "Check status",
     "checking": "Checking…",
     "revertToManagedButton": "Switch back to Managed",
-    "reverting": "Reverting…"
+    "reverting": "Reverting…",
+    "sendTestTitle": "Send test email",
+    "sendTestDescription": "Send a test email using the current sender configuration to verify it's working.",
+    "recipientLabel": "Recipient",
+    "sendTestButton": "Send test",
+    "sendingTest": "Sending…",
+    "sendTestSuccess": "Test email sent to {email}",
+    "sendTestSkipped": "Test skipped — this address is suppressed.",
+    "sendTestTestMode": "Sent in test mode — no real email was delivered.",
+    "sendTestError": "Could not send the test email. Please try again."
   }
 }

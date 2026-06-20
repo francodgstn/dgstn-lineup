@@ -1810,6 +1810,15 @@
     "checkStatusButton": "Verifica stato",
     "checking": "Verifica in corso…",
     "revertToManagedButton": "Torna a Gestito",
-    "reverting": "Ripristino in corso…"
+    "reverting": "Ripristino in corso…",
+    "sendTestTitle": "Invia e-mail di test",
+    "sendTestDescription": "Invia un'e-mail di test con la configurazione mittente attuale per verificare che funzioni.",
+    "recipientLabel": "Destinatario",
+    "sendTestButton": "Invia test",
+    "sendingTest": "Invio in corso…",
+    "sendTestSuccess": "E-mail di test inviata a {email}",
+    "sendTestSkipped": "Test saltato — questo indirizzo è soppresso.",
+    "sendTestTestMode": "Inviato in modalità test — nessuna e-mail reale è stata consegnata.",
+    "sendTestError": "Impossibile inviare l'e-mail di test. Riprova."
   }
 }
