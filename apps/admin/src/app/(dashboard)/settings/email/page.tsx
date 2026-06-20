@@ -1,8 +1,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { getBrevoStatus } from '@/lib/queries/settings'
+import { requireOperator } from '@/lib/require-operator'
 import { useEmulators } from '@/lib/secret-manager'
 import { BrevoForm } from './brevo-form'
+import { TestEmailForm } from './test-email-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +12,7 @@ export const dynamic = 'force-dynamic'
 const FUNCTIONS_REGION = 'europe-west6'
 
 export default async function EmailSettingsPage() {
-  const status = await getBrevoStatus()
+  const [status, operator] = await Promise.all([getBrevoStatus(), requireOperator()])
 
   // We don't have the real deployed project here, so template the webhook URL.
   // The project id is available at build/runtime via the public Firebase config.
@@ -66,6 +68,10 @@ export default async function EmailSettingsPage() {
           apiKeyConfigured={status.apiKeyConfigured}
           webhookSecretConfigured={status.webhookSecretConfigured}
         />
+
+        <div className="border-t pt-4">
+          <TestEmailForm defaultRecipient={operator.email} />
+        </div>
 
         {/* Webhook configuration guidance */}
         <div className="flex flex-col gap-2 border-t pt-4">

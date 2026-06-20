@@ -7,7 +7,7 @@ import { MAIL_SENDS_COLLECTION } from '@linyup/shared'
 import { brevoProvider } from './brevoProvider'
 import { getManagedStudioFrom, getSystemSender } from './senderIdentity'
 import { resolveStudioSender } from './senderResolution'
-import { loadStudioContext } from './senderConfig'
+import { loadOrgContext, loadStudioContext } from './senderConfig'
 import { isSuppressed } from './suppression'
 import type { MailProvider, OutboundMessage, ResolvedSender } from './types'
 
@@ -140,10 +140,16 @@ export async function sendSystemMail(msg: OutboundMessage): Promise<SendOutcome>
   return dispatch(msg, getSystemSender(), 'system')
 }
 
-// "Send as the studio" — resolves the team's sender identity (Managed or a
-// verified BYO domain) and sends on its behalf.
-export async function sendStudioMail(teamId: string, msg: OutboundMessage): Promise<SendOutcome> {
-  const ctx = await loadStudioContext(teamId)
+// "Send as the studio" — resolves the entity's sender identity (Managed or a
+// verified BYO domain) and sends on its behalf. Works for a team or an org.
+export async function sendEntityMail(
+  scope: 'team' | 'org',
+  entityId: string,
+  msg: OutboundMessage,
+  fallbackContactEmail?: string,
+): Promise<SendOutcome> {
+  const ctx =
+    scope === 'team' ? await loadStudioContext(entityId) : await loadOrgContext(entityId, fallbackContactEmail)
   const sender = resolveStudioSender({
     teamName: ctx.teamName,
     contactEmail: ctx.contactEmail,
@@ -151,7 +157,12 @@ export async function sendStudioMail(teamId: string, msg: OutboundMessage): Prom
     config: ctx.config,
     managedFrom: getManagedStudioFrom(),
   })
-  return dispatch(msg, sender, 'studio', teamId)
+  return dispatch(msg, sender, 'studio', entityId)
+}
+
+// Convenience wrapper for the common team case (used by utils/email's façade).
+export async function sendStudioMail(teamId: string, msg: OutboundMessage): Promise<SendOutcome> {
+  return sendEntityMail('team', teamId, msg)
 }
 
 // Stable idempotency key helper for critical-path sends.

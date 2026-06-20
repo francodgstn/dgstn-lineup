@@ -1,9 +1,14 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { BrevoClient } from '@getbrevo/brevo'
 import { requireOperator } from '@/lib/require-operator'
-import { setSecret, SecretManagerUnavailableError } from '@/lib/secret-manager'
-import { BREVO_API_KEY_SECRET, BREVO_WEBHOOK_SECRET } from '@/lib/queries/settings'
+import {
+  getSecretValue,
+  setSecret,
+  SecretManagerUnavailableError,
+} from '@/lib/secret-manager'
+import { BREVO_API_KEY_SECRET, BREVO_SYSTEM_SENDER, BREVO_WEBHOOK_SECRET } from '@/lib/queries/settings'
 
 export interface SaveSecretResult {
   ok: boolean
@@ -49,4 +54,53 @@ export async function saveBrevoApiKey(formData: FormData): Promise<SaveSecretRes
 export async function saveBrevoWebhookSecret(formData: FormData): Promise<SaveSecretResult> {
   const value = String(formData.get('webhookSecret') ?? '').trim()
   return saveBrevoSecret(BREVO_WEBHOOK_SECRET, 'Webhook secret', value)
+}
+
+export interface SendTestResult {
+  ok: boolean
+  error?: string
+  warning?: string
+  sentTo?: string
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// Sends a Brevo **system** test email (from hello@linyup.com) so the operator can
+// verify the API key + sender are working. Recipient defaults to the operator's
+// own address; an explicit value overrides it.
+export async function sendBrevoTestEmail(formData: FormData): Promise<SendTestResult> {
+  const operator = await requireOperator()
+
+  const toRaw = String(formData.get('to') ?? '').trim()
+  const recipient = toRaw || operator.email
+  if (!EMAIL_RE.test(recipient)) return { ok: false, error: 'Enter a valid recipient email address.' }
+
+  let apiKey: string
+  try {
+    apiKey = await getSecretValue(BREVO_API_KEY_SECRET)
+  } catch (err) {
+    if (err instanceof SecretManagerUnavailableError) return { ok: false, warning: err.message }
+    if ((err as { code?: number }).code === 5) return { ok: false, error: 'No Brevo API key is configured yet.' }
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+
+  try {
+    const client = new BrevoClient({ apiKey, maxRetries: 1 })
+    await client.transactionalEmails.sendTransacEmail({
+      sender: { name: 'Linyup', email: BREVO_SYSTEM_SENDER },
+      to: [{ email: recipient }],
+      subject: 'Linyup system test email',
+      htmlContent:
+        '<p>This is a Linyup <strong>system</strong> test email sent via Brevo.</p>' +
+        '<p>If you received this, system mail is configured correctly.</p>',
+      textContent:
+        'This is a Linyup system test email sent via Brevo.\n\n' +
+        'If you received this, system mail is configured correctly.',
+      tags: ['test', 'system'],
+    })
+  } catch (err) {
+    return { ok: false, error: `Send failed: ${err instanceof Error ? err.message : String(err)}` }
+  }
+
+  return { ok: true, sentTo: recipient }
 }

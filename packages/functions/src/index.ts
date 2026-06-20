@@ -140,6 +140,7 @@ export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'
 // Sender resolution + the central mail service live in ./mail and are called
 // by every send site via ../utils/email.
 export { registerSenderDomain, checkSenderDomain, useManagedSender } from './mail/domainAuth'
+export { sendTestEmail } from './mail/sendTestEmail'
 export { handleBrevoWebhook } from './mail/handleBrevoWebhook'
 
 // Outreach

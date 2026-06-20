@@ -41,12 +41,12 @@ async function assertOrgAdmin(uid: string, orgId: string): Promise<void> {
   }
 }
 
-async function assertAccess(uid: string, scope: SenderScope, entityId: string): Promise<void> {
+export async function assertAccess(uid: string, scope: SenderScope, entityId: string): Promise<void> {
   if (scope === 'team') await assertTeamOwner(uid, entityId)
   else await assertOrgAdmin(uid, entityId)
 }
 
-function validateScope(scope: unknown, entityId: unknown): asserts scope is SenderScope {
+export function validateScope(scope: unknown, entityId: unknown): asserts scope is SenderScope {
   if (scope !== 'team' && scope !== 'org') {
     throw new HttpsError('invalid-argument', 'scope must be "team" or "org"')
   }

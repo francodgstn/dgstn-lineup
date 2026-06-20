@@ -103,3 +103,18 @@ export async function loadStudioContext(teamId: string): Promise<StudioContext> 
     config,
   }
 }
+
+// Org equivalent of loadStudioContext. Orgs have no dedicated contact-email
+// field, so Reply-To falls back to the provided address (e.g. the requesting
+// admin). Orgs are always a paid tier → BYO-eligible.
+export async function loadOrgContext(orgId: string, fallbackContactEmail?: string): Promise<StudioContext> {
+  const snap = await admin.firestore().collection(ORGANIZATIONS_COLLECTION).doc(orgId).get()
+  const org = (snap.data() as Record<string, unknown>) || {}
+  const config = await getEmailSenderConfig('org', orgId)
+  return {
+    teamName: (org.name as string) || '',
+    plan: 'organization',
+    contactEmail: (typeof org.email === 'string' && org.email.trim()) || fallbackContactEmail,
+    config,
+  }
+}
