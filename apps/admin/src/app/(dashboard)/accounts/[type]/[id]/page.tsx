@@ -15,6 +15,7 @@ import {
 import { StatusBadge, PlanBadge, PaymentsBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
+import { ConnectToggle } from './connect-toggle'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,8 +90,12 @@ export default async function AccountDetailPage({
         {/* Member → Studio: Stripe Connect (the studio collects from its members). */}
         {account.payments && (
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-start justify-between gap-2">
               <CardTitle>Member → Studio (Stripe Connect)</CardTitle>
+              <ConnectToggle
+                teamId={account.id}
+                initialEnabled={account.payments.status !== 'disabled'}
+              />
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
