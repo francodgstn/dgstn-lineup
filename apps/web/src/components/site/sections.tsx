@@ -420,9 +420,11 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
 // ─── Pricing (live: team public_profile.aggregator_subscription_types) ────────
 
 interface PlanPrice {
+  id?: string
   amount: number
   recurrence: string
   label?: string
+  included_months?: number
 }
 
 interface PlanEntry {
@@ -467,8 +469,6 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
       alive = false
     }
   }, [teamId])
-
-  const href = preview ? undefined : `/public/${slug}/signup`
 
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
@@ -519,7 +519,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                   </p>
                 )}
                 <a
-                  {...linkProps(href, preview)}
+                  {...linkProps(preview ? undefined : `/public/${slug}/shop?type=${p.id}`, preview)}
                   className="mt-5 inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
                   style={{ background: palette.accent, color: palette.onAccent }}
                 >
@@ -529,6 +529,17 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
             ))
           )}
         </div>
+        {!loading && plans.length > 0 && (
+          <div className="mt-8 text-center">
+            <a
+              {...linkProps(preview ? undefined : `/public/${slug}/shop`, preview)}
+              className="text-sm font-medium underline-offset-4 hover:underline"
+              style={{ color: palette.muted }}
+            >
+              View all options →
+            </a>
+          </div>
+        )}
       </div>
     </section>
   )

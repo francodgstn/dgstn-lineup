@@ -11,6 +11,7 @@
 // (Phase E) from Stripe events — never from client-reported success.
 
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
   computePlatformFee,
@@ -36,12 +37,15 @@ type SubInterval = (typeof SUB_INTERVALS)[number]
 function resultUrls(
   locale: string,
   successUrl?: string,
-  cancelUrl?: string
+  cancelUrl?: string,
+  // Appended to the default result URLs so the page can link back (e.g. &slug=…&seg=shop).
+  extraQuery?: string
 ): { successUrl: string; cancelUrl: string } {
   const base = `${getHostingUrl()}/${locale}/pay/result`
+  const extra = extraQuery ?? ''
   return {
-    successUrl: successUrl ?? `${base}?status=success`,
-    cancelUrl: cancelUrl ?? `${base}?status=cancelled`,
+    successUrl: successUrl ?? `${base}?status=success${extra}`,
+    cancelUrl: cancelUrl ?? `${base}?status=cancelled${extra}`,
   }
 }
 
@@ -279,5 +283,138 @@ export const createMembershipPayment = onCall(async (request) => {
   } catch (err) {
     console.error('[connect] createMembershipPayment failed:', err)
     throw new HttpsError('internal', 'Failed to create the membership payment')
+  }
+})
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
+
+/**
+ * Index-free hourly rate limit for the public checkout: an `{ip}:{hourBucket}`
+ * counter doc, incremented in a transaction. Avoids composite indexes (and the
+ * emulator-hides-missing-index trap). 'unknown' IPs share one bucket.
+ */
+async function checkoutRateLimit(ipRaw: string | undefined): Promise<void> {
+  const ip = (ipRaw ?? 'unknown').replace(/[^\w.:-]/g, '_').slice(0, 60)
+  const bucket = Math.floor(Date.now() / 3_600_000)
+  const ref = admin.firestore().collection('connect_checkout_attempts').doc(`${ip}:${bucket}`)
+  const count = await admin.firestore().runTransaction(async (tx) => {
+    const snap = await tx.get(ref)
+    const next = ((snap.data()?.count as number | undefined) ?? 0) + 1
+    tx.set(ref, { ip, bucket, count: next, updated_at: FieldValue.serverTimestamp() }, { merge: true })
+    return next
+  })
+  if (count > CHECKOUT_RATE_LIMIT_PER_HOUR) {
+    throw new HttpsError('resource-exhausted', 'Too many attempts. Please try again later.')
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createMembershipCheckout — PUBLIC (unauthenticated) sibling of
+// createMembershipPayment for the member-facing shop page. A member picks a
+// subscription type + price and their email; we charge on the studio's connected
+// account. No contactId is carried — the webhook links/creates the contact by
+// email. Guarded by the Connect kill-switch + a chargeable account + rate limit.
+// ─────────────────────────────────────────────────────────────────────────────
+export const createMembershipCheckout = onCall(async (request) => {
+  const data = request.data as {
+    teamId?: string
+    subscriptionTypeId?: string
+    priceId?: string
+    memberEmail?: string
+    slug?: string
+    locale?: string
+    idempotencyKey?: string
+  }
+  if (!data?.teamId || !data?.subscriptionTypeId || !data?.priceId) {
+    throw new HttpsError('invalid-argument', 'teamId, subscriptionTypeId and priceId are required')
+  }
+  const email = (data.memberEmail ?? '').toLowerCase().trim()
+  if (!EMAIL_RE.test(email)) {
+    throw new HttpsError('invalid-argument', 'A valid email is required')
+  }
+  const { teamId, subscriptionTypeId, priceId } = data
+  const locale = data.locale ?? 'en'
+
+  await checkoutRateLimit(request.rawRequest?.ip)
+
+  // No auth: the only gates are the team's Connect kill-switch + chargeable account.
+  const team = await loadEnabledTeam(teamId)
+  const { accountId, model } = requireChargeableAccount(team)
+
+  const typeSnap = await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(SUBSCRIPTION_TYPES_SUBCOLLECTION)
+    .doc(subscriptionTypeId)
+    .get()
+  if (!typeSnap.exists) throw new HttpsError('not-found', 'Subscription type not found')
+  const subType = typeSnap.data() as SubscriptionType
+  // Only public + active types are sellable from the public shop.
+  if (subType.public !== true || subType.active === false) {
+    throw new HttpsError('failed-precondition', 'This item is not available')
+  }
+  const price = (subType.prices ?? []).find((p) => p.id === priceId && p.active !== false)
+  if (!price) throw new HttpsError('not-found', 'Price not found on this subscription type')
+
+  const amount = Math.round(price.amount * 100)
+  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
+    throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
+  }
+
+  const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=shop` : ''
+  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery)
+  const productName = price.label ? `${subType.name} — ${price.label}` : subType.name
+
+  // Webhook reads this to create/link the buyer's contact. No contactId here.
+  const metadata: Record<string, string> = {
+    teamId,
+    kind: 'membership',
+    subscriptionTypeId,
+    subscriptionTypeName: subType.name,
+    priceId,
+    recurrence: price.recurrence,
+  }
+  if (price.included_months) metadata.includedMonths = String(price.included_months)
+
+  const interval = recurrenceToStripeInterval(price.recurrence)
+  const idempotencyKey =
+    data.idempotencyKey ??
+    `membership-pub:${teamId}:${priceId}:${email}:${Math.floor(Date.now() / 60000)}`
+
+  try {
+    if (isRecurringRecurrence(price.recurrence) && interval) {
+      const session = await createSubscriptionCheckoutSession({
+        accountId,
+        amount,
+        interval: interval.interval,
+        intervalCount: interval.interval_count,
+        applicationFeePercent: takeRatePercent(team.plan),
+        productName,
+        successUrl,
+        cancelUrl,
+        customerEmail: email,
+        metadata,
+        idempotencyKey,
+      })
+      return { url: session.url, sessionId: session.sessionId, recurring: true }
+    }
+
+    const session = await createOneOffCheckoutSession({
+      accountId,
+      amount,
+      applicationFeeAmount: computePlatformFee({ tier: team.plan, amount, model }),
+      productName,
+      successUrl,
+      cancelUrl,
+      customerEmail: email,
+      metadata,
+      idempotencyKey,
+    })
+    return { url: session.url, sessionId: session.sessionId, recurring: false }
+  } catch (err) {
+    console.error('[connect] createMembershipCheckout failed:', err)
+    throw new HttpsError('internal', 'Failed to start checkout')
   }
 })

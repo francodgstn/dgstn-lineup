@@ -62,6 +62,9 @@ export interface TeamLink {
   // System link to the public Space (online courses). Only meaningful when the
   // online-courses plugin is active; routes to /public/space/{slug}.
   isCoursesLink?: boolean
+  // System link to the public Shop (self-checkout). Only meaningful when the team
+  // has Stripe Connect enabled; routes to /public/{slug}/shop.
+  isShopLink?: boolean
 }
 
 export type SocialPlatform =

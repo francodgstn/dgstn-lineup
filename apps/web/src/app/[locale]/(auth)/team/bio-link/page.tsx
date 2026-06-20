@@ -73,6 +73,7 @@ const linkSchema = z.object({
   isBookingLink: z.boolean().optional(),
   isMembershipLink: z.boolean().optional(),
   isCoursesLink: z.boolean().optional(),
+  isShopLink: z.boolean().optional(),
 })
 
 const bookingSchema = z.object({
@@ -432,6 +433,7 @@ function LinksTab({
           isBookingLink?: boolean
           isMembershipLink?: boolean
           isCoursesLink?: boolean
+          isShopLink?: boolean
         }
         const systemBadge = f.isBookingLink
           ? t('bookingLink')
@@ -439,7 +441,9 @@ function LinksTab({
             ? t('membershipLink')
             : f.isCoursesLink
               ? t('coursesLink')
-              : null
+              : f.isShopLink
+                ? t('shopLink')
+                : null
         const isSystem = systemBadge !== null
         return (
           <div key={field.id} className="rounded-lg border p-4 space-y-3">
@@ -839,6 +843,7 @@ export default function TeamBioLinkEditorPage() {
   const { data: team, isLoading } = useTeam(currentTeamId)
   const { isInstalled } = useInstalledPlugins()
   const coursesActive = isInstalled('online-courses')
+  const connectEnabled = team?.payments?.connectStatus === 'enabled'
   const qc = useQueryClient()
   const t = useTranslations('BioLink')
 
@@ -863,13 +868,13 @@ export default function TeamBioLinkEditorPage() {
     formState: { isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: getDefaults(team ?? null, coursesActive),
+    defaultValues: getDefaults(team ?? null, coursesActive, connectEnabled),
   })
 
-  // Re-populate form when team data arrives or the courses plugin state resolves.
+  // Re-populate form when team data arrives or the courses/connect state resolves.
   useEffect(() => {
-    if (team) reset(getDefaults(team, coursesActive))
-  }, [team?.id, coursesActive]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (team) reset(getDefaults(team, coursesActive, connectEnabled))
+  }, [team?.id, coursesActive, connectEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live preview values
   const formValues = useWatch({ control })
@@ -1161,7 +1166,11 @@ function stripUndefined<T>(obj: T): T {
 // Normalises stored links and reconciles the courses system link with the
 // online-courses plugin state: present (default-injected) when active, removed
 // when inactive. Booking/membership system links are always preserved.
-function buildLinks(rawLinks: Team['links'], coursesPluginActive: boolean): FormData['links'] {
+function buildLinks(
+  rawLinks: Team['links'],
+  coursesPluginActive: boolean,
+  connectEnabled: boolean
+): FormData['links'] {
   const links = (rawLinks ?? [])
     .map((l) => ({
       label: typeof l.label === 'string' ? l.label : '',
@@ -1173,8 +1182,11 @@ function buildLinks(rawLinks: Team['links'], coursesPluginActive: boolean): Form
       isBookingLink: l.isBookingLink === true ? (true as const) : undefined,
       isMembershipLink: l.isMembershipLink === true ? (true as const) : undefined,
       isCoursesLink: l.isCoursesLink === true ? (true as const) : undefined,
+      isShopLink: l.isShopLink === true ? (true as const) : undefined,
     }))
     .filter((l) => coursesPluginActive || !l.isCoursesLink)
+    // The shop system link only exists while Connect is enabled.
+    .filter((l) => connectEnabled || !l.isShopLink)
 
   if (coursesPluginActive && !links.some((l) => l.isCoursesLink)) {
     links.push({
@@ -1186,12 +1198,27 @@ function buildLinks(rawLinks: Team['links'], coursesPluginActive: boolean): Form
       isBookingLink: undefined,
       isMembershipLink: undefined,
       isCoursesLink: true,
+      isShopLink: undefined,
+    })
+  }
+
+  if (connectEnabled && !links.some((l) => l.isShopLink)) {
+    links.push({
+      label: 'Shop',
+      description: undefined,
+      url: '',
+      showInBioLink: true,
+      iconName: 'ShoppingBag',
+      isBookingLink: undefined,
+      isMembershipLink: undefined,
+      isCoursesLink: undefined,
+      isShopLink: true,
     })
   }
   return links
 }
 
-function getDefaults(team: Team | null, coursesPluginActive = false): FormData {
+function getDefaults(team: Team | null, coursesPluginActive = false, connectEnabled = false): FormData {
   const sl = team?.socialLinks ?? []
   const getSocial = (p: SocialPlatform) => sl.find((s) => s.platform === p)?.url ?? ''
 
@@ -1226,7 +1253,7 @@ function getDefaults(team: Team | null, coursesPluginActive = false): FormData {
     // Sanitize each link to ensure all required fields are valid for the schema.
     // The courses system link only exists while the online-courses plugin is
     // active: drop it when inactive, and inject a default when active & missing.
-    links: buildLinks(team?.links ?? [], coursesPluginActive),
+    links: buildLinks(team?.links ?? [], coursesPluginActive, connectEnabled),
     booking: {
       flowType,
       windowMonths,

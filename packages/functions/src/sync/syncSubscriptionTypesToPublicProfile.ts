@@ -51,7 +51,15 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
       return String(a.data().name ?? '').localeCompare(String(b.data().name ?? ''))
     })
 
-    type PublicPrice = { amount: number; recurrence: string; label?: string }
+    // `id` + `included_months` are needed by the public shop checkout (resolves a
+    // price by id; one-time prices grant a membership duration).
+    type PublicPrice = {
+      id: string
+      amount: number
+      recurrence: string
+      label?: string
+      included_months?: number
+    }
     const publicTypes = docsSorted.map((d) => {
       const data = d.data()
       // name + description power the website Pricing cards / booking bio-link;
@@ -70,14 +78,23 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
       }
       const prices: PublicPrice[] = (Array.isArray(data.prices) ? data.prices : [])
         .filter(
-          (p: { active?: boolean; amount?: unknown }) =>
-            p && p.active !== false && typeof p.amount === 'number'
+          (p: { id?: unknown; active?: boolean; amount?: unknown }) =>
+            p && p.active !== false && typeof p.amount === 'number' && typeof p.id === 'string'
         )
-        .map((p: { amount: number; recurrence: string; label?: string }) => {
-          const price: PublicPrice = { amount: p.amount, recurrence: p.recurrence }
-          if (p.label) price.label = p.label
-          return price
-        })
+        .map(
+          (p: {
+            id: string
+            amount: number
+            recurrence: string
+            label?: string
+            included_months?: number
+          }) => {
+            const price: PublicPrice = { id: p.id, amount: p.amount, recurrence: p.recurrence }
+            if (p.label) price.label = p.label
+            if (typeof p.included_months === 'number') price.included_months = p.included_months
+            return price
+          }
+        )
       if (prices.length) entry.prices = prices
       return entry
     })

@@ -223,15 +223,18 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
               const isBooking = link.isBookingLink
               const isMembership = link.isMembershipLink
               const isCourses = link.isCoursesLink
+              const isShop = link.isShopLink
               const href = isBooking
                 ? `/public/${slug}/booking`
                 : isMembership
                   ? `/public/${slug}/signup`
                   : isCourses
                     ? `/public/${slug}/space`
-                    : link.url
+                    : isShop
+                      ? `/public/${slug}/shop`
+                      : link.url
 
-              const isInternal = isBooking || isMembership || isCourses
+              const isInternal = isBooking || isMembership || isCourses || isShop
               const cardStyle = isBooking
                 ? { background: accent, border: 'none' }
                 : { background: cardBg, border: `1px solid ${cardBorder}` }

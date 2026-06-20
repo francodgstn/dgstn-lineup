@@ -23,10 +23,17 @@ import {
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
+  PLAN_PRICING,
+  planHasHardContactCap,
   type ConnectOnboardingModel,
+  type SaasPlan,
 } from '@linyup/shared'
 import { getSecret } from '../utils/secrets'
-import { constructConnectWebhookEvent, retrieveAccountStatus } from '../utils/connect/client'
+import {
+  constructConnectWebhookEvent,
+  getConnectStripe,
+  retrieveAccountStatus,
+} from '../utils/connect/client'
 import { persistAccountStatus } from './access'
 
 // Account/capability events → re-fetch the account (source of truth) and persist.
@@ -104,17 +111,13 @@ async function resolveContactId(
   return null
 }
 
-async function applyMembership(
+/** Write the membership fields onto a known contact + an activity-log entry. */
+async function writeContactMembership(
   teamId: string,
+  contactId: string,
   md: Record<string, string>,
-  opts: { amountRappen: number; membershipExpiration: Timestamp | null; fallbackEmail?: string | null }
+  opts: { amountRappen: number; membershipExpiration: Timestamp | null }
 ): Promise<void> {
-  if (md.kind !== 'membership' || !md.subscriptionTypeId) return
-  const contactId = await resolveContactId(teamId, md, opts.fallbackEmail)
-  if (!contactId) {
-    console.log(`[connect] membership payment: no contact matched (team=${teamId})`)
-    return
-  }
   const db = admin.firestore()
   const update: Record<string, unknown> = {
     last_payment_at: FieldValue.serverTimestamp(),
@@ -137,6 +140,88 @@ async function applyMembership(
       message: `Membership payment received${md.subscriptionTypeName ? ` · ${md.subscriptionTypeName}` : ''}`,
       timestamp: FieldValue.serverTimestamp(),
     })
+}
+
+/** Apply membership to an EXISTING contact (resolved by id/email). Used by the
+ * payment_intent / subscription handlers (incl. renewals). No contact creation. */
+async function applyMembership(
+  teamId: string,
+  md: Record<string, string>,
+  opts: { amountRappen: number; membershipExpiration: Timestamp | null; fallbackEmail?: string | null }
+): Promise<void> {
+  if (md.kind !== 'membership' || !md.subscriptionTypeId) return
+  const contactId = await resolveContactId(teamId, md, opts.fallbackEmail)
+  if (!contactId) {
+    console.log(`[connect] membership: no existing contact matched (team=${teamId})`)
+    return
+  }
+  await writeContactMembership(teamId, contactId, md, opts)
+}
+
+function splitName(full?: string | null): { firstname: string; lastname: string } {
+  const parts = (full ?? '').trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return { firstname: '', lastname: '' }
+  if (parts.length === 1) return { firstname: parts[0], lastname: '' }
+  return { firstname: parts[0], lastname: parts.slice(1).join(' ') }
+}
+
+/** Active (non-archived, non-deleted) contact count — cap basis (matches admin). */
+async function activeContactCount(teamId: string): Promise<number> {
+  const agg = await admin
+    .firestore()
+    .collection(CONTACTS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .where('deleted_at', '==', null)
+    .where('archived_at', '==', null)
+    .count()
+    .get()
+  return agg.data().count
+}
+
+/**
+ * Resolve a contact by email, or CREATE one from the buyer's checkout details.
+ * Cap-aware: on a plan with a hard contact cap (Free), if the team is already at
+ * the limit the contact is NOT created (returns null) — the payment is still
+ * recorded; the studio links it after upgrading/freeing a slot.
+ */
+async function resolveOrCreateContact(
+  teamId: string,
+  plan: SaasPlan,
+  info: { email: string; name?: string | null; phone?: string | null }
+): Promise<string | null> {
+  const db = admin.firestore()
+  const existing = await db
+    .collection(CONTACTS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .where('email', '==', info.email)
+    .limit(1)
+    .get()
+  if (!existing.empty) return existing.docs[0].id
+
+  if (planHasHardContactCap(plan)) {
+    const cap = PLAN_PRICING[plan].includedContacts
+    if (cap != null && (await activeContactCount(teamId)) >= cap) {
+      console.log(
+        `[connect] shop purchase: contact cap reached (team=${teamId}, plan=${plan}) — contact not created`
+      )
+      return null
+    }
+  }
+
+  const { firstname, lastname } = splitName(info.name)
+  const ref = db.collection(CONTACTS_COLLECTION).doc()
+  await ref.set({
+    teamId,
+    email: info.email,
+    firstname,
+    lastname,
+    ...(info.phone ? { phone: info.phone } : {}),
+    type: 'student',
+    archived_at: null,
+    deleted_at: null,
+    created_at: FieldValue.serverTimestamp(),
+  })
+  return ref.id
 }
 
 // ─── per-event-type handlers ─────────────────────────────────────────────────────
@@ -282,6 +367,79 @@ async function handleInvoice(
   )
 }
 
+/**
+ * checkout.session.completed — the authoritative point for linking the buyer's
+ * contact (it carries customer_details: email, name, phone). Resolves/creates the
+ * contact and applies membership. For subscriptions it also backfills contactId
+ * into the Stripe subscription metadata so RENEWAL events (handleSubscription) link
+ * the same contact. Covers both the public shop (email only) and the manager flow
+ * (metadata.contactId). Idempotent with the payment_intent/subscription handlers.
+ */
+async function handleCheckoutCompleted(
+  team: TeamRef,
+  session: any,
+  accountId: string | undefined,
+  _eventId: string
+): Promise<void> {
+  const md = (session.metadata ?? {}) as Record<string, string>
+  if (md.kind !== 'membership' || !md.subscriptionTypeId) return
+
+  const email = (session.customer_details?.email ?? session.customer_email ?? '')
+    .toLowerCase()
+    .trim()
+  const name = (session.customer_details?.name as string | undefined) ?? null
+  const phone = (session.customer_details?.phone as string | undefined) ?? null
+
+  // Prefer an explicit contactId (manager flow); else resolve/create by email.
+  let contactId: string | null = null
+  if (md.contactId) {
+    const snap = await admin.firestore().collection(CONTACTS_COLLECTION).doc(md.contactId).get()
+    if (snap.exists && snap.data()?.teamId === team.teamId) contactId = md.contactId
+  }
+  if (!contactId && email) {
+    const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
+    const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
+    contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
+  }
+  if (!contactId) return // cap-blocked or no email — payment is still recorded by other handlers
+
+  const amountRappen = (session.amount_total as number | undefined) ?? 0
+  let membershipExpiration: Timestamp | null = null
+
+  if (session.mode === 'subscription' && session.subscription) {
+    const subId =
+      typeof session.subscription === 'string' ? session.subscription : session.subscription.id
+    if (accountId) {
+      try {
+        const stripe = await getConnectStripe()
+        await stripe.subscriptions.update(
+          subId,
+          { metadata: { ...md, contactId } },
+          { stripeAccount: accountId }
+        )
+        const sub: any = await stripe.subscriptions.retrieve(subId, undefined, {
+          stripeAccount: accountId,
+        })
+        const cpe = sub.current_period_end as number | undefined
+        membershipExpiration = cpe ? Timestamp.fromMillis(cpe * 1000) : null
+      } catch (err) {
+        console.error('[connect] subscription backfill/retrieve failed:', err)
+      }
+    }
+    await memberSubscriptionRef(team.teamId, subId).set({ contactId }, { merge: true })
+  } else {
+    const months = md.includedMonths ? parseInt(md.includedMonths, 10) : 0
+    membershipExpiration = months > 0 ? addMonths(months) : null
+    const piId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id
+    if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+  }
+
+  await writeContactMembership(team.teamId, contactId, md, { amountRappen, membershipExpiration })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // handleConnectWebhook
 // ─────────────────────────────────────────────────────────────────────────────
@@ -353,6 +511,9 @@ export const handleConnectWebhook = onRequest({ invoker: 'public' }, async (req,
         return
       }
       switch (event.type) {
+        case 'checkout.session.completed':
+          await handleCheckoutCompleted(team, obj, accountId, event.id)
+          break
         case 'payment_intent.succeeded':
           await handlePaymentIntent(team, obj, 'succeeded', event.id)
           break

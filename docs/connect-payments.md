@@ -160,6 +160,25 @@ All are **function-written only**; managers/owners get read access for the dashb
 
 ---
 
+## Public shop (member self-checkout)
+
+A public, member-facing page at **`/public/{slug}/shop`** lists the team's public
+subscription types and lets a member pay without logging in (email only). It reads the
+world-readable `aggregator_subscription_types` catalogue (now incl. price `id` +
+`included_months`) and calls the **public** `createMembershipCheckout` callable
+(unauthenticated; same Connect kill-switch + chargeable-account guards + an IP/hour
+rate limit). On success the `checkout.session.completed` webhook **links or creates**
+the buyer's contact from the Stripe `customer_details` — cap-aware: on a Free team at
+the 15-contact limit the contact is not created (payment is still recorded). Stripe
+redirects to `/{locale}/pay/result`.
+
+Entry points: a **bio-link** "Shop" system link (auto-shown once Connect is enabled,
+owner-toggleable) and the **website pricing** component (each plan card deep-links
+`/public/{slug}/shop?type={id}`, plus a "view all" link). The `shop` segment is a
+reserved slug.
+
+---
+
 ## Webhook setup
 
 The Connect endpoint must receive **connected-account** events. With the Stripe CLI,
@@ -176,6 +195,7 @@ Functions emulator. In production, register a **Connect** webhook endpoint point
 
 ```
 account.updated, capability.updated, v2.core.account*  (account state)
+checkout.session.completed                              (links/creates the buyer's contact)
 payment_intent.succeeded, payment_intent.payment_failed
 charge.refunded, charge.dispute.created, charge.dispute.closed
 customer.subscription.created/updated/deleted
