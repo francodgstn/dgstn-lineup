@@ -96,6 +96,9 @@ export const CATEGORIES_COLLECTION = 'categories'
 export const COURSES_COLLECTION = 'courses'
 export const COURSE_MODULES_SUBCOLLECTION = 'modules'
 export const COURSE_LESSONS_SUBCOLLECTION = 'lessons'
+// Lifetime entitlement granted when a contact buys a 'purchase'-tier course one-off.
+// Doc id is the buyer's contactId; written only by the Connect webhook (admin SDK).
+export const COURSE_PURCHASES_SUBCOLLECTION = 'purchases'
 
 // Website plugin (studio site builder)
 // site_drafts: PRIVATE working copy (manager+). site_published: PUBLIC snapshot

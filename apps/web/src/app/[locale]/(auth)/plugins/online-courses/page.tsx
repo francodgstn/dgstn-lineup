@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner'
 import { GraduationCap, Plus, ImageIcon, X, ExternalLink } from 'lucide-react'
 import type { Course, CourseStatus } from '@linyup/shared'
+import { formatCurrency } from '@/lib/format'
 import { useCourses, createCourse, updateCourse, countCourses } from '@/plugins/online-courses/hooks'
 import { getOnlineCoursesLimits } from '@/plugins/online-courses/limits'
 
@@ -40,11 +41,18 @@ const ACCESS_BADGE: Record<string, string> = {
   free: 'bg-green-100 text-green-700',
   registered: 'bg-blue-100 text-blue-700',
   subscription: 'bg-purple-100 text-purple-700',
+  purchase: 'bg-amber-100 text-amber-700',
 }
 
-function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) {
+function CourseCard({ course, onOpen, currency }: { course: Course; onOpen: () => void; currency: string }) {
   const t = useTranslations('Courses')
   const accessType = course.accessRule?.type ?? 'registered'
+  const accessLabel =
+    accessType === 'free' ? t('accessFree')
+    : accessType === 'subscription' ? t('accessSubscription')
+    : accessType === 'purchase'
+      ? t('soldBadge', { price: formatCurrency(course.accessRule?.priceAmount ?? 0, currency) })
+      : t('accessRegistered')
   return (
     <button
       type="button"
@@ -74,7 +82,7 @@ function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) 
             {t('lessonCount', { count: course.lessonCount ?? 0 })}
           </p>
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ACCESS_BADGE[accessType] ?? ''}`}>
-            {accessType === 'free' ? t('accessFree') : accessType === 'subscription' ? t('accessSubscription') : t('accessRegistered')}
+            {accessLabel}
           </span>
         </div>
       </div>
@@ -231,6 +239,7 @@ export default function OnlineCoursesPage() {
             <CourseCard
               key={course.id}
               course={course}
+              currency={team?.default_currency ?? 'CHF'}
               onOpen={() => router.push(`/plugins/online-courses/${course.id}` as Route)}
             />
           ))}

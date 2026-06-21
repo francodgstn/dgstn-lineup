@@ -1,16 +1,17 @@
 'use client'
 
 // Public self-checkout ("shop"): lists what a studio sells — memberships (public
-// subscription types) AND products (merch/equipment) — and lets a member pay via
-// Stripe Connect. Branded with the team's bio-link palette. No login required —
-// just an email; the webhook links/creates the contact. Memberships and products
-// are separated behind a tab toggle so the two never visually mix.
+// subscription types), products (merch/equipment) AND online courses (one-off
+// purchase) — and lets a member pay via Stripe Connect. Branded with the team's
+// bio-link palette. No login required — just an email; the webhook links/creates the
+// contact (and grants a course entitlement). The three surfaces are separated behind
+// a tab toggle so they never visually mix.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { doc, getDoc } from 'firebase/firestore'
+import { collectionGroup, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { useTranslations, useLocale } from 'next-intl'
-import { ShoppingBag, Loader2, X } from 'lucide-react'
+import { ShoppingBag, GraduationCap, Loader2, X } from 'lucide-react'
 import { db, functions } from '@/lib/firebase'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { formatCurrency } from '@/lib/format'
@@ -46,11 +47,30 @@ interface ProductEntry {
   variants?: ProductVariantEntry[]
 }
 
-type Tab = 'memberships' | 'products'
+interface CourseEntry {
+  id: string
+  title: string
+  summary?: string
+  coverImageUrl?: string
+  priceAmount: number
+}
+
+// Raw shape of a course's world-readable public_profile summary (syncCoursePublicProfile).
+interface RawCoursePublicProfile {
+  accessType?: string
+  priceAmount?: number | null
+  title?: string
+  summary?: string
+  coverImageUrl?: string | null
+  order?: number
+}
+
+type Tab = 'memberships' | 'products' | 'courses'
 
 type Checkout =
   | { kind: 'membership'; typeId: string; typeName: string; price: PlanPrice }
   | { kind: 'product'; product: ProductEntry; variantId: string | null }
+  | { kind: 'course'; course: CourseEntry }
 
 function prefillEmail(): string {
   try {
@@ -66,9 +86,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function ShopHome({
   focusTypeId,
+  focusCourseId,
   initialTab,
 }: {
   focusTypeId: string | null
+  focusCourseId: string | null
   initialTab: Tab | null
 }) {
   const t = useTranslations('Shop')
@@ -77,31 +99,70 @@ export default function ShopHome({
 
   const [plans, setPlans] = useState<PlanEntry[]>([])
   const [products, setProducts] = useState<ProductEntry[]>([])
+  const [courses, setCourses] = useState<CourseEntry[]>([])
   const [currency, setCurrency] = useState('CHF')
   const [loading, setLoading] = useState(true)
   const [systemDark, setSystemDark] = useState(false)
   const [tab, setTab] = useState<Tab>(initialTab ?? 'memberships')
   const [tabTouched, setTabTouched] = useState(false)
   const [checkout, setCheckout] = useState<Checkout | null>(null)
+  const [courseFocusHandled, setCourseFocusHandled] = useState(false)
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
-    getDoc(doc(db, 'teams', teamId, 'public_profile', teamId))
-      .then((snap) => {
+    let cancelled = false
+    // Memberships + products live on the team's single public_profile doc; sellable
+    // courses are world-readable per-course public_profile summaries (same collection-
+    // group query the Space uses), filtered to the 'purchase' tier.
+    const profileP = getDoc(doc(db, 'teams', teamId, 'public_profile', teamId))
+    const coursesP = getDocs(
+      query(
+        collectionGroup(db, 'public_profile'),
+        where('type', '==', 'course'),
+        where('teamId', '==', teamId)
+      )
+    )
+    Promise.all([profileP, coursesP])
+      .then(([snap, courseSnap]) => {
+        if (cancelled) return
         const planList = (snap.data()?.aggregator_subscription_types ?? []) as PlanEntry[]
         const productList = (snap.data()?.products ?? []) as ProductEntry[]
         setPlans(Array.isArray(planList) ? planList : [])
         setProducts(Array.isArray(productList) ? productList : [])
         setCurrency((snap.data()?.default_currency as string | undefined) ?? 'CHF')
+        const courseList: CourseEntry[] = courseSnap.docs
+          .map((d) => ({ id: d.ref.parent.parent?.id ?? d.id, data: d.data() as RawCoursePublicProfile }))
+          .filter(
+            ({ data }) =>
+              data.accessType === 'purchase' &&
+              typeof data.priceAmount === 'number' &&
+              data.priceAmount > 0
+          )
+          .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0))
+          .map(({ id, data }) => ({
+            id,
+            title: data.title ?? '',
+            summary: data.summary || undefined,
+            coverImageUrl: data.coverImageUrl || undefined,
+            priceAmount: data.priceAmount as number,
+          }))
+        setCourses(courseList)
       })
       .catch(() => {
+        if (cancelled) return
         setPlans([])
         setProducts([])
+        setCourses([])
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [teamId])
 
   useEffect(() => {
@@ -115,16 +176,24 @@ export default function ShopHome({
 
   const hasMemberships = plans.length > 0
   const hasProducts = products.length > 0
-  const showTabs = hasMemberships && hasProducts
+  const hasCourses = courses.length > 0
+  const availableTabs = useMemo<Tab[]>(() => {
+    const out: Tab[] = []
+    if (hasMemberships) out.push('memberships')
+    if (hasProducts) out.push('products')
+    if (hasCourses) out.push('courses')
+    return out
+  }, [hasMemberships, hasProducts, hasCourses])
+  const showTabs = availableTabs.length > 1
 
   // Default the active tab to whichever surface has items, unless the user (or the
   // ?tab= param) chose one. ?type= focusing always implies memberships.
   useEffect(() => {
     if (loading || tabTouched || initialTab) return
     if (focusTypeId) setTab('memberships')
-    else if (!hasMemberships && hasProducts) setTab('products')
-    else setTab('memberships')
-  }, [loading, tabTouched, initialTab, focusTypeId, hasMemberships, hasProducts])
+    else if (focusCourseId && hasCourses) setTab('courses')
+    else setTab(availableTabs[0] ?? 'memberships')
+  }, [loading, tabTouched, initialTab, focusTypeId, focusCourseId, hasCourses, availableTabs])
 
   // Pre-focus a subscription card from ?type=.
   useEffect(() => {
@@ -132,6 +201,18 @@ export default function ShopHome({
     const el = cardRefs.current[focusTypeId]
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [focusTypeId, loading, tab])
+
+  // Deep-link from the Space "Buy" CTA (?course=): open that course's checkout once.
+  useEffect(() => {
+    if (!focusCourseId || loading || courseFocusHandled) return
+    const c = courses.find((x) => x.id === focusCourseId)
+    if (c) {
+      setCheckout({ kind: 'course', course: c })
+      setEmail(prefillEmail())
+      setError(null)
+    }
+    setCourseFocusHandled(true)
+  }, [focusCourseId, loading, courseFocusHandled, courses])
 
   const isDark = team?.bioLinkTheme === 'dark' || (team?.bioLinkTheme === 'auto' && systemDark)
   const bg = team?.bioLinkBackground
@@ -166,10 +247,17 @@ export default function ShopHome({
     setError(null)
   }
 
+  function openCourse(course: CourseEntry) {
+    setCheckout({ kind: 'course', course })
+    setEmail(prefillEmail())
+    setError(null)
+  }
+
   // The amount shown in the checkout modal.
   const checkoutAmount = (() => {
     if (!checkout) return 0
     if (checkout.kind === 'membership') return checkout.price.amount
+    if (checkout.kind === 'course') return checkout.course.priceAmount
     return resolveProductPrice(checkout.product, checkout.variantId)
   })()
 
@@ -204,7 +292,7 @@ export default function ShopHome({
         })
         if (res.data?.url) window.location.href = res.data.url
         else throw new Error('no-url')
-      } else {
+      } else if (checkout.kind === 'product') {
         const fn = httpsCallable<
           {
             teamId: string
@@ -226,6 +314,26 @@ export default function ShopHome({
         })
         if (res.data?.url) window.location.href = res.data.url
         else throw new Error('no-url')
+      } else {
+        const fn = httpsCallable<
+          {
+            teamId: string
+            courseId: string
+            memberEmail: string
+            slug: string
+            locale: string
+          },
+          { url: string }
+        >(functions, 'createCourseCheckout')
+        const res = await fn({
+          teamId,
+          courseId: checkout.course.id,
+          memberEmail: email.trim(),
+          slug,
+          locale,
+        })
+        if (res.data?.url) window.location.href = res.data.url
+        else throw new Error('no-url')
       }
     } catch (err) {
       const code = (err as FunctionsError)?.code
@@ -239,7 +347,9 @@ export default function ShopHome({
       ? checkout.typeName
       : checkout?.kind === 'product'
         ? checkout.product.name
-        : ''
+        : checkout?.kind === 'course'
+          ? checkout.course.title
+          : ''
 
   return (
     <div className="min-h-screen w-full" style={{ background: bgStyle, color: textMain }}>
@@ -263,14 +373,16 @@ export default function ShopHome({
           </div>
         </div>
 
-        {/* Memberships ⇄ Products toggle (only when both exist) */}
+        {/* Memberships ⇄ Products ⇄ Courses toggle (only when 2+ surfaces exist) */}
         {showTabs && (
           <div
             className="mt-6 inline-flex rounded-full p-1"
             style={{ background: onDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }}
           >
-            {(['memberships', 'products'] as Tab[]).map((key) => {
+            {availableTabs.map((key) => {
               const active = tab === key
+              const label =
+                key === 'memberships' ? t('tabMemberships') : key === 'products' ? t('tabProducts') : t('tabCourses')
               return (
                 <button
                   key={key}
@@ -285,7 +397,7 @@ export default function ShopHome({
                     color: active ? '#ffffff' : textMuted,
                   }}
                 >
-                  {key === 'memberships' ? t('tabMemberships') : t('tabProducts')}
+                  {label}
                 </button>
               )
             })}
@@ -296,7 +408,7 @@ export default function ShopHome({
           <div className="mt-10 flex justify-center">
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: textMuted }} />
           </div>
-        ) : !hasMemberships && !hasProducts ? (
+        ) : !hasMemberships && !hasProducts && !hasCourses ? (
           <p className="mt-10 text-center text-sm" style={{ color: textMuted }}>
             {t('noItems')}
           </p>
@@ -361,7 +473,7 @@ export default function ShopHome({
               </div>
             ))}
           </section>
-        ) : (
+        ) : tab === 'products' ? (
           <section className="mt-6 grid grid-cols-2 gap-4">
             {!showTabs && (
               <h2
@@ -427,6 +539,53 @@ export default function ShopHome({
               )
             })}
           </section>
+        ) : (
+          <section className="mt-6 grid grid-cols-2 gap-4">
+            {!showTabs && (
+              <h2
+                className="col-span-2 text-xs font-semibold uppercase tracking-wider"
+                style={{ color: textMuted }}
+              >
+                {t('coursesSection')}
+              </h2>
+            )}
+            {courses.map((course) => (
+              <div
+                key={course.id}
+                className="rounded-2xl border overflow-hidden flex flex-col"
+                style={{ background: cardBg, borderColor: cardBorder }}
+              >
+                <div
+                  className="aspect-video flex items-center justify-center overflow-hidden"
+                  style={{ background: onDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}
+                >
+                  {course.coverImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={course.coverImageUrl} alt={course.title} className="h-full w-full object-cover" />
+                  ) : (
+                    <GraduationCap className="h-8 w-8" style={{ color: textMuted }} />
+                  )}
+                </div>
+                <div className="p-3 flex flex-col gap-1 flex-1">
+                  <p className="text-sm font-semibold leading-tight line-clamp-2">{course.title}</p>
+                  {course.summary && (
+                    <p className="text-xs line-clamp-2" style={{ color: textMuted }}>
+                      {course.summary}
+                    </p>
+                  )}
+                  <p className="mt-1 text-sm font-medium">{formatCurrency(course.priceAmount, currency)}</p>
+                  <button
+                    type="button"
+                    onClick={() => openCourse(course)}
+                    className="mt-2 w-full rounded-full px-4 py-2 text-sm font-semibold"
+                    style={{ background: accent, color: '#ffffff' }}
+                  >
+                    {t('buy')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
         )}
       </div>
 
@@ -488,6 +647,12 @@ export default function ShopHome({
                   </div>
                 </div>
               )}
+
+            {checkout.kind === 'course' && (
+              <p className="mt-3 text-xs" style={{ color: textMuted }}>
+                {t('courseAccessNote')}
+              </p>
+            )}
 
             <label className="mt-4 block text-xs font-medium">{t('emailLabel')}</label>
             <input

@@ -152,6 +152,7 @@ export {
   createMembershipPayment,
   createMembershipCheckout,
   createProductCheckout,
+  createCourseCheckout,
 } from './connect/payments'
 export { refundMemberPayment } from './connect/refunds'
 export { handleConnectWebhook } from './connect/webhook'

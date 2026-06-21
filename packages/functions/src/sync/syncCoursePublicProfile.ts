@@ -25,6 +25,9 @@ export const syncCoursePublicProfile = onDocumentWritten('courses/{courseId}', a
     coverImageUrl: data.coverImageUrl || null,
     accessType: data.accessRule?.type ?? 'registered',
     subscriptionTypeIds: data.accessRule?.subscriptionTypeIds ?? [],
+    // One-off shop price for 'purchase'-tier courses (major units). null for the
+    // free/registered/subscription tiers so the shop can ignore them.
+    priceAmount: typeof data.accessRule?.priceAmount === 'number' ? data.accessRule.priceAmount : null,
     moduleCount: data.moduleCount ?? 0,
     lessonCount: data.lessonCount ?? 0,
     order: data.order ?? 0,

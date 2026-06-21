@@ -13,9 +13,12 @@ export default async function PayResultPage({
 }: {
   searchParams: Promise<{ status?: string; slug?: string; seg?: string }>
 }) {
-  const { status, slug } = await searchParams
+  const { status, slug, seg } = await searchParams
   const t = await getTranslations('PayResult')
   const success = status === 'success'
+  // Course purchases land here with seg=space: success means a lifetime entitlement was
+  // granted — point the buyer to their Space (where they watch) rather than the shop.
+  const toSpace = seg === 'space'
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
@@ -29,14 +32,14 @@ export default async function PayResultPage({
           {success ? t('successTitle') : t('cancelledTitle')}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {success ? t('successBody') : t('cancelledBody')}
+          {success ? (toSpace ? t('successBodyCourse') : t('successBody')) : t('cancelledBody')}
         </p>
         {slug ? (
           <Link
-            href={`/public/${slug}/shop` as Route}
+            href={`/public/${slug}/${success && toSpace ? 'space' : 'shop'}` as Route}
             className="inline-block text-sm font-medium text-primary hover:underline"
           >
-            {t('backToShop')}
+            {success && toSpace ? t('openSpace') : t('backToShop')}
           </Link>
         ) : (
           <p className="text-sm text-muted-foreground">{t('close')}</p>

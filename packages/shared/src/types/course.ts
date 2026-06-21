@@ -19,11 +19,24 @@ export type MediaSource = 'youtube' | 'vimeo' | 'url' | 'upload'
 //                     does NOT require an active membership
 //  - 'subscription' → a signed-in contact whose subscription_type_id is one of
 //                     subscriptionTypeIds
+//  - 'purchase'     → sold one-off in the shop for `priceAmount`. A signed-in contact
+//                     gains lifetime access once they buy it (a course_purchases
+//                     entitlement doc), OR for free if their subscription_type_id is one
+//                     of subscriptionTypeIds (optional "included free for these subs").
 // subscriptionTypeIds is an array so it is ready for the planned move to multiple
 // concurrent active subscriptions per contact.
 export interface CourseAccessRule {
-  type: 'free' | 'registered' | 'subscription'
+  type: 'free' | 'registered' | 'subscription' | 'purchase'
+  // 'subscription': the subs that grant access.
+  // 'purchase': OPTIONAL subs whose members get it free (everyone else buys it once).
   subscriptionTypeIds?: string[] // team subscription_types ids
+  // 'purchase' only: one-off price in the team's default currency (major units, e.g. 29.9).
+  priceAmount?: number
+}
+
+// True when a course is sold one-off in the shop (has a 'purchase' rule + a price).
+export function isSellableCourse(c: Pick<Course, 'accessRule'>): boolean {
+  return c.accessRule.type === 'purchase' && typeof c.accessRule.priceAmount === 'number'
 }
 
 export interface Course {
@@ -45,6 +58,21 @@ export interface Course {
   updated_at: Timestamp
   createdBy: string
   archived_at?: Timestamp | null
+}
+
+// Subcollection: courses/{courseId}/purchases/{contactId}
+//
+// A lifetime entitlement written by the Connect webhook when a contact buys a
+// 'purchase'-tier course one-off. The doc id is the buyer's contactId, so a grant is
+// idempotent. Security rules check `exists()` on this doc to unlock the course.
+export interface CoursePurchase {
+  courseId: string
+  teamId: string
+  contactId: string
+  paymentIntentId?: string
+  amount?: number // charged amount in Rappen (minor units), as on member_payments
+  currency?: string
+  purchasedAt: Timestamp
 }
 
 // Subcollection: courses/{courseId}/modules

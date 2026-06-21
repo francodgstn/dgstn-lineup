@@ -20,6 +20,8 @@ import {
   CONNECT_ACCOUNTS_COLLECTION,
   CONNECT_WEBHOOK_EVENTS_COLLECTION,
   CONTACTS_COLLECTION,
+  COURSES_COLLECTION,
+  COURSE_PURCHASES_SUBCOLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
@@ -251,6 +253,15 @@ async function handlePaymentIntent(
             variantLabel: md.variantLabel ?? null,
           }
         : {}),
+      // Course sales (kind === 'course') carry the course reference so the payments
+      // dashboard can show which course was bought.
+      ...(md.kind === 'course'
+        ? {
+            kind: 'course',
+            courseId: md.courseId ?? null,
+            courseName: md.courseTitle ?? null,
+          }
+        : {}),
       amount: pi.amount ?? 0,
       currency: pi.currency ?? 'chf',
       application_fee_amount: pi.application_fee_amount ?? 0,
@@ -396,6 +407,10 @@ async function handleCheckoutCompleted(
     await handleProductCheckout(team, session, md)
     return
   }
+  if (md.kind === 'course') {
+    await handleCourseCheckout(team, session, md)
+    return
+  }
   if (md.kind !== 'membership' || !md.subscriptionTypeId) return
 
   const email = (session.customer_details?.email ?? session.customer_email ?? '')
@@ -496,6 +511,72 @@ async function handleProductCheckout(
       type: 'product_purchased',
       source: 'stripe_connect',
       message: `Product purchased · ${label}`,
+      timestamp: FieldValue.serverTimestamp(),
+    })
+}
+
+/**
+ * Course purchase (kind === 'course') — a one-off shop charge for a 'purchase'-tier
+ * online course. Like products, the payment_intent handler already records the
+ * member_payments doc (with courseId/courseName). Here we link/create the buyer's
+ * contact by email (cap-aware), grant a LIFETIME entitlement
+ * (courses/{courseId}/purchases/{contactId} — what the security rules check to unlock
+ * the course in the Space), stamp contactId onto the payment, and log the purchase.
+ */
+async function handleCourseCheckout(
+  team: TeamRef,
+  session: any,
+  md: Record<string, string>
+): Promise<void> {
+  if (!md.courseId) return
+  const email = (session.customer_details?.email ?? session.customer_email ?? '')
+    .toLowerCase()
+    .trim()
+  if (!email) return // nothing to grant the entitlement to; payment is still recorded
+
+  const name = (session.customer_details?.name as string | undefined) ?? null
+  const phone = (session.customer_details?.phone as string | undefined) ?? null
+
+  const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
+  const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
+  const contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
+  if (!contactId) return // cap-blocked — payment still recorded, studio links it later
+
+  const piId =
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id
+  if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+
+  // Grant the lifetime entitlement. Doc id = contactId → idempotent on redelivery.
+  await admin
+    .firestore()
+    .collection(COURSES_COLLECTION)
+    .doc(md.courseId)
+    .collection(COURSE_PURCHASES_SUBCOLLECTION)
+    .doc(contactId)
+    .set(
+      {
+        courseId: md.courseId,
+        teamId: team.teamId,
+        contactId,
+        paymentIntentId: piId ?? null,
+        amount: (session.amount_total as number | undefined) ?? null,
+        currency: (session.currency as string | undefined) ?? null,
+        purchasedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+  await admin
+    .firestore()
+    .collection(CONTACTS_COLLECTION)
+    .doc(contactId)
+    .collection('activity_log')
+    .add({
+      type: 'course_purchased',
+      source: 'stripe_connect',
+      message: `Course purchased · ${md.courseTitle ?? 'Course'}`,
       timestamp: FieldValue.serverTimestamp(),
     })
 }
