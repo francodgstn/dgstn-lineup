@@ -188,11 +188,12 @@ environment variable `ALLOW_TEST_PAYREXX=true`.
 ### Option A — ngrok tunnel (closest to production)
 
 1. Install [ngrok](https://ngrok.com/download) and authenticate
-2. Start the full local stack:
+2. Start the emulators (+ seed) in one terminal, and the web app in another:
    ```
-   pnpm dev:billing
+   pnpm emulators:seed   # terminal 1 — incl. the Functions emulator on :5001
+   pnpm dev:web          # terminal 2 — only if you need the UI to trigger payments
    ```
-3. In a second terminal, expose the local Functions emulator:
+3. In another terminal, expose the local Functions emulator:
    ```
    ngrok http 5001
    ```

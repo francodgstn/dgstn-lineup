@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Starts Firebase emulators (auth, firestore, functions), waits for them,
- * seeds the database, then keeps running until Ctrl+C.
+ * Starts Firebase emulators (auth, firestore, functions, storage), waits for
+ * them, seeds the database, then keeps running until Ctrl+C.
  *
  * Usage (two terminals):
  *   Terminal 1:  pnpm emulators:seed
