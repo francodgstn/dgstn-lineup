@@ -1483,6 +1483,7 @@
     "trialEnds": "Prova termina il {date}",
     "upgradeButton": "Abbonati",
     "cancelButton": "Annulla abbonamento",
+    "cancel": "Annulla",
     "cancelConfirmTitle": "Annullare l'abbonamento?",
     "cancelConfirmMessage": "L'abbonamento resterà attivo fino alla fine del periodo di fatturazione corrente.",
     "cancelConfirmAction": "Sì, annulla",

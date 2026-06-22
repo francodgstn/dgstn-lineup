@@ -1493,6 +1493,7 @@
     "trialEnds": "Essai se termine le {date}",
     "upgradeButton": "S'abonner",
     "cancelButton": "Annuler l'abonnement",
+    "cancel": "Annuler",
     "cancelConfirmTitle": "Annuler l'abonnement ?",
     "cancelConfirmMessage": "Votre abonnement restera actif jusqu'à la fin de la période de facturation en cours.",
     "cancelConfirmAction": "Oui, annuler",

@@ -1493,6 +1493,7 @@
     "trialEnds": "Test endet {date}",
     "upgradeButton": "Abonnieren",
     "cancelButton": "Abonnement kündigen",
+    "cancel": "Abbrechen",
     "cancelConfirmTitle": "Abonnement kündigen?",
     "cancelConfirmMessage": "Dein Abonnement bleibt bis zum Ende des aktuellen Abrechnungszeitraums aktiv.",
     "cancelConfirmAction": "Ja, kündigen",

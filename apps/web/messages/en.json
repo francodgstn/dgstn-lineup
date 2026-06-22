@@ -1498,6 +1498,7 @@
     "trialEnds": "Trial ends {date}",
     "upgradeButton": "Subscribe",
     "cancelButton": "Cancel subscription",
+    "cancel": "Cancel",
     "cancelConfirmTitle": "Cancel subscription?",
     "cancelConfirmMessage": "Your subscription will remain active until the end of the current billing period.",
     "cancelConfirmAction": "Yes, cancel",

@@ -327,7 +327,7 @@ export default function OrgBillingPage() {
             <AlertDialogDescription>{t('cancelConfirmMessage')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionLoading}>{t('cancel' as Parameters<typeof t>[0])}</AlertDialogCancel>
+            <AlertDialogCancel disabled={actionLoading}>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleCancel} disabled={actionLoading}>
               {actionLoading ? '…' : t('cancelConfirmAction')}
             </AlertDialogAction>
