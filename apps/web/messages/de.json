@@ -2100,5 +2100,8 @@
     "backToShop": "Zurück zum Shop",
     "openSpace": "Space öffnen",
     "close": "Du kannst dieses Fenster schliessen."
+  },
+  "Notifications": {
+    "dismiss": "Verwerfen"
   }
 }

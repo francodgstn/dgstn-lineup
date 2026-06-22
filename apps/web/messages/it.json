@@ -2090,5 +2090,8 @@
     "backToShop": "Torna al negozio",
     "openSpace": "Apri il tuo Space",
     "close": "Puoi chiudere questa finestra."
+  },
+  "Notifications": {
+    "dismiss": "Chiudi"
   }
 }

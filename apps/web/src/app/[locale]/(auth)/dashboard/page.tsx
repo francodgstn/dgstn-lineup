@@ -68,6 +68,7 @@ import { EngagementMatrixCard } from '@/components/dashboard/EngagementMatrixCar
 // import { TrialFunnelCard } from '@/components/dashboard/TrialFunnelCard'
 // import { CorrelationExplorerCard } from '@/components/dashboard/CorrelationExplorerCard'
 import { DiscoverPanel } from '@/components/dashboard/DiscoverPanel'
+import { TeamNotificationsBanner } from '@/components/dashboard/TeamNotificationsBanner'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -765,6 +766,9 @@ export default function DashboardPage() {
     <div className="space-y-8">
       {/* ── 0. Setup checklist (new teams only; auto-hides when done/dismissed) ── */}
       <SetupChecklist />
+
+      {/* ── 0b. Team notifications (org access requests, etc.) ── */}
+      <TeamNotificationsBanner />
 
       {/* ── 1. Welcome row: greeting left, daily quote right ── */}
       <section className="space-y-5">

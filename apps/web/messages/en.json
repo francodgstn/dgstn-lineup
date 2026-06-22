@@ -2105,5 +2105,8 @@
     "backToShop": "Back to the shop",
     "openSpace": "Open your Space",
     "close": "You can close this window."
+  },
+  "Notifications": {
+    "dismiss": "Dismiss"
   }
 }

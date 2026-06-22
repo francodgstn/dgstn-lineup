@@ -119,6 +119,10 @@ export const CONNECT_ACCOUNTS_COLLECTION = 'connect_accounts'
 export const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
 export const MEMBER_SUBSCRIPTIONS_SUBCOLLECTION = 'member_subscriptions'
 
+// In-app notifications for team managers/owners (e.g. org access requests).
+// Written only by Cloud Functions (Admin SDK); clients read and mark-read.
+export const NOTIFICATIONS_SUBCOLLECTION = 'notifications'
+
 // BYO gateway ledger (Payrexx / Stripe-BYO). teams/{teamId}/payment_events/{id},
 // doc id = `${gateway}:${gatewayRef}` for idempotency. Written only by the team
 // webhook handlers + the updatePaymentRecord callable (Admin SDK); managers/owners

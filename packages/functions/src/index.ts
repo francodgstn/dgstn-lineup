@@ -17,6 +17,7 @@ export { getTeamInvitationDetails } from './teams/getTeamInvitationDetails'
 export { acceptTeamInvitation } from './teams/acceptTeamInvitation'
 export { manageTeamInvitation } from './teams/manageTeamInvitation'
 export { manageTeamMember } from './teams/manageTeamMember'
+export { listTeamMembers } from './teams/listTeamMembers'
 
 // Auth
 export { generateAuthToken } from './auth/generateAuthToken'

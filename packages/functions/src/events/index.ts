@@ -236,6 +236,12 @@ export const sendEventInvitations = onCall(async (request) => {
     })
   )
 
+  // Surface a clear error when every send attempt failed so the client shows a
+  // meaningful message rather than silently treating zero-sent as success.
+  if (sent === 0 && errors.length > 0) {
+    throw new HttpsError('internal', errors[0].error)
+  }
+
   return { success: true, stats: { sent, skipped, errors } }
 })
 

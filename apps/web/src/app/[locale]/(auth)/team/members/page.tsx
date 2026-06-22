@@ -48,15 +48,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION, TEAM_INVITATIONS_SUBCOLLECTION } from '@linyup/shared'
-import type { TeamMember, TeamInvitation, TeamRole } from '@linyup/shared'
+import { TEAMS_COLLECTION, TEAM_INVITATIONS_SUBCOLLECTION } from '@linyup/shared'
+import type { TeamInvitation, TeamRole } from '@linyup/shared'
 
 // ----- types ----------------------------------------------------------------
 
-interface MemberDoc extends TeamMember {
+// MemberDoc is shaped by the listTeamMembers callable response.
+// `joined` is an ISO string (or null) — the callable serialises Timestamps.
+interface MemberDoc {
   id: string
-  email?: string
-  displayName?: string
+  userId: string
+  teamId?: string
+  role: TeamRole
+  joined: string | null | undefined
+  addedBy?: string | null
+  email?: string | null
+  displayName?: string | null
 }
 
 interface InvitationDoc extends TeamInvitation {
@@ -66,8 +73,14 @@ interface InvitationDoc extends TeamInvitation {
 
 // ----- helpers --------------------------------------------------------------
 
-function formatDate(ts: { seconds: number } | Date | null | undefined): string {
+// Accepts an ISO string (from listTeamMembers), a Firestore Timestamp-like
+// object (legacy direct Firestore reads), or a plain Date / null.
+function formatDate(ts: string | { seconds: number } | Date | null | undefined): string {
   if (!ts) return ''
+  if (typeof ts === 'string') {
+    const d = new Date(ts)
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  }
   const d = ts instanceof Date ? ts : new Date((ts as { seconds: number }).seconds * 1000)
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
@@ -317,18 +330,29 @@ export default function TeamMembersPage() {
   const [cancelInviteTarget, setCancelInviteTarget] = useState<InvitationDoc | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
-  // data — members
+  // data — members (via callable so displayName + email are resolved server-side)
   const { data: members, isLoading: membersLoading } = useQuery<MemberDoc[]>({
     queryKey: ['team-members', teamId],
     enabled: !!teamId,
     queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, TEAMS_COLLECTION, teamId!, TEAM_MEMBERS_SUBCOLLECTION),
-          orderBy('joined', 'asc')
-        )
-      )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id } as MemberDoc))
+      const fn = httpsCallable<{ teamId: string }, { members: Array<{
+        userId: string
+        role: TeamRole
+        joined: string | null
+        addedBy: string | null
+        displayName: string | null
+        email: string | null
+      }> }>(functions, 'listTeamMembers')
+      const result = await fn({ teamId: teamId! })
+      return result.data.members.map((m) => ({
+        id: m.userId,
+        userId: m.userId,
+        role: m.role,
+        joined: m.joined,
+        addedBy: m.addedBy,
+        displayName: m.displayName,
+        email: m.email,
+      } as MemberDoc))
     },
   })
 
@@ -469,7 +493,7 @@ export default function TeamMembersPage() {
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {t('joinedOn', { date: formatDate(m.joined as Parameters<typeof formatDate>[0]) })}
+                      {t('joinedOn', { date: formatDate(m.joined) })}
                     </div>
                   </div>
                   {/* Role badge */}

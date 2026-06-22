@@ -525,6 +525,16 @@ service cloud.firestore {
         allow read: if hasTeamRole(teamId, 'owner') || hasTeamRole(teamId, 'manager');
         allow write: if false;
       }
+
+      // In-app notifications for team managers/owners (e.g. org access requests).
+      // Written ONLY by Cloud Functions (Admin SDK). Managers and owners read;
+      // managers can update (e.g. mark as read). Clients never create or delete.
+      match /notifications/{notificationId} {
+        allow read:   if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow update: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow create: if false; // Cloud Functions only
+        allow delete: if false; // Cloud Functions only
+      }
     }
 
     // Public user profiles (deprecated - now using users/{userId}/public_profile subcollection)

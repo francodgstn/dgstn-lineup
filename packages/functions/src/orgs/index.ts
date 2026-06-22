@@ -8,6 +8,7 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { getTeam } from '../utils/teams'
 import { StripeAdapter } from '../utils/gateway/stripe'
 import type { OrgRole } from '@linyup/shared'
+import { NOTIFICATIONS_SUBCOLLECTION } from '@linyup/shared'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -465,7 +466,8 @@ export const requestTeamAccess = onCall(async (request) => {
 
   await batch.commit()
 
-  // Email notification is best-effort — a failed send must not roll back the request.
+  // Notifications (in-app + email) are best-effort — failures must not roll back
+  // the access request that was already committed above.
   try {
     const [orgDoc, ownerSnap] = await Promise.all([
       db.collection('organizations').doc(data.orgId).get(),
@@ -473,27 +475,51 @@ export const requestTeamAccess = onCall(async (request) => {
         .collection('team_members').where('role', '==', 'owner').limit(1).get(),
     ])
 
+    const orgName = (orgDoc.data()?.name ?? data.orgId) as string
+
+    const [requesterDoc, team] = await Promise.all([
+      db.collection('users').doc(request.auth.uid).get(),
+      getTeam(data.teamId),
+    ])
+    const requesterName = (requesterDoc.data()?.displayName || requesterDoc.data()?.email || 'An org admin') as string
+    const teamName = team?.name ?? data.teamId
+    const accessLabel = data.accessType === 'manage' ? 'manage (admin)' : 'view'
+    const hostingUrl = getHostingUrl()
+
+    // ── In-app notification (teams/{teamId}/notifications/{id}) ───────────────
+    // Written via Admin SDK so Firestore rules for this subcollection deny client
+    // writes ("allow write: if false"). All team managers/owners can read via the
+    // "allow read: if hasTeamRole(teamId, 'manager')" rule added to firestore.rules.
+    const notificationTitle = `Access request from ${orgName}`
+    const notificationBody = `${requesterName} (${orgName}) has requested ${accessLabel} access to your studio.`
+    await db.collection('teams').doc(data.teamId)
+      .collection(NOTIFICATIONS_SUBCOLLECTION).add({
+        type: 'org_access_request',
+        orgId: data.orgId,
+        orgName,
+        title: notificationTitle,
+        body: notificationBody,
+        status: 'unread',
+        // requestId: the org-side doc (organizations/{orgId}/team_access_requests/{teamId})
+        // and the team-side doc (teams/{teamId}/org_access_requests/{orgId}) both use
+        // teamId / orgId as their doc id, so no separate requestId field is needed.
+        link: '/settings?tab=org',
+        created_at: FieldValue.serverTimestamp(),
+      })
+
+    // ── Email notification ────────────────────────────────────────────────────
     if (!ownerSnap.empty) {
       const ownerUserDoc = await db.collection('users').doc(ownerSnap.docs[0].id).get()
       const ownerEmail = ownerUserDoc.data()?.email as string | undefined
 
       if (ownerEmail) {
-        const [requesterDoc, team] = await Promise.all([
-          db.collection('users').doc(request.auth.uid).get(),
-          getTeam(data.teamId),
-        ])
-        const requesterName = (requesterDoc.data()?.displayName || requesterDoc.data()?.email || 'An org admin') as string
-        const teamName = team?.name ?? data.teamId
-        const accessLabel = data.accessType === 'manage' ? 'manage (admin)' : 'view'
-        const hostingUrl = getHostingUrl()
-
         const { html, text } = buildEmailTemplate({
           title: `Access request for ${teamName} on Linyup`,
           body: `
-            <p><strong>${requesterName}</strong>, an admin of the organization <strong>${orgDoc.data()?.name ?? data.orgId}</strong>,
+            <p><strong>${requesterName}</strong>, an admin of the organization <strong>${orgName}</strong>,
             has requested <strong>${accessLabel}</strong> access to your team <strong>${teamName}</strong> on Linyup.</p>
             <p>You can review and approve or deny this request in your team's settings.</p>
-            <p><a href="${hostingUrl}/settings" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Review Request</a></p>
+            <p><a href="${hostingUrl}/settings?tab=org" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Review Request</a></p>
           `,
         })
 
@@ -501,7 +527,7 @@ export const requestTeamAccess = onCall(async (request) => {
       }
     }
   } catch (err) {
-    console.error('requestTeamAccess: email notification failed (non-fatal):', err)
+    console.error('requestTeamAccess: notification failed (non-fatal):', err)
   }
 
   return { success: true }
