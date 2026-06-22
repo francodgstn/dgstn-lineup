@@ -1,3 +1,4 @@
+import { createConnection } from 'node:net'
 import type { App } from 'firebase-admin/app'
 import { initializeApp, cert } from 'firebase-admin/app'
 import type { CollectionReference, CollectionGroup, DocumentReference, Firestore } from 'firebase-admin/firestore'
@@ -119,3 +120,39 @@ export function sourceDb():   ReadonlyFirestore { return _sourceDb }
 export function targetDb():   Firestore         { return _targetDb }
 export function sourceAuth(): Auth              { return _sourceAuth }
 export function targetAuth(): Auth              { return _targetAuth }
+
+// ─── emulator preflight ─────────────────────────────────────────────────────────
+// One-shot TCP probe so `--target-emulator` fails fast with a clear message when the
+// emulators aren't running — instead of a confusing gRPC ECONNREFUSED mid-migration.
+
+function probePort(hostPort: string, timeoutMs = 1500): Promise<boolean> {
+  const [host, portStr] = hostPort.split(':')
+  return new Promise((resolve) => {
+    const sock = createConnection({ host, port: Number(portStr) })
+    const done = (ok: boolean) => { sock.destroy(); resolve(ok) }
+    sock.once('connect', () => done(true))
+    sock.once('error', () => done(false))
+    sock.setTimeout(timeoutMs, () => done(false))
+  })
+}
+
+/** Exit with a helpful message if the local Firestore/Auth emulators aren't up. */
+export async function assertTargetEmulatorReachable(): Promise<void> {
+  const targets: [string, string][] = [
+    ['Firestore', EMULATOR_FIRESTORE_HOST],
+    ['Auth', EMULATOR_AUTH_HOST],
+  ]
+  const down = (await Promise.all(targets.map(([, hp]) => probePort(hp))))
+    .map((ok, i) => (ok ? null : `${targets[i][0]} (${targets[i][1]})`))
+    .filter((x): x is string => x !== null)
+
+  if (down.length > 0) {
+    console.error(
+      `\n✖ Cannot reach the local emulator(s): ${down.join(', ')}.\n` +
+        `  --target-emulator writes to the local Firebase emulators, but they don't appear\n` +
+        `  to be running. Start them first in another terminal, then re-run:\n\n` +
+        `    pnpm emulators:start\n`
+    )
+    process.exit(1)
+  }
+}
