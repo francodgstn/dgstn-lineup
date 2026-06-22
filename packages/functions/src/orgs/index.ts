@@ -3,7 +3,7 @@ import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { getSecret } from '../utils/secrets'
-import { getHostingUrl } from '../utils/env'
+import { getHostingUrl, resolveBaseUrl } from '../utils/env'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { getTeam } from '../utils/teams'
 import { StripeAdapter } from '../utils/gateway/stripe'
@@ -359,7 +359,7 @@ export const removeTeamFromOrg = onCall(async (request) => {
 export const createOrgCheckoutSession = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
-  const data = request.data as { orgId?: string; locale?: string }
+  const data = request.data as { orgId?: string; locale?: string; origin?: string }
   if (!data?.orgId) throw new HttpsError('invalid-argument', 'orgId is required')
 
   await assertOrgAdmin(request.auth.uid, data.orgId)
@@ -381,7 +381,9 @@ export const createOrgCheckoutSession = onCall(async (request) => {
   const customerEmail: string = ownerDoc.exists ? (ownerDoc.data()!.email ?? '') : ''
 
   const adapter = await getPlatformStripeAdapter()
-  const hostingUrl = getHostingUrl()
+  // Same-session redirect → prefer the caller's origin (so local dev returns to
+  // localhost), falling back to the env-configured hosting URL.
+  const hostingUrl = resolveBaseUrl(data.origin)
   const idempotencyKey = `org-checkout:${orgId}:organization:${Math.floor(Date.now() / 60000)}`
 
   let session: { url: string; sessionId: string }

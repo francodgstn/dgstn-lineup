@@ -48,10 +48,9 @@ backups (PITR + scheduled exports) and a per-tenant **reset/export** capability.
 
 ## Related references
 
-- [`../connect-payments.md`](../connect-payments.md) — Stripe Connect architecture & decisions
-- [`../testing-billing.md`](../testing-billing.md) — billing test setup
+- [`../payment-contact-studio.md`](../payment-contact-studio.md) — contact → studio (Stripe Connect + BYO gateways)
+- [`../payment-studio-linyup.md`](../payment-studio-linyup.md) — studio → Linyup SaaS billing + test setup
 - [`../stripe-catalog.md`](../stripe-catalog.md) — the Stripe catalogue (`stripe:sync`)
-- [`../payment-gateways.md`](../payment-gateways.md) — gateway overview (Connect vs Payrexx)
 
 > These checklists are distilled from the launch-readiness plan. Re-verify exact
 > secret names, function params and CI workflows against the live infra as you go —

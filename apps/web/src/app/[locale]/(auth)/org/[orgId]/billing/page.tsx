@@ -145,11 +145,15 @@ export default function OrgBillingPage() {
   async function handleSubscribe() {
     setActionLoading(true)
     try {
-      const fn = httpsCallable<{ orgId: string; locale: string }, { url: string }>(
-        functions,
-        'createOrgCheckoutSession'
-      )
-      const result = await fn({ orgId: orgId, locale })
+      const fn = httpsCallable<
+        { orgId: string; locale: string; origin?: string },
+        { url: string }
+      >(functions, 'createOrgCheckoutSession')
+      const result = await fn({
+        orgId: orgId,
+        locale,
+        origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+      })
       const url = result.data.url
       if (!url.startsWith('https://checkout.stripe.com')) {
         throw new Error('Unexpected redirect URL')

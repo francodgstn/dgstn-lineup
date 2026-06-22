@@ -5,8 +5,8 @@ Payrexx) is wired correctly **in sandbox/test mode first**, then run a single
 **controlled live smoke test** in prod. Never use real customer payments as the
 test harness.
 
-Related: [`../connect-payments.md`](../connect-payments.md),
-[`../testing-billing.md`](../testing-billing.md),
+Related: [`../payment-contact-studio.md`](../payment-contact-studio.md),
+[`../payment-studio-linyup.md`](../payment-studio-linyup.md),
 [`../stripe-catalog.md`](../stripe-catalog.md).
 
 ---

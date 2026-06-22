@@ -27,7 +27,7 @@ import {
   type Product,
   type Course,
 } from '@linyup/shared'
-import { getHostingUrl } from '../utils/env'
+import { resolveBaseUrl } from '../utils/env'
 import {
   createOneOffCheckoutSession,
   createSubscriptionCheckoutSession,
@@ -44,9 +44,11 @@ function resultUrls(
   successUrl?: string,
   cancelUrl?: string,
   // Appended to the default result URLs so the page can link back (e.g. &slug=…&seg=shop).
-  extraQuery?: string
+  extraQuery?: string,
+  // Caller's origin — prefers localhost in dev, falls back to the hosting URL.
+  origin?: string
 ): { successUrl: string; cancelUrl: string } {
-  const base = `${getHostingUrl()}/${locale}/pay/result`
+  const base = `${resolveBaseUrl(origin)}/${locale}/pay/result`
   const extra = extraQuery ?? ''
   return {
     successUrl: successUrl ?? `${base}?status=success${extra}`,
@@ -81,6 +83,7 @@ export const createMemberPayment = onCall(async (request) => {
     cancelUrl?: string
     locale?: string
     idempotencyKey?: string
+    origin?: string
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   const teamId = data.teamId
@@ -93,7 +96,13 @@ export const createMemberPayment = onCall(async (request) => {
   const { accountId, model } = requireChargeableAccount(team)
 
   const applicationFeeAmount = computePlatformFee({ tier: team.plan, amount, model })
-  const { successUrl, cancelUrl } = resultUrls(locale, data.successUrl, data.cancelUrl)
+  const { successUrl, cancelUrl } = resultUrls(
+    locale,
+    data.successUrl,
+    data.cancelUrl,
+    undefined,
+    data.origin
+  )
 
   const metadata: Record<string, string> = { teamId, purpose, kind: 'one_off' }
   if (data.contactId) metadata.contactId = data.contactId
@@ -142,6 +151,7 @@ export const createMemberSubscription = onCall(async (request) => {
     cancelUrl?: string
     locale?: string
     idempotencyKey?: string
+    origin?: string
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   const teamId = data.teamId
@@ -157,7 +167,13 @@ export const createMemberSubscription = onCall(async (request) => {
   const { accountId } = requireChargeableAccount(team)
 
   const applicationFeePercent = takeRatePercent(team.plan)
-  const { successUrl, cancelUrl } = resultUrls(locale, data.successUrl, data.cancelUrl)
+  const { successUrl, cancelUrl } = resultUrls(
+    locale,
+    data.successUrl,
+    data.cancelUrl,
+    undefined,
+    data.origin
+  )
 
   const metadata: Record<string, string> = { teamId, kind: 'subscription' }
   if (data.contactId) metadata.contactId = data.contactId
@@ -204,6 +220,7 @@ export const createMembershipPayment = onCall(async (request) => {
     cancelUrl?: string
     locale?: string
     idempotencyKey?: string
+    origin?: string
   }
   if (!data?.teamId || !data?.subscriptionTypeId || !data?.priceId) {
     throw new HttpsError('invalid-argument', 'teamId, subscriptionTypeId and priceId are required')
@@ -234,7 +251,13 @@ export const createMembershipPayment = onCall(async (request) => {
     throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
   }
 
-  const { successUrl, cancelUrl } = resultUrls(locale, data.successUrl, data.cancelUrl)
+  const { successUrl, cancelUrl } = resultUrls(
+    locale,
+    data.successUrl,
+    data.cancelUrl,
+    undefined,
+    data.origin
+  )
   const productName = price.label ? `${subType.name} — ${price.label}` : subType.name
 
   // Metadata the webhook reads to update the member's contact membership.
@@ -330,6 +353,7 @@ export const createMembershipCheckout = onCall(async (request) => {
     slug?: string
     locale?: string
     idempotencyKey?: string
+    origin?: string
   }
   if (!data?.teamId || !data?.subscriptionTypeId || !data?.priceId) {
     throw new HttpsError('invalid-argument', 'teamId, subscriptionTypeId and priceId are required')
@@ -369,7 +393,7 @@ export const createMembershipCheckout = onCall(async (request) => {
   }
 
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=shop` : ''
-  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery)
+  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
   const productName = price.label ? `${subType.name} — ${price.label}` : subType.name
 
   // Webhook reads this to create/link the buyer's contact. No contactId here.
@@ -441,6 +465,7 @@ export const createProductCheckout = onCall(async (request) => {
     slug?: string
     locale?: string
     idempotencyKey?: string
+    origin?: string
   }
   if (!data?.teamId || !data?.productId) {
     throw new HttpsError('invalid-argument', 'teamId and productId are required')
@@ -489,7 +514,7 @@ export const createProductCheckout = onCall(async (request) => {
   }
 
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=shop` : ''
-  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery)
+  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
   const productName = variantLabel ? `${product.name} — ${variantLabel}` : product.name
 
   // Webhook reads this to record the sale + link/create the buyer's contact.
@@ -541,6 +566,7 @@ export const createCourseCheckout = onCall(async (request) => {
     slug?: string
     locale?: string
     idempotencyKey?: string
+    origin?: string
   }
   if (!data?.teamId || !data?.courseId) {
     throw new HttpsError('invalid-argument', 'teamId and courseId are required')
@@ -577,7 +603,7 @@ export const createCourseCheckout = onCall(async (request) => {
 
   // Land the buyer back in the Space (where they watch), not the shop.
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=space` : ''
-  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery)
+  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
 
   // Webhook reads this to grant the entitlement + link/create the buyer's contact.
   const metadata: Record<string, string> = {

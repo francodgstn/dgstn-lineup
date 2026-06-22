@@ -44,7 +44,7 @@ export async function getConnectStripe(): Promise<StripeInstance> {
 // BOTH onboarding choices create the same Standard account (full dashboard); the
 // byo vs managed distinction is UI framing only (connect an existing account vs
 // create a new one — the hosted Account Link supports both). See
-// docs/connect-payments.md.
+// docs/payment-contact-studio.md.
 const MODEL_DASHBOARD: Record<ConnectOnboardingModel, 'full'> = {
   byo: 'full',
   managed: 'full',
