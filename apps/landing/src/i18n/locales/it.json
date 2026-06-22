@@ -45,9 +45,9 @@
       "payments": { "title": "Incassa i pagamenti", "benefit": "Le quote si incassano da sole — niente più solleciti." },
       "rankings": { "title": "Traccia gradi e livelli", "benefit": "Valuta gli studenti e tienili motivati verso il livello successivo." },
       "mobileApp": { "title": "Dai un'app ai tuoi studenti", "benefit": "Un'app iOS e Android col tuo brand per prenotare e fare check-in." },
-      "checkins": { "title": "Registra gli studenti", "benefit": "Una scansione QR veloce all'ingresso — niente fogli." },
       "automations": { "title": "Automatizza il lavoro ripetitivo", "benefit": "Dai il benvenuto, ricorda e recupera i contatti in automatico." }
-    }
+    },
+    "cta": { "title": "Guardalo all'opera", "body": "Prova uno studio reale — senza registrarti.", "button": "Esplora la demo live" }
   },
   "proof": {
     "label": "Diventa uno dei nostri club fondatori — assicurati uno sconto di lancio speciale",
@@ -59,11 +59,12 @@
     "subtitle": "Niente mockup — schermate reali di uno studio che usa Linyup.",
     "dashboardAlt": "La dashboard Linyup",
     "shots": {
-      "schedule": { "title": "Tutta la settimana a colpo d'occhio", "detail": "Ogni lezione, sala e coach in un unico calendario a colori." },
+      "schedule": { "title": "Tutta la settimana a colpo d'occhio", "detail": "Ogni lezione, sala e coach in un unico calendario a colori — e gli studenti prenotano il posto online." },
       "contact": { "title": "Segui i progressi di ogni studente", "detail": "Presenze, serie e un radar delle performance su ogni profilo." },
       "courses": { "title": "Vendi corsi online", "detail": "Trasforma le tue competenze in corsi che i contatti seguono al proprio ritmo." },
-      "biolink": { "title": "Crea il tuo bio-link", "detail": "Un link condivisibile a orario, prenotazioni, corsi online e sito web — con anteprima live." }
-    }
+      "biolink": { "title": "Bio-link, sito web e shop", "detail": "Un link condivisibile a orario, prenotazioni, corsi, shop e sito web — con anteprima live." }
+    },
+    "more": "E altro ancora da scoprire"
   },
   "features": {
     "title": "Tutto ciò di cui hai bisogno per gestire uno studio moderno",

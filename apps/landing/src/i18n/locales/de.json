@@ -45,9 +45,9 @@
       "payments": { "title": "Zahlungen einziehen", "benefit": "Beiträge ziehen sich selbst ein — kein Nachhaken mehr." },
       "rankings": { "title": "Ränge & Level verfolgen", "benefit": "Prüfe Schüler und halte sie auf dem Weg zum nächsten Level." },
       "mobileApp": { "title": "Schülern eine App geben", "benefit": "Eine gebrandete iOS- und Android-App zum Buchen und Einchecken." },
-      "checkins": { "title": "Schüler einchecken", "benefit": "Ein schneller QR-Scan an der Tür — keine Klemmbretter." },
       "automations": { "title": "Routinearbeit automatisieren", "benefit": "Begrüsse, erinnere und gewinne Kontakte zurück — automatisch." }
-    }
+    },
+    "cta": { "title": "Alles in Aktion sehen", "body": "Teste ein echtes Studio — ohne Anmeldung.", "button": "Live-Demo entdecken" }
   },
   "proof": {
     "label": "Werde einer unserer Gründungsclubs — sichere dir einen speziellen Launch-Rabatt",
@@ -59,11 +59,12 @@
     "subtitle": "Keine Mockups — echte Screens eines Studios, das mit Linyup läuft.",
     "dashboardAlt": "Das Linyup-Dashboard",
     "shots": {
-      "schedule": { "title": "Die ganze Woche im Blick", "detail": "Jede Klasse, jeder Raum und jeder Coach in einem farbcodierten Kalender." },
+      "schedule": { "title": "Die ganze Woche im Blick", "detail": "Jede Klasse, jeder Raum und jeder Coach in einem farbcodierten Kalender — und Schüler buchen ihren Platz online." },
       "contact": { "title": "Den Fortschritt jedes Schülers verfolgen", "detail": "Anwesenheit, Streaks und ein Leistungsradar auf jedem Profil." },
       "courses": { "title": "Online-Kurse verkaufen", "detail": "Verpacke dein Wissen in Kurse, die Kontakte im eigenen Tempo durchgehen." },
-      "biolink": { "title": "Deinen Bio-Link bauen", "detail": "Ein teilbarer Link zu Plan, Buchung, Online-Kursen und Website — mit Live-Vorschau." }
-    }
+      "biolink": { "title": "Bio-Link, Website und Shop", "detail": "Ein teilbarer Link zu Plan, Buchung, Kursen, Shop und Website — mit Live-Vorschau." }
+    },
+    "more": "Und mehr zu entdecken"
   },
   "features": {
     "title": "Alles, was du für ein modernes Studio brauchst",
