@@ -37,12 +37,14 @@ import {
   Globe,
   ImageIcon,
   Plus,
+  Pencil,
   Trash2,
   X,
   Eye,
   ChevronUp,
   ChevronDown,
 } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -412,17 +414,29 @@ function LinksTab({
   const t = useTranslations('BioLink')
   const targetLabel = useTargetLabel()
   const { fields, append, remove, move } = useFieldArray({ control, name: 'links' })
+  // Live values for the collapsed card headers — useFieldArray `fields` is a snapshot.
+  const watched = useWatch({ control, name: 'links' })
+
+  // Which link card is expanded; a newly-added link auto-expands.
+  const [openId, setOpenId] = useState<string | null>(null)
+  const wantOpenLast = useRef(false)
+  useEffect(() => {
+    if (wantOpenLast.current && fields.length > 0) {
+      setOpenId(fields[fields.length - 1].id)
+      wantOpenLast.current = false
+    }
+  }, [fields.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Page links (booking, signup, shop, courses, website) and custom links share ONE
   // list so they can be reordered freely. Page links carry a badge and have no URL
-  // field; both kinds are deletable. Page links are added explicitly — via the quick
-  // suggestion chips or the "+ Add" menu — which offer available, not-yet-added surfaces.
+  // field; both kinds are added via the "Add link" placeholder menu below.
   const usedTargets = new Set(
     (fields as Array<{ target?: SystemLinkTarget }>).map((f) => f.target).filter(Boolean)
   )
   const addableTargets = availableTargets.filter((tgt) => !usedTargets.has(tgt))
 
   function addPageLink(target: SystemLinkTarget) {
+    wantOpenLast.current = true
     append({
       label: targetLabel(target),
       description: '',
@@ -433,101 +447,56 @@ function LinksTab({
     })
   }
 
+  function addCustomLink() {
+    wantOpenLast.current = true
+    append({ label: '', description: '', url: '', showInBioLink: true })
+  }
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">{t('tabLinks')}</p>
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>
-            <Plus className="h-4 w-4 mr-1" />
-            {t('addLink')}
-            <ChevronDown className="h-3.5 w-3.5 ml-1" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-60">
-            <DropdownMenuItem
-              onClick={() => append({ label: '', description: '', url: '', showInBioLink: true })}
-            >
-              {t('addCustomLink')}
-            </DropdownMenuItem>
-            {addableTargets.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">
-                    {t('addPageLink')}
-                  </DropdownMenuLabel>
-                  {addableTargets.map((tgt) => (
-                    <DropdownMenuItem key={tgt} onClick={() => addPageLink(tgt)}>
-                      {targetLabel(tgt)}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Quick-add suggestions for available page-link surfaces (not yet added). */}
-      {addableTargets.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">{t('addPageLink')}:</span>
-          {addableTargets.map((tgt) => (
-            <button
-              key={tgt}
-              type="button"
-              onClick={() => addPageLink(tgt)}
-              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
-              <DynamicIcon name={SYSTEM_LINK_META[tgt].defaultIcon} className="h-3.5 w-3.5" />
-              {targetLabel(tgt)}
-              <Plus className="h-3 w-3" />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {fields.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center border border-dashed rounded-lg py-6">
-          {t('noCustomLinks')}
-        </p>
-      )}
-
+    <div className="space-y-2.5">
       {fields.map((field, i) => {
         const f = field as typeof field & { target?: SystemLinkTarget }
+        const wl = watched?.[i] as Partial<FormData['links'][number]> | undefined
         const systemBadge = f.target ? targetLabel(f.target) : null
         const isSystem = systemBadge !== null
+        const iconName =
+          (wl?.iconName as string | undefined) ||
+          (f.target ? SYSTEM_LINK_META[f.target].defaultIcon : 'Link2')
+        const open = openId === field.id
+        const displayLabel =
+          (wl?.label as string | undefined) || (isSystem ? systemBadge! : t('addCustomLink'))
         return (
-          <div key={field.id} className="rounded-lg border p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                {isSystem && (
-                  <Badge variant="secondary" className="text-xs shrink-0">
-                    {systemBadge}
-                  </Badge>
-                )}
-                <Controller
-                  control={control}
-                  name={`links.${i}.showInBioLink`}
-                  render={({ field: cf }) => (
-                    <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={cf.value}
-                        onChange={(e) => cf.onChange(e.target.checked)}
-                        className="accent-primary"
-                      />
-                      {t('showOnBioLink')}
-                    </label>
+          <div key={field.id} className="rounded-lg border">
+            {/* Card header — mirrors the website builder section card */}
+            <div className="flex items-center gap-2 p-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                <DynamicIcon name={iconName} className="h-4 w-4" />
+              </span>
+              <button
+                type="button"
+                onClick={() => setOpenId(open ? null : field.id)}
+                className="min-w-0 flex-1 text-left"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-medium">{displayLabel}</span>
+                  {isSystem && (
+                    <Badge variant="secondary" className="shrink-0 text-[10px]">
+                      {systemBadge}
+                    </Badge>
                   )}
-                />
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
+                </div>
+                {!isSystem && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    {(wl?.url as string | undefined) || 'https://'}
+                  </p>
+                )}
+              </button>
+              <div className="flex items-center gap-0.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => move(i, i - 1)}
                   disabled={i === 0}
-                  className="p-1 rounded hover:bg-muted disabled:opacity-30 transition-colors"
+                  className="rounded p-1 hover:bg-muted disabled:opacity-30"
                 >
                   <ChevronUp className="h-3.5 w-3.5" />
                 </button>
@@ -535,51 +504,110 @@ function LinksTab({
                   type="button"
                   onClick={() => move(i, i + 1)}
                   disabled={i === fields.length - 1}
-                  className="p-1 rounded hover:bg-muted disabled:opacity-30 transition-colors"
+                  className="rounded p-1 hover:bg-muted disabled:opacity-30"
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
-                  onClick={() => remove(i)}
-                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                  onClick={() => setOpenId(open ? null : field.id)}
+                  className="rounded p-1 hover:bg-muted"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (open) setOpenId(null)
+                    remove(i)
+                  }}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
-            <div className="flex gap-2 items-start">
-              <Controller
-                control={control}
-                name={`links.${i}.iconName`}
-                render={({ field: cf }) => <IconPicker value={cf.value} onChange={cf.onChange} />}
-              />
-              <div className="flex-1 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    {...register(`links.${i}.label`)}
-                    placeholder={t('linkLabel')}
-                    className="h-9 text-sm"
+
+            {/* Collapsible body */}
+            {open && (
+              <div className="space-y-3 border-t p-3">
+                <div className="flex gap-2 items-start">
+                  <Controller
+                    control={control}
+                    name={`links.${i}.iconName`}
+                    render={({ field: cf }) => <IconPicker value={cf.value} onChange={cf.onChange} />}
                   />
-                  <Input
-                    {...register(`links.${i}.description`)}
-                    placeholder={t('linkDesc')}
-                    className="h-9 text-sm"
-                  />
+                  <div className="flex-1 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        {...register(`links.${i}.label`)}
+                        placeholder={t('linkLabel')}
+                        className="h-9 text-sm"
+                      />
+                      <Input
+                        {...register(`links.${i}.description`)}
+                        placeholder={t('linkDesc')}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    {!isSystem && (
+                      <Input
+                        {...register(`links.${i}.url`)}
+                        type="url"
+                        placeholder="https://"
+                        className="h-9 text-sm font-mono"
+                      />
+                    )}
+                  </div>
                 </div>
-                {!isSystem && (
-                  <Input
-                    {...register(`links.${i}.url`)}
-                    type="url"
-                    placeholder="https://"
-                    className="h-9 text-sm font-mono"
-                  />
-                )}
+                <Controller
+                  control={control}
+                  name={`links.${i}.showInBioLink`}
+                  render={({ field: cf }) => (
+                    <label className="flex items-center justify-between rounded-lg border p-3">
+                      <span className="text-sm">{t('showOnBioLink')}</span>
+                      <Switch checked={cf.value} onCheckedChange={(v) => cf.onChange(v)} />
+                    </label>
+                  )}
+                />
               </div>
-            </div>
+            )}
           </div>
         )
       })}
+
+      {/* Add link — dashed placeholder mirrors the website builder's "Add section" */}
+      <DropdownMenu>
+        <DropdownMenuTrigger className="flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-input py-3 text-sm font-medium text-muted-foreground hover:border-primary/50 hover:text-foreground">
+          <Plus className="h-4 w-4" />
+          {t('addLink')}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-64">
+          <DropdownMenuItem onClick={addCustomLink} className="gap-2">
+            <DynamicIcon name="Link2" className="h-4 w-4 text-muted-foreground" />
+            {t('addCustomLink')}
+          </DropdownMenuItem>
+          {addableTargets.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  {t('addPageLink')}
+                </DropdownMenuLabel>
+                {addableTargets.map((tgt) => (
+                  <DropdownMenuItem key={tgt} onClick={() => addPageLink(tgt)} className="gap-2">
+                    <DynamicIcon
+                      name={SYSTEM_LINK_META[tgt].defaultIcon}
+                      className="h-4 w-4 text-muted-foreground"
+                    />
+                    {targetLabel(tgt)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -643,7 +671,7 @@ export default function TeamBioLinkEditorPage() {
   const qc = useQueryClient()
   const t = useTranslations('BioLink')
 
-  const [tab, setTab] = useState<Tab>('appearance')
+  const [tab, setTab] = useState<Tab>('links')
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null)
 
@@ -827,8 +855,8 @@ export default function TeamBioLinkEditorPage() {
       : `/public/${team.slug}`
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'appearance', label: t('tabAppearance') },
     { key: 'links', label: t('tabLinks') },
+    { key: 'appearance', label: t('tabAppearance') },
     { key: 'social', label: t('tabSocial') },
   ]
 
