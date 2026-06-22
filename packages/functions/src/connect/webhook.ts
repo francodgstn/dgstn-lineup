@@ -37,6 +37,7 @@ import {
   retrieveAccountStatus,
 } from '../utils/connect/client'
 import { persistAccountStatus } from './access'
+import { resolveSingleContact } from '../utils/contacts'
 
 // Account/capability events → re-fetch the account (source of truth) and persist.
 // Covers classic Connect account events and v2 thin account events.
@@ -90,7 +91,7 @@ function addMonths(months: number): Timestamp {
 }
 
 /** Resolve the contact: prefer metadata.contactId (verified to belong to the team),
- * else fall back to an email lookup (teamId + email), mirroring Payrexx. */
+ * else fall back to a UNIQUE email match (none/ambiguous → null, never guess). */
 async function resolveContactId(
   teamId: string,
   md: Record<string, string>,
@@ -101,14 +102,8 @@ async function resolveContactId(
     if (snap.exists && snap.data()?.teamId === teamId) return md.contactId
   }
   if (fallbackEmail) {
-    const q = await admin
-      .firestore()
-      .collection(CONTACTS_COLLECTION)
-      .where('teamId', '==', teamId)
-      .where('email', '==', fallbackEmail)
-      .limit(1)
-      .get()
-    if (!q.empty) return q.docs[0].id
+    const { contactId } = await resolveSingleContact(teamId, fallbackEmail)
+    return contactId
   }
   return null
 }
@@ -181,10 +176,12 @@ async function activeContactCount(teamId: string): Promise<number> {
 }
 
 /**
- * Resolve a contact by email, or CREATE one from the buyer's checkout details.
- * Cap-aware: on a plan with a hard contact cap (Free), if the team is already at
- * the limit the contact is NOT created (returns null) — the payment is still
- * recorded; the studio links it after upgrading/freeing a slot.
+ * Resolve a contact by a UNIQUE email match, or CREATE one from the buyer's
+ * checkout details. Matching mirrors resolveSingleContact: exactly one active
+ * match links; >1 (a shared family email) returns null so the studio assigns it,
+ * never the wrong child. Cap-aware: on a plan with a hard contact cap (Free), if
+ * the team is already at the limit the contact is NOT created (returns null) — the
+ * payment is still recorded; the studio links it after upgrading/freeing a slot.
  */
 async function resolveOrCreateContact(
   teamId: string,
@@ -192,14 +189,16 @@ async function resolveOrCreateContact(
   info: { email: string; name?: string | null; phone?: string | null }
 ): Promise<string | null> {
   const db = admin.firestore()
-  const existing = await db
-    .collection(CONTACTS_COLLECTION)
-    .where('teamId', '==', teamId)
-    .where('email', '==', info.email)
-    .limit(1)
-    .get()
-  if (!existing.empty) return existing.docs[0].id
+  const { contactId, count } = await resolveSingleContact(teamId, info.email)
+  if (contactId) return contactId
+  if (count > 1) {
+    console.log(
+      `[connect] shop purchase: ${count} contacts share ${info.email} (team=${teamId}) — left unassigned`
+    )
+    return null
+  }
 
+  // count === 0 → create the contact (cap-aware).
   if (planHasHardContactCap(plan)) {
     const cap = PLAN_PRICING[plan].includedContacts
     if (cap != null && (await activeContactCount(teamId)) >= cap) {

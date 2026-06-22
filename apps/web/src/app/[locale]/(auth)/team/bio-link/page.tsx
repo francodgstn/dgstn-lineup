@@ -15,20 +15,22 @@ import { z } from 'zod'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { IconPicker } from '@/components/ui/icon-picker'
+import { IconPicker, DynamicIcon } from '@/components/ui/icon-picker'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import BioLinkHome from '../../../(public)/public/[slug]/BioLinkHome'
 import { toast } from 'sonner'
-import { TEAMS_COLLECTION } from '@linyup/shared'
-import type { Team, SocialPlatform, BookingSettings } from '@linyup/shared'
+import { TEAMS_COLLECTION, SYSTEM_LINK_META, resolveSystemLinkTarget } from '@linyup/shared'
+import type { Team, SocialPlatform, SystemLinkTarget } from '@linyup/shared'
 import { BIO_LINK_GRADIENTS, SOCIAL_PLATFORMS, SOCIAL_LABELS } from '@/lib/bioLink'
 import {
   ExternalLink,
@@ -70,21 +72,10 @@ const linkSchema = z.object({
   url: safeUrl,
   showInBioLink: z.boolean(),
   iconName: z.string().optional(),
-  isBookingLink: z.boolean().optional(),
-  isMembershipLink: z.boolean().optional(),
-  isCoursesLink: z.boolean().optional(),
-  isShopLink: z.boolean().optional(),
-})
-
-const bookingSchema = z.object({
-  flowType: z.enum(['activity-first', 'date-first']),
-  windowMonths: z.number().int().min(1).max(6),
-  showPhone: z.boolean(),
-  showActivityDescription: z.boolean(),
-  showFitnessAppField: z.boolean(),
-  ctaUrl: safeUrl,
-  ctaLabel: z.string().optional(),
-  coachingEnabled: z.boolean().optional(),
+  // Set → this is a "page link" to one of the team's public surfaces.
+  target: z
+    .enum(['booking', 'signup', 'shop', 'shop-memberships', 'shop-products', 'shop-courses', 'space', 'site'])
+    .optional(),
 })
 
 const schema = z.object({
@@ -103,7 +94,6 @@ const schema = z.object({
   website: z.string().optional(),
   review: z.string().optional(),
   links: z.array(linkSchema),
-  booking: bookingSchema,
 })
 
 type FormData = z.infer<typeof schema>
@@ -394,33 +384,108 @@ function AppearanceTab({
 
 // ─── links tab ────────────────────────────────────────────────────────────────
 
+// Display label for a page-link target (badge + Add-menu item + chip).
+function useTargetLabel() {
+  const t = useTranslations('BioLink')
+  const KEYS: Record<SystemLinkTarget, Parameters<typeof t>[0]> = {
+    booking: 'bookingLink',
+    signup: 'membershipLink',
+    shop: 'shopLink',
+    'shop-memberships': 'membershipsLink',
+    'shop-products': 'productsLink',
+    'shop-courses': 'shopCoursesLink',
+    space: 'coursesLink',
+    site: 'siteLink',
+  }
+  return (target: SystemLinkTarget): string => t(KEYS[target])
+}
+
 function LinksTab({
   control,
   register,
+  availableTargets,
 }: {
   control: ReturnType<typeof useForm<FormData>>['control']
   register: ReturnType<typeof useForm<FormData>>['register']
+  availableTargets: SystemLinkTarget[]
 }) {
   const t = useTranslations('BioLink')
+  const targetLabel = useTargetLabel()
   const { fields, append, remove, move } = useFieldArray({ control, name: 'links' })
 
-  // System links (booking, membership, courses) and custom links share ONE list
-  // so they can be reordered freely. System links carry a badge, have no URL and
-  // cannot be deleted; custom links have a URL and a delete button.
+  // Page links (booking, signup, shop, courses, website) and custom links share ONE
+  // list so they can be reordered freely. Page links carry a badge and have no URL
+  // field; both kinds are deletable. Page links are added explicitly — via the quick
+  // suggestion chips or the "+ Add" menu — which offer available, not-yet-added surfaces.
+  const usedTargets = new Set(
+    (fields as Array<{ target?: SystemLinkTarget }>).map((f) => f.target).filter(Boolean)
+  )
+  const addableTargets = availableTargets.filter((tgt) => !usedTargets.has(tgt))
+
+  function addPageLink(target: SystemLinkTarget) {
+    append({
+      label: targetLabel(target),
+      description: '',
+      url: '',
+      showInBioLink: true,
+      iconName: SYSTEM_LINK_META[target].defaultIcon,
+      target,
+    })
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{t('tabLinks')}</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => append({ label: '', description: '', url: '', showInBioLink: true })}
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          {t('addLink')}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>
+            <Plus className="h-4 w-4 mr-1" />
+            {t('addLink')}
+            <ChevronDown className="h-3.5 w-3.5 ml-1" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuItem
+              onClick={() => append({ label: '', description: '', url: '', showInBioLink: true })}
+            >
+              {t('addCustomLink')}
+            </DropdownMenuItem>
+            {addableTargets.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    {t('addPageLink')}
+                  </DropdownMenuLabel>
+                  {addableTargets.map((tgt) => (
+                    <DropdownMenuItem key={tgt} onClick={() => addPageLink(tgt)}>
+                      {targetLabel(tgt)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      {/* Quick-add suggestions for available page-link surfaces (not yet added). */}
+      {addableTargets.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">{t('addPageLink')}:</span>
+          {addableTargets.map((tgt) => (
+            <button
+              key={tgt}
+              type="button"
+              onClick={() => addPageLink(tgt)}
+              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <DynamicIcon name={SYSTEM_LINK_META[tgt].defaultIcon} className="h-3.5 w-3.5" />
+              {targetLabel(tgt)}
+              <Plus className="h-3 w-3" />
+            </button>
+          ))}
+        </div>
+      )}
 
       {fields.length === 0 && (
         <p className="text-sm text-muted-foreground text-center border border-dashed rounded-lg py-6">
@@ -429,21 +494,8 @@ function LinksTab({
       )}
 
       {fields.map((field, i) => {
-        const f = field as typeof field & {
-          isBookingLink?: boolean
-          isMembershipLink?: boolean
-          isCoursesLink?: boolean
-          isShopLink?: boolean
-        }
-        const systemBadge = f.isBookingLink
-          ? t('bookingLink')
-          : f.isMembershipLink
-            ? t('membershipLink')
-            : f.isCoursesLink
-              ? t('coursesLink')
-              : f.isShopLink
-                ? t('shopLink')
-                : null
+        const f = field as typeof field & { target?: SystemLinkTarget }
+        const systemBadge = f.target ? targetLabel(f.target) : null
         const isSystem = systemBadge !== null
         return (
           <div key={field.id} className="rounded-lg border p-4 space-y-3">
@@ -487,15 +539,13 @@ function LinksTab({
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
                 </button>
-                {!isSystem && (
-                  <button
-                    type="button"
-                    onClick={() => remove(i)}
-                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => remove(i)}
+                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
             <div className="flex gap-2 items-start">
@@ -556,287 +606,9 @@ function SocialTab({ register }: { register: ReturnType<typeof useForm<FormData>
   )
 }
 
-// ─── booking tab ──────────────────────────────────────────────────────────────
-
-function BookingTab({
-  control,
-  register,
-}: {
-  control: ReturnType<typeof useForm<FormData>>['control']
-  register: ReturnType<typeof useForm<FormData>>['register']
-}) {
-  return (
-    <div className="space-y-6">
-      {/* Flow type */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium">Booking flow</p>
-        <p className="text-xs text-muted-foreground">Choose how visitors browse sessions.</p>
-        <Controller
-          control={control}
-          name="booking.flowType"
-          render={({ field }) => (
-            <div className="space-y-2">
-              {(
-                [
-                  {
-                    value: 'activity-first',
-                    label: 'Activity-first',
-                    desc: 'Visitors pick an activity, then a time slot.',
-                  },
-                  {
-                    value: 'date-first',
-                    label: 'Date-first',
-                    desc: 'Visitors pick a date, then an activity.',
-                  },
-                ] as const
-              ).map((opt) => (
-                <label
-                  key={opt.value}
-                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                    field.value === opt.value ? 'border-primary bg-primary/5' : 'hover:bg-muted/30'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    value={opt.value}
-                    checked={field.value === opt.value}
-                    onChange={() => field.onChange(opt.value)}
-                    className="mt-0.5 accent-primary"
-                  />
-                  <div>
-                    <p className="text-sm font-medium">{opt.label}</p>
-                    <p className="text-xs text-muted-foreground">{opt.desc}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
-          )}
-        />
-      </div>
-
-      {/* Booking window */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium">Booking window</p>
-        <p className="text-xs text-muted-foreground">How far ahead visitors can book sessions.</p>
-        <Controller
-          control={control}
-          name="booking.windowMonths"
-          render={({ field }) => (
-            <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-              <SelectTrigger className="h-9 w-36">
-                <span className="flex flex-1 text-left text-sm truncate">
-                  {(
-                    { 1: '1 month', 2: '2 months', 3: '3 months', 6: '6 months' } as Record<
-                      number,
-                      string
-                    >
-                  )[field.value] ?? `${field.value} months`}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1 month</SelectItem>
-                <SelectItem value="2">2 months</SelectItem>
-                <SelectItem value="3">3 months</SelectItem>
-                <SelectItem value="6">6 months</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </div>
-
-      {/* Toggle helper */}
-      {(
-        [
-          {
-            name: 'booking.showPhone' as const,
-            label: 'Show phone field',
-            desc: 'Include an optional phone field in the new guest form.',
-          },
-          {
-            name: 'booking.showActivityDescription' as const,
-            label: 'Show activity description',
-            desc: 'Show the activity description text on the activity selection screen.',
-          },
-          {
-            name: 'booking.showFitnessAppField' as const,
-            label: 'Show fitness app field',
-            desc: "Ask new guests which fitness app they're coming from (e.g. Fitpass, ClassPass).",
-          },
-          {
-            name: 'booking.coachingEnabled' as const,
-            label: 'Show coaching slots',
-            desc: 'Show coaching slots in the bio-link booking flow.',
-          },
-        ] as const
-      ).map(({ name, label, desc }) => (
-        <div key={name} className="flex items-center justify-between rounded-lg border p-3">
-          <div>
-            <p className="text-sm font-medium">{label}</p>
-            <p className="text-xs text-muted-foreground">{desc}</p>
-          </div>
-          <Controller
-            control={control}
-            name={name}
-            render={({ field }) => (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={field.value}
-                onClick={() => field.onChange(!field.value)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
-                  field.value ? 'bg-primary' : 'bg-muted'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
-                    field.value ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            )}
-          />
-        </div>
-      ))}
-
-      {/* CTA button */}
-      <div className="space-y-3">
-        <div>
-          <p className="text-sm font-medium">CTA button (optional)</p>
-          <p className="text-xs text-muted-foreground">
-            Shown on the confirmation screen after a successful booking.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Button URL</label>
-            <Input
-              {...register('booking.ctaUrl')}
-              type="url"
-              placeholder="https://example.com"
-              className="h-9 text-sm font-mono"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Button label</label>
-            <Input
-              {...register('booking.ctaLabel')}
-              placeholder="e.g. Contact Us"
-              className="h-9 text-sm"
-            />
-          </div>
-        </div>
-      </div>
-
-    </div>
-  )
-}
-
-// ─── booking preview panel ────────────────────────────────────────────────────
-
-const SAMPLE_ACTIVITIES = [
-  { name: 'Morning Yoga', color: '#6366f1' },
-  { name: 'HIIT Training', color: '#10b981' },
-  { name: 'Pilates', color: '#f59e0b' },
-]
-
-function gradientForColor(color: string) {
-  return `linear-gradient(135deg, ${color}cc, ${color}66)`
-}
-
-function BookingPreviewPanel({
-  teamName,
-  accentColor,
-  onBack,
-}: {
-  teamName: string
-  accentColor: string
-  onBack: () => void
-}) {
-  return (
-    <div className="min-h-[600px] bg-background text-foreground font-sans">
-      {/* Top nav */}
-      <div className="border-b bg-card px-5 py-3">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <svg
-            className="h-3.5 w-3.5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          {teamName}
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-lg mx-auto px-5 py-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Book a Session</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Choose an activity to get started.</p>
-        </div>
-
-        <div className="space-y-3">
-          {SAMPLE_ACTIVITIES.map((a) => (
-            <div
-              key={a.name}
-              className="w-full rounded-xl border bg-card flex items-stretch overflow-hidden opacity-80"
-            >
-              <div className="w-20 shrink-0" style={{ background: gradientForColor(a.color) }} />
-              <div className="flex-1 p-4">
-                <p className="font-semibold text-sm">{a.name}</p>
-                <span className="mt-1 inline-block rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
-                  Sample activity
-                </span>
-              </div>
-              <div className="flex items-center pr-4 text-muted-foreground">
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Sticky bar preview */}
-        <div
-          className="rounded-2xl border p-3 flex items-center gap-3 mt-4"
-          style={{ borderColor: `${accentColor}40`, background: `${accentColor}08` }}
-        >
-          <div
-            className="w-12 h-12 rounded-lg shrink-0"
-            style={{ background: gradientForColor(accentColor) }}
-          />
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm truncate">Morning Yoga</p>
-            <p className="text-xs text-muted-foreground">Mon 9 Jun · 09:00–10:00</p>
-          </div>
-          <button
-            className="shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-white"
-            style={{ background: accentColor }}
-          >
-            Confirm
-          </button>
-        </div>
-        <p className="text-center text-xs text-muted-foreground">↑ Booking summary bar</p>
-      </div>
-    </div>
-  )
-}
-
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'appearance' | 'links' | 'social' | 'booking'
+type Tab = 'appearance' | 'links' | 'social'
 
 export default function TeamBioLinkEditorPage() {
   const { currentTeamId } = useAuth()
@@ -844,11 +616,34 @@ export default function TeamBioLinkEditorPage() {
   const { isInstalled } = useInstalledPlugins()
   const coursesActive = isInstalled('online-courses')
   const connectEnabled = team?.payments?.connectStatus === 'enabled'
+
+  // Page-link surfaces this team can offer (before subtracting already-added). The
+  // generic `shop` target stays valid for back-compat but isn't suggested — the three
+  // shop sections (memberships/products/courses) deep-link the relevant tab instead.
+  // booking/signup are base features; the rest follow their plugin / Connect state.
+  const productsActive = isInstalled('products')
+  const websiteActive = isInstalled('website')
+  const offeredTargets: SystemLinkTarget[] = [
+    'booking',
+    'signup',
+    'shop-memberships',
+    'shop-products',
+    'shop-courses',
+    'space',
+    'site',
+  ]
+  const availableTargets = offeredTargets.filter((tgt) => {
+    if (tgt === 'shop-memberships') return connectEnabled
+    if (tgt === 'shop-products') return productsActive
+    if (tgt === 'shop-courses') return coursesActive
+    if (tgt === 'space') return coursesActive
+    if (tgt === 'site') return websiteActive
+    return true // booking, signup
+  })
   const qc = useQueryClient()
   const t = useTranslations('BioLink')
 
   const [tab, setTab] = useState<Tab>('appearance')
-  const [previewPage, setPreviewPage] = useState<'home' | 'booking'>('home')
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null)
 
@@ -868,13 +663,13 @@ export default function TeamBioLinkEditorPage() {
     formState: { isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: getDefaults(team ?? null, coursesActive, connectEnabled),
+    defaultValues: getDefaults(team ?? null),
   })
 
-  // Re-populate form when team data arrives or the courses/connect state resolves.
+  // Re-populate form when team data arrives.
   useEffect(() => {
-    if (team) reset(getDefaults(team, coursesActive, connectEnabled))
-  }, [team?.id, coursesActive, connectEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (team) reset(getDefaults(team))
+  }, [team?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live preview values
   const formValues = useWatch({ control })
@@ -932,17 +727,6 @@ export default function TeamBioLinkEditorPage() {
       (p) => data[p as keyof FormData] as string | undefined
     ).map((p) => ({ platform: p, url: data[p as keyof FormData] as string }))
 
-    const bookingSettings: BookingSettings = {
-      flowType: data.booking.flowType,
-      windowMonths: data.booking.windowMonths,
-      showPhone: data.booking.showPhone,
-      showActivityDescription: data.booking.showActivityDescription,
-      showFitnessAppField: data.booking.showFitnessAppField,
-      ctaUrl: data.booking.ctaUrl || null,
-      ctaLabel: data.booking.ctaLabel || null,
-      coachingEnabled: data.booking.coachingEnabled ?? false,
-    }
-
     // Firestore rejects `undefined` values — strip them before any write
     const bioLinkPayload = stripUndefined({
       bioLinkTheme: data.bioLinkTheme,
@@ -962,7 +746,6 @@ export default function TeamBioLinkEditorPage() {
           type: 'team',
           slug: team?.slug ?? '',
           name: team?.name ?? '',
-          bookingSettings,
           ...bioLinkPayload,
         }),
         { merge: true }
@@ -972,7 +755,6 @@ export default function TeamBioLinkEditorPage() {
       //    correctly after reload. Non-fatal: log but don't fail the whole save.
       updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
         ...bioLinkPayload,
-        'settings.booking': bookingSettings,
       }).catch((err) => {
         console.warn('[bio-link save] team doc update failed (non-fatal):', err)
       })
@@ -1048,7 +830,6 @@ export default function TeamBioLinkEditorPage() {
     { key: 'appearance', label: t('tabAppearance') },
     { key: 'links', label: t('tabLinks') },
     { key: 'social', label: t('tabSocial') },
-    { key: 'booking', label: 'Booking' },
   ]
 
   return (
@@ -1082,10 +863,7 @@ export default function TeamBioLinkEditorPage() {
               <button
                 key={key}
                 type="button"
-                onClick={() => {
-                  setTab(key)
-                  setPreviewPage(key === 'booking' ? 'booking' : 'home')
-                }}
+                onClick={() => setTab(key)}
                 className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   tab === key
                     ? 'border-primary text-foreground'
@@ -1110,9 +888,14 @@ export default function TeamBioLinkEditorPage() {
                 onHeroRemove={handleHeroRemove}
               />
             )}
-            {tab === 'links' && <LinksTab control={control} register={register} />}
+            {tab === 'links' && (
+              <LinksTab
+                control={control}
+                register={register}
+                availableTargets={availableTargets}
+              />
+            )}
             {tab === 'social' && <SocialTab register={register} />}
-            {tab === 'booking' && <BookingTab control={control} register={register} />}
           </form>
         </div>
 
@@ -1134,21 +917,8 @@ export default function TeamBioLinkEditorPage() {
             </a>
           </div>
           <div className="rounded-xl border overflow-hidden max-h-[calc(100vh-12rem)] overflow-y-auto shadow-sm">
-            {previewPage === 'booking' ? (
-              <BookingPreviewPanel
-                teamName={team.name}
-                accentColor={formValues.accentColor ?? '#6366f1'}
-                onBack={() => setPreviewPage('home')}
-              />
-            ) : (
-              <BioLinkHome
-                team={previewTeam}
-                slug={team.slug}
-                onLinkClick={(type: 'booking' | 'signup' | 'external') => {
-                  if (type === 'booking') setPreviewPage('booking')
-                }}
-              />
-            )}
+            {/* Links are inert in the preview (onLinkClick prevents navigation). */}
+            <BioLinkHome team={previewTeam} slug={team.slug} onLinkClick={() => {}} />
           </div>
         </div>
       </div>
@@ -1163,75 +933,24 @@ function stripUndefined<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj)) as T
 }
 
-// Normalises stored links and reconciles the courses system link with the
-// online-courses plugin state: present (default-injected) when active, removed
-// when inactive. Booking/membership system links are always preserved.
-function buildLinks(
-  rawLinks: Team['links'],
-  coursesPluginActive: boolean,
-  connectEnabled: boolean
-): FormData['links'] {
-  const links = (rawLinks ?? [])
-    .map((l) => ({
-      label: typeof l.label === 'string' ? l.label : '',
-      description: typeof l.description === 'string' ? l.description : undefined,
-      url: typeof l.url === 'string' ? l.url : '',
-      showInBioLink:
-        l.showInBioLink === true || l.showInBioLink === false ? l.showInBioLink : false,
-      iconName: typeof l.iconName === 'string' ? l.iconName : undefined,
-      isBookingLink: l.isBookingLink === true ? (true as const) : undefined,
-      isMembershipLink: l.isMembershipLink === true ? (true as const) : undefined,
-      isCoursesLink: l.isCoursesLink === true ? (true as const) : undefined,
-      isShopLink: l.isShopLink === true ? (true as const) : undefined,
-    }))
-    .filter((l) => coursesPluginActive || !l.isCoursesLink)
-    // The shop system link only exists while Connect is enabled.
-    .filter((l) => connectEnabled || !l.isShopLink)
-
-  if (coursesPluginActive && !links.some((l) => l.isCoursesLink)) {
-    links.push({
-      label: 'Online Courses',
-      description: undefined,
-      url: '',
-      showInBioLink: true,
-      iconName: 'GraduationCap',
-      isBookingLink: undefined,
-      isMembershipLink: undefined,
-      isCoursesLink: true,
-      isShopLink: undefined,
-    })
-  }
-
-  if (connectEnabled && !links.some((l) => l.isShopLink)) {
-    links.push({
-      label: 'Shop',
-      description: undefined,
-      url: '',
-      showInBioLink: true,
-      iconName: 'ShoppingBag',
-      isBookingLink: undefined,
-      isMembershipLink: undefined,
-      isCoursesLink: undefined,
-      isShopLink: true,
-    })
-  }
-  return links
+// Normalises stored links for the form, mapping any legacy is{Booking,Membership,
+// Courses,Shop}Link booleans to the new `target` page-link discriminator. No
+// injection/filtering — page links are added explicitly via the "+ Add" menu.
+function buildLinks(rawLinks: Team['links']): FormData['links'] {
+  return (rawLinks ?? []).map((l) => ({
+    label: typeof l.label === 'string' ? l.label : '',
+    description: typeof l.description === 'string' ? l.description : undefined,
+    url: typeof l.url === 'string' ? l.url : '',
+    showInBioLink:
+      l.showInBioLink === true || l.showInBioLink === false ? l.showInBioLink : false,
+    iconName: typeof l.iconName === 'string' ? l.iconName : undefined,
+    target: resolveSystemLinkTarget(l) ?? undefined,
+  }))
 }
 
-function getDefaults(team: Team | null, coursesPluginActive = false, connectEnabled = false): FormData {
+function getDefaults(team: Team | null): FormData {
   const sl = team?.socialLinks ?? []
   const getSocial = (p: SocialPlatform) => sl.find((s) => s.platform === p)?.url ?? ''
-
-  // Cast through unknown so TS allows us to read possibly-missing sub-keys
-  const rawBooking = ((team?.settings as Record<string, unknown> | undefined)?.booking ??
-    {}) as Record<string, unknown>
-
-  // Coerce windowMonths to a valid integer (Firestore can return floats or strings)
-  const rawMonths = Number(rawBooking.windowMonths)
-  const windowMonths =
-    Number.isInteger(rawMonths) && rawMonths >= 1 && rawMonths <= 6 ? rawMonths : 2
-
-  const flowType = rawBooking.flowType === 'date-first' ? 'date-first' : 'activity-first'
 
   return {
     bioLinkTheme: (['light', 'dark', 'auto'] as const).includes(team?.bioLinkTheme as never)
@@ -1250,19 +969,7 @@ function getDefaults(team: Team | null, coursesPluginActive = false, connectEnab
     whatsapp: getSocial('whatsapp'),
     website: getSocial('website'),
     review: getSocial('review'),
-    // Sanitize each link to ensure all required fields are valid for the schema.
-    // The courses system link only exists while the online-courses plugin is
-    // active: drop it when inactive, and inject a default when active & missing.
-    links: buildLinks(team?.links ?? [], coursesPluginActive, connectEnabled),
-    booking: {
-      flowType,
-      windowMonths,
-      showPhone: rawBooking.showPhone !== false,
-      showActivityDescription: rawBooking.showActivityDescription !== false,
-      showFitnessAppField: rawBooking.showFitnessAppField === true,
-      ctaUrl: typeof rawBooking.ctaUrl === 'string' ? rawBooking.ctaUrl : '',
-      ctaLabel: typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
-      coachingEnabled: rawBooking.coachingEnabled === true,
-    },
+    // Normalise stored links + map any legacy boolean flags to `target`.
+    links: buildLinks(team?.links ?? []),
   }
 }

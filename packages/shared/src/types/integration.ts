@@ -11,6 +11,14 @@ export interface StripeGatewayConfig {
   // Secret key stored in Firebase Secret Manager, not in Firestore
   webhook_secret_ref?: string
   currency: string
+  // Webhook signing secret (whsec_… from the studio's Stripe dashboard) — stored
+  // in Firestore, owners only. Used by handleTeamStripeWebhook to verify the
+  // Stripe-Signature header (BYO is minimal: signature verify + record only, no
+  // API calls, so no secret key is needed). Mirrors Payrexx's webhook_signing_secret.
+  webhook_signing_secret?: string
+  // Fallback subscription_type_id when a checkout/payment carries no
+  // metadata.subscriptionTypeId — mirrors Payrexx's default.
+  default_subscription_type_id?: string
 }
 
 export interface PayrexxGatewayConfig {

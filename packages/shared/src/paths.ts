@@ -114,6 +114,13 @@ export const SITE_PUBLISHED_COLLECTION = 'site_published'
 export const CONNECT_ACCOUNTS_COLLECTION = 'connect_accounts'
 export const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
 export const MEMBER_SUBSCRIPTIONS_SUBCOLLECTION = 'member_subscriptions'
+
+// BYO gateway ledger (Payrexx / Stripe-BYO). teams/{teamId}/payment_events/{id},
+// doc id = `${gateway}:${gatewayRef}` for idempotency. Written only by the team
+// webhook handlers + the updatePaymentRecord callable (Admin SDK); managers/owners
+// read it for the payments dashboard and per-contact Payments tab. Unlike Connect,
+// BYO records the payment even when no contact matches (assignment_status).
+export const PAYMENT_EVENTS_SUBCOLLECTION = 'payment_events'
 // Idempotency markers for the Connect webhook (doc id = Stripe event id).
 // Admin-SDK only; clients never read or write it.
 export const CONNECT_WEBHOOK_EVENTS_COLLECTION = 'connect_webhook_events'

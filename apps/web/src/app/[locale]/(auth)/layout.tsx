@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Users,
   Calendar,
+  CalendarCheck,
   Zap,
   CalendarRange,
   ClipboardList,
@@ -40,6 +41,7 @@ import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { useHasByoGateway } from '@/hooks/useConnect'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Logo } from '@/components/Logo'
@@ -93,6 +95,7 @@ const NAV_SECTIONS: NavSection[] = [
     labelKey: 'sectionConfigure',
     items: [
       { href: '/activities', labelKey: 'activities', icon: Zap },
+      { href: '/team/booking', labelKey: 'bookingPage', icon: CalendarCheck },
       { href: '/team/event-types', labelKey: 'eventTypes', icon: CalendarRange },
       { href: '/team/subscriptions', labelKey: 'subscriptions', icon: Tag },
       { href: '/automations', labelKey: 'automations', icon: Workflow },
@@ -487,12 +490,15 @@ function SidebarContent({
   onLinkClick?: () => void
 }) {
   const t = useTranslations('Nav')
-  const { team } = useAuth()
+  const { team, currentTeamId } = useAuth()
   const inOrg = !!team?.org_id
-  // Show the Payments dashboard once a team has started Connect onboarding
-  // (an account exists), as long as it isn't operator-disabled.
+  // Show the Payments dashboard once a team has started Connect onboarding (an
+  // account exists, not operator-disabled) OR has any BYO gateway configured —
+  // both rails record into the unified payments view.
+  const { data: hasByoGateway = false } = useHasByoGateway(currentTeamId ?? null)
   const connectOn =
-    !!team?.payments?.connectAccountId && team?.payments?.connectEnabled !== false
+    (!!team?.payments?.connectAccountId && team?.payments?.connectEnabled !== false) ||
+    hasByoGateway
 
   // Plugin nav entries: those targeting a built-in section render inside it;
   // the rest fall back to the default "Plugins" group below.

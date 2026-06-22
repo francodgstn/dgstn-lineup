@@ -9,12 +9,27 @@
 
 ## What this is
 
-Linyup lets each team plug in their own payment gateway so they can:
+Linyup lets each team plug in their **own** payment gateway (no platform fee —
+money never touches Linyup) so they can:
 
-- Accept membership or subscription payments directly inside Linyup
-- Have the contact record automatically updated when a payment is confirmed
+- **Record** every confirmed payment against a contact, inside Linyup
+- Have the contact record updated when a payment is uniquely matched
   (`membership_expiration`, `subscription_type_id`, `last_payment_at`)
 - Keep an immutable audit trail of every payment event in Firestore
+
+BYO is deliberately **minimal**: Linyup only records the payment and links it to a
+contact. It does not run the checkout, manage refunds, or hold any gateway
+credentials (only the per-team **webhook signing secret**, used to verify
+signatures). For the fully-integrated rail with refunds + a platform fee, see
+**Stripe Connect** ([connect-payments.md](connect-payments.md)).
+
+**Matching is conservative.** Email is **not** a unique key — a parent's address
+can control several child contacts — so a payment links to a contact only when
+**exactly one** active contact matches the payer email. Zero or multiple matches
+→ the payment is still **recorded as Unassigned**, and a manager assigns it from
+the **Payments** page (or the contact's **Payments** tab). Each row also carries a
+free-text **comment** ("what was paid"), prefilled with a default suggestion
+(the subscription-type name or a generic gateway label) and editable by managers.
 
 Each team configures exactly one gateway. The gateway settings live in
 `teams/{teamId}/integrations/{integrationId}` (type `payment_gateway`).
@@ -24,7 +39,7 @@ Each team configures exactly one gateway. The gateway settings live in
 | Gateway | Webhook handler | Status |
 |---------|----------------|--------|
 | Payrexx | `handlePayrexxWebhook` | ✅ Implemented |
-| Stripe  | `handleStripeWebhook` (team-level) | ⏳ Stub — coming soon |
+| Stripe (BYO) | `handleTeamStripeWebhook` | ✅ Implemented (record-only) |
 
 ---
 
@@ -40,11 +55,11 @@ Cloud Function: handlePayrexxWebhook?teamId={teamId}
         ├─ 1. Load integration config (Firestore, Admin SDK)
         ├─ 2. Verify HMAC-SHA256 signature
         ├─ 3. Parse transaction payload
-        ├─ 4. Look up contact by email
+        ├─ 4. Match contact by UNIQUE email (else → Unassigned)
         ├─ 5. Atomic Firestore transaction
-        │       ├─ write payment_events doc (idempotency key)
-        │       └─ update contact fields
-        └─ 6. Append activity_log entry (best-effort)
+        │       ├─ write payment_events doc (always; idempotency key)
+        │       └─ update contact fields (only when assigned)
+        └─ 6. Append activity_log entry (assigned only, best-effort)
 
 Firestore writes:
   contacts/{contactId}
@@ -258,26 +273,35 @@ Written by the settings UI (owner only).
 
 **Firestore rules:** only owners can read or write integrations.
 
-### `teams/{teamId}/payment_events/{payrexx:{transactionId}}`
+### `teams/{teamId}/payment_events/{gateway}:{gatewayRef}`
 
-Written atomically by `handlePayrexxWebhook`. Never modified after creation.
+The unified **BYO ledger** (`ExternalPayment`). Written atomically by
+`handlePayrexxWebhook` / `handleTeamStripeWebhook` on first delivery, and patched
+by the `updatePaymentRecord` callable when a manager (re)assigns the contact or
+edits the comment. The webhook part is idempotent — a redelivery (and any later
+manager edit) is never clobbered.
 
 ```jsonc
 {
-  "gateway": "payrexx",
-  "transaction_id": "12345",
-  "amount": 5000,          // in smallest currency unit (Rappen / Cent)
+  "gateway": "payrexx",            // "payrexx" | "stripe"
+  "gatewayRef": "12345",           // Payrexx tx id / Stripe payment ref
+  "contact_id": "…",               // null when unassigned
+  "assignment_status": "assigned", // "assigned" | "unassigned"
+  "amount": 5000,                  // smallest currency unit (Rappen / Cent)
   "currency": "CHF",
-  "contact_id": "…",
-  "email": "student@example.com",
-  "subscription_type_id": "…",       // may be null
+  "email": "student@example.com",  // payer email, may be null
+  "subscription_type_id": "…",     // may be null
   "membership_expiration": Timestamp, // may be null
+  "comment": "Monthly membership", // "what was paid" — default suggestion, editable
   "raw_status": "confirmed",
-  "processed_at": Timestamp
+  "processed_at": Timestamp,
+  "assigned_by": "uid",            // set when a manager assigns
+  "assigned_at": Timestamp
 }
 ```
 
-**Firestore rules:** managers and owners can read; no client writes.
+**Firestore rules:** managers and owners can read; no client writes (the
+`updatePaymentRecord` callable writes via the Admin SDK).
 
 ### `contacts/{contactId}` — fields updated on payment
 
@@ -300,7 +324,7 @@ Check the Cloud Function logs for `[handlePayrexxWebhook]` lines. Common causes:
 | `No Payrexx integration for team=…` | Gateway not configured in Settings, or wrong `teamId` in the webhook URL |
 | `Missing X-Webhook-Signature` | Payrexx is not sending the header — check webhook config in Payrexx dashboard |
 | `Signature mismatch` | `webhook_signing_secret` in Linyup doesn't match what's in Payrexx. Re-copy it. |
-| `Contact not found email=…` | The email in the Payrexx contact doesn't match any contact in this team |
+| `… unassigned email=…` | No single active contact matched the payer email (none, or a shared family email). The payment is recorded as **Unassigned** — assign it from the Payments page. |
 | `skipped_status:waiting` | Payment not yet confirmed — normal, Payrexx sends events at each status change |
 | `test_mode` | `mode: "TEST"` — set `ALLOW_TEST_PAYREXX=true` on staging or trigger a live payment |
 | `already_processed` (duplicate) | Payrexx retried a previously processed event — safe to ignore |
@@ -324,14 +348,45 @@ get a 405 — that's correct behaviour.
 
 ---
 
-## Stripe — use Stripe Connect instead
+## Stripe (BYO)
 
-For studios that want to collect member payments via Stripe **with Linyup taking a
-platform fee**, use the first-class **Stripe Connect** integration documented in
-[connect-payments.md](connect-payments.md) — money settles on the studio's own
-Stripe balance (direct charges), onboarding is BYO or Managed, and the platform fee
-is configurable per plan tier.
+A studio that already runs **its own** Stripe account (no platform fee, money
+never touches Linyup) can have Linyup **record** those payments against contacts —
+the same minimal "record + assign" deal as Payrexx. Handler:
+`handleTeamStripeWebhook?teamId={teamId}`.
 
-The BYO `GatewayAdapter` path here (independent account, **no** platform fee) remains
-available via Payrexx for studios who prefer a fully self-managed gateway. The old
-"team-level Stripe gateway" stub idea is superseded by Connect.
+> Want Linyup to run the checkout, handle refunds, and take a platform fee
+> instead? Use **Stripe Connect** ([connect-payments.md](connect-payments.md)) —
+> that is a different rail. BYO Stripe here is record-only.
+
+### Setup
+
+1. **Settings → Payments → Add gateway → Stripe.** Enter the publishable key and
+   currency. (The publishable key is only stored for reference; BYO makes no
+   Stripe API calls.)
+2. In the **Stripe dashboard → Developers → Webhooks**, add an endpoint:
+
+   | Field | Value |
+   |-------|-------|
+   | URL | `https://europe-west6-linyup-prod.cloudfunctions.net/handleTeamStripeWebhook?teamId=YOUR_TEAM_ID` |
+   | Events | `checkout.session.completed`, `payment_intent.succeeded`, `invoice.payment_succeeded` |
+
+3. Copy the endpoint's **Signing secret** (`whsec_…`) and paste it into the
+   Linyup gateway dialog's **Webhook signing secret** field. Without it, no
+   payments are recorded (the signature can't be verified).
+4. Optionally set a **Default subscription type** — applied when a payment carries
+   no `subscriptionTypeId` metadata. Set `metadata.subscriptionTypeId` on a
+   Checkout Session / PaymentIntent for per-plan control.
+
+### Behaviour
+
+- **Signature** is verified against the team's own signing secret
+  (`stripe.webhooks.constructEventAsync`). No Stripe API key is needed.
+- The payment is keyed by its underlying **payment reference** (PaymentIntent /
+  invoice / session id), so the `checkout.session.completed` and matching
+  `payment_intent.succeeded` events converge to **one** `payment_events` doc
+  (write-once — a redelivery or a manager's later edit is never clobbered).
+- The payer email is matched with the same UNIQUE-match rule as Payrexx; no match
+  (or ambiguous) → recorded **Unassigned**.
+- Scope is **record + assign** only — no in-app checkout, no refunds (refunds
+  happen in the studio's own Stripe dashboard, or use Connect).

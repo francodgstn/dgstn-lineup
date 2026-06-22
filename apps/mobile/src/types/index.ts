@@ -66,12 +66,23 @@ export interface Contact {
   custom_badges?: string[];
 }
 
+// 'page link' to one of the team's public surfaces (mirrors @linyup/shared
+// SystemLinkTarget). Set → system link; unset → custom URL link.
+export type SystemLinkTarget =
+  | 'booking'
+  | 'signup'
+  | 'shop'
+  | 'shop-memberships'
+  | 'shop-products'
+  | 'shop-courses'
+  | 'space'
+  | 'site';
+
 export interface TeamLink {
   label: string;
   description?: string;
-  url: string;
-  isBookingLink?: boolean;
-  isMembershipLink?: boolean;
+  url?: string;
+  target?: SystemLinkTarget;
   showIcon?: boolean;
   iconName?: string;
 }

@@ -53,14 +53,14 @@ export async function provisionTeam(
       description: 'Reserve your spot in a session',
       url: '',
       showInBioLink: true,
-      isBookingLink: true,
+      target: 'booking',
     },
     {
       label: 'Membership Signup',
       description: 'Join our community and become a member',
       url: '',
       showInBioLink: true,
-      isMembershipLink: true,
+      target: 'signup',
     },
   ]
 

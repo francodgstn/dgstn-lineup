@@ -184,6 +184,13 @@ export interface MemberPayment {
   /** Free-form purpose tag, e.g. 'drop_in' | 'belt_test' | 'shop'. */
   purpose: string
   description?: string
+  /**
+   * Generic "what was paid" note, aligned with ExternalPayment.comment so the
+   * unified payments view treats both rails the same. Connect rows derive a
+   * default from their structured detail (subscription type / product / course /
+   * purpose); a manager can override it via updatePaymentRecord.
+   */
+  comment?: string | null
   amount: number // gross Rappen
   currency: string // 'chf'
   /** Platform application fee taken (Rappen) — from computePlatformFee. */

@@ -123,6 +123,7 @@ import {
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab } from './NotesTab'
+import { PaymentsTab } from './PaymentsTab'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
 
@@ -2940,6 +2941,7 @@ type TabId =
   | 'activity'
   | 'bookings'
   | 'subscriptions'
+  | 'payments'
   | 'goals'
   | 'gamification'
   | 'alerts'
@@ -3011,6 +3013,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'alerts', label: t('tabAlerts'), icon: Bell },
     { id: 'bookings', label: t('tabBookings'), icon: CalendarDays },
     { id: 'subscriptions', label: t('tabSubscriptions'), icon: BookOpen, feature: 'subscriptions' },
+    { id: 'payments', label: t('tabPayments'), icon: CreditCard },
     { id: 'goals', label: t('tabGoals'), icon: Flag, feature: 'goals' },
     // Gamification is a plugin — the tab appears only when it's installed (filtered below).
     { id: 'gamification', label: t('tabGamification'), icon: Star },
@@ -3165,6 +3168,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {tab === 'subscriptions' && (
               <SubscriptionsTab contact={contact} teamId={currentTeamId} />
             )}
+            {tab === 'payments' && <PaymentsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'goals' && <GoalsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'gamification' && <GamificationTab contact={contact} teamId={currentTeamId} />}
           </div>

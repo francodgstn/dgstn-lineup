@@ -747,9 +747,9 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const renderTeamTab = () => {
-    const generalLinks = (teamProfile?.links || []).filter(
-      (l) => !l.isBookingLink && !l.isMembershipLink
-    );
+    // Only custom links here; "page links" (booking/signup/shop/space) are system
+    // surfaces, surfaced by the app's own navigation rather than as plain links.
+    const generalLinks = (teamProfile?.links || []).filter((l) => !l.target);
     const websiteLink = teamProfile?.socialLinks?.find((s) => s.platform === 'website');
     const legalLinks = teamProfile?.legalLinks;
     const hasLegal = !!(legalLinks?.gtcUrl || legalLinks?.privacyPolicyUrl || legalLinks?.regulationUrl);
@@ -828,7 +828,7 @@ export const ProfileScreen: React.FC = () => {
                         </TouchableRipple>
                       )}
                       {generalLinks.map((link, idx) => (
-                        <TouchableRipple key={idx} onPress={() => Linking.openURL(link.url).catch(() => undefined)}>
+                        <TouchableRipple key={idx} onPress={() => { if (link.url) Linking.openURL(link.url).catch(() => undefined) }}>
                           <View style={[styles.infoRow, { paddingVertical: 4 }]}>
                             <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}>
                               <Icon source="link-variant" size={20} color={theme.dark ? '#818CF8' : '#6366F1'} />
