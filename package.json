@@ -28,6 +28,7 @@
     "stripe:listen": "stripe listen --forward-to localhost:5001/demo-linyup/europe-west6/handleStripeWebhook",
     "stripe:sync": "tsx scripts/stripe-sync.ts",
     "migrate:hmd": "tsx --tsconfig tsconfig.scripts.json scripts/migrate-hmd.ts",
+    "promote:team": "tsx --tsconfig tsconfig.scripts.json scripts/promote-team.ts",
     "seed:staging": "tsx scripts/seed-staging.ts",
     "reset:staging": "tsx scripts/reset-staging-db.ts --confirm",
     "seed:sandbox": "tsx scripts/seed-sandbox.ts",

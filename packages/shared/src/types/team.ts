@@ -195,6 +195,18 @@ export interface Team {
   // Billing currency for subscription-type prices (ISO 4217, e.g. 'CHF').
   // Pre-filled from the configured payment gateway's currency when one exists.
   default_currency?: string
+  // Operational flags for launch / founder onboarding (see docs/launch/).
+  flags?: {
+    // Linyup-internal / synthetic tenant (e.g. the prod smoke-test studio).
+    // Excluded from platform metrics AND exempt from trial auto-downgrade.
+    internal?: boolean
+    // Founder / pilot studio. Exempt from trial auto-downgrade so it cannot lapse
+    // to Free mid-validation; still counted in platform metrics (a real customer).
+    pilot?: boolean
+    // Set by the promote tool when a team is copied from sandbox into prod.
+    promotedFrom?: string // source environment, e.g. 'sandbox'
+    promotedAt?: Timestamp
+  }
   // Stripe Connect (member → studio payments) — compact mirror written by the
   // Connect Cloud Functions. The feature flag (connectEnabled) is operator-only;
   // full account state lives in connect_accounts/{connectAccountId}.

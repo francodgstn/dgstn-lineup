@@ -16,21 +16,21 @@ and the [data-safety checklist](./data-safety-checklist.md) §1 (backups) is don
 | Tenant-data manifest + per-team `purgeTeam` reset | ✅ built (`packages/shared/src/tenantData.ts`, `saas-billing/index.ts`) |
 | `linyup-sandbox` project + guarded reset script | ✅ exists (`.firebaserc`, `scripts/reset-sandbox-db.ts`) |
 | Migration framework (dry-run / `--verify` / `--from-team`) | ✅ exists (`scripts/migration/*`, `scripts/migrate-hmd.ts`) |
-| **`Team.flags.internal/pilot`** (exclude from metrics + exempt from trial auto-downgrade) | ⏳ **TODO** — add to `Team` type + gate in `handleTrialLifecycle` and `platform_metrics` |
-| **Per-team promote tool** (sandbox → prod, idempotent + verified) | ⏳ **TODO** — build on the migration framework |
+| **`Team.flags.internal/pilot`** (exclude from metrics + exempt from trial auto-downgrade) | ✅ built — `Team.flags` (`packages/shared/src/types/team.ts`); gated in `handleTrialLifecycle` (`saas-billing/index.ts`) and `capturePlatformMetrics` (`analytics/platformMetrics.ts`) |
+| **Per-team promote tool** (sandbox → prod, idempotent + verified) | ✅ built — `pnpm promote:team` (`scripts/promote-team.ts`), manifest-driven |
 | External provider teardown in `purgeTeam` (Stripe cancel/disconnect) | ⏳ **TODO** — do manually for now |
 
-> Until the two TODO tools land, the **promote** step is run manually with the
-> migration framework, and the **pilot flag** is approximated by setting the
-> team's `plan` directly (so it doesn't lapse on the 14-day trial) and excluding
-> the internal/test studio from metrics by hand.
+> **Flag semantics:** `flags.internal` → excluded from platform metrics **and**
+> exempt from trial auto-downgrade (for the prod smoke-test studio). `flags.pilot`
+> → exempt from trial auto-downgrade only (a founder is a real customer, still
+> counted in metrics). The promote tool sets `flags.pilot` on the target team.
 
 ---
 
 ## Phase A — Validate in sandbox (`linyup-sandbox`, Stripe TEST mode)
 
-1. **Create the sandbox team.** Flag it `pilot` (once the flag exists; for now set
-   `plan` directly to avoid the 14-day trial auto-downgrade mid-validation).
+1. **Create the sandbox team.** Set `flags.pilot = true` so it can't lapse to Free
+   mid-validation (the trial-downgrade job skips internal/pilot teams).
 2. **Load data.**
    - *Migrating founder (HMD/CSV):* import **into sandbox first** using the
      migration framework — `--dry-run` then real, then `--verify` (counts +
@@ -44,9 +44,19 @@ and the [data-safety checklist](./data-safety-checklist.md) §1 (backups) is don
 
 ## Phase B — Promote to prod (`linyup-prod`, LIVE providers)
 
-6. **Promote the team** sandbox → prod (idempotent + verified; source kept
-   immutable so it's re-runnable). Gate the prod write on a counts + spot-check
-   **verify pass** and a diff report.
+6. **Promote the team** sandbox → prod with `pnpm promote:team` — it copies the
+   studio's content (team doc + subcollections, contacts/sessions/courses/products/
+   …) but **excludes provider plumbing** (Stripe Connect account, member payments/
+   subscriptions, SaaS billing, integration secrets), which is re-established live.
+   Dry-run first, then run with `--verify` + `--confirm`; it marks the prod team
+   `flags.pilot`:
+   ```
+   pnpm promote:team --team <id> --source-creds sandbox-sa.json \
+     --target-creds prod-sa.json --dry-run --verify
+   pnpm promote:team --team <id> --source-creds sandbox-sa.json \
+     --target-creds prod-sa.json --verify --confirm \
+     [--include-storage --source-bucket <b> --target-bucket <b>]
+   ```
 7. **Founder completes LIVE Connect onboarding** + the **controlled first real
    charge** (small, then refund) per the
    [provider-wiring checklist](./provider-wiring-checklist.md) §4.
