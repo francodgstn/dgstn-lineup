@@ -11,6 +11,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePlaces } from '@/hooks/usePlaces'
+import { MainAddressMap } from '@/components/places/MainAddressMap'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
@@ -1432,6 +1434,8 @@ export default function ContactsPage() {
   const { data: contactGroups = [] } = useContactGroups(groupsEnabled ? currentTeamId : null)
   const inOrg = !!team?.org_id
   const { data: statusDefs } = useOrgMembershipStatuses(team?.org_id)
+  const { data: places = [] } = usePlaces(currentTeamId, team?.org_id ?? null)
+  const primaryPlace = places.find((p) => p.scope === 'team' && p.isPrimary)
 
   // Contact cap usage: counts active = non-archived, non-deleted. Over-cap
   // behaviour is tier-specific (contactOverageForPlan) and never per-contact
@@ -1723,6 +1727,17 @@ export default function ContactsPage() {
         loading={loadingActive}
         rankingSystems={team?.ranking_systems}
       />
+
+      {/* Main address (team's primary place) */}
+      {primaryPlace && (
+        <MainAddressMap
+          name={primaryPlace.name}
+          address={primaryPlace.address}
+          mapsLink={primaryPlace.mapsLink}
+          heading={t('mainAddress')}
+          className="max-w-md"
+        />
+      )}
 
       {/* Search — sticky, clears with × */}
       <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 backdrop-blur-sm border-b border-border/40">

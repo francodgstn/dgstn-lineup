@@ -12,11 +12,13 @@ import {
 } from '@/components/ui/select'
 import type {
   WebsiteSection, HeroSection, ContentSection, GallerySection,
-  ActivitiesSection, PricingSection, ScheduleSection, ContactSection, SiteCta,
+  ActivitiesSection, PricingSection, ScheduleSection, ContactSection, PlacesSection, SiteCta,
 } from '@linyup/shared'
 import { RichTextEditor } from '@/components/RichTextEditor'
 import { uploadSiteImage } from './hooks'
 import { getWebsiteLimits } from './limits'
+import { usePlaces } from '@/hooks/usePlaces'
+import { useAuth } from '@/contexts/AuthContext'
 
 const limits = getWebsiteLimits()
 
@@ -374,6 +376,59 @@ function ContactFields({ s, onChange }: { s: ContactSection; onChange: (p: Patch
   )
 }
 
+function PlacesFields({ s, teamId, onChange }: { s: PlacesSection; teamId: string; onChange: (p: Patch) => void }) {
+  const { team } = useAuth()
+  const { data: places = [] } = usePlaces(teamId, team?.org_id ?? null)
+  const selected = new Set(s.placeIds ?? [])
+  const toggle = (id: string) => {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    onChange({ placeIds: Array.from(next) })
+  }
+  return (
+    <div className="space-y-3">
+      <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="Find us" className="h-9" /></Field>
+      <Field label="Subheading"><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
+      <Field label="Columns">
+        <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
+          <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="2">2</SelectItem>
+            <SelectItem value="3">3</SelectItem>
+            <SelectItem value="4">4</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Places to show</Label>
+        {places.length === 0 ? (
+          <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+            No places yet — add them under Settings → Places.
+          </p>
+        ) : (
+          <div className="space-y-1">
+            {places.map((p) => (
+              <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded-md border p-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected.has(p.id)}
+                  onChange={() => toggle(p.id)}
+                  className="h-4 w-4 accent-primary"
+                />
+                <span className="flex-1 truncate">
+                  {p.name}
+                  {p.scope === 'org' ? <span className="text-muted-foreground"> · org</span> : null}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── dispatcher ───────────────────────────────────────────────────────────────
 
 export function SectionEditor({
@@ -392,6 +447,7 @@ export function SectionEditor({
     case 'pricing':  return <PricingFields s={section} onChange={onChange} />
     case 'schedule': return <ScheduleFields s={section} onChange={onChange} />
     case 'contact':  return <ContactFields s={section} onChange={onChange} />
+    case 'places':   return <PlacesFields s={section} teamId={teamId} onChange={onChange} />
     default:         return null
   }
 }

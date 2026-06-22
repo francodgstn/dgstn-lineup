@@ -321,13 +321,10 @@ service cloud.firestore {
         allow write: if false; // Only cloud functions should write to weekly reports
       }
 
-      // Team places subcollection (moved from users/{userId}/user_places)
+      // Team places subcollection. Team members read; managers manage (CRUD).
       match /team_places/{placeId} {
-        // All team members can read places
-        allow read: if isTeamMember(teamId);
-
-        // Cloud functions can write (counters managed by functions)
-        allow write: if false; // Only cloud functions should write to places
+        allow read:  if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'manager');
       }
 
       // Team sessions tags subcollection (moved from users/{userId}/sessions_tags)
@@ -1036,6 +1033,15 @@ service cloud.firestore {
         allow read:   if isOrgMember(orgId);
         allow write:  if hasOrgRole(orgId, 'org_admin');
         allow delete: if hasOrgRole(orgId, 'org_admin');
+      }
+
+      // Org-wide places: shared down to every sub-studio (read), managed by org admins.
+      // Sub-team members read via their current team's org_id (mirrors org-scope events).
+      match /org_places/{placeId} {
+        allow read:  if isOrgMember(orgId)
+                     || (isAuthed()
+                         && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);
+        allow write: if hasOrgRole(orgId, 'org_admin');
       }
     }
 

@@ -15,6 +15,7 @@
     "organization": "Organization"
   },
   "Nav": {
+    "places": "Places",
     "sectionOperations": "Manage",
     "sectionEngage": "Engage",
     "sectionConfigure": "Configure",
@@ -172,6 +173,7 @@
     "demoEmptyLevel": "No contacts with rank set"
   },
   "Contacts": {
+    "mainAddress": "Main address",
     "title": "Contacts",
     "subtitle": "{total} total · {active} active",
     "addContact": "Add contact",
@@ -458,6 +460,10 @@
     "noContacts": "No contacts found."
   },
   "Sessions": {
+    "fieldPlace": "Place",
+    "fieldRoom": "Room",
+    "placeNone": "No place",
+    "roomNone": "No room",
     "title": "Sessions",
     "subtitle": "{count} upcoming",
     "newSession": "New session",
@@ -1373,6 +1379,7 @@
     "addToGroup": "Add to group"
   },
   "Org": {
+    "tabPlaces": "Places",
     "title": "Organization",
     "tabTeams": "Teams",
     "tabEvents": "Events",
@@ -1566,6 +1573,8 @@
     "tip_recurring_body": "Create a recurring session instead of adding each class by hand."
   },
   "Website": {
+    "sectionPlaces": "Places",
+    "sectionPlacesDesc": "Selected locations as simple cards.",
     "title": "Website",
     "preview": "Preview",
     "tabSections": "Sections",

@@ -48,6 +48,7 @@ export const ORG_TEAMS_SUBCOLLECTION = 'org_teams'
 export const ORG_INVITATIONS_SUBCOLLECTION = 'org_invitations'
 export const ORG_ACCESS_REQUESTS_SUBCOLLECTION = 'org_access_requests'
 export const ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION = 'membership_statuses'
+export const ORG_PLACES_SUBCOLLECTION = 'org_places'
 export const TEAM_INTEGRATIONS_SUBCOLLECTION = 'integrations'
 export const INSTALLED_PLUGINS_SUBCOLLECTION = 'installed_plugins'
 // Well-known integration doc id for a studio's email sender configuration

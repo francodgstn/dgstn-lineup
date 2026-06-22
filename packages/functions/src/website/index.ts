@@ -8,6 +8,9 @@ import {
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
   TEAMS_COLLECTION,
+  TEAM_PLACES_SUBCOLLECTION,
+  ORGANIZATIONS_COLLECTION,
+  ORG_PLACES_SUBCOLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
 } from '@linyup/shared'
 import type {
@@ -188,8 +191,95 @@ function buildSection(d: Dict, id: string, type: string): WebsiteSection | null 
         showSocial: bool(d.showSocial),
       }) as unknown as WebsiteSection
     }
+    // Places: keep only the selection + presentation here; the actual place data
+    // is embedded at publish time (enrichSectionsWithPlaces) — sanitizers are pure.
+    case 'places': {
+      const columns = num(d.columns, 2, 4, 3)
+      const placeIds = (Array.isArray(d.placeIds) ? d.placeIds : [])
+        .map((x) => optStr(x, 64))
+        .filter((x): x is string => !!x)
+        .slice(0, 50)
+      return clean({
+        id, type: 'places',
+        heading: optStr(d.heading, 200),
+        subheading: optStr(d.subheading, 400),
+        columns: (columns === 2 || columns === 4 ? columns : 3) as 2 | 3 | 4,
+        placeIds: placeIds.length ? placeIds : undefined,
+      }) as unknown as WebsiteSection
+    }
     default:
       return null
+  }
+}
+
+// Resolve a team's place pool (own team_places + inherited org_places) into a
+// public-safe map + the team's primary place, for publish-time embedding.
+async function loadPlacePool(
+  fs: admin.firestore.Firestore,
+  teamId: string,
+  team: Dict
+): Promise<{
+  byId: Map<string, { id: string; name: string; address?: string; mapsLink?: string }>
+  primary: { name: string; address?: string; mapsLink?: string } | null
+}> {
+  const byId = new Map<string, { id: string; name: string; address?: string; mapsLink?: string }>()
+  const teamSnap = await fs
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(TEAM_PLACES_SUBCOLLECTION)
+    .get()
+  const orgId = optStr((team as Dict).org_id, 64)
+  const orgSnap = orgId
+    ? await fs
+        .collection(ORGANIZATIONS_COLLECTION)
+        .doc(orgId)
+        .collection(ORG_PLACES_SUBCOLLECTION)
+        .get()
+    : null
+
+  const add = (id: string, data: Dict) =>
+    byId.set(
+      id,
+      clean({ id, name: str(data.name, 200), address: optStr(data.address, 400), mapsLink: safeUrl(data.mapsLink) }) as {
+        id: string
+        name: string
+        address?: string
+        mapsLink?: string
+      }
+    )
+  teamSnap.docs.forEach((d) => add(d.id, d.data() as Dict))
+  orgSnap?.docs.forEach((d) => add(d.id, d.data() as Dict))
+
+  const primaryDoc = teamSnap.docs.find((d) => (d.data() as Dict).isPrimary === true) ?? teamSnap.docs[0]
+  const pd = primaryDoc?.data() as Dict | undefined
+  const primary = pd
+    ? (clean({ name: str(pd.name, 200), address: optStr(pd.address, 400), mapsLink: safeUrl(pd.mapsLink) }) as {
+        name: string
+        address?: string
+        mapsLink?: string
+      })
+    : null
+  return { byId, primary }
+}
+
+// Embed selected places into 'places' sections + default the Contact map from the
+// team's primary place. Mutates the sanitized sections in place.
+async function enrichSectionsWithPlaces(
+  fs: admin.firestore.Firestore,
+  teamId: string,
+  team: Dict,
+  sections: WebsiteSection[]
+): Promise<void> {
+  if (!sections.some((s) => s.type === 'places' || s.type === 'contact')) return
+  const { byId, primary } = await loadPlacePool(fs, teamId, team)
+  for (const s of sections) {
+    if (s.type === 'places') {
+      const resolved = (s.placeIds ?? []).map((id) => byId.get(id)).filter((x): x is NonNullable<typeof x> => !!x)
+      s.places = resolved.length ? resolved : undefined
+    } else if (s.type === 'contact' && primary) {
+      if (!s.address) s.address = primary.address
+      if (!s.mapQuery) s.mapQuery = primary.address || primary.name
+    }
   }
 }
 
@@ -260,6 +350,10 @@ export const publishWebsite = onCall(async (request) => {
     .map(sanitizeSection)
     .filter((s): s is WebsiteSection => s !== null)
     .slice(0, 30)
+
+  // Embed selected places into 'places' sections + fill the Contact map from the
+  // team's primary place. Done after sanitizing (needs Firestore reads).
+  await enrichSectionsWithPlaces(fs, teamId, team, sections)
 
   // Denormalise social links (already public via team.public_profile) so the
   // published doc is self-contained for footer/contact icons.

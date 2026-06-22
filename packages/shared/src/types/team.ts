@@ -1,6 +1,7 @@
 import type { Timestamp } from './common'
 // Type-only import — no runtime cycle (connect.ts imports SaasPlan from here).
 import type { ConnectOnboardingModel, ConnectAccountStatus } from './connect'
+import type { PublicMainAddress } from './place'
 
 export type TeamRole = 'owner' | 'manager' | 'viewer'
 
@@ -267,6 +268,9 @@ export interface TeamPublicProfile {
   // Denormalized from teams/{id}.default_currency by syncTeamPublicProfile so the
   // public website pricing table can format prices without reading teams/.
   default_currency?: string
+  // The team's primary place (Main Address), denormalized by
+  // syncPrimaryPlaceToPublicProfile so the public bio-link can show address + map.
+  mainAddress?: PublicMainAddress | null
   // Which surface the team root `/public/{slug}` resolves to (mirrors
   // teams/{id}.default_public_surface). Unset → 'bio-link'.
   default_public_surface?: PublicSurface

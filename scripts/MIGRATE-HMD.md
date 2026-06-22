@@ -95,7 +95,7 @@ pnpm migrate:hmd \
 | `--from-team <teamId>` | Resume contacts/sessions passes from a specific team |
 | `--verify` | Run verification after migration |
 
-Pass names: `setup` · `auth-users` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `referrals` · `team-subcollections` · `verify`
+Pass names: `setup` · `auth-users` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `referrals` · `team-subcollections` · `places` · `verify`
 
 **Run a single pass** (e.g. after a failure mid-way):
 

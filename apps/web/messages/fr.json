@@ -15,6 +15,7 @@
     "organization": "Organisation"
   },
   "Nav": {
+    "places": "Lieux",
     "sectionOperations": "Gérer",
     "sectionEngage": "Engagement",
     "sectionConfigure": "Configuration",
@@ -167,6 +168,7 @@
     "demoEmptyLevel": "Aucun contact avec un classement défini"
   },
   "Contacts": {
+    "mainAddress": "Adresse principale",
     "title": "Contacts",
     "subtitle": "{total} au total · {active} actifs",
     "addContact": "Ajouter un contact",
@@ -453,6 +455,10 @@
     "noContacts": "Aucun contact trouvé."
   },
   "Sessions": {
+    "fieldPlace": "Lieu",
+    "fieldRoom": "Salle",
+    "placeNone": "Aucun lieu",
+    "roomNone": "Aucune salle",
     "title": "Séances",
     "subtitle": "{count} à venir",
     "newSession": "Nouvelle séance",
@@ -1368,6 +1374,7 @@
     "addToGroup": "Ajouter au groupe"
   },
   "Org": {
+    "tabPlaces": "Lieux",
     "title": "Organisation",
     "tabTeams": "Équipes",
     "tabEvents": "Événements",
@@ -1561,6 +1568,8 @@
     "tip_recurring_body": "Créez une séance récurrente au lieu d'ajouter chaque cours à la main."
   },
   "Website": {
+    "sectionPlaces": "Lieux",
+    "sectionPlacesDesc": "Lieux sélectionnés sous forme de cartes.",
     "title": "Site web",
     "preview": "Aperçu",
     "tabSections": "Sections",

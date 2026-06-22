@@ -16,6 +16,8 @@ import { Slider } from '@/components/ui/slider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { usePlaces } from '@/hooks/usePlaces'
+import { useAuth } from '@/contexts/AuthContext'
 import { SESSIONS_COLLECTION } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
 import { Loader2, Repeat2 } from 'lucide-react'
@@ -98,6 +100,8 @@ const sessionSchema = z.object({
   start:          z.date({ required_error: 'Required' }),
   duration:       z.number().min(15).max(480),
   location:       z.string().max(120).optional(),
+  placeId:        z.string().optional(),
+  roomId:         z.string().optional(),
   instructorName: z.string().max(120).optional(),
   notes:          z.string().max(2000).optional(),
   allowBooking:   z.boolean().optional(),
@@ -282,6 +286,8 @@ export function SessionFormDialog({
         start:          editing?.start?.toDate() ?? defaultStart(),
         duration:       deriveDefaultDuration(editing),
         location:       editing?.location ?? '',
+        placeId:        editing?.placeId ?? '',
+        roomId:         editing?.roomId ?? '',
         instructorName: editing?.instructorName ?? '',
         notes:          editing?.notes ?? '',
         allowBooking:   editing?.allowBooking ?? false,
@@ -290,6 +296,11 @@ export function SessionFormDialog({
 
   const watchedActivityId = watch('activityId')
   const watchedStart      = watch('start')
+  const watchedPlaceId    = watch('placeId')
+
+  const { team } = useAuth()
+  const { data: places = [] } = usePlaces(teamId, team?.org_id ?? null)
+  const placeRooms = places.find((p) => p.id === watchedPlaceId)?.rooms ?? []
   const watchedDuration   = watch('duration')
 
   useEffect(() => {
@@ -321,6 +332,8 @@ export function SessionFormDialog({
       activityName:   activityEntry?.name ?? null,
       activityType:   values.activityType,
       location:       values.location || null,
+      placeId:        values.placeId || null,
+      roomId:         values.roomId || null,
       instructorName: values.instructorName || null,
       notes:          values.notes || null,
       allowBooking:   values.allowBooking ?? false,
@@ -343,6 +356,8 @@ export function SessionFormDialog({
           activityName: activityEntry?.name ?? null,
           activityType: values.activityType,
           location: values.location || null,
+          placeId: values.placeId || null,
+          roomId: values.roomId || null,
           tags: [], notes: values.notes || '',
           duration: values.duration,
           allowBooking: values.allowBooking ?? false,
@@ -565,6 +580,46 @@ export function SessionFormDialog({
                 )} />
               </div>
             </div>
+
+            {places.length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">{t('fieldPlace')}</label>
+                  <Controller name="placeId" control={control} render={({ field }) => (
+                    <Select
+                      value={field.value || '__none'}
+                      onValueChange={(v) => { field.onChange(v === '__none' ? '' : v); setValue('roomId', '') }}
+                    >
+                      <SelectTrigger><SelectValue placeholder={t('placeNone')} /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">{t('placeNone')}</SelectItem>
+                        {places.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}{p.scope === 'org' ? ' · org' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )} />
+                </div>
+                {placeRooms.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">{t('fieldRoom')}</label>
+                    <Controller name="roomId" control={control} render={({ field }) => (
+                      <Select value={field.value || '__none'} onValueChange={(v) => field.onChange(v === '__none' ? '' : v)}>
+                        <SelectTrigger><SelectValue placeholder={t('roomNone')} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">{t('roomNone')}</SelectItem>
+                          {placeRooms.map((r) => (
+                            <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )} />
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="text-sm font-medium">{t('fieldLocation')}</label>
