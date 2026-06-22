@@ -11,8 +11,14 @@ This is the **third, distinct** payment concern in the codebase — keep them ap
 | Concern | Money settles on | Where |
 |---|---|---|
 | Linyup SaaS billing (platform charges studios) | **Linyup** | `saas-billing/`, `getPlatformStripeAdapter()` |
-| BYO team gateway (studio charges members, **independent** account, no fee) | Studio | `utils/gateway/`, `handlePayrexxWebhook` |
+| BYO team gateway (studio charges members, **independent** account, no fee) | Studio | `utils/gateway/`, `handlePayrexxWebhook` / `handleTeamStripeWebhook` |
 | **Connect (this doc)** — studio charges members **+ platform fee** | **Studio** | `connect/`, `utils/connect/` |
+
+> **Unified payments view.** The web **Payments** page and the contact **Payments**
+> tab merge BOTH rails in the read layer: Connect (`member_payments` /
+> `member_subscriptions`) + BYO (`payment_events`). One `updatePaymentRecord`
+> callable handles (re)assigning a contact and editing the free-text `comment`
+> across both. See [payment-gateways.md](payment-gateways.md) for the BYO ledger.
 
 ---
 

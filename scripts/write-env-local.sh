@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Generates apps/web/.env.local pointing the web app at the Firebase emulators.
-# Called by .devcontainer/setup.sh and scripts/dev.sh — safe to run repeatedly.
+# Called by .devcontainer/setup.sh — safe to run repeatedly.
 set -euo pipefail
 
 # Resolve repo root so this works regardless of the caller's cwd.

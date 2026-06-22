@@ -6,16 +6,28 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
-import { CreditCard, Loader2, Plus, Copy, Check } from 'lucide-react'
-import type { MemberPayment, SubscriptionType } from '@linyup/shared'
+import { CreditCard, Loader2, Plus, Copy, Check, UserPlus, Pencil } from 'lucide-react'
+import type { SubscriptionType } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useMemberPayments,
   useMemberSubscriptions,
+  usePaymentEvents,
   useRefundMemberPayment,
   useCreateMembershipPayment,
 } from '@/hooks/useConnect'
+import { useActiveContacts } from '@/hooks/useActiveContacts'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import {
+  connectToUnified,
+  byoToUnified,
+  mergePaymentRows,
+  paymentLabel,
+  formatMoneyMinor,
+  formatPaymentDate,
+  type UnifiedPaymentRow,
+} from '@/lib/payments'
+import { AssignPaymentDialog, type AssignPaymentTarget } from '@/components/payments/AssignPaymentDialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -47,19 +59,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-function formatChf(rappen: number): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'CHF' }).format(
-    (rappen ?? 0) / 100
-  )
-}
-
-function formatDate(ts: unknown): string {
-  const d = (ts as { toDate?: () => Date } | undefined)?.toDate?.()
-  return d ? d.toLocaleDateString() : ''
-}
-
 const PAYMENT_STATUS_STYLES: Record<string, string> = {
   succeeded: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  paid: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   partially_refunded: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
   refunded: 'bg-muted text-muted-foreground',
   failed: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
@@ -72,13 +74,34 @@ export default function PaymentsDashboardPage() {
   const teamId = currentTeamId ?? null
 
   const { data: payments = [], isLoading } = useMemberPayments(teamId)
+  const { data: events = [], isLoading: loadingEvents } = usePaymentEvents(teamId)
   const { data: subscriptions = [] } = useMemberSubscriptions(teamId)
+  const { data: contacts = [] } = useActiveContacts(teamId)
   const refund = useRefundMemberPayment()
-  const [refundTarget, setRefundTarget] = useState<MemberPayment | null>(null)
+
+  const [refundTarget, setRefundTarget] = useState<UnifiedPaymentRow | null>(null)
+  const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
+  const [filter, setFilter] = useState<'all' | 'unassigned'>('all')
+
+  const contactName = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of contacts) {
+      m.set(c.id, `${c.firstname ?? ''} ${c.lastname ?? ''}`.trim() || c.email || c.id)
+    }
+    return m
+  }, [contacts])
+
+  const rows = useMemo(
+    () => mergePaymentRows(connectToUnified(payments), byoToUnified(events)),
+    [payments, events]
+  )
+  const unassignedCount = rows.filter((r) => !r.assigned).length
+  const visible = filter === 'unassigned' ? rows.filter((r) => !r.assigned) : rows
+  const loading = isLoading || loadingEvents
 
   async function confirmRefund() {
     if (!refundTarget || !teamId) return
-    await refund.mutateAsync({ teamId, paymentIntentId: refundTarget.paymentIntentId })
+    await refund.mutateAsync({ teamId, paymentIntentId: refundTarget.paymentId })
     setRefundTarget(null)
   }
 
@@ -92,56 +115,120 @@ export default function PaymentsDashboardPage() {
         {teamId && <CreatePaymentLinkDialog teamId={teamId} />}
       </div>
 
-      {/* One-off payments */}
+      {/* Filter: all / unassigned */}
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant={filter === 'all' ? 'default' : 'outline'}
+          onClick={() => setFilter('all')}
+        >
+          {t('filterAll')}
+        </Button>
+        <Button
+          size="sm"
+          variant={filter === 'unassigned' ? 'default' : 'outline'}
+          onClick={() => setFilter('unassigned')}
+        >
+          {t('filterUnassigned')}
+          {unassignedCount > 0 && (
+            <Badge variant="secondary" className="ml-1.5">
+              {unassignedCount}
+            </Badge>
+          )}
+        </Button>
+      </div>
+
+      {/* Payments (Connect + BYO, unified) */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium">{t('paymentsHeading')}</h2>
-        {isLoading ? (
+        {loading ? (
           <Skeleton className="h-24 rounded" />
-        ) : payments.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">{t('noPayments')}</p>
+        ) : visible.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            {filter === 'unassigned' ? t('noUnassigned') : t('noPayments')}
+          </p>
         ) : (
           <Card>
             <CardContent className="p-0 divide-y">
-              {payments.map((p) => {
-                const refundable =
-                  p.status === 'succeeded' || p.status === 'partially_refunded'
-                return (
-                  <div key={p.paymentIntentId} className="flex items-center gap-3 p-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{p.purpose || t('payment')}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(p.created_at)} · {t('fee')} {formatChf(p.application_fee_amount)}
-                        {p.amount_refunded > 0 && (
-                          <> · {t('refunded')} {formatChf(p.amount_refunded)}</>
-                        )}
-                      </p>
-                    </div>
-                    {p.dispute_status && (
-                      <Badge variant="outline" className="text-red-700 border-red-300">
-                        {t('disputed')}
-                      </Badge>
-                    )}
-                    <Badge
-                      variant="secondary"
-                      className={PAYMENT_STATUS_STYLES[p.status] ?? 'bg-muted'}
-                    >
-                      {t(`status_${p.status}` as never)}
-                    </Badge>
-                    <span className="text-sm font-medium tabular-nums">{formatChf(p.amount)}</span>
-                    {refundable && (
-                      <Button size="sm" variant="outline" onClick={() => setRefundTarget(p)}>
-                        {t('refund')}
-                      </Button>
-                    )}
+              {visible.map((row) => (
+                <div key={row.key} className="flex items-center gap-3 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{paymentLabel(row)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatPaymentDate(row.createdAt)}
+                      {row.source === 'connect' && row.feeAmount > 0 && (
+                        <> · {t('fee')} {formatMoneyMinor(row.feeAmount, row.currency)}</>
+                      )}
+                      {row.amountRefunded > 0 && (
+                        <> · {t('refunded')} {formatMoneyMinor(row.amountRefunded, row.currency)}</>
+                      )}
+                    </p>
+                    <p className="text-xs mt-0.5">
+                      {row.assigned ? (
+                        <span className="text-muted-foreground">
+                          {row.contactId ? contactName.get(row.contactId) ?? '—' : '—'}
+                        </span>
+                      ) : (
+                        <Badge variant="outline" className="text-amber-700 border-amber-300">
+                          {t('unassigned')}
+                          {row.email ? ` · ${row.email}` : ''}
+                        </Badge>
+                      )}
+                    </p>
                   </div>
-                )
-              })}
+
+                  <Badge variant="outline" className="hidden sm:inline-flex text-muted-foreground">
+                    {t(`gateway_${row.gateway}` as never)}
+                  </Badge>
+                  {row.disputed && (
+                    <Badge variant="outline" className="text-red-700 border-red-300">
+                      {t('disputed')}
+                    </Badge>
+                  )}
+                  <Badge variant="secondary" className={PAYMENT_STATUS_STYLES[row.status] ?? 'bg-muted'}>
+                    {row.source === 'byo' ? t('status_paid') : t(`status_${row.status}` as never)}
+                  </Badge>
+                  <span className="text-sm font-medium tabular-nums">
+                    {formatMoneyMinor(row.amount, row.currency)}
+                  </span>
+
+                  {/* Assign / edit (both rails) */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setAssignTarget({
+                        source: row.source,
+                        paymentId: row.paymentId,
+                        contactId: row.contactId,
+                        comment: row.comment,
+                      })
+                    }
+                  >
+                    {row.assigned ? (
+                      <Pencil className="h-3.5 w-3.5" />
+                    ) : (
+                      <>
+                        <UserPlus className="h-3.5 w-3.5 mr-1" />
+                        {t('assign')}
+                      </>
+                    )}
+                  </Button>
+
+                  {/* Refund (Connect only) */}
+                  {row.refundable && (
+                    <Button size="sm" variant="outline" onClick={() => setRefundTarget(row)}>
+                      {t('refund')}
+                    </Button>
+                  )}
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}
       </section>
 
-      {/* Recurring memberships */}
+      {/* Recurring memberships (Connect) */}
       {subscriptions.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-medium">{t('subscriptionsHeading')}</h2>
@@ -152,7 +239,7 @@ export default function PaymentsDashboardPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{t('membership')}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatChf(s.amount)} · {s.status}
+                      {formatMoneyMinor(s.amount, s.currency)} · {s.status}
                     </p>
                   </div>
                   <Badge variant="secondary">{s.status}</Badge>
@@ -163,12 +250,23 @@ export default function PaymentsDashboardPage() {
         </section>
       )}
 
+      {teamId && (
+        <AssignPaymentDialog
+          teamId={teamId}
+          target={assignTarget}
+          onClose={() => setAssignTarget(null)}
+        />
+      )}
+
       <AlertDialog open={!!refundTarget} onOpenChange={(o) => !o && setRefundTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('refundConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {refundTarget && t('refundConfirmBody', { amount: formatChf(refundTarget.amount) })}
+              {refundTarget &&
+                t('refundConfirmBody', {
+                  amount: formatMoneyMinor(refundTarget.amount, refundTarget.currency),
+                })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

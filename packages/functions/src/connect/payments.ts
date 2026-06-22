@@ -18,9 +18,14 @@ import {
   takeRatePercent,
   recurrenceToStripeInterval,
   isRecurringRecurrence,
+  resolveProductPrice,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  PRODUCTS_SUBCOLLECTION,
+  COURSES_COLLECTION,
   TEAMS_COLLECTION,
   type SubscriptionType,
+  type Product,
+  type Course,
 } from '@linyup/shared'
 import { getHostingUrl } from '../utils/env'
 import {
@@ -415,6 +420,193 @@ export const createMembershipCheckout = onCall(async (request) => {
     return { url: session.url, sessionId: session.sessionId, recurring: false }
   } catch (err) {
     console.error('[connect] createMembershipCheckout failed:', err)
+    throw new HttpsError('internal', 'Failed to start checkout')
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createProductCheckout — PUBLIC (unauthenticated) one-off checkout for the
+// member-facing shop's PRODUCTS section. Mirrors createMembershipCheckout but for
+// physical products: always a single charge (never recurring) on the studio's
+// connected account. The optional variantId selects a size/colour; the price is
+// the variant override or the product's base price. The webhook links/creates the
+// buyer's contact by email and records the sale (kind === 'product').
+// ─────────────────────────────────────────────────────────────────────────────
+export const createProductCheckout = onCall(async (request) => {
+  const data = request.data as {
+    teamId?: string
+    productId?: string
+    variantId?: string
+    memberEmail?: string
+    slug?: string
+    locale?: string
+    idempotencyKey?: string
+  }
+  if (!data?.teamId || !data?.productId) {
+    throw new HttpsError('invalid-argument', 'teamId and productId are required')
+  }
+  const email = (data.memberEmail ?? '').toLowerCase().trim()
+  if (!EMAIL_RE.test(email)) {
+    throw new HttpsError('invalid-argument', 'A valid email is required')
+  }
+  const { teamId, productId } = data
+  const variantId = data.variantId
+  const locale = data.locale ?? 'en'
+
+  await checkoutRateLimit(request.rawRequest?.ip)
+
+  // No auth: the only gates are the team's Connect kill-switch + chargeable account.
+  const team = await loadEnabledTeam(teamId)
+  const { accountId, model } = requireChargeableAccount(team)
+
+  const productSnap = await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(PRODUCTS_SUBCOLLECTION)
+    .doc(productId)
+    .get()
+  if (!productSnap.exists) throw new HttpsError('not-found', 'Product not found')
+  const product = productSnap.data() as Product
+  // Only active products are sellable from the public shop.
+  if (product.active === false) {
+    throw new HttpsError('failed-precondition', 'This item is not available')
+  }
+
+  // Resolve the chosen variant (if any) and validate it is active.
+  let variantLabel: string | undefined
+  if (variantId) {
+    const variant = (product.variants ?? []).find((v) => v.id === variantId)
+    if (!variant || variant.active === false) {
+      throw new HttpsError('not-found', 'Variant not available')
+    }
+    variantLabel = variant.label
+  }
+
+  const amount = Math.round(resolveProductPrice(product, variantId) * 100)
+  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
+    throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
+  }
+
+  const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=shop` : ''
+  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery)
+  const productName = variantLabel ? `${product.name} — ${variantLabel}` : product.name
+
+  // Webhook reads this to record the sale + link/create the buyer's contact.
+  const metadata: Record<string, string> = {
+    teamId,
+    kind: 'product',
+    purpose: 'product',
+    productId,
+    productName: product.name,
+  }
+  if (variantId) metadata.variantId = variantId
+  if (variantLabel) metadata.variantLabel = variantLabel
+
+  const idempotencyKey =
+    data.idempotencyKey ??
+    `product-pub:${teamId}:${productId}:${variantId ?? '_'}:${email}:${Math.floor(Date.now() / 60000)}`
+
+  try {
+    const session = await createOneOffCheckoutSession({
+      accountId,
+      amount,
+      applicationFeeAmount: computePlatformFee({ tier: team.plan, amount, model }),
+      productName,
+      successUrl,
+      cancelUrl,
+      customerEmail: email,
+      metadata,
+      idempotencyKey,
+    })
+    return { url: session.url, sessionId: session.sessionId, recurring: false }
+  } catch (err) {
+    console.error('[connect] createProductCheckout failed:', err)
+    throw new HttpsError('internal', 'Failed to start checkout')
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createCourseCheckout — public, one-off purchase of a 'purchase'-tier online course
+// (LMS). No auth: the buyer pays from the shop, then logs into the team's Space with
+// the same email to watch. The webhook grants a lifetime entitlement
+// (courses/{id}/purchases/{contactId}) + links/creates the buyer's contact by email.
+// Mirrors createProductCheckout; the success page lands in the Space (seg=space).
+// ─────────────────────────────────────────────────────────────────────────────
+export const createCourseCheckout = onCall(async (request) => {
+  const data = request.data as {
+    teamId?: string
+    courseId?: string
+    memberEmail?: string
+    slug?: string
+    locale?: string
+    idempotencyKey?: string
+  }
+  if (!data?.teamId || !data?.courseId) {
+    throw new HttpsError('invalid-argument', 'teamId and courseId are required')
+  }
+  const email = (data.memberEmail ?? '').toLowerCase().trim()
+  if (!EMAIL_RE.test(email)) {
+    throw new HttpsError('invalid-argument', 'A valid email is required')
+  }
+  const { teamId, courseId } = data
+  const locale = data.locale ?? 'en'
+
+  await checkoutRateLimit(request.rawRequest?.ip)
+
+  // No auth: the only gates are the team's Connect kill-switch + chargeable account.
+  const team = await loadEnabledTeam(teamId)
+  const { accountId, model } = requireChargeableAccount(team)
+
+  const courseSnap = await admin.firestore().collection(COURSES_COLLECTION).doc(courseId).get()
+  if (!courseSnap.exists) throw new HttpsError('not-found', 'Course not found')
+  const course = courseSnap.data() as Course
+  // Only a published, purchase-tier course that belongs to this team is sellable.
+  if (course.teamId !== teamId) throw new HttpsError('not-found', 'Course not found')
+  if (course.status !== 'published') {
+    throw new HttpsError('failed-precondition', 'This course is not available')
+  }
+  if (course.accessRule?.type !== 'purchase' || typeof course.accessRule.priceAmount !== 'number') {
+    throw new HttpsError('failed-precondition', 'This course is not for sale')
+  }
+
+  const amount = Math.round(course.accessRule.priceAmount * 100)
+  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
+    throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
+  }
+
+  // Land the buyer back in the Space (where they watch), not the shop.
+  const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=space` : ''
+  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery)
+
+  // Webhook reads this to grant the entitlement + link/create the buyer's contact.
+  const metadata: Record<string, string> = {
+    teamId,
+    kind: 'course',
+    purpose: 'course',
+    courseId,
+    courseTitle: course.title,
+  }
+
+  const idempotencyKey =
+    data.idempotencyKey ??
+    `course-pub:${teamId}:${courseId}:${email}:${Math.floor(Date.now() / 60000)}`
+
+  try {
+    const session = await createOneOffCheckoutSession({
+      accountId,
+      amount,
+      applicationFeeAmount: computePlatformFee({ tier: team.plan, amount, model }),
+      productName: course.title,
+      successUrl,
+      cancelUrl,
+      customerEmail: email,
+      metadata,
+      idempotencyKey,
+    })
+    return { url: session.url, sessionId: session.sessionId, recurring: false }
+  } catch (err) {
+    console.error('[connect] createCourseCheckout failed:', err)
     throw new HttpsError('internal', 'Failed to start checkout')
   }
 })

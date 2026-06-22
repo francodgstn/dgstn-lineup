@@ -32,7 +32,7 @@ import { toast } from 'sonner'
 import {
   ChevronLeft, Plus, Pencil, Trash2, FileText, Video, Music, GraduationCap, Upload, X, Paperclip,
 } from 'lucide-react'
-import type { Lesson, LessonType, MediaSource, CourseStatus, LessonAttachment } from '@linyup/shared'
+import type { Course, Lesson, LessonType, MediaSource, CourseStatus, LessonAttachment } from '@linyup/shared'
 import {
   useCourse, useModules, useLessons,
   updateCourse, deleteCourse,
@@ -536,24 +536,29 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
 // ─── Settings tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, status,
+  courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, priceAmount, status,
 }: {
   courseId: string
   teamId: string
   title: string
   summary: string
   coverImageUrl: string | null
-  accessType: 'free' | 'registered' | 'subscription'
+  accessType: 'free' | 'registered' | 'subscription' | 'purchase'
   subscriptionTypeIds?: string[]
+  priceAmount?: number
   status: CourseStatus
 }) {
   const t = useTranslations('Courses')
+  const { team } = useAuth()
+  const currency = team?.default_currency ?? 'CHF'
   const queryClient = useQueryClient()
   const router = useRouter()
   const [localTitle, setLocalTitle] = useState(title)
   const [localSummary, setLocalSummary] = useState(summary)
   const [localAccess, setLocalAccess] = useState(accessType)
   const [localSubIds, setLocalSubIds] = useState<string[]>(initialSubIds ?? [])
+  const initialPriceText = typeof priceAmount === 'number' ? String(priceAmount) : ''
+  const [localPriceText, setLocalPriceText] = useState(initialPriceText)
   const [uploading, setUploading] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -561,29 +566,46 @@ function SettingsTab({
 
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
 
+  // The included-subs checkbox list is shared by the 'subscription' and 'purchase' tiers.
+  const showSubsList = localAccess === 'subscription' || localAccess === 'purchase'
+  const localPriceNum = parseFloat(localPriceText.replace(',', '.'))
+  // Stripe's minimum charge is ~0.50 in the team's currency.
+  const purchasePriceInvalid =
+    localAccess === 'purchase' && !(Number.isFinite(localPriceNum) && localPriceNum >= 0.5)
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['course', courseId] })
   const dirty =
     localTitle !== title ||
     localSummary !== summary ||
     localAccess !== accessType ||
+    localPriceText !== initialPriceText ||
     JSON.stringify(localSubIds.slice().sort()) !==
       JSON.stringify((initialSubIds ?? []).slice().sort())
 
   const saveMutation = useMutation({
-    mutationFn: () => updateCourse(courseId, {
-      title: localTitle.trim(),
-      summary: localSummary.trim(),
-      accessRule: localAccess === 'subscription'
-        ? { type: 'subscription', subscriptionTypeIds: localSubIds }
-        : { type: localAccess },
-    }),
+    mutationFn: () => {
+      let accessRule: Course['accessRule']
+      if (localAccess === 'subscription') {
+        accessRule = { type: 'subscription', subscriptionTypeIds: localSubIds }
+      } else if (localAccess === 'purchase') {
+        // localSubIds here is the OPTIONAL "included free for these subs" list.
+        accessRule = { type: 'purchase', priceAmount: localPriceNum, subscriptionTypeIds: localSubIds }
+      } else {
+        accessRule = { type: localAccess }
+      }
+      return updateCourse(courseId, {
+        title: localTitle.trim(),
+        summary: localSummary.trim(),
+        accessRule,
+      })
+    },
     onSuccess: () => { invalidate(); toast.success(t('settingsSaved')) },
     onError: () => toast.error(t('errorSave')),
   })
 
   // Ctrl/Cmd+S saves the settings (when there are unsaved changes).
   useSaveShortcut(() => {
-    if (dirty && !saveMutation.isPending) saveMutation.mutate()
+    if (dirty && !purchasePriceInvalid && !saveMutation.isPending) saveMutation.mutate()
   })
 
   async function handleCover(e: React.ChangeEvent<HTMLInputElement>) {
@@ -656,11 +678,35 @@ function SettingsTab({
             <RadioGroupItem value="subscription" id="access-sub" />
             <Label htmlFor="access-sub" className="font-normal">{t('accessSubscription')}</Label>
           </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="purchase" id="access-purchase" />
+            <Label htmlFor="access-purchase" className="font-normal">{t('accessPurchase')}</Label>
+          </div>
         </RadioGroup>
 
-        {localAccess === 'subscription' && (
+        {localAccess === 'purchase' && (
+          <div className="mt-3 space-y-1.5">
+            <Label htmlFor="course-price">{t('fieldPrice', { currency })}</Label>
+            <Input
+              id="course-price"
+              inputMode="decimal"
+              value={localPriceText}
+              onChange={(e) => setLocalPriceText(e.target.value)}
+              placeholder="0.00"
+              className="max-w-[10rem]"
+            />
+            {purchasePriceInvalid && (
+              <p className="text-xs text-destructive">{t('priceMin')}</p>
+            )}
+            <p className="text-xs text-muted-foreground">{t('accessPurchaseHint')}</p>
+          </div>
+        )}
+
+        {showSubsList && (
           <div className="mt-3 space-y-2 rounded-md border bg-muted/30 p-3">
-            <p className="text-xs font-medium">{t('accessSubscriptionTypesLabel')}</p>
+            <p className="text-xs font-medium">
+              {localAccess === 'purchase' ? t('accessIncludedSubsLabel') : t('accessSubscriptionTypesLabel')}
+            </p>
             {subscriptionTypes.length === 0 ? (
               <p className="text-xs text-muted-foreground">{t('accessNoSubscriptionTypes')}</p>
             ) : (
@@ -687,7 +733,7 @@ function SettingsTab({
       </div>
 
       <div className="flex gap-2">
-        <Button onClick={() => saveMutation.mutate()} disabled={!dirty || saveMutation.isPending}>
+        <Button onClick={() => saveMutation.mutate()} disabled={!dirty || purchasePriceInvalid || saveMutation.isPending}>
           {saveMutation.isPending ? t('saving') : t('saveSettings')}
         </Button>
         <Button variant="outline" onClick={togglePublish}>
@@ -798,6 +844,7 @@ export default function CourseBuilderPage() {
             coverImageUrl={course.coverImageUrl ?? null}
             accessType={course.accessRule?.type ?? 'registered'}
             subscriptionTypeIds={course.accessRule?.subscriptionTypeIds}
+            priceAmount={course.accessRule?.priceAmount}
             status={course.status}
           />
         </TabsContent>

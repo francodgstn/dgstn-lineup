@@ -392,16 +392,14 @@ async function seedTeam(opts: {
       links: [
         {
           label: 'Book Now',
-          isBookingLink: true,
-          isMembershipLink: false,
+          target: 'booking',
           showInBioLink: true,
           iconName: 'CalendarPlus',
           url: null,
         },
         {
           label: 'Join as Member',
-          isBookingLink: false,
-          isMembershipLink: true,
+          target: 'signup',
           showInBioLink: true,
           iconName: 'UserCheck',
           url: null,
@@ -411,7 +409,7 @@ async function seedTeam(opts: {
           ? [
               {
                 label: 'Online Courses',
-                isCoursesLink: true,
+                target: 'space',
                 showInBioLink: true,
                 iconName: 'GraduationCap',
                 url: null,
@@ -443,16 +441,14 @@ async function seedTeam(opts: {
       links: [
         {
           label: 'Book Now',
-          isBookingLink: true,
-          isMembershipLink: false,
+          target: 'booking',
           showInBioLink: true,
           iconName: 'CalendarPlus',
           url: null,
         },
         {
           label: 'Join as Member',
-          isBookingLink: false,
-          isMembershipLink: true,
+          target: 'signup',
           showInBioLink: true,
           iconName: 'UserCheck',
           url: null,
@@ -461,7 +457,7 @@ async function seedTeam(opts: {
           ? [
               {
                 label: 'Online Courses',
-                isCoursesLink: true,
+                target: 'space',
                 showInBioLink: true,
                 iconName: 'GraduationCap',
                 url: null,
@@ -2029,8 +2025,7 @@ async function seedFreeTeam() {
       links: [
         {
           label: 'Book Now',
-          isBookingLink: true,
-          isMembershipLink: false,
+          target: 'booking',
           showInBioLink: true,
           iconName: 'CalendarPlus',
           url: null,
@@ -2059,8 +2054,7 @@ async function seedFreeTeam() {
       links: [
         {
           label: 'Book Now',
-          isBookingLink: true,
-          isMembershipLink: false,
+          target: 'booking',
           showInBioLink: true,
           iconName: 'CalendarPlus',
           url: null,

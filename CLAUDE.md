@@ -163,10 +163,26 @@ world-readable
 | Free | `free` | "Free" | Anyone, no login — incl. media |
 | Sign-in required | `registered` | "Sign-in required" | Any signed-in contact of the team |
 | Subscription | `subscription` | "Subscription" | Contact whose `subscription_type_id` ∈ `accessRule.subscriptionTypeIds` |
+| Sold (one-off) | `purchase` | "Sold · {price}" | Contact who bought it (lifetime), OR whose `subscription_type_id` ∈ `accessRule.subscriptionTypeIds` (optional "included free") |
 
 History: the middle tier was `members` until 2026-06; renamed (value + display) to
 `registered` while pre-launch with seed data only. The stored enum value is the stable
 machine identifier — post-launch, renames must be display-only.
+
+**Selling courses (the `purchase` tier).** A purchase-tier course carries
+`accessRule.priceAmount` (major units) and is sold one-off in `/public/{slug}/shop`
+**next to products and subscriptions** (a "Courses" tab), while still consumed in
+`/public/{slug}/space`. It reuses the products Stripe-Connect plumbing: the public
+`createCourseCheckout` callable (`packages/functions/src/connect/payments.ts`) →
+`createOneOffCheckoutSession` → the Connect webhook's `handleCourseCheckout`
+(`webhook.ts`, `kind: 'course'`) links/creates the buyer's contact and writes a
+**lifetime entitlement** at `courses/{courseId}/purchases/{contactId}`
+(`COURSE_PURCHASES_SUBCOLLECTION`). Firestore rules unlock the course via
+`hasPurchasedCourse(courseId)` inside `canReadPublishedCourse(courseId, c)`. The shop
++ Space read the per-course `public_profile` summary (now carries `priceAmount`) via
+the same collection-group query; the Space also queries `purchases` (collection-group,
+indexed on `contactId, teamId`) to show unlock state. The success page lands the buyer
+in their Space (`seg=space`) to watch.
 
 **Contact auth on the web** reuses the mobile contact-session mechanism: passwordless email
 code (`sendMembershipVerificationCode`) → `loginContactWithCode` (matches the existing
@@ -323,15 +339,37 @@ apps/web/
 
 ## Development commands
 
+**Local dev = one process per terminal.**
+
+In VS Code (the usual way): **Ctrl+Shift+P → "Tasks: Run Task"** → pick a service or a
+`Stack:` preset (`.vscode/tasks.json`). Each runs in its own dedicated integrated
+terminal; the `Stack:` presets launch several at once (e.g. "Stack: Web" = emulators +
+web). Add/extend presets there.
+
+Or run the scripts directly (start the backend in one terminal, then each app in its own):
+
 ```bash
-pnpm install                                    # root — installs all workspaces
-pnpm --filter @linyup/web dev                   # Next.js dev server (port 3000)
-pnpm --filter @linyup/functions run build       # compile functions TypeScript
-pnpm --filter @linyup/functions run test        # run function tests (needs emulator)
-pnpm --filter @linyup/mobile start              # Expo dev server
-pnpm typecheck                                  # typecheck all packages
-pnpm lint                                       # lint all packages
+pnpm install            # root — installs all workspaces (once)
+
+# ── Terminal 1: backend (pick ONE dataset — see "Emulator data modes") ──
+pnpm emulators:seed     # fresh seed: emulators (auth+firestore+functions+storage) + 3 demo accounts
+pnpm emulators:demo     # persistent demo snapshot
+pnpm emulators:hmd      # HMD migration snapshot (auth+firestore+storage)
+
+# ── Terminal 2+: apps (one per terminal, as needed) ──
+pnpm dev:web            # Next.js admin dashboard (port 3000)
+pnpm dev:admin          # operator console (port 3002)
+pnpm dev:landing        # Astro marketing site (port 4321)
+pnpm dev:mobile         # Expo student app
+
+# ── Optional extra terminals ──
+pnpm stripe:listen      # forward Stripe test webhooks to the local Functions emulator
+pnpm functions:watch    # rebuild Cloud Functions on save (when editing functions)
 ```
+
+Quality / CI checks (run anytime): `pnpm build` · `pnpm lint` · `pnpm typecheck` ·
+`pnpm test` · `pnpm format`. Cloud/data ops live under `seed:*` / `reset:*` /
+`migrate:hmd` / `stripe:sync` / `emulators:export:*` — not part of day-to-day startup.
 
 ---
 

@@ -51,20 +51,87 @@ export interface CustomFieldDefinition {
   required?: boolean
 }
 
+// A "page link" target — one of the team's own public surfaces, reachable at
+// /public/{slug}/{route}. Replaces the former per-surface boolean flags
+// (is{Booking,Membership,Courses,Shop}Link) with a single discriminator so new
+// surfaces are one table entry, not a new flag + branches everywhere.
+//  - booking          → /booking                (always available)
+//  - signup           → /signup                 (membership signup; always available)
+//  - shop             → /shop                    (whole self-checkout)
+//  - shop-memberships → /shop?tab=memberships    (subscriptions section)
+//  - shop-products    → /shop?tab=products        (products section)
+//  - shop-courses     → /shop?tab=courses         (sellable courses section)
+//  - space            → /space                   (member course library; online-courses plugin)
+//  - site             → /site                    (studio website; website plugin)
+// `route` may carry a query (e.g. 'shop?tab=products') — the public link is a plain
+// <a href>, so the query rides through to deep-link the right shop tab.
+export type SystemLinkTarget =
+  | 'booking'
+  | 'signup'
+  | 'shop'
+  | 'shop-memberships'
+  | 'shop-products'
+  | 'shop-courses'
+  | 'space'
+  | 'site'
+
+export const SYSTEM_LINK_TARGETS: readonly SystemLinkTarget[] = [
+  'booking',
+  'signup',
+  'shop',
+  'shop-memberships',
+  'shop-products',
+  'shop-courses',
+  'space',
+  'site',
+]
+
+export interface SystemLinkMeta {
+  route: string // sibling route (may include a query) under /public/{slug}/
+  defaultIcon: string // lucide icon name, used when the link carries no custom icon
+}
+
+export const SYSTEM_LINK_META: Record<SystemLinkTarget, SystemLinkMeta> = {
+  booking: { route: 'booking', defaultIcon: 'CalendarDays' },
+  signup: { route: 'signup', defaultIcon: 'UserPlus' },
+  shop: { route: 'shop', defaultIcon: 'ShoppingBag' },
+  'shop-memberships': { route: 'shop?tab=memberships', defaultIcon: 'Ticket' },
+  'shop-products': { route: 'shop?tab=products', defaultIcon: 'Tag' },
+  'shop-courses': { route: 'shop?tab=courses', defaultIcon: 'GraduationCap' },
+  space: { route: 'space', defaultIcon: 'BookOpen' },
+  site: { route: 'site', defaultIcon: 'Globe' },
+}
+
+// A bio-link entry: either a custom external link (`url`) or a "page link" to one
+// of the team's own public surfaces (`target`). Exactly one is set — `target`
+// takes precedence if both somehow appear.
 export interface TeamLink {
   label: string
   description?: string
-  url: string
+  url?: string // custom links only
   showInBioLink: boolean
   iconName?: string
-  isBookingLink?: boolean
-  isMembershipLink?: boolean
-  // System link to the public Space (online courses). Only meaningful when the
-  // online-courses plugin is active; routes to /public/space/{slug}.
-  isCoursesLink?: boolean
-  // System link to the public Shop (self-checkout). Only meaningful when the team
-  // has Stripe Connect enabled; routes to /public/{slug}/shop.
-  isShopLink?: boolean
+  target?: SystemLinkTarget // page links only
+}
+
+// Back-compat: resolve a (possibly legacy) raw link to its page-link target. Reads
+// the new `target` first, then falls back to the old is{Booking,Membership,Courses,
+// Shop}Link booleans so pre-refactor data still resolves. null = custom link.
+export function resolveSystemLinkTarget(link: {
+  target?: unknown
+  isBookingLink?: unknown
+  isMembershipLink?: unknown
+  isCoursesLink?: unknown
+  isShopLink?: unknown
+}): SystemLinkTarget | null {
+  if (typeof link.target === 'string' && SYSTEM_LINK_TARGETS.includes(link.target as SystemLinkTarget)) {
+    return link.target as SystemLinkTarget
+  }
+  if (link.isBookingLink) return 'booking'
+  if (link.isMembershipLink) return 'signup'
+  if (link.isCoursesLink) return 'space'
+  if (link.isShopLink) return 'shop'
+  return null
 }
 
 export type SocialPlatform =

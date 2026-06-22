@@ -709,8 +709,7 @@ async function seedTeam(opts: TeamSeed) {
     {
       label: 'Book Now',
       description: 'Reserve your spot in a session',
-      isBookingLink: true,
-      isMembershipLink: false,
+      target: 'booking',
       showInBioLink: true,
       iconName: 'CalendarPlus',
       url: null,
@@ -718,8 +717,7 @@ async function seedTeam(opts: TeamSeed) {
     {
       label: 'Join as Member',
       description: 'Join our community and become a member',
-      isBookingLink: false,
-      isMembershipLink: true,
+      target: 'signup',
       showInBioLink: true,
       iconName: 'UserCheck',
       url: null,

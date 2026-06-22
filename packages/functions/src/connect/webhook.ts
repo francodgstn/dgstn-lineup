@@ -20,6 +20,8 @@ import {
   CONNECT_ACCOUNTS_COLLECTION,
   CONNECT_WEBHOOK_EVENTS_COLLECTION,
   CONTACTS_COLLECTION,
+  COURSES_COLLECTION,
+  COURSE_PURCHASES_SUBCOLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
@@ -35,6 +37,7 @@ import {
   retrieveAccountStatus,
 } from '../utils/connect/client'
 import { persistAccountStatus } from './access'
+import { resolveSingleContact } from '../utils/contacts'
 
 // Account/capability events → re-fetch the account (source of truth) and persist.
 // Covers classic Connect account events and v2 thin account events.
@@ -88,7 +91,7 @@ function addMonths(months: number): Timestamp {
 }
 
 /** Resolve the contact: prefer metadata.contactId (verified to belong to the team),
- * else fall back to an email lookup (teamId + email), mirroring Payrexx. */
+ * else fall back to a UNIQUE email match (none/ambiguous → null, never guess). */
 async function resolveContactId(
   teamId: string,
   md: Record<string, string>,
@@ -99,14 +102,8 @@ async function resolveContactId(
     if (snap.exists && snap.data()?.teamId === teamId) return md.contactId
   }
   if (fallbackEmail) {
-    const q = await admin
-      .firestore()
-      .collection(CONTACTS_COLLECTION)
-      .where('teamId', '==', teamId)
-      .where('email', '==', fallbackEmail)
-      .limit(1)
-      .get()
-    if (!q.empty) return q.docs[0].id
+    const { contactId } = await resolveSingleContact(teamId, fallbackEmail)
+    return contactId
   }
   return null
 }
@@ -179,10 +176,12 @@ async function activeContactCount(teamId: string): Promise<number> {
 }
 
 /**
- * Resolve a contact by email, or CREATE one from the buyer's checkout details.
- * Cap-aware: on a plan with a hard contact cap (Free), if the team is already at
- * the limit the contact is NOT created (returns null) — the payment is still
- * recorded; the studio links it after upgrading/freeing a slot.
+ * Resolve a contact by a UNIQUE email match, or CREATE one from the buyer's
+ * checkout details. Matching mirrors resolveSingleContact: exactly one active
+ * match links; >1 (a shared family email) returns null so the studio assigns it,
+ * never the wrong child. Cap-aware: on a plan with a hard contact cap (Free), if
+ * the team is already at the limit the contact is NOT created (returns null) — the
+ * payment is still recorded; the studio links it after upgrading/freeing a slot.
  */
 async function resolveOrCreateContact(
   teamId: string,
@@ -190,14 +189,16 @@ async function resolveOrCreateContact(
   info: { email: string; name?: string | null; phone?: string | null }
 ): Promise<string | null> {
   const db = admin.firestore()
-  const existing = await db
-    .collection(CONTACTS_COLLECTION)
-    .where('teamId', '==', teamId)
-    .where('email', '==', info.email)
-    .limit(1)
-    .get()
-  if (!existing.empty) return existing.docs[0].id
+  const { contactId, count } = await resolveSingleContact(teamId, info.email)
+  if (contactId) return contactId
+  if (count > 1) {
+    console.log(
+      `[connect] shop purchase: ${count} contacts share ${info.email} (team=${teamId}) — left unassigned`
+    )
+    return null
+  }
 
+  // count === 0 → create the contact (cap-aware).
   if (planHasHardContactCap(plan)) {
     const cap = PLAN_PRICING[plan].includedContacts
     if (cap != null && (await activeContactCount(teamId)) >= cap) {
@@ -241,6 +242,25 @@ async function handlePaymentIntent(
       chargeId: typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null),
       contactId: md.contactId ?? null,
       purpose: md.purpose ?? 'payment',
+      // Product sales (kind === 'product') carry the catalogue reference so the
+      // payments dashboard can show what was bought + which variant.
+      ...(md.kind === 'product'
+        ? {
+            kind: 'product',
+            productId: md.productId ?? null,
+            productName: md.productName ?? null,
+            variantLabel: md.variantLabel ?? null,
+          }
+        : {}),
+      // Course sales (kind === 'course') carry the course reference so the payments
+      // dashboard can show which course was bought.
+      ...(md.kind === 'course'
+        ? {
+            kind: 'course',
+            courseId: md.courseId ?? null,
+            courseName: md.courseTitle ?? null,
+          }
+        : {}),
       amount: pi.amount ?? 0,
       currency: pi.currency ?? 'chf',
       application_fee_amount: pi.application_fee_amount ?? 0,
@@ -382,6 +402,14 @@ async function handleCheckoutCompleted(
   _eventId: string
 ): Promise<void> {
   const md = (session.metadata ?? {}) as Record<string, string>
+  if (md.kind === 'product') {
+    await handleProductCheckout(team, session, md)
+    return
+  }
+  if (md.kind === 'course') {
+    await handleCourseCheckout(team, session, md)
+    return
+  }
   if (md.kind !== 'membership' || !md.subscriptionTypeId) return
 
   const email = (session.customer_details?.email ?? session.customer_email ?? '')
@@ -438,6 +466,118 @@ async function handleCheckoutCompleted(
   }
 
   await writeContactMembership(team.teamId, contactId, md, { amountRappen, membershipExpiration })
+}
+
+/**
+ * Product purchase (kind === 'product') — a one-off shop charge for a physical
+ * product. The payment_intent handler already records the member_payments doc
+ * (with productId/variant). Here we link/create the buyer's contact by email
+ * (cap-aware, same as a membership shop purchase), stamp contactId onto the
+ * payment, and log a purchase activity entry so the studio sees who bought what.
+ * No membership/subscription state changes — products are merch, not memberships.
+ */
+async function handleProductCheckout(
+  team: TeamRef,
+  session: any,
+  md: Record<string, string>
+): Promise<void> {
+  const email = (session.customer_details?.email ?? session.customer_email ?? '')
+    .toLowerCase()
+    .trim()
+  if (!email) return // nothing to link the sale to; payment is still recorded
+
+  const name = (session.customer_details?.name as string | undefined) ?? null
+  const phone = (session.customer_details?.phone as string | undefined) ?? null
+
+  const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
+  const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
+  const contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
+  if (!contactId) return // cap-blocked — payment still recorded, studio links it later
+
+  const piId =
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id
+  if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+
+  const label = md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? 'Product')
+  await admin
+    .firestore()
+    .collection(CONTACTS_COLLECTION)
+    .doc(contactId)
+    .collection('activity_log')
+    .add({
+      type: 'product_purchased',
+      source: 'stripe_connect',
+      message: `Product purchased · ${label}`,
+      timestamp: FieldValue.serverTimestamp(),
+    })
+}
+
+/**
+ * Course purchase (kind === 'course') — a one-off shop charge for a 'purchase'-tier
+ * online course. Like products, the payment_intent handler already records the
+ * member_payments doc (with courseId/courseName). Here we link/create the buyer's
+ * contact by email (cap-aware), grant a LIFETIME entitlement
+ * (courses/{courseId}/purchases/{contactId} — what the security rules check to unlock
+ * the course in the Space), stamp contactId onto the payment, and log the purchase.
+ */
+async function handleCourseCheckout(
+  team: TeamRef,
+  session: any,
+  md: Record<string, string>
+): Promise<void> {
+  if (!md.courseId) return
+  const email = (session.customer_details?.email ?? session.customer_email ?? '')
+    .toLowerCase()
+    .trim()
+  if (!email) return // nothing to grant the entitlement to; payment is still recorded
+
+  const name = (session.customer_details?.name as string | undefined) ?? null
+  const phone = (session.customer_details?.phone as string | undefined) ?? null
+
+  const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
+  const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
+  const contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
+  if (!contactId) return // cap-blocked — payment still recorded, studio links it later
+
+  const piId =
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id
+  if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+
+  // Grant the lifetime entitlement. Doc id = contactId → idempotent on redelivery.
+  await admin
+    .firestore()
+    .collection(COURSES_COLLECTION)
+    .doc(md.courseId)
+    .collection(COURSE_PURCHASES_SUBCOLLECTION)
+    .doc(contactId)
+    .set(
+      {
+        courseId: md.courseId,
+        teamId: team.teamId,
+        contactId,
+        paymentIntentId: piId ?? null,
+        amount: (session.amount_total as number | undefined) ?? null,
+        currency: (session.currency as string | undefined) ?? null,
+        purchasedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+  await admin
+    .firestore()
+    .collection(CONTACTS_COLLECTION)
+    .doc(contactId)
+    .collection('activity_log')
+    .add({
+      type: 'course_purchased',
+      source: 'stripe_connect',
+      message: `Course purchased · ${md.courseTitle ?? 'Course'}`,
+      timestamp: FieldValue.serverTimestamp(),
+    })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

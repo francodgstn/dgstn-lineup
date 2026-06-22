@@ -75,21 +75,31 @@ or prod (each environment has its own key).
 
 ## Each dev session
 
-### Terminal 1 — start everything
+Local dev runs one process per terminal. For billing you need three:
+
+### Terminal 1 — emulators + seed
 
 ```
-pnpm dev:billing
+pnpm emulators:seed
 ```
 
-This script:
-1. Builds Cloud Functions (required by the Functions emulator)
-2. Starts Firebase emulators: auth (:9099), firestore (:8080), functions (:5001)
+This:
+1. Builds `@linyup/shared` + Cloud Functions (required by the Functions emulator)
+2. Starts Firebase emulators: auth (:9099), firestore (:8080), functions (:5001), storage (:9199)
 3. Seeds the emulator with 3 test accounts
-4. Starts the Next.js dev server (:3000)
+4. Keeps running (Ctrl+C to stop)
 
-### Terminal 2 — forward Stripe webhooks
+### Terminal 2 — web app
 
-Wait until "emulators up" appears in Terminal 1, then:
+```
+pnpm dev:web
+```
+
+Starts the Next.js dev server on :3000.
+
+### Terminal 3 — forward Stripe webhooks
+
+Wait until "Ready" appears in Terminal 1, then:
 
 ```
 pnpm stripe:listen
@@ -225,14 +235,16 @@ dashboard with the exact lookup key shown in the table above.
 printed. Copy the `whsec_...` value fresh from Terminal 2 and restart.
 
 **Billing page calls fail silently in the browser**  
-→ Make sure you're running `pnpm dev:billing`, not `pnpm dev:local`. The
-`dev:local` script does not start the Functions emulator (:5001), so callable
-functions have nothing to connect to.
+→ Make sure Terminal 1 is running `pnpm emulators:seed` and that the Functions
+emulator came up on :5001 — callable functions have nothing to connect to otherwise.
 
 **Functions emulator not starting**  
-→ The emulator requires a compiled build. `dev:billing` runs the build
-automatically, but if you change function code mid-session you need to rebuild:
+→ The emulator requires a compiled build. `pnpm emulators:seed` runs the build
+automatically, but if you change function code mid-session you need to rebuild
+(in another terminal):
 ```
 pnpm --filter @linyup/functions run build
 ```
+> Tip: `pnpm functions:watch` rebuilds functions on save so you don't have to
+> rebuild by hand.
 Then restart Terminal 1.

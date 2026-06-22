@@ -14,6 +14,7 @@ export const CONTACT_REQUESTS_SUBCOLLECTION = 'contact_requests'
 export const TEAM_ALERTS_SUBCOLLECTION = 'team_alerts'
 export const ALERT_PRESETS_SUBCOLLECTION = 'alert_presets'
 export const SUBSCRIPTION_TYPES_SUBCOLLECTION = 'subscription_types'
+export const PRODUCTS_SUBCOLLECTION = 'products'
 export const CONTACT_FILTERS_SUBCOLLECTION = 'contact_filters'
 export const CONTACT_GROUPS_SUBCOLLECTION = 'contact_groups'
 export const OUTREACH_TEMPLATES_SUBCOLLECTION = 'outreach_templates'
@@ -95,6 +96,9 @@ export const CATEGORIES_COLLECTION = 'categories'
 export const COURSES_COLLECTION = 'courses'
 export const COURSE_MODULES_SUBCOLLECTION = 'modules'
 export const COURSE_LESSONS_SUBCOLLECTION = 'lessons'
+// Lifetime entitlement granted when a contact buys a 'purchase'-tier course one-off.
+// Doc id is the buyer's contactId; written only by the Connect webhook (admin SDK).
+export const COURSE_PURCHASES_SUBCOLLECTION = 'purchases'
 
 // Website plugin (studio site builder)
 // site_drafts: PRIVATE working copy (manager+). site_published: PUBLIC snapshot
@@ -110,6 +114,13 @@ export const SITE_PUBLISHED_COLLECTION = 'site_published'
 export const CONNECT_ACCOUNTS_COLLECTION = 'connect_accounts'
 export const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
 export const MEMBER_SUBSCRIPTIONS_SUBCOLLECTION = 'member_subscriptions'
+
+// BYO gateway ledger (Payrexx / Stripe-BYO). teams/{teamId}/payment_events/{id},
+// doc id = `${gateway}:${gatewayRef}` for idempotency. Written only by the team
+// webhook handlers + the updatePaymentRecord callable (Admin SDK); managers/owners
+// read it for the payments dashboard and per-contact Payments tab. Unlike Connect,
+// BYO records the payment even when no contact matches (assignment_status).
+export const PAYMENT_EVENTS_SUBCOLLECTION = 'payment_events'
 // Idempotency markers for the Connect webhook (doc id = Stripe event id).
 // Admin-SDK only; clients never read or write it.
 export const CONNECT_WEBHOOK_EVENTS_COLLECTION = 'connect_webhook_events'

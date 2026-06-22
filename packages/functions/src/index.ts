@@ -35,6 +35,7 @@ export { syncActivityPublicProfile } from './sync/syncActivityPublicProfile'
 export { syncCoursePublicProfile } from './sync/syncCoursePublicProfile'
 export { indexUser } from './sync/indexUser'
 export { syncSubscriptionTypesToPublicProfile } from './sync/syncSubscriptionTypesToPublicProfile'
+export { syncProductsToPublicProfile } from './sync/syncProductsToPublicProfile'
 export { onContactSubscriptionChange } from './sync/onContactSubscriptionChange'
 export { onSessionUpdate } from './sync/onSessionUpdate'
 export { onActivityTypeChange } from './sync/onActivityTypeChange'
@@ -133,8 +134,10 @@ export {
   requestTeamAccess,
 } from './orgs'
 
-// Team-level billing (teams charging their own students — Payrexx)
+// Team-level billing (BYO — teams charging their own students on their OWN
+// gateway account; no platform fee). Both webhooks record into payment_events.
 export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'
+export { handleTeamStripeWebhook } from './billing/handleTeamStripeWebhook'
 
 // Email sending (Brevo) — BYO domain authentication + event webhook.
 // Sender resolution + the central mail service live in ./mail and are called
@@ -150,9 +153,13 @@ export {
   createMemberSubscription,
   createMembershipPayment,
   createMembershipCheckout,
+  createProductCheckout,
+  createCourseCheckout,
 } from './connect/payments'
 export { refundMemberPayment } from './connect/refunds'
 export { handleConnectWebhook } from './connect/webhook'
+// Cross-rail payment editing (assign contact + edit comment) for Connect + BYO.
+export { updatePaymentRecord } from './connect/updatePayment'
 
 // Outreach
 export { sendOutreachEmail } from './outreach'

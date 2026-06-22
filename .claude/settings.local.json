@@ -169,7 +169,8 @@
       "Bash(cat /tmp/buildid.txt 2>/dev/null && echo \"found\" || echo \"still running\")",
       "Bash(gcloud functions *)",
       "Bash(cat)",
-      "Bash(rm -f .git/COMMIT_MSG_TMP)"
+      "Bash(rm -f .git/COMMIT_MSG_TMP)",
+      "Bash(xargs grep -l \"CourseAccessRule\\\\|courseId\")"
     ]
   }
 }

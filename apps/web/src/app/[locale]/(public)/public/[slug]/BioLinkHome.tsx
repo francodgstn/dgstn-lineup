@@ -18,6 +18,7 @@ import {
 import { Link } from '@/i18n/navigation'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
+import { SYSTEM_LINK_META } from '@linyup/shared'
 import type { TeamLink, SocialLink, BioLinkTheme, BioLinkBackground } from '@linyup/shared'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -220,21 +221,13 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
         {visibleLinks.length > 0 && (
           <div className="mt-7 space-y-3">
             {visibleLinks.map((link, i) => {
-              const isBooking = link.isBookingLink
-              const isMembership = link.isMembershipLink
-              const isCourses = link.isCoursesLink
-              const isShop = link.isShopLink
-              const href = isBooking
-                ? `/public/${slug}/booking`
-                : isMembership
-                  ? `/public/${slug}/signup`
-                  : isCourses
-                    ? `/public/${slug}/space`
-                    : isShop
-                      ? `/public/${slug}/shop`
-                      : link.url
+              // A "page link" carries a target → routes to one of our public surfaces;
+              // otherwise it's a custom external URL. Booking keeps the accent CTA style.
+              const target = link.target
+              const isBooking = target === 'booking'
+              const href = target ? `/public/${slug}/${SYSTEM_LINK_META[target].route}` : link.url
 
-              const isInternal = isBooking || isMembership || isCourses || isShop
+              const isInternal = !!target
               const cardStyle = isBooking
                 ? { background: accent, border: 'none' }
                 : { background: cardBg, border: `1px solid ${cardBorder}` }
@@ -254,7 +247,7 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
                       ? (e) => {
                           e.preventDefault()
                           onLinkClick(
-                            isBooking ? 'booking' : isMembership ? 'signup' : 'external',
+                            target === 'booking' ? 'booking' : target === 'signup' ? 'signup' : 'external',
                             href || undefined
                           )
                         }
@@ -271,16 +264,7 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
                     }}
                   >
                     <DynamicIcon
-                      name={
-                        link.iconName ??
-                        (isBooking
-                          ? 'CalendarDays'
-                          : isMembership
-                            ? 'UserPlus'
-                            : isCourses
-                              ? 'GraduationCap'
-                              : 'Link2')
-                      }
+                      name={link.iconName ?? (target ? SYSTEM_LINK_META[target].defaultIcon : 'Link2')}
                       className="h-4 w-4"
                     />
                   </div>

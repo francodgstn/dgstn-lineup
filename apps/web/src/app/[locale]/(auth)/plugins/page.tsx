@@ -116,7 +116,7 @@ function PluginCard({
     content: t('categoryContent'),
     engagement: t('categoryEngagement'),
     organization: t('categoryOrganization'),
-    payments: 'Payments',
+    payments: t('categoryPayments'),
     analytics: 'Analytics',
   }
 
@@ -344,6 +344,7 @@ export default function PluginsPage() {
     { key: 'website',        label: t('categoryWebsite') },
     { key: 'content',        label: t('categoryContent') },
     { key: 'engagement',     label: t('categoryEngagement') },
+    { key: 'payments',       label: t('categoryPayments') },
     { key: 'organization',   label: t('categoryOrganization') },
   ]
 

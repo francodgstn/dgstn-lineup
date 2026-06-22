@@ -20,7 +20,12 @@
 //   • Idempotency: a payment_events/{payrexx:{transactionId}} doc is written atomically.
 //     Duplicate webhooks from Payrexx are silently acknowledged.
 //
-// On success the contact record is updated:
+// The payment is ALWAYS recorded as an ExternalPayment (even when no contact
+// matches) so nothing is silently dropped. A contact is linked ONLY on a UNIQUE
+// active email match (resolveSingleContact) — none/ambiguous → assignment_status
+// 'unassigned', and a manager assigns it later from the payments dashboard.
+//
+// When (and only when) uniquely assigned, the contact record is also updated:
 //   • membership_expiration ← subscription.valid_until (ISO date)
 //   • subscription_type_id  ← transaction.referenceId (merchant-set) or gateway default
 //   • last_payment_at       ← now
@@ -30,7 +35,13 @@ import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { to } from '../utils/async'
-import { TEAMS_COLLECTION } from '@linyup/shared'
+import { resolveSingleContact } from '../utils/contacts'
+import {
+  TEAMS_COLLECTION,
+  CONTACTS_COLLECTION,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  PAYMENT_EVENTS_SUBCOLLECTION,
+} from '@linyup/shared'
 import type { PayrexxGatewayConfig } from '@linyup/shared'
 
 export const handlePayrexxWebhook = onRequest(
@@ -133,13 +144,10 @@ export const handlePayrexxWebhook = onRequest(
     }
 
     // ── 5. Extract contact email ───────────────────────────────────────────────
+    // Email may be absent — we still RECORD the payment (unassigned) so it never
+    // silently disappears; a manager links it from the payments dashboard.
     const contactPayload = transaction.contact as Record<string, unknown> | undefined
-    const email = contactPayload?.email as string | undefined
-    if (!email) {
-      console.warn(`[handlePayrexxWebhook] No email in transaction id=${transactionId} team=${teamId}`)
-      res.status(200).json({ ok: false, reason: 'no_email' })
-      return
-    }
+    const email = (contactPayload?.email as string | undefined)?.trim() || null
 
     // ── 6. Resolve subscription_type_id ───────────────────────────────────────
     // referenceId is set by the merchant on the Payrexx payment link — use it as
@@ -160,26 +168,31 @@ export const handlePayrexxWebhook = onRequest(
       }
     }
 
-    // ── 8. Look up contact by teamId + email ──────────────────────────────────
-    const [contactErr, contactSnap] = await to(
-      db.collection('contacts')
-        .where('teamId', '==', teamId)
-        .where('email', '==', email)
-        .limit(1)
-        .get()
-    )
-    if (contactErr || !contactSnap || contactSnap.empty) {
-      console.warn(`[handlePayrexxWebhook] Contact not found email=${email} team=${teamId}`)
-      res.status(200).json({ ok: false, reason: 'contact_not_found' })
-      return
+    // ── 8. Default "what was paid" comment ─────────────────────────────────────
+    // Suggest the subscription-type name when this payment maps to one, else a
+    // generic Payrexx label. A manager can edit it via updatePaymentRecord.
+    let comment = 'Payrexx payment'
+    if (subscriptionTypeId) {
+      const [, typeSnap] = await to(
+        db
+          .collection(TEAMS_COLLECTION)
+          .doc(teamId)
+          .collection(SUBSCRIPTION_TYPES_SUBCOLLECTION)
+          .doc(subscriptionTypeId)
+          .get()
+      )
+      const name = typeSnap?.exists ? (typeSnap.data()?.name as string | undefined) : undefined
+      if (name) comment = name
     }
 
-    const contactDoc = contactSnap.docs[0]
-    const contactId = contactDoc.id
+    // ── 9. Match the contact (UNIQUE active email match only) ──────────────────
+    // None or ambiguous (a shared family email) → unassigned; never guess.
+    const { contactId } = await resolveSingleContact(teamId, email)
+    const assignmentStatus = contactId ? 'assigned' : 'unassigned'
 
-    // ── 9. Atomic write with idempotency guard ────────────────────────────────
+    // ── 10. Atomic write with idempotency guard ────────────────────────────────
     const paymentEventRef = db.doc(
-      `${TEAMS_COLLECTION}/${teamId}/payment_events/payrexx:${transactionId}`
+      `${TEAMS_COLLECTION}/${teamId}/${PAYMENT_EVENTS_SUBCOLLECTION}/payrexx:${transactionId}`
     )
 
     const [txErr] = await to(
@@ -189,28 +202,33 @@ export const handlePayrexxWebhook = onRequest(
           throw new Error('already_processed')
         }
 
-        // Record the payment event (immutable audit trail)
+        // Record the payment event (immutable audit trail) — always, even when
+        // unassigned, so no payment is ever dropped.
         tx.set(paymentEventRef, {
           gateway: 'payrexx',
-          transaction_id: String(transactionId),
-          amount: transaction.amount ?? null,
-          currency: cfg.currency,
+          gatewayRef: String(transactionId),
           contact_id: contactId,
+          assignment_status: assignmentStatus,
           email,
+          amount: typeof transaction.amount === 'number' ? transaction.amount : null,
+          currency: cfg.currency,
           subscription_type_id: subscriptionTypeId,
           membership_expiration: membershipExpiration,
+          comment,
           raw_status: status,
           processed_at: FieldValue.serverTimestamp(),
         })
 
-        // Update the contact (inside the same transaction for atomicity)
-        const contactUpdate: Record<string, unknown> = {
-          last_payment_at: FieldValue.serverTimestamp(),
+        // Apply the membership to the contact ONLY when uniquely assigned (same
+        // transaction for atomicity). Unassigned payments touch no contact.
+        if (contactId) {
+          const contactUpdate: Record<string, unknown> = {
+            last_payment_at: FieldValue.serverTimestamp(),
+          }
+          if (membershipExpiration) contactUpdate.membership_expiration = membershipExpiration
+          if (subscriptionTypeId) contactUpdate.subscription_type_id = subscriptionTypeId
+          tx.update(db.collection(CONTACTS_COLLECTION).doc(contactId), contactUpdate)
         }
-        if (membershipExpiration) contactUpdate.membership_expiration = membershipExpiration
-        if (subscriptionTypeId) contactUpdate.subscription_type_id = subscriptionTypeId
-
-        tx.update(db.collection('contacts').doc(contactId), contactUpdate)
       })
     )
 
@@ -226,28 +244,31 @@ export const handlePayrexxWebhook = onRequest(
     }
 
     console.log(
-      `[handlePayrexxWebhook] contact=${contactId} team=${teamId} txId=${transactionId}` +
+      `[handlePayrexxWebhook] team=${teamId} txId=${transactionId} ${assignmentStatus}` +
+      (contactId ? ` contact=${contactId}` : ` email=${email ?? 'none'}`) +
       (subscriptionTypeId ? ` sub=${subscriptionTypeId}` : '') +
       (validUntilStr ? ` expires=${validUntilStr}` : '')
     )
 
-    // ── 10. Activity log (best-effort, outside transaction) ───────────────────
-    const activityMsg = [
-      `Payment confirmed via Payrexx (tx ${transactionId})`,
-      subscriptionTypeId ? `subscription: ${subscriptionTypeId}` : null,
-      validUntilStr ? `expires: ${validUntilStr}` : null,
-    ].filter(Boolean).join(' · ')
+    // ── 11. Activity log (best-effort, outside transaction) — assigned only ────
+    if (contactId) {
+      const activityMsg = [
+        `Payment confirmed via Payrexx (tx ${transactionId})`,
+        subscriptionTypeId ? `subscription: ${subscriptionTypeId}` : null,
+        validUntilStr ? `expires: ${validUntilStr}` : null,
+      ].filter(Boolean).join(' · ')
 
-    await to(
-      db.collection('contacts').doc(contactId)
-        .collection('activity_log').add({
-          type: 'payment_received',
-          source: 'payrexx',
-          message: activityMsg,
-          timestamp: FieldValue.serverTimestamp(),
-        })
-    )
+      await to(
+        db.collection(CONTACTS_COLLECTION).doc(contactId)
+          .collection('activity_log').add({
+            type: 'payment_received',
+            source: 'payrexx',
+            message: activityMsg,
+            timestamp: FieldValue.serverTimestamp(),
+          })
+      )
+    }
 
-    res.status(200).json({ ok: true, contact_id: contactId })
+    res.status(200).json({ ok: true, contact_id: contactId, assignment_status: assignmentStatus })
   }
 )

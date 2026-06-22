@@ -8,6 +8,7 @@ import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { GraduationCap, Lock, LogOut } from 'lucide-react'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
+import { formatCurrency } from '@/lib/format'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { usePublicTeam } from '../PublicTeamProvider'
 import SignInDialog from './SignInDialog'
@@ -20,8 +21,9 @@ export interface PublicCourseCard {
   title: string
   summary?: string
   coverImageUrl?: string
-  accessType: 'free' | 'registered' | 'subscription'
+  accessType: 'free' | 'registered' | 'subscription' | 'purchase'
   subscriptionTypeIds?: string[]
+  priceAmount?: number // 'purchase' tier: one-off price (major units)
   moduleCount?: number
   lessonCount?: number
   order?: number
@@ -32,7 +34,8 @@ export interface PublicCourseCard {
 function hasAccess(
   card: PublicCourseCard,
   isAuthenticated: boolean,
-  subscriptionTypeId?: string
+  subscriptionTypeId?: string,
+  purchasedCourseIds?: Set<string>
 ): boolean {
   if (card.accessType === 'free') return true
   if (!isAuthenticated) return false
@@ -40,6 +43,11 @@ function hasAccess(
   if (card.accessType === 'subscription') {
     if (!subscriptionTypeId) return false
     return (card.subscriptionTypeIds ?? []).includes(subscriptionTypeId)
+  }
+  if (card.accessType === 'purchase') {
+    // Bought it once (lifetime), or it's included free with the contact's subscription.
+    if (purchasedCourseIds?.has(card.id)) return true
+    return !!subscriptionTypeId && (card.subscriptionTypeIds ?? []).includes(subscriptionTypeId)
   }
   return false
 }
@@ -51,7 +59,9 @@ export default function SpaceHome() {
   const { slug, teamId, isAuthenticated, contact, logout, openSignIn } = useSpaceAuth()
   // Team branding already resolved once by the parent PublicTeamProvider (layout).
   const { team } = usePublicTeam()
+  const currency = team?.default_currency ?? 'CHF'
   const [courses, setCourses] = useState<PublicCourseCard[]>([])
+  const [purchasedCourseIds, setPurchasedCourseIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [signInOpen, setSignInOpen] = useState(false)
   const [systemDark, setSystemDark] = useState(false)
@@ -75,6 +85,31 @@ export default function SpaceHome() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [teamId])
+
+  // Which 'purchase'-tier courses this contact has bought (lifetime entitlements).
+  useEffect(() => {
+    if (!isAuthenticated || !contact?.id) {
+      setPurchasedCourseIds(new Set())
+      return
+    }
+    let cancelled = false
+    const q = query(
+      collectionGroup(db, 'purchases'),
+      where('contactId', '==', contact.id),
+      where('teamId', '==', teamId)
+    )
+    getDocs(q)
+      .then((snap) => {
+        if (cancelled) return
+        setPurchasedCourseIds(
+          new Set(snap.docs.map((d) => (d.data().courseId as string | undefined) ?? d.id))
+        )
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated, contact?.id, teamId])
 
   useEffect(() => {
     if (team?.bioLinkTheme !== 'auto') return
@@ -169,7 +204,12 @@ export default function SpaceHome() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {courses.map((course) => {
-                const accessible = hasAccess(course, isAuthenticated, contact?.subscription_type_id)
+                const accessible = hasAccess(
+                  course,
+                  isAuthenticated,
+                  contact?.subscription_type_id,
+                  purchasedCourseIds
+                )
                 return (
                   <CourseCard
                     key={course.id}
@@ -181,7 +221,7 @@ export default function SpaceHome() {
                     cardBorder={cardBorder}
                     textMain={textMain}
                     textMuted={textMuted}
-
+                    currency={currency}
                     t={t}
                     onSignIn={() => { openSignIn(); setSignInOpen(true) }}
                   />
@@ -222,19 +262,30 @@ interface CardProps {
   cardBorder: string
   textMain: string
   textMuted: string
+  currency: string
   t: ReturnType<typeof useTranslations<'Space'>>
   onSignIn: () => void
 }
 
 function CourseCard({
-  course, slug, accessible, accent, cardBg, cardBorder, textMain, textMuted, t, onSignIn,
+  course, slug, accessible, accent, cardBg, cardBorder, textMain, textMuted, currency, t, onSignIn,
 }: CardProps) {
   const accessBadgeColor =
     course.accessType === 'free'
       ? '#16a34a'
       : course.accessType === 'registered'
       ? '#2563eb'
-      : '#7c3aed'
+      : course.accessType === 'subscription'
+      ? '#7c3aed'
+      : '#d97706'
+  const accessBadgeLabel =
+    course.accessType === 'free'
+      ? t('accessFree')
+      : course.accessType === 'subscription'
+      ? t('accessSubscription')
+      : course.accessType === 'purchase'
+      ? formatCurrency(course.priceAmount ?? 0, currency)
+      : t('accessRegistered')
 
   const content = (
     <div
@@ -278,23 +329,29 @@ function CourseCard({
             className="text-[11px] font-medium px-2 py-0.5 rounded-full text-white"
             style={{ background: accessBadgeColor }}
           >
-            {course.accessType === 'free'
-              ? t('accessFree')
-              : course.accessType === 'subscription'
-              ? t('accessSubscription')
-              : t('accessRegistered')}
+            {accessBadgeLabel}
           </span>
         </div>
 
-        {/* CTA if locked */}
+        {/* CTA if locked: purchase tier → buy in the shop; others → sign in */}
         {!accessible && (
-          <button
-            onClick={(e) => { e.preventDefault(); onSignIn() }}
-            className="mt-1 text-xs font-medium hover:underline"
-            style={{ color: accent }}
-          >
-            {t('signInToAccess')} →
-          </button>
+          course.accessType === 'purchase' ? (
+            <Link
+              href={`/public/${slug}/shop?tab=courses&course=${course.id}` as Route}
+              className="mt-1 inline-block text-xs font-medium hover:underline"
+              style={{ color: accent }}
+            >
+              {t('buyToAccess', { price: formatCurrency(course.priceAmount ?? 0, currency) })} →
+            </Link>
+          ) : (
+            <button
+              onClick={(e) => { e.preventDefault(); onSignIn() }}
+              className="mt-1 text-xs font-medium hover:underline"
+              style={{ color: accent }}
+            >
+              {t('signInToAccess')} →
+            </button>
+          )
         )}
       </div>
     </div>

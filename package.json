@@ -9,7 +9,6 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
     "dev:web": "pnpm --filter @linyup/web dev",
     "dev:admin": "pnpm --filter @linyup/admin dev",
     "dev:landing": "pnpm --filter @linyup/landing dev",
@@ -26,9 +25,6 @@
     "emulators:hmd": "firebase emulators:start --only auth,firestore,storage --import=./snapshots/hmd-migration --export-on-exit=./snapshots/hmd-migration --project demo-linyup",
     "emulators:export:demo": "firebase emulators:export ./snapshots/demo --project demo-linyup",
     "emulators:export:hmd": "firebase emulators:export ./snapshots/hmd-migration --project demo-linyup",
-    "dev:local": "node scripts/dev-local.mjs",
-    "dev:billing": "node scripts/dev-billing.mjs",
-    "dev:codespace": "bash scripts/dev.sh",
     "stripe:listen": "stripe listen --forward-to localhost:5001/demo-linyup/europe-west6/handleStripeWebhook",
     "stripe:sync": "tsx scripts/stripe-sync.ts",
     "migrate:hmd": "tsx --tsconfig tsconfig.scripts.json scripts/migrate-hmd.ts",

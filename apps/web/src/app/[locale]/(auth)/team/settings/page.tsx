@@ -1205,9 +1205,9 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       gatewayType: cfg.type,
       identifier: cfg.type === 'stripe' ? cfg.publishable_key : cfg.instance_name,
       currency: cfg.currency,
-      webhookSigningSecret: cfg.type === 'payrexx' ? (cfg.webhook_signing_secret ?? '') : '',
-      defaultSubscriptionTypeId:
-        cfg.type === 'payrexx' ? (cfg.default_subscription_type_id ?? '') : '',
+      // Both Stripe (BYO) and Payrexx now carry a webhook signing secret + default.
+      webhookSigningSecret: cfg.webhook_signing_secret ?? '',
+      defaultSubscriptionTypeId: cfg.default_subscription_type_id ?? '',
     })
     setEditingId(item.id)
     setShowDialog(true)
@@ -1222,6 +1222,12 @@ function PaymentsTab({ teamId }: { teamId: string }) {
               type: 'stripe' as const,
               publishable_key: values.identifier,
               currency: values.currency,
+              ...(values.webhookSigningSecret?.trim()
+                ? { webhook_signing_secret: values.webhookSigningSecret.trim() }
+                : {}),
+              ...(values.defaultSubscriptionTypeId?.trim()
+                ? { default_subscription_type_id: values.defaultSubscriptionTypeId.trim() }
+                : {}),
             }
           : {
               type: 'payrexx' as const,
@@ -1396,60 +1402,79 @@ function PaymentsTab({ teamId }: { teamId: string }) {
               />
             </div>
 
-            {/* Payrexx-specific fields */}
-            {selectedType === 'payrexx' && (
-              <>
-                <div className="space-y-1.5">
-                  <Label>Webhook signing secret</Label>
-                  <Input
-                    {...register('webhookSigningSecret')}
-                    type="password"
-                    placeholder="Paste from Payrexx dashboard → Webhooks"
-                    autoComplete="off"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
+            {/* BYO record-only wiring (Stripe + Payrexx): verify the webhook
+                signature + a default subscription type for unlabelled payments. */}
+            <div className="space-y-1.5">
+              <Label>Webhook signing secret</Label>
+              <Input
+                {...register('webhookSigningSecret')}
+                type="password"
+                placeholder={
+                  selectedType === 'stripe' ? 'whsec_…' : 'Paste from Payrexx dashboard → Webhooks'
+                }
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                {selectedType === 'stripe' ? (
+                  <>
+                    Point a Stripe webhook at{' '}
+                    <code className="bg-muted px-1 rounded">
+                      /handleTeamStripeWebhook?teamId={teamId}
+                    </code>{' '}
+                    and paste its signing secret here to record payments against contacts.
+                    Leave blank to disable (no payments recorded).
+                  </>
+                ) : (
+                  <>
                     Used to verify{' '}
                     <code className="bg-muted px-1 rounded">X-Webhook-Signature</code> on incoming
                     payment webhooks. Leave blank to disable signature verification (not
                     recommended).
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Default subscription type</Label>
-                  <Controller
-                    name="defaultSubscriptionTypeId"
-                    control={control}
-                    render={({ field }) => (
-                      <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                        <SelectTrigger>
-                          <span className="flex flex-1 text-left text-sm truncate">
-                            {subscriptionTypes.find((s) => s.id === field.value)?.name ?? (
-                              <span className="text-muted-foreground">
-                                None — use Payrexx referenceId
-                              </span>
-                            )}
-                          </span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">None — use Payrexx referenceId</SelectItem>
-                          {subscriptionTypes.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                  <p className="text-[11px] text-muted-foreground">
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Default subscription type</Label>
+              <Controller
+                name="defaultSubscriptionTypeId"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {subscriptionTypes.find((s) => s.id === field.value)?.name ?? (
+                          <span className="text-muted-foreground">None</span>
+                        )}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {subscriptionTypes.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                {selectedType === 'stripe' ? (
+                  <>
+                    Applied when a payment carries no{' '}
+                    <code className="bg-muted px-1 rounded">subscriptionTypeId</code> metadata.
+                  </>
+                ) : (
+                  <>
                     Applied when the Payrexx payment link has no{' '}
                     <code className="bg-muted px-1 rounded">referenceId</code>. Set{' '}
                     <code className="bg-muted px-1 rounded">referenceId</code> to the subscription
                     type ID on each Payrexx link for per-plan control.
-                  </p>
-                </div>
-              </>
-            )}
+                  </>
+                )}
+              </p>
+            </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>

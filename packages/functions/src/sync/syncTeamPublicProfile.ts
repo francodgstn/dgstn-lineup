@@ -6,6 +6,7 @@ import {
   INSTALLED_PLUGINS_SUBCOLLECTION,
   SITE_PUBLISHED_COLLECTION,
   COURSES_COLLECTION,
+  resolveSystemLinkTarget,
 } from '@linyup/shared'
 import type { PublicSurface, ActivePublicSurfaces } from '@linyup/shared'
 
@@ -93,9 +94,9 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       url: link.url || null,
       iconName: link.iconName || null,
       showInBioLink: link.showInBioLink !== false,
-      isBookingLink: link.isBookingLink || false,
-      isMembershipLink: link.isMembershipLink || false,
-      isCoursesLink: link.isCoursesLink || false,
+      // 'page link' to one of the team's public surfaces; null for custom links.
+      // resolveSystemLinkTarget also maps pre-refactor boolean flags.
+      target: resolveSystemLinkTarget(link) || null,
     })),
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,

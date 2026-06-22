@@ -17,5 +17,7 @@ bash scripts/write-env-local.sh
 
 echo ""
 echo "==> Setup complete."
-echo "    Start everything with:  pnpm dev:codespace"
-echo "    (Firebase emulators + seed data + Next.js dev server on port 3000)"
+echo "    In VS Code: Run Task (Ctrl+Shift+P → 'Tasks: Run Task') → pick a 'Stack:' preset or a service."
+echo "    Or run directly in separate terminals:"
+echo "      1) pnpm emulators:seed   # Firebase emulators (auth, firestore, functions, storage) + seed data"
+echo "      2) pnpm dev:web          # Next.js dev server on port 3000"
