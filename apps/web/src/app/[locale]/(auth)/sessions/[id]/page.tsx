@@ -17,7 +17,7 @@ import { useRouter as useI18nRouter } from '@/i18n/navigation'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Pencil, Trash2, UserPlus,
   MapPin, Clock, Users, QrCode, BookOpen, CheckCircle2, UserX,
-  ExternalLink, X, Check, Ban, Camera, CameraOff,
+  ExternalLink, X, Check, Ban,
 } from 'lucide-react'
 import {
   SESSIONS_COLLECTION, ACTIVITIES_COLLECTION, CONTACTS_COLLECTION,
@@ -276,8 +276,9 @@ export default function SessionDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
-  const [scanning, setScanning] = useState(false)
-  const [scanMsg, setScanMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  // QR scanner state — kept for when scanner is re-enabled; prefixed with _ to suppress unused-var lint
+  const [scanning, _setScanning] = useState(false)
+  const [_scanMsg, setScanMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   // ── data fetching ────────────────────────────────────────────────────────────
 
@@ -422,10 +423,7 @@ export default function SessionDetailPage() {
 
   const scanner = useQrScanner(handleQrScan)
 
-  const toggleScanner = () => {
-    if (scanner.active) { scanner.stop(); setScanning(false) }
-    else { scanner.start(); setScanning(true) }
-  }
+  // toggleScanner intentionally removed — QR scanner is "coming soon" (button is disabled)
   useEffect(() => { if (!scanning) scanner.stop() }, [scanning, scanner])
 
   // ── derived ───────────────────────────────────────────────────────────────────
@@ -551,17 +549,19 @@ export default function SessionDetailPage() {
 
         {/* Action row */}
         <div className="px-5 pb-4 flex flex-wrap gap-2">
-          <button
-            onClick={toggleScanner}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              scanner.active
-                ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90'
-            }`}
-          >
-            {scanner.active ? <CameraOff className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
-            {scanner.active ? 'Stop scanner' : 'Check-in scanner'}
-          </button>
+          {/* QR scanner — coming soon; button is disabled and scanner UI is suppressed */}
+          <div className="relative inline-flex items-center">
+            <button
+              disabled
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
+            >
+              <QrCode className="h-4 w-4" />
+              Check-in scanner
+            </button>
+            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 select-none">
+              Coming soon
+            </span>
+          </div>
           <button
             onClick={() => setAddOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
@@ -580,35 +580,8 @@ export default function SessionDetailPage() {
         </div>
       </div>
 
-      {/* QR scanner section */}
-      {scanner.active && (
-        <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
-          <div className="p-4 border-b flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Camera className="h-4 w-4 text-primary" />
-              QR scanner active
-            </div>
-            <button onClick={() => { scanner.stop(); setScanning(false) }} className="text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="relative bg-black">
-            <video ref={scanner.videoRef} className="w-full max-h-64 object-cover" muted playsInline />
-            {/* scan frame */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="h-40 w-40 border-2 border-white/60 rounded-xl" />
-            </div>
-          </div>
-          {scanMsg && (
-            <div className={`px-4 py-3 text-sm font-medium ${scanMsg.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-              {scanMsg.text}
-            </div>
-          )}
-          {scanner.error && (
-            <div className="px-4 py-3 text-sm text-red-600 bg-red-50">{scanner.error}</div>
-          )}
-        </div>
-      )}
+      {/* QR scanner section — disabled (coming soon); keep code for future re-enable */}
+      {/* {scanner.active && ( ... )} */}
 
       {/* Portal bookings */}
       {hasBookings && (

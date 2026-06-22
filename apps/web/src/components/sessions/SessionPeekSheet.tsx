@@ -11,11 +11,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet'
 import {
   Clock, MapPin, User, Users, BookOpen, CheckCircle2,
-  ExternalLink, Pencil, Trash2, Repeat2,
+  ExternalLink, Pencil, Trash2, Repeat2, UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SESSIONS_COLLECTION, PARTICIPANTS_SUBCOLLECTION } from '@linyup/shared'
 import type { Session, Activity, Booking } from '@linyup/shared'
+import type { Route } from 'next'
 
 const BOOKINGS_SUB = 'bookings'
 const PARTICIPANTS_PREVIEW_LIMIT = 8
@@ -118,21 +119,43 @@ export function SessionPeekSheet({ sessionId, onClose, activities, onEdit, onDel
         {session && (
           <>
             <SheetHeader className="pb-3">
-              <div className="flex items-center gap-2 pr-8">
-                <SheetTitle className="truncate">
-                  {session.activityName ?? t('noActivity')}
-                </SheetTitle>
-                {session.seriesId && <Repeat2 className="h-4 w-4 text-muted-foreground shrink-0" />}
-                {session.status && session.status !== 'open' && (
-                  <Badge
-                    variant="outline"
-                    className={cn('text-xs shrink-0', session.status === 'cancelled'
-                      ? 'text-destructive border-destructive/30'
-                      : 'text-amber-600 border-amber-300')}
+              <div className="flex items-start gap-2 pr-8">
+                <div className="flex-1 min-w-0 flex items-center gap-2">
+                  <SheetTitle className="truncate">
+                    {session.activityName ?? t('noActivity')}
+                  </SheetTitle>
+                  {session.seriesId && <Repeat2 className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  {session.status && session.status !== 'open' && (
+                    <Badge
+                      variant="outline"
+                      className={cn('text-xs shrink-0', session.status === 'cancelled'
+                        ? 'text-destructive border-destructive/30'
+                        : 'text-amber-600 border-amber-300')}
+                    >
+                      {t(session.status === 'cancelled' ? 'statusCancelled' : 'statusFull')}
+                    </Badge>
+                  )}
+                </div>
+                {/* Action icons in the header — visible immediately without scrolling */}
+                <div className="flex items-center gap-1 shrink-0 -mt-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onEdit(session)}
+                    title={t('peekEdit')}
                   >
-                    {t(session.status === 'cancelled' ? 'statusCancelled' : 'statusFull')}
-                  </Badge>
-                )}
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => onDelete(session)}
+                    title={t('peekDelete')}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-1.5 text-sm text-muted-foreground mt-1">
                 <div className="flex items-center gap-2">
@@ -238,22 +261,20 @@ export function SessionPeekSheet({ sessionId, onClose, activities, onEdit, onDel
 
             <SheetFooter className="flex-row items-center gap-2 border-t">
               <Link
-                href={`/sessions/${session.id}`}
+                href={`/sessions/${session.id}` as Route}
                 className={cn(buttonVariants({ variant: 'default' }), 'flex-1')}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 {t('peekOpenFull')}
               </Link>
-              <Button variant="outline" size="icon" onClick={() => onEdit(session)} title={t('peekEdit')}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline" size="icon"
-                className="text-muted-foreground hover:text-destructive"
-                onClick={() => onDelete(session)} title={t('peekDelete')}
+              <Link
+                href={`/sessions/${session.id}` as Route}
+                className={cn(buttonVariants({ variant: 'outline' }))}
+                title="Add participant"
               >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+                <UserPlus className="h-4 w-4" />
+                Add participant
+              </Link>
             </SheetFooter>
           </>
         )}

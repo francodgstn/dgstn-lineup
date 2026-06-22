@@ -338,8 +338,8 @@ export function CheckinPanel({
 
   return (
     <div className="space-y-4">
-      {/* Summary bar */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Summary bar — sticky so "Add checkin" stays visible while list scrolls */}
+      <div className="sticky top-0 z-10 bg-background py-2 flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <span><strong className="text-foreground">{checkins.length}</strong> checkins</span>
           {confirmedCount > 0 && (
@@ -387,7 +387,9 @@ export function CheckinPanel({
           <span className="text-xs text-muted-foreground shrink-0">Showing team:</span>
           <Select value={selectedAddTeamId} onValueChange={(v) => { if (v) setSelectedAddTeamId(v) }}>
             <SelectTrigger className="h-8 text-xs w-48">
-              <SelectValue />
+              <SelectValue placeholder={orgTeamsQ.data?.find((t) => t.id === selectedAddTeamId)?.name ?? selectedAddTeamId}>
+                {orgTeamsQ.data?.find((t) => t.id === selectedAddTeamId)?.name ?? selectedAddTeamId}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {orgTeamsQ.data?.map((t) => (
@@ -514,7 +516,7 @@ export function CheckinPanel({
 
       {/* Checkin form sheet */}
       <Sheet open={!!sheetTarget} onOpenChange={(o) => { if (!o) setSheetTarget(null) }}>
-        <SheetContent side="right" className="w-full sm:max-w-md">
+        <SheetContent side="right" className="w-full sm:max-w-md px-6">
           <SheetHeader className="mb-4">
             <SheetTitle>{sheetTarget?.existing ? 'Update checkin' : 'Add checkin'}</SheetTitle>
             {sheetTarget && (

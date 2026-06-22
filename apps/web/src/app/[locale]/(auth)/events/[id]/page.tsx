@@ -38,6 +38,7 @@ import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { useEventTypes } from '@/hooks/useEventTypes'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { CheckinPanel } from '@/components/events/CheckinPanel'
+import { useOrg } from '@/contexts/OrgContext'
 import dynamic from 'next/dynamic'
 import type { Route } from 'next'
 
@@ -391,6 +392,7 @@ type DetailTab = 'overview' | 'checkins' | 'categories' | 'attendees' | 'invitat
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { currentTeamId, team, teamRole, isOrgAdmin } = useAuth()
+  const { org } = useOrg()
   const t = useTranslations('Events')
   const router = useRouter()
   const qc = useQueryClient()
@@ -506,8 +508,8 @@ export default function EventDetailPage() {
   const endTime = formatTime(event.end)
   const duration = eventDuration(event)
 
-  // Ranking systems come from the team config, not the event doc
-  const rankingSystems: RankingSystem[] = team?.ranking_systems ?? []
+  // Ranking systems: org-wide events use org.ranking_systems (overrides team config)
+  const rankingSystems: RankingSystem[] = org?.ranking_systems ?? team?.ranking_systems ?? []
 
   // Detect if this event type is backed by a plugin that declares hasCategories
   const eventPlugin = PLUGIN_REGISTRY.find((p) => p.eventType?.id === event.type)
