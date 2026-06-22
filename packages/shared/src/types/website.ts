@@ -122,6 +122,18 @@ export interface ContactSection extends SectionBase {
   showSocial?: boolean
 }
 
+/** A studio-selected subset of the team's Places, rendered as simple cards (no map).
+ *  Draft stores the selection (`placeIds`); publish embeds a whitelisted snapshot
+ *  (`places`) so the public site needs no extra reads. */
+export interface PlacesSection extends SectionBase {
+  type: 'places'
+  heading?: string
+  subheading?: string
+  columns: 2 | 3 | 4
+  placeIds?: string[]
+  places?: { id: string; name: string; address?: string; mapsLink?: string }[]
+}
+
 export type WebsiteSection =
   | HeroSection
   | ContentSection
@@ -130,6 +142,7 @@ export type WebsiteSection =
   | PricingSection
   | ScheduleSection
   | ContactSection
+  | PlacesSection
 
 export type WebsiteSectionType = WebsiteSection['type']
 

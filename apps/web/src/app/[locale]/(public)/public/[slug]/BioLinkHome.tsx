@@ -14,12 +14,13 @@ import {
   Star,
   Music2,
   ChevronRight,
+  MapPin,
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { SYSTEM_LINK_META } from '@linyup/shared'
-import type { TeamLink, SocialLink, BioLinkTheme, BioLinkBackground } from '@linyup/shared'
+import type { TeamLink, SocialLink, BioLinkTheme, BioLinkBackground, PublicMainAddress } from '@linyup/shared'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ export interface BioLinkTeamData {
   /** Denormalized by syncTeamPublicProfile — true on the Free plan; removing
    *  the badge is a paid perk. */
   showBranding?: boolean
+  /** The team's primary place (Main Address), denormalized for the address + map. */
+  mainAddress?: PublicMainAddress | null
 }
 
 // ─── social icon map ──────────────────────────────────────────────────────────
@@ -290,6 +293,48 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
                 </a>
               )
             })}
+          </div>
+        )}
+
+        {/* Main address + map (the team's primary place) */}
+        {team.mainAddress?.address && (
+          <div className="mt-7">
+            <div
+              className="overflow-hidden rounded-2xl border"
+              style={{ borderColor: cardBorder, background: cardBg }}
+            >
+              <iframe
+                title="map"
+                className="w-full"
+                style={{ minHeight: 180, border: 0 }}
+                loading="lazy"
+                src={`https://www.google.com/maps?q=${encodeURIComponent(team.mainAddress.address)}&output=embed`}
+              />
+              <div className="flex items-start gap-2.5 p-4">
+                <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: accent }} />
+                <div className="min-w-0">
+                  {team.mainAddress.name && (
+                    <p className="text-sm font-semibold" style={{ color: textMain }}>
+                      {team.mainAddress.name}
+                    </p>
+                  )}
+                  <p className="text-xs" style={{ color: textMuted }}>
+                    {team.mainAddress.address}
+                  </p>
+                  {team.mainAddress.mapsLink && (
+                    <a
+                      href={team.mainAddress.mapsLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-block text-xs font-medium hover:underline"
+                      style={{ color: accent }}
+                    >
+                      Open in maps →
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

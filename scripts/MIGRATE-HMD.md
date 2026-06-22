@@ -95,7 +95,7 @@ pnpm migrate:hmd \
 | `--from-team <teamId>` | Resume contacts/sessions passes from a specific team |
 | `--verify` | Run verification after migration |
 
-Pass names: `setup` · `auth-users` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `referrals` · `team-subcollections` · `verify`
+Pass names: `setup` · `auth-users` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `referrals` · `team-subcollections` · `places` · `verify`
 
 **Run a single pass** (e.g. after a failure mid-way):
 
@@ -134,12 +134,57 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | `contacts` + subcollections | Copied; `rank → ranks.hmd`; `notes`, `acquisition` dropped |
 | `sessions` + participants/bookings | Copied + activity name/type enriched |
 | `events` + invitations/attendees | Copied as `scope='org', orgId='hmd', teamId=null` |
+| Global `checkins` (event check-ins) | Migrated from the top-level `checkins` collection where `event.id == eventId`; doc IDs preserved; `completed_checkins_count` set on each event doc |
 | `referrals` | Copied as-is |
-| Team subcollections | Copied as-is (subscription_types, outreach_templates, etc.) |
+| Team subcollections | Copied from source; **canonical subscription types are seeded** (see below) |
 | `coach_availability` / `coach_slots` | **Skipped** — coaching was preview-only; configure fresh |
-| `checkins` | **Skipped** — old checkins are session-level; new schema is event-level |
+| Session-level `checkins` | **Skipped** — session-level checkins (docs without `event.id`) are not migrated; the new schema is event-level only |
 | `saas_subscriptions` | **Not migrated** — create one per team manually after migration |
 | `courses` (Online Courses) | **Not migrated** — net-new in Linyup; create courses in-app post-migration |
+
+---
+
+## Canonical subscription types (pass 11)
+
+Pass 11 (`team-subcollections`) seeds five canonical subscription types into every team's
+`subscription_types` subcollection. These are written with `set()` (no skip-if-exists) on
+each run, so running `--only team-subcollections` again will refresh them to the latest
+prices without touching other existing subscription types.
+
+Seeded types (source: HMD Basel published pricing, confirmed from
+`hmdbasel-website-astro/src/content/pricing-plans/en/`):
+
+| id | Name | Prices |
+|---|---|---|
+| `essential` | Essential | CHF 60/month, CHF 600/year |
+| `students` | Students | CHF 70/month, CHF 660/year |
+| `unlimited` | Unlimited | CHF 85/month, CHF 840/year |
+| `intro_offer` | Intro Offer | CHF 100 one-time (2 months included) |
+| `one_time_class` | One-time Class | CHF 25 one-time (1 month included) |
+
+## Subscription contact matching (pass 05, HEURISTIC — validate after run)
+
+During pass 05 (`contacts`), each contact's `subscription_type_name` from the source is
+matched to a canonical type by case-insensitive keyword:
+
+- Contains "intro" → `intro_offer`
+- Contains "one", "single", or "drop" → `one_time_class`
+- Contains "unlimited" → `unlimited`
+- Contains "student(s)" → `students`
+- Contains "essential" → `essential`
+
+On match, `subscription_type_id`, `subscription_type_name`, `subscription_price_id`,
+`subscription_amount`, and `subscription_recurrence` are rewritten to canonical values.
+If the source `subscription_recurrence` contains "annual" or "year", the annual price is
+used; otherwise monthly. One-time types always use their single price.
+
+If no keyword matches, the contact's subscription fields pass through unchanged.
+
+**The matching is heuristic.** Pass 05 logs matched vs. unmatched counts per team.
+Review those counts against the real source data and adjust `KEYWORD_MAP` in
+`scripts/migration/transforms/subscriptions.ts` if needed before migrating to staging.
+
+---
 
 > **Online Courses / public Space:** courses don't exist in hmd-lineup, so there is nothing
 > to migrate. The web Space + course gating only depend on already-migrated contact fields —

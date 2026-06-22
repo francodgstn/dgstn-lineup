@@ -15,6 +15,7 @@
     "organization": "Organisation"
   },
   "Nav": {
+    "places": "Lieux",
     "sectionOperations": "Gérer",
     "sectionEngage": "Engagement",
     "sectionConfigure": "Configuration",
@@ -167,6 +168,7 @@
     "demoEmptyLevel": "Aucun contact avec un classement défini"
   },
   "Contacts": {
+    "mainAddress": "Adresse principale",
     "title": "Contacts",
     "subtitle": "{total} au total · {active} actifs",
     "addContact": "Ajouter un contact",
@@ -346,6 +348,16 @@
     "sectionPersonalInfo": "Informations personnelles",
     "sectionStats": "Statistiques",
     "sectionMembership": "Abonnement & {term}",
+    "sectionMembershipOrg": "Statut {orgName} & {term}",
+    "tooltipMembership": "Ce statut reflète la relation du contact avec l'organisation (le club / la fédération).",
+    "tooltipSubscription": "Ceci reflète la relation du contact avec le studio ou le coach.",
+    "sectionEmergencyContacts": "Contacts d'urgence",
+    "emergencyContactName": "Nom",
+    "emergencyContactPhone": "Téléphone",
+    "emergencyContactEmail": "E-mail",
+    "emergencyContactAdd": "Ajouter un contact d'urgence",
+    "emergencyContactRemove": "Supprimer",
+    "emergencyContactNone": "Aucun contact d'urgence ajouté.",
     "statTotalSessions": "Séances au total",
     "statStreak": "Série de semaines",
     "statMonthScore": "Score du mois",
@@ -453,6 +465,10 @@
     "noContacts": "Aucun contact trouvé."
   },
   "Sessions": {
+    "fieldPlace": "Lieu",
+    "fieldRoom": "Salle",
+    "placeNone": "Aucun lieu",
+    "roomNone": "Aucune salle",
     "title": "Séances",
     "subtitle": "{count} à venir",
     "newSession": "Nouvelle séance",
@@ -1326,7 +1342,9 @@
     "contactGroupsNavLabel": "Groupes",
     "customFieldsName": "Champs personnalisés",
     "customFieldsDescription": "Ajoutez vos propres champs aux contacts — texte, nombres, dates, listes déroulantes et cases à cocher. Affichés sur le profil de chaque contact.",
-    "categoryOrganization": "Organisation"
+    "categoryOrganization": "Organisation",
+    "orgManagedBadge": "Installé par l'organisation",
+    "orgManagedHint": "Géré par l'organisation — contactez votre admin org pour le supprimer."
   },
   "ContactGroups": {
     "title": "Groupes de contacts",
@@ -1368,6 +1386,8 @@
     "addToGroup": "Ajouter au groupe"
   },
   "Org": {
+    "tabPlaces": "Lieux",
+    "tabPlugins": "Plugins",
     "title": "Organisation",
     "tabTeams": "Équipes",
     "tabEvents": "Événements",
@@ -1376,7 +1396,18 @@
     "tabMembers": "Membres",
     "tabBilling": "Facturation",
     "tabSettings": "Paramètres",
-    "backToDashboard": "Retour au tableau de bord"
+    "backToDashboard": "Retour au tableau de bord",
+    "pluginsTitle": "Plugins de l'organisation",
+    "pluginsSubtitle": "Installez des plugins une fois et ils seront disponibles pour tous les studios de cette organisation.",
+    "pluginsReadOnly": "Seuls les administrateurs de l'organisation peuvent installer ou supprimer des plugins.",
+    "pluginsInstall": "Installer pour l'org",
+    "pluginsInstalling": "Installation…",
+    "pluginsUninstall": "Supprimer",
+    "pluginsInstalledBadge": "Installé par l'org",
+    "pluginsInstalledSuccess": "installé pour tous les studios",
+    "pluginsUninstalledSuccess": "Plugin supprimé de l'organisation.",
+    "pluginsErrorInstall": "Impossible d'installer le plugin. Veuillez réessayer.",
+    "pluginsErrorUninstall": "Impossible de supprimer le plugin. Veuillez réessayer."
   },
   "OrgTeams": {
     "title": "Équipes",
@@ -1486,6 +1517,7 @@
     "trialEnds": "Essai se termine le {date}",
     "upgradeButton": "S'abonner",
     "cancelButton": "Annuler l'abonnement",
+    "cancel": "Annuler",
     "cancelConfirmTitle": "Annuler l'abonnement ?",
     "cancelConfirmMessage": "Votre abonnement restera actif jusqu'à la fin de la période de facturation en cours.",
     "cancelConfirmAction": "Oui, annuler",
@@ -1561,6 +1593,8 @@
     "tip_recurring_body": "Créez une séance récurrente au lieu d'ajouter chaque cours à la main."
   },
   "Website": {
+    "sectionPlaces": "Lieux",
+    "sectionPlacesDesc": "Lieux sélectionnés sous forme de cartes.",
     "title": "Site web",
     "preview": "Aperçu",
     "tabSections": "Sections",
@@ -2066,5 +2100,8 @@
     "backToShop": "Retour à la boutique",
     "openSpace": "Ouvrir votre Space",
     "close": "Vous pouvez fermer cette fenêtre."
+  },
+  "Notifications": {
+    "dismiss": "Fermer"
   }
 }

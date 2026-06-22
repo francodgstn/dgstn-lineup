@@ -18,6 +18,9 @@ export interface Event {
   start: Timestamp
   end: Timestamp
   location?: string
+  // Optional link to a Place + Room (team or org place); `location` kept as fallback.
+  placeId?: string
+  roomId?: string
   description?: string
   fee?: number
   status?: EventStatus

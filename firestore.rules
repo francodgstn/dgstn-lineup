@@ -321,13 +321,10 @@ service cloud.firestore {
         allow write: if false; // Only cloud functions should write to weekly reports
       }
 
-      // Team places subcollection (moved from users/{userId}/user_places)
+      // Team places subcollection. Team members read; managers manage (CRUD).
       match /team_places/{placeId} {
-        // All team members can read places
-        allow read: if isTeamMember(teamId);
-
-        // Cloud functions can write (counters managed by functions)
-        allow write: if false; // Only cloud functions should write to places
+        allow read:  if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'manager');
       }
 
       // Team sessions tags subcollection (moved from users/{userId}/sessions_tags)
@@ -527,6 +524,16 @@ service cloud.firestore {
       match /org_access_requests/{orgId} {
         allow read: if hasTeamRole(teamId, 'owner') || hasTeamRole(teamId, 'manager');
         allow write: if false;
+      }
+
+      // In-app notifications for team managers/owners (e.g. org access requests).
+      // Written ONLY by Cloud Functions (Admin SDK). Managers and owners read;
+      // managers can update (e.g. mark as read). Clients never create or delete.
+      match /notifications/{notificationId} {
+        allow read:   if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow update: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow create: if false; // Cloud Functions only
+        allow delete: if false; // Cloud Functions only
       }
     }
 
@@ -1036,6 +1043,25 @@ service cloud.firestore {
         allow read:   if isOrgMember(orgId);
         allow write:  if hasOrgRole(orgId, 'org_admin');
         allow delete: if hasOrgRole(orgId, 'org_admin');
+      }
+
+      // Org-wide places: shared down to every sub-studio (read), managed by org admins.
+      // Sub-team members read via their current team's org_id (mirrors org-scope events).
+      match /org_places/{placeId} {
+        allow read:  if isOrgMember(orgId)
+                     || (isAuthed()
+                         && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);
+        allow write: if hasOrgRole(orgId, 'org_admin');
+      }
+
+      // Org-level plugin installs: visible to all sub-studios, managed by org admins.
+      // Sub-team members read via their current team's org_id so useInstalledPlugins
+      // can merge org plugins alongside team plugins without a separate auth check.
+      match /installed_plugins/{pluginId} {
+        allow read:  if isOrgMember(orgId)
+                     || (isAuthed()
+                         && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);
+        allow write: if hasOrgRole(orgId, 'org_admin');
       }
     }
 

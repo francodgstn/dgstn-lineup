@@ -15,6 +15,7 @@
     "organization": "Organizzazione"
   },
   "Nav": {
+    "places": "Sedi",
     "sectionOperations": "Gestisci",
     "sectionEngage": "Coinvolgi",
     "sectionConfigure": "Configura",
@@ -167,6 +168,7 @@
     "demoEmptyLevel": "Nessun contatto con grado impostato"
   },
   "Contacts": {
+    "mainAddress": "Indirizzo principale",
     "title": "Contatti",
     "subtitle": "{total} totali · {active} attivi",
     "addContact": "Aggiungi contatto",
@@ -346,6 +348,16 @@
     "sectionPersonalInfo": "Informazioni personali",
     "sectionStats": "Statistiche",
     "sectionMembership": "Abbonamento & {term}",
+    "sectionMembershipOrg": "Stato {orgName} & {term}",
+    "tooltipMembership": "Questo stato riflette il rapporto del contatto con l'organizzazione (il club / la federazione).",
+    "tooltipSubscription": "Questo riflette il rapporto del contatto con lo studio o il coach.",
+    "sectionEmergencyContacts": "Contatti di emergenza",
+    "emergencyContactName": "Nome",
+    "emergencyContactPhone": "Telefono",
+    "emergencyContactEmail": "E-mail",
+    "emergencyContactAdd": "Aggiungi contatto di emergenza",
+    "emergencyContactRemove": "Rimuovi",
+    "emergencyContactNone": "Nessun contatto di emergenza aggiunto.",
     "statTotalSessions": "Sessioni totali",
     "statStreak": "Serie di settimane",
     "statMonthScore": "Punteggio mensile",
@@ -453,6 +465,10 @@
     "noContacts": "Nessun contatto trovato."
   },
   "Sessions": {
+    "fieldPlace": "Sede",
+    "fieldRoom": "Sala",
+    "placeNone": "Nessuna sede",
+    "roomNone": "Nessuna sala",
     "title": "Sessioni",
     "subtitle": "{count} in arrivo",
     "newSession": "Nuova sessione",
@@ -1316,7 +1332,9 @@
     "contactGroupsNavLabel": "Gruppi",
     "customFieldsName": "Campi personalizzati",
     "customFieldsDescription": "Aggiungi campi personalizzati ai contatti — testo, numeri, date, menu a tendina e caselle di controllo. Visibili nel profilo di ogni contatto.",
-    "categoryOrganization": "Organizzazione"
+    "categoryOrganization": "Organizzazione",
+    "orgManagedBadge": "Installato dall'organizzazione",
+    "orgManagedHint": "Gestito dall'organizzazione — contatta il tuo admin org per rimuoverlo."
   },
   "ContactGroups": {
     "title": "Gruppi di contatti",
@@ -1358,6 +1376,8 @@
     "addToGroup": "Aggiungi al gruppo"
   },
   "Org": {
+    "tabPlaces": "Sedi",
+    "tabPlugins": "Plugin",
     "title": "Organizzazione",
     "tabTeams": "Team",
     "tabEvents": "Eventi",
@@ -1366,7 +1386,18 @@
     "tabMembers": "Membri",
     "tabBilling": "Fatturazione",
     "tabSettings": "Impostazioni",
-    "backToDashboard": "Torna alla dashboard"
+    "backToDashboard": "Torna alla dashboard",
+    "pluginsTitle": "Plugin dell'organizzazione",
+    "pluginsSubtitle": "Installa i plugin una volta e diventano disponibili per tutti gli studi dell'organizzazione.",
+    "pluginsReadOnly": "Solo gli amministratori dell'organizzazione possono installare o rimuovere plugin.",
+    "pluginsInstall": "Installa per l'org",
+    "pluginsInstalling": "Installazione…",
+    "pluginsUninstall": "Rimuovi",
+    "pluginsInstalledBadge": "Installato dall'org",
+    "pluginsInstalledSuccess": "installato per tutti gli studi",
+    "pluginsUninstalledSuccess": "Plugin rimosso dall'organizzazione.",
+    "pluginsErrorInstall": "Impossibile installare il plugin. Riprova.",
+    "pluginsErrorUninstall": "Impossibile rimuovere il plugin. Riprova."
   },
   "OrgTeams": {
     "title": "Team",
@@ -1476,6 +1507,7 @@
     "trialEnds": "Prova termina il {date}",
     "upgradeButton": "Abbonati",
     "cancelButton": "Annulla abbonamento",
+    "cancel": "Annulla",
     "cancelConfirmTitle": "Annullare l'abbonamento?",
     "cancelConfirmMessage": "L'abbonamento resterà attivo fino alla fine del periodo di fatturazione corrente.",
     "cancelConfirmAction": "Sì, annulla",
@@ -1551,6 +1583,8 @@
     "tip_recurring_body": "Crea una sessione ricorrente invece di aggiungere ogni corso a mano."
   },
   "Website": {
+    "sectionPlaces": "Sedi",
+    "sectionPlacesDesc": "Sedi selezionate come schede semplici.",
     "title": "Sito web",
     "preview": "Anteprima",
     "tabSections": "Sezioni",
@@ -2056,5 +2090,8 @@
     "backToShop": "Torna al negozio",
     "openSpace": "Apri il tuo Space",
     "close": "Puoi chiudere questa finestra."
+  },
+  "Notifications": {
+    "dismiss": "Chiudi"
   }
 }

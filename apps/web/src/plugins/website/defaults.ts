@@ -26,6 +26,7 @@ export const SECTION_LIBRARY: {
     icon: 'CalendarDays',
   },
   { type: 'contact', labelKey: 'sectionContact', descKey: 'sectionContactDesc', icon: 'MapPin' },
+  { type: 'places', labelKey: 'sectionPlaces', descKey: 'sectionPlacesDesc', icon: 'Map' },
 ]
 
 /** Client-only unique id for a new section (React key + image path segment + anchor). */
@@ -51,6 +52,8 @@ export function newSection(type: WebsiteSectionType): WebsiteSection {
       return { id, type, source: 'sessions', windowDays: 7 }
     case 'contact':
       return { id, type, showSocial: true }
+    case 'places':
+      return { id, type, columns: 3 }
   }
 }
 

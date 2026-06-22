@@ -13,7 +13,7 @@
 // Charge + refund (with fee reversal) need a charge-enabled connected account, so
 // they are additionally gated on STRIPE_TEST_CONNECTED_ACCOUNT (a test account you
 // onboarded once). Subscription renewals + disputes are driven via test clocks /
-// the Stripe CLI — see docs/connect-payments.md.
+// the Stripe CLI — see docs/payment-contact-studio.md.
 
 import assert from 'node:assert/strict'
 import Stripe from 'stripe'

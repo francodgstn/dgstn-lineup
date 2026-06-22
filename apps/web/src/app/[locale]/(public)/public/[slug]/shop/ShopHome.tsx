@@ -279,6 +279,7 @@ export default function ShopHome({
             memberEmail: string
             slug: string
             locale: string
+            origin?: string
           },
           { url: string }
         >(functions, 'createMembershipCheckout')
@@ -289,6 +290,7 @@ export default function ShopHome({
           memberEmail: email.trim(),
           slug,
           locale,
+          origin: window.location.origin,
         })
         if (res.data?.url) window.location.href = res.data.url
         else throw new Error('no-url')
@@ -301,6 +303,7 @@ export default function ShopHome({
             memberEmail: string
             slug: string
             locale: string
+            origin?: string
           },
           { url: string }
         >(functions, 'createProductCheckout')
@@ -311,6 +314,7 @@ export default function ShopHome({
           memberEmail: email.trim(),
           slug,
           locale,
+          origin: window.location.origin,
         })
         if (res.data?.url) window.location.href = res.data.url
         else throw new Error('no-url')
@@ -322,6 +326,7 @@ export default function ShopHome({
             memberEmail: string
             slug: string
             locale: string
+            origin?: string
           },
           { url: string }
         >(functions, 'createCourseCheckout')
@@ -331,6 +336,7 @@ export default function ShopHome({
           memberEmail: email.trim(),
           slug,
           locale,
+          origin: window.location.origin,
         })
         if (res.data?.url) window.location.href = res.data.url
         else throw new Error('no-url')

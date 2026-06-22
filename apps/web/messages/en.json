@@ -15,6 +15,7 @@
     "organization": "Organization"
   },
   "Nav": {
+    "places": "Places",
     "sectionOperations": "Manage",
     "sectionEngage": "Engage",
     "sectionConfigure": "Configure",
@@ -172,6 +173,7 @@
     "demoEmptyLevel": "No contacts with rank set"
   },
   "Contacts": {
+    "mainAddress": "Main address",
     "title": "Contacts",
     "subtitle": "{total} total · {active} active",
     "addContact": "Add contact",
@@ -351,6 +353,16 @@
     "sectionPersonalInfo": "Personal information",
     "sectionStats": "Statistics",
     "sectionMembership": "Subscription & {term}",
+    "sectionMembershipOrg": "{orgName} status & {term}",
+    "tooltipMembership": "This status reflects the contact's relationship with the organisation (the club / federation).",
+    "tooltipSubscription": "This reflects the contact's relationship with the studio or coach.",
+    "sectionEmergencyContacts": "Emergency contacts",
+    "emergencyContactName": "Name",
+    "emergencyContactPhone": "Phone",
+    "emergencyContactEmail": "Email",
+    "emergencyContactAdd": "Add emergency contact",
+    "emergencyContactRemove": "Remove",
+    "emergencyContactNone": "No emergency contacts added.",
     "statTotalSessions": "Total sessions",
     "statStreak": "Week streak",
     "statMonthScore": "Month score",
@@ -458,6 +470,10 @@
     "noContacts": "No contacts found."
   },
   "Sessions": {
+    "fieldPlace": "Place",
+    "fieldRoom": "Room",
+    "placeNone": "No place",
+    "roomNone": "No room",
     "title": "Sessions",
     "subtitle": "{count} upcoming",
     "newSession": "New session",
@@ -1331,7 +1347,9 @@
     "contactGroupsNavLabel": "Groups",
     "customFieldsName": "Custom Fields",
     "customFieldsDescription": "Add your own fields to contacts — text, numbers, dates, dropdowns and checkboxes. Shown on every contact's profile.",
-    "categoryOrganization": "Organisation"
+    "categoryOrganization": "Organisation",
+    "orgManagedBadge": "Installed by organization",
+    "orgManagedHint": "Managed by the organization — contact your org admin to remove."
   },
   "ContactGroups": {
     "title": "Contact Groups",
@@ -1373,6 +1391,8 @@
     "addToGroup": "Add to group"
   },
   "Org": {
+    "tabPlaces": "Places",
+    "tabPlugins": "Plugins",
     "title": "Organization",
     "tabTeams": "Teams",
     "tabEvents": "Events",
@@ -1381,7 +1401,18 @@
     "tabMembers": "Members",
     "tabBilling": "Billing",
     "tabSettings": "Settings",
-    "backToDashboard": "Back to dashboard"
+    "backToDashboard": "Back to dashboard",
+    "pluginsTitle": "Organization Plugins",
+    "pluginsSubtitle": "Install plugins once and they become available to all studios in this organization.",
+    "pluginsReadOnly": "Only organization admins can install or remove plugins.",
+    "pluginsInstall": "Install for org",
+    "pluginsInstalling": "Installing…",
+    "pluginsUninstall": "Remove",
+    "pluginsInstalledBadge": "Org installed",
+    "pluginsInstalledSuccess": "installed for all studios",
+    "pluginsUninstalledSuccess": "Plugin removed from organization.",
+    "pluginsErrorInstall": "Could not install plugin. Please try again.",
+    "pluginsErrorUninstall": "Could not remove plugin. Please try again."
   },
   "OrgTeams": {
     "title": "Teams",
@@ -1491,6 +1522,7 @@
     "trialEnds": "Trial ends {date}",
     "upgradeButton": "Subscribe",
     "cancelButton": "Cancel subscription",
+    "cancel": "Cancel",
     "cancelConfirmTitle": "Cancel subscription?",
     "cancelConfirmMessage": "Your subscription will remain active until the end of the current billing period.",
     "cancelConfirmAction": "Yes, cancel",
@@ -1566,6 +1598,8 @@
     "tip_recurring_body": "Create a recurring session instead of adding each class by hand."
   },
   "Website": {
+    "sectionPlaces": "Places",
+    "sectionPlacesDesc": "Selected locations as simple cards.",
     "title": "Website",
     "preview": "Preview",
     "tabSections": "Sections",
@@ -2071,5 +2105,8 @@
     "backToShop": "Back to the shop",
     "openSpace": "Open your Space",
     "close": "You can close this window."
+  },
+  "Notifications": {
+    "dismiss": "Dismiss"
   }
 }

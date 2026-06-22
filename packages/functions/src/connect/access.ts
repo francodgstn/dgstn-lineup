@@ -12,7 +12,7 @@ import {
   type SaasPlan,
 } from '@linyup/shared'
 import { hasTeamRole } from '../utils/teams'
-import { getHostingUrl } from '../utils/env'
+import { resolveBaseUrl } from '../utils/env'
 import type { NormalizedAccountStatus } from '../utils/connect/client'
 
 export async function assertOwner(uid: string, teamId: string): Promise<void> {
@@ -86,9 +86,14 @@ export async function ownerEmail(uid: string, team: EnabledTeam): Promise<string
   return email ?? (team.data.contact_email as string | undefined) ?? ''
 }
 
-/** Settings → Payments return/refresh targets for the hosted onboarding flow. */
-export function onboardingUrls(locale: string): { returnUrl: string; refreshUrl: string } {
-  const base = `${getHostingUrl()}/${locale}/team/settings`
+/** Settings → Payments return/refresh targets for the hosted onboarding flow.
+ * Prefers the caller's origin (so local dev returns to localhost), else the
+ * env-configured hosting URL. */
+export function onboardingUrls(
+  locale: string,
+  origin?: string
+): { returnUrl: string; refreshUrl: string } {
+  const base = `${resolveBaseUrl(origin)}/${locale}/team/settings`
   return {
     returnUrl: `${base}?tab=payments&connect=return`,
     refreshUrl: `${base}?tab=payments&connect=refresh`,

@@ -15,6 +15,7 @@
     "organization": "Organisation"
   },
   "Nav": {
+    "places": "Orte",
     "sectionOperations": "Verwalten",
     "sectionEngage": "Engage",
     "sectionConfigure": "Konfiguration",
@@ -167,6 +168,7 @@
     "demoEmptyLevel": "Keine Kontakte mit gesetztem Rang"
   },
   "Contacts": {
+    "mainAddress": "Hauptadresse",
     "title": "Kontakte",
     "subtitle": "{total} gesamt · {active} aktiv",
     "addContact": "Kontakt hinzufügen",
@@ -346,6 +348,16 @@
     "sectionPersonalInfo": "Persönliche Informationen",
     "sectionStats": "Statistiken",
     "sectionMembership": "Abo & {term}",
+    "sectionMembershipOrg": "{orgName}-Status & {term}",
+    "tooltipMembership": "Dieser Status gibt die Beziehung des Kontakts zur Organisation (Verein / Verband) wieder.",
+    "tooltipSubscription": "Dies gibt die Beziehung des Kontakts zum Studio oder Coach wieder.",
+    "sectionEmergencyContacts": "Notfallkontakte",
+    "emergencyContactName": "Name",
+    "emergencyContactPhone": "Telefon",
+    "emergencyContactEmail": "E-Mail",
+    "emergencyContactAdd": "Notfallkontakt hinzufügen",
+    "emergencyContactRemove": "Entfernen",
+    "emergencyContactNone": "Noch keine Notfallkontakte hinzugefügt.",
     "statTotalSessions": "Einheiten gesamt",
     "statStreak": "Wochen-Streak",
     "statMonthScore": "Monatspunkte",
@@ -453,6 +465,10 @@
     "noContacts": "Keine Kontakte gefunden."
   },
   "Sessions": {
+    "fieldPlace": "Ort",
+    "fieldRoom": "Raum",
+    "placeNone": "Kein Ort",
+    "roomNone": "Kein Raum",
     "title": "Einheiten",
     "subtitle": "{count} bevorstehend",
     "newSession": "Neue Einheit",
@@ -1326,7 +1342,9 @@
     "contactGroupsNavLabel": "Gruppen",
     "customFieldsName": "Eigene Felder",
     "customFieldsDescription": "Füge Kontakten eigene Felder hinzu – Text, Zahlen, Daten, Auswahllisten und Kontrollkästchen. Erscheint im Profil jedes Kontakts.",
-    "categoryOrganization": "Organisation"
+    "categoryOrganization": "Organisation",
+    "orgManagedBadge": "Von Organisation installiert",
+    "orgManagedHint": "Wird von der Organisation verwaltet – wende dich an deinen Org-Admin zum Entfernen."
   },
   "ContactGroups": {
     "title": "Kontaktgruppen",
@@ -1368,6 +1386,8 @@
     "addToGroup": "Zu Gruppe hinzufügen"
   },
   "Org": {
+    "tabPlaces": "Orte",
+    "tabPlugins": "Plugins",
     "title": "Organisation",
     "tabTeams": "Teams",
     "tabEvents": "Events",
@@ -1376,7 +1396,18 @@
     "tabMembers": "Mitglieder",
     "tabBilling": "Abrechnung",
     "tabSettings": "Einstellungen",
-    "backToDashboard": "Zurück zum Dashboard"
+    "backToDashboard": "Zurück zum Dashboard",
+    "pluginsTitle": "Organisations-Plugins",
+    "pluginsSubtitle": "Plugins einmalig installieren und sie werden für alle Studios dieser Organisation verfügbar.",
+    "pluginsReadOnly": "Nur Organisations-Admins können Plugins installieren oder entfernen.",
+    "pluginsInstall": "Für Org installieren",
+    "pluginsInstalling": "Wird installiert…",
+    "pluginsUninstall": "Entfernen",
+    "pluginsInstalledBadge": "Org installiert",
+    "pluginsInstalledSuccess": "für alle Studios installiert",
+    "pluginsUninstalledSuccess": "Plugin aus Organisation entfernt.",
+    "pluginsErrorInstall": "Plugin konnte nicht installiert werden. Bitte erneut versuchen.",
+    "pluginsErrorUninstall": "Plugin konnte nicht entfernt werden. Bitte erneut versuchen."
   },
   "OrgTeams": {
     "title": "Teams",
@@ -1486,6 +1517,7 @@
     "trialEnds": "Test endet {date}",
     "upgradeButton": "Abonnieren",
     "cancelButton": "Abonnement kündigen",
+    "cancel": "Abbrechen",
     "cancelConfirmTitle": "Abonnement kündigen?",
     "cancelConfirmMessage": "Dein Abonnement bleibt bis zum Ende des aktuellen Abrechnungszeitraums aktiv.",
     "cancelConfirmAction": "Ja, kündigen",
@@ -1561,6 +1593,8 @@
     "tip_recurring_body": "Erstelle eine wiederkehrende Session, statt jeden Kurs einzeln anzulegen."
   },
   "Website": {
+    "sectionPlaces": "Orte",
+    "sectionPlacesDesc": "Ausgewählte Standorte als einfache Karten.",
     "title": "Website",
     "preview": "Vorschau",
     "tabSections": "Abschnitte",
@@ -2066,5 +2100,8 @@
     "backToShop": "Zurück zum Shop",
     "openSpace": "Space öffnen",
     "close": "Du kannst dieses Fenster schliessen."
+  },
+  "Notifications": {
+    "dismiss": "Verwerfen"
   }
 }

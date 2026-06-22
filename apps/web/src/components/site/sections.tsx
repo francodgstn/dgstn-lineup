@@ -40,10 +40,12 @@ import type {
   PricingSection,
   ScheduleSection,
   ContactSection,
+  PlacesSection,
   SocialLink,
 } from '@linyup/shared'
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
+import { usePlaces } from '@/hooks/usePlaces'
 
 export interface RenderCtx {
   palette: SitePalette
@@ -745,6 +747,81 @@ function ContactBlock({ section, ctx }: { section: ContactSection; ctx: RenderCt
   )
 }
 
+// Selected places as simple cards (no map). Published sites carry an embedded
+// `places` snapshot; the builder preview resolves the selected ids live.
+function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx }) {
+  const { palette, preview, teamId } = ctx
+  const { data: pool = [] } = usePlaces(preview && !section.places ? teamId : null)
+  const places =
+    section.places ??
+    (section.placeIds ?? [])
+      .map((id) => pool.find((p) => p.id === id))
+      .filter((p): p is NonNullable<typeof p> => !!p)
+      .map((p) => ({ id: p.id, name: p.name, address: p.address, mapsLink: p.mapsLink }))
+
+  const cols =
+    section.columns === 2
+      ? '@2xl:grid-cols-2'
+      : section.columns === 4
+        ? '@2xl:grid-cols-2 @5xl:grid-cols-4'
+        : '@2xl:grid-cols-2 @5xl:grid-cols-3'
+
+  return (
+    <section id={section.id} className="py-20" style={{ background: palette.bg }}>
+      <div className="mx-auto max-w-5xl px-6">
+        <Heading text={section.heading ?? 'Find us'} palette={palette} />
+        {section.subheading && (
+          <p className="mt-3 text-center" style={{ color: palette.muted }}>
+            {section.subheading}
+          </p>
+        )}
+        <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
+          {places.length === 0 ? (
+            <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
+              No places selected.
+            </p>
+          ) : (
+            places.map((p) => (
+              <div
+                key={p.id}
+                className="flex flex-col rounded-2xl border p-5"
+                style={{ borderColor: palette.border, background: palette.surface }}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                    style={{ background: `${palette.accent}1a`, color: palette.accent }}
+                  >
+                    <MapPin className="h-4 w-4" />
+                  </span>
+                  <h3 className="text-lg font-semibold" style={{ color: palette.text }}>
+                    {p.name}
+                  </h3>
+                </div>
+                {p.address && (
+                  <p className="mt-3 text-sm" style={{ color: palette.muted }}>
+                    {p.address}
+                  </p>
+                )}
+                {p.mapsLink && (
+                  <a
+                    {...linkProps(preview ? undefined : p.mapsLink, preview, true)}
+                    className="mt-4 inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
+                    style={{ color: palette.accent }}
+                  >
+                    Open in maps
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ─── dispatcher ───────────────────────────────────────────────────────────────
 
 export function SectionBlock({ section, ctx }: { section: WebsiteSection; ctx: RenderCtx }) {
@@ -764,6 +841,8 @@ export function SectionBlock({ section, ctx }: { section: WebsiteSection; ctx: R
       return <ScheduleBlock section={section} ctx={ctx} />
     case 'contact':
       return <ContactBlock section={section} ctx={ctx} />
+    case 'places':
+      return <PlacesBlock section={section} ctx={ctx} />
     default:
       return null
   }
@@ -785,6 +864,8 @@ export function sectionNavLabel(section: WebsiteSection): string {
       return section.heading || 'Schedule'
     case 'contact':
       return section.heading || 'Contact'
+    case 'places':
+      return section.heading || 'Locations'
     default:
       return ''
   }

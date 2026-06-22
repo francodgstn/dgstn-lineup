@@ -20,6 +20,12 @@ import {
   type MemberSubscription,
 } from '@linyup/shared'
 
+/** The browser origin to send to checkout/onboarding callables so Stripe returns
+ * here (localhost in dev) instead of the env-configured hosting URL. */
+function clientOrigin(): string | undefined {
+  return typeof window !== 'undefined' ? window.location.origin : undefined
+}
+
 export interface ConnectStatusResult {
   connected: boolean
   accountId?: string
@@ -52,10 +58,10 @@ export function useStartConnectOnboarding() {
       locale?: string
     }) => {
       const fn = httpsCallable<
-        { teamId: string; model: string; locale?: string },
+        { teamId: string; model: string; locale?: string; origin?: string },
         { accountId: string; model: ConnectOnboardingModel; url: string }
       >(functions, 'startConnectOnboarding')
-      return (await fn(vars)).data
+      return (await fn({ ...vars, origin: clientOrigin() })).data
     },
   })
 }
@@ -70,11 +76,11 @@ export function useCreateMembershipPayment() {
       customerEmail?: string
       locale?: string
     }) => {
-      const fn = httpsCallable<typeof vars, { url: string; sessionId: string; recurring: boolean }>(
-        functions,
-        'createMembershipPayment'
-      )
-      return (await fn(vars)).data
+      const fn = httpsCallable<
+        typeof vars & { origin?: string },
+        { url: string; sessionId: string; recurring: boolean }
+      >(functions, 'createMembershipPayment')
+      return (await fn({ ...vars, origin: clientOrigin() })).data
     },
   })
 }

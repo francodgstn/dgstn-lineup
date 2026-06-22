@@ -43,6 +43,7 @@ export const startConnectOnboarding = onCall(async (request) => {
     country?: string
     entityType?: 'company' | 'individual'
     locale?: string
+    origin?: string
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   const teamId = data.teamId
@@ -112,7 +113,7 @@ export const startConnectOnboarding = onCall(async (request) => {
       )
   }
 
-  const { returnUrl, refreshUrl } = onboardingUrls(locale)
+  const { returnUrl, refreshUrl } = onboardingUrls(locale, data.origin)
   let url: string
   try {
     ;({ url } = await createAccountLink({ accountId, refreshUrl, returnUrl }))

@@ -10,6 +10,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePlaces } from '@/hooks/usePlaces'
 import { useTranslations } from 'next-intl'
 import { Link, useRouter } from '@/i18n/navigation'
 import {
@@ -37,6 +38,7 @@ import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { useEventTypes } from '@/hooks/useEventTypes'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { CheckinPanel } from '@/components/events/CheckinPanel'
+import { useOrg } from '@/contexts/OrgContext'
 import dynamic from 'next/dynamic'
 import type { Route } from 'next'
 
@@ -79,6 +81,8 @@ const editSchema = z
     start: z.date({ required_error: 'Required' }),
     end: z.date({ required_error: 'Required' }),
     location: z.string().max(120).optional(),
+    placeId: z.string().optional(),
+    roomId: z.string().optional(),
     fee: z.string().optional(),
     description: z.string().max(1000).optional(),
   })
@@ -143,8 +147,9 @@ function EditEventDialog({
   onSaved: () => void
 }) {
   const t = useTranslations('Events')
-  const { currentTeamId } = useAuth()
+  const { currentTeamId, team } = useAuth()
   const { types } = useEventTypes(currentTeamId)
+  const { data: places = [] } = usePlaces(currentTeamId, team?.org_id ?? null)
   // Keep the event's current type selectable even if its plugin was uninstalled
   // (or it's an unknown/legacy type) — otherwise editing would silently drop it.
   const typeOptions =
@@ -158,7 +163,7 @@ function EditEventDialog({
       (k) => t(k as Parameters<typeof t>[0]),
       typeOptions.find((x) => x.id === id)?.name,
     )
-  const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm<EditFormData>({
+  const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting } } = useForm<EditFormData>({
     resolver: zodResolver(editSchema),
     defaultValues: {
       title: event.title,
@@ -166,10 +171,14 @@ function EditEventDialog({
       start: (event.start as { toDate(): Date } | null | undefined)?.toDate() ?? undefined,
       end: (event.end as { toDate(): Date } | null | undefined)?.toDate() ?? undefined,
       location: event.location ?? '',
+      placeId: event.placeId ?? '',
+      roomId: event.roomId ?? '',
       fee: event.fee != null ? String(event.fee) : '',
       description: event.description ?? '',
     },
   })
+  const watchedPlaceId = watch('placeId')
+  const placeRooms = places.find((p) => p.id === watchedPlaceId)?.rooms ?? []
 
   async function onSubmit(data: EditFormData) {
     await updateDoc(doc(db, EVENTS_COLLECTION, event.id), {
@@ -178,6 +187,8 @@ function EditEventDialog({
       start: Timestamp.fromDate(data.start),
       end: Timestamp.fromDate(data.end),
       location: data.location ?? '',
+      placeId: data.placeId || null,
+      roomId: data.roomId || null,
       fee: data.fee ? Number(data.fee) : null,
       description: data.description ?? '',
     })
@@ -248,6 +259,46 @@ function EditEventDialog({
               {errors.end && <p className="text-destructive text-xs">{errors.end.message}</p>}
             </div>
           </div>
+
+          {places.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('fieldPlace')}</Label>
+                <Controller name="placeId" control={control} render={({ field }) => (
+                  <Select
+                    value={field.value || '__none'}
+                    onValueChange={(v) => { field.onChange(v === '__none' ? '' : v); setValue('roomId', '') }}
+                  >
+                    <SelectTrigger><SelectValue placeholder={t('placeNone')} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">{t('placeNone')}</SelectItem>
+                      {places.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}{p.scope === 'org' ? ' · org' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )} />
+              </div>
+              {placeRooms.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>{t('fieldRoom')}</Label>
+                  <Controller name="roomId" control={control} render={({ field }) => (
+                    <Select value={field.value || '__none'} onValueChange={(v) => field.onChange(v === '__none' ? '' : v)}>
+                      <SelectTrigger><SelectValue placeholder={t('roomNone')} /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">{t('roomNone')}</SelectItem>
+                        {placeRooms.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )} />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -341,6 +392,7 @@ type DetailTab = 'overview' | 'checkins' | 'categories' | 'attendees' | 'invitat
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { currentTeamId, team, teamRole, isOrgAdmin } = useAuth()
+  const { org } = useOrg()
   const t = useTranslations('Events')
   const router = useRouter()
   const qc = useQueryClient()
@@ -456,8 +508,8 @@ export default function EventDetailPage() {
   const endTime = formatTime(event.end)
   const duration = eventDuration(event)
 
-  // Ranking systems come from the team config, not the event doc
-  const rankingSystems: RankingSystem[] = team?.ranking_systems ?? []
+  // Ranking systems: org-wide events use org.ranking_systems (overrides team config)
+  const rankingSystems: RankingSystem[] = org?.ranking_systems ?? team?.ranking_systems ?? []
 
   // Detect if this event type is backed by a plugin that declares hasCategories
   const eventPlugin = PLUGIN_REGISTRY.find((p) => p.eventType?.id === event.type)

@@ -19,6 +19,12 @@ export interface ContactAddress {
   locality?: string
 }
 
+export interface EmergencyContact {
+  name: string
+  phone?: string
+  email?: string
+}
+
 export interface ContactAcquisition {
   channel?: string
   campaign?: string
@@ -44,6 +50,9 @@ export interface Contact {
 
   // Address
   address?: ContactAddress
+
+  // Emergency contacts (max 2)
+  emergency_contacts?: EmergencyContact[]
 
   // Team-level membership (legacy / bio-link signup flow)
   type?: ContactType

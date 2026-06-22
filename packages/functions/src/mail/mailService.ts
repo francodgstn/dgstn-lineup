@@ -160,12 +160,23 @@ export async function sendSystemMail(msg: OutboundMessage): Promise<SendOutcome>
 
 // "Send as the studio" — resolves the entity's sender identity (Managed or a
 // verified BYO domain) and sends on its behalf. Works for a team or an org.
+//
+// TEST_MODE override: when TEST_MODE=true, the managed-studio sender
+// (studios@linyup.com with an unverified studio display name) is not registered
+// in the Brevo test account and would be rejected. Instead we fall back to the
+// system sender (hello@linyup.com — verified) so local dev and CI can send
+// without a registered managed sender. Production behavior is unchanged.
 export async function sendEntityMail(
   scope: 'team' | 'org',
   entityId: string,
   msg: OutboundMessage,
   fallbackContactEmail?: string,
 ): Promise<SendOutcome> {
+  if (isTestMode()) {
+    // Use the verified system sender in test mode — avoids Brevo rejecting an
+    // unverified managed From address (studios@linyup.com) in dev/CI.
+    return dispatch(msg, getSystemSender(), 'studio', entityId)
+  }
   const ctx =
     scope === 'team' ? await loadStudioContext(entityId) : await loadOrgContext(entityId, fallbackContactEmail)
   const sender = resolveStudioSender({

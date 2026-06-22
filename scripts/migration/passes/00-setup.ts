@@ -59,4 +59,21 @@ export async function pass00Setup(cfg: MigrationConfig): Promise<void> {
       console.log(`  created org_members/${adminUid} (org_admin)`)
     }
   }
+
+  // Pre-install the HMD Fighting Cup plugin at org level (idempotent)
+  const fightingCupPluginId = 'hmd-fighting-cup'
+  const pluginRef = orgRef.collection('installed_plugins').doc(fightingCupPluginId)
+  const pluginSnap = await pluginRef.get()
+  if (pluginSnap.exists) {
+    console.log(`  installed_plugins/${fightingCupPluginId} already exists — skipping`)
+  } else {
+    await pluginRef.set({
+      pluginId:    fightingCupPluginId,
+      orgId:       ORG_ID,
+      installedAt: FieldValue.serverTimestamp(),
+      installedBy: 'migration',
+      status:      'active',
+    })
+    console.log(`  created installed_plugins/${fightingCupPluginId} (org-level, migration)`)
+  }
 }

@@ -11,6 +11,10 @@ export interface Session {
   end: Timestamp
   duration_minutes?: number
   location?: string
+  // Optional link to a Place + Room (team or org place). `location` is kept as a
+  // free-text fallback (online/ad-hoc) and for display.
+  placeId?: string
+  roomId?: string
   onlineUrl?: string
   tags?: string[]
   participants_count?: number

@@ -72,7 +72,7 @@ import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useMembershipTerm } from '@/hooks/useMembershipTerm'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -106,7 +106,15 @@ import {
   Lock,
   Flag,
   Link2,
+  Info,
 } from 'lucide-react'
+import {
+  Tooltip as UITooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
+import { useOrg } from '@/contexts/OrgContext'
 import {
   LineChart,
   Line,
@@ -188,6 +196,16 @@ const profileSchema = z.object({
   ranks: z.record(z.string(), z.number()).optional(),
   custom_fields: z
     .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .optional(),
+  emergency_contacts: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        phone: z.string().optional(),
+        email: z.string().email().optional().or(z.literal('')),
+      })
+    )
+    .max(2)
     .optional(),
 })
 type ProfileValues = z.infer<typeof profileSchema>
@@ -941,6 +959,7 @@ function ProfileTab({
   const tCommon = useTranslations('Common')
   const membershipTerm = useMembershipTerm()
   const { team } = useAuth()
+  const { org } = useOrg()
   const { isInstalled } = useInstalledPlugins()
   const currency = (team?.default_currency ?? 'CHF').toUpperCase()
   const { data: subTypes = [] } = useSubscriptionTypes(teamId)
@@ -991,7 +1010,13 @@ function ProfileTab({
       acquisition_notes: contact.acquisition?.notes ?? '',
       ranks: contact.ranks ?? {},
       custom_fields: contact.custom_fields ?? {},
+      emergency_contacts: contact.emergency_contacts ?? [],
     },
+  })
+
+  const { fields: ecFields, append: ecAppend, remove: ecRemove } = useFieldArray({
+    control,
+    name: 'emergency_contacts',
   })
 
   const onSubmit = async (values: ProfileValues) => {
@@ -1031,6 +1056,7 @@ function ProfileTab({
       },
       ranks: values.ranks ?? {},
       custom_fields: values.custom_fields ?? {},
+      emergency_contacts: (values.emergency_contacts ?? []).filter((ec) => ec.name.trim() !== ''),
       updatedAt: serverTimestamp(),
     })
     onSaved()
@@ -1071,10 +1097,22 @@ function ProfileTab({
         <FormBlock
           title={
             <>
-              {t('sectionMembership', { term: membershipTerm })}
+              {org?.name
+                ? t('sectionMembershipOrg', { orgName: org.name, term: membershipTerm })
+                : t('sectionMembership', { term: membershipTerm })}
               {membershipFieldLocked && (
                 <Lock className="h-3 w-3 text-muted-foreground/60 shrink-0" />
               )}
+              <TooltipProvider delay={200}>
+                <UITooltip>
+                  <TooltipTrigger className="inline-flex text-muted-foreground/50 cursor-help">
+                    <Info className="h-3 w-3 shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-56">
+                    {t('tooltipMembership')}
+                  </TooltipContent>
+                </UITooltip>
+              </TooltipProvider>
             </>
           }
         >
@@ -1444,6 +1482,55 @@ function ProfileTab({
           </Field>
         </FormBlock>
 
+        {/* Emergency contacts */}
+        <FormBlock title={t('sectionEmergencyContacts')}>
+          <div className="space-y-4">
+            {ecFields.map((field, index) => (
+              <div key={field.id} className="rounded-lg border p-3 space-y-2 relative">
+                <button
+                  type="button"
+                  onClick={() => ecRemove(index)}
+                  className="absolute top-2 right-2 p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                  aria-label={t('emergencyContactRemove')}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+                <Field
+                  label={t('emergencyContactName')}
+                  required
+                  error={errors.emergency_contacts?.[index]?.name?.message}
+                >
+                  <Input {...register(`emergency_contacts.${index}.name`)} autoCapitalize="words" />
+                </Field>
+                <Field label={t('emergencyContactPhone')}>
+                  <Input type="tel" inputMode="tel" {...register(`emergency_contacts.${index}.phone`)} />
+                </Field>
+                <Field
+                  label={t('emergencyContactEmail')}
+                  error={errors.emergency_contacts?.[index]?.email?.message}
+                >
+                  <Input type="email" inputMode="email" {...register(`emergency_contacts.${index}.email`)} />
+                </Field>
+              </div>
+            ))}
+            {ecFields.length < 2 && (
+              <button
+                type="button"
+                onClick={() => ecAppend({ name: '', phone: '', email: '' })}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full justify-center"
+              >
+                <Plus className="h-4 w-4" />
+                {t('emergencyContactAdd')}
+              </button>
+            )}
+            {ecFields.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-1">
+                {t('emergencyContactNone')}
+              </p>
+            )}
+          </div>
+        </FormBlock>
+
         {/* Acquisition */}
         <FormBlock title={t('sectionAcquisition')}>
           <Field label={t('fieldAcquisitionChannel')}>
@@ -1550,6 +1637,23 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('tabSubscriptions')}
+          </p>
+          <TooltipProvider delay={200}>
+            <UITooltip>
+              <TooltipTrigger className="inline-flex text-muted-foreground/50 cursor-help">
+                <Info className="h-3.5 w-3.5 shrink-0" />
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-56">
+                {t('tooltipSubscription')}
+              </TooltipContent>
+            </UITooltip>
+          </TooltipProvider>
+        </div>
+      </div>
       <div className="flex justify-end">
         <button
           onClick={() => setAddOpen(true)}

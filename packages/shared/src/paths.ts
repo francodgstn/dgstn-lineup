@@ -48,8 +48,12 @@ export const ORG_TEAMS_SUBCOLLECTION = 'org_teams'
 export const ORG_INVITATIONS_SUBCOLLECTION = 'org_invitations'
 export const ORG_ACCESS_REQUESTS_SUBCOLLECTION = 'org_access_requests'
 export const ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION = 'membership_statuses'
+export const ORG_PLACES_SUBCOLLECTION = 'org_places'
 export const TEAM_INTEGRATIONS_SUBCOLLECTION = 'integrations'
 export const INSTALLED_PLUGINS_SUBCOLLECTION = 'installed_plugins'
+// Same subcollection name, under organizations/{orgId} instead of teams/{teamId}.
+// Exported as a separate constant for clarity at call sites.
+export const ORG_INSTALLED_PLUGINS_SUBCOLLECTION = 'installed_plugins'
 // Well-known integration doc id for a studio's email sender configuration
 // (teams|organizations/{id}/integrations/email_sender). See EmailSenderConfig.
 export const EMAIL_SENDER_INTEGRATION_DOC = 'email_sender'
@@ -114,6 +118,10 @@ export const SITE_PUBLISHED_COLLECTION = 'site_published'
 export const CONNECT_ACCOUNTS_COLLECTION = 'connect_accounts'
 export const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
 export const MEMBER_SUBSCRIPTIONS_SUBCOLLECTION = 'member_subscriptions'
+
+// In-app notifications for team managers/owners (e.g. org access requests).
+// Written only by Cloud Functions (Admin SDK); clients read and mark-read.
+export const NOTIFICATIONS_SUBCOLLECTION = 'notifications'
 
 // BYO gateway ledger (Payrexx / Stripe-BYO). teams/{teamId}/payment_events/{id},
 // doc id = `${gateway}:${gatewayRef}` for idempotency. Written only by the team

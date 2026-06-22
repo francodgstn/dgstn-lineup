@@ -19,10 +19,12 @@ import {
   ExternalLink,
   Pencil,
   Trash2,
+  UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EVENTS_COLLECTION } from '@linyup/shared'
 import type { Event } from '@linyup/shared'
+import type { Route } from 'next'
 
 // Matches the event-type palette used in SessionsCalendar
 const EVENT_TYPE_COLOR: Record<string, string> = {
@@ -112,28 +114,50 @@ export function EventPeekSheet({ eventId, onClose, onEdit, onDelete }: EventPeek
         {event && (
           <>
             <SheetHeader className="pb-3">
-              <div className="flex items-center gap-2 pr-8 flex-wrap">
-                <SheetTitle className="truncate">{event.title}</SheetTitle>
-                <Badge
-                  variant="secondary"
-                  className="text-xs shrink-0"
-                  style={{ backgroundColor: `${accent}1F`, color: accent }}
-                >
-                  {typeLabel}
-                </Badge>
-                {event.scope === 'org' && (
-                  <Badge variant="outline" className="text-xs shrink-0">
-                    Org
-                  </Badge>
-                )}
-                {event.status === 'cancelled' && (
+              <div className="flex items-start gap-2 pr-8">
+                <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+                  <SheetTitle className="truncate">{event.title}</SheetTitle>
                   <Badge
-                    variant="outline"
-                    className="text-xs shrink-0 text-destructive border-destructive/30"
+                    variant="secondary"
+                    className="text-xs shrink-0"
+                    style={{ backgroundColor: `${accent}1F`, color: accent }}
                   >
-                    {t('statusCancelled')}
+                    {typeLabel}
                   </Badge>
-                )}
+                  {event.scope === 'org' && (
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      Org
+                    </Badge>
+                  )}
+                  {event.status === 'cancelled' && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs shrink-0 text-destructive border-destructive/30"
+                    >
+                      {t('statusCancelled')}
+                    </Badge>
+                  )}
+                </div>
+                {/* Action icons in the header — visible immediately without scrolling */}
+                <div className="flex items-center gap-1 shrink-0 -mt-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onEdit(event)}
+                    title={t('peekEdit')}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => onDelete(event)}
+                    title={t('peekDelete')}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-1.5 text-sm text-muted-foreground mt-1">
                 <div className="flex items-center gap-2">
@@ -192,29 +216,20 @@ export function EventPeekSheet({ eventId, onClose, onEdit, onDelete }: EventPeek
 
             <SheetFooter className="flex-row items-center gap-2 border-t">
               <Link
-                href={`/events/${event.id}`}
+                href={`/events/${event.id}` as Route}
                 className={cn(buttonVariants({ variant: 'default' }), 'flex-1')}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 {t('peekOpenFull')}
               </Link>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => onEdit(event)}
-                title={t('peekEdit')}
+              <Link
+                href={`/events/${event.id}` as Route}
+                className={cn(buttonVariants({ variant: 'outline' }))}
+                title="Add check-in"
               >
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="text-muted-foreground hover:text-destructive"
-                onClick={() => onDelete(event)}
-                title={t('peekDelete')}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+                <UserPlus className="h-4 w-4" />
+                Add check-in
+              </Link>
             </SheetFooter>
           </>
         )}
