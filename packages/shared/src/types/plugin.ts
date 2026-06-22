@@ -89,7 +89,10 @@ export interface PluginManifest {
 
 export interface InstalledPlugin {
   pluginId: PluginId
-  teamId: string
+  /** Set for team-scoped installs; absent on org-level installs. */
+  teamId?: string
+  /** Set for org-level installs; absent on team-scoped installs. */
+  orgId?: string
   installedAt: Timestamp
   installedBy: string
   config?: Record<string, unknown>

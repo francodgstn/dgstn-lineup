@@ -1347,7 +1347,9 @@
     "contactGroupsNavLabel": "Groups",
     "customFieldsName": "Custom Fields",
     "customFieldsDescription": "Add your own fields to contacts — text, numbers, dates, dropdowns and checkboxes. Shown on every contact's profile.",
-    "categoryOrganization": "Organisation"
+    "categoryOrganization": "Organisation",
+    "orgManagedBadge": "Installed by organization",
+    "orgManagedHint": "Managed by the organization — contact your org admin to remove."
   },
   "ContactGroups": {
     "title": "Contact Groups",
@@ -1390,6 +1392,7 @@
   },
   "Org": {
     "tabPlaces": "Places",
+    "tabPlugins": "Plugins",
     "title": "Organization",
     "tabTeams": "Teams",
     "tabEvents": "Events",
@@ -1398,7 +1401,18 @@
     "tabMembers": "Members",
     "tabBilling": "Billing",
     "tabSettings": "Settings",
-    "backToDashboard": "Back to dashboard"
+    "backToDashboard": "Back to dashboard",
+    "pluginsTitle": "Organization Plugins",
+    "pluginsSubtitle": "Install plugins once and they become available to all studios in this organization.",
+    "pluginsReadOnly": "Only organization admins can install or remove plugins.",
+    "pluginsInstall": "Install for org",
+    "pluginsInstalling": "Installing…",
+    "pluginsUninstall": "Remove",
+    "pluginsInstalledBadge": "Org installed",
+    "pluginsInstalledSuccess": "installed for all studios",
+    "pluginsUninstalledSuccess": "Plugin removed from organization.",
+    "pluginsErrorInstall": "Could not install plugin. Please try again.",
+    "pluginsErrorUninstall": "Could not remove plugin. Please try again."
   },
   "OrgTeams": {
     "title": "Teams",

@@ -1342,7 +1342,9 @@
     "contactGroupsNavLabel": "Groupes",
     "customFieldsName": "Champs personnalisés",
     "customFieldsDescription": "Ajoutez vos propres champs aux contacts — texte, nombres, dates, listes déroulantes et cases à cocher. Affichés sur le profil de chaque contact.",
-    "categoryOrganization": "Organisation"
+    "categoryOrganization": "Organisation",
+    "orgManagedBadge": "Installé par l'organisation",
+    "orgManagedHint": "Géré par l'organisation — contactez votre admin org pour le supprimer."
   },
   "ContactGroups": {
     "title": "Groupes de contacts",
@@ -1385,6 +1387,7 @@
   },
   "Org": {
     "tabPlaces": "Lieux",
+    "tabPlugins": "Plugins",
     "title": "Organisation",
     "tabTeams": "Équipes",
     "tabEvents": "Événements",
@@ -1393,7 +1396,18 @@
     "tabMembers": "Membres",
     "tabBilling": "Facturation",
     "tabSettings": "Paramètres",
-    "backToDashboard": "Retour au tableau de bord"
+    "backToDashboard": "Retour au tableau de bord",
+    "pluginsTitle": "Plugins de l'organisation",
+    "pluginsSubtitle": "Installez des plugins une fois et ils seront disponibles pour tous les studios de cette organisation.",
+    "pluginsReadOnly": "Seuls les administrateurs de l'organisation peuvent installer ou supprimer des plugins.",
+    "pluginsInstall": "Installer pour l'org",
+    "pluginsInstalling": "Installation…",
+    "pluginsUninstall": "Supprimer",
+    "pluginsInstalledBadge": "Installé par l'org",
+    "pluginsInstalledSuccess": "installé pour tous les studios",
+    "pluginsUninstalledSuccess": "Plugin supprimé de l'organisation.",
+    "pluginsErrorInstall": "Impossible d'installer le plugin. Veuillez réessayer.",
+    "pluginsErrorUninstall": "Impossible de supprimer le plugin. Veuillez réessayer."
   },
   "OrgTeams": {
     "title": "Équipes",

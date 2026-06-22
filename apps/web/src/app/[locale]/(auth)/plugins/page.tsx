@@ -79,6 +79,7 @@ function PluginCard({
   manifest,
   access,
   isInstalled,
+  installedByOrg,
   isOwner,
   onInstall,
   onRemove,
@@ -89,6 +90,8 @@ function PluginCard({
   manifest: PluginManifest
   access: PluginAccess
   isInstalled: boolean
+  /** True when the plugin is installed at org level (not removable by the team). */
+  installedByOrg: boolean
   isOwner: boolean
   onInstall: () => void
   onRemove: () => void
@@ -99,10 +102,16 @@ function PluginCard({
   const t = useTranslations('Plugins')
 
   const statusBadge = isInstalled ? (
-    <Badge variant="outline" className="border-green-500 text-green-600 text-xs">
-      <span className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
-      {t('statusInstalled')}
-    </Badge>
+    installedByOrg ? (
+      <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+        {t('orgManagedBadge')}
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="border-green-500 text-green-600 text-xs">
+        <span className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
+        {t('statusInstalled')}
+      </Badge>
+    )
   ) : manifest.status === 'coming_soon' ? (
     <Badge variant="secondary" className="text-xs">{t('statusComingSoon')}</Badge>
   ) : manifest.status === 'beta' ? (
@@ -169,16 +178,21 @@ function PluginCard({
       {isOwner && (
         <div className="mt-auto pt-1">
           {isInstalled ? (
-            <div className="flex gap-2">
-              {manifest.hasOwnerConfig && (
-                <Button size="sm" variant="outline" onClick={onConfigure}>
-                  {t('configure')}
+            installedByOrg ? (
+              // Org-managed plugins cannot be uninstalled at the team level
+              <p className="text-xs text-muted-foreground">{t('orgManagedHint')}</p>
+            ) : (
+              <div className="flex gap-2">
+                {manifest.hasOwnerConfig && (
+                  <Button size="sm" variant="outline" onClick={onConfigure}>
+                    {t('configure')}
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
+                  {t('remove')}
                 </Button>
-              )}
-              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
-                {t('remove')}
-              </Button>
-            </div>
+              </div>
+            )
           ) : access.kind === 'upgrade' ? (
             <Button size="sm" variant="outline" onClick={onUpgrade}>
               {t('upgradeCta')}
@@ -254,7 +268,7 @@ function PluginConfigDialog({
 export default function PluginsPage() {
   const t = useTranslations('Plugins')
   const { user, currentTeamId } = useAuth()
-  const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
+  const { plugins: installedPlugins, isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
   const { data: isOwner, isLoading: roleLoading } = useIsOwner(currentTeamId, user?.uid ?? null)
   const { plan, isTrialing } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
@@ -399,20 +413,24 @@ export default function PluginsPage() {
 
       {/* Grid */}
       <div className="grid gap-6 sm:grid-cols-2">
-        {filteredPlugins.map((manifest) => (
-          <PluginCard
-            key={manifest.id}
-            manifest={manifest}
-            access={pluginAccessForPlan(manifest, plan)}
-            isInstalled={isInstalled(manifest.id)}
-            isOwner={!!isOwner}
-            installing={installingId === manifest.id}
-            onInstall={() => handleInstall(manifest)}
-            onRemove={() => handleRemove(manifest)}
-            onConfigure={() => setConfigPlugin(manifest)}
-            onUpgrade={() => openUpgradeModal({ minPlan: manifest.minPlan })}
-          />
-        ))}
+        {filteredPlugins.map((manifest) => {
+          const entry = installedPlugins.find((e) => e.manifest.id === manifest.id)
+          return (
+            <PluginCard
+              key={manifest.id}
+              manifest={manifest}
+              access={pluginAccessForPlan(manifest, plan)}
+              isInstalled={isInstalled(manifest.id)}
+              installedByOrg={entry?.source === 'org'}
+              isOwner={!!isOwner}
+              installing={installingId === manifest.id}
+              onInstall={() => handleInstall(manifest)}
+              onRemove={() => handleRemove(manifest)}
+              onConfigure={() => setConfigPlugin(manifest)}
+              onUpgrade={() => openUpgradeModal({ minPlan: manifest.minPlan })}
+            />
+          )
+        })}
       </div>
 
       {filteredPlugins.length === 0 && (

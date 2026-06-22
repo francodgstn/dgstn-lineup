@@ -1332,7 +1332,9 @@
     "contactGroupsNavLabel": "Gruppi",
     "customFieldsName": "Campi personalizzati",
     "customFieldsDescription": "Aggiungi campi personalizzati ai contatti — testo, numeri, date, menu a tendina e caselle di controllo. Visibili nel profilo di ogni contatto.",
-    "categoryOrganization": "Organizzazione"
+    "categoryOrganization": "Organizzazione",
+    "orgManagedBadge": "Installato dall'organizzazione",
+    "orgManagedHint": "Gestito dall'organizzazione — contatta il tuo admin org per rimuoverlo."
   },
   "ContactGroups": {
     "title": "Gruppi di contatti",
@@ -1375,6 +1377,7 @@
   },
   "Org": {
     "tabPlaces": "Sedi",
+    "tabPlugins": "Plugin",
     "title": "Organizzazione",
     "tabTeams": "Team",
     "tabEvents": "Eventi",
@@ -1383,7 +1386,18 @@
     "tabMembers": "Membri",
     "tabBilling": "Fatturazione",
     "tabSettings": "Impostazioni",
-    "backToDashboard": "Torna alla dashboard"
+    "backToDashboard": "Torna alla dashboard",
+    "pluginsTitle": "Plugin dell'organizzazione",
+    "pluginsSubtitle": "Installa i plugin una volta e diventano disponibili per tutti gli studi dell'organizzazione.",
+    "pluginsReadOnly": "Solo gli amministratori dell'organizzazione possono installare o rimuovere plugin.",
+    "pluginsInstall": "Installa per l'org",
+    "pluginsInstalling": "Installazione…",
+    "pluginsUninstall": "Rimuovi",
+    "pluginsInstalledBadge": "Installato dall'org",
+    "pluginsInstalledSuccess": "installato per tutti gli studi",
+    "pluginsUninstalledSuccess": "Plugin rimosso dall'organizzazione.",
+    "pluginsErrorInstall": "Impossibile installare il plugin. Riprova.",
+    "pluginsErrorUninstall": "Impossibile rimuovere il plugin. Riprova."
   },
   "OrgTeams": {
     "title": "Team",
