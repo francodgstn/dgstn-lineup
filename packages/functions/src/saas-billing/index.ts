@@ -874,6 +874,13 @@ export const handleTrialLifecycle = onSchedule(
       .get()
     for (const doc of expiring.docs) {
       const teamId = doc.id
+      // Internal/pilot teams never auto-downgrade — an internal smoke-test studio
+      // or a founder mid-validation must not lapse to Free (see docs/launch/).
+      const flags = doc.data().flags as { internal?: boolean; pilot?: boolean } | undefined
+      if (flags?.internal || flags?.pilot) {
+        console.log(`[trial] skipped ${flags.internal ? 'internal' : 'pilot'} team ${teamId}`)
+        continue
+      }
       try {
         await downgradeTeamToFree(teamId, { fromTrial: true })
         await sendTrialExpiredEmail(teamId, doc.data()).catch((e) =>

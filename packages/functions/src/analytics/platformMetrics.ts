@@ -74,6 +74,10 @@ export const capturePlatformMetrics = onSchedule(
 
     for (const doc of teamsSnap.docs) {
       const team = doc.data()
+      // Internal teams (e.g. the prod smoke-test studio) never count toward
+      // platform metrics. Filtered in memory — `flags.internal` is a nested field
+      // (no top-level boolean to query on) and all teams are already loaded.
+      if (team.flags?.internal === true) continue
       const sub = subs.get(doc.id)
       inputs.push({
         type: 'team',
