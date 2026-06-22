@@ -368,7 +368,7 @@ function AgendaCard({ teamId }: { teamId: string | null }) {
         <div className="flex items-center justify-between">
           <CardTitle>{t('agenda')}</CardTitle>
           <Link
-            href="/sessions"
+            href="/schedule"
             className="text-xs text-primary hover:underline flex items-center gap-0.5"
           >
             {t('allSessions')} <ArrowRight className="h-3 w-3" />
@@ -440,7 +440,7 @@ function QuickActions({ teamSlug }: { teamSlug?: string }) {
   const router = useRouter()
   const actions: { label: string; icon: React.ElementType; href: Route }[] = [
     { label: t('actionNewContact'), icon: UserPlus, href: '/contacts' as Route },
-    { label: t('actionNewSession'), icon: Plus, href: '/sessions' as Route },
+    { label: t('actionNewSession'), icon: Plus, href: '/schedule' as Route },
     {
       label: t('actionViewBioLink'),
       icon: BookOpen,
