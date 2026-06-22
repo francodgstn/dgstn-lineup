@@ -1,4 +1,5 @@
 export * from './paths'
+export * from './tenantData'
 export * from './slugs'
 export * from './types/common'
 export * from './types/team'

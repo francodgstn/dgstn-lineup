@@ -15,9 +15,9 @@ import {
   TRIAL_EXTENSION_DAYS,
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
-  CONTACTS_COLLECTION,
-  SITE_DRAFTS_COLLECTION,
-  SITE_PUBLISHED_COLLECTION,
+  TENANT_DATA_COLLECTIONS,
+  TENANT_TEAM_DOC_COLLECTION,
+  tenantStoragePrefix,
 } from '@linyup/shared'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
@@ -747,88 +747,79 @@ async function downgradeTeamToFree(teamId: string, opts: { fromTrial: boolean })
   await Promise.all(teardowns)
 }
 
-// All team-scoped top-level collections keyed by `teamId`. recursiveDelete on
-// each matching doc also removes that doc's subcollections (e.g. contact goals,
-// session bookings, event attendees).
-const TEAM_COLLECTIONS_BY_TEAMID = [
-  CONTACTS_COLLECTION,
-  'sessions',
-  'activities',
-  'events',
-  'checkins',
-  'session_series',
-  'courses',
-  'coach_availability',
-]
-
 /**
  * Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users.
  * When `dryRun` is true, NOTHING is deleted — it only logs what it would remove
  * (counts per collection).
  *
- * DORMANT: no longer wired to a schedule (the 90-day trial purge was retired
- * when lapsed trials began downgrading to the Free plan). Kept as a manual
- * GDPR / account-deletion utility — exported so the module compiles and so an
- * admin script can import it.
+ * The set of tenant-scoped collections is driven by TENANT_DATA_COLLECTIONS in
+ * `@linyup/shared` (the single source of truth, guarded by a completeness test)
+ * so a newly added tenant collection is purged automatically once registered.
+ *
+ * DORMANT as a schedule (the 90-day trial purge was retired when lapsed trials
+ * began downgrading to Free). Kept as the manual GDPR / account-deletion (and
+ * QA "reset account") utility — exported for admin scripts and callables.
+ *
+ * NOTE: this removes Firestore + Storage only. Provider-side state for entries
+ * flagged `externalTeardown` (e.g. the Stripe Connect account + its member
+ * subscriptions) must be cancelled/disconnected separately — a warning is logged.
  */
 export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> {
   const db = admin.firestore()
-  const tag = dryRun ? '[trial][dry-run]' : '[trial]'
+  const tag = dryRun ? '[purge][dry-run]' : '[purge]'
 
-  for (const coll of TEAM_COLLECTIONS_BY_TEAMID) {
-    if (dryRun) {
-      const c = await db.collection(coll).where('teamId', '==', teamId).count().get()
-      console.log(`${tag} team ${teamId}: would delete ${c.data().count} ${coll}`)
+  for (const entry of TENANT_DATA_COLLECTIONS) {
+    if (entry.match.by === 'field') {
+      const q = db.collection(entry.collection).where(entry.match.field, '==', teamId)
+      if (dryRun) {
+        const c = await q.count().get()
+        console.log(`${tag} team ${teamId}: would delete ${c.data().count} ${entry.collection}`)
+      } else {
+        const snap = await q.get()
+        for (const d of snap.docs) await db.recursiveDelete(d.ref)
+      }
     } else {
-      const snap = await db.collection(coll).where('teamId', '==', teamId).get()
-      for (const d of snap.docs) await db.recursiveDelete(d.ref)
+      // doc id IS the teamId
+      const ref = db.collection(entry.collection).doc(teamId)
+      if (dryRun) {
+        const exists = (await ref.get()).exists
+        console.log(`${tag} team ${teamId}: would delete ${exists ? 1 : 0} ${entry.collection}/${teamId}`)
+      } else {
+        await db.recursiveDelete(ref)
+      }
+    }
+    if (entry.externalTeardown === 'stripe_connect') {
+      console.warn(
+        `${tag} team ${teamId}: ${entry.collection} removed from Firestore — the Stripe Connect ` +
+          `account & its member subscriptions still require provider-side teardown (cancel/disconnect).`
+      )
     }
   }
 
-  // referrals key the team via `team_id`, not `teamId`.
   if (dryRun) {
-    const c = await db.collection('referrals').where('team_id', '==', teamId).count().get()
-    console.log(`${tag} team ${teamId}: would delete ${c.data().count} referrals`)
     console.log(
-      `${tag} team ${teamId}: would delete saas_subscription + checkout attempts + site draft + published site + team doc & subcollections + Storage teams/${teamId}/`
+      `${tag} team ${teamId}: would recursively delete ${TENANT_TEAM_DOC_COLLECTION}/${teamId} ` +
+        `(doc + all subcollections) and Storage ${tenantStoragePrefix(teamId)}`
     )
     return
   }
-  const refSnap = await db.collection('referrals').where('team_id', '==', teamId).get()
-  for (const d of refSnap.docs) await db.recursiveDelete(d.ref)
 
-  // Top-level docs keyed by teamId.
-  const attempts = await db.collection('saas_checkout_attempts').where('teamId', '==', teamId).get()
-  for (const d of attempts.docs) await d.ref.delete()
-  await db
-    .collection('saas_subscriptions')
-    .doc(teamId)
-    .delete()
-    .catch(() => undefined)
-  // Website plugin: private draft + public snapshot (both keyed by teamId).
-  await db
-    .collection(SITE_DRAFTS_COLLECTION)
-    .doc(teamId)
-    .delete()
-    .catch(() => undefined)
-  await db
-    .collection(SITE_PUBLISHED_COLLECTION)
-    .doc(teamId)
-    .delete()
-    .catch(() => undefined)
-
-  // Team doc + ALL its subcollections (team_members, installed_plugins, …).
-  await db.recursiveDelete(db.collection(TEAMS_COLLECTION).doc(teamId))
+  // Team doc + ALL its subcollections (team_members, installed_plugins,
+  // integrations, subscription_types, products, member_payments/subscriptions, …).
+  await db.recursiveDelete(db.collection(TENANT_TEAM_DOC_COLLECTION).doc(teamId))
 
   // Team Storage files.
   try {
-    await admin
-      .storage()
-      .bucket()
-      .deleteFiles({ prefix: `teams/${teamId}/` })
+    await admin.storage().bucket().deleteFiles({ prefix: tenantStoragePrefix(teamId) })
   } catch (err) {
-    console.error(`[trial] storage cleanup failed for ${teamId}:`, err)
+    console.error(`${tag} storage cleanup failed for ${teamId}:`, err)
   }
+
+  // Audit trail (best-effort; never block the purge on it).
+  await db
+    .collection('team_audits')
+    .add({ action: 'purge_team', teamId, at: FieldValue.serverTimestamp() })
+    .catch((err) => console.error(`${tag} audit write failed for ${teamId}:`, err))
 }
 
 /** Notify the owner that the trial ended and the team is now on the Free plan. */
