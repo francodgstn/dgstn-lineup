@@ -56,8 +56,18 @@ defaults shown):
 | `MAIL_SYSTEM_FROM` | `hello@linyup.com` | System mail From |
 | `MAIL_SYSTEM_NAME` | `Linyup` | System mail display name |
 | `MAIL_MANAGED_STUDIO_FROM` | `studios@linyup.com` | Managed studio mail From (display name = studio) |
+| `MAIL_ENABLED` | `true` | Master kill switch — set to `false` to disable ALL sending in an environment |
 | `TEST_MODE` | `false` | Redirect all mail to `TEST_EMAIL` |
-| `TEST_EMAIL` | — | Recipient when `TEST_MODE=true` |
+| `TEST_EMAIL` | — | Recipient when `TEST_MODE=true`; empty + `TEST_MODE=true` also drops sends |
+
+**Per-environment policy** (committed in `packages/functions/.env.<alias>`):
+
+| Env | Setting | Effect |
+|---|---|---|
+| production | `MAIL_ENABLED=true`, `TEST_MODE=false` | Real sending |
+| staging | `TEST_MODE=true`, `TEST_EMAIL=<your inbox>` | All mail redirected to one inbox |
+| sandbox (public demo) | `MAIL_ENABLED=false` | No sending at all — zero Brevo calls |
+| dev/emulator | no key, or `TEST_MODE=true` | Fail-soft / redirect to you |
 
 ## Brevo account setup (one-time)
 

@@ -19,6 +19,13 @@ const testEmail = defineString('TEST_EMAIL', {
   description: 'Recipient when TEST_MODE is enabled',
   default: '',
 })
+// Master kill switch for outbound mail. Set to "false" to disable ALL sending in
+// an environment (e.g. the public sandbox/demo) — no Brevo calls, no quota use,
+// no risk of mailing demo contacts. Defaults to enabled.
+const mailEnabled = defineString('MAIL_ENABLED', {
+  description: 'Set to "false" to disable all outbound mail in this environment',
+  default: 'true',
+})
 
 // The active provider. Swappable for tests; in production it is always Brevo.
 let provider: MailProvider = brevoProvider
@@ -37,6 +44,10 @@ export interface SendOutcome {
 
 function isTestMode(): boolean {
   return testModeEnabled.value() === 'true'
+}
+
+function isMailEnabled(): boolean {
+  return mailEnabled.value() !== 'false'
 }
 
 function toArray(to: string | string[]): string[] {
@@ -74,6 +85,13 @@ async function dispatch(
 ): Promise<SendOutcome> {
   if (!msg.to || !msg.subject || (!msg.html && !msg.text)) {
     throw new Error('Missing required email fields: to, subject, and html/text')
+  }
+
+  // Kill switch — short-circuit before any Brevo or Firestore work so a disabled
+  // environment makes zero external calls.
+  if (!isMailEnabled()) {
+    console.log(`[mail] sending disabled (MAIL_ENABLED=false) — skipping ${stream} mail to ${toArray(msg.to).join(', ')}`)
+    return { skipped: true }
   }
 
   const db = admin.firestore()
