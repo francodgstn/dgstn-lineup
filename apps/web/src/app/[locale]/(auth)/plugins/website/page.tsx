@@ -14,6 +14,7 @@ import {
   Pencil,
   Trash2,
   Eye,
+  EyeOff,
   ExternalLink,
   Check,
 } from 'lucide-react'
@@ -507,7 +508,7 @@ export default function WebsiteBuilderPage() {
                 const lib = SECTION_LIBRARY.find((l) => l.type === s.type)
                 const open = openId === s.id
                 return (
-                  <div key={s.id} className="rounded-lg border">
+                  <div key={s.id} className={`rounded-lg border${s.hidden ? ' opacity-60' : ''}`}>
                     <div className="flex items-center gap-2 p-3">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                         <DynamicIcon name={lib?.icon ?? 'Square'} className="h-4 w-4" />
@@ -525,6 +526,18 @@ export default function WebsiteBuilderPage() {
                         </p>
                       </button>
                       <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => updateSection(s.id, { hidden: !s.hidden })}
+                          title={t('toggleVisible')}
+                          className="rounded p-1 hover:bg-muted"
+                        >
+                          {s.hidden ? (
+                            <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-3.5 w-3.5" />
+                          )}
+                        </button>
                         <button
                           type="button"
                           onClick={() => moveSection(s.id, -1)}

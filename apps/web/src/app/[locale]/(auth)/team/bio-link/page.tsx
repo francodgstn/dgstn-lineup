@@ -41,10 +41,10 @@ import {
   Trash2,
   X,
   Eye,
+  EyeOff,
   ChevronUp,
   ChevronDown,
 } from 'lucide-react'
-import { Switch } from '@/components/ui/switch'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -466,7 +466,10 @@ function LinksTab({
         const displayLabel =
           (wl?.label as string | undefined) || (isSystem ? systemBadge! : t('addCustomLink'))
         return (
-          <div key={field.id} className="rounded-lg border">
+          <div
+            key={field.id}
+            className={`rounded-lg border${wl?.showInBioLink === false ? ' opacity-60' : ''}`}
+          >
             {/* Card header — mirrors the website builder section card */}
             <div className="flex items-center gap-2 p-3">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
@@ -492,6 +495,24 @@ function LinksTab({
                 )}
               </button>
               <div className="flex items-center gap-0.5 shrink-0">
+                <Controller
+                  control={control}
+                  name={`links.${i}.showInBioLink`}
+                  render={({ field: cf }) => (
+                    <button
+                      type="button"
+                      onClick={() => cf.onChange(!cf.value)}
+                      title={t('showOnBioLink')}
+                      className="rounded p-1 hover:bg-muted"
+                    >
+                      {cf.value === false ? (
+                        <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  )}
+                />
                 <button
                   type="button"
                   onClick={() => move(i, i - 1)}
@@ -560,16 +581,6 @@ function LinksTab({
                     )}
                   </div>
                 </div>
-                <Controller
-                  control={control}
-                  name={`links.${i}.showInBioLink`}
-                  render={({ field: cf }) => (
-                    <label className="flex items-center justify-between rounded-lg border p-3">
-                      <span className="text-sm">{t('showOnBioLink')}</span>
-                      <Switch checked={cf.value} onCheckedChange={(v) => cf.onChange(v)} />
-                    </label>
-                  )}
-                />
               </div>
             )}
           </div>
