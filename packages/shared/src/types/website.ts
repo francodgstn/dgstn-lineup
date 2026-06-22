@@ -41,6 +41,9 @@ interface SectionBase {
   /** Whether this section shows as an item in the site's navigation menu.
    *  Defaults to visible (true) when unset; the hero is never listed. */
   showInNav?: boolean
+  /** When true the section is kept in the draft but omitted from the published
+   *  site (a quick show/hide that doesn't delete the section). */
+  hidden?: boolean
 }
 
 export interface HeroSection extends SectionBase {

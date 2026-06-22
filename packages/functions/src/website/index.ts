@@ -347,6 +347,9 @@ export const publishWebsite = onCall(async (request) => {
 
   const name = optStr(team.name, 200) ?? 'Site'
   const sections = (Array.isArray(draft.sections) ? draft.sections : [])
+    // Drop sections the studio toggled hidden — they stay in the draft but never
+    // reach the published site (or its nav).
+    .filter((raw) => !(raw && typeof raw === 'object' && (raw as Dict).hidden === true))
     .map(sanitizeSection)
     .filter((s): s is WebsiteSection => s !== null)
     .slice(0, 30)

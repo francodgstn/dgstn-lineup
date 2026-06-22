@@ -1606,6 +1606,7 @@
     "tabAppearance": "Appearance",
     "addSection": "Add section",
     "showInMenu": "Show in navigation menu",
+    "toggleVisible": "Show / hide on site",
     "saveDraft": "Save draft",
     "saving": "Saving…",
     "publish": "Publish",
