@@ -45,9 +45,9 @@
       "payments": { "title": "Collect payments", "benefit": "Dues collect themselves — no more chasing." },
       "rankings": { "title": "Track ranks & levels", "benefit": "Grade students and keep them chasing the next level." },
       "mobileApp": { "title": "Give students an app", "benefit": "A branded iOS and Android app to book and check in." },
-      "checkins": { "title": "Check students in", "benefit": "A quick QR scan at the door — no clipboards." },
       "automations": { "title": "Automate the busywork", "benefit": "Welcome, remind, and win back contacts on autopilot." }
-    }
+    },
+    "cta": { "title": "See it all in action", "body": "Take a real studio for a spin — no sign-up needed.", "button": "Explore the live demo" }
   },
   "proof": {
     "label": "Be one of our founding clubs — lock in a special launch discount",
@@ -59,11 +59,12 @@
     "subtitle": "Not mockups — real screens from a studio running on Linyup.",
     "dashboardAlt": "The Linyup dashboard",
     "shots": {
-      "schedule": { "title": "See your whole week", "detail": "Every class, room, and coach in one colour-coded calendar." },
+      "schedule": { "title": "See your whole week", "detail": "Every class, room, and coach in one colour-coded calendar — and let students book their spot online." },
       "contact": { "title": "Track every student's progress", "detail": "Attendance, streaks, and a performance radar on every profile." },
       "courses": { "title": "Sell online courses", "detail": "Package your curriculum into courses contacts follow at their own pace." },
-      "biolink": { "title": "Build your bio-link", "detail": "One shareable link to your schedule, booking, online courses and website — with live preview." }
-    }
+      "biolink": { "title": "Bio-link, web site and shop", "detail": "One shareable link to your schedule, booking, courses, shop and website — with live preview." }
+    },
+    "more": "And more to explore"
   },
   "features": {
     "title": "Everything you need to run a modern studio",

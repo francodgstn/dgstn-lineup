@@ -45,9 +45,9 @@
       "payments": { "title": "Encaissez les paiements", "benefit": "Les cotisations se collectent seules — fini les relances." },
       "rankings": { "title": "Suivez grades & niveaux", "benefit": "Évaluez vos élèves et gardez-les motivés vers le niveau suivant." },
       "mobileApp": { "title": "Offrez une app à vos élèves", "benefit": "Une app iOS et Android à votre marque pour réserver et s'enregistrer." },
-      "checkins": { "title": "Enregistrez vos élèves", "benefit": "Un scan QR rapide à l'entrée — sans paperasse." },
       "automations": { "title": "Automatisez le travail répétitif", "benefit": "Accueillez, relancez et reconquérez vos contacts automatiquement." }
-    }
+    },
+    "cta": { "title": "Voyez tout en action", "body": "Essayez un vrai studio — sans inscription.", "button": "Découvrir la démo en direct" }
   },
   "proof": {
     "label": "Devenez l'un de nos clubs fondateurs — profitez d'une remise de lancement spéciale",
@@ -59,11 +59,12 @@
     "subtitle": "Pas des maquettes — de vrais écrans d'un studio qui tourne sur Linyup.",
     "dashboardAlt": "Le tableau de bord Linyup",
     "shots": {
-      "schedule": { "title": "Toute votre semaine en un coup d'œil", "detail": "Chaque cours, salle et coach dans un seul calendrier en couleurs." },
+      "schedule": { "title": "Toute votre semaine en un coup d'œil", "detail": "Chaque cours, salle et coach dans un seul calendrier en couleurs — et vos élèves réservent leur place en ligne." },
       "contact": { "title": "Suivez la progression de chaque élève", "detail": "Présences, séries et un radar de performance sur chaque profil." },
       "courses": { "title": "Vendez des cours en ligne", "detail": "Transformez votre savoir en cours que vos contacts suivent à leur rythme." },
-      "biolink": { "title": "Créez votre bio-link", "detail": "Un lien partageable vers planning, réservation, cours en ligne et site web — avec aperçu en direct." }
-    }
+      "biolink": { "title": "Bio-link, site web et boutique", "detail": "Un lien partageable vers planning, réservation, cours, boutique et site web — avec aperçu en direct." }
+    },
+    "more": "Et plus encore à explorer"
   },
   "features": {
     "title": "Tout ce qu'il vous faut pour gérer un studio moderne",

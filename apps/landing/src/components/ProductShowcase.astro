@@ -62,6 +62,11 @@ const shots = [
         ))
       }
     </div>
+
+    <a class="showcase-more" href="#more-features">
+      <span>{t('showcase.more')}</span>
+      <i data-lucide="arrow-down"></i>
+    </a>
   </div>
 
   <!-- Lightbox — opened by clicking a shot -->
@@ -106,6 +111,25 @@ const shots = [
   }
 
   .shot { margin: 0; }
+
+  /* "And more to explore" — nudges the visitor down to the features marquee. */
+  .showcase-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 36px auto 0;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--primary);
+    text-decoration: none;
+    transition: gap 0.15s ease;
+  }
+  .showcase-more:hover { gap: 12px; }
+  .showcase-more :global(svg) { width: 18px; height: 18px; animation: more-bob 1.8s ease-in-out infinite; }
+  @keyframes more-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+  @media (prefers-reduced-motion: reduce) { .showcase-more :global(svg) { animation: none; } }
 
   /* Frame is a button — click to open the lightbox */
   .shot-frame {

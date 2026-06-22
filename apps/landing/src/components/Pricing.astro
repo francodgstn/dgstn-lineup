@@ -150,12 +150,9 @@ const cmpText = (v: CmpVal): string | null => {
       }
     </div>
 
-    <!-- Full feature comparison — collapsed by default -->
-    <details class="compare">
-      <summary class="compare-summary">
-        <span>{t('plans.cmpToggle')}</span>
-        <i data-lucide="chevron-down"></i>
-      </summary>
+    <!-- Full feature comparison — collapsed to a faded peek, expand to reveal -->
+    <div class="compare" id="compare">
+      <div class="compare-body" id="compare-body">
       <div class="compare-scroll">
         <table class="compare-table">
           <thead>
@@ -199,9 +196,23 @@ const cmpText = (v: CmpVal): string | null => {
           </tbody>
         </table>
       </div>
-    </details>
+      </div>
+      <button class="compare-toggle" type="button" aria-expanded="false" aria-controls="compare-body">
+        <span>{t('plans.cmpToggle')}</span>
+        <i data-lucide="chevron-down"></i>
+      </button>
+    </div>
   </div>
 </section>
+
+<script>
+  const cmp = document.querySelector('.compare');
+  const btn = cmp?.querySelector('.compare-toggle');
+  btn?.addEventListener('click', () => {
+    const open = cmp!.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(open));
+  });
+</script>
 
 <style>
   .plans-sec { padding: 80px 0; background: var(--purple-50); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
@@ -271,22 +282,39 @@ const cmpText = (v: CmpVal): string | null => {
     box-shadow: var(--ring-card), var(--shadow-sm);
     overflow: hidden;
   }
-  .compare-summary {
+  /* Collapsed: a faded "peek" of the table (like the hero product image) so the
+     comparison is obviously there to open — not a single easy-to-miss switch. */
+  .compare-body {
+    max-height: 264px;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 38%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 38%, transparent 100%);
+  }
+  .compare.open .compare-body {
+    max-height: none;
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .compare-toggle {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
+    width: 100%;
     padding: 16px;
+    font-family: inherit;
     font-size: 15px;
     font-weight: 600;
     color: var(--primary);
+    background: var(--card);
+    border: 0;
+    border-top: 1px solid var(--border);
     cursor: pointer;
-    list-style: none;
     user-select: none;
   }
-  .compare-summary::-webkit-details-marker { display: none; }
-  .compare-summary :global(svg) { width: 16px; height: 16px; transition: transform 0.2s ease; }
-  .compare[open] .compare-summary :global(svg) { transform: rotate(180deg); }
+  .compare-toggle :global(svg) { width: 16px; height: 16px; transition: transform 0.2s ease; }
+  .compare.open .compare-toggle :global(svg) { transform: rotate(180deg); }
 
   .compare-scroll { overflow-x: auto; }
   .compare-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 660px; }

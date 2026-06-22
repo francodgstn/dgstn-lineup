@@ -9,10 +9,12 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang);
 
-// The 8 hero features — the day-to-day essentials, shown directly under the hero
-// as calm, static cards (no marquee). Labels are verb + benefit; copy lives in
-// heroFeatures.cards.<key>.{title,benefit}. The full breadth is in the marquee
-// further down (Features.astro, "Everything else Linyup does").
+const DEMO_URL = import.meta.env.PUBLIC_DEMO_URL ?? 'https://demo.linyup.com';
+
+// The day-to-day essentials, shown directly under the hero as calm, static cards
+// (no marquee). Labels are verb + benefit; copy lives in
+// heroFeatures.cards.<key>.{title,benefit}. The last grid cell is an accent
+// demo CTA. The full breadth is in the marquee further down (Features.astro).
 const cards = [
   { key: 'sessions', icon: 'calendar-range' },
   { key: 'bookings', icon: 'clipboard-list' },
@@ -20,7 +22,6 @@ const cards = [
   { key: 'payments', icon: 'credit-card' },
   { key: 'rankings', icon: 'medal' },
   { key: 'mobileApp', icon: 'smartphone' },
-  { key: 'checkins', icon: 'qr-code' },
   { key: 'automations', icon: 'workflow' },
 ] as const;
 ---
@@ -43,6 +44,12 @@ const cards = [
           </div>
         ))
       }
+      <a class="hf-card hf-cta" href={DEMO_URL}>
+        <div class="hf-icon hf-cta-icon"><i data-lucide="play"></i></div>
+        <h3>{t('heroFeatures.cta.title')}</h3>
+        <p>{t('heroFeatures.cta.body')}</p>
+        <span class="hf-cta-btn">{t('heroFeatures.cta.button')} <i data-lucide="arrow-right"></i></span>
+      </a>
     </div>
   </div>
 </section>
@@ -71,6 +78,29 @@ const cards = [
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
   .hf-card:hover { transform: translateY(-3px); box-shadow: var(--ring-card), var(--shadow-md); }
+
+  /* Accent demo CTA — fills the last grid cell, draws the eye in primary. */
+  .hf-cta {
+    background: linear-gradient(160deg, var(--primary), color-mix(in oklch, var(--primary) 78%, black));
+    border: 0;
+    color: #fff;
+    text-decoration: none;
+  }
+  .hf-cta:hover { box-shadow: var(--ring-card), var(--shadow-lg); }
+  .hf-cta h3 { color: #fff; }
+  .hf-cta p { color: color-mix(in oklch, #fff 82%, transparent); }
+  .hf-cta-icon { background: color-mix(in oklch, #fff 18%, transparent); border-color: color-mix(in oklch, #fff 28%, transparent); color: #fff; }
+  .hf-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .hf-cta-btn :global(svg) { width: 16px; height: 16px; transition: transform 0.15s ease; }
+  .hf-cta:hover .hf-cta-btn :global(svg) { transform: translateX(3px); }
 
   .hf-icon {
     width: 52px;
