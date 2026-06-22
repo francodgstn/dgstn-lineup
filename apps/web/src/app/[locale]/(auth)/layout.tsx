@@ -11,16 +11,9 @@ import {
   LayoutDashboard,
   Users,
   Calendar,
-  CalendarCheck,
-  Zap,
-  CalendarRange,
   ClipboardList,
   Trophy,
-  Workflow,
-  UserCog,
   Globe,
-  Settings,
-  CreditCard,
   Wallet,
   ChevronLeft,
   ChevronRight,
@@ -31,7 +24,7 @@ import {
   Gift,
   GraduationCap,
   FolderTree,
-  Tag,
+  SlidersHorizontal,
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -39,6 +32,8 @@ import type { Route } from 'next'
 import type { SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
+import { SettingsPinsProvider, useSettingsPins } from '@/contexts/SettingsPinsContext'
+import { SETTINGS_ITEMS } from '@/lib/settings-nav'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useHasByoGateway } from '@/hooks/useConnect'
@@ -77,9 +72,12 @@ type NavSection = { labelKey: string; items: NavItem[] }
 
 const DASHBOARD_ITEM: NavItem = { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard }
 
+// Two action-oriented sidebar sections for high-frequency destinations. All
+// lower-frequency configuration lives behind the Settings group (pinned shortcuts
+// + the /settings hub) — see SettingsNavGroup + src/lib/settings-nav.ts.
 const NAV_SECTIONS: NavSection[] = [
   {
-    labelKey: 'sectionOperations',
+    labelKey: 'sectionRun',
     items: [
       { href: '/schedule', labelKey: 'calendar', icon: Calendar },
       { href: '/bookings', labelKey: 'bookings', icon: ClipboardList },
@@ -88,27 +86,8 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    labelKey: 'sectionEngage',
+    labelKey: 'sectionGrow',
     items: [{ href: '/team/bio-link', labelKey: 'bioLink', icon: Globe }],
-  },
-  {
-    labelKey: 'sectionConfigure',
-    items: [
-      { href: '/activities', labelKey: 'activities', icon: Zap },
-      { href: '/team/booking', labelKey: 'bookingPage', icon: CalendarCheck },
-      { href: '/team/event-types', labelKey: 'eventTypes', icon: CalendarRange },
-      { href: '/team/subscriptions', labelKey: 'subscriptions', icon: Tag },
-      { href: '/automations', labelKey: 'automations', icon: Workflow },
-      { href: '/plugins', labelKey: 'plugins', icon: Puzzle, exact: true },
-    ],
-  },
-  {
-    labelKey: 'sectionTeam',
-    items: [
-      { href: '/team/members', labelKey: 'managers', icon: UserCog },
-      { href: '/team/settings', labelKey: 'settings', icon: Settings },
-      { href: '/billing', labelKey: 'billing', icon: CreditCard },
-    ],
   },
 ]
 
@@ -235,11 +214,12 @@ type PluginNavEntry = {
 }
 
 // Maps PluginNavContribution.section values to built-in NAV_SECTIONS labelKeys.
+// 'configure'/'team' no longer have a sidebar section — those plugin entries fall
+// through to the bottom "Plugins" group (unsectioned). Feature-surface plugins
+// (engagement category → 'engage') render under Grow.
 const PLUGIN_SECTION_TO_LABEL_KEY: Record<string, string> = {
-  operations: 'sectionOperations',
-  engage: 'sectionEngage',
-  configure: 'sectionConfigure',
-  team: 'sectionTeam',
+  operations: 'sectionRun',
+  engage: 'sectionGrow',
 }
 
 // Suggestion (muted nudge) dismissals, persisted in the browser only. Affects
@@ -480,6 +460,71 @@ function PluginNavLinks({
   )
 }
 
+// Settings group: the user's pinned shortcuts + a lightweight gateway to the full
+// /settings hub. Pins are per-browser (SettingsPinsContext); defaults cover the
+// items that matter most while setting up (activities, subscriptions, plugins).
+function SettingsNavGroup({
+  collapsed,
+  onLinkClick,
+  sectionCollapsed,
+  onToggleSection,
+}: {
+  collapsed: boolean
+  onLinkClick?: () => void
+  sectionCollapsed: boolean
+  onToggleSection: () => void
+}) {
+  const t = useTranslations('Nav')
+  const { isPinned } = useSettingsPins()
+  const pinned = SETTINGS_ITEMS.filter((i) => isPinned(i.id))
+
+  return (
+    <div className="mt-3">
+      {collapsed ? (
+        <div className="border-t mx-1 mb-1" />
+      ) : (
+        <button
+          type="button"
+          onClick={onToggleSection}
+          className="flex w-full items-center justify-between rounded px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+        >
+          <span>{t('sectionSettings')}</span>
+          <ChevronDown
+            className={`h-3 w-3 shrink-0 transition-transform ${sectionCollapsed ? '-rotate-90' : ''}`}
+          />
+        </button>
+      )}
+      {!sectionCollapsed && (
+        <div className="space-y-0.5">
+          {pinned.map((item) => (
+            <NavLink
+              key={item.id}
+              item={{ href: item.href, labelKey: item.labelKey, icon: item.icon, exact: item.exact }}
+              collapsed={collapsed}
+              onClick={onLinkClick}
+            />
+          ))}
+          {collapsed ? (
+            <NavLink
+              item={{ href: '/settings', labelKey: 'allSettings', icon: SlidersHorizontal, exact: true }}
+              collapsed
+              onClick={onLinkClick}
+            />
+          ) : (
+            <Link
+              href={'/settings' as Route}
+              onClick={onLinkClick}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-muted-foreground/70 hover:text-foreground transition-colors"
+            >
+              {t('allSettings')} <span aria-hidden>»</span>
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SidebarContent({
   collapsed,
   onToggleCollapse,
@@ -592,6 +637,12 @@ function SidebarContent({
           onLinkClick={onLinkClick}
           onDismiss={dismissSuggestion}
         />
+        <SettingsNavGroup
+          collapsed={collapsed}
+          onLinkClick={onLinkClick}
+          sectionCollapsed={!collapsed && collapsedSections.includes('sectionSettings')}
+          onToggleSection={() => toggleSection('sectionSettings')}
+        />
         <OrgLinks collapsed={collapsed} onLinkClick={onLinkClick} />
       </nav>
 
@@ -645,8 +696,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <UpgradeModalProvider>
-      <ProductTour />
+    <SettingsPinsProvider>
+      <UpgradeModalProvider>
+        <ProductTour />
       <div className="flex bg-background">
         {/* Desktop sidebar — fixed to viewport height, nav scrolls internally */}
         <aside
@@ -675,6 +727,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </main>
         </div>
       </div>
-    </UpgradeModalProvider>
+      </UpgradeModalProvider>
+    </SettingsPinsProvider>
   )
 }
