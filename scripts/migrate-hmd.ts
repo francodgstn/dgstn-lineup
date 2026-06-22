@@ -20,7 +20,7 @@
 import { parseArgs } from 'node:util'
 import { readFileSync } from 'node:fs'
 import { getApp } from 'firebase-admin/app'
-import { initApps, DEFAULT_ORG_ADMIN_EMAIL } from './migration/config'
+import { initApps, assertTargetEmulatorReachable, DEFAULT_ORG_ADMIN_EMAIL } from './migration/config'
 import type { MigrationConfig } from './migration/config'
 import { pass00Setup }              from './migration/passes/00-setup'
 import { pass00AuthUsers }          from './migration/passes/00-auth-users'
@@ -70,11 +70,6 @@ const cfg: MigrationConfig = {
   fromTeam:        values['from-team'],
 }
 
-initApps(cfg)
-
-if (cfg.dryRun) console.log('=== DRY RUN — no writes will be committed ===')
-console.log(`Org admin: ${cfg.orgAdminEmail}`)
-
 async function enableEmailPasswordSignIn(): Promise<void> {
   if (cfg.targetEmulator) return
   if (cfg.dryRun) { console.log('[dry-run] would enable email/password sign-in'); return }
@@ -100,6 +95,14 @@ async function enableEmailPasswordSignIn(): Promise<void> {
 }
 
 async function run() {
+  // Fail fast if --target-emulator is set but the emulators aren't running —
+  // before reading source creds or touching any data.
+  if (cfg.targetEmulator) await assertTargetEmulatorReachable()
+
+  initApps(cfg)
+  if (cfg.dryRun) console.log('=== DRY RUN — no writes will be committed ===')
+  console.log(`Org admin: ${cfg.orgAdminEmail}`)
+
   await enableEmailPasswordSignIn()
   const only = cfg.only
 

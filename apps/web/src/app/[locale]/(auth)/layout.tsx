@@ -660,8 +660,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const { user, loading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+  const t = useTranslations('Nav')
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Settings detail pages get a back link to the hub in their heading area.
+  const onSettingsPage = SETTINGS_ITEMS.some((i) => i.href === pathname)
 
   useEffect(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
@@ -722,6 +726,15 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <main className="flex-1">
             <div className="max-w-5xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-8">
               <FreeDowngradeBanner />
+              {onSettingsPage && (
+                <Link
+                  href={'/settings' as Route}
+                  className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  {t('settingsHubTitle')}
+                </Link>
+              )}
               {children}
             </div>
           </main>
