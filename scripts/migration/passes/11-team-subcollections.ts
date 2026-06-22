@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import type { MigrationConfig } from '../config'
 import { sourceDb, targetDb } from '../config'
 import { BatchWriter } from '../batch-writer'
+import { CANONICAL_SUBSCRIPTION_TYPES } from '../transforms/subscriptions'
 
 const TEAM_SUBCOLLECTIONS = [
   'team_members',          // must come first — rules depend on this for read access
@@ -100,6 +101,21 @@ export async function pass11TeamSubcollections(
     } else if (adminUid && adminHandledInSource) {
       console.log(`    ${teamId}: org admin found in source team_members — migrated as-is`)
     }
+
+    // ── Seed canonical subscription types ────────────────────────────────────
+    // Write the 5 HMD Basel canonical subscription types (Essential, Students,
+    // Unlimited, Intro Offer, One-time Class) into every team's subscription_types
+    // subcollection. These overwrite the canonical ids on each run (idempotent set),
+    // so re-running pass11 is safe. Unknown/other existing types are left untouched.
+    for (const stype of CANONICAL_SUBSCRIPTION_TYPES) {
+      const stRef = tgt
+        .collection('teams').doc(teamId)
+        .collection('subscription_types').doc(stype.id)
+      // Always overwrite canonical types — they are the ground truth for pricing.
+      // (No skip-if-exists check: we want these to be authoritative each run.)
+      bw.set(stRef, stype)
+    }
+    console.log(`    ${teamId}: seeded ${CANONICAL_SUBSCRIPTION_TYPES.length} canonical subscription types`)
 
     await bw.done()
   }

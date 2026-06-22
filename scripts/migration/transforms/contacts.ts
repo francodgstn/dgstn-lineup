@@ -1,4 +1,5 @@
 import { RANKING_HMD, RANKING_KD } from '../config'
+import { matchSubscriptionType, pickSubscriptionPrice } from './subscriptions'
 
 export function transformContact(src: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...src }
@@ -45,6 +46,27 @@ export function transformContact(src: Record<string, unknown>): Record<string, u
     out.org_membership_status = 'expired'
     out.org_membership_active = false
   }
+
+  // ── Subscription type matching (HEURISTIC) ───────────────────────────────
+  // Attempts to map the source subscription_type_name to a canonical Linyup
+  // subscription type by keyword. This is a best-effort approximation — the
+  // matched-vs-unmatched counts logged by pass05 must be reviewed against the
+  // real source data to confirm accuracy before going live.
+  const srcTypeName = out.subscription_type_name as string | undefined | null
+  const match = matchSubscriptionType(srcTypeName)
+  if (match !== null) {
+    const price = pickSubscriptionPrice(
+      match.prices,
+      out.subscription_recurrence as string | undefined | null,
+    )
+    out.subscription_type_id   = match.typeId
+    out.subscription_type_name = match.typeName
+    out.subscription_price_id  = price.id
+    out.subscription_amount    = price.amount
+    // Keep subscription_recurrence authoritative from the chosen price
+    out.subscription_recurrence = price.recurrence
+  }
+  // If match is null, leave all subscription_* fields unchanged (pass through source values).
 
   return out
 }
