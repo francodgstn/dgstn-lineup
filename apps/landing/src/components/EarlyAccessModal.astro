@@ -34,6 +34,9 @@ const FIREBASE_API_KEY = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
         {t('hero.emailCta')} <i data-lucide="arrow-right"></i>
       </button>
     </form>
+    <p class="ea-consent">
+      By signing up you agree to our <a href="/privacy">Privacy Policy</a>. Unsubscribe anytime.
+    </p>
     <p class="ea-status" id="ea-status" aria-live="polite"></p>
   </div>
 </div>
@@ -205,6 +208,8 @@ const FIREBASE_API_KEY = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
   .ea-status { margin: 14px 0 0; min-height: 20px; font-size: 14px; color: var(--muted-foreground); }
   .ea-status.success { color: var(--success-fg); }
   .ea-status.error { color: var(--warning-fg); }
+  .ea-consent { margin: 14px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted-foreground); }
+  .ea-consent a { color: var(--primary); text-decoration: underline; }
 
   @keyframes ea-fade { from { opacity: 0; } to { opacity: 1; } }
   @keyframes ea-pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
