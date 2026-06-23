@@ -33,14 +33,11 @@ Web: https://linyup.com
 
 **Commercial register**
 
-Not currently entered in the commercial register. Entry is optional below the
-CHF 100,000 annual-turnover threshold; this line is to be updated with the UID
-(CHE-xxx.xxx.xxx) and register office if and when the Einzelfirma is registered.
+Not currently entered in the commercial register.
 
 **VAT**
 
-Not VAT-registered. To be updated once the CHF 100,000 turnover threshold is
-reached and a VAT/UID number is issued.
+Not VAT-registered.
 
 **Responsible for content**
 
