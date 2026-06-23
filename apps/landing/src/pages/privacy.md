@@ -59,9 +59,13 @@ If you opt in, we may send you product news through our email provider. You can 
 
 ## 2.3 Cookies and analytics
 
-`[[CONFIRM AND EDIT TO MATCH WHAT THE SITE ACTUALLY USES.]]`
+We do not use advertising or analytics cookies, and we do not track you across websites. The site has no third-party analytics, tag manager, advertising pixel, or session-recording tool.
 
-Our website uses cookies and similar technologies that are strictly necessary to operate it. `[[If you add analytics (e.g. Plausible, Google Analytics, or similar), describe the tool here, state whether it is privacy-friendly / cookieless, and — if it is not strictly necessary — gate it behind a consent banner.]]` Where consent is required, we ask for it before any non-essential cookies or trackers are set, and you can change your choice at any time.
+For one strictly functional purpose we use your browser's local storage: to remember your light or dark theme preference. It is kept only on your device, holds no personal data, and is not shared.
+
+To display the site, your browser loads some resources from third-party content-delivery networks — web fonts from Google Fonts (Google) and interface icons from unpkg. Fetching those files makes your IP address and browser information visible to those providers; we do not use this to track you. When you submit an email form, the address you enter is sent to Google Firestore to record your request (see Sections 2.2 and 2.4).
+
+Because we set no non-essential cookies or trackers, no cookie-consent banner is needed. If we add analytics in future, we will name the tool here, prefer a privacy-friendly or cookieless option, and — where it is not strictly necessary — ask for your consent before it runs.
 
 ## 2.4 Service providers and recipients
 
