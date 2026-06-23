@@ -9,8 +9,7 @@ import { toast } from 'sonner'
 import {
   Globe,
   Plus,
-  ChevronUp,
-  ChevronDown,
+  GripVertical,
   Pencil,
   Trash2,
   Eye,
@@ -18,6 +17,8 @@ import {
   ExternalLink,
   Check,
 } from 'lucide-react'
+import { SortableList, SortableItem } from '@/components/ui/sortable'
+import { arrayMove } from '@dnd-kit/sortable'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { Button } from '@/components/ui/button'
@@ -314,15 +315,8 @@ export default function WebsiteBuilderPage() {
   }
   const removeSection = (id: string) =>
     mutate((d) => ({ ...d, sections: d.sections.filter((s) => s.id !== id) }))
-  function moveSection(id: string, dir: -1 | 1) {
-    mutate((d) => {
-      const i = d.sections.findIndex((s) => s.id === id)
-      const j = i + dir
-      if (i < 0 || j < 0 || j >= d.sections.length) return d
-      const next = [...d.sections]
-      ;[next[i], next[j]] = [next[j], next[i]]
-      return { ...d, sections: next }
-    })
+  function reorderSections(from: number, to: number) {
+    mutate((d) => ({ ...d, sections: arrayMove(d.sections, from, to) }))
   }
 
   // ── save / publish ──
@@ -504,93 +498,97 @@ export default function WebsiteBuilderPage() {
             <AppearancePanel meta={draft.meta} onChange={patchMeta} />
           ) : (
             <div className="space-y-2.5">
-              {draft.sections.map((s, i) => {
-                const lib = SECTION_LIBRARY.find((l) => l.type === s.type)
-                const open = openId === s.id
-                return (
-                  <div key={s.id} className={`rounded-lg border${s.hidden ? ' opacity-60' : ''}`}>
-                    <div className="flex items-center gap-2 p-3">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                        <DynamicIcon name={lib?.icon ?? 'Square'} className="h-4 w-4" />
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setOpenId(open ? null : s.id)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <p className="text-sm font-medium">
-                          {lib ? t(lib.labelKey as Parameters<typeof t>[0]) : s.type}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {sectionSummary(s)}
-                        </p>
-                      </button>
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => updateSection(s.id, { hidden: !s.hidden })}
-                          title={t('toggleVisible')}
-                          className="rounded p-1 hover:bg-muted"
+              <SortableList ids={draft.sections.map((s) => s.id)} onReorder={reorderSections}>
+                {draft.sections.map((s) => {
+                  const lib = SECTION_LIBRARY.find((l) => l.type === s.type)
+                  const open = openId === s.id
+                  return (
+                    <SortableItem id={s.id} key={s.id}>
+                      {({ setNodeRef, style, attributes, listeners, isDragging }) => (
+                        <div
+                          ref={setNodeRef}
+                          style={style}
+                          className={`rounded-lg border bg-card${s.hidden ? ' opacity-60' : ''}${
+                            isDragging ? ' shadow-lg ring-1 ring-border' : ''
+                          }`}
                         >
-                          {s.hidden ? (
-                            <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
+                          <div className="flex items-center gap-1.5 p-3">
+                            <button
+                              type="button"
+                              {...attributes}
+                              {...listeners}
+                              className="shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted active:cursor-grabbing"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </button>
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                              <DynamicIcon name={lib?.icon ?? 'Square'} className="h-4 w-4" />
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setOpenId(open ? null : s.id)}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <p className="text-sm font-medium">
+                                {lib ? t(lib.labelKey as Parameters<typeof t>[0]) : s.type}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {sectionSummary(s)}
+                              </p>
+                            </button>
+                            <div className="flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => updateSection(s.id, { hidden: !s.hidden })}
+                                title={t('toggleVisible')}
+                                className="rounded p-1 hover:bg-muted"
+                              >
+                                {s.hidden ? (
+                                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setOpenId(open ? null : s.id)}
+                                className="rounded p-1 hover:bg-muted"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteId(s.id)}
+                                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          {open && currentTeamId && (
+                            <div className="space-y-3 border-t p-3">
+                              <SectionEditor
+                                section={s}
+                                teamId={currentTeamId}
+                                onChange={(patch) => updateSection(s.id, patch)}
+                              />
+                              {s.type !== 'hero' && (
+                                <label className="flex items-center justify-between rounded-lg border p-3">
+                                  <span className="text-sm">{t('showInMenu')}</span>
+                                  <Switch
+                                    checked={s.showInNav !== false}
+                                    onCheckedChange={(v) => updateSection(s.id, { showInNav: v })}
+                                  />
+                                </label>
+                              )}
+                            </div>
                           )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveSection(s.id, -1)}
-                          disabled={i === 0}
-                          className="rounded p-1 hover:bg-muted disabled:opacity-30"
-                        >
-                          <ChevronUp className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveSection(s.id, 1)}
-                          disabled={i === draft.sections.length - 1}
-                          className="rounded p-1 hover:bg-muted disabled:opacity-30"
-                        >
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOpenId(open ? null : s.id)}
-                          className="rounded p-1 hover:bg-muted"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteId(s.id)}
-                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    {open && currentTeamId && (
-                      <div className="space-y-3 border-t p-3">
-                        <SectionEditor
-                          section={s}
-                          teamId={currentTeamId}
-                          onChange={(patch) => updateSection(s.id, patch)}
-                        />
-                        {s.type !== 'hero' && (
-                          <label className="flex items-center justify-between rounded-lg border p-3">
-                            <span className="text-sm">{t('showInMenu')}</span>
-                            <Switch
-                              checked={s.showInNav !== false}
-                              onCheckedChange={(v) => updateSection(s.id, { showInNav: v })}
-                            />
-                          </label>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                        </div>
+                      )}
+                    </SortableItem>
+                  )
+                })}
+              </SortableList>
 
               {/* Add section */}
               <DropdownMenu>
