@@ -1,0 +1,154 @@
+---
+// Layout for the legal Markdown pages (Privacy, Legal Notice). The page body is
+// authored as Markdown in src/pages/*.md and rendered into the <slot/> below, so
+// the legal text stays content-managed in one place per page and can be edited
+// without touching code. The Markdown keeps the source's own section numbering
+// and headings; this layout only frames it (nav, container, footer, date).
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Nav from '~/components/Nav.astro';
+import Footer from '~/components/Footer.astro';
+import { defaultLang } from '~/i18n';
+
+interface Props {
+  frontmatter: {
+    title: string;
+    description?: string;
+    lastUpdated?: string;
+  };
+}
+
+const { frontmatter } = Astro.props;
+// English only for now; localised legal pages follow later.
+const lang = defaultLang;
+const { title, description = '', lastUpdated } = frontmatter;
+---
+
+<BaseLayout title={`${title} — Linyup`} description={description} lang={lang}>
+  <Nav lang={lang} />
+  <main class="legal-main">
+    <article class="legal">
+      <div class="legal-body">
+        <slot />
+      </div>
+      {lastUpdated && <p class="legal-updated">Last updated: {lastUpdated}</p>}
+    </article>
+  </main>
+  <Footer lang={lang} />
+</BaseLayout>
+
+<style>
+  .legal-main {
+    padding: 112px 0 72px;
+  }
+  .legal {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 24px;
+    color: var(--foreground);
+    font-size: 15.5px;
+    line-height: 1.7;
+  }
+
+  .legal-body :global(h1) {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 30px;
+    line-height: 1.2;
+    color: var(--heading);
+    margin: 0 0 24px;
+  }
+  .legal-body :global(h2) {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 20px;
+    color: var(--heading);
+    margin: 40px 0 12px;
+  }
+  .legal-body :global(h3) {
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--foreground);
+    margin: 26px 0 8px;
+  }
+  .legal-body :global(p) {
+    margin: 0 0 14px;
+  }
+  .legal-body :global(strong) {
+    color: var(--foreground);
+    font-weight: 700;
+  }
+  .legal-body :global(em) {
+    color: var(--muted-foreground);
+  }
+  .legal-body :global(a) {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .legal-body :global(ul),
+  .legal-body :global(ol) {
+    margin: 0 0 16px;
+    padding-left: 22px;
+  }
+  .legal-body :global(li) {
+    margin: 0 0 6px;
+  }
+  .legal-body :global(hr) {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 32px 0;
+  }
+
+  /* Draft notes from the source (blockquotes) and unresolved [[ ]] placeholders
+     are kept visible and highlighted so the founder + lawyer can spot them. */
+  .legal-body :global(blockquote) {
+    margin: 0 0 20px;
+    padding: 12px 16px;
+    border-left: 3px solid var(--purple-200);
+    background: var(--purple-50);
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+    color: var(--muted-foreground);
+    font-size: 14px;
+  }
+  .legal-body :global(blockquote p) {
+    margin: 0 0 8px;
+  }
+  .legal-body :global(blockquote p:last-child) {
+    margin: 0;
+  }
+  .legal-body :global(code) {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.86em;
+    background: var(--warning-bg);
+    color: var(--warning-fg);
+    padding: 1px 5px;
+    border-radius: 5px;
+  }
+
+  /* Real tables (e.g. the providers/recipients table in Privacy 2.4). */
+  .legal-body :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 20px;
+    font-size: 14px;
+  }
+  .legal-body :global(th),
+  .legal-body :global(td) {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .legal-body :global(th) {
+    background: var(--sidebar);
+    font-weight: 700;
+  }
+
+  .legal-updated {
+    margin-top: 40px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 13.5px;
+    color: var(--muted-foreground);
+  }
+</style>

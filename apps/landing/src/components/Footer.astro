@@ -22,8 +22,10 @@ const copyright = t('footer.copyright').replace('{year}', String(year));
       </a>
       <span class="tag">{t('footer.tagline')}</span>
       <div class="foot-links">
-        <a href={getLocalizedPath('/privacy', lang)}>{t('footer.links.privacy')}</a>
-        <a href={getLocalizedPath('/terms', lang)}>{t('footer.links.terms')}</a>
+        {/* Legal pages are English-only at the site root for now; localised
+            versions and Terms (at signup launch) follow later. */}
+        <a href="/privacy">{t('footer.links.privacy')}</a>
+        <a href="/legal">{t('footer.links.legal')}</a>
         <a href="mailto:hello@linyup.com">{t('footer.links.contact')}</a>
         <LanguageSwitcher currentLang={lang} />
       </div>
