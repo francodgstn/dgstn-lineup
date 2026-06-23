@@ -18,7 +18,7 @@ lastUpdated: 23 June 2026
 This website (linyup.com) and the Linyup service are operated by:
 
 Franco D'Agostino, trading as "D'Agostino Production"\
-("Linyup" is the customer-facing brand of this business.)
+("Linyup" is the name of the software-as-a-service (SaaS) web application provided by this business, not a separate legal entity.)
 
 **Address**
 
