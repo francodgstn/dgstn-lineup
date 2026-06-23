@@ -38,13 +38,13 @@ import {
   ImageIcon,
   Plus,
   Pencil,
+  GripVertical,
   Trash2,
   X,
   Eye,
   EyeOff,
-  ChevronUp,
-  ChevronDown,
 } from 'lucide-react'
+import { SortableList, SortableItem } from '@/components/ui/sortable'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -454,138 +454,139 @@ function LinksTab({
 
   return (
     <div className="space-y-2.5">
-      {fields.map((field, i) => {
-        const f = field as typeof field & { target?: SystemLinkTarget }
-        const wl = watched?.[i] as Partial<FormData['links'][number]> | undefined
-        const systemBadge = f.target ? targetLabel(f.target) : null
-        const isSystem = systemBadge !== null
-        const iconName =
-          (wl?.iconName as string | undefined) ||
-          (f.target ? SYSTEM_LINK_META[f.target].defaultIcon : 'Link2')
-        const open = openId === field.id
-        const displayLabel =
-          (wl?.label as string | undefined) || (isSystem ? systemBadge! : t('addCustomLink'))
-        return (
-          <div
-            key={field.id}
-            className={`rounded-lg border${wl?.showInBioLink === false ? ' opacity-60' : ''}`}
-          >
-            {/* Card header — mirrors the website builder section card */}
-            <div className="flex items-center gap-2 p-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <DynamicIcon name={iconName} className="h-4 w-4" />
-              </span>
-              <button
-                type="button"
-                onClick={() => setOpenId(open ? null : field.id)}
-                className="min-w-0 flex-1 text-left"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate text-sm font-medium">{displayLabel}</span>
-                  {isSystem && (
-                    <Badge variant="secondary" className="shrink-0 text-[10px]">
-                      {systemBadge}
-                    </Badge>
-                  )}
-                </div>
-                {!isSystem && (
-                  <p className="truncate text-xs text-muted-foreground">
-                    {(wl?.url as string | undefined) || 'https://'}
-                  </p>
-                )}
-              </button>
-              <div className="flex items-center gap-0.5 shrink-0">
-                <Controller
-                  control={control}
-                  name={`links.${i}.showInBioLink`}
-                  render={({ field: cf }) => (
+      <SortableList ids={fields.map((sf) => sf.id)} onReorder={move}>
+        {fields.map((field, i) => {
+          const f = field as typeof field & { target?: SystemLinkTarget }
+          const wl = watched?.[i] as Partial<FormData['links'][number]> | undefined
+          const systemBadge = f.target ? targetLabel(f.target) : null
+          const isSystem = systemBadge !== null
+          const iconName =
+            (wl?.iconName as string | undefined) ||
+            (f.target ? SYSTEM_LINK_META[f.target].defaultIcon : 'Link2')
+          const open = openId === field.id
+          const displayLabel =
+            (wl?.label as string | undefined) || (isSystem ? systemBadge! : t('addCustomLink'))
+          return (
+            <SortableItem id={field.id} key={field.id}>
+              {({ setNodeRef, style, attributes, listeners, isDragging }) => (
+                <div
+                  ref={setNodeRef}
+                  style={style}
+                  className={`rounded-lg border bg-card${wl?.showInBioLink === false ? ' opacity-60' : ''}${
+                    isDragging ? ' shadow-lg ring-1 ring-border' : ''
+                  }`}
+                >
+                  {/* Card header — mirrors the website builder section card */}
+                  <div className="flex items-center gap-1.5 p-3">
                     <button
                       type="button"
-                      onClick={() => cf.onChange(!cf.value)}
-                      title={t('showOnBioLink')}
-                      className="rounded p-1 hover:bg-muted"
+                      {...attributes}
+                      {...listeners}
+                      className="shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted active:cursor-grabbing"
                     >
-                      {cf.value === false ? (
-                        <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                      ) : (
-                        <Eye className="h-3.5 w-3.5" />
+                      <GripVertical className="h-4 w-4" />
+                    </button>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                      <DynamicIcon name={iconName} className="h-4 w-4" />
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(open ? null : field.id)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-medium">{displayLabel}</span>
+                        {isSystem && (
+                          <Badge variant="secondary" className="shrink-0 text-[10px]">
+                            {systemBadge}
+                          </Badge>
+                        )}
+                      </div>
+                      {!isSystem && (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {(wl?.url as string | undefined) || 'https://'}
+                        </p>
                       )}
                     </button>
-                  )}
-                />
-                <button
-                  type="button"
-                  onClick={() => move(i, i - 1)}
-                  disabled={i === 0}
-                  className="rounded p-1 hover:bg-muted disabled:opacity-30"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(i, i + 1)}
-                  disabled={i === fields.length - 1}
-                  className="rounded p-1 hover:bg-muted disabled:opacity-30"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpenId(open ? null : field.id)}
-                  className="rounded p-1 hover:bg-muted"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (open) setOpenId(null)
-                    remove(i)
-                  }}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Collapsible body */}
-            {open && (
-              <div className="space-y-3 border-t p-3">
-                <div className="flex gap-2 items-start">
-                  <Controller
-                    control={control}
-                    name={`links.${i}.iconName`}
-                    render={({ field: cf }) => <IconPicker value={cf.value} onChange={cf.onChange} />}
-                  />
-                  <div className="flex-1 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        {...register(`links.${i}.label`)}
-                        placeholder={t('linkLabel')}
-                        className="h-9 text-sm"
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Controller
+                        control={control}
+                        name={`links.${i}.showInBioLink`}
+                        render={({ field: cf }) => (
+                          <button
+                            type="button"
+                            onClick={() => cf.onChange(!cf.value)}
+                            title={t('showOnBioLink')}
+                            className="rounded p-1 hover:bg-muted"
+                          >
+                            {cf.value === false ? (
+                              <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        )}
                       />
-                      <Input
-                        {...register(`links.${i}.description`)}
-                        placeholder={t('linkDesc')}
-                        className="h-9 text-sm"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setOpenId(open ? null : field.id)}
+                        className="rounded p-1 hover:bg-muted"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (open) setOpenId(null)
+                          remove(i)
+                        }}
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                    {!isSystem && (
-                      <Input
-                        {...register(`links.${i}.url`)}
-                        type="url"
-                        placeholder="https://"
-                        className="h-9 text-sm font-mono"
-                      />
-                    )}
                   </div>
+
+                  {/* Collapsible body */}
+                  {open && (
+                    <div className="space-y-3 border-t p-3">
+                      <div className="flex gap-2 items-start">
+                        <Controller
+                          control={control}
+                          name={`links.${i}.iconName`}
+                          render={({ field: cf }) => <IconPicker value={cf.value} onChange={cf.onChange} />}
+                        />
+                        <div className="flex-1 space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              {...register(`links.${i}.label`)}
+                              placeholder={t('linkLabel')}
+                              className="h-9 text-sm"
+                            />
+                            <Input
+                              {...register(`links.${i}.description`)}
+                              placeholder={t('linkDesc')}
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          {!isSystem && (
+                            <Input
+                              {...register(`links.${i}.url`)}
+                              type="url"
+                              placeholder="https://"
+                              className="h-9 text-sm font-mono"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </div>
-        )
-      })}
+              )}
+            </SortableItem>
+          )
+        })}
+      </SortableList>
 
       {/* Add link — dashed placeholder mirrors the website builder's "Add section" */}
       <DropdownMenu>
