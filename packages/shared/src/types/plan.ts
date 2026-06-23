@@ -6,9 +6,9 @@ export const PLAN_ORDER: SaasPlan[] = ['free', 'coach', 'studio', 'organization'
 // Trial: new self-service teams start on a full-access Studio trial
 // of this length. NOTE: plan IDs are stable machine identifiers — display names
 // live in the `Plans` i18n namespace, see usePlanName().
-// One self-service extension of TRIAL_EXTENSION_DAYS is allowed (see extendTrial).
-export const TRIAL_DAYS = 14
-export const TRIAL_EXTENSION_DAYS = 14
+// The trial is a flat 30 days with no opt-in extension (the old 14-day +
+// one-time extension model was retired in the 2026-06 pricing overhaul).
+export const TRIAL_DAYS = 30
 // When the trial lapses the team is downgraded to the Free plan (see
 // handleTrialLifecycle); there is no wall or data purge.
 
@@ -36,17 +36,20 @@ export interface PlanPrice {
 export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
   free: { baseMonthly: 0, stripeLookupKey: null, includedContacts: 15 },
   coach: {
-    baseMonthly: 7.99,
+    baseMonthly: 9,
     stripeLookupKey: 'linyup_coach_monthly',
     includedContacts: 50,
   },
   studio: {
-    baseMonthly: 29.99,
+    baseMonthly: 35,
     stripeLookupKey: 'linyup_studio_monthly',
     includedContacts: 250,
   },
+  // Organisation is NOT flat-published: the `baseMonthly` here is the org BASE
+  // fee only. The real price is base + per-studio (see ORG_PER_STUDIO /
+  // orgMonthlyForStudios) and is quoted on a call ("From CHF 103 · Talk to us").
   organization: {
-    baseMonthly: 149,
+    baseMonthly: 79,
     stripeLookupKey: 'linyup_organization_monthly',
     includedContacts: null,
   },
@@ -82,6 +85,34 @@ export const STUDIO_CONTACT_BLOCK: ContactBlock = {
   size: 250,
   monthly: 10,
   stripeLookupKey: 'linyup_studio_contact_block_monthly',
+}
+
+// ─── Organisation pricing (base + per-studio, sales-led) ────────────────────────
+// Organisation is NOT flat-published and NOT self-serve checkout: it's quoted on
+// a call ("From CHF 103 · Talk to us"). The total is a base fee
+// (PLAN_PRICING.organization.baseMonthly) plus a per-studio fee, with a
+// 2-studio minimum. The base fee is deliberate — it makes the org wrapper cost
+// something, so unrelated studios can't group up purely to undercut individual
+// Studio plans. Stripe models this as two recurring items: the org base price
+// (PLAN_PRICING.organization.stripeLookupKey) at quantity 1, plus ORG_PER_STUDIO
+// at quantity = number of studios. Eligibility (common ownership / a single
+// federating body) and the exact quote are handled by sales, not in code.
+export const ORG_MIN_STUDIOS = 2
+
+export const ORG_PER_STUDIO: { monthly: number; stripeLookupKey: string } = {
+  monthly: 12,
+  stripeLookupKey: 'linyup_organization_studio_monthly',
+}
+
+/** Monthly total for an organisation with `studios` studios (min enforced). */
+export function orgMonthlyForStudios(studios: number): number {
+  const n = Math.max(ORG_MIN_STUDIOS, Math.floor(studios) || 0)
+  return PLAN_PRICING.organization.baseMonthly + n * ORG_PER_STUDIO.monthly
+}
+
+/** The public "From CHF X" entry price (the 2-studio minimum) — e.g. 103. */
+export function orgPriceFrom(): number {
+  return orgMonthlyForStudios(ORG_MIN_STUDIOS)
 }
 
 export type ContactOverage =
@@ -212,6 +243,9 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'payment_tracking',
     'goals',
     'coaching',
+    // The member app is available from Coach up (a basic booking/check-in portal
+    // on Coach, enriched by add-ons). Never offered on Free. (2026-06 overhaul.)
+    'student_app',
   ],
   studio: [
     'contacts',
@@ -236,6 +270,10 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'multiple_managers',
     'referral_program',
     'courses',
+    // API access is available from Studio up (2026-06). NOTE: this is currently a
+    // declarative flag only — the API itself is not built yet, so there is no
+    // runtime gate to relax; minimumPlanForFeature('api_access') now returns 'studio'.
+    'api_access',
   ],
   organization: [
     'contacts',
@@ -293,7 +331,14 @@ export function pluginAccessForPlan(
   if (plan === 'studio' || plan === 'organization') return { kind: 'included' }
   // Free: no add-ons (nothing to bill against) — everything is upgrade-locked.
   if (plan === 'free') return { kind: 'upgrade', minPlan: 'coach' }
-  // Coach (or unknown/trialing coach): paid add-on if curated, else upgrade.
+  // Coach (or unknown/trialing coach):
+  //  • plugins standard from Coach (minPlan ≤ coach, no paid add-on) → included
+  //    (e.g. Contact Groups, Custom Fields — de-pettified in the 2026-06 pricing
+  //    overhaul; they install client-side with no charge).
+  //  • curated paid add-ons → addon (Website, Online Courses, Products,
+  //    Gamification, Referral).
+  //  • Studio-only plugins → upgrade.
+  if (!manifest.addon && planIsAtLeast('coach', manifest.minPlan)) return { kind: 'included' }
   if (manifest.addon) return { kind: 'addon', priceMonthly: manifest.addon.coachPriceMonthly }
   return { kind: 'upgrade', minPlan: manifest.minPlan }
 }

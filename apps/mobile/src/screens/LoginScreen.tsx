@@ -286,7 +286,7 @@ export const LoginScreen: React.FC = () => {
         style={styles.container}
       >
         <ScrollView contentContainerStyle={styles.centeredContent} keyboardShouldPersistTaps="handled">
-          {renderHeader('HMD Student', 'Sign in with the email registered by your team')}
+          {renderHeader('Linyup Member', 'Sign in with the email registered by your team')}
 
           <TextInput
             mode="outlined"

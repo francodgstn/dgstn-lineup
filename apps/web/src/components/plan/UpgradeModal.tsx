@@ -43,23 +43,23 @@ const PLAN_CONTENT: Record<SaasPlan, { tagline: string; features: string[] }> = 
   // The modal never asks anyone to "upgrade" to Free — entry exists only to
   // keep the Record exhaustive.
   free: {
-    tagline: 'Get started for free with up to 10 contacts.',
-    features: ['Up to 10 active contacts', 'Public bio link', 'Sessions, subscriptions & goals'],
+    tagline: 'Get started for free with up to 15 contacts.',
+    features: ['Up to 15 active contacts', 'Public bio link', 'Sessions, subscriptions & goals'],
   },
   coach: {
     tagline: 'Everything a solo coach needs to run a professional practice.',
     features: [
-      '1:1 coaching slots with client booking',
-      'Subscriptions & session packages',
-      'Goals, check-ins & progress tracking',
+      'Member app + 1:1 coaching slots',
+      'Contact Groups & Custom Fields included',
+      'À-la-carte add-ons + 50 contacts',
     ],
   },
   studio: {
-    tagline: 'Scale with engagement tools, automation, and a mobile app.',
+    tagline: 'Scale with engagement tools, automation, and the member app.',
     features: [
-      'Student mobile app (iOS & Android)',
+      'Every add-on included + 250 contacts',
       'Gamification — streaks, leaderboards, badges',
-      'Outreach automation & multiple managers',
+      'Full automation suite & multiple managers',
     ],
   },
   organization: {

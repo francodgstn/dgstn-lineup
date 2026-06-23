@@ -24,8 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { toast } from 'sonner'
-import { TEAMS_COLLECTION, PLAN_ORDER, PLAN_PRICING, TRIAL_EXTENSION_DAYS } from '@linyup/shared'
+import { TEAMS_COLLECTION, PLAN_ORDER, PLAN_PRICING, orgPriceFrom } from '@linyup/shared'
 import type { SaasSubscription, SaasPlan, Team } from '@linyup/shared'
 import {
   CreditCard,
@@ -438,10 +437,17 @@ function SubscriptionCard({
                     )}
                   </div>
 
-                  {/* Price — from PLAN_PRICING (billing source of truth) */}
+                  {/* Price — from PLAN_PRICING (billing source of truth). Org is
+                      base + per-studio (sales-led), shown as "From CHF {entry}". */}
                   <div className="mt-3 flex items-baseline gap-1">
                     {price.baseMonthly === 0 ? (
                       <span className="text-2xl font-bold">{tp('priceFree')}</span>
+                    ) : plan === 'organization' ? (
+                      <>
+                        <span className="text-xs text-muted-foreground">{tp('priceFrom')}</span>
+                        <span className="text-2xl font-bold">CHF {orgPriceFrom()}</span>
+                        <span className="text-xs text-muted-foreground">{tp('perMonth')}</span>
+                      </>
                     ) : (
                       <>
                         <span className="text-2xl font-bold">CHF {fmtPrice(price.baseMonthly)}</span>
@@ -456,7 +462,21 @@ function SubscriptionCard({
                   </p>
 
                   <div className="mt-auto pt-4">
-                    {selectable ? (
+                    {plan === 'organization' && !isCurrent ? (
+                      // Organisation is sales-led ("Talk to us") — not self-serve
+                      // checkout. Route to a contact email rather than Stripe.
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          window.location.href =
+                            'mailto:hello@linyup.com?subject=Organisation%20plan%20enquiry'
+                        }}
+                      >
+                        {t('talkToUs')}
+                      </Button>
+                    ) : selectable ? (
                       <Button
                         size="sm"
                         className="w-full"
@@ -614,50 +634,6 @@ function ManagedByOrgBanner({ orgId }: { orgId: string }) {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-// ─── trial extension card ──────────────────────────────────────────────────────
-
-function TrialExtendCard({ team, teamId }: { team: Team | null; teamId: string }) {
-  const t = useTranslations('Billing')
-  const [loading, setLoading] = useState(false)
-
-  // Only during a trial that hasn't already been extended.
-  if (!team || team.plan_status !== 'trial' || team.trial_extended) return null
-
-  const endMs = toTs(team.trial_ends_at)
-  const endDate = endMs ? new Date(endMs).toLocaleDateString() : null
-
-  async function extend() {
-    setLoading(true)
-    try {
-      await httpsCallable<{ teamId: string }>(functions, 'extendTrial')({ teamId })
-      toast.success(t('trialExtendedToast', { days: TRIAL_EXTENSION_DAYS }))
-      // team doc updates in real time via AuthContext → this card self-hides.
-    } catch {
-      toast.error(t('trialExtendError'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <Card className="border-primary/30 bg-primary/[0.03]">
-      <CardContent className="p-5 flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <p className="font-semibold">{t('trialExtendTitle')}</p>
-          <p className="text-sm text-muted-foreground">
-            {endDate
-              ? t('trialExtendBody', { days: TRIAL_EXTENSION_DAYS, date: endDate })
-              : t('trialExtendBodyNoDate', { days: TRIAL_EXTENSION_DAYS })}
-          </p>
-        </div>
-        <Button onClick={extend} disabled={loading} className="shrink-0">
-          {loading ? t('trialExtending') : t('trialExtendCta', { days: TRIAL_EXTENSION_DAYS })}
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
 export default function BillingPage() {
   const { user, currentTeamId, team } = useAuth()
   const t = useTranslations('Billing')
@@ -712,7 +688,6 @@ export default function BillingPage() {
         <CheckoutBanner />
       </Suspense>
 
-      <TrialExtendCard team={team} teamId={currentTeamId!} />
       <SubscriptionCard sub={sub ?? null} team={team} teamId={currentTeamId!} />
       <InvoicesSection teamId={currentTeamId!} hasGateway={hasGateway} />
     </div>

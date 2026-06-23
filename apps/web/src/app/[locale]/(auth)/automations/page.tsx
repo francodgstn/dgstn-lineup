@@ -44,7 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PlanGate } from '@/components/plan/PlanGate'
+import { usePlan } from '@/hooks/usePlan'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1608,6 +1608,11 @@ function TemplateDialog({
 
 export default function AutomationsPage() {
   const { currentTeamId, user } = useAuth()
+  const { isAtLeast } = usePlan()
+  // Automations are available on every tier; Studio/Org get the full suite while
+  // Free/Coach are limited to the triggers/actions of their active modules and
+  // installed add-ons (the builder only offers those). Show a note below Studio.
+  const fullAutomations = isAtLeast('studio')
   const qc = useQueryClient()
 
   // Plugin-contributed triggers and actions
@@ -1720,7 +1725,7 @@ export default function AutomationsPage() {
   const pausedRules = rules.filter((r) => !r.active)
 
   return (
-    <PlanGate minPlan="studio">
+    <>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
@@ -1758,6 +1763,18 @@ export default function AutomationsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Limited-plan note: Free/Coach get automations scoped to their active
+            modules and add-ons; Studio unlocks the full suite. */}
+        {!fullAutomations && (
+          <div className="rounded-lg border border-primary/30 bg-primary/[0.04] px-4 py-3 text-sm">
+            <p className="font-medium">Automations on your plan are limited</p>
+            <p className="text-muted-foreground">
+              You can automate around your active modules and installed add-ons. Upgrade to Studio
+              for the full automation suite — including every add-on&apos;s triggers and actions.
+            </p>
+          </div>
+        )}
 
         {/* Loading */}
         {rulesLoading && (
@@ -1888,6 +1905,6 @@ export default function AutomationsPage() {
           />
         </>
       )}
-    </PlanGate>
+    </>
   )
 }

@@ -14,14 +14,16 @@ export interface PluginAddonPrice {
   stripeLookupKey: string
 }
 
+// À-la-carte is limited to the substantial add-ons (2026-06 overhaul). Contact
+// Groups and Custom Fields are now STANDARD in Coach (no longer billed) — they
+// were removed here and their manifests drop the `addon` field, so
+// pluginAccessForPlan resolves them to `included` from Coach up.
 export const PLUGIN_ADDONS: Record<string, PluginAddonPrice> = {
+  website:        { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_website_monthly' },
+  'online-courses': { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_online-courses_monthly' },
+  products:       { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_products_monthly' },
   gamification:   { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_gamification_monthly' },
   referrals:      { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_referrals_monthly' },
-  'online-courses': { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_online-courses_monthly' },
-  website:        { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_website_monthly' },
-  'contact-groups': { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_contact-groups_monthly' },
-  'custom-fields': { coachPriceMonthly: 2, stripeLookupKey: 'linyup_addon_custom-fields_monthly' },
-  products:       { coachPriceMonthly: 5, stripeLookupKey: 'linyup_addon_products_monthly' },
 }
 
 export function pluginAddon(pluginId: string): PluginAddonPrice | undefined {

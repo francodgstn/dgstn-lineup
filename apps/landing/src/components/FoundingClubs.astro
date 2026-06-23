@@ -36,7 +36,7 @@ const slots = ['dumbbell', 'shield', 'medal', 'flame'] as const;
 </section>
 
 <style>
-  .proof { padding: 56px 0 48px; }
+  .proof { padding: 72px 0 60px; }
   .proof .wrap { text-align: center; }
 
   .proof-label {
@@ -96,7 +96,7 @@ const slots = ['dumbbell', 'shield', 'medal', 'flame'] as const;
   .proof-slot-cta:hover { background: var(--purple-100); transform: translateY(-2px); }
 
   @media (max-width: 860px) {
-    .proof { padding: 36px 0 28px; }
+    .proof { padding: 48px 0 36px; }
     /* Keep the band slim on mobile — show the first three plates + the CTA */
     .proof-slot:nth-of-type(n + 4):not(.proof-slot-cta) { display: none; }
   }

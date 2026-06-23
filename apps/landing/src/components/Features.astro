@@ -23,6 +23,8 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
     { key: 'trials', icon: 'sparkles' },
     { key: 'memberships', icon: 'badge-check' },
     { key: 'payments', icon: 'credit-card' },
+    { key: 'coaching', icon: 'calendar-clock' },
+    { key: 'goals', icon: 'target' },
   ],
   // Row 1 — scrolls right
   [
@@ -34,6 +36,7 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
     { key: 'rankings', icon: 'medal' },
     { key: 'referrals', icon: 'gift' },
     { key: 'courses', icon: 'graduation-cap' },
+    { key: 'products', icon: 'package' },
   ],
   // Row 2 — scrolls left
   [
@@ -45,7 +48,16 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
     { key: 'whatsapp', icon: 'message-circle', soon: true },
     { key: 'aiInsights', icon: 'brain', soon: true },
     { key: 'team', icon: 'user-plus' },
+    { key: 'forms', icon: 'square-pen', soon: true },
+    { key: 'api', icon: 'code' },
   ],
+];
+
+// Info-only modal sources — NOT shown in the marquee, but openable by key (e.g.
+// the pricing comparison's "Linyup payment fee" row opens 'paymentFee'). They
+// reuse the same modal + .ficon, so there's one source of truth for the copy.
+const extraCards: { key: string; icon: string }[] = [
+  { key: 'paymentFee', icon: 'percent' },
 ];
 ---
 
@@ -68,6 +80,7 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
               <button
                 type="button"
                 class="fcard"
+                data-key={key}
                 data-title={t(`features.cards.${key}.title`)}
                 data-detail={t(`features.cards.${key}.detail`)}
                 data-soon={soon ? 'true' : undefined}
@@ -83,6 +96,25 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
             ))}
           </div>
         </div>
+      ))
+    }
+  </div>
+
+  <!-- Hidden info-only cards (not in the marquee) — source for modals opened by
+       key from elsewhere on the page, e.g. the pricing comparison fee row. -->
+  <div class="fcard-extras" hidden aria-hidden="true">
+    {
+      extraCards.map(({ key, icon }) => (
+        <button
+          type="button"
+          class="fcard"
+          data-key={key}
+          data-title={t(`features.cards.${key}.title`)}
+          data-detail={t(`features.cards.${key}.detail`)}
+        >
+          <div class="ficon"><i data-lucide={icon} /></div>
+          <div class="fcard-text"><h3>{t(`features.cards.${key}.title`)}</h3></div>
+        </button>
       ))
     }
   </div>
@@ -128,6 +160,18 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
     document.querySelectorAll<HTMLElement>('.marquee .fcard').forEach((card) => {
       card.addEventListener('click', () => open(card));
     });
+
+    // Expose an opener so other sections (e.g. the pricing comparison table) can
+    // open the same feature-detail modal by feature key. Reuses the marquee
+    // card's data + rendered icon, so there is a single source of truth.
+    (window as unknown as { openFeatureModal?: (key: string) => void }).openFeatureModal = (
+      key: string
+    ) => {
+      // Look in the marquee first, then the hidden info-only cards.
+      const card = document.querySelector<HTMLElement>(`.fcard[data-key="${key}"]`);
+      if (card) open(card);
+    };
+
     closeBtn?.addEventListener('click', close);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) close();
@@ -139,7 +183,7 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
 </script>
 
 <style>
-  section { padding: 72px 0 80px; overflow: hidden; }
+  section { padding: 96px 0 104px; overflow: hidden; }
 
   /* Eyebrow above the shared section heading */
   .sec-head .eyebrow { margin-bottom: 16px; }
@@ -184,6 +228,9 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
     from { transform: translateX(-50%); }
     to { transform: translateX(0); }
   }
+
+  /* Hidden info-only card source (modal content for non-marquee rows) */
+  .fcard-extras { display: none; }
 
   /* ── Card ────────────────────────────────────────────────────────────── */
   .fcard {
@@ -309,7 +356,7 @@ const featureRows: { key: string; icon: string; soon?: boolean }[][] = [
 
   /* ── Mobile ──────────────────────────────────────────────────────────── */
   @media (max-width: 860px) {
-    section { padding: 48px 0 56px; }
+    section { padding: 64px 0 68px; }
     .marquee { gap: 14px; }
     .marquee-track { gap: 14px; }
     .fcard { width: 240px; padding: 14px 16px; }

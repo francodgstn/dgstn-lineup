@@ -125,7 +125,6 @@ export {
   getBillingPortalUrl,
   activatePluginAddon,
   deactivatePluginAddon,
-  extendTrial,
   handleTrialLifecycle,
 } from './saas-billing'
 

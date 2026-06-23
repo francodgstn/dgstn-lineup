@@ -43,7 +43,8 @@ The system is structured around **business maturity**, not arbitrary feature gro
   * **"Powered by Linyup" badge** on the public bio link (every free bio link is a
     referral surface; removing the badge is a paid perk)
 * CHF 0, no payment method, no Stripe subscription
-* Lifecycle: every signup still starts on the 14-day full-access Studio trial; on
+* Lifecycle: every signup still starts on the **30-day** full-access Studio trial
+  (no opt-in extension — the old 14-day + extension model was retired 2026-06); on
   expiry the team **downgrades to Free** (data kept, no wall, no purge). Cancelled
   paid subscriptions also land here.
 
@@ -104,7 +105,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
   * Long-term goals — numeric targets with a deadline (e.g. lose 5 kg by June); coach and client both comment and evaluate progress
   * Short-term tasks / homework — boolean-completion goals assigned by coach after a session (e.g. "3× stretch routine this week"); client marks done; coach sees completion rate
   * Progress photos — photo attachments on goal progress updates; photos are evidence toward a specific goal, not a standalone gallery
-  * Bidirectional comment thread on each goal — coach and client annotate progress entries; visible in contact profile and student app
+  * Bidirectional comment thread on each goal — coach and client annotate progress entries; visible in contact profile and member app
   * Unified "Goals & Progress" section in contact profile covering all three types
 
 * **Resource sharing**
@@ -122,8 +123,13 @@ outgrows it quickly, converting exactly when the product has proven its value.
 **Constraints (important):**
 
 * Max 1 team manager
-* No advanced automation
-* No student app (clients book via bio link/web; app is Studio)
+* **Automation is "half active"** — available, but limited to the triggers and
+  actions of the coach's active modules and installed add-ons. The full automation
+  suite (all add-on triggers/actions) is Studio.
+* **Member app included** — a basic booking/check-in portal on Coach, enriched by
+  add-ons (Gamification, Online Courses, …). Standard from Coach up; never on Free.
+* **Contact Groups & Custom Fields are standard in Coach** (no longer paid add-ons,
+  2026-06). À-la-carte is limited to the substantial add-ons (see *Plugin add-ons*).
 
 **Product Intent:**
 
@@ -151,7 +157,7 @@ outgrows it quickly, converting exactly when the product has proven its value.
 **Persona:**
 
 * Gym / club (e.g. boxing, martial arts, fitness studio)
-* 50–250+ students (buy contact blocks beyond 250)
+* 50–250+ members (buy contact blocks beyond 250)
 * Wants growth + retention
 
 **Goal:**
@@ -171,13 +177,14 @@ outgrows it quickly, converting exactly when the product has proven its value.
 
 #### Engagement
 
-* Student mobile app (iOS + Android)
+* Member app (iOS + Android) — the full, content-rich app (the same app ships on
+  Coach as a basic booking/check-in portal; Studio's add-ons light it up)
 
 * **Coaching — mobile app integration** (extends Coach plan's 1:1 system)
   * In-app slot browsing and booking (upcoming slots carousel + featured next-slot card)
   * Booking and cancellation from within the app (token-based, no login required for simple flows)
   * Push notification reminder 1 hour before a 1:1 appointment
-  * Per-client coaching session history visible in student profile
+  * Per-client coaching session history visible in member profile
   * Progress notes shared between coach and client (ties into Training Profile)
 
 * Gamification:
@@ -296,11 +303,13 @@ growth is monetised by moving up a tier (or, for Studio, buying flat blocks).
 ### What counts as a contact
 
 * A **contact** is any non-archived person record. Two contact types: **trial**
-  and **student** (the old "external" type is merged into the general contact
-  type). Trials **do** count toward the cap but keep a distinct `trial` status
-  flag for the trial→student funnel and automations.
-* Use the word **"contacts"** everywhere in product and pricing copy — reserve
-  **"members"** for the Organisation context (member teams / locations).
+  and **student** (`student` is the stable code/enum value, kept post-launch; it
+  is **displayed as "Member"** in the UI). Trials **do** count toward the cap but
+  keep a distinct `trial` status flag for the trial→member funnel and automations.
+* **Terminology (2026-06):** use **"members"** for people in customer-facing copy
+  and **"contacts"** in data/CRM contexts. A studio's sellable recurring plans are
+  **"subscriptions"** (not "memberships"). Reserve **"membership"** for the
+  Organisation level only (a studio's membership in an org / member teams).
 * **Guardians are not contact records.** Guardian / emergency info is stored as
   fields on the contact (name + phone), never as a separate counted record.
 
@@ -310,16 +319,25 @@ growth is monetised by moving up a tier (or, for Studio, buying flat blocks).
 * Archived contacts are **auto-anonymised after 2 years** by default (retention
   policy). Frame this as a **privacy feature**, not a limit: nDSG / GDPR data
   minimisation — *"old archived contacts are automatically anonymised, so you
-  don't hoard ex-students' data."* A differentiator vs international tools.
+  don't hoard ex-members' data."* A differentiator vs international tools.
 
 ### Pricing Structure
 
 | Tier         | Base Price | Included Contacts | Over the cap |
 |--------------|------------|-------------------|--------------|
 | Free         | CHF 0      | 15 (hard cap)     | Blocked — prompt to upgrade to Coach / Studio |
-| Coach        | CHF 7.99   | 50                | Prompt to upgrade to Studio (no overage charge) |
-| Studio       | CHF 29.99  | 250               | Add +250-contact blocks at ~CHF 10/mo each, or upgrade to Organisation |
-| Organization | CHF 149    | Unlimited         | — |
+| Coach        | CHF 9      | 50                | Prompt to upgrade to Studio (no overage charge) |
+| Studio       | CHF 35     | 250               | Add +250-contact blocks at CHF 10/mo each, or upgrade to Organisation |
+| Organization | From CHF 103 · *Talk to us* | Unlimited | — |
+
+> **Organisation pricing (not flat-published).** Org is **base CHF 79/mo + CHF 12
+> per studio**, 2-studio minimum, so the entry point is ~CHF 103 (two studios) and
+> scales with locations. It is **sales-led** — published only as "From CHF 103 ·
+> Talk to us", never as the base/per-studio split. The base fee is deliberate: it
+> makes the org wrapper cost something so unrelated studios can't group up purely
+> to undercut individual Studio plans. Modelled in code as the org base price plus
+> `ORG_PER_STUDIO` (`linyup_organization_studio_monthly`, quantity = studios).
+> Eligibility: studios under common ownership or a single federating body.
 
 * **Free (15)** — hard cap. Manual adds are blocked at the limit; public bio-link
   signups still land, so the breach itself becomes the upsell.
@@ -340,28 +358,45 @@ growth is monetised by moving up a tier (or, for Studio, buying flat blocks).
 > piece is the in-app "add a block" purchase flow (the over-cap banner already
 > surfaces the option).
 
-> **Founder pricing** (free 6 months, then CHF 15/mo Studio locked for life) is a
-> private founding-club deal — keep it **off** the public pricing page.
+> **Launch offer (PUBLIC):** 50% off **Coach and Studio** for the first **6 months**
+> for new signups during launch (Coach ~CHF 4.50, Studio ~CHF 17.50), framed as
+> scarce ("limited availability"). This is the single public promo and doubles as
+> the early-adopter offer. Organisation is "Talk to us", not a published discount.
+
+> **Founder pricing (PRIVATE):** Studio **CHF 15/mo locked for life**, founding
+> clubs only — handled by direct outreach, kept **off** the public pricing page.
+> Note the collision risk: the 50% Studio launch price is CHF 17.50, so the
+> founder CHF 15 must never appear publicly. The only founder element allowed on
+> the page later is a partner-logo strip once they've signed.
 
 ### Plugin add-ons (Coach plan)
 
-Plugins extend a deliberately bare Coach base. **Studio and Org include all
-internal plugins** at no extra cost; **Coach** can activate a curated subset
-(engagement/content plugins) as **paid monthly add-ons**, each billed as a Stripe
-subscription item on top of the Coach base.
+**Studio and Org include all internal plugins** at no extra cost; **Coach** can
+activate a curated subset (the substantial engagement/content plugins) as **paid
+monthly add-ons**, each billed as a Stripe subscription item on top of the Coach
+base.
 
-Add-on prices are **anchored** so that a coach wanting two or more add-ons
-reaches or exceeds the Coach→Studio delta — making Studio the rational choice.
+**Standard in Coach (2026-06 de-pettifying):** **Contact Groups** and **Custom
+Fields** are now included in the Coach base — they are no longer sold à la carte
+("no more CHF 2 for custom fields"). À-la-carte is limited to the substantial
+add-ons below.
+
+Add-on prices are **anchored** so that a coach wanting **three or more** add-ons
+reaches or exceeds the Coach→Studio delta — making Studio the rational choice
+("Need 3+ add-ons? Studio includes everything for CHF 35").
 
 | Add-on | Coach price / mo |
 |--------|------------------|
-| Gamification | CHF 5 |
-| Referrals    | CHF 5 |
-| Online Courses | CHF 8 |
 | Website | CHF 8 |
+| Online Courses | CHF 8 |
+| Products Shop | CHF 8 |
+| Gamification | CHF 5 |
+| Referrals | CHF 5 |
 
-*Indicative placeholders. Marquee Studio features — student app, automation,
-multiple managers, advanced analytics — are **never** sold à la carte.*
+*Indicative placeholders, synced from `PLUGIN_ADDONS`. Marquee Studio features —
+the full member app, full automation suite, multiple managers, advanced analytics
+— are **never** sold à la carte. The member app itself ships from Coach as a basic
+portal; add-ons (Gamification, Online Courses, …) are the content that fills it.*
 
 **Mechanics:** plugin **installation is the gate**. Studio/Org owners install
 freely; Coach activations go through a Cloud Function that adds the Stripe item
@@ -480,7 +515,7 @@ Focus on: simplicity, speed, real gym use cases.
 | Metric | Why it matters |
 |--------|----------------|
 | Activation time (setup → first booking) | Measures onboarding friction |
-| Monthly active students per customer | Proxy for customer health |
+| Monthly active members per customer | Proxy for customer health |
 | Gym retention rate | Core SaaS health metric |
 | Subscription adoption rate (Team tier) | Revenue quality |
 | Feature usage: automations, app, referrals | Stickiness drivers |

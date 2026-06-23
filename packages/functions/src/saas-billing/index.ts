@@ -12,7 +12,6 @@ import type { SaasPlan } from '@linyup/shared'
 import {
   PLUGIN_ADDONS,
   pluginIdForAddonLookupKey,
-  TRIAL_EXTENSION_DAYS,
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   TENANT_DATA_COLLECTIONS,
@@ -21,7 +20,10 @@ import {
 } from '@linyup/shared'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
-const VALID_PLANS: SaasPlan[] = ['coach', 'studio', 'organization']
+// Self-serve checkout is Coach & Studio only. Organisation is sales-led
+// (base + per-studio, 2-studio minimum — see ORG_PER_STUDIO) and quoted on a
+// call, so it's never created through the public createCheckoutSession path.
+const VALID_PLANS: SaasPlan[] = ['coach', 'studio']
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -656,42 +658,9 @@ export const deactivatePluginAddon = onCall(async (request) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// extendTrial — one-time self-service trial extension (+TRIAL_EXTENSION_DAYS)
+// (The one-time self-service trial extension was retired in the 2026-06 pricing
+//  overhaul — the trial is now a flat 30 days with no opt-in extension.)
 // ─────────────────────────────────────────────────────────────────────────────
-
-export const extendTrial = onCall(async (request) => {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
-
-  const data = request.data as { teamId?: string }
-  if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
-
-  await assertOwner(request.auth.uid, data.teamId)
-
-  const teamRef = admin.firestore().collection(TEAMS_COLLECTION).doc(data.teamId)
-  const snap = await teamRef.get()
-  if (!snap.exists) throw new HttpsError('not-found', 'Team not found')
-
-  const team = snap.data()!
-  if (team.plan_status !== 'trial') {
-    throw new HttpsError('failed-precondition', 'Trial extension is only available during a trial')
-  }
-  if (team.trial_extended === true) {
-    throw new HttpsError('failed-precondition', 'The trial has already been extended')
-  }
-
-  // Extend from the later of now / current trial end (don't shorten a future end).
-  const currentEndMs = (team.trial_ends_at as Timestamp | undefined)?.toMillis() ?? Date.now()
-  const base = Math.max(Date.now(), currentEndMs)
-  const newEnd = Timestamp.fromMillis(base + TRIAL_EXTENSION_DAYS * 24 * 60 * 60 * 1000)
-
-  await teamRef.update({
-    trial_ends_at: newEnd,
-    trial_extended: true,
-    updated_at: FieldValue.serverTimestamp(),
-  })
-
-  return { trial_ends_at: newEnd.toMillis() }
-})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Trial lifecycle: lapsed trials (and cancelled paid subscriptions) land on

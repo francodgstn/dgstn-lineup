@@ -23,7 +23,7 @@
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply --reprice   # also reprice drift
  */
 import Stripe from 'stripe'
-import { PLAN_PRICING, PLUGIN_ADDONS, STUDIO_CONTACT_BLOCK } from '@linyup/shared'
+import { PLAN_PRICING, PLUGIN_ADDONS, STUDIO_CONTACT_BLOCK, ORG_PER_STUDIO } from '@linyup/shared'
 
 const CURRENCY = 'chf'
 const APPLY = process.argv.includes('--apply')
@@ -71,6 +71,16 @@ const catalog: CatalogEntry[] = [
     name: `Linyup +${STUDIO_CONTACT_BLOCK.size} contacts`,
     lookupKey: STUDIO_CONTACT_BLOCK.stripeLookupKey,
     chf: STUDIO_CONTACT_BLOCK.monthly,
+  },
+  // Organisation per-studio price — billed alongside the org base price
+  // (linyup_organization_monthly). Quantity = number of studios (2-studio
+  // minimum). Org is sales-led, so these prices back the quote, not self-serve
+  // checkout.
+  {
+    kind: 'plan',
+    name: 'Linyup Organization · per studio',
+    lookupKey: ORG_PER_STUDIO.stripeLookupKey,
+    chf: ORG_PER_STUDIO.monthly,
   },
 ]
 

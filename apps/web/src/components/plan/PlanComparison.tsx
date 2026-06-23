@@ -25,11 +25,12 @@ import { PLAN_ORDER, PLAN_PRICING, type SaasPlan } from '@linyup/shared'
 // [free, coach, studio, organization]. Cell values: true = ✓, false = —, or a
 // sentinel ('unlimited' | 'addon' | 'soon'). The contacts row is computed from
 // PLAN_PRICING so the caps can never drift from the billing source of truth.
-type Cell = boolean | 'unlimited' | 'addon' | 'soon'
+type Cell = boolean | 'unlimited' | 'addon' | 'soon' | 'limited'
 
 interface CmpRow {
   label: string
-  note?: boolean
+  /** Translation key for a small note rendered under the row label. */
+  note?: string
   /** Computed from PLAN_PRICING.includedContacts instead of a literal. */
   contacts?: boolean
   values?: Cell[]
@@ -39,7 +40,7 @@ const GROUPS: { heading: string; rows: CmpRow[] }[] = [
   {
     heading: 'groupUsage',
     rows: [
-      { label: 'rowContacts', note: true, contacts: true },
+      { label: 'rowContacts', note: 'contactsNote', contacts: true },
       { label: 'rowMigration', values: [false, true, true, true] },
       { label: 'rowBranding', values: [false, false, true, true] },
       { label: 'rowMembers', values: [false, false, true, true] },
@@ -55,21 +56,19 @@ const GROUPS: { heading: string; rows: CmpRow[] }[] = [
       { label: 'rowCheckins', values: [true, true, true, true] },
       { label: 'rowMemberships', values: [true, true, true, true] },
       { label: 'rowPayments', values: [true, true, true, true] },
+      { label: 'rowAutomations', values: ['limited', 'limited', true, true] },
       { label: 'rowGoals', values: [true, true, true, true] },
-    ],
-  },
-  {
-    heading: 'groupGrowth',
-    rows: [
-      { label: 'rowMobileApp', values: [false, false, true, true] },
-      { label: 'rowAutomations', values: [false, false, true, true] },
+      { label: 'rowGroups', values: [false, true, true, true] },
+      { label: 'rowCustomFields', values: [false, true, true, true] },
+      { label: 'rowForms', note: 'formsNote', values: [false, 'addon', true, true] },
+      { label: 'rowMobileApp', values: [false, true, true, true] },
       { label: 'rowGamification', values: [false, 'addon', true, true] },
       { label: 'rowReferrals', values: [false, 'addon', true, true] },
       { label: 'rowCourses', values: [false, 'addon', true, true] },
       { label: 'rowWebsite', values: [false, 'addon', true, true] },
-      { label: 'rowGroups', values: [false, 'addon', true, true] },
-      { label: 'rowCustomFields', values: [false, 'addon', true, true] },
+      { label: 'rowProducts', values: [false, 'addon', true, true] },
       { label: 'rowAnalytics', values: [false, false, true, true] },
+      { label: 'rowApi', values: [false, false, true, true] },
       { label: 'rowAiInsights', values: [false, false, 'soon', 'soon'] },
       { label: 'rowWhatsapp', values: [false, false, 'soon', 'soon'] },
     ],
@@ -80,7 +79,6 @@ const GROUPS: { heading: string; rows: CmpRow[] }[] = [
       { label: 'rowMultiTeam', values: [false, false, false, true] },
       { label: 'rowCentralAdmin', values: [false, false, false, true] },
       { label: 'rowCrossTeam', values: [false, false, false, true] },
-      { label: 'rowApi', values: [false, false, false, true] },
       { label: 'rowPermissions', values: [false, false, false, true] },
     ],
   },
@@ -103,6 +101,7 @@ export function PlanComparison({ currentPlan }: { currentPlan: SaasPlan | null }
     if (v === false) return <Minus className="mx-auto h-4 w-4 text-muted-foreground/40" />
     if (v === 'unlimited') return <span className="font-medium">{t('unlimited')}</span>
     if (v === 'addon') return <span className="text-xs font-medium">{t('addon')}</span>
+    if (v === 'limited') return <span className="text-xs font-medium text-muted-foreground">{t('limited')}</span>
     if (v === 'soon') return <span className="text-xs font-medium text-muted-foreground">{t('soon')}</span>
     return <span className="font-medium">{v}</span>
   }
@@ -151,7 +150,7 @@ export function PlanComparison({ currentPlan }: { currentPlan: SaasPlan | null }
                             {t(row.label)}
                             {row.note && (
                               <span className="mt-0.5 block max-w-[36ch] text-[11px] font-normal leading-snug text-muted-foreground">
-                                {t('contactsNote')}
+                                {t(row.note as Parameters<typeof t>[0])}
                               </span>
                             )}
                           </TableCell>

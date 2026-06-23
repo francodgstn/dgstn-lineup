@@ -27,7 +27,10 @@ export const triggerAutomationRule = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'You are not a member of this team.')
   }
 
-  await requirePlan(teamId, 'studio')
+  // Automations are available on every tier (Free/Coach are limited to their
+  // active modules/add-ons at rule-creation time). requirePlan('free') still
+  // rejects past_due / cancelled subscriptions.
+  await requirePlan(teamId, 'free')
 
   const db = admin.firestore()
 

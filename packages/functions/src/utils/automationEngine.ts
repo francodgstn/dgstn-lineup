@@ -1201,14 +1201,12 @@ export async function fireEventRules(
   const teamData =
     !teamErr && teamDoc && teamDoc.exists ? (teamDoc.data() as Record<string, unknown>) : {}
 
-  // Plan gate: automation rules require studio+ plan
-  const teamPlan = (teamData.plan as string) || 'coach'
-  if (!['studio', 'organization'].includes(teamPlan)) {
-    console.log(
-      `[automationEngine] fireEventRules: team ${teamId} on plan '${teamPlan}' — automation requires studio+, skipping`
-    ) // eslint-disable-line no-console
-    return
-  }
+  // Automations are available on every paid tier (2026-06 overhaul): Studio/Org
+  // get the full suite, while Free/Coach are "half active" — limited to the
+  // triggers and actions of their ACTIVE modules and installed add-ons. That
+  // limit is enforced at rule-creation time (the builder only offers core
+  // actions plus the team's installed-plugin actions), so the engine simply
+  // runs whatever rules the team was allowed to create. No tier is skipped here.
 
   for (const ruleDoc of rulesSnap.docs) {
     const rule = normalizeRule(ruleDoc.id, ruleDoc.data() as Record<string, unknown>)

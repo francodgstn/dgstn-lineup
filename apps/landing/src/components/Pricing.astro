@@ -22,10 +22,14 @@ const plans = [
 // sentinel/literal string ('unlimited' | 'addon' | 'soon', or a contact count).
 // Row labels reuse the already-translated marquee titles where possible.
 type CmpVal = boolean | string;
-const COMPARE: { heading: string; rows: { label: string; note?: string; values: CmpVal[] }[] }[] = [
+// `feature` (optional) names the marquee feature card a row's label should open
+// when clicked — used for rows whose label isn't a `features.cards.<key>.title`
+// (so every "Run your studio" row gets the clickable (i) detail modal).
+const COMPARE: { heading: string; rows: { label: string; note?: string; feature?: string; values: CmpVal[] }[] }[] = [
   {
     heading: 'plans.cmpUsage',
     rows: [
+      { label: 'plans.cmpUiLanguages', note: 'plans.cmpUiLanguagesNote', values: [true, true, true, true] },
       { label: 'plans.cmpContacts', note: 'plans.cmpContactsNote', values: ['15', '50', '250', 'unlimited'] },
       { label: 'plans.cmpMigration', values: [false, true, true, true] },
       { label: 'plans.cmpBranding', values: [false, false, true, true] },
@@ -39,25 +43,24 @@ const COMPARE: { heading: string; rows: { label: string; note?: string; values: 
       { label: 'features.cards.contacts.title', values: [true, true, true, true] },
       { label: 'features.cards.bookings.title', values: [true, true, true, true] },
       { label: 'features.cards.biolink.title', values: [true, true, true, true] },
-      { label: 'plans.cmpCoaching', values: [true, true, true, true] },
+      { label: 'plans.cmpCoaching', feature: 'coaching', values: [true, true, true, true] },
       { label: 'features.cards.checkins.title', values: [true, true, true, true] },
       { label: 'features.cards.memberships.title', values: [true, true, true, true] },
       { label: 'features.cards.payments.title', values: [true, true, true, true] },
-      { label: 'plans.cmpGoals', values: [true, true, true, true] },
-    ],
-  },
-  {
-    heading: 'plans.cmpGrowth',
-    rows: [
-      { label: 'features.cards.mobileApp.title', values: [false, false, true, true] },
-      { label: 'features.cards.automations.title', values: [false, false, true, true] },
+      { label: 'plans.cmpPaymentFee', feature: 'paymentFee', values: [t('payments.feeFree'), t('payments.feeCoach'), t('payments.feeStudio'), t('payments.feeOrg')] },
+      { label: 'features.cards.automations.title', note: 'plans.cmpAutomationsNote', values: ['limited', 'limited', true, true] },
+      { label: 'plans.cmpGoals', feature: 'goals', values: [true, true, true, true] },
+      { label: 'features.cards.groups.title', values: [false, true, true, true] },
+      { label: 'features.cards.customFields.title', values: [false, true, true, true] },
+      { label: 'plans.cmpForms', feature: 'forms', note: 'plans.cmpFormsNote', values: [false, 'addon', true, true] },
+      { label: 'features.cards.mobileApp.title', values: [false, true, true, true] },
       { label: 'features.cards.gamification.title', values: [false, 'addon', true, true] },
       { label: 'features.cards.referrals.title', values: [false, 'addon', true, true] },
       { label: 'features.cards.courses.title', values: [false, 'addon', true, true] },
       { label: 'features.cards.website.title', values: [false, 'addon', true, true] },
-      { label: 'features.cards.groups.title', values: [false, 'addon', true, true] },
-      { label: 'features.cards.customFields.title', values: [false, 'addon', true, true] },
+      { label: 'plans.cmpProducts', feature: 'products', values: [false, 'addon', true, true] },
       { label: 'features.cards.analytics.title', values: [false, false, true, true] },
+      { label: 'plans.cmpApi', feature: 'api', values: [false, false, true, true] },
       { label: 'features.cards.aiInsights.title', values: [false, false, 'soon', 'soon'] },
       { label: 'features.cards.whatsapp.title', values: [false, false, 'soon', 'soon'] },
     ],
@@ -68,7 +71,6 @@ const COMPARE: { heading: string; rows: { label: string; note?: string; values: 
       { label: 'plans.cmpMultiTeam', values: [false, false, false, true] },
       { label: 'plans.cmpCentralAdmin', values: [false, false, false, true] },
       { label: 'plans.cmpCrossTeam', values: [false, false, false, true] },
-      { label: 'plans.cmpApi', values: [false, false, false, true] },
       { label: 'plans.cmpPermissions', values: [false, false, false, true] },
     ],
   },
@@ -78,6 +80,7 @@ const COMPARE: { heading: string; rows: { label: string; note?: string; values: 
 const cmpText = (v: CmpVal): string | null => {
   if (v === 'unlimited') return t('plans.cmpUnlimited');
   if (v === 'addon') return t('plans.cmpAddon');
+  if (v === 'limited') return t('plans.cmpLimited');
   if (v === 'soon') return t('plans.cmpSoon');
   return typeof v === 'string' ? v : null;
 };
@@ -91,6 +94,7 @@ const cmpText = (v: CmpVal): string | null => {
     </div>
 
     <div class="trial-wrap">
+      <span class="eyebrow trial-note launch-note"><i data-lucide="badge-percent"></i> {t('plans.launchNote')}</span>
       <span class="eyebrow trial-note"><i data-lucide="badge-check"></i> {t('plans.trialNote')}</span>
       <span class="eyebrow trial-note mig-note"><i data-lucide="arrow-left-right"></i> {t('plans.migrationNote')}</span>
       <span class="eyebrow trial-note"><i data-lucide="mountain"></i> {t('plans.swissNote')}</span>
@@ -99,9 +103,16 @@ const cmpText = (v: CmpVal): string | null => {
     <div class="plans">
       {
         plans.map(({ key, featured }) => {
-          // Split "CHF 15.00" into currency label + amount so the currency can
-          // sit on its own small line above (keeps the number + /mo on one line).
-          const [currency, ...amountParts] = t(`plans.${key}.promoPrice`).split(' ');
+          const isFree = key === 'free';
+          const isOrg = key === 'org';
+          // Coach & Studio carry the 50% launch promo; Org is sales-led
+          // ("From CHF X · Talk to us"), no published discount; Free is free.
+          const hasPromo = !isFree && !isOrg;
+          // Promo cards split the discounted promoPrice; the org card splits its
+          // (undiscounted) "From CHF X" price so the currency can sit on its own
+          // small line above (keeps the number + /mo on one line).
+          const priceSource = isOrg ? 'price' : 'promoPrice';
+          const [currency, ...amountParts] = t(`plans.${key}.${priceSource}`).split(' ');
           const amount = amountParts.join(' ');
           return (
           <div class:list={['plan', { featured }]}>
@@ -110,22 +121,25 @@ const cmpText = (v: CmpVal): string | null => {
             <p class="aud">{t(`plans.${key}.audience`)}</p>
 
             <div class="price-block">
-              {key === 'free' ? (
+              {isFree ? (
                 <span class="amount">{t('plans.free.price')}</span>
               ) : (
                 <>
                   <span class="currency">{currency}</span>
                   <div class="amount-line">
                     <span class="amount-row">
-                      <span class="amount">{amount}<sup class="price-star">*</sup></span>
+                      {isOrg && <span class="from-label">{t('plans.orgFrom')}</span>}
+                      <span class="amount">{amount}{hasPromo && <sup class="price-star">*</sup>}</span>
                       <span class="period">{t('plans.perMonth')}</span>
                     </span>
-                    <span class="price-tag"><i data-lucide="sparkles"></i> {t('plans.promoBadge')}</span>
+                    {hasPromo && (
+                      <span class="price-tag"><i data-lucide="sparkles"></i> {t('plans.promoBadge')}</span>
+                    )}
                   </div>
                 </>
               )}
             </div>
-            {key !== 'free' && (
+            {hasPromo && (
               <p class="price-note">
                 * {t(`plans.${key}.price`)}{t('plans.perMonth')} {t('plans.afterPromo')}
               </p>
@@ -142,7 +156,7 @@ const cmpText = (v: CmpVal): string | null => {
               type="button"
               data-early-access
             >
-              {t('plans.earlyAccessCta')}
+              {isOrg ? t('plans.talkToUs') : t('plans.earlyAccessCta')}
             </button>
           </div>
           );
@@ -168,10 +182,27 @@ const cmpText = (v: CmpVal): string | null => {
                   <tr class="cmp-group">
                     <th colspan={plans.length + 1}>{t(group.heading)}</th>
                   </tr>
-                  {group.rows.map((row) => (
+                  {group.rows.map((row) => {
+                    // Rows backed by a marquee feature card (label =
+                    // features.cards.<key>.title) get a clickable label that opens
+                    // the same detail modal as the feature marquee. Other rows
+                    // (plans.cmp*) render as plain text.
+                    const featKey =
+                      row.feature ??
+                      (row.label.startsWith('features.cards.') && row.label.endsWith('.title')
+                        ? row.label.slice('features.cards.'.length, -'.title'.length)
+                        : null);
+                    return (
                     <tr>
                       <th scope="row">
-                        {t(row.label)}
+                        {featKey ? (
+                          <button type="button" class="feat-link" data-feature-key={featKey}>
+                            <span>{t(row.label)}</span>
+                            <i data-lucide="info"></i>
+                          </button>
+                        ) : (
+                          t(row.label)
+                        )}
                         {row.note && <span class="row-note">{t(row.note)}</span>}
                       </th>
                       {row.values.map((v) => {
@@ -189,7 +220,8 @@ const cmpText = (v: CmpVal): string | null => {
                         );
                       })}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </Fragment>
               ))
             }
@@ -197,6 +229,8 @@ const cmpText = (v: CmpVal): string | null => {
         </table>
       </div>
       </div>
+    </div>
+    <div class="compare-toggle-wrap">
       <button class="compare-toggle" type="button" aria-expanded="false" aria-controls="compare-body">
         <span>{t('plans.cmpToggle')}</span>
         <i data-lucide="chevron-down"></i>
@@ -207,21 +241,35 @@ const cmpText = (v: CmpVal): string | null => {
 
 <script>
   const cmp = document.querySelector('.compare');
-  const btn = cmp?.querySelector('.compare-toggle');
+  const btn = document.querySelector('.compare-toggle');
   btn?.addEventListener('click', () => {
     const open = cmp!.classList.toggle('open');
     btn.setAttribute('aria-expanded', String(open));
   });
+
+  // Clickable feature labels → open the shared feature-detail modal (defined in
+  // Features.astro, which renders on the same page).
+  document.querySelectorAll<HTMLElement>('.compare-table .feat-link').forEach((el) => {
+    el.addEventListener('click', () => {
+      const key = el.dataset.featureKey;
+      const opener = (window as unknown as { openFeatureModal?: (k: string) => void })
+        .openFeatureModal;
+      if (key && opener) opener(key);
+    });
+  });
 </script>
 
 <style>
-  .plans-sec { padding: 80px 0; background: var(--purple-50); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .plans-sec { padding: 104px 0; background: var(--purple-50); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 
   /* Trial + migration note pills under the section head */
   .trial-wrap { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: -24px 0 36px; }
   .trial-note { background: var(--card); }
   .mig-note { color: var(--purple-700); background: var(--purple-50); border-color: var(--purple-200); }
   .mig-note :global(svg) { color: var(--primary); }
+  /* Launch-offer pill — the single public promo (50% off, limited) */
+  .launch-note { color: #fff; background: var(--primary); border-color: transparent; font-weight: 600; }
+  .launch-note :global(svg) { color: #fff; }
 
   .plans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: stretch; }
   .plan { background: var(--card); border-radius: var(--radius-xl); box-shadow: var(--ring-card), var(--shadow-sm); padding: 28px; display: flex; flex-direction: column; }
@@ -236,6 +284,7 @@ const cmpText = (v: CmpVal): string | null => {
   .amount-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
   .amount-row { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
   .amount { font-family: var(--font-display); font-weight: 600; font-size: 34px; line-height: 1; color: var(--heading); }
+  .from-label { align-self: center; font-size: 14px; font-weight: 500; color: var(--muted-foreground); margin-right: 4px; }
   .price-star { color: var(--primary); font-weight: 700; font-size: 0.5em; }
   .period { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
 
@@ -274,21 +323,16 @@ const cmpText = (v: CmpVal): string | null => {
   }
 
   /* ── Feature comparison (collapsible) ────────────────────────────────── */
-  .compare {
-    margin-top: 40px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--ring-card), var(--shadow-sm);
-    overflow: hidden;
-  }
-  /* Collapsed: a faded "peek" of the table (like the hero product image) so the
-     comparison is obviously there to open — not a single easy-to-miss switch. */
+  /* No card chrome — when collapsed the table simply dissolves into the section
+     background, and the toggle sits below as a detached button. */
+  .compare { margin-top: 44px; }
+  /* Collapsed: a taller "peek" (a few more rows) that fades fully into the
+     section background at the bottom. */
   .compare-body {
-    max-height: 264px;
+    max-height: 400px;
     overflow: hidden;
-    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 38%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 0, #000 38%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 62%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 62%, transparent 100%);
   }
   .compare.open .compare-body {
     max-height: none;
@@ -296,25 +340,28 @@ const cmpText = (v: CmpVal): string | null => {
     -webkit-mask-image: none;
     mask-image: none;
   }
+  /* Detached toggle — a standalone pill button under the table, not a table row */
+  .compare-toggle-wrap { display: flex; justify-content: center; margin-top: 28px; }
   .compare-toggle {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
     gap: 8px;
-    width: 100%;
-    padding: 16px;
+    padding: 11px 24px;
     font-family: inherit;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--primary);
     background: var(--card);
-    border: 0;
-    border-top: 1px solid var(--border);
+    border: 1px solid var(--purple-200);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow-sm);
     cursor: pointer;
     user-select: none;
+    transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
   }
+  .compare-toggle:hover { background: var(--purple-50); transform: translateY(-1px); box-shadow: var(--shadow-md); }
   .compare-toggle :global(svg) { width: 16px; height: 16px; transition: transform 0.2s ease; }
-  .compare.open .compare-toggle :global(svg) { transform: rotate(180deg); }
+  .compare-toggle[aria-expanded="true"] :global(svg) { transform: rotate(180deg); }
 
   .compare-scroll { overflow-x: auto; }
   .compare-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 660px; }
@@ -324,14 +371,36 @@ const cmpText = (v: CmpVal): string | null => {
   .compare-table thead th:first-child { border-top: 0; }
   .compare-table tbody th[scope='row'] { text-align: left; font-weight: 500; color: var(--foreground); }
   .row-note { display: block; margin-top: 3px; font-size: 11.5px; font-weight: 400; line-height: 1.4; color: var(--muted-foreground); max-width: 30ch; }
+
+  /* Clickable feature label (opens the shared feature-detail modal) */
+  .feat-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .feat-link > span {
+    text-decoration: underline dotted var(--border);
+    text-underline-offset: 3px;
+  }
+  .feat-link:hover > span { color: var(--primary); text-decoration-color: var(--primary); }
+  .feat-link :global(svg) { width: 13px; height: 13px; color: var(--muted-foreground); opacity: 0.55; flex-shrink: 0; }
+  .feat-link:hover :global(svg) { color: var(--primary); opacity: 1; }
+  .feat-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
   .cmp-group th {
     text-align: left;
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--muted-foreground);
-    background: var(--purple-50);
+    color: var(--purple-700);
+    background: var(--purple-100);
   }
   .cell-yes { color: var(--success-fg); display: inline-flex; }
   .cell-yes :global(svg) { width: 18px; height: 18px; }
@@ -339,7 +408,7 @@ const cmpText = (v: CmpVal): string | null => {
   .cell-txt { font-size: 13px; font-weight: 600; color: var(--foreground); }
 
   @media (max-width: 860px) {
-    .plans-sec { padding: 56px 0; }
+    .plans-sec { padding: 72px 0; }
     .plans { grid-template-columns: 1fr; }
     .trial-wrap { margin: -12px 0 28px; }
   }

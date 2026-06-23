@@ -1,0 +1,89 @@
+---
+import type { Language } from '~/i18n';
+import { useTranslations } from '~/i18n';
+
+interface Props {
+  lang: Language;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+// The headline upgrade for this release — "Accept Payments + Shop" gets its own
+// full-width section (not a feature tile): four benefit points + CTAs. The
+// per-plan Linyup fee lives in the pricing comparison table (under the Payments
+// row), not here. Copy is pulled from the `payments` i18n namespace.
+const points = [
+  { key: 'account', icon: 'wallet' },
+  { key: 'shop', icon: 'store' },
+  { key: 'twint', icon: 'smartphone' },
+  { key: 'transparent', icon: 'badge-check' },
+] as const;
+---
+
+<section id="payments" class="pay-sec">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow"><i data-lucide="banknote"></i> {t('payments.eyebrow')}</span>
+      <h2>{t('payments.title')}</h2>
+      <p>{t('payments.subtitle')}</p>
+    </div>
+
+    <div class="pay-grid">
+      {
+        points.map(({ key, icon }) => (
+          <div class="pay-card">
+            <span class="pay-ico"><i data-lucide={icon}></i></span>
+            <h3>{t(`payments.cards.${key}.title`)}</h3>
+            <p>{t(`payments.cards.${key}.body`)}</p>
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="pay-cta">
+      <button class="btn btn-primary" type="button" data-early-access>{t('payments.cta')}</button>
+      <a class="btn btn-outline" href="#pricing">{t('payments.ctaSecondary')}</a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .pay-sec { padding: 104px 0; }
+  .sec-head { text-align: center; max-width: 720px; margin: 0 auto 40px; }
+  .sec-head .eyebrow { margin-bottom: 14px; }
+  .sec-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 34px; line-height: 1.15; }
+  .sec-head p { margin-top: 12px; font-size: 17px; color: var(--muted-foreground); }
+
+  .pay-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .pay-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--ring-card), var(--shadow-sm);
+    padding: 24px;
+  }
+  .pay-ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-lg);
+    background: var(--purple-50);
+    color: var(--primary);
+    margin-bottom: 14px;
+  }
+  .pay-ico :global(svg) { width: 21px; height: 21px; }
+  .pay-card h3 { font-family: var(--font-display); font-weight: 600; font-size: 19px; }
+  .pay-card p { margin-top: 7px; font-size: 14.5px; line-height: 1.55; color: var(--muted-foreground); }
+
+  .pay-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 32px; }
+  .pay-cta .btn { min-width: 180px; }
+
+  @media (max-width: 860px) {
+    .pay-sec { padding: 68px 0; }
+    .pay-grid { grid-template-columns: 1fr; }
+    .sec-head h2 { font-size: 28px; }
+  }
+</style>

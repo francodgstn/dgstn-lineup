@@ -1,7 +1,7 @@
 {
   "site": {
     "name": "Linyup",
-    "description": "Das All-in-one-Verwaltungstool für Trainer und Studios — Lektionen, Kontakte, Buchungen und eine Schüler-App, alles an einem Ort."
+    "description": "Das All-in-one-Verwaltungstool für Trainer und Studios — Lektionen, Kontakte, Buchungen, Zahlungen und eine Mitglieder-App."
   },
   "nav": {
     "features": "Funktionen",
@@ -12,7 +12,7 @@
   },
   "hero": {
     "tagline": "Für neue und wachsende Clubs",
-    "title": "Lektionen planen. Schüler kennen. Studio wachsen lassen.",
+    "title": "Lektionen planen. Mitglieder kennen. Studio wachsen lassen.",
     "subtitle": "Weniger Verwaltung, mehr Coaching — die moderne, erschwingliche Plattform für Coaches und kleine Studios.",
     "cta": "Kostenlos starten",
     "ctaSecondary": "Funktionen ansehen",
@@ -40,18 +40,18 @@
     "subtitle": "Alles, was ein Coach oder kleines Studio zum Laufen braucht — egal, was du unterrichtest. Einfach von Haus aus.",
     "cards": {
       "sessions": { "title": "Plane deine Klassen", "benefit": "Wiederkehrende Lektionen, Plätze und Anwesenheit in einem Kalender." },
-      "bookings": { "title": "Buchungen online annehmen", "benefit": "Schüler reservieren ihren Platz mit einem Tippen." },
-      "memberships": { "title": "Mitgliedschaften verwalten", "benefit": "Verkaufe Pläne und verfolge jede Verlängerung automatisch." },
+      "bookings": { "title": "Buchungen online annehmen", "benefit": "Mitglieder reservieren ihren Platz mit einem Tippen." },
+      "memberships": { "title": "Abos verwalten", "benefit": "Verkaufe Pläne und verfolge jede Verlängerung automatisch." },
       "payments": { "title": "Zahlungen einziehen", "benefit": "Beiträge ziehen sich selbst ein — kein Nachhaken mehr." },
-      "rankings": { "title": "Ränge & Level verfolgen", "benefit": "Prüfe Schüler und halte sie auf dem Weg zum nächsten Level." },
-      "mobileApp": { "title": "Schülern eine App geben", "benefit": "Eine gebrandete iOS- und Android-App zum Buchen und Einchecken." },
+      "rankings": { "title": "Ränge & Level verfolgen", "benefit": "Prüfe Mitglieder und halte sie auf dem Weg zum nächsten Level." },
+      "mobileApp": { "title": "Mitgliedern eine App geben", "benefit": "Eine gebrandete iOS- und Android-App zum Buchen und Einchecken." },
       "automations": { "title": "Routinearbeit automatisieren", "benefit": "Begrüsse, erinnere und gewinne Kontakte zurück — automatisch." }
     },
     "cta": { "title": "Alles in Aktion sehen", "body": "Teste ein echtes Studio — ohne Anmeldung.", "button": "Live-Demo entdecken" }
   },
   "proof": {
-    "label": "Werde einer unserer Gründungsclubs — sichere dir einen speziellen Launch-Rabatt",
-    "cta": "Platz sichern"
+    "label": "Sichere dir den Launch-Rabatt — 50 % Rabatt, begrenzt verfügbar",
+    "cta": "Angebot sichern"
   },
   "showcase": {
     "eyebrow": "In Aktion",
@@ -59,8 +59,8 @@
     "subtitle": "Keine Mockups — echte Screens eines Studios, das mit Linyup läuft.",
     "dashboardAlt": "Das Linyup-Dashboard",
     "shots": {
-      "schedule": { "title": "Die ganze Woche im Blick", "detail": "Jede Klasse, jeder Raum und jeder Coach in einem farbcodierten Kalender — und Schüler buchen ihren Platz online." },
-      "contact": { "title": "Den Fortschritt jedes Schülers verfolgen", "detail": "Anwesenheit, Streaks und ein Leistungsradar auf jedem Profil." },
+      "schedule": { "title": "Die ganze Woche im Blick", "detail": "Jede Klasse, jeder Raum und jeder Coach in einem farbcodierten Kalender — und Mitglieder buchen ihren Platz online." },
+      "contact": { "title": "Den Fortschritt jedes Mitglieds verfolgen", "detail": "Anwesenheit, Streaks und ein Leistungsradar auf jedem Profil." },
       "courses": { "title": "Online-Kurse verkaufen", "detail": "Verpacke dein Wissen in Kurse, die Kontakte im eigenen Tempo durchgehen." },
       "biolink": { "title": "Bio-Link, Website und Shop", "detail": "Ein teilbarer Link zu Plan, Buchung, Kursen, Shop und Website — mit Live-Vorschau." }
     },
@@ -76,17 +76,18 @@
     "cards": {
       "sessions": { "title": "Lektionen", "description": "Klassen planen und Anwesenheit verfolgen.", "detail": "Erstelle deinen Wochenplan in Minuten — wiederkehrende Klassen, Platzlimits und Anwesenheit in einem Kalender." },
       "calendar": { "title": "Kalender", "description": "Die ganze Woche auf einen Blick.", "detail": "Die ganze Woche deines Studios in einer farbcodierten Ansicht nach Aktivität und Trainer — nie wieder Doppelbuchungen." },
-      "contacts": { "title": "Kontakte", "description": "Jedes Schülerprofil an einem Ort.", "detail": "Ein vollständiges Profil für jeden Schüler — Notizen, Verlauf, Ränge und Mitgliedsstatus, immer nur einen Klick entfernt." },
-      "bookings": { "title": "Buchungen", "description": "Schüler buchen Lektionen online.", "detail": "Schüler reservieren ihren Platz mit einem Tippen und du erhältst für jede Lektion eine saubere Echtzeit-Teilnehmerliste." },
-      "checkins": { "title": "Check-ins", "description": "Schneller QR-Check-in an der Tür.", "detail": "Checke Schüler per Scan ein — keine Klemmbretter, keine Tabellen, nur eine exakte Anwesenheitserfassung." },
-      "trials": { "title": "Probestunden", "description": "Aus Probegästen werden Stammkunden.", "detail": "Erfasse jede Probeanmeldung und führe sie mit integrierten Follow-ups gezielt zur Mitgliedschaft." },
-      "memberships": { "title": "Mitgliedschaften", "description": "Pläne und Verlängerungen verwalten.", "detail": "Verkaufe Monats-, Quartals- oder Jahrespläne und verfolge jede Verlängerung automatisch — ganz ohne Tabelle." },
-      "payments": { "title": "Zahlungen", "description": "Beiträge ohne Nachhaken einziehen.", "detail": "Verbinde deinen Zahlungsanbieter und lass Beiträge sich selbst einziehen — Schluss mit dem Nachhaken." },
+      "contacts": { "title": "Kontakte", "description": "Jedes Mitgliederprofil an einem Ort.", "detail": "Ein vollständiges Profil für jedes Mitglied — Notizen, Verlauf, Ränge und Abostatus, immer nur einen Klick entfernt." },
+      "bookings": { "title": "Buchungen", "description": "Mitglieder buchen Lektionen online.", "detail": "Mitglieder reservieren ihren Platz mit einem Tippen und du erhältst für jede Lektion eine saubere Echtzeit-Teilnehmerliste." },
+      "checkins": { "title": "Check-ins", "description": "Schneller QR-Check-in an der Tür.", "detail": "Checke Mitglieder per Scan ein — keine Klemmbretter, keine Tabellen, nur eine exakte Anwesenheitserfassung." },
+      "trials": { "title": "Probestunden", "description": "Aus Probegästen werden Stammkunden.", "detail": "Erfasse jede Probeanmeldung und führe sie mit integrierten Follow-ups gezielt zum Abo." },
+      "memberships": { "title": "Abos", "description": "Pläne und Verlängerungen verwalten.", "detail": "Verkaufe Monats-, Quartals- oder Jahrespläne und verfolge jede Verlängerung automatisch — ganz ohne Tabelle." },
+      "payments": { "title": "Zahlungen", "description": "Beiträge ohne Nachhaken einziehen.", "detail": "Zwei Wege zum Kassieren: Zahlungen über Linyup auf dein eigenes Stripe-Konto leiten ('Pay via Linyup') oder dein eigenes Gateway nutzen (BYO) und hier nur erfassen." },
+      "paymentFee": { "title": "Linyup-Zahlungsgebühr", "detail": "Ein kleiner Prozentsatz zusätzlich zur Stripe-Gebühr — nur bei 'Pay via Linyup'. Mit eigenem Gateway (BYO) fällt keine Linyup-Gebühr an." },
       "biolink": { "title": "Bio-Link", "description": "Ein Link für alles, was du anbietest.", "detail": "Ein teilbarer Link mit Plan, Buchung und Anmeldung — perfekt für deine Instagram- oder TikTok-Bio." },
       "website": { "title": "Website", "description": "Buchungsseite, sofort einsatzbereit.", "detail": "Starte eine schicke Studio-Website mit Plan und Preisen — ohne Designer, ohne Code." },
-      "mobileApp": { "title": "Mobile App", "description": "iOS- & Android-App für deine Schüler.", "detail": "Deine Schüler erhalten eine gebrandete iOS- und Android-App zum Buchen, Einchecken und Verbundenbleiben." },
+      "mobileApp": { "title": "Mitglieder-App", "description": "iOS- & Android-App für deine Mitglieder.", "detail": "Deine Mitglieder erhalten eine gebrandete iOS- und Android-App zum Buchen, Einchecken und Verbundenbleiben." },
       "automations": { "title": "Automatisierungen", "description": "Routinearbeit auf Autopilot.", "detail": "Einmal einrichten und Linyup begrüsst neue Kontakte, sendet Erinnerungen und gewinnt inaktive zurück — automatisch." },
-      "gamification": { "title": "Gamification", "description": "Streaks belohnen, Schüler motivieren.", "detail": "Punkte, Streaks und Abzeichen, die aus blossem Erscheinen eine Gewohnheit machen, die deine Schüler lieben." },
+      "gamification": { "title": "Gamification", "description": "Streaks belohnen, Mitglieder motivieren.", "detail": "Punkte, Streaks und Abzeichen, die aus blossem Erscheinen eine Gewohnheit machen, die deine Mitglieder lieben." },
       "rankings": { "title": "Ranglisten", "description": "Level & Leaderboards, die motivieren.", "detail": "Verfolge Ränge, Level und Ranglisten, die Kontakte zum nächsten Meilenstein treiben — und zurückkommen lassen." },
       "referrals": { "title": "Empfehlungen", "description": "Kontakte werden zu deinen Werbern.", "detail": "Belohne Kontakte fürs Mitbringen von Freunden — Empfehlungen werden automatisch erfasst und gutgeschrieben." },
       "courses": { "title": "Kurse", "description": "Strukturierte Mehrwochenprogramme verkaufen.", "detail": "Verpacke dein Wissen in mehrwöchige Online-Kurse, die deine Kontakte kaufen und im eigenen Tempo durchgehen." },
@@ -95,51 +96,66 @@
       "groups": { "title": "Gruppen", "description": "Kontakte in Kohorten organisieren.", "detail": "Organisiere Kontakte in Teams, Levels oder Komitees für gezielte Kommunikation und müheloses Management." },
       "customFields": { "title": "Eigene Felder", "description": "Genau die Daten erfassen, die du brauchst.", "detail": "Füge die Felder hinzu, die dein Studio wirklich braucht, und erfasse beliebige Daten zu jedem Kontakt." },
       "analytics": { "title": "Analysen", "description": "Trends & Engagement auf einen Blick.", "detail": "Sieh Anwesenheit, Bindung und Engagement-Trends, damit du immer weisst, was funktioniert — und was nicht." },
-      "whatsapp": { "title": "WhatsApp", "description": "Schüler dort erreichen, wo sie sind.", "detail": "Sende Erinnerungen, Updates und Reaktivierungs-Nachrichten über WhatsApp — genau dort, wo deine Schüler schon sind." },
+      "whatsapp": { "title": "WhatsApp", "description": "Mitglieder dort erreichen, wo sie sind.", "detail": "Sende Erinnerungen, Updates und Reaktivierungs-Nachrichten über WhatsApp — genau dort, wo deine Mitglieder schon sind." },
       "aiInsights": { "title": "KI-Insights", "description": "Abwanderungsrisiko früh erkennen.", "detail": "Lass die KI abwanderungsgefährdete Kontakte erkennen und gleich die passende Nachricht entwerfen, um sie zu halten." },
+      "coaching": { "title": "1:1-Coaching", "description": "Buchbare Einzeltermine.", "detail": "Veröffentliche Verfügbarkeits-Slots, die Kunden selbst über deinen Bio-Link buchen — mit .ics-Kalendereinladungen, Erinnerungen und Pufferzeiten. Dein Personal-Trainer-Hook." },
+      "goals": { "title": "Ziele & Fortschritt", "description": "Ziele setzen, Fortschritt verfolgen.", "detail": "Setze langfristige Ziele und kurzfristige Aufgaben, dokumentiere Fortschritt mit Fotos und Check-ins und halte jedes Mitglied auf Kurs zum nächsten Meilenstein." },
+      "products": { "title": "Produkt-Shop", "description": "Merch, Ausrüstung & Pakete verkaufen.", "detail": "Verkaufe physische oder digitale Produkte — Merch, Ausrüstung, Bundles — über deinen öffentlichen Shop, direkt auf dein eigenes Stripe-Konto." },
+      "forms": { "title": "Formulare", "description": "Eigene Formulare für jeden Ablauf.", "detail": "Erstelle eigene Formulare für Anmeldungen, Aufnahme, Verzichtserklärungen und mehr — erfasse genau die Daten, die du brauchst. Demnächst verfügbar." },
+      "api": { "title": "API-Zugriff", "description": "Auf eigenen Daten aufbauen.", "detail": "Programmatischer Zugriff auf die Daten deines Studios, um Linyup mit deinen anderen Tools zu verbinden und eigene Workflows zu bauen." },
       "team": { "title": "Team & Rollen", "description": "Coaches einladen, Rechte zuweisen.", "detail": "Lade Coaches und Manager mit den richtigen Rechten pro Rolle ein — jeder sieht genau das, was er soll." }
     }
   },
   "migration": {
     "eyebrow": "Wechselst du von einer anderen Plattform?",
     "title": "Wir migrieren deine Daten für dich",
-    "subtitle": "Der Umzug von einem anderen Tool ist der mühsamste Teil eines Wechsels — überlass ihn uns. Wir übernehmen deine Kontakte, deinen Stundenplan, Mitgliedschaften und den Verlauf. Du prüfst nur das Ergebnis und sagst uns, was anzupassen ist.",
+    "subtitle": "Der Umzug von einem anderen Tool ist der mühsamste Teil eines Wechsels — überlass ihn uns. Wir übernehmen deine Kontakte, deinen Stundenplan, Abos und den Verlauf. Du prüfst nur das Ergebnis und sagst uns, was anzupassen ist.",
     "badge": "Kostenlose Rundum-Migration für Early Adopters",
     "send": { "title": "Schick uns deine Daten", "detail": "Ein Export oder eine Tabelle aus deinem aktuellen Tool — was immer du schon hast." },
-    "migrate": { "title": "Wir übernehmen die Fleissarbeit", "detail": "Wir ordnen deine Kontakte, deinen Stundenplan, Mitgliedschaften und den Verlauf zu und importieren sie in Linyup." },
+    "migrate": { "title": "Wir übernehmen die Fleissarbeit", "detail": "Wir ordnen deine Kontakte, deinen Stundenplan, Abos und den Verlauf zu und importieren sie in Linyup." },
     "review": { "title": "Du prüfst & gibst Anweisungen", "detail": "Prüf das Ergebnis und sag uns einfach, was anzupassen ist. Nichts geht live, bevor es stimmt." },
     "cta": "Sprich mit uns über die Migration"
   },
   "plans": {
     "title": "Pläne für jede Grösse",
-    "subtitle": "Einfache Pläne, die mit dir wachsen.",
-    "trialNote": "14 Tage kostenlos testen · Keine Kreditkarte nötig.",
+    "subtitle": "Echte Preise, klar sichtbar. Kein «Demo anfragen, um Preise zu sehen», keine versteckten Gebühren — nur, was jeder Plan kostet und genau, was du bekommst.",
+    "trialNote": "30 Tage kostenlos testen · Keine Kreditkarte nötig.",
+    "launchNote": "Launch-Angebot: 50 % Rabatt auf deine ersten 6 Monate — begrenzt verfügbar.",
     "migrationNote": "Wechsel von einer anderen Plattform? Wir migrieren deine Daten für dich — kostenlos.",
     "swissNote": "Swiss Made · Preise in CHF · EN/DE/FR/IT",
     "perMonth": "/Mt.",
-    "afterPromo": "nach 3 Monaten",
+    "afterPromo": "nach 6 Monaten",
     "promoBadge": "Launch-Angebot",
     "earlyAccessCta": "Frühen Zugang sichern",
+    "talkToUs": "Sprich mit uns",
+    "orgFrom": "Ab",
     "mostPopular": "Am beliebtesten",
     "cmpToggle": "Alle Funktionen vergleichen",
     "cmpUsage": "Nutzung & Zugang",
     "cmpCore": "Studio führen",
-    "cmpGrowth": "Wachsen & binden",
-    "cmpOrg": "Mehrere Standorte",
+    "cmpOrg": "Multi-Studio-Organisation",
     "cmpContacts": "Kontakte",
     "cmpContactsNote": "Zählt nur aktive (nicht archivierte) Kontakte. Studio kann +250er-Blöcke für CHF 10/Monat hinzufügen; archivierte Kontakte werden nach 2 Jahren automatisch anonymisiert.",
     "cmpMembers": "Mehrere Teammitglieder",
+    "cmpUiLanguages": "Moderne UI in 4 Sprachen",
+    "cmpUiLanguagesNote": "English · Deutsch · Français · Italiano",
     "cmpBranding": "Linyup-Branding entfernen",
-    "cmpMigration": "Kostenlose Datenmigration",
+    "cmpMigration": "Kostenlose Datenmigration (Launch-Angebot)",
     "cmpCoaching": "1:1-Coaching & Termine",
     "cmpGoals": "Ziele & Fortschritt",
-    "cmpMultiTeam": "Mehrere Teams",
+    "cmpProducts": "Produkt-Shop",
+    "cmpForms": "Formulare",
+    "cmpFormsNote": "Demnächst verfügbar",
+    "cmpPaymentFee": "Linyup-Zahlungsgebühr",
+    "cmpMultiTeam": "Mehrere Studios",
     "cmpCentralAdmin": "Zentrale Verwaltung & Datenüberblick",
     "cmpCrossTeam": "Teamübergreifende Events & Nachrichten",
     "cmpApi": "API-Zugang",
     "cmpPermissions": "Erweiterte Rollen & Rechte",
     "cmpUnlimited": "Unbegrenzt",
     "cmpAddon": "Add-on",
+    "cmpLimited": "Eingeschränkt",
+    "cmpAutomationsNote": "Free & Coach: beschränkt auf Ihre aktiven Module & Add-ons. Studio schaltet den vollen Umfang frei.",
     "cmpSoon": "Bald",
     "free": {
       "name": "Free",
@@ -149,25 +165,48 @@
     },
     "coach": {
       "name": "Coach",
-      "price": "CHF 7.99",
-      "promoPrice": "CHF 4.00",
+      "price": "CHF 9",
+      "promoPrice": "CHF 4.50",
       "audience": "Für Einzeltrainer und Privatcoaches.",
-      "features": ["Alles aus Free", "50 Kontakte", "1:1-Coaching & Termine"]
+      "features": ["Alles aus Free", "50 Kontakte", "Mitglieder-App + Gruppen & eigene Felder", "Add-ons à la carte"]
     },
     "studio": {
       "name": "Studio",
-      "price": "CHF 29.99",
-      "promoPrice": "CHF 15.00",
+      "price": "CHF 35",
+      "promoPrice": "CHF 17.50",
       "audience": "Für Studios und Fitnesscenter mit mehreren Trainern und Klassen.",
-      "features": ["Alles aus Coach", "Schüler-App & Automatisierungen", "Gamification, Empfehlungen & Analysen"]
+      "features": ["Alles aus Coach", "Alle Add-ons inklusive", "Mitglieder-App, Automatisierungen & erweiterte Analysen", "Mehrere Teammitglieder"]
     },
     "org": {
       "name": "Organisation",
-      "price": "CHF 149",
-      "promoPrice": "CHF 74.50",
+      "price": "CHF 103",
       "audience": "Für Mehrstandort-Studios, Verbände und Franchises.",
-      "features": ["Alles aus Studio", "Unbegrenzte Kontakte & Teams", "Zentrale Verwaltung & API"]
+      "features": ["Alles aus Studio", "Zentrale Mehrteam-Verwaltung", "Teamübergreifende Events & Nachrichten", "API & erweiterte Rollen"]
     }
+  },
+  "payments": {
+    "eyebrow": "Bezahlt werden",
+    "title": "Bezahlt werden. Online verkaufen. Behalten, was dir gehört.",
+    "subtitle": "Nimm Abos und Drop-ins direkt auf dein eigenes Stripe-Konto an und eröffne in Minuten einen öffentlichen Shop — kein Mittelsmann, der dein Geld hält.",
+    "cards": {
+      "account": { "title": "Dein Konto, dein Geld", "body": "Auszahlungen gehen direkt auf dein eigenes Stripe-Konto. Linyup hält nie dein Geld." },
+      "shop": { "title": "Ein Shop, der mit dir wächst", "body": "Verkaufe Abos, Klassenpakete und Drop-ins von Anfang an — und ergänze Online-Kurse oder den Produkt-Shop, um Kurse und Merch von derselben öffentlichen Seite zu verkaufen. Kunden kaufen mit einem Tippen, online, jederzeit." },
+      "twint": { "title": "TWINT + Karten", "body": "Akzeptiere die Methoden, die Schweizer Kunden wirklich nutzen — inklusive wiederkehrender Abos über TWINT, nicht nur Einmalzahlungen." },
+      "transparent": { "title": "Ehrliche, transparente Preise", "body": "Stripe-Gebühr zum Selbstkostenpreis weitergereicht, plus eine kleine Linyup-Gebühr ab 0,4 %. Kein versteckter Aufschlag, keine Marktplatz-Provision." }
+    },
+    "proof": "Ein per TWINT bezahltes Abo auf der Studio-Stufe kostet rund 2 % all-in — etwa die Hälfte dessen, was nur-Karten-Tools aus dem Ausland berechnen.",
+    "cta": "Kostenlos starten",
+    "ctaSecondary": "So funktionieren Zahlungen",
+    "feesTitle": "Zahlungsgebühren, klar sichtbar",
+    "feesIntro": "Berechnet zusätzlich zur Standardgebühr von Stripe, die wir zum Selbstkostenpreis weitergeben. Nur Prozente — keine feste Linyup-Gebühr pro Transaktion. Gleicher Satz für Karten und TWINT.",
+    "feesPlanHead": "Plan",
+    "feesFeeHead": "Linyup-Zahlungsgebühr",
+    "feeFree": "1.7%",
+    "feeCoach": "1.2%",
+    "feeStudio": "0.7%",
+    "feeOrg": "ab 0.4%",
+    "feeOrgNote": "Mengenrabatte verfügbar",
+    "feesMicrocopy": "Du siehst genau, was du zahlst: Stripes Bearbeitungsgebühr zum Selbstkostenpreis, plus eine kleine Linyup-Gebühr. Keine gebündelten Aufschläge, keine Provision auf die Zahlungen deiner Mitglieder."
   },
   "cta": {
     "title": "Bereit loszulegen?",

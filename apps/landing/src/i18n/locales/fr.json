@@ -1,7 +1,7 @@
 {
   "site": {
     "name": "Linyup",
-    "description": "L'outil de gestion tout-en-un pour coaches et studios — sessions, contacts, réservations et application mobile étudiante, tout en un."
+    "description": "L'outil de gestion tout-en-un pour coaches et studios — sessions, contacts, réservations, paiements et une app membre."
   },
   "nav": {
     "features": "Fonctionnalités",
@@ -12,7 +12,7 @@
   },
   "hero": {
     "tagline": "Pour les clubs nouveaux et en croissance",
-    "title": "Planifiez vos cours. Connaissez vos élèves. Développez votre studio.",
+    "title": "Planifiez vos cours. Connaissez vos membres. Développez votre studio.",
     "subtitle": "Moins d'administratif, plus de coaching — la plateforme moderne et abordable pour coaches et petits studios.",
     "cta": "Commencer gratuitement",
     "ctaSecondary": "Voir les fonctionnalités",
@@ -40,18 +40,18 @@
     "subtitle": "Tout ce qu'un coach ou un petit studio doit gérer — quelle que soit votre discipline. Simple par défaut.",
     "cards": {
       "sessions": { "title": "Planifiez vos cours", "benefit": "Cours récurrents, places et présences dans un seul calendrier." },
-      "bookings": { "title": "Prenez des réservations en ligne", "benefit": "Vos élèves réservent leur place en un geste." },
+      "bookings": { "title": "Prenez des réservations en ligne", "benefit": "Vos membres réservent leur place en un geste." },
       "memberships": { "title": "Gérez les abonnements", "benefit": "Vendez des formules et suivez chaque renouvellement automatiquement." },
       "payments": { "title": "Encaissez les paiements", "benefit": "Les cotisations se collectent seules — fini les relances." },
-      "rankings": { "title": "Suivez grades & niveaux", "benefit": "Évaluez vos élèves et gardez-les motivés vers le niveau suivant." },
-      "mobileApp": { "title": "Offrez une app à vos élèves", "benefit": "Une app iOS et Android à votre marque pour réserver et s'enregistrer." },
+      "rankings": { "title": "Suivez grades & niveaux", "benefit": "Évaluez vos membres et gardez-les motivés vers le niveau suivant." },
+      "mobileApp": { "title": "Offrez une app à vos membres", "benefit": "Une app iOS et Android à votre marque pour réserver et s'enregistrer." },
       "automations": { "title": "Automatisez le travail répétitif", "benefit": "Accueillez, relancez et reconquérez vos contacts automatiquement." }
     },
     "cta": { "title": "Voyez tout en action", "body": "Essayez un vrai studio — sans inscription.", "button": "Découvrir la démo en direct" }
   },
   "proof": {
-    "label": "Devenez l'un de nos clubs fondateurs — profitez d'une remise de lancement spéciale",
-    "cta": "Réservez votre place"
+    "label": "Profitez de la remise de lancement — 50 % de réduction, places limitées",
+    "cta": "Profiter de l'offre"
   },
   "showcase": {
     "eyebrow": "En action",
@@ -59,8 +59,8 @@
     "subtitle": "Pas des maquettes — de vrais écrans d'un studio qui tourne sur Linyup.",
     "dashboardAlt": "Le tableau de bord Linyup",
     "shots": {
-      "schedule": { "title": "Toute votre semaine en un coup d'œil", "detail": "Chaque cours, salle et coach dans un seul calendrier en couleurs — et vos élèves réservent leur place en ligne." },
-      "contact": { "title": "Suivez la progression de chaque élève", "detail": "Présences, séries et un radar de performance sur chaque profil." },
+      "schedule": { "title": "Toute votre semaine en un coup d'œil", "detail": "Chaque cours, salle et coach dans un seul calendrier en couleurs — et vos membres réservent leur place en ligne." },
+      "contact": { "title": "Suivez la progression de chaque membre", "detail": "Présences, séries et un radar de performance sur chaque profil." },
       "courses": { "title": "Vendez des cours en ligne", "detail": "Transformez votre savoir en cours que vos contacts suivent à leur rythme." },
       "biolink": { "title": "Bio-link, site web et boutique", "detail": "Un lien partageable vers planning, réservation, cours, boutique et site web — avec aperçu en direct." }
     },
@@ -76,17 +76,18 @@
     "cards": {
       "sessions": { "title": "Sessions", "description": "Planifiez les cours et suivez les présences.", "detail": "Construisez votre planning hebdomadaire en quelques minutes — cours récurrents, limites de places et présences dans un seul calendrier." },
       "calendar": { "title": "Calendrier", "description": "Toute votre semaine d'un coup d'œil.", "detail": "Toute la semaine de votre studio dans une vue couleur par activité et instructeur — fini les doubles réservations." },
-      "contacts": { "title": "Contacts", "description": "Chaque profil d'élève au même endroit.", "detail": "Un profil complet pour chaque élève — notes, historique, grades et statut d'abonnement, toujours à portée de clic." },
-      "bookings": { "title": "Réservations", "description": "Vos élèves réservent en ligne.", "detail": "Vos élèves réservent leur place en un geste et vous obtenez une liste claire et en temps réel pour chaque session." },
-      "checkins": { "title": "Enregistrements", "description": "Check-in QR rapide à l'entrée.", "detail": "Enregistrez vos élèves d'un simple scan — sans paperasse ni tableur, juste un suivi de présence précis." },
+      "contacts": { "title": "Contacts", "description": "Chaque profil de membre au même endroit.", "detail": "Un profil complet pour chaque membre — notes, historique, grades et statut d'abonnement, toujours à portée de clic." },
+      "bookings": { "title": "Réservations", "description": "Vos membres réservent en ligne.", "detail": "Vos membres réservent leur place en un geste et vous obtenez une liste claire et en temps réel pour chaque session." },
+      "checkins": { "title": "Enregistrements", "description": "Check-in QR rapide à l'entrée.", "detail": "Enregistrez vos membres d'un simple scan — sans paperasse ni tableur, juste un suivi de présence précis." },
       "trials": { "title": "Essais", "description": "Transformez les essais en habitués.", "detail": "Captez chaque inscription d'essai et menez-la vers l'abonnement grâce à des relances intégrées qui convertissent." },
       "memberships": { "title": "Abonnements", "description": "Gérez formules et renouvellements.", "detail": "Vendez des formules mensuelles, trimestrielles ou annuelles et suivez chaque renouvellement automatiquement." },
-      "payments": { "title": "Paiements", "description": "Encaissez sans relancer.", "detail": "Connectez votre prestataire de paiement et laissez les cotisations se collecter seules — fini les relances." },
+      "payments": { "title": "Paiements", "description": "Encaissez sans relancer.", "detail": "Deux façons d'encaisser : acheminez les paiements via Linyup vers votre compte Stripe (« Pay via Linyup »), ou utilisez votre propre passerelle (BYO) et suivez-les ici." },
+      "paymentFee": { "title": "Frais de paiement Linyup", "detail": "Un petit % en plus des frais Stripe — facturé uniquement avec « Pay via Linyup ». Avec votre propre passerelle (BYO), aucun frais Linyup." },
       "biolink": { "title": "Bio link", "description": "Un seul lien pour toute votre offre.", "detail": "Un lien partageable avec votre planning, vos réservations et vos inscriptions — parfait pour votre bio Instagram ou TikTok." },
       "website": { "title": "Site web", "description": "Un site de réservation clé en main.", "detail": "Lancez un site de studio soigné avec planning et tarifs intégrés — sans designer ni code." },
-      "mobileApp": { "title": "Appli mobile", "description": "App iOS & Android pour vos élèves.", "detail": "Vos élèves disposent d'une app iOS et Android à votre marque pour réserver, s'enregistrer et rester informés." },
+      "mobileApp": { "title": "App membre", "description": "App iOS & Android pour vos membres.", "detail": "Vos membres disposent d'une app iOS et Android à votre marque pour réserver, s'enregistrer et rester informés." },
       "automations": { "title": "Automatisations", "description": "Le travail répétitif en pilote auto.", "detail": "Configurez une fois et laissez Linyup accueillir, relancer et reconquérir vos contacts — automatiquement." },
-      "gamification": { "title": "Gamification", "description": "Récompensez les séries, fidélisez.", "detail": "Points, séries et badges qui transforment la simple présence en une habitude que vos élèves adorent." },
+      "gamification": { "title": "Gamification", "description": "Récompensez les séries, fidélisez.", "detail": "Points, séries et badges qui transforment la simple présence en une habitude que vos membres adorent." },
       "rankings": { "title": "Classements", "description": "Niveaux & classements motivants.", "detail": "Suivez grades, niveaux et classements qui poussent vos contacts vers leur prochain palier — et les font revenir." },
       "referrals": { "title": "Parrainage", "description": "Vos contacts deviennent ambassadeurs.", "detail": "Récompensez les contacts qui amènent des amis — parrainages suivis et crédités automatiquement. Votre meilleur canal de croissance." },
       "courses": { "title": "Cours en ligne", "description": "Vendez des programmes sur plusieurs semaines.", "detail": "Transformez votre savoir-faire en cours en ligne sur plusieurs semaines que vos contacts achètent et suivent à leur rythme." },
@@ -95,8 +96,13 @@
       "groups": { "title": "Groupes", "description": "Organisez vos contacts en cohortes.", "detail": "Organisez vos contacts en équipes, niveaux ou comités pour une communication ciblée et une gestion sans effort." },
       "customFields": { "title": "Champs perso", "description": "Suivez exactement les données utiles.", "detail": "Ajoutez les champs dont votre studio a vraiment besoin et suivez n'importe quelle donnée sur n'importe quel contact." },
       "analytics": { "title": "Analyses", "description": "Tendances & engagement en un clin d'œil.", "detail": "Visualisez présences, rétention et engagement pour toujours savoir ce qui marche — et ce qui demande votre attention." },
-      "whatsapp": { "title": "WhatsApp", "description": "Touchez vos élèves là où ils sont.", "detail": "Envoyez rappels, actualités et messages de réengagement sur WhatsApp, là où vos élèves sont déjà." },
+      "whatsapp": { "title": "WhatsApp", "description": "Touchez vos membres là où ils sont.", "detail": "Envoyez rappels, actualités et messages de réengagement sur WhatsApp, là où vos membres sont déjà." },
       "aiInsights": { "title": "Insights IA", "description": "Anticipez le risque de désabonnement.", "detail": "Laissez l'IA repérer les contacts à risque de départ et rédiger le message idéal pour les reconquérir à temps." },
+      "coaching": { "title": "Coaching 1:1", "description": "Rendez-vous individuels réservables.", "detail": "Publiez des créneaux de disponibilité que vos clients réservent eux-mêmes depuis votre bio-link — avec invitations .ics, rappels et temps tampon. Votre atout coach personnel." },
+      "goals": { "title": "Objectifs & progression", "description": "Fixez des objectifs, suivez les progrès.", "detail": "Fixez des objectifs à long terme et des tâches à court terme, suivez la progression avec photos et check-ins, et gardez chaque membre en route vers son prochain palier." },
+      "products": { "title": "Boutique de produits", "description": "Vendez merch, équipement et packs.", "detail": "Vendez des produits physiques ou numériques — merch, équipement, packs — depuis votre boutique publique, encaissés directement sur votre compte Stripe." },
+      "forms": { "title": "Formulaires", "description": "Formulaires personnalisés pour tout.", "detail": "Créez des formulaires personnalisés pour les inscriptions, l'accueil, les décharges et plus — collectez exactement les données dont vous avez besoin. Bientôt disponible." },
+      "api": { "title": "Accès API", "description": "Bâtissez sur vos données.", "detail": "Accès programmatique aux données de votre studio pour intégrer Linyup à vos autres outils et créer des workflows sur mesure." },
       "team": { "title": "Équipe & rôles", "description": "Invitez des coaches, gérez les accès.", "detail": "Invitez coaches et gestionnaires avec les bonnes permissions par rôle — chacun voit exactement ce qu'il doit voir." }
     }
   },
@@ -112,34 +118,44 @@
   },
   "plans": {
     "title": "Des formules pour chaque étape",
-    "subtitle": "Des formules simples qui évoluent avec vous.",
-    "trialNote": "Essai gratuit de 14 jours · Sans carte de crédit.",
+    "subtitle": "De vrais prix, en toute transparence. Pas de « demandez une démo pour voir les tarifs », pas de frais cachés — juste le coût de chaque formule et exactement ce que vous obtenez.",
+    "trialNote": "Essai gratuit de 30 jours · Sans carte de crédit.",
+    "launchNote": "Offre de lancement : 50 % de réduction sur vos 6 premiers mois — places limitées.",
     "migrationNote": "Vous changez de plateforme ? Nous migrons vos données pour vous — gratuitement.",
     "swissNote": "Conçu en Suisse · prix en CHF · EN/DE/FR/IT",
     "perMonth": "/mois",
-    "afterPromo": "après 3 mois",
+    "afterPromo": "après 6 mois",
     "promoBadge": "Offre de lancement",
     "earlyAccessCta": "Accès anticipé",
+    "talkToUs": "Contactez-nous",
+    "orgFrom": "Dès",
     "mostPopular": "Le plus populaire",
     "cmpToggle": "Comparer toutes les fonctionnalités",
     "cmpUsage": "Usage & accès",
     "cmpCore": "Gérer votre studio",
-    "cmpGrowth": "Développer & fidéliser",
-    "cmpOrg": "Multi-sites",
+    "cmpOrg": "Organisation multi-studios",
     "cmpContacts": "Contacts",
     "cmpContactsNote": "Compte uniquement les contacts actifs (non archivés). Studio peut ajouter des blocs de +250 pour CHF 10/mois ; les contacts archivés sont anonymisés automatiquement après 2 ans.",
     "cmpMembers": "Plusieurs membres d'équipe",
+    "cmpUiLanguages": "Interface moderne en 4 langues",
+    "cmpUiLanguagesNote": "English · Deutsch · Français · Italiano",
     "cmpBranding": "Retirer la marque Linyup",
-    "cmpMigration": "Migration de données offerte",
+    "cmpMigration": "Migration de données offerte (offre de lancement)",
     "cmpCoaching": "Coaching 1:1 & rendez-vous",
     "cmpGoals": "Objectifs & progression",
-    "cmpMultiTeam": "Plusieurs équipes",
+    "cmpProducts": "Boutique de produits",
+    "cmpForms": "Formulaires",
+    "cmpFormsNote": "Bientôt disponible",
+    "cmpPaymentFee": "Frais de paiement Linyup",
+    "cmpMultiTeam": "Plusieurs studios",
     "cmpCentralAdmin": "Administration centrale & vue unifiée",
     "cmpCrossTeam": "Événements & messages inter-équipes",
     "cmpApi": "Accès API",
     "cmpPermissions": "Rôles & permissions avancés",
     "cmpUnlimited": "Illimité",
     "cmpAddon": "Option",
+    "cmpLimited": "Limité",
+    "cmpAutomationsNote": "Free et Coach : limité à vos modules et options actifs. Studio débloque la suite complète.",
     "cmpSoon": "Bientôt",
     "free": {
       "name": "Free",
@@ -149,25 +165,48 @@
     },
     "coach": {
       "name": "Coach",
-      "price": "CHF 7.99",
-      "promoPrice": "CHF 4.00",
+      "price": "CHF 9",
+      "promoPrice": "CHF 4.50",
       "audience": "Pour les instructeurs solos et coaches privés.",
-      "features": ["Tout de Free", "50 contacts", "Coaching 1:1 & rendez-vous"]
+      "features": ["Tout de Free", "50 contacts", "App membre + Groupes & Champs perso", "Options à la carte"]
     },
     "studio": {
       "name": "Studio",
-      "price": "CHF 29.99",
-      "promoPrice": "CHF 15.00",
+      "price": "CHF 35",
+      "promoPrice": "CHF 17.50",
       "audience": "Pour les studios et salles de sport avec plusieurs coaches et cours.",
-      "features": ["Tout de Coach", "Appli mobile & automatisations", "Gamification, parrainage & analyses"]
+      "features": ["Tout de Coach", "Toutes les options incluses", "App membre, automatisations & analyses avancées", "Plusieurs membres d'équipe"]
     },
     "org": {
       "name": "Organisation",
-      "price": "CHF 149",
-      "promoPrice": "CHF 74.50",
+      "price": "CHF 103",
       "audience": "Pour les studios multi-sites, fédérations et franchises.",
-      "features": ["Tout de Studio", "Contacts & équipes illimités", "Administration centrale & API"]
+      "features": ["Tout de Studio", "Administration centrale multi-équipes", "Événements & messages inter-équipes", "API & rôles avancés"]
     }
+  },
+  "payments": {
+    "eyebrow": "Soyez payé",
+    "title": "Soyez payé. Vendez en ligne. Gardez ce qui vous revient.",
+    "subtitle": "Encaissez abonnements et entrées à l'unité directement sur votre propre compte Stripe, et ouvrez une boutique publique en quelques minutes — aucun intermédiaire qui retient votre argent.",
+    "cards": {
+      "account": { "title": "Votre compte, votre argent", "body": "Les versements vont directement sur votre propre compte Stripe. Linyup ne détient jamais vos fonds." },
+      "shop": { "title": "Une boutique qui grandit avec vous", "body": "Vendez abonnements, cartes de cours et entrées à l'unité dès le départ — puis ajoutez les cours en ligne ou la boutique de produits pour vendre cours et articles depuis la même page publique. Vos clients achètent en un geste, en ligne, à tout moment." },
+      "twint": { "title": "TWINT + cartes", "body": "Acceptez les moyens que les clients suisses utilisent vraiment — y compris les abonnements récurrents sur TWINT, pas seulement les paiements uniques." },
+      "transparent": { "title": "Des tarifs honnêtes et transparents", "body": "Les frais Stripe répercutés au prix coûtant, plus une petite commission Linyup dès 0,4 %. Aucune majoration cachée, aucune commission de place de marché." }
+    },
+    "proof": "Un abonnement payé par TWINT sur la formule Studio coûte environ 2 % tout compris — soit à peu près la moitié de ce que facturent les outils internationaux qui n'acceptent que les cartes.",
+    "cta": "Commencer gratuitement",
+    "ctaSecondary": "Comment fonctionnent les paiements",
+    "feesTitle": "Frais de paiement, en toute transparence",
+    "feesIntro": "Facturés en plus des frais standard de Stripe, que nous répercutons au prix coûtant. Uniquement un pourcentage — aucun frais Linyup fixe par transaction. Même taux sur les cartes et TWINT.",
+    "feesPlanHead": "Formule",
+    "feesFeeHead": "Frais de paiement Linyup",
+    "feeFree": "1.7%",
+    "feeCoach": "1.2%",
+    "feeStudio": "0.7%",
+    "feeOrg": "dès 0.4%",
+    "feeOrgNote": "remises selon le volume disponibles",
+    "feesMicrocopy": "Vous voyez exactement ce que vous payez : les frais de traitement Stripe au prix coûtant, plus une petite commission Linyup. Aucune majoration groupée, aucune commission sur les paiements de vos membres."
   },
   "cta": {
     "title": "Prêt à vous lancer ?",

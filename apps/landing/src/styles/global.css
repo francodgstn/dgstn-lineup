@@ -142,9 +142,9 @@ i[data-lucide] { display: inline-flex; }
 .eyebrow svg { width: 13px; height: 13px; }
 
 /* Section header */
-.sec-head { text-align: center; max-width: 60ch; margin: 0 auto 48px; }
+.sec-head { text-align: center; max-width: 60ch; margin: 0 auto 60px; }
 .sec-head h2 { font-family: "Sora", var(--font-sans); font-weight: 700; font-size: 40px; letter-spacing: -0.01em; }
-.sec-head p { font-size: 17px; color: var(--muted-foreground); margin: 14px auto 0; }
+.sec-head p { font-size: 17px; color: var(--muted-foreground); margin: 16px auto 0; }
 
 @media (max-width: 860px) {
   .sec-head h2 { font-size: 30px; }
