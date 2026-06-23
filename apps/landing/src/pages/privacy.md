@@ -21,7 +21,7 @@ Franco D'Agostino, trading as "D'Agostino Production"\
 Kleinhüningerstrasse 205, 4057 Basel, Switzerland\
 Email: hello@linyup.com
 
-For Customers and visitors in the EU/EEA, this controller processes personal data in connection with offering its service in those markets. `[[Decide whether an EU representative under GDPR Art. 27 is required; for a small Swiss provider with limited EU activity this is often not yet triggered, but confirm.]]`
+For Customers and visitors in the EU/EEA, this controller processes personal data in connection with offering its service in those markets.
 
 ## 2.2 What data we collect and why
 
@@ -39,13 +39,13 @@ If you fill in a contact or sign-up form, we process the data you provide, such 
 
 *Legal basis:* steps taken at your request before entering a contract (GDPR Art. 6(1)(b)) and/or your consent (GDPR Art. 6(1)(a)).
 
-**c) When you create an account or become a Customer** `[[applies once the app is live]]`
+**c) When you create an account or become a Customer**
 
 To provide the service we process account and profile data (name, email, language, login credentials), billing data, and usage data.
 
 *Legal basis:* performance of the contract (GDPR Art. 6(1)(b)).
 
-**d) Payments** `[[applies once payments are live]]`
+**d) Payments**
 
 Payments are processed by Stripe. Card and payment details are entered directly with Stripe and are not stored by us; we receive limited transaction metadata (such as status, amount, and a reference). See Section 2.4.
 
@@ -83,7 +83,7 @@ Our application infrastructure runs in Google's europe-west6 (Zurich, Switzerlan
 
 We keep personal data only as long as needed for the purposes above or as required by law.
 
-- Website logs: `[[e.g. up to 90 days]]`.
+- Website logs: up to 30 days (Google Cloud's default log retention).
 - Contact and waitlist data: until your request is handled, or until you ask us to delete it.
 - Customer account and billing data: for the duration of the contract and for as long as legal retention duties (for example Swiss accounting law, generally 10 years for accounting records) require.
 
