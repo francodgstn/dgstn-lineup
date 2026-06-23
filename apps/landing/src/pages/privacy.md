@@ -73,11 +73,11 @@ We use carefully selected providers who process data on our behalf under contrac
 
 | Provider | Purpose | Location |
 |---|---|---|
-| Google Cloud (Google) | Hosting and infrastructure | `[[EU region / confirm]]` |
+| Google Cloud / Firebase (Google) | Hosting, database, file storage, and serverless functions | EU / Switzerland (europe-west6, Zurich) |
 | Brevo (Sendinblue SAS) | Transactional and marketing email | France (EU) |
-| Stripe (Stripe Payments Europe, Ltd.) | Payment processing | Ireland (EU), with group processing in the `[[USA]]` |
+| Stripe (Stripe Payments Europe, Ltd.) | Payment processing | Ireland (EU), with group processing in the United States |
 
-Some providers may process data outside Switzerland and the EU/EEA (for example in the United States). Where this happens, transfers are protected by recognized safeguards such as the EU and Swiss Standard Contractual Clauses and, where applicable, an adequacy mechanism such as the EU-U.S. / Swiss-U.S. Data Privacy Framework. `[[Verify the exact mechanism each provider relies on and update.]]`
+Our application infrastructure runs in Google's europe-west6 (Zurich, Switzerland) region and our email provider is in France (EU), so most processing stays within Switzerland and the EU/EEA. Some providers may process data outside Switzerland and the EU/EEA (for example in the United States). Where this happens, transfers are protected by recognized safeguards such as the EU and Swiss Standard Contractual Clauses and, where applicable, an adequacy mechanism such as the EU-U.S. / Swiss-U.S. Data Privacy Framework.
 
 ## 2.5 How long we keep data
 
