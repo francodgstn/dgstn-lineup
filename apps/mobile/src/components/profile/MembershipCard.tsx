@@ -4,8 +4,8 @@ import { Card, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react-n
 import { LinearGradient } from 'expo-linear-gradient';
 import { Contact, TeamPublicProfile } from '../../types';
 import {
-  getStatusLabel,
-  getStatusColors,
+  getAffiliationLabel,
+  getAffiliationColors,
   calculateAge,
   formatGender,
   getRankInfo,
@@ -83,7 +83,9 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
   const rankTitle = rankInfo?.belt || 'NO BELT';
   const studentName = [contact.firstname, contact.lastname].filter(Boolean).join(' ').toUpperCase();
   const rankSub = `MEMBER: ${studentName}`;
-  const statusColors = getStatusColors(contact.membership_status, theme.colors);
+  const affiliationSummary = contact.affiliation_summary;
+  const statusColors = getAffiliationColors(affiliationSummary, theme.colors);
+  const affiliationLabel = getAffiliationLabel(affiliationSummary);
 
   const handleToggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -110,7 +112,7 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
             <TouchableRipple onPress={onShowStatusModal} style={styles.statusBadgeContainer}>
               <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
                 <Text style={[styles.statusBadgeText, { color: statusColors.text }]}>
-                  {getStatusLabel(contact.membership_status).toUpperCase()}
+                  {affiliationLabel}
                 </Text>
               </View>
             </TouchableRipple>
@@ -144,7 +146,7 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
             <TouchableRipple onPress={onShowStatusModal} style={styles.statusBadgeContainer}>
               <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
                 <Text style={[styles.statusBadgeText, { color: statusColors.text }]}>
-                  {getStatusLabel(contact.membership_status).toUpperCase()}
+                  {affiliationLabel}
                 </Text>
               </View>
             </TouchableRipple>

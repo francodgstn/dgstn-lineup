@@ -105,7 +105,7 @@ function useOrgTeams(orgId: string) {
               query(
                 collection(db, CONTACTS_COLLECTION),
                 where('teamId', '==', row.teamId),
-                where('org_membership_active', '==', true)
+                where('affiliation_summary.has_active', '==', true)
               )
             )
             row.activeMemberships = countSnap.data().count

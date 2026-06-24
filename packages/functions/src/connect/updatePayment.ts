@@ -114,10 +114,10 @@ export const updatePaymentRecord = onCall(async (request) => {
     const contactUpdate: Record<string, unknown> = { last_payment_at: now }
     if (source === 'byo') {
       // BYO docs carry the subscription linkage; re-apply it like the webhook does.
+      // Note: membership_expiration is NOT written to the contact — the subscription
+      // axis (subscription_type_id) is separate from the affiliation axis.
       const subTypeId = payment.subscription_type_id as string | undefined
-      const membershipExpiration = payment.membership_expiration ?? null
       if (subTypeId) contactUpdate.subscription_type_id = subTypeId
-      if (membershipExpiration) contactUpdate.membership_expiration = membershipExpiration
     }
     await db.collection(CONTACTS_COLLECTION).doc(newContactId).set(contactUpdate, { merge: true })
 

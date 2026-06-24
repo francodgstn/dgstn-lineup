@@ -8,13 +8,15 @@ import { useOrg, resolveOrgMembershipTerm } from '@/contexts/OrgContext'
 import { useLocale } from 'next-intl'
 
 /**
- * Returns the org-configured membership term (e.g. "Affiliation", "Lizenz") for the
- * current locale, falling back to "Membership" when not configured.
+ * Returns the org-configured affiliation term (e.g. "Affiliation", "Lizenz") for the
+ * current locale, falling back to "Affiliation" when not configured.
  *
  * Works in both org-admin pages (uses OrgContext) and team-admin pages (loads lazily
  * from the team's org_id via TanStack Query).
+ *
+ * Renamed from useMembershipTerm — reads the same Organization.membership_term field.
  */
-export function useMembershipTerm(): string {
+export function useAffiliationTerm(): string {
   const { org, membershipTerm: orgContextTerm } = useOrg()
   const { team } = useAuth()
   const locale = useLocale()
@@ -27,10 +29,9 @@ export function useMembershipTerm(): string {
     enabled: !!teamOrgId,
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
-      if (!teamOrgId) return 'Membership'
-      // Reuse cached ['org', orgId] data if available; otherwise fetch minimally
+      if (!teamOrgId) return 'Affiliation'
       const snap = await getDoc(doc(db, 'organizations', teamOrgId))
-      if (!snap.exists()) return 'Membership'
+      if (!snap.exists()) return 'Affiliation'
       const data = snap.data() as { membership_term?: Partial<Record<string, string>> }
       return resolveOrgMembershipTerm(data.membership_term, locale)
     },
@@ -39,5 +40,5 @@ export function useMembershipTerm(): string {
   // Priority: org context (already resolved) > team's org > default
   if (org) return orgContextTerm
   if (termFromTeamOrg) return termFromTeamOrg
-  return 'Membership'
+  return 'Affiliation'
 }

@@ -28,9 +28,9 @@ export type AutomationTriggerType =
   | 'booking_confirmed'
   | 'booking_no_show'
   | 'booking_cancelled'
-  | 'membership_status_changed'
   | 'acquisition_stage_changed'
   | 'subscription_changed'
+  | 'affiliation_changed'
   // Tier 1+2 — event trigger + optional Cloud Tasks delay
   | 'session_ended'
   // Inbound webhook — external system POSTs to a team's unique URL
@@ -48,7 +48,6 @@ export type AutomationCondition =
   | { type: 'inactivity_days'; value: number }
   | { type: 'inactivity_days_max'; value: number }
   | { type: 'acquisition_stage'; value: string }
-  | { type: 'membership_status'; value: string }
   | { type: 'subscription'; value: string }
   | { type: 'subscription_missing' } // legacy alias → subscription: none
   | { type: 'subscription_set' } // legacy alias → subscription: any
@@ -61,6 +60,12 @@ export type AutomationCondition =
   // Lifecycle
   | { type: 'days_since_created'; value: number } // created N+ days ago
   | { type: 'birthday_today' } // birthdate day+month matches today
+  // Affiliation axis conditions (summary-based, no subcollection read required)
+  | { type: 'has_affiliation' } // affiliation_summary.has_active === true
+  | { type: 'affiliation_type'; value: string } // affiliation_summary.types includes value
+  // NOTE: affiliation_status (per-affiliation status_id check) and affiliation_expires_in
+  // are deferred — they require reading the affiliations subcollection per contact in the
+  // scheduled scan path, which is expensive. The summary covers the primary use cases.
 
 export type AutomationAction =
   | { type: 'send_email'; templateId: string }
@@ -71,6 +76,10 @@ export type AutomationAction =
   | { type: 'notify_team'; subject: string; body: string }
   | { type: 'log_activity'; message: string }
   | { type: 'webhook'; url: string }
+  // Affiliation action — sets the status of the contact's affiliation of a given type.
+  // Targets the contact's FIRST affiliation whose type_key matches affiliation_type_key
+  // (or any affiliation if affiliation_type_key is omitted). Best-effort: no-op if none found.
+  | { type: 'set_affiliation_status'; status_id: string; affiliation_type_key?: string }
   // Plugin-contributed actions (namespaced: 'plugin:{pluginId}:{name}')
   | { type: PluginActionId; config?: Record<string, unknown> }
 
@@ -99,7 +108,6 @@ export interface ContactData {
   email?: string
   email_unsubscribed?: boolean
   acquisition_stage?: string
-  membership_status?: string
   subscription_type_id?: string
   subscription_status?: string
   total_sessions?: number
@@ -113,8 +121,8 @@ export interface ContactData {
   // Lifecycle conditions
   created_at?: Timestamp | { seconds: number; nanoseconds: number } | null
   birthdate?: Timestamp | { seconds: number; nanoseconds: number } | null
-  // Subscription renewal condition
-  membership_expiration?: Timestamp | { seconds: number; nanoseconds: number } | null
+  // Affiliation axis — summary maintained by onAffiliationWrite
+  affiliation_summary?: { has_active: boolean; types: string[]; org_ids: string[] }
   [key: string]: unknown
 }
 
@@ -283,8 +291,12 @@ export function evaluateContactConditions(
         if (contact.acquisition_stage !== cond.value) return false
         break
 
-      case 'membership_status':
-        if (contact.membership_status !== cond.value) return false
+      case 'has_affiliation':
+        if (contact.affiliation_summary?.has_active !== true) return false
+        break
+
+      case 'affiliation_type':
+        if (!contact.affiliation_summary?.types?.includes(cond.value)) return false
         break
 
       case 'subscription':
@@ -552,7 +564,7 @@ async function executeActionsForContact(
 
       // update_field — write a whitelisted contact field
       if (action.type === 'update_field') {
-        const ALLOWED_UPDATE_FIELDS = ['acquisition_stage', 'membership_status'] as const
+        const ALLOWED_UPDATE_FIELDS = ['acquisition_stage', 'notes', 'tags'] as const
         const field = action.field
         if (!(ALLOWED_UPDATE_FIELDS as readonly string[]).includes(field)) {
           console.log(
@@ -669,6 +681,64 @@ async function executeActionsForContact(
         executed++
       }
 
+      // set_affiliation_status — update the status (and active flag) of the
+      // contact's first affiliation matching the given type_key (or any affiliation
+      // if no type_key is specified). Best-effort: silently skips when no match.
+      if (action.type === 'set_affiliation_status') {
+        const { CONTACT_AFFILIATIONS_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES } =
+          await import('@linyup/shared')
+        const affiliationsSnap = await admin
+          .firestore()
+          .collection('contacts')
+          .doc(contactId)
+          .collection(CONTACT_AFFILIATIONS_SUBCOLLECTION)
+          .get()
+
+        const target = affiliationsSnap.docs.find((d) => {
+          if (!action.affiliation_type_key) return true // first any
+          return d.data().type_key === action.affiliation_type_key
+        })
+
+        if (target) {
+          const affData = target.data() as { issuer?: string; org_id?: string }
+          // Resolve active flag from status defs (org or default)
+          let statusDefs = DEFAULT_ORG_MEMBERSHIP_STATUSES
+          if (affData.issuer === 'org' && affData.org_id) {
+            try {
+              const orgStatusSnap = await admin
+                .firestore()
+                .collection('organizations')
+                .doc(affData.org_id as string)
+                .collection('membership_statuses')
+                .get()
+              if (!orgStatusSnap.empty) {
+                statusDefs = orgStatusSnap.docs.map(
+                  (d) => d.data() as (typeof DEFAULT_ORG_MEMBERSHIP_STATUSES)[number]
+                )
+              }
+            } catch {
+              // best-effort
+            }
+          }
+          const statusDef = statusDefs.find((s) => s.id === action.status_id)
+          const active = statusDef?.countsAsActive ?? false
+
+          await target.ref.update({
+            status_id: action.status_id,
+            active,
+            updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          })
+          executed++
+          console.log(
+            `[automationEngine] set_affiliation_status: contact=${contactId} affiliation=${target.id} status=${action.status_id}`
+          )
+        } else {
+          console.log(
+            `[automationEngine] set_affiliation_status: no matching affiliation for contact=${contactId} type_key=${action.affiliation_type_key ?? '(any)'}, skipping`
+          )
+        }
+      }
+
       // plugin action — dispatch to the plugin's registered handler
       if ((action.type as string).startsWith('plugin:')) {
         const handler = pluginActionHandlers[action.type as PluginActionId]
@@ -708,7 +778,7 @@ async function executeActionsForContact(
               lastname: contact.lastname,
               email: contact.email,
               acquisition_stage: contact.acquisition_stage,
-              membership_status: contact.membership_status,
+              affiliation_summary: contact.affiliation_summary ?? null,
               total_sessions: contact.total_sessions,
               tags: contact.tags ?? [],
             },

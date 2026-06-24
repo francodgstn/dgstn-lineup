@@ -28,7 +28,7 @@ import {
   CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, contactOverageForPlan,
   planHasHardContactCap,
 } from '@linyup/shared'
-import type { Contact, ContactGroup, MembershipStatus, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
+import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
 import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES } from '@linyup/shared'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups, expandGroupSelection, flattenGroupTree } from '@/plugins/contact-groups/hooks'
@@ -54,10 +54,6 @@ function initials(c: Contact) {
   return `${c.firstname?.[0] ?? ''}${c.lastname?.[0] ?? ''}`.toUpperCase() || '?'
 }
 
-const STATUS_VARIANT: Record<MembershipStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  guest: 'secondary', requested: 'outline', under_review: 'outline',
-  almost_ready: 'outline', active: 'default', expired: 'destructive',
-}
 
 const MEMBERSHIP_COLOR_CLASSES: Record<string, string> = {
   gray:   'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
@@ -272,8 +268,6 @@ function CreateContactDialog({
       source_detail: values.source_detail || null,
       ...stageData,
       acquisition_stage_updated_at: serverTimestamp(),
-      membership_status: 'guest',
-      membership_active: false,
       lead_acknowledged: false,
       createdBy: userId,
       created_at: serverTimestamp(),
@@ -431,7 +425,7 @@ function OverviewPanel({
   const t = useTranslations('Contacts')
   const [open, setOpen] = useState(false)
 
-  const activeCount = contacts.filter((c) => (c.org_membership_status ?? c.membership_status) === 'active').length
+  const activeCount = contacts.filter((c) => c.affiliation_summary?.has_active === true).length
   const trialBookedCount = contacts.filter((c) => c.acquisition_stage === 'trial_booked').length
 
   return (
@@ -506,7 +500,7 @@ function countActiveFilters(f: Filters): number {
 interface SavedQuery { id: string; name: string; filters: Filters; pinned?: boolean }
 
 const FILTER_PRESETS: SavedQuery[] = [
-  { id: 'p-active', name: 'Active members',  filters: { ...EMPTY_FILTERS, statuses: ['active'] } },
+  { id: 'p-active', name: 'Affiliated',       filters: { ...EMPTY_FILTERS, statuses: ['active'] } },
   { id: 'p-nosub',  name: 'No subscription', filters: { ...EMPTY_FILTERS, subscriptions: ['none'] } },
   { id: 'p-trials', name: 'Trials',          filters: { ...EMPTY_FILTERS, stages: ['trial_booked', 'trial_attended'] } },
   { id: 'p-alerts', name: 'Has alerts',      filters: { ...EMPTY_FILTERS, hasAlerts: true } },
@@ -777,7 +771,10 @@ function FilterChips({
 
   const STAGE_OPTS  = (ACQUISITION_STAGES as readonly AcquisitionStage[]).map((v) => ({ value: v, label: t(`stage_${v}` as Parameters<typeof t>[0]) }))
   const SOURCE_OPTS = (CONTACT_SOURCES as readonly ContactSource[]).map((v) => ({ value: v, label: t(`source_${v}` as Parameters<typeof t>[0]) }))
-  const STATUS_OPTS = (['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired'] as MembershipStatus[]).map((v) => ({ value: v, label: t(`status_${v}`) }))
+  const AFFIL_OPTS = [
+    { value: 'active', label: t('filterAffiliationActive') },
+    { value: 'none', label: t('filterAffiliationNone') },
+  ]
   const SUB_OPTS    = [{ value: 'none', label: t('filterSubscriptionNone') }, ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name }))]
   const INACTIVITY_OPTS: { value: InactivityPreset; label: string }[] = [
     { value: 'never', label: t('filterInactivityNever') },
@@ -862,9 +859,9 @@ function FilterChips({
           onToggle={() => onChange({ ...filters, sources: toggle(filters.sources, o.value) })} />)}
       </FilterChip>
 
-      <FilterChip label={t('filterStatus')} activeLabel={chip(filters.statuses, STATUS_OPTS, 'statuses')}
+      <FilterChip label={t('filterAffiliation')} activeLabel={chip(filters.statuses, AFFIL_OPTS, 'statuses')}
         isActive={filters.statuses.length > 0} onClear={() => onChange({ ...filters, statuses: [] })}>
-        {STATUS_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.statuses.includes(o.value)}
+        {AFFIL_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.statuses.includes(o.value)}
           onToggle={() => onChange({ ...filters, statuses: toggle(filters.statuses, o.value) })} />)}
       </FilterChip>
 
@@ -971,14 +968,12 @@ function ContactRow({
   selected,
   onSelect,
   rankingSystems = [],
-  statusDefs,
 }: {
   contact: Contact
   selectable: boolean
   selected: boolean
   onSelect: (id: string) => void
   rankingSystems?: RankingSystem[]
-  statusDefs?: OrgMembershipStatusDef[]
 }) {
   const router = useRouter()
   const t = useTranslations('Contacts')
@@ -1027,35 +1022,22 @@ function ContactRow({
               </span>
             )}
           </p>
-          {/* Line 3: type + membership/subscription chips */}
-          {(() => {
-            // Prefer org_membership_status; fall back to legacy membership_status
-            const defs = statusDefs ?? DEFAULT_ORG_MEMBERSHIP_STATUSES
-            const orgDef = contact.org_membership_status
-              ? defs.find((s) => s.id === contact.org_membership_status) ?? null
-              : null
-            return (
-              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                {contact.acquisition_stage && (
-                  <Badge variant="outline" className="text-xs">{t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])}</Badge>
-                )}
-                {orgDef ? (
-                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${MEMBERSHIP_COLOR_CLASSES[orgDef.color] ?? MEMBERSHIP_COLOR_CLASSES.gray}`}>
-                    {orgDef.label}
-                  </span>
-                ) : contact.membership_status ? (
-                  <Badge variant={STATUS_VARIANT[contact.membership_status]} className="text-xs">
-                    {t(`status_${contact.membership_status}`)}
-                  </Badge>
-                ) : null}
-                {contact.subscription_type_name && (
-                  <Badge variant="secondary" className="text-xs font-normal">
-                    {contact.subscription_type_name}
-                  </Badge>
-                )}
-              </div>
-            )
-          })()}
+          {/* Line 3: stage + affiliation + subscription chips */}
+          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+            {contact.acquisition_stage && (
+              <Badge variant="outline" className="text-xs">{t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])}</Badge>
+            )}
+            {contact.affiliation_summary?.has_active && (
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${MEMBERSHIP_COLOR_CLASSES.green}`}>
+                {t('affiliationChip')}
+              </span>
+            )}
+            {contact.subscription_type_name && (
+              <Badge variant="secondary" className="text-xs font-normal">
+                {contact.subscription_type_name}
+              </Badge>
+            )}
+          </div>
         </div>
       </button>
 
@@ -1494,7 +1476,6 @@ export default function ContactsPage() {
   const groupsEnabled = isInstalled('contact-groups')
   const { data: contactGroups = [] } = useContactGroups(groupsEnabled ? currentTeamId : null)
   const inOrg = !!team?.org_id
-  const { data: statusDefs } = useOrgMembershipStatuses(team?.org_id)
   const { data: places = [] } = usePlaces(currentTeamId, team?.org_id ?? null)
   const primaryPlace = places.find((p) => p.scope === 'team' && p.isPrimary)
 
@@ -1549,10 +1530,16 @@ export default function ContactsPage() {
     if (f.sources.length > 0)
       result = result.filter((c) => c.source && f.sources.includes(c.source))
 
+    // Affiliation filter: statuses now carries 'active' (has_active) or 'none' (not affiliated)
     if (f.statuses.length > 0)
       result = result.filter((c) => {
-        const status = c.org_membership_status ?? c.membership_status
-        return status != null && f.statuses.includes(status)
+        if (f.statuses.includes('active') && !f.statuses.includes('none')) {
+          return c.affiliation_summary?.has_active === true
+        }
+        if (f.statuses.includes('none') && !f.statuses.includes('active')) {
+          return !c.affiliation_summary?.has_active
+        }
+        return true // both selected = no filter
       })
 
     if (f.subscriptions.length > 0) {
@@ -1730,7 +1717,7 @@ export default function ContactsPage() {
             <p className="text-sm text-muted-foreground mt-0.5">
               {t('subtitle', {
                 total: active.length + archived.length,
-                active: active.filter((c) => (c.org_membership_status ?? c.membership_status) === 'active').length,
+                active: active.filter((c) => c.affiliation_summary?.has_active === true).length,
               })}
             </p>
           )}
@@ -1912,7 +1899,6 @@ export default function ContactsPage() {
               selected={selected.has(c.id)}
               onSelect={toggleSelect}
               rankingSystems={rankingSystems}
-              statusDefs={statusDefs}
             />
           ))}
 

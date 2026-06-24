@@ -47,6 +47,17 @@
 
 import admin from 'firebase-admin'
 import { applicationDefault } from 'firebase-admin/app'
+import {
+  CONTACT_AFFILIATIONS_SUBCOLLECTION,
+  AFFILIATION_TYPES_SUBCOLLECTION,
+  ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
+  DEFAULT_ORG_MEMBERSHIP_STATUSES,
+  orgAffiliationTypes,
+  teamAffiliationTypes,
+  buildAffiliationDoc,
+  buildAffiliationSummary,
+  statusCountsAsActive,
+} from './lib/affiliations'
 
 const PROJECT_ID = 'linyup-staging'
 
@@ -582,6 +593,18 @@ async function seedTeam(opts: TeamSeed) {
   const automationsEnabled = plan !== 'coach'
   const gamificationEnabled = plan !== 'coach'
 
+  // ── affiliation config ───────────────────────────────────────────────────────
+  // Studio/Org teams enable the affiliation axis. Org-member teams issue at the
+  // ORG level (federation licence + club); standalone studios issue a team-local
+  // club membership. Coach plan stays single-surface (no axis).
+  const affiliationsEnabled = plan === 'studio' || plan === 'organization'
+  const affiliationTypeDefs = affiliationsEnabled
+    ? orgId
+      ? orgAffiliationTypes(orgId)
+      : teamAffiliationTypes()
+    : []
+  const clubAffiliationType = affiliationTypeDefs.find((t) => t.key === 'club') ?? null
+
   // ── subscription types ──────────────────────────────────────────────────────
   const subscriptionTypeDefs =
     plan === 'coach'
@@ -785,7 +808,10 @@ async function seedTeam(opts: TeamSeed) {
       plan,
       plan_status: planStatus,
       ...(trialEndsAt ? { trial_ends_at: trialEndsAt } : {}),
-      ...(orgId ? { org_id: orgId, ranking_systems: [] } : { ranking_systems: rankingSystemDefs }),
+      ...(affiliationsEnabled ? { affiliations_enabled: true } : {}),
+      ...(orgId
+        ? { org_id: orgId, organization_ids: [orgId], ranking_systems: [] }
+        : { ranking_systems: rankingSystemDefs }),
       settings: { gamification: gamificationSettings, teamEmail: email },
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
@@ -883,6 +909,16 @@ async function seedTeam(opts: TeamSeed) {
         },
         { merge: true }
       )
+  }
+
+  // ── affiliation type catalog ──────────────────────────────────────────────────
+  // Org-member teams write the ORG catalog (idempotent set); standalone studios
+  // write a team-local 'club' type.
+  for (const at of affiliationTypeDefs) {
+    const parent = orgId
+      ? db.collection('organizations').doc(orgId)
+      : db.collection('teams').doc(teamId)
+    await parent.collection(AFFILIATION_TYPES_SUBCOLLECTION).doc(at.id).set(at)
   }
 
   // ── activities (group classes + coaching) ─────────────────────────────────────
@@ -1270,6 +1306,32 @@ async function seedTeam(opts: TeamSeed) {
     const baseTags = c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : []
     const tags = c.type === 'external' ? [...baseTags, 'external'] : baseTags
 
+    // ── affiliation (replaces the old membership_* / org_membership_* fields) ──
+    // Issuer 'org' for org-member teams (carries org_id), else 'team'. External
+    // and guest contacts hold no affiliation. `active` is denormalized from status.
+    const writeAffiliation =
+      affiliationsEnabled &&
+      clubAffiliationType !== null &&
+      c.type !== 'external' &&
+      c.status !== 'guest'
+    const affiliationDoc = writeAffiliation
+      ? buildAffiliationDoc({
+          teamId,
+          type: clubAffiliationType!,
+          statusId: c.status,
+          orgId,
+          // No expiration in seed data — derive a plausible validity window.
+          validUntil: statusCountsAsActive(c.status)
+            ? ts(daysFromNow(300))
+            : c.status === 'expired'
+              ? ts(daysFromNow(-20))
+              : undefined,
+          validFrom: ts(daysFromNow(-200)),
+          createdAt: createdTs,
+          createdBy: 'seed',
+        })
+      : null
+
     await db
       .collection('contacts')
       .doc(id)
@@ -1282,11 +1344,6 @@ async function seedTeam(opts: TeamSeed) {
         gender: c.gender,
         birthplace: c.birthplace,
         birthdate: birthdate ? ts(birthdate) : null,
-        membership_status: c.status,
-        membership_active: c.status === 'active',
-        ...(orgId
-          ? { org_membership_active: c.status === 'active', org_membership_status: c.status }
-          : {}),
         total_sessions: c.totalSessions,
         last_session_at:
           c.totalSessions > 0 ? ts(daysFromNow(-Math.floor(seededRand(seed + 'ls') * 14))) : null,
@@ -1300,6 +1357,10 @@ async function seedTeam(opts: TeamSeed) {
         deleted_at: null,
         archived_at: null,
         ...acquisition,
+        // Best-effort affiliation summary (the trigger recomputes this live).
+        ...(affiliationDoc
+          ? { affiliation_summary: buildAffiliationSummary([affiliationDoc as { active: boolean; type_key?: string; org_id?: string }]) }
+          : {}),
         ...(gamificationEnabled
           ? {
               current_month_score: monthScore,
@@ -1325,6 +1386,15 @@ async function seedTeam(opts: TeamSeed) {
         ...(rank != null ? { ranks: { [rankSystemId]: rank } } : {}),
         tags,
       })
+
+    if (affiliationDoc) {
+      await db
+        .collection('contacts')
+        .doc(id)
+        .collection(CONTACT_AFFILIATIONS_SUBCOLLECTION)
+        .doc(`${id}-aff-club`)
+        .set(affiliationDoc)
+    }
 
     // subscription history
     if (sub) {
@@ -2089,6 +2159,16 @@ async function seedOrg(opts: {
       created: ts(daysFromNow(-260)),
       createdBy: adminUid,
     })
+
+  // Org membership statuses (reused as affiliation statuses for org-issued affiliations).
+  for (const st of DEFAULT_ORG_MEMBERSHIP_STATUSES) {
+    await db
+      .collection('organizations')
+      .doc(orgId)
+      .collection(ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION)
+      .doc(st.id)
+      .set(st)
+  }
 
   await db.collection('organizations').doc(orgId).collection('org_members').doc(adminUid).set({
     userId: adminUid,

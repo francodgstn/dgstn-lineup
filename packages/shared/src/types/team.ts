@@ -232,8 +232,15 @@ export interface Team {
     connectModel?: ConnectOnboardingModel
     connectStatus?: ConnectAccountStatus
   }
-  // Organization membership
+  // Organization membership. `org_id` is the legacy single-parent link (still the
+  // primary). `organization_ids` is the multi-org set (DB structure only this round
+  // — a team may belong to more than one org; the OrgTeam join is the source of
+  // truth, this mirrors it for affiliation lookups). Keep both in sync going forward.
   org_id?: string
+  organization_ids?: string[]
+  // Affiliation axis opt-in (Studio tier up — see planSupportsAffiliations). Off by
+  // default; gates the affiliation UI + callables.
+  affiliations_enabled?: boolean
   // Which public surface `/public/{slug}` resolves to. Defaults to 'bio-link'
   // (always present, every plan) when unset. See PublicSurface.
   default_public_surface?: PublicSurface

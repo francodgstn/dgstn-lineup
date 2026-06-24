@@ -34,6 +34,14 @@
 
 import admin from 'firebase-admin'
 import { applicationDefault } from 'firebase-admin/app'
+import {
+  CONTACT_AFFILIATIONS_SUBCOLLECTION,
+  AFFILIATION_TYPES_SUBCOLLECTION,
+  teamAffiliationTypes,
+  buildAffiliationDoc,
+  buildAffiliationSummary,
+  statusCountsAsActive,
+} from './lib/affiliations'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // On the emulator, write into the namespace the web app + emulator use
@@ -1553,6 +1561,8 @@ async function seedDemoTeam(profile: SectorProfile) {
       plan: 'studio',
       plan_status: 'active',
       default_currency: 'CHF',
+      // Standalone Studio demo teams enable the affiliation axis (team-local 'club').
+      affiliations_enabled: true,
       ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],
       settings: { gamification: gamificationSettings, teamEmail: email },
       bioLinkTheme: 'light',
@@ -1638,6 +1648,18 @@ async function seedDemoTeam(profile: SectorProfile) {
       },
       { merge: true }
     )
+
+  // ── affiliation type catalog (team-local 'club') ──────────────────────────
+  const affiliationTypeDefs = teamAffiliationTypes()
+  const clubAffiliationType = affiliationTypeDefs.find((t) => t.key === 'club')!
+  for (const at of affiliationTypeDefs) {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection(AFFILIATION_TYPES_SUBCOLLECTION)
+      .doc(at.id)
+      .set(at)
+  }
 
   // ── activities (group classes + coaching) ─────────────────────────────────
   const actIds = activities.map((_, i) => `${teamId}-act-${i}`)
@@ -1986,6 +2008,27 @@ async function seedDemoTeam(profile: SectorProfile) {
     const baseTags = c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : []
     const tags = c.type === 'external' ? [...baseTags, 'external'] : baseTags
 
+    // ── affiliation (replaces the old membership_* fields) ───────────────────
+    // Standalone studio → issuer 'team', team-local 'club' type. External and
+    // guest contacts hold no affiliation.
+    const writeAffiliation = c.type !== 'external' && c.status !== 'guest'
+    const affiliationDoc = writeAffiliation
+      ? buildAffiliationDoc({
+          teamId,
+          type: clubAffiliationType,
+          statusId: c.status,
+          // No expiration in seed data — derive a plausible validity window.
+          validUntil: statusCountsAsActive(c.status)
+            ? ts(daysFromNow(300))
+            : c.status === 'expired'
+              ? ts(daysFromNow(-20))
+              : undefined,
+          validFrom: ts(daysFromNow(-200)),
+          createdAt: createdTs,
+          createdBy: 'seed',
+        })
+      : null
+
     await db
       .collection('contacts')
       .doc(id)
@@ -1998,8 +2041,6 @@ async function seedDemoTeam(profile: SectorProfile) {
         gender: c.gender,
         birthplace: c.birthplace,
         birthdate: birthdate ? ts(birthdate) : null,
-        membership_status: c.status,
-        membership_active: c.status === 'active',
         total_sessions: c.totalSessions,
         last_session_at:
           c.totalSessions > 0 ? ts(daysFromNow(-Math.floor(seededRand(seed + 'ls') * 14))) : null,
@@ -2013,6 +2054,10 @@ async function seedDemoTeam(profile: SectorProfile) {
         deleted_at: null,
         archived_at: null,
         ...acquisition,
+        // Best-effort affiliation summary (the trigger recomputes this live).
+        ...(affiliationDoc
+          ? { affiliation_summary: buildAffiliationSummary([affiliationDoc as { active: boolean; type_key?: string; org_id?: string }]) }
+          : {}),
         current_month_score: monthScore,
         current_streak: streak,
         max_streak: maxStreak,
@@ -2036,6 +2081,15 @@ async function seedDemoTeam(profile: SectorProfile) {
         ...(rank != null && rankSystemId ? { ranks: { [rankSystemId]: rank } } : {}),
         tags,
       })
+
+    if (affiliationDoc) {
+      await db
+        .collection('contacts')
+        .doc(id)
+        .collection(CONTACT_AFFILIATIONS_SUBCOLLECTION)
+        .doc(`${id}-aff-club`)
+        .set(affiliationDoc)
+    }
 
     // subscription history
     if (sub) {

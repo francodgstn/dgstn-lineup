@@ -1,4 +1,4 @@
-import { ContactResidence, MembershipStatus } from '../types';
+import { AffiliationSummary, ContactResidence, MembershipStatus } from '../types';
 
 // Rank / belt configuration
 export const RANKS = [
@@ -175,4 +175,25 @@ export const formatResidence = (residence?: ContactResidence | null) => {
   const lines = [firstLine, secondLine, thirdLine].filter(Boolean);
 
   return lines.length ? lines.join(',') : null;
+};
+
+// ── Affiliation helpers ──────────────────────────────────────────────────────
+
+/** Returns a short display label for the affiliation badge on the card. */
+export const getAffiliationLabel = (summary?: AffiliationSummary): string => {
+  if (!summary || !summary.has_active) return 'NOT AFFILIATED';
+  if (summary.types.length === 1) return summary.types[0].replace(/_/g, ' ').toUpperCase();
+  return `AFFILIATED (${summary.types.length})`;
+};
+
+/** Returns badge background/text colors for the affiliation badge. */
+export const getAffiliationColors = (
+  summary?: AffiliationSummary,
+  themeColors?: any,
+): { bg: string; text: string } => {
+  if (summary?.has_active) return { bg: '#4CAF50', text: '#FFFFFF' };
+  return {
+    bg: themeColors?.surfaceVariant ?? '#E8E8E8',
+    text: themeColors?.onSurfaceVariant ?? '#555555',
+  };
 };

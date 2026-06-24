@@ -108,7 +108,9 @@ async function resolveContactId(
   return null
 }
 
-/** Write the membership fields onto a known contact + an activity-log entry. */
+/** Write the subscription fields onto a known contact + an activity-log entry.
+ * Note: membership_expiration is NOT written here — the subscription axis
+ * (subscription_type_id etc.) is separate from the affiliation axis. */
 async function writeContactMembership(
   teamId: string,
   contactId: string,
@@ -125,7 +127,8 @@ async function writeContactMembership(
     subscription_amount: Math.round(opts.amountRappen) / 100, // contact stores major units
     subscription_type_updated_at: FieldValue.serverTimestamp(),
   }
-  if (opts.membershipExpiration) update.membership_expiration = opts.membershipExpiration
+  // membership_expiration intentionally not written — subscription axis only
+  void opts.membershipExpiration
   await db.collection(CONTACTS_COLLECTION).doc(contactId).set(update, { merge: true })
   await db
     .collection(CONTACTS_COLLECTION)

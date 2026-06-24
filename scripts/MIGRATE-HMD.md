@@ -131,7 +131,7 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | `teams` | Copied + `plan: 'studio'`, `organizationId: 'hmd'` added |
 | `activities` | Copied + new fields (`slug`, `type`, `isActive`, `level`) |
 | `session_series` | Copied + recurrence field names normalised |
-| `contacts` + subcollections | Copied; `rank → ranks.hmd`; `notes` dropped; `type` → acquisition axis (`acquisition_stage`/`entry` + milestone timestamps, `external` → `external` tag); `acquisition.channel` → `source` (+ `source_detail`), `acquisition.acknowledged` → `lead_acknowledged` |
+| `contacts` + subcollections | Copied; `rank → ranks.hmd`; `notes` dropped; `type` → acquisition axis (`acquisition_stage`/`entry` + milestone timestamps, `external` → `external` tag); `acquisition.channel` → `source` (+ `source_detail`), `acquisition.acknowledged` → `lead_acknowledged`; membership fields → **affiliations** (see below) |
 | `sessions` + participants/bookings | Copied + activity name/type enriched |
 | `events` + invitations/attendees | Copied as `scope='org', orgId='hmd', teamId=null` |
 | Global `checkins` (event check-ins) | Migrated from the top-level `checkins` collection where `event.id == eventId`; doc IDs preserved; `completed_checkins_count` set on each event doc |
@@ -186,8 +186,39 @@ Review those counts against the real source data and adjust `KEYWORD_MAP` in
 
 ---
 
+## Affiliations (pass 00 + pass 05)
+
+Phase 2 replaced the single-valued membership fields on the contact doc with a
+multi-valued **affiliation** set (`contacts/{id}/affiliations`). The migration no
+longer writes any of the removed fields (`membership_status`, `membership_active`,
+`membership_expiration`, `org_membership_status`, `org_membership_active`,
+`org_membership_expiration`).
+
+Mapping (`scripts/migration/transforms/contacts.ts`):
+
+| Source field (non-`guest`) | → Affiliation |
+|---|---|
+| `org_membership_status` | `issuer: 'org'` (HMD org `hmd`), type `club`, `status_id` = the value, `active` = (`active`-status), `valid_until` ← `org_membership_expiration` |
+| `membership_status` | `issuer: 'team'`, type `club`, `status_id` = the value, `active` = (`active`-status), `valid_until` ← `membership_expiration` |
+| `guest` / none | no affiliation |
+
+Soft-deleted contacts (`deleted_at != null`) are coerced to `status_id: 'expired'`
+so they never count as active. The transform derives the affiliation docs and
+attaches them under the reserved `__affiliations` key; **pass 05** peels that off
+and writes each into `contacts/{id}/affiliations/{id}-aff-N`, then persists the
+contact doc without the key. A best-effort `affiliation_summary` is set on the
+contact (the live `onAffiliationWrite` trigger recomputes it).
+
+Catalog + statuses: **pass 00** seeds the org-level `club` affiliation type and
+the reused `membership_statuses` (`DEFAULT_ORG_MEMBERSHIP_STATUSES`) under
+`organizations/hmd`. **Pass 05** seeds a team-local `club` affiliation type per
+team and flags each team `affiliations_enabled: true` (the `org_id` /
+`organization_ids: ['hmd']` link is set in pass 02).
+
+---
+
 > **Online Courses / public Space:** courses don't exist in hmd-lineup, so there is nothing
 > to migrate. The web Space + course gating only depend on already-migrated contact fields —
-> `email`, `membership_active`, and `subscription_type_id` — so contacts can log in and unlock
-> gated courses. The verify pass already spot-checks contacts; confirm migrated contacts have
-> a non-empty `email` (required for the passwordless contact login).
+> `email` and `subscription_type_id` — so contacts can log in and unlock gated courses. The
+> verify pass already spot-checks contacts; confirm migrated contacts have a non-empty
+> `email` (required for the passwordless contact login).

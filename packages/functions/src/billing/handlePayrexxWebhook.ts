@@ -219,13 +219,14 @@ export const handlePayrexxWebhook = onRequest(
           processed_at: FieldValue.serverTimestamp(),
         })
 
-        // Apply the membership to the contact ONLY when uniquely assigned (same
+        // Apply the subscription to the contact ONLY when uniquely assigned (same
         // transaction for atomicity). Unassigned payments touch no contact.
+        // Note: membership_expiration is NOT written to the contact — the subscription
+        // axis (subscription_type_id) is separate from the affiliation axis.
         if (contactId) {
           const contactUpdate: Record<string, unknown> = {
             last_payment_at: FieldValue.serverTimestamp(),
           }
-          if (membershipExpiration) contactUpdate.membership_expiration = membershipExpiration
           if (subscriptionTypeId) contactUpdate.subscription_type_id = subscriptionTypeId
           tx.update(db.collection(CONTACTS_COLLECTION).doc(contactId), contactUpdate)
         }

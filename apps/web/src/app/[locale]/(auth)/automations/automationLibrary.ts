@@ -551,8 +551,11 @@ Il team {{teamName}}`,
       },
     },
     rule: {
-      trigger: { type: 'membership_status_changed' },
-      conditions: [{ type: 'membership_status', value: 'expired' }],
+      // NOTE: precise "affiliation expired" detection needs the deferred
+      // affiliation_status / affiliation_expires_in conditions. Until then this
+      // fires on any affiliation change for an affiliated contact.
+      trigger: { type: 'affiliation_changed' },
+      conditions: [{ type: 'has_affiliation' }],
       actions: [{ type: 'send_email', template_key: 'lib_membership_expired' }],
     },
   },

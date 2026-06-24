@@ -29,6 +29,9 @@ export { generateApiKey } from './auth/generateApiKey'
 export { beforeSignup } from './auth/beforeSignup'
 export { onSignupInviteCreated } from './auth/onSignupInviteCreated'
 
+// Affiliations
+export { upsertAffiliation, removeAffiliation, approveAffiliation } from './affiliations'
+
 // Sync triggers
 export { syncTeamPublicProfile } from './sync/syncTeamPublicProfile'
 export { syncSessionPublicProfile } from './sync/syncSessionPublicProfile'
@@ -43,6 +46,7 @@ export { onMemberSubscriptionWrite } from './sync/onMemberSubscriptionWrite'
 export { onSessionUpdate } from './sync/onSessionUpdate'
 export { onActivityTypeChange } from './sync/onActivityTypeChange'
 export { onInstalledPluginStatusChange } from './sync/onInstalledPluginStatusChange'
+export { onAffiliationWrite } from './sync/onAffiliationWrite'
 
 // Booking
 export {

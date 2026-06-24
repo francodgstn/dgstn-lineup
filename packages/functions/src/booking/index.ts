@@ -610,8 +610,6 @@ export const bookSession = onCall(async (request) => {
         acquisition_stage_updated_at: FieldValue.serverTimestamp(),
         entry: 'booking',
         teamId: data.teamId,
-        membership_status: 'guest',
-        membership_active: false,
         archived_at: null,
         deleted_at: null,
         created_at: FieldValue.serverTimestamp(),

@@ -462,7 +462,9 @@ export const weeklyReports = onSchedule(
         const active_contacts_count = contacts.length
 
         const contacts_count_by_stage = countByField(contacts, 'acquisition_stage')
-        const contacts_count_by_membership_status = countByField(contacts, 'membership_status')
+        const contacts_with_active_affiliation = contacts.filter(
+          (c) => (c.affiliation_summary as { has_active?: boolean } | undefined)?.has_active === true
+        ).length
         const contacts_count_by_subscription_type = countByField(contacts, 'subscription_type_id')
         const contacts_count_by_recurrence = countByField(
           contacts.filter((c) => c.subscription_type_id),
@@ -522,7 +524,7 @@ export const weeklyReports = onSchedule(
           generated_at: FieldValue.serverTimestamp(),
           active_contacts_count,
           contacts_count_by_stage,
-          contacts_count_by_membership_status,
+          contacts_with_active_affiliation,
           contacts_count_by_subscription_type,
           contacts_count_by_recurrence,
           sessions_count,

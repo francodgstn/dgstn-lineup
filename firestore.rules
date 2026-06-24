@@ -401,6 +401,13 @@ service cloud.firestore {
         allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
       }
 
+      // Team-local affiliation type catalog (club / licence / grading). Org-wide
+      // types live under organizations/{orgId}/affiliation_types.
+      match /affiliation_types/{typeId} {
+        allow read: if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+      }
+
       // Products subcollection (team-defined sellable products — merch/equipment).
       // The public storefront reads the world-readable public_profile summary, never
       // this collection; the checkout callable resolves products via the Admin SDK.
@@ -569,16 +576,13 @@ service cloud.firestore {
                    || isSelfContact(contactId)
                    || sharesContactEmail(resource)
                    || isOrgAdminOfTeam(resource.data.teamId);
-      allow update: if (belongsToUserTeam(resource)
+      // Belonging now lives in the affiliations subcollection (governed by the
+      // catch-all below + the upsertAffiliation callable's org-lock guard), so the
+      // old org_membership_* field gate is gone.
+      allow update: if belongsToUserTeam(resource)
                        || hasRole('admin')
                        || (isSelfContact(contactId)
-                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at'])))
-                      && (
-                        !request.resource.data.diff(resource.data).affectedKeys()
-                          .hasAny(['org_membership_status', 'org_membership_active', 'org_membership_expiration'])
-                        || orgMembershipWriteAllowed(resource.data.teamId)
-                        || hasRole('admin')
-                      );
+                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at']));
       allow delete: if belongsToUserTeam(resource) || hasRole('admin');
 
       // Subscription history subcollection — full CRUD for team members
@@ -1026,6 +1030,17 @@ service cloud.firestore {
 
       match /membership_statuses/{statusId} {
         allow read:   if isOrgMember(orgId);
+        allow write:  if hasOrgRole(orgId, 'org_admin');
+        allow delete: if hasOrgRole(orgId, 'org_admin');
+      }
+
+      // Org-wide affiliation type catalog — shared down to every sub-studio (read),
+      // managed by org admins. Sub-team members read via their current team's org_id
+      // so the affiliation type dropdown can populate (mirrors org_places).
+      match /affiliation_types/{typeId} {
+        allow read:   if isOrgMember(orgId)
+                      || (isAuthed()
+                          && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);
         allow write:  if hasOrgRole(orgId, 'org_admin');
         allow delete: if hasOrgRole(orgId, 'org_admin');
       }

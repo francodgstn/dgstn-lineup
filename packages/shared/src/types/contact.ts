@@ -1,12 +1,5 @@
 import type { Timestamp } from './common'
-
-export type MembershipStatus =
-  | 'guest'
-  | 'requested'
-  | 'under_review'
-  | 'almost_ready'
-  | 'active'
-  | 'expired'
+import type { AffiliationSummary } from './affiliation'
 
 // ─── Acquisition axis (sticky, event-named funnel) ───────────────────────────
 // Single ordered, OPEN vocab. The stage is a high-water milestone: it advances on
@@ -98,16 +91,12 @@ export interface Contact {
   // "New contact seen" UX flag (replaces the old acquisition.acknowledged).
   lead_acknowledged?: boolean
 
-  // Team-level membership (legacy — replaced by the affiliations subcollection in
-  // Phase 2; left intact for now so Phase 1 stays self-contained).
-  membership_status?: MembershipStatus
-  membership_active?: boolean
-  membership_expiration?: Timestamp
+  // ─── Affiliation axis (belonging) ──────────────────────────────────────────
+  // Affiliations themselves live in the contacts/{id}/affiliations subcollection
+  // (a contact may hold several). This denormalized rollup is what the contacts
+  // list + Firestore rules read; maintained by the onAffiliationWrite trigger.
+  affiliation_summary?: AffiliationSummary
 
-  // Org-level membership (federation / affiliation)
-  org_membership_status?: string
-  org_membership_active?: boolean
-  org_membership_expiration?: Timestamp
   // Subscription (one active subscription per contact)
   subscription_type_id?: string
   subscription_type_name?: string

@@ -11,15 +11,6 @@ const ACQUISITION_STAGE_LABELS: Record<string, string> = {
   joined: 'Joined',
 }
 
-const MEMBERSHIP_STATUS_LABELS: Record<string, string> = {
-  guest: 'Guest',
-  requested: 'Requested',
-  being_checked: 'Being Checked',
-  almost_ready: 'Almost Ready',
-  active: 'Active',
-  expired: 'Expired',
-}
-
 const URL_PLACEHOLDER_KEYS = /\{\{(bookingUrl|membershipUrl|bioLinkUrl|websiteUrl|reviewUrl)\}\}/g
 
 type ContactLike = Record<string, unknown>
@@ -57,12 +48,6 @@ export function substituteVariables(
       '{{acquisition_stage}}',
       ACQUISITION_STAGE_LABELS[(contact.acquisition_stage as string) || ''] ||
         (contact.acquisition_stage as string) ||
-        ''
-    )
-    .replaceAll(
-      '{{membership_status}}',
-      MEMBERSHIP_STATUS_LABELS[(contact.membership_status as string) || ''] ||
-        (contact.membership_status as string) ||
         ''
     )
     .replaceAll('{{sessions_count}}', String((contact.total_sessions as number) ?? 0))

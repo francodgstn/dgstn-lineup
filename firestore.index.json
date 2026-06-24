@@ -81,7 +81,21 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "org_membership_active",
+          "fieldPath": "affiliation_summary.has_active",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "affiliations",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "valid_until",
           "order": "ASCENDING"
         }
       ]

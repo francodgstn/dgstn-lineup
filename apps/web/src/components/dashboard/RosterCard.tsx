@@ -15,14 +15,6 @@ const TYPE_CONFIG = [
   { key: 'joined',         label: 'Joined',          color: '#6366F1' },
 ]
 
-const MEMBERSHIP_STATUS_CONFIG = [
-  { key: 'active',        label: 'Active',        color: '#10B981' },
-  { key: 'almost_ready',  label: 'Almost Ready',  color: '#8B5CF6' },
-  { key: 'being_checked', label: 'Being Checked', color: '#3B82F6' },
-  { key: 'requested',     label: 'Requested',     color: '#9CA3AF' },
-  { key: 'expired',       label: 'Expired',       color: '#EF4444' },
-  { key: 'guest',         label: 'Guest',         color: '#F59E0B' },
-]
 
 const SUB_COLORS = ['#6366F1','#10B981','#F59E0B','#8B5CF6','#0EA5E9','#EF4444','#84CC16','#6B21A8']
 
@@ -79,10 +71,12 @@ export function RosterCard({ contacts, subscriptionTypes = [] }: Props) {
     .map((t) => ({ name: t.label, value: active.filter((c) => c.acquisition_stage === t.key).length, color: t.color }))
     .filter((d) => d.value > 0)
 
-  // Membership status view
-  const membershipData = MEMBERSHIP_STATUS_CONFIG
-    .map((s) => ({ name: s.label, value: active.filter((c) => c.membership_status === s.key).length, color: s.color }))
-    .filter((d) => d.value > 0)
+  // Affiliation view — split by has_active from affiliation_summary
+  const affiliatedCount = active.filter((c) => c.affiliation_summary?.has_active).length
+  const membershipData = [
+    { name: 'Affiliated', value: affiliatedCount, color: '#10B981' },
+    { name: 'Not affiliated', value: active.length - affiliatedCount, color: '#9CA3AF' },
+  ].filter((d) => d.value > 0)
 
   // Subscription view
   const subData = subscriptionTypes.map((st, i) => ({

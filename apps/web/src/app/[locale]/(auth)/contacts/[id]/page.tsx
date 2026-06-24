@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, use, useMemo } from 'react'
+import { useState, use, useMemo, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useRouter, Link } from '@/i18n/navigation'
@@ -20,7 +20,8 @@ import {
   Timestamp,
   limit,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { db, functions } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
 import { formatCurrency } from '@/lib/format'
 import { useAuth } from '@/contexts/AuthContext'
 import { Badge } from '@/components/ui/badge'
@@ -56,7 +57,6 @@ import {
 } from '@linyup/shared'
 import type {
   Contact,
-  MembershipStatus,
   AcquisitionStage,
   ContactEntry,
   ContactSource,
@@ -69,11 +69,20 @@ import type {
   ActivityLogEntry,
   ActivityEventType,
   PlanFeature,
+  Affiliation,
+  AffiliationType,
+  OrgMembershipStatusDef,
 } from '@linyup/shared'
-import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES } from '@linyup/shared'
+import {
+  CONTACT_ENTRIES,
+  CONTACT_SOURCES,
+  CONTACT_AFFILIATIONS_SUBCOLLECTION,
+  AFFILIATION_TYPES_SUBCOLLECTION,
+  DEFAULT_ORG_MEMBERSHIP_STATUSES,
+} from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
-import { useMembershipTerm } from '@/hooks/useMembershipTerm'
+
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { useForm, Controller, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -110,6 +119,9 @@ import {
   Flag,
   Link2,
   Info,
+  Users,
+  Pencil,
+  ShieldCheck,
 } from 'lucide-react'
 import {
   Tooltip as UITooltip,
@@ -117,7 +129,7 @@ import {
   TooltipContent,
   TooltipProvider,
 } from '@/components/ui/tooltip'
-import { useOrg } from '@/contexts/OrgContext'
+
 import {
   LineChart,
   Line,
@@ -134,7 +146,7 @@ import {
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab } from './NotesTab'
-import { PaymentsTab } from './PaymentsTab'
+import { PaymentsTab, MemberSubscriptionsSection } from './PaymentsTab'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
 
@@ -144,17 +156,6 @@ function initials(c: Contact) {
   return `${c.firstname?.[0] ?? ''}${c.lastname?.[0] ?? ''}`.toUpperCase() || '?'
 }
 
-const STATUS_VARIANT: Record<
-  MembershipStatus,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  guest: 'secondary',
-  requested: 'outline',
-  under_review: 'outline',
-  almost_ready: 'outline',
-  active: 'default',
-  expired: 'destructive',
-}
 
 function formatDate(ts: { toDate(): Date } | null | undefined, opts?: Intl.DateTimeFormatOptions) {
   if (!ts) return '—'
@@ -183,12 +184,6 @@ const profileSchema = z.object({
   birthdate: z.date().optional(),
   birthplace: z.string().max(100).optional(),
   weight: z.coerce.number().min(0).max(500).optional(),
-  membership_status: z
-    .enum(['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired'])
-    .optional(),
-  subscription_type_id: z.string().optional(),
-  subscription_recurrence: z.string().optional(),
-  subscription_price_id: z.string().optional(),
   address_route: z.string().max(100).optional(),
   address_street_number: z.string().max(20).optional(),
   address_postal_code: z.string().max(20).optional(),
@@ -481,6 +476,64 @@ function useAlertPresets(teamId: string | null) {
         collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION)
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as AlertPresetRecord)
+    },
+  })
+}
+
+// ─── affiliation hooks ────────────────────────────────────────────────────────
+
+function useContactAffiliations(contactId: string) {
+  return useQuery<Affiliation[]>({
+    queryKey: ['contact-affiliations', contactId],
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, CONTACTS_COLLECTION, contactId, CONTACT_AFFILIATIONS_SUBCOLLECTION),
+          orderBy('created_at', 'desc')
+        )
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Affiliation)
+    },
+  })
+}
+
+function useAffiliationTypes(teamId: string | null, orgId?: string | null) {
+  return useQuery<AffiliationType[]>({
+    queryKey: ['affiliation-types', teamId, orgId ?? null],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const results: AffiliationType[] = []
+      if (teamId) {
+        const snap = await getDocs(
+          collection(db, TEAMS_COLLECTION, teamId, AFFILIATION_TYPES_SUBCOLLECTION)
+        )
+        snap.docs.forEach((d) => results.push({ ...d.data(), id: d.id } as AffiliationType))
+      }
+      if (orgId) {
+        const snap = await getDocs(
+          collection(db, ORGANIZATIONS_COLLECTION, orgId, AFFILIATION_TYPES_SUBCOLLECTION)
+        )
+        snap.docs.forEach((d) => results.push({ ...d.data(), id: d.id } as AffiliationType))
+      }
+      return results
+    },
+  })
+}
+
+function useOrgAffiliationStatuses(orgId?: string | null) {
+  return useQuery<OrgMembershipStatusDef[]>({
+    queryKey: ['org-affiliation-statuses', orgId ?? null],
+    enabled: !!orgId,
+    queryFn: async () => {
+      if (!orgId) return DEFAULT_ORG_MEMBERSHIP_STATUSES
+      const snap = await getDocs(
+        collection(db, ORGANIZATIONS_COLLECTION, orgId, 'membership_statuses')
+      )
+      if (snap.empty) return DEFAULT_ORG_MEMBERSHIP_STATUSES
+      const docs = snap.docs
+        .map((d) => ({ ...d.data(), id: d.id }) as OrgMembershipStatusDef)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      return docs.length > 0 ? docs : DEFAULT_ORG_MEMBERSHIP_STATUSES
     },
   })
 }
@@ -1004,42 +1057,24 @@ function ProfileTab({
   teamId,
   orgId,
   onSaved,
-  membershipFieldLocked,
 }: {
   contact: Contact
   teamId: string | null
   orgId?: string | null
   onSaved: () => void
-  membershipFieldLocked?: boolean
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
-  const membershipTerm = useMembershipTerm()
   const { team } = useAuth()
-  const { org } = useOrg()
   const { isInstalled } = useInstalledPlugins()
-  const currency = (team?.default_currency ?? 'CHF').toUpperCase()
-  const { data: subTypes = [] } = useSubscriptionTypes(teamId)
   const { data: rankingSystems = [] } = useTeamRankingSystems(teamId, orgId)
 
-  const STATUSES: MembershipStatus[] = [
-    'guest',
-    'requested',
-    'under_review',
-    'almost_ready',
-    'active',
-    'expired',
-  ]
   const GENDERS: ContactGender[] = ['M', 'F', 'other']
-
-  const RECURRENCES = ['per_class', 'weekly', 'biweekly', 'monthly', 'quarterly', 'annual']
 
   const {
     register,
     handleSubmit,
     control,
-    watch,
-    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
@@ -1052,11 +1087,6 @@ function ProfileTab({
       birthdate: tsToDate(contact.birthdate),
       birthplace: contact.birthplace ?? '',
       weight: contact.weight,
-      membership_status: (contact.org_membership_status ??
-        contact.membership_status) as typeof contact.membership_status,
-      subscription_type_id: contact.subscription_type_id ?? '',
-      subscription_recurrence: contact.subscription_recurrence ?? '',
-      subscription_price_id: contact.subscription_price_id ?? '',
       address_route: contact.address?.route ?? '',
       address_street_number: contact.address?.street_number ?? '',
       address_postal_code: contact.address?.postal_code ?? '',
@@ -1076,10 +1106,6 @@ function ProfileTab({
   })
 
   const onSubmit = async (values: ProfileValues) => {
-    // When the chosen type has prices, recurrence + amount derive from the
-    // selected price; otherwise the free recurrence dropdown stays authoritative.
-    const chosenType = subTypes.find((st) => st.id === values.subscription_type_id)
-    const chosenPrice = chosenType?.prices?.find((p) => p.id === values.subscription_price_id)
     await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
       firstname: values.firstname,
       lastname: values.lastname,
@@ -1089,15 +1115,6 @@ function ProfileTab({
       birthdate: values.birthdate ? Timestamp.fromDate(values.birthdate) : null,
       birthplace: values.birthplace || null,
       weight: values.weight || null,
-      ...(membershipFieldLocked
-        ? {}
-        : { org_membership_status: values.membership_status || 'guest' }),
-      subscription_type_id: values.subscription_type_id || null,
-      subscription_price_id: chosenPrice ? chosenPrice.id : null,
-      subscription_recurrence: chosenPrice
-        ? chosenPrice.recurrence
-        : values.subscription_recurrence || null,
-      subscription_amount: chosenPrice ? chosenPrice.amount : null,
       address: {
         route: values.address_route || null,
         street_number: values.address_street_number || null,
@@ -1190,189 +1207,6 @@ function ProfileTab({
 
       {/* 2-col section blocks on desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Subscription & membership */}
-        <FormBlock
-          title={
-            <>
-              {org?.name
-                ? t('sectionMembershipOrg', { orgName: org.name, term: membershipTerm })
-                : t('sectionMembership', { term: membershipTerm })}
-              {membershipFieldLocked && (
-                <Lock className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-              )}
-              <TooltipProvider delay={200}>
-                <UITooltip>
-                  <TooltipTrigger className="inline-flex text-muted-foreground/50 cursor-help">
-                    <Info className="h-3 w-3 shrink-0" />
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="max-w-56">
-                    {t('tooltipMembership')}
-                  </TooltipContent>
-                </UITooltip>
-              </TooltipProvider>
-            </>
-          }
-        >
-          <Field label={t('colStatus')}>
-            {membershipFieldLocked ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/40 text-sm text-muted-foreground border border-border/50">
-                <Lock className="h-3 w-3 shrink-0" />
-                <span>
-                  {contact.org_membership_status
-                    ? t(`status_${contact.org_membership_status}`)
-                    : '—'}
-                </span>
-              </div>
-            ) : (
-              <Controller
-                control={control}
-                name="membership_status"
-                render={({ field }) => (
-                  <Select
-                    value={field.value ?? ''}
-                    onValueChange={(val) => field.onChange(val ?? '')}
-                  >
-                    <SelectTrigger className="w-full">
-                      <span className="flex flex-1 text-left text-sm truncate">
-                        {field.value ? (
-                          t(`status_${field.value}`)
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {t(`status_${s}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
-          </Field>
-          {subTypes.length > 0 && (
-            <Field label={t('subscriptionTypeName')}>
-              <Controller
-                control={control}
-                name="subscription_type_id"
-                render={({ field }) => {
-                  const selected = subTypes.find((st) => st.id === field.value)
-                  return (
-                    <Select
-                      value={field.value ?? ''}
-                      onValueChange={(val) => {
-                        field.onChange(val ?? '')
-                        // Reset the chosen price — it belongs to the previous type.
-                        setValue('subscription_price_id', '')
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <span className="flex flex-1 text-left text-sm truncate">
-                          {selected ? (
-                            selected.name
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">—</SelectItem>
-                        {subTypes
-                          .filter((st) => st.active !== false)
-                          .map((st) => (
-                            <SelectItem key={st.id} value={st.id}>
-                              {st.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  )
-                }}
-              />
-            </Field>
-          )}
-          {(() => {
-            const selType = subTypes.find((st) => st.id === watch('subscription_type_id'))
-            const activePrices = (selType?.prices ?? []).filter((p) => p.active !== false)
-            // When the chosen type carries prices, pick a price (recurrence + amount
-            // derive from it). Otherwise fall back to the free recurrence dropdown.
-            if (activePrices.length > 0) {
-              return (
-                <Field label={t('subscriptionPrice')}>
-                  <Controller
-                    control={control}
-                    name="subscription_price_id"
-                    render={({ field }) => {
-                      const sel = activePrices.find((p) => p.id === field.value)
-                      const priceLabel = (p: (typeof activePrices)[number]) =>
-                        `${p.label ? `${p.label} · ` : ''}${formatCurrency(p.amount, currency)} · ${t(`recurrence_${p.recurrence}`)}`
-                      return (
-                        <Select
-                          value={field.value ?? ''}
-                          onValueChange={(val) => field.onChange(val ?? '')}
-                        >
-                          <SelectTrigger className="w-full">
-                            <span className="flex flex-1 text-left text-sm truncate">
-                              {sel ? (
-                                priceLabel(sel)
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </span>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="">—</SelectItem>
-                            {activePrices.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {priceLabel(p)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )
-                    }}
-                  />
-                </Field>
-              )
-            }
-            return (
-              <Field label={t('subscriptionRecurrence')}>
-                <Controller
-                  control={control}
-                  name="subscription_recurrence"
-                  render={({ field }) => (
-                    <Select
-                      value={field.value ?? ''}
-                      onValueChange={(val) => field.onChange(val ?? '')}
-                    >
-                      <SelectTrigger className="w-full">
-                        <span className="flex flex-1 text-left text-sm truncate">
-                          {field.value ? (
-                            t(`recurrence_${field.value}`)
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">—</SelectItem>
-                        {RECURRENCES.map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {t(`recurrence_${r}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </Field>
-            )
-          })()}
-        </FormBlock>
-
         {/* Ranks */}
         <FormBlock title={t('sectionRanks')}>
           {rankingSystems.length === 0 ? (
@@ -1709,12 +1543,20 @@ function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | n
 
 function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
+  const tPayments = useTranslations('PaymentsDashboard')
   const qc = useQueryClient()
   const { data: history = [], isLoading } = useSubscriptionHistory(contact.id)
   const { data: subTypes = [] } = useSubscriptionTypes(teamId)
-  const [addOpen, setAddOpen] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
+  const { team } = useAuth()
+  const currency = (team?.default_currency ?? 'CHF').toUpperCase()
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['subscription-history', contact.id] })
+  const invalidateContact = () => {
+    qc.invalidateQueries({ queryKey: ['contact', contact.id] })
+    qc.invalidateQueries({ queryKey: ['contacts'] })
+  }
+  const invalidateHistory = () =>
+    qc.invalidateQueries({ queryKey: ['subscription-history', contact.id] })
 
   if (isLoading)
     return (
@@ -1726,149 +1568,206 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
     )
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('tabSubscriptions')}
-          </p>
-          <TooltipProvider delay={200}>
-            <UITooltip>
-              <TooltipTrigger className="inline-flex text-muted-foreground/50 cursor-help">
-                <Info className="h-3.5 w-3.5 shrink-0" />
-              </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-56">
-                {t('tooltipSubscription')}
-              </TooltipContent>
-            </UITooltip>
-          </TooltipProvider>
+    <div className="space-y-6 pb-16">
+      {/* ── Current type assignment ── */}
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              {t('subscriptionHeadingCard')}
+              <TooltipProvider delay={200}>
+                <UITooltip>
+                  <TooltipTrigger className="inline-flex text-muted-foreground/50 cursor-help">
+                    <Info className="h-3 w-3 shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-56">
+                    {t('tooltipSubscription')}
+                  </TooltipContent>
+                </UITooltip>
+              </TooltipProvider>
+            </p>
+            {contact.subscription_type_name ? (
+              <div className="mt-1 space-y-0.5">
+                <p className="text-sm font-medium">{contact.subscription_type_name}</p>
+                {contact.subscription_recurrence && (
+                  <p className="text-xs text-muted-foreground">
+                    {t(`recurrence_${contact.subscription_recurrence}`)}
+                    {contact.subscription_amount != null && (
+                      <span> · {formatCurrency(contact.subscription_amount, currency)}</span>
+                    )}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground mt-1">{t('noSubscriptions')}</p>
+            )}
+          </div>
+          <button
+            onClick={() => setAssignOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors shrink-0"
+          >
+            <Pencil className="h-4 w-4" />
+            {t('addSubscription')}
+          </button>
         </div>
-      </div>
-      <div className="flex justify-end">
-        <button
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          {t('addSubscription')}
-        </button>
       </div>
 
-      {history.length === 0 ? (
-        <div className="py-12 text-center text-muted-foreground text-sm">
-          {t('noSubscriptions')}
-        </div>
-      ) : (
+      {/* ── Stripe billing (freeze / resume) ── */}
+      {teamId && (
         <div className="space-y-2">
-          {history.map((entry) => {
-            const isActive = !entry.end_date
-            const typeName =
-              subTypes.find((s) => s.id === entry.subscription_type_id)?.name ??
-              entry.subscription_type_name ??
-              '—'
-            return (
-              <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border">
-                <div
-                  className={`h-2 w-2 rounded-full mt-2 shrink-0 ${isActive ? 'bg-green-500' : 'bg-muted-foreground/40'}`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">{typeName}</p>
-                    {isActive && (
-                      <Badge variant="default" className="text-xs">
-                        {t('subscriptionActiveLabel')}
-                      </Badge>
-                    )}
-                  </div>
-                  {entry.recurrence && (
-                    <p className="text-xs text-muted-foreground">
-                      {t(`recurrence_${entry.recurrence}`)}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(entry.start_date)} –{' '}
-                    {entry.end_date ? formatDate(entry.end_date) : t('subscriptionEndNone')}
-                  </p>
-                  {entry.termination_reason && (
-                    <p className="text-xs text-muted-foreground italic">
-                      {entry.termination_reason}
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={async () => {
-                    await deleteDoc(
-                      doc(
-                        db,
-                        CONTACTS_COLLECTION,
-                        contact.id,
-                        CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION,
-                        entry.id
-                      )
-                    )
-                    invalidate()
-                  }}
-                  className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )
-          })}
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {tPayments('stripeSubscriptionsTitle')}
+          </p>
+          <MemberSubscriptionsSection teamId={teamId} contactId={contact.id} t={tPayments} />
         </div>
       )}
 
-      <AddSubscriptionDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        contactId={contact.id}
+      {/* ── History ── */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('subscriptionHistoryTitle')}
+        </p>
+        {history.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground text-sm">
+            {t('noSubscriptions')}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {history.map((entry) => {
+              const isActive = !entry.end_date
+              const typeName =
+                subTypes.find((s) => s.id === entry.subscription_type_id)?.name ??
+                entry.subscription_type_name ??
+                '—'
+              return (
+                <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border">
+                  <div
+                    className={`h-2 w-2 rounded-full mt-2 shrink-0 ${isActive ? 'bg-green-500' : 'bg-muted-foreground/40'}`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{typeName}</p>
+                      {isActive && (
+                        <Badge variant="default" className="text-xs">
+                          {t('subscriptionActiveLabel')}
+                        </Badge>
+                      )}
+                    </div>
+                    {entry.recurrence && (
+                      <p className="text-xs text-muted-foreground">
+                        {t(`recurrence_${entry.recurrence}`)}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(entry.start_date)} –{' '}
+                      {entry.end_date ? formatDate(entry.end_date) : t('subscriptionEndNone')}
+                    </p>
+                    {entry.termination_reason && (
+                      <p className="text-xs text-muted-foreground italic">
+                        {entry.termination_reason}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await deleteDoc(
+                        doc(
+                          db,
+                          CONTACTS_COLLECTION,
+                          contact.id,
+                          CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION,
+                          entry.id
+                        )
+                      )
+                      invalidateHistory()
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <SetSubscriptionDialog
+        open={assignOpen}
+        onOpenChange={setAssignOpen}
+        contact={contact}
         subTypes={subTypes}
-        onSaved={invalidate}
+        currency={currency}
+        onSaved={() => { invalidateContact(); invalidateHistory() }}
       />
     </div>
   )
 }
 
-function AddSubscriptionDialog({
+// ─── set subscription dialog (price-aware, writes flat contact fields) ────────
+
+function SetSubscriptionDialog({
   open,
   onOpenChange,
-  contactId,
+  contact,
   subTypes,
+  currency,
   onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
-  contactId: string
+  contact: Contact
   subTypes: SubscriptionType[]
+  currency: string
   onSaved: () => void
 }) {
   const t = useTranslations('Contacts')
-  const tCommon = useTranslations('Common')
-  const [typeId, setTypeId] = useState('')
-  const [recurrence, setRecurrence] = useState('')
-  const [startDate, setStartDate] = useState<Date | undefined>(new Date())
-  const [endDate, setEndDate] = useState<Date | undefined>()
-  const [terminationReason, setTerminationReason] = useState('')
+  const [typeId, setTypeId] = useState(contact.subscription_type_id ?? '')
+  const [priceId, setPriceId] = useState(contact.subscription_price_id ?? '')
+  const [recurrence, setRecurrence] = useState(contact.subscription_recurrence ?? '')
   const [saving, setSaving] = useState(false)
 
   const RECURRENCES = ['per_class', 'weekly', 'biweekly', 'monthly', 'quarterly', 'annual']
 
+  const selectedType = subTypes.find((st) => st.id === typeId)
+  const activePrices = (selectedType?.prices ?? []).filter((p) => p.active !== false)
+  const selectedPrice = activePrices.find((p) => p.id === priceId)
+
+  const priceLabel = (p: (typeof activePrices)[number]) =>
+    `${p.label ? `${p.label} · ` : ''}${formatCurrency(p.amount, currency)} · ${t(`recurrence_${p.recurrence}`)}`
+
   const save = async () => {
+    if (!typeId) return
     setSaving(true)
     try {
       const typeName = subTypes.find((s) => s.id === typeId)?.name ?? ''
-      await addDoc(
-        collection(db, CONTACTS_COLLECTION, contactId, CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION),
-        {
-          subscription_type_id: typeId || null,
-          subscription_type_name: typeName || null,
-          recurrence: recurrence || null,
-          start_date: startDate ? Timestamp.fromDate(startDate) : null,
-          end_date: endDate ? Timestamp.fromDate(endDate) : null,
-          termination_reason: terminationReason.trim() || null,
-          created_at: serverTimestamp(),
-        }
-      )
+      const chosenPrice = activePrices.find((p) => p.id === priceId)
+      await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
+        subscription_type_id: typeId,
+        subscription_type_name: typeName,
+        subscription_price_id: chosenPrice ? chosenPrice.id : null,
+        subscription_recurrence: chosenPrice ? chosenPrice.recurrence : recurrence || null,
+        subscription_amount: chosenPrice ? chosenPrice.amount : null,
+        subscription_type_updated_at: serverTimestamp(),
+      })
+      onSaved()
+      onOpenChange(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleClear = async () => {
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
+        subscription_type_id: null,
+        subscription_type_name: null,
+        subscription_price_id: null,
+        subscription_recurrence: null,
+        subscription_amount: null,
+        subscription_type_updated_at: serverTimestamp(),
+      })
       onSaved()
       onOpenChange(false)
     } finally {
@@ -1883,72 +1782,96 @@ function AddSubscriptionDialog({
           <DialogTitle>{t('addSubscription')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
-          {subTypes.length > 0 && (
-            <Field label={t('subscriptionTypeName')}>
-              <Select value={typeId} onValueChange={(v) => setTypeId(v ?? '')}>
+          <Field label={t('subscriptionTypeName')} required>
+            <Select
+              value={typeId}
+              onValueChange={(v) => {
+                setTypeId(v ?? '')
+                setPriceId('')
+                setRecurrence('')
+              }}
+            >
+              <SelectTrigger>
+                <span className="flex flex-1 text-left text-sm truncate">
+                  {selectedType ? selectedType.name : <span className="text-muted-foreground">—</span>}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">—</SelectItem>
+                {subTypes
+                  .filter((st) => st.active !== false)
+                  .map((st) => (
+                    <SelectItem key={st.id} value={st.id}>
+                      {st.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          {activePrices.length > 0 ? (
+            <Field label={t('subscriptionPrice')}>
+              <Select value={priceId} onValueChange={(v) => setPriceId(v ?? '')}>
                 <SelectTrigger>
-                  <SelectValue placeholder="—" />
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {selectedPrice ? priceLabel(selectedPrice) : <span className="text-muted-foreground">—</span>}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">—</SelectItem>
-                  {subTypes.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
+                  {activePrices.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {priceLabel(p)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
-          )}
-          <Field label={t('subscriptionRecurrence')}>
-            <Select value={recurrence} onValueChange={(v) => setRecurrence(v ?? '')}>
-              <SelectTrigger>
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">—</SelectItem>
-                {RECURRENCES.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r.replace('_', ' ')}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label={t('subscriptionStart')}>
-            <DatePicker value={startDate} onChange={setStartDate} />
-          </Field>
-          <Field label={t('subscriptionEnd')}>
-            <DatePicker
-              value={endDate}
-              onChange={setEndDate}
-              placeholder={t('subscriptionEndNone')}
-            />
-          </Field>
-          {endDate && (
-            <Field label={t('subscriptionTerminationReason')}>
-              <Input
-                value={terminationReason}
-                onChange={(e) => setTerminationReason(e.target.value)}
-                placeholder="e.g. cancelled, payment issue"
-              />
+          ) : typeId ? (
+            <Field label={t('subscriptionRecurrence')}>
+              <Select value={recurrence} onValueChange={(v) => setRecurrence(v ?? '')}>
+                <SelectTrigger>
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {recurrence ? t(`recurrence_${recurrence}`) : <span className="text-muted-foreground">—</span>}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  {RECURRENCES.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {t(`recurrence_${r}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
-          )}
+          ) : null}
         </div>
-        <DialogFooter>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
-          >
-            {t('cancel')}
-          </button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            {saving ? tCommon('loading') : t('saveChanges')}
-          </button>
+        <DialogFooter className="flex items-center justify-between">
+          {contact.subscription_type_id && (
+            <button
+              onClick={handleClear}
+              disabled={saving}
+              className="text-xs text-destructive hover:underline disabled:opacity-50"
+            >
+              {t('clearSubscription')}
+            </button>
+          )}
+          <div className="flex gap-2 ml-auto">
+            <button
+              onClick={() => onOpenChange(false)}
+              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+            >
+              {t('cancel')}
+            </button>
+            <button
+              onClick={save}
+              disabled={saving || !typeId}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {t('saveChanges')}
+            </button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2822,11 +2745,9 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
 function ArchivedContactView({
   contact,
   onAction,
-  orgMembershipLocked,
 }: {
   contact: Contact
   onAction: () => void
-  orgMembershipLocked?: boolean
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
@@ -2923,21 +2844,6 @@ function ArchivedContactView({
         {contact.entry && (
           <DetailRow label={t('fieldAcquisitionEntry')} value={t(`entry_${contact.entry}` as Parameters<typeof t>[0])} />
         )}
-        <DetailRow
-          label={
-            <>
-              {t('colStatus')}
-              {orgMembershipLocked && (
-                <Lock className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-              )}
-            </>
-          }
-          value={
-            (contact.org_membership_status ?? contact.membership_status)
-              ? t(`status_${contact.org_membership_status ?? contact.membership_status}`)
-              : null
-          }
-        />
         <DetailRow
           label={t('fieldGender')}
           value={contact.gender ? t(`gender_${contact.gender}`) : null}
@@ -3132,6 +3038,366 @@ function ContactHeaderStats({ contact }: { contact: Contact }) {
   )
 }
 
+// ─── affiliation status badge (reuses OrgMembershipStatusDef color system) ────
+
+const AFFIL_COLOR_CLASSES: Record<string, { bg: string; text: string; border: string }> = {
+  green: {
+    bg: 'bg-green-50 dark:bg-green-900/20',
+    text: 'text-green-700 dark:text-green-300',
+    border: 'border-green-200 dark:border-green-800',
+  },
+  blue: {
+    bg: 'bg-blue-50 dark:bg-blue-900/20',
+    text: 'text-blue-700 dark:text-blue-300',
+    border: 'border-blue-200 dark:border-blue-800',
+  },
+  yellow: {
+    bg: 'bg-yellow-50 dark:bg-yellow-900/20',
+    text: 'text-yellow-700 dark:text-yellow-300',
+    border: 'border-yellow-200 dark:border-yellow-800',
+  },
+  red: {
+    bg: 'bg-red-50 dark:bg-red-900/20',
+    text: 'text-red-700 dark:text-red-300',
+    border: 'border-red-200 dark:border-red-800',
+  },
+  gray: {
+    bg: 'bg-gray-50 dark:bg-gray-900/20',
+    text: 'text-gray-600 dark:text-gray-400',
+    border: 'border-gray-200 dark:border-gray-700',
+  },
+}
+
+function AffilStatusBadge({
+  statusId,
+  statuses,
+}: {
+  statusId: string
+  statuses: OrgMembershipStatusDef[]
+}) {
+  const def = statuses.find((s) => s.id === statusId) ?? statuses[0]
+  const color = AFFIL_COLOR_CLASSES[def?.color ?? 'gray'] ?? AFFIL_COLOR_CLASSES.gray
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${color.bg} ${color.text} ${color.border}`}
+    >
+      {def?.label ?? statusId}
+    </span>
+  )
+}
+
+// ─── affiliations tab ─────────────────────────────────────────────────────────
+
+function AffiliationsTab({
+  contact,
+  teamId,
+  orgId,
+  membershipFieldLocked,
+}: {
+  contact: Contact
+  teamId: string | null
+  orgId?: string | null
+  membershipFieldLocked?: boolean
+}) {
+  const t = useTranslations('Affiliations')
+  const qc = useQueryClient()
+
+  const { data: affiliations = [], isLoading } = useContactAffiliations(contact.id)
+  const { data: affiliationTypes = [] } = useAffiliationTypes(teamId, orgId)
+  const { data: statuses = DEFAULT_ORG_MEMBERSHIP_STATUSES } = useOrgAffiliationStatuses(orgId)
+
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<Affiliation | null>(null)
+  const [removing, setRemoving] = useState<string | null>(null)
+  const [approving, setApproving] = useState<string | null>(null)
+
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: ['contact-affiliations', contact.id] })
+
+  const handleRemove = async (affiliationId: string) => {
+    setRemoving(affiliationId)
+    try {
+      const fn = httpsCallable(functions, 'removeAffiliation')
+      await fn({ contactId: contact.id, affiliationId })
+      invalidate()
+    } finally {
+      setRemoving(null)
+    }
+  }
+
+  const handleApprove = async (affiliationId: string) => {
+    setApproving(affiliationId)
+    try {
+      const fn = httpsCallable(functions, 'approveAffiliation')
+      await fn({ contactId: contact.id, affiliationId })
+      invalidate()
+    } finally {
+      setApproving(null)
+    }
+  }
+
+  if (isLoading)
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-14 rounded-lg" />
+        ))}
+      </div>
+    )
+
+  return (
+    <div className="space-y-4 pb-16">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('title')}
+        </p>
+        {!membershipFieldLocked && (
+          <button
+            onClick={() => { setEditing(null); setDialogOpen(true) }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            {t('addButton')}
+          </button>
+        )}
+      </div>
+
+      {affiliations.length === 0 ? (
+        <div className="py-12 text-center text-muted-foreground text-sm">
+          {t('noAffiliations')}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {affiliations.map((aff) => {
+            const typeDef = affiliationTypes.find((at) => at.id === aff.affiliation_type_id)
+            const label = typeDef?.label ?? aff.label ?? aff.type_key ?? aff.affiliation_type_id ?? '—'
+            const issuerLabel =
+              aff.issuer === 'team'
+                ? t('issuer_team')
+                : aff.issuer === 'org'
+                  ? (aff.issuer_name ?? t('issuer_org'))
+                  : (aff.issuer_name ?? t('issuer_external'))
+            const isRemoving = removing === aff.id
+            const isApproving = approving === aff.id
+            const requestedStatus = statuses.find((s) => s.id === 'requested')
+            const isRequested = requestedStatus && aff.status_id === requestedStatus.id
+
+            return (
+              <div key={aff.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                <div
+                  className={`h-2 w-2 rounded-full mt-2 shrink-0 ${aff.active ? 'bg-green-500' : 'bg-muted-foreground/40'}`}
+                />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium">{label}</p>
+                    <AffilStatusBadge statusId={aff.status_id} statuses={statuses} />
+                    <span className="text-xs text-muted-foreground">{issuerLabel}</span>
+                  </div>
+                  {(aff.valid_from || aff.valid_until) && (
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(aff.valid_from)} – {aff.valid_until ? formatDate(aff.valid_until) : t('ongoingLabel')}
+                    </p>
+                  )}
+                  {aff.reference && (
+                    <p className="text-xs text-muted-foreground">{t('colReference')}: {aff.reference}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Approve action for pending/requested affiliations */}
+                  {!membershipFieldLocked && isRequested && (
+                    <button
+                      onClick={() => handleApprove(aff.id)}
+                      disabled={isApproving}
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-green-600 disabled:opacity-50"
+                      title={t('approveButton')}
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {!membershipFieldLocked && (
+                    <button
+                      onClick={() => { setEditing(aff); setDialogOpen(true) }}
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                      title={t('colType')}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {!membershipFieldLocked && (
+                    <button
+                      onClick={() => handleRemove(aff.id)}
+                      disabled={isRemoving}
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-destructive disabled:opacity-50"
+                      title={t('removeTitle')}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <UpsertAffiliationDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        contact={contact}
+        existing={editing}
+        affiliationTypes={affiliationTypes}
+        statuses={statuses}
+        orgId={orgId}
+        onSaved={() => { invalidate(); setEditing(null) }}
+      />
+    </div>
+  )
+}
+
+// ─── upsert affiliation dialog ────────────────────────────────────────────────
+
+function UpsertAffiliationDialog({
+  open,
+  onOpenChange,
+  contact,
+  existing,
+  affiliationTypes,
+  statuses,
+  orgId,
+  onSaved,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  contact: Contact
+  existing: Affiliation | null
+  affiliationTypes: AffiliationType[]
+  statuses: OrgMembershipStatusDef[]
+  orgId?: string | null
+  onSaved: () => void
+}) {
+  const t = useTranslations('Affiliations')
+  const [typeId, setTypeId] = useState(existing?.affiliation_type_id ?? '')
+  const [statusId, setStatusId] = useState(existing?.status_id ?? (statuses[0]?.id ?? ''))
+  const [reference, setReference] = useState(existing?.reference ?? '')
+  const [validFrom, setValidFrom] = useState<Date | undefined>(
+    existing?.valid_from ? tsToDate(existing.valid_from) : undefined
+  )
+  const [validUntil, setValidUntil] = useState<Date | undefined>(
+    existing?.valid_until ? tsToDate(existing.valid_until) : undefined
+  )
+  const [saving, setSaving] = useState(false)
+
+  // Reset when dialog opens with a different affiliation
+  useEffect(() => {
+    if (open) {
+      setTypeId(existing?.affiliation_type_id ?? '')
+      setStatusId(existing?.status_id ?? (statuses[0]?.id ?? ''))
+      setReference(existing?.reference ?? '')
+      setValidFrom(existing?.valid_from ? tsToDate(existing.valid_from) : undefined)
+      setValidUntil(existing?.valid_until ? tsToDate(existing.valid_until) : undefined)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, existing?.id])
+
+  const save = async () => {
+    if (!typeId) return
+    setSaving(true)
+    try {
+      const typeDef = affiliationTypes.find((at) => at.id === typeId)
+      const fn = httpsCallable(functions, 'upsertAffiliation')
+      await fn({
+        contactId: contact.id,
+        affiliationId: existing?.id ?? null,
+        affiliation_type_id: typeId,
+        type_key: typeDef?.key ?? null,
+        label: typeDef?.label ?? null,
+        issuer: typeDef?.default_issuer ?? 'team',
+        org_id: orgId ?? null,
+        issuer_name: typeDef?.issuer_name ?? null,
+        status_id: statusId,
+        reference: reference.trim() || null,
+        valid_from: validFrom ? Timestamp.fromDate(validFrom) : null,
+        valid_until: validUntil ? Timestamp.fromDate(validUntil) : null,
+      })
+      onSaved()
+      onOpenChange(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{existing ? t('editTitle') : t('addTitle')}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <Field label={t('fieldType')} required>
+            <Select value={typeId} onValueChange={(v) => setTypeId(v ?? '')}>
+              <SelectTrigger>
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                {affiliationTypes.map((at) => (
+                  <SelectItem key={at.id} value={at.id}>
+                    {at.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label={t('fieldStatus')}>
+            <Select value={statusId} onValueChange={(v) => setStatusId(v ?? '')}>
+              <SelectTrigger>
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                {statuses.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label={t('fieldReference')}>
+            <Input
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+            />
+          </Field>
+          <Field label={t('fieldValidFrom')}>
+            <DatePicker value={validFrom} onChange={setValidFrom} />
+          </Field>
+          <Field label={t('fieldValidUntil')}>
+            <DatePicker
+              value={validUntil}
+              onChange={setValidUntil}
+              placeholder={t('ongoingLabel')}
+            />
+          </Field>
+        </div>
+        <DialogFooter>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+          >
+            {t('cancel')}
+          </button>
+          <button
+            onClick={save}
+            disabled={saving || !typeId}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            {saving ? t('saving') : t('save')}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 type TabId =
@@ -3141,6 +3407,7 @@ type TabId =
   | 'activity'
   | 'bookings'
   | 'subscriptions'
+  | 'affiliations'
   | 'payments'
   | 'goals'
   | 'gamification'
@@ -3213,6 +3480,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'alerts', label: t('tabAlerts'), icon: Bell },
     { id: 'bookings', label: t('tabBookings'), icon: CalendarDays },
     { id: 'subscriptions', label: t('tabSubscriptions'), icon: BookOpen, feature: 'subscriptions' },
+    { id: 'affiliations', label: t('tabAffiliations'), icon: Users },
     { id: 'payments', label: t('tabPayments'), icon: CreditCard },
     { id: 'goals', label: t('tabGoals'), icon: Flag, feature: 'goals' },
     // Gamification is a plugin — the tab appears only when it's installed (filtered below).
@@ -3249,18 +3517,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   <Badge variant="secondary">{t('archivedBadge')}</Badge>
                 ) : (
                   <>
-                    {(contact.org_membership_status ?? contact.membership_status) && (
-                      <Badge
-                        variant={
-                          STATUS_VARIANT[
-                            (contact.org_membership_status ??
-                              contact.membership_status) as keyof typeof STATUS_VARIANT
-                          ]
-                        }
-                      >
-                        {t(`status_${contact.org_membership_status ?? contact.membership_status}`)}
-                      </Badge>
-                    )}
                     {contact.acquisition_stage && (
                       <Badge variant="outline">{t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])}</Badge>
                     )}
@@ -3268,6 +3524,28 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                       <Badge className="bg-blue-500 text-white border-blue-500">
                         {t('newBadge')}
                       </Badge>
+                    )}
+                    {/* Subscription summary chip */}
+                    {contact.subscription_type_name && (
+                      <button
+                        type="button"
+                        onClick={() => setTab('subscriptions')}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <BookOpen className="h-3 w-3 shrink-0" />
+                        <span>{t('subscriptionHeadingCard')}: {contact.subscription_type_name}</span>
+                      </button>
+                    )}
+                    {/* Affiliation summary chip */}
+                    {contact.affiliation_summary?.has_active && (
+                      <button
+                        type="button"
+                        onClick={() => setTab('affiliations')}
+                        className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 transition-colors"
+                      >
+                        <CheckCircle className="h-3 w-3 shrink-0" />
+                        <span>{t('affiliationHeadingCard')}</span>
+                      </button>
                     )}
                   </>
                 )}
@@ -3318,7 +3596,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         <ArchivedContactView
           contact={contact}
           onAction={invalidate}
-          orgMembershipLocked={orgMembershipLocked}
         />
       ) : (
         <>
@@ -3359,7 +3636,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 teamId={currentTeamId}
                 orgId={team?.org_id}
                 onSaved={invalidate}
-                membershipFieldLocked={membershipFieldLocked}
               />
             )}
             {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
@@ -3369,6 +3645,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {tab === 'bookings' && <BookingsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'subscriptions' && (
               <SubscriptionsTab contact={contact} teamId={currentTeamId} />
+            )}
+            {tab === 'affiliations' && (
+              <AffiliationsTab
+                contact={contact}
+                teamId={currentTeamId}
+                orgId={team?.org_id}
+                membershipFieldLocked={membershipFieldLocked}
+              />
             )}
             {tab === 'payments' && <PaymentsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'goals' && <GoalsTab contact={contact} teamId={currentTeamId} />}

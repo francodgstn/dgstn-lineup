@@ -1,5 +1,36 @@
-import { RANKING_HMD, RANKING_KD } from '../config'
+import { RANKING_HMD, RANKING_KD, ORG_ID } from '../config'
 import { matchSubscriptionType, pickSubscriptionPrice } from './subscriptions'
+
+// ── Affiliation mapping (Phase 2) ─────────────────────────────────────────────
+//
+// HMD's single-valued membership_status / org_membership_status fields are
+// replaced by the multi-valued AFFILIATION set (contacts/{id}/affiliations).
+// The status vocabulary is reused as-is (active/expired/requested/…); only the
+// 'active' status counts as active. Affiliation docs are NOT a subcollection on
+// the HMD source, so the transform derives them and attaches them under the
+// reserved `__affiliations` key — pass05 writes each into the affiliations
+// subcollection and strips the key before persisting the contact doc.
+
+// Reserved transform-output key the contacts pass reads to emit subcollection docs.
+export const AFFILIATIONS_OUTPUT_KEY = '__affiliations'
+
+// Affiliation type ids seeded into the type catalog by the migration. The HMD
+// org-level 'club' type lives at organizations/{ORG_ID}/affiliation_types/club;
+// a team-local 'club' type at teams/{teamId}/affiliation_types/club.
+const ORG_CLUB_TYPE = { id: 'club', key: 'club', label: 'Club membership' }
+const TEAM_CLUB_TYPE = { id: 'club', key: 'club', label: 'Club membership' }
+
+// Only 'active' counts as an active affiliation (mirrors DEFAULT_ORG_MEMBERSHIP_STATUSES).
+const ACTIVE_COUNTING_STATUS_IDS = new Set(['active'])
+
+function statusCountsAsActive(statusId: string): boolean {
+  return ACTIVE_COUNTING_STATUS_IDS.has(statusId)
+}
+
+// A non-guest, non-empty status is a real affiliation; guest/none → none.
+function isAffiliationStatus(status: unknown): status is string {
+  return typeof status === 'string' && status.length > 0 && status !== 'guest'
+}
 
 // Map an HMD acquisition channel label (free text) onto the canonical Linyup
 // marketing source. Returns the nearest channel, or 'other' for anything that
@@ -108,18 +139,69 @@ export function transformContact(src: Record<string, unknown>): Record<string, u
   out.deleted_at    = out.deleted_at    ?? null
   out.archived_at   = out.archived_at   ?? null
 
-  // HMD tracked membership at the club level via membership_status/membership_active/membership_expiration.
-  // In Linyup the membership relationship is contact↔org (the club is just the intermediary),
-  // so these fields rename to the org_membership_* namespace.
-  if ('membership_status' in out)     { out.org_membership_status     = out.membership_status;     delete out.membership_status }
-  if ('membership_active' in out)     { out.org_membership_active     = out.membership_active;     delete out.membership_active }
-  if ('membership_expiration' in out) { out.org_membership_expiration = out.membership_expiration; delete out.membership_expiration }
+  // ── Affiliations (replaces the removed membership_* / org_membership_* fields) ─
+  // Derive affiliation docs from the HMD membership fields, then delete those
+  // fields from the contact doc. pass05 reads the __affiliations array off the
+  // transform output and writes each into contacts/{id}/affiliations.
+  //   org_membership_status (non-guest) → issuer 'org' affiliation (the HMD org),
+  //     valid_until from org_membership_expiration.
+  //   membership_status     (non-guest) → 'club' issuer 'team' affiliation,
+  //     valid_until from membership_expiration.
+  //   guest / none → no affiliation.
+  // Soft-deleted contacts are coerced to 'expired' so they never count as active.
+  const teamId = typeof out.teamId === 'string' ? out.teamId : ''
+  const isDeleted = out.deleted_at != null
+  const createdAt = (out.created_at as unknown) ?? null
+  const affiliations: Array<Record<string, unknown>> = []
 
-  // Coerce org_membership for soft-deleted contacts — HMD sometimes left status as 'active'
-  // on contacts that were subsequently deleted, causing them to inflate active-member counts.
-  if (out.deleted_at != null) {
-    out.org_membership_status = 'expired'
-    out.org_membership_active = false
+  function pushAffiliation(
+    statusRaw: unknown,
+    issuer: 'org' | 'team',
+    type: { id: string; key: string; label: string },
+    expiration: unknown,
+  ): void {
+    if (!isAffiliationStatus(statusRaw)) return
+    const statusId = isDeleted ? 'expired' : statusRaw
+    const doc: Record<string, unknown> = {
+      teamId,
+      affiliation_type_id: type.id,
+      type_key: type.key,
+      label: type.label,
+      issuer,
+      status_id: statusId,
+      active: statusCountsAsActive(statusId),
+      created_at: createdAt,
+      updated_at: createdAt,
+      created_by: 'migration',
+    }
+    if (issuer === 'org') doc.org_id = ORG_ID
+    if (expiration != null) doc.valid_until = expiration
+    affiliations.push(doc)
+  }
+
+  // org-issued membership (newer HMD docs may carry this explicitly)
+  pushAffiliation(out.org_membership_status, 'org', ORG_CLUB_TYPE, out.org_membership_expiration)
+  // club / team-issued membership (the field HMD historically stores)
+  pushAffiliation(out.membership_status, 'team', TEAM_CLUB_TYPE, out.membership_expiration)
+
+  // Drop the removed membership fields from the contact doc.
+  delete out.membership_status
+  delete out.membership_active
+  delete out.membership_expiration
+  delete out.org_membership_status
+  delete out.org_membership_active
+  delete out.org_membership_expiration
+
+  if (affiliations.length > 0) {
+    // Best-effort summary so the contacts list shows belonging without the trigger.
+    const types = [...new Set(affiliations.map((a) => a.type_key as string))]
+    const orgIds = [...new Set(affiliations.filter((a) => a.org_id).map((a) => a.org_id as string))]
+    out.affiliation_summary = {
+      has_active: affiliations.some((a) => a.active === true),
+      types,
+      org_ids: orgIds,
+    }
+    out[AFFILIATIONS_OUTPUT_KEY] = affiliations
   }
 
   // ── Subscription type matching (HEURISTIC) ───────────────────────────────

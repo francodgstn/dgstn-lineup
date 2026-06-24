@@ -100,17 +100,6 @@ export async function countContactsByStage(
 }
 
 /**
- * Count active contacts by membership_status.
- */
-export async function countContactsByMembershipStatus(
-  db: admin.firestore.Firestore,
-  teamId: string,
-): Promise<Record<string, number>> {
-  const contacts = await getActiveContacts(db, teamId)
-  return countByField(contacts, 'membership_status')
-}
-
-/**
  * Count active contacts by subscription_type_id.
  */
 export async function countContactsBySubscriptionType(

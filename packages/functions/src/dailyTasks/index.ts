@@ -5,7 +5,7 @@ import { resetExpiredStreaks } from './resetExpiredStreaks'
 import { resetMonthlyScores } from './resetMonthlyScores'
 import { sendBookingReminders } from './sendBookingReminders'
 import { runScheduledRules } from './runScheduledRules'
-import { expireOrgMemberships } from './expireOrgMemberships'
+import { expireAffiliations } from './expireAffiliations'
 
 
 interface TaskResult {
@@ -28,7 +28,7 @@ export const dailyTasks = onSchedule(
       { name: 'resetMonthlyScores', handler: resetMonthlyScores },
       { name: 'sendBookingReminders', handler: sendBookingReminders },
       { name: 'runScheduledRules', handler: runScheduledRules },
-      { name: 'expireOrgMemberships', handler: expireOrgMemberships },
+      { name: 'expireAffiliations', handler: expireAffiliations },
     ]
 
     const results: TaskResult[] = []

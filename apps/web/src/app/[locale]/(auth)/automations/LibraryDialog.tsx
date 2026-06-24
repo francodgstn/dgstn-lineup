@@ -35,7 +35,7 @@ function triggerChip(type: string): { label: string; Icon: React.ElementType } {
     case 'contact_created':           return { label: 'On create',     Icon: UserPlus }
     case 'booking_confirmed':         return { label: 'Booking',       Icon: CalendarCheck }
     case 'booking_no_show':           return { label: 'No-show',       Icon: CalendarCheck }
-    case 'membership_status_changed': return { label: 'Membership',    Icon: ShieldCheck }
+    case 'affiliation_changed':       return { label: 'Affiliation',   Icon: ShieldCheck }
     case 'subscription_changed':      return { label: 'Subscription',  Icon: CreditCard }
     case 'session_ended':             return { label: 'Session end',   Icon: CalendarCheck }
     case 'manual':                    return { label: 'Manual',        Icon: Play }

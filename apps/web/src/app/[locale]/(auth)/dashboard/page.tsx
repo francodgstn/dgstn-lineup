@@ -54,7 +54,7 @@ import type {
 import { getDailyQuote } from '@/data/quotes'
 import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 import { useDashboardData } from '@/hooks/useDashboardData'
-import { useMembershipTerm } from '@/hooks/useMembershipTerm'
+import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SetupChecklist } from '@/components/onboarding/SetupChecklist'
 import { RosterCard } from '@/components/dashboard/RosterCard'
@@ -725,14 +725,14 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
 export default function DashboardPage() {
   const { currentTeamId, profile, team } = useAuth()
   const t = useTranslations('Dashboard')
-  const membershipTerm = useMembershipTerm()
+  const membershipTerm = useAffiliationTerm()
 
   const { data: contacts, isLoading: contactsLoading } = useContacts(currentTeamId)
   const { data: sessions, isLoading: sessionsLoading } = useUpcomingSessions(currentTeamId)
   const { data: subTypes = [] } = useSubscriptionTypes(currentTeamId)
 
   const activeMembers =
-    contacts?.filter((c) => c.membership_status === 'active' && !c.archived_at).length ?? null
+    contacts?.filter((c) => c.affiliation_summary?.has_active && !c.archived_at).length ?? null
   const thisWeek = weekStart()
   const prevWeek = new Date(thisWeek)
   prevWeek.setDate(prevWeek.getDate() - 7)

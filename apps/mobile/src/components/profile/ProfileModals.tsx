@@ -4,10 +4,8 @@ import { ActivityIndicator, Button, IconButton, Text, useTheme, Avatar, Surface,
 import QRCode from 'react-native-qrcode-svg';
 import { Contact, TeamPublicProfile } from '../../types';
 import {
-  getStatusLabel,
-  getStatusColors,
-  getStatusDescription,
-  MEMBERSHIP_STATUS_CONFIG
+  getAffiliationLabel,
+  getAffiliationColors,
 } from '../../utils/profileUtils';
 
 interface ProfileModalsProps {
@@ -100,7 +98,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
         </View>
       </Modal>
 
-      {/* Membership Status Info Modal */}
+      {/* Affiliation Status Info Modal */}
       <Modal
         visible={showStatusModal}
         transparent
@@ -120,37 +118,44 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
               <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                 Your current status
               </Text>
-              <View style={[styles.statusBadgeLarge, { backgroundColor: getStatusColors(contact.membership_status, theme.colors).bg }]}>
-                <Text variant="labelLarge" style={{ color: getStatusColors(contact.membership_status, theme.colors).text, fontWeight: '700' }}>
-                  {getStatusLabel(contact.membership_status)}
-                </Text>
-              </View>
-              <Text variant="bodyMedium" style={[styles.statusDescriptionText, { color: theme.colors.onSurface }]}>
-                {getStatusDescription(contact.membership_status)}
-              </Text>
-            </View>
-
-            <View style={styles.statusFlowContainer}>
-              <Text variant="titleSmall" style={{ color: theme.colors.onSurface, marginBottom: 12 }}>
-                Status Flow
-              </Text>
-              {Object.entries(MEMBERSHIP_STATUS_CONFIG).map(([key, config], index) => (
-                <View key={key} style={styles.statusFlowItem}>
-                  <View style={[styles.statusFlowBadge, { backgroundColor: config.bgColor }]}>
-                    <Text style={[styles.statusFlowBadgeText, { color: config.textColor }]}>
-                      {index + 1}
-                    </Text>
-                  </View>
-                  <View style={styles.statusFlowContent}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurface }}>
-                      {config.label}
-                    </Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                      {config.description}
-                    </Text>
-                  </View>
-                </View>
-              ))}
+              {(() => {
+                const summary = contact.affiliation_summary;
+                const colors = getAffiliationColors(summary, theme.colors);
+                const label = getAffiliationLabel(summary);
+                return (
+                  <>
+                    <View style={[styles.statusBadgeLarge, { backgroundColor: colors.bg }]}>
+                      <Text variant="labelLarge" style={{ color: colors.text, fontWeight: '700' }}>
+                        {label}
+                      </Text>
+                    </View>
+                    {summary?.has_active && summary.types.length > 0 && (
+                      <View style={styles.statusFlowContainer}>
+                        <Text variant="titleSmall" style={{ color: theme.colors.onSurface, marginBottom: 8 }}>
+                          Active affiliations
+                        </Text>
+                        {summary.types.map((type) => (
+                          <View key={type} style={styles.statusFlowItem}>
+                            <View style={[styles.statusFlowBadge, { backgroundColor: '#4CAF50' }]}>
+                              <Text style={[styles.statusFlowBadgeText, { color: '#FFFFFF' }]}>✓</Text>
+                            </View>
+                            <View style={styles.statusFlowContent}>
+                              <Text variant="labelMedium" style={{ color: theme.colors.onSurface }}>
+                                {type.replace(/_/g, ' ')}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    {!summary?.has_active && (
+                      <Text variant="bodyMedium" style={[styles.statusDescriptionText, { color: theme.colors.onSurface }]}>
+                        No active affiliations recorded. Contact your team if you think this is a mistake.
+                      </Text>
+                    )}
+                  </>
+                );
+              })()}
             </View>
 
             <Button mode="contained" onPress={onCloseStatus} style={styles.closeButton}>

@@ -170,8 +170,8 @@ const TRIGGER_OPTIONS = [
   { value: 'booking_no_show', label: 'Booking marked no-show', icon: XCircle, supportsDelay: true },
   { value: 'booking_cancelled', label: 'Booking cancelled', icon: XCircle, supportsDelay: true },
   {
-    value: 'membership_status_changed',
-    label: 'Membership status changed',
+    value: 'affiliation_changed',
+    label: 'Affiliation changed',
     icon: ShieldCheck,
     supportsDelay: true,
   },
@@ -188,7 +188,8 @@ const TRIGGER_OPTIONS = [
 
 const CONDITION_TYPE_OPTIONS = [
   { value: 'acquisition_stage', label: 'Acquisition stage', input: 'acquisition_stage_select' },
-  { value: 'membership_status', label: 'Membership status', input: 'membership_select' },
+  { value: 'has_affiliation', label: 'Has an active affiliation', input: 'none' },
+  { value: 'affiliation_type', label: 'Affiliation type', input: 'affiliation_type_select' },
   { value: 'subscription', label: 'Subscription', input: 'subscription_select' },
   { value: 'sessions_attended_min', label: 'Sessions attended ≥', input: 'number' },
   { value: 'sessions_attended_max', label: 'Sessions attended ≤', input: 'number' },
@@ -228,14 +229,6 @@ const ACQUISITION_STAGE_VALUES = [
   { value: 'trial_booked', label: 'Trial booked' },
   { value: 'trial_attended', label: 'Trial attended' },
   { value: 'joined', label: 'Joined' },
-]
-const MEMBERSHIP_STATUS_VALUES = [
-  'guest',
-  'requested',
-  'being_checked',
-  'almost_ready',
-  'active',
-  'expired',
 ]
 const SUBSCRIPTION_VALUES = [
   { value: 'any', label: 'Any subscription' },
@@ -554,15 +547,15 @@ function ConditionEditor({
                     const defaultVal =
                       next === 'acquisition_stage'
                         ? 'trial_booked'
-                        : next === 'membership_status'
-                          ? 'active'
-                          : next === 'subscription'
-                            ? 'any'
-                            : next === 'subscription_status'
-                              ? 'active'
-                              : next === 'bio_link_booking_no_show' || next === 'birthday_today'
+                        : next === 'subscription'
+                          ? 'any'
+                          : next === 'subscription_status'
+                            ? 'active'
+                            : next === 'bio_link_booking_no_show' || next === 'birthday_today'
+                              ? ''
+                              : next === 'has_affiliation'
                                 ? ''
-                                : next === 'tag' || next === 'field_equals'
+                                : next === 'tag' || next === 'field_equals' || next === 'affiliation_type'
                                   ? ''
                                   : '7'
                     update(i, { type: next, value: defaultVal, condField: undefined })
@@ -603,22 +596,13 @@ function ConditionEditor({
                         </SelectContent>
                       </Select>
                     )}
-                    {opt?.input === 'membership_select' && (
-                      <Select
+                    {opt?.input === 'affiliation_type_select' && (
+                      <Input
+                        className="h-8 text-xs"
+                        placeholder="type key (e.g. club_membership)"
                         value={cond.value}
-                        onValueChange={(v) => update(i, { value: v ?? '' })}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MEMBERSHIP_STATUS_VALUES.map((v) => (
-                            <SelectItem key={v} value={v} className="text-xs">
-                              {v}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(e) => update(i, { value: e.target.value })}
+                      />
                     )}
                     {opt?.input === 'subscription_select' && (
                       <Select
@@ -727,11 +711,6 @@ const UPDATE_FIELD_OPTIONS = [
     value: 'acquisition_stage',
     label: 'Acquisition stage',
     values: ['trial_booked', 'trial_attended', 'joined'],
-  },
-  {
-    value: 'membership_status',
-    label: 'Membership status',
-    values: ['guest', 'requested', 'being_checked', 'almost_ready', 'active', 'expired'],
   },
 ] as const
 
@@ -1281,7 +1260,7 @@ const PLACEHOLDER_GROUPS = [
       { key: 'firstname', hint: 'First name' },
       { key: 'lastname', hint: 'Last name' },
       { key: 'acquisition_stage', hint: 'Trial booked / Trial attended / Joined' },
-      { key: 'membership_status', hint: 'Active / Expired / …' },
+      { key: 'affiliation_summary', hint: 'Has active affiliation (true/false)' },
       { key: 'sessions_count', hint: 'Sessions attended' },
     ],
   },

@@ -8,7 +8,15 @@ export interface ContactResidence {
   [key: string]: string | undefined;
 }
 
+/** @deprecated use affiliation_summary instead */
 export type MembershipStatus = 'guest' | 'requested' | 'being_checked' | 'almost_ready' | 'active' | 'expired';
+
+/** Denormalized affiliation snapshot written by Cloud Functions to contacts/{id} */
+export interface AffiliationSummary {
+  has_active: boolean;
+  types: string[];
+  org_ids: string[];
+}
 
 export interface CoachBadgeConfig {
   key: string;
@@ -44,7 +52,9 @@ export interface Contact {
   residence?: ContactResidence | null;
   gender?: string;
   notes?: string;
+  /** @deprecated synced from affiliation_summary.has_active */
   membership_status?: MembershipStatus;
+  affiliation_summary?: AffiliationSummary;
   rank?: number;
   weight?: number;
   taxnumber?: string;

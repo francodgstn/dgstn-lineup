@@ -1,6 +1,9 @@
 // Tier 1 event trigger — fires automation rules in real-time when a contact document
-// is created or has key fields updated (acquisition_stage, membership_status,
-// subscription_type_id).
+// is created or has key fields updated (acquisition_stage, subscription_type_id).
+//
+// NOTE: affiliation_changed is no longer fired from here. It is fired from the
+// onAffiliationWrite trigger (sync/onAffiliationWrite.ts) which has direct access
+// to the affiliation data and fires after the summary has been recomputed.
 //
 // Trigger path: contacts/{contactId}
 // Contacts are top-level with a teamId field — teamId is read from the document.
@@ -18,9 +21,6 @@ function resolveContactTrigger(
 
   // acquisition stage advanced (trial_booked → trial_attended → joined)
   if (before.acquisition_stage !== after.acquisition_stage) return 'acquisition_stage_changed'
-
-  // membership_status changed
-  if (before.membership_status !== after.membership_status) return 'membership_status_changed'
 
   // subscription changed (manual type assignment OR Stripe billing rollup status)
   if (before.subscription_type_id !== after.subscription_type_id) return 'subscription_changed'

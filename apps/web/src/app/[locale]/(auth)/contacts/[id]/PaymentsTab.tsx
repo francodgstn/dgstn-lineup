@@ -141,7 +141,7 @@ function useResumeMemberSubscription(teamId: string | null, contactId: string) {
 
 // ─── member subscriptions section ─────────────────────────────────────────────
 
-function MemberSubscriptionsSection({
+export function MemberSubscriptionsSection({
   teamId,
   contactId,
   t,

@@ -2,6 +2,25 @@ import { FieldValue } from 'firebase-admin/firestore'
 import type { MigrationConfig } from '../config'
 import { sourceDb, targetDb, ORG_ID, ORG_NAME, HMD_ORG_RANKING_SYSTEMS } from '../config'
 
+// Path constants + default statuses mirror @linyup/shared (not importable under
+// tsconfig.scripts.json). The org-level 'club' affiliation type + the reused org
+// membership statuses back the migration's org-issued affiliations.
+const AFFILIATION_TYPES_SUBCOLLECTION = 'affiliation_types'
+const ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION = 'membership_statuses'
+
+const DEFAULT_ORG_MEMBERSHIP_STATUSES = [
+  { id: 'guest',        label: 'Guest',        description: 'No membership process started.',                    color: 'gray',   order: 0, isBuiltIn: true, countsAsActive: false, isFinal: false },
+  { id: 'requested',    label: 'Requested',    description: 'Member has submitted a request, awaiting review.',  color: 'yellow', order: 1, isBuiltIn: true, countsAsActive: false, isFinal: false },
+  { id: 'under_review', label: 'Under review', description: 'Documents are being reviewed by the organisation.', color: 'blue',   order: 2, isBuiltIn: true, countsAsActive: false, isFinal: false },
+  { id: 'almost_ready', label: 'Almost ready', description: 'Review complete, awaiting final confirmation.',     color: 'purple', order: 3, isBuiltIn: true, countsAsActive: false, isFinal: false },
+  { id: 'active',       label: 'Active',       description: 'Valid membership, recognised by the federation.',    color: 'green',  order: 4, isBuiltIn: true, countsAsActive: true,  isFinal: false },
+  { id: 'expired',      label: 'Expired',      description: 'Membership period has ended. Renewal required.',     color: 'red',    order: 5, isBuiltIn: true, countsAsActive: false, isFinal: true },
+] as const
+
+const ORG_CLUB_AFFILIATION_TYPE = {
+  id: 'club', key: 'club', label: 'Club membership', default_issuer: 'org', org_id: ORG_ID, active: true, order: 0,
+}
+
 export async function pass00Setup(cfg: MigrationConfig): Promise<void> {
   console.log('Pass 0: org setup')
   const src = sourceDb()
@@ -42,6 +61,17 @@ export async function pass00Setup(cfg: MigrationConfig): Promise<void> {
     })
     console.log(`  created organizations/${ORG_ID} with ${HMD_ORG_RANKING_SYSTEMS.length} ranking systems`)
   }
+
+  // Seed the org membership statuses (reused as affiliation statuses) + the
+  // org-level 'club' affiliation type that backs org-issued affiliations.
+  for (const st of DEFAULT_ORG_MEMBERSHIP_STATUSES) {
+    await orgRef.collection(ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION).doc(st.id).set(st)
+  }
+  await orgRef
+    .collection(AFFILIATION_TYPES_SUBCOLLECTION)
+    .doc(ORG_CLUB_AFFILIATION_TYPE.id)
+    .set(ORG_CLUB_AFFILIATION_TYPE)
+  console.log(`  seeded ${DEFAULT_ORG_MEMBERSHIP_STATUSES.length} membership statuses + org 'club' affiliation type`)
 
   // Create the org_admin member doc (idempotent)
   if (adminUid) {

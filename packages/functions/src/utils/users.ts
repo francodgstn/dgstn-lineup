@@ -5,7 +5,6 @@ import { format } from 'date-fns'
 import { to } from './async'
 import {
   countContactsByStage,
-  countContactsByMembershipStatus,
   countContactsBySubscriptionType,
   countContactsByRecurrence,
 } from './contacts'
@@ -52,10 +51,9 @@ export async function getOrCreateTeamWeeklyReport(
   if (!existing.empty) return existing.docs[0].ref
 
   // No report for this week — compute initial snapshot counts
-  const [contactsByStage, contactsByMembership, contactsBySubType, contactsByRecurrence] =
+  const [contactsByStage, contactsBySubType, contactsByRecurrence] =
     await Promise.all([
       countContactsByStage(db, teamId),
-      countContactsByMembershipStatus(db, teamId),
       countContactsBySubscriptionType(db, teamId),
       countContactsByRecurrence(db, teamId),
     ])
@@ -82,7 +80,6 @@ export async function getOrCreateTeamWeeklyReport(
       iso_week: format(date, ISO_WEEK_FORMAT),
       teamId,
       contacts_count_by_stage: contactsByStage,
-      contacts_count_by_membership_status: contactsByMembership,
       contacts_count_by_subscription_type: contactsBySubType,
       contacts_count_by_recurrence: contactsByRecurrence,
       sessions_count: sessionsSnap?.size ?? 0,

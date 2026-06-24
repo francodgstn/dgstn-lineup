@@ -5,6 +5,14 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { assertVerifiableCode } from './verificationCode'
+import { to } from '../utils/async'
+import {
+  CONTACT_AFFILIATIONS_SUBCOLLECTION,
+  AFFILIATION_TYPES_SUBCOLLECTION,
+  TEAMS_COLLECTION,
+  planSupportsAffiliations,
+  type AffiliationType,
+} from '@linyup/shared'
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,20 +117,87 @@ export const completeMembershipSignup = onCall(async (request) => {
     birthdate: sanitized.birthdate,
     notes: sanitized.notes,
     // Acquisition: a direct membership signup crosses straight into the community.
-    // The approval pipeline (requested → active) lives on the membership/affiliation
-    // axis, not here.
+    // The approval pipeline (requested → active) lives on the affiliation axis, not here.
     acquisition_stage: 'joined',
     acquisition_stage_updated_at: FieldValue.serverTimestamp(),
     converted_at: FieldValue.serverTimestamp(),
     entry: 'signup',
     teamId,
-    membership_status: 'requested',
-    membership_active: false,
     archived_at: null,
     deleted_at: null,
     created_at: FieldValue.serverTimestamp(),
   })
   const contactId = contactRef.id
+
+  // ── Create a PENDING affiliation (if affiliations are enabled + plan allows) ──
+  // Best-effort: signup must not fail if the affiliation catalog is missing.
+  try {
+    const db = admin.firestore()
+    if (team.affiliations_enabled && planSupportsAffiliations(team.plan ?? null)) {
+      // Find the first active affiliation type in the team's catalog.
+      // Prefer org-issued types if the team belongs to an org; else team-local.
+      let affiliationTypeId: string | null = null
+      let affiliationIssuer: 'team' | 'org' = 'team'
+      let affiliationOrgId: string | undefined
+
+      if (team.org_id) {
+        const [, orgTypesSnap] = await to(
+          db
+            .collection('organizations')
+            .doc(team.org_id)
+            .collection(AFFILIATION_TYPES_SUBCOLLECTION)
+            .where('active', '!=', false)
+            .limit(1)
+            .get(),
+        )
+        if (orgTypesSnap && !orgTypesSnap.empty) {
+          const t = orgTypesSnap.docs[0].data() as AffiliationType
+          affiliationTypeId = orgTypesSnap.docs[0].id
+          affiliationIssuer = 'org'
+          affiliationOrgId = team.org_id
+          void t // used above for type narrowing
+        }
+      }
+
+      if (!affiliationTypeId) {
+        const [, teamTypesSnap] = await to(
+          db
+            .collection(TEAMS_COLLECTION)
+            .doc(teamId)
+            .collection(AFFILIATION_TYPES_SUBCOLLECTION)
+            .where('active', '!=', false)
+            .limit(1)
+            .get(),
+        )
+        if (teamTypesSnap && !teamTypesSnap.empty) {
+          affiliationTypeId = teamTypesSnap.docs[0].id
+          affiliationIssuer = 'team'
+        }
+      }
+
+      if (affiliationTypeId) {
+        const affRef = contactRef.collection(CONTACT_AFFILIATIONS_SUBCOLLECTION).doc()
+        await affRef.set({
+          id: affRef.id,
+          teamId,
+          affiliation_type_id: affiliationTypeId,
+          issuer: affiliationIssuer,
+          ...(affiliationOrgId ? { org_id: affiliationOrgId } : {}),
+          status_id: 'requested',
+          active: false, // 'requested' countsAsActive=false
+          created_by: null,
+          created_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        })
+        console.log(`[completeMembershipSignup] created pending affiliation for contact ${contactId}`)
+      } else {
+        console.log(`[completeMembershipSignup] no affiliation types found for team ${teamId}, skipping`)
+      }
+    }
+  } catch (err) {
+    // Non-fatal: contact is already created; affiliation is best-effort
+    console.error('[completeMembershipSignup] affiliation creation failed (non-fatal):', err)
+  }
 
   // Mark code as used
   await codeRef.update({ used: true, usedAt: FieldValue.serverTimestamp(), contactId })

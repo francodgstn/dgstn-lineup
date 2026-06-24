@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/select'
 import { buildWeekKeys, shortWeekLabel, formatTooltipWeek, formatAxisWeek } from '@/lib/isoWeek'
 import type { WeeklyReport, SubscriptionTypeDoc } from '@/hooks/useDashboardData'
-import { useMembershipTerm } from '@/hooks/useMembershipTerm'
 
 // ─── colors ──────────────────────────────────────────────────────────────────
 
@@ -29,7 +28,6 @@ function paletteColor(i: number) { return PALETTE[i % PALETTE.length] }
 // Built dynamically inside the component so the membership term can be injected.
 
 function getField(dim: string): string {
-  if (dim === 'membership_status')       return 'contacts_count_by_membership_status'
   if (dim === 'subscription_type')       return 'contacts_count_by_subscription_type'
   if (dim === 'subscription_recurrence') return 'contacts_count_by_recurrence'
   return 'contacts_count_by_stage'
@@ -132,10 +130,8 @@ export function ContactsSummaryCard({
   weeklyReports, comparisonWeeklyReports = [], compareWith = 'none',
   trendsWeeks = 13, subscriptionTypes = [], title,
 }: Props) {
-  const membershipTerm = useMembershipTerm()
   const DIMENSIONS = [
-    { value: 'type',                    label: 'Contact type' },
-    { value: 'membership_status',       label: membershipTerm },
+    { value: 'type',                    label: 'Acquisition stage' },
     { value: 'subscription_type',       label: 'Subscription' },
     { value: 'subscription_recurrence', label: 'Billing recurrence' },
   ]
@@ -151,13 +147,6 @@ export function ContactsSummaryCard({
       return [
         { value: 'all', label: 'All types', color: typeColor('all') },
         ...types.map((t) => ({ value: t, label: t, color: typeColor(t) })),
-      ]
-    }
-    if (dimension === 'membership_status') {
-      const statuses = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_membership_status ?? {})))).sort()
-      return [
-        { value: 'all', label: 'All statuses', color: FALLBACK },
-        ...statuses.map((s, i) => ({ value: s, label: s, color: paletteColor(i) })),
       ]
     }
     if (dimension === 'subscription_recurrence') {

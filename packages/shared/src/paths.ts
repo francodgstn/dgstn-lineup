@@ -49,6 +49,9 @@ export const ORG_INVITATIONS_SUBCOLLECTION = 'org_invitations'
 export const ORG_ACCESS_REQUESTS_SUBCOLLECTION = 'org_access_requests'
 export const ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION = 'membership_statuses'
 export const ORG_PLACES_SUBCOLLECTION = 'org_places'
+// Affiliation type catalog — same subcollection name under organizations/{orgId}
+// (org-wide types) AND teams/{teamId} (team-local types). See AffiliationType.
+export const AFFILIATION_TYPES_SUBCOLLECTION = 'affiliation_types'
 export const TEAM_INTEGRATIONS_SUBCOLLECTION = 'integrations'
 export const INSTALLED_PLUGINS_SUBCOLLECTION = 'installed_plugins'
 // Same subcollection name, under organizations/{orgId} instead of teams/{teamId}.
@@ -74,6 +77,8 @@ export const CONTACT_GOALS_SUBCOLLECTION = 'goals'
 export const CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION = 'performance_checkins'
 export const CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION = 'subscription_history'
 export const SUBSCRIPTION_TRANSITIONS_SUBCOLLECTION = 'subscription_transitions'
+// Affiliation set — a contact may hold several (club + federation licence + grading).
+export const CONTACT_AFFILIATIONS_SUBCOLLECTION = 'affiliations'
 
 export const EVENTS_COLLECTION = 'events'
 export const EVENT_TYPES_SUBCOLLECTION = 'event_types'
