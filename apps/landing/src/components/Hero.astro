@@ -69,7 +69,6 @@ const DEMO_STUDIOS = [
     <!-- Live demo shortcut — every activity is an equal peer; no default vertical -->
     <div class="demo-cta">
       <p class="demo-eyebrow"><i data-lucide="play-circle"></i> {t('hero.demoEyebrow')}</p>
-      <p class="demo-intro">{t('hero.demoIntro')}</p>
       <div class="demo-chips">
         {
           DEMO_STUDIOS.map((studio) => (
@@ -266,9 +265,6 @@ const DEMO_STUDIOS = [
     margin: 0 0 18px;
   }
   .demo-eyebrow :global(svg) { width: 15px; height: 15px; color: var(--primary); }
-
-  /* Intro line — all activities presented as equal peers (no default vertical) */
-  .demo-intro { font-size: 14px; line-height: 1.5; color: var(--muted-foreground); margin: 0 0 18px; }
 
   .demo-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
   .demo-chip {

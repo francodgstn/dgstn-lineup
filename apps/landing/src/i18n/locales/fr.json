@@ -24,7 +24,6 @@
     "emailError": "Une erreur s'est produite — réessayez.",
     "emailModalSub": "Linyup arrive bientôt — laissez votre e-mail et nous vous préviendrons dès que c'est prêt.",
     "demoEyebrow": "Essayez une démo live — sans inscription",
-    "demoIntro": "Fonctionne pour la danse, le fitness, le yoga, le tennis, les arts martiaux et plus — choisissez un studio à explorer :",
     "demoStudios": {
       "grappling": "Arts martiaux",
       "crossfit": "CrossFit",
@@ -50,8 +49,8 @@
     "cta": { "title": "Voyez tout en action", "body": "Essayez un vrai studio — sans inscription.", "button": "Découvrir la démo en direct" }
   },
   "proof": {
-    "label": "Profitez de la remise de lancement — 50 % de réduction, places limitées",
-    "cta": "Profiter de l'offre"
+    "label": "Profitez du tarif early-user — contactez-nous",
+    "cta": "Contactez-nous"
   },
   "showcase": {
     "eyebrow": "En action",
@@ -120,7 +119,7 @@
     "title": "Des formules pour chaque étape",
     "subtitle": "De vrais prix, en toute transparence. Pas de « demandez une démo pour voir les tarifs », pas de frais cachés — juste le coût de chaque formule et exactement ce que vous obtenez.",
     "trialNote": "Essai gratuit de 30 jours · Sans carte de crédit.",
-    "launchNote": "Offre de lancement : 50 % de réduction sur vos 6 premiers mois — places limitées.",
+    "launchNote": "Tarif early-user disponible — contactez-nous.",
     "migrationNote": "Vous changez de plateforme ? Nous migrons vos données pour vous — gratuitement.",
     "swissNote": "Conçu en Suisse · prix en CHF · EN/DE/FR/IT",
     "perMonth": "/mois",
@@ -189,14 +188,12 @@
     "title": "Soyez payé. Vendez en ligne. Gardez ce qui vous revient.",
     "subtitle": "Encaissez abonnements et entrées à l'unité directement sur votre propre compte Stripe, et ouvrez une boutique publique en quelques minutes — aucun intermédiaire qui retient votre argent.",
     "cards": {
-      "account": { "title": "Votre compte, votre argent", "body": "Les versements vont directement sur votre propre compte Stripe. Linyup ne détient jamais vos fonds." },
+      "models": { "title": "Flexible & transparent", "body": "Deux façons d'encaisser : acheminez les paiements via Linyup directement vers votre compte Stripe (Pay via Linyup), ou utilisez votre propre passerelle (BYO Stripe / Payrexx) et suivez-les ici.", "ratesLink": "Voir les tarifs Pay via Linyup" },
       "shop": { "title": "Une boutique qui grandit avec vous", "body": "Vendez abonnements, cartes de cours et entrées à l'unité dès le départ — puis ajoutez les cours en ligne ou la boutique de produits pour vendre cours et articles depuis la même page publique. Vos clients achètent en un geste, en ligne, à tout moment." },
-      "twint": { "title": "TWINT + cartes", "body": "Acceptez les moyens que les clients suisses utilisent vraiment — y compris les abonnements récurrents sur TWINT, pas seulement les paiements uniques." },
-      "transparent": { "title": "Des tarifs honnêtes et transparents", "body": "Les frais Stripe répercutés au prix coûtant, plus une petite commission Linyup dès 0,4 %. Aucune majoration cachée, aucune commission de place de marché." }
+      "twint": { "title": "TWINT + cartes", "body": "Acceptez les moyens que les clients suisses utilisent vraiment — y compris les abonnements récurrents sur TWINT, pas seulement les paiements uniques." }
     },
     "proof": "Un abonnement payé par TWINT sur la formule Studio coûte environ 2 % tout compris — soit à peu près la moitié de ce que facturent les outils internationaux qui n'acceptent que les cartes.",
-    "cta": "Commencer gratuitement",
-    "ctaSecondary": "Comment fonctionnent les paiements",
+    "cta": "Commencer gratuitement",
     "feesTitle": "Frais de paiement, en toute transparence",
     "feesIntro": "Facturés en plus des frais standard de Stripe, que nous répercutons au prix coûtant. Uniquement un pourcentage — aucun frais Linyup fixe par transaction. Même taux sur les cartes et TWINT.",
     "feesPlanHead": "Formule",

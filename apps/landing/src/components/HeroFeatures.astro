@@ -44,7 +44,7 @@ const cards = [
           </div>
         ))
       }
-      <a class="hf-card hf-cta" href={DEMO_URL}>
+      <a class="hf-card hf-cta" href={`${DEMO_URL}/login`}>
         <div class="hf-icon hf-cta-icon"><i data-lucide="play"></i></div>
         <h3>{t('heroFeatures.cta.title')}</h3>
         <p>{t('heroFeatures.cta.body')}</p>
@@ -88,7 +88,9 @@ const cards = [
   }
   .hf-cta:hover { box-shadow: var(--ring-card), var(--shadow-lg); }
   .hf-cta h3 { color: #fff; }
-  .hf-cta p { color: color-mix(in oklch, #fff 82%, transparent); }
+  /* Higher specificity than `.hf-card p` (same element carries both classes), so the
+     body text actually renders white on the purple card instead of muted grey. */
+  .hf-card.hf-cta p { color: color-mix(in oklch, #fff 94%, transparent); }
   .hf-cta-icon { background: color-mix(in oklch, #fff 18%, transparent); border-color: color-mix(in oklch, #fff 28%, transparent); color: #fff; }
   .hf-cta-btn {
     display: inline-flex;

@@ -24,7 +24,6 @@
     "emailError": "Something went wrong — please try again.",
     "emailModalSub": "Linyup is launching soon — leave your email and we'll let you know the moment it's ready.",
     "demoEyebrow": "Try a live demo — no signup",
-    "demoIntro": "Works for dance, fitness, yoga, tennis, martial arts and more — pick a studio to explore:",
     "demoStudios": {
       "grappling": "Martial arts",
       "crossfit": "CrossFit",
@@ -50,8 +49,8 @@
     "cta": { "title": "See it all in action", "body": "Take a real studio for a spin — no sign-up needed.", "button": "Explore the live demo" }
   },
   "proof": {
-    "label": "Lock in the launch discount — 50% off, limited availability",
-    "cta": "Claim the offer"
+    "label": "Lock in early-user pricing — get in touch",
+    "cta": "Get in touch"
   },
   "showcase": {
     "eyebrow": "See it in action",
@@ -120,7 +119,7 @@
     "title": "Plans for every stage",
     "subtitle": "Real prices, in plain sight. No 'request a demo to see pricing', no surprise fees — just what each plan costs and exactly what you get.",
     "trialNote": "30-day free trial · No credit card required.",
-    "launchNote": "Launch offer: 50% off your first 6 months — limited availability.",
+    "launchNote": "Early-user pricing available — get in touch.",
     "migrationNote": "Switching platforms? We migrate your data for you — free.",
     "swissNote": "Swiss-made · prices in CHF · EN/DE/FR/IT",
     "perMonth": "/mo",
@@ -189,14 +188,12 @@
     "title": "Get paid. Sell online. Keep what's yours.",
     "subtitle": "Take subscriptions and drop-ins straight into your own Stripe account, and open a public shop in minutes — no middleman holding your money.",
     "cards": {
-      "account": { "title": "Your account, your money", "body": "Payouts go directly into your own Stripe account. Linyup never holds your funds." },
+      "models": { "title": "Flexible & transparent", "body": "Two ways to get paid: route payments through Linyup straight into your own Stripe account (Pay via Linyup), or bring your own gateway (BYO Stripe / Payrexx) and just track them here.", "ratesLink": "See the Pay-via-Linyup rates" },
       "shop": { "title": "A shop that grows with you", "body": "Sell subscriptions, class packs and drop-ins out of the box — then add Online Courses or the Products Shop to sell courses and merch from the same public page. Customers buy in a tap, online, anytime." },
-      "twint": { "title": "TWINT + cards", "body": "Accept the methods Swiss customers actually use — including recurring subscriptions on TWINT, not just one-off payments." },
-      "transparent": { "title": "Honest, transparent pricing", "body": "Stripe's fee passed through at cost, plus a small Linyup fee from 0.4%. No hidden markup, no marketplace commission." }
+      "twint": { "title": "TWINT + cards", "body": "Accept the methods Swiss customers actually use — including recurring subscriptions on TWINT, not just one-off payments." }
     },
     "proof": "A subscription paid by TWINT on the Studio tier costs about 2% all-in — roughly half what card-only international tools charge.",
     "cta": "Start for free",
-    "ctaSecondary": "See how payments work",
     "feesTitle": "Payment fees, in plain sight",
     "feesIntro": "Charged on top of Stripe's standard fee, which we pass through at cost. Percentage only — no fixed per-transaction Linyup fee. Same rate on cards and TWINT.",
     "feesPlanHead": "Plan",

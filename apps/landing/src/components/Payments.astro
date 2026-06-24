@@ -10,14 +10,12 @@ const { lang } = Astro.props;
 const t = useTranslations(lang);
 
 // The headline upgrade for this release — "Accept Payments + Shop" gets its own
-// full-width section (not a feature tile): four benefit points + CTAs. The
-// per-plan Linyup fee lives in the pricing comparison table (under the Payments
-// row), not here. Copy is pulled from the `payments` i18n namespace.
+// full-width section. A lead "flexible & transparent" card (the two payment
+// models: Pay via Linyup + BYO Stripe/Payrexx, with a rates modal) is followed
+// by the two product cards. Copy is pulled from the `payments` i18n namespace.
 const points = [
-  { key: 'account', icon: 'wallet' },
   { key: 'shop', icon: 'store' },
   { key: 'twint', icon: 'smartphone' },
-  { key: 'transparent', icon: 'badge-check' },
 ] as const;
 ---
 
@@ -30,6 +28,14 @@ const points = [
     </div>
 
     <div class="pay-grid">
+      <div class="pay-card pay-card-lead">
+        <span class="pay-ico"><i data-lucide="scale"></i></span>
+        <h3>{t('payments.cards.models.title')}</h3>
+        <p>{t('payments.cards.models.body')}</p>
+        <button class="pay-rates" type="button" data-rates-open>
+          {t('payments.cards.models.ratesLink')} <i data-lucide="arrow-right"></i>
+        </button>
+      </div>
       {
         points.map(({ key, icon }) => (
           <div class="pay-card">
@@ -43,10 +49,45 @@ const points = [
 
     <div class="pay-cta">
       <button class="btn btn-primary" type="button" data-early-access>{t('payments.cta')}</button>
-      <a class="btn btn-outline" href="#pricing">{t('payments.ctaSecondary')}</a>
     </div>
   </div>
+
+  <dialog class="rates-modal" id="rates-modal">
+    <div class="rates-head">
+      <h3>{t('payments.feesTitle')}</h3>
+      <button class="rates-close" type="button" data-rates-close aria-label="Close">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <p class="rates-intro">{t('payments.feesIntro')}</p>
+    <table class="rates-table">
+      <thead>
+        <tr><th>{t('payments.feesPlanHead')}</th><th>{t('payments.feesFeeHead')}</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Free</td><td>{t('payments.feeFree')}</td></tr>
+        <tr><td>Coach</td><td>{t('payments.feeCoach')}</td></tr>
+        <tr><td>Studio</td><td>{t('payments.feeStudio')}</td></tr>
+        <tr><td>Organisation</td><td>{t('payments.feeOrg')}</td></tr>
+      </tbody>
+    </table>
+    <p class="rates-micro">{t('payments.feesMicrocopy')}</p>
+  </dialog>
 </section>
+
+<script>
+  const modal = document.getElementById('rates-modal') as HTMLDialogElement | null;
+  document
+    .querySelectorAll('[data-rates-open]')
+    .forEach((b) => b.addEventListener('click', () => modal?.showModal()));
+  document
+    .querySelectorAll('[data-rates-close]')
+    .forEach((b) => b.addEventListener('click', () => modal?.close()));
+  // Close when clicking the backdrop (outside the dialog box).
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) modal.close();
+  });
+</script>
 
 <style>
   .pay-sec { padding: 104px 0; }
@@ -55,7 +96,7 @@ const points = [
   .sec-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 34px; line-height: 1.15; }
   .sec-head p { margin-top: 12px; font-size: 17px; color: var(--muted-foreground); }
 
-  .pay-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .pay-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
   .pay-card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -78,12 +119,62 @@ const points = [
   .pay-card h3 { font-family: var(--font-display); font-weight: 600; font-size: 19px; }
   .pay-card p { margin-top: 7px; font-size: 14.5px; line-height: 1.55; color: var(--muted-foreground); }
 
+  /* Lead card — subtle accent border to mark it as the "how you get paid" anchor */
+  .pay-card-lead { border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); }
+  .pay-rates {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary);
+  }
+  .pay-rates :global(svg) { width: 15px; height: 15px; transition: transform 0.15s ease; }
+  .pay-rates:hover :global(svg) { transform: translateX(3px); }
+
   .pay-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 32px; }
   .pay-cta .btn { min-width: 180px; }
 
+  /* Rates modal */
+  .rates-modal {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    padding: 28px;
+    max-width: 440px;
+    width: calc(100% - 32px);
+    color: var(--foreground);
+    background: var(--card);
+  }
+  .rates-modal::backdrop { background: color-mix(in oklch, black 45%, transparent); }
+  .rates-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .rates-head h3 { font-family: var(--font-display); font-weight: 600; font-size: 20px; }
+  .rates-close {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; flex-shrink: 0;
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    background: none; cursor: pointer; color: var(--muted-foreground);
+  }
+  .rates-close:hover { background: var(--purple-50); color: var(--primary); }
+  .rates-close :global(svg) { width: 16px; height: 16px; }
+  .rates-intro { margin-top: 10px; font-size: 14px; line-height: 1.55; color: var(--muted-foreground); }
+  .rates-table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  .rates-table th, .rates-table td { text-align: left; padding: 10px 4px; border-bottom: 1px solid var(--border); font-size: 14.5px; }
+  .rates-table th { font-weight: 600; color: var(--muted-foreground); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .rates-table td:last-child { text-align: right; font-weight: 600; }
+  .rates-micro { margin-top: 16px; font-size: 12.5px; line-height: 1.55; color: var(--muted-foreground); }
+
+  @media (max-width: 980px) {
+    .pay-grid { grid-template-columns: 1fr; }
+  }
   @media (max-width: 860px) {
     .pay-sec { padding: 68px 0; }
-    .pay-grid { grid-template-columns: 1fr; }
     .sec-head h2 { font-size: 28px; }
   }
 </style>
