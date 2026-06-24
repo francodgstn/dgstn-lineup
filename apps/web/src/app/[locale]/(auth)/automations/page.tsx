@@ -79,7 +79,7 @@ import {
   Tag,
   Webhook,
 } from 'lucide-react'
-import { TEAMS_COLLECTION } from '@linyup/shared'
+import { TEAMS_COLLECTION, SUBSCRIPTION_ROLLUP_STATUSES } from '@linyup/shared'
 import { Link } from '@/i18n/navigation'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
@@ -201,7 +201,28 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'field_equals', label: 'Field equals', input: 'field_equals' },
   { value: 'birthday_today', label: 'Birthday today', input: 'none' },
   { value: 'bio_link_booking_no_show', label: 'Bio-link booking no-show', input: 'none' },
+  {
+    value: 'subscription_status',
+    label: 'Subscription billing status',
+    input: 'subscription_status_select',
+  },
 ]
+
+const SUBSCRIPTION_STATUS_VALUES = SUBSCRIPTION_ROLLUP_STATUSES.map((v) => ({
+  value: v,
+  label:
+    v === 'active'
+      ? 'Active'
+      : v === 'trialing'
+        ? 'Trialing'
+        : v === 'past_due'
+          ? 'Past due'
+          : v === 'paused'
+            ? 'Paused (frozen)'
+            : v === 'cancelled'
+              ? 'Cancelled'
+              : 'No subscription',
+}))
 
 const ACQUISITION_STAGE_VALUES = [
   { value: 'trial_booked', label: 'Trial booked' },
@@ -537,11 +558,13 @@ function ConditionEditor({
                           ? 'active'
                           : next === 'subscription'
                             ? 'any'
-                            : next === 'bio_link_booking_no_show' || next === 'birthday_today'
-                              ? ''
-                              : next === 'tag' || next === 'field_equals'
+                            : next === 'subscription_status'
+                              ? 'active'
+                              : next === 'bio_link_booking_no_show' || next === 'birthday_today'
                                 ? ''
-                                : '7'
+                                : next === 'tag' || next === 'field_equals'
+                                  ? ''
+                                  : '7'
                     update(i, { type: next, value: defaultVal, condField: undefined })
                   }}
                 >
@@ -610,6 +633,26 @@ function ConditionEditor({
                         </SelectTrigger>
                         <SelectContent>
                           {SUBSCRIPTION_VALUES.map((sv) => (
+                            <SelectItem key={sv.value} value={sv.value} className="text-xs">
+                              {sv.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {opt?.input === 'subscription_status_select' && (
+                      <Select
+                        value={cond.value}
+                        onValueChange={(v) => update(i, { value: v ?? 'active' })}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <span className="flex flex-1 text-left text-xs truncate">
+                            {SUBSCRIPTION_STATUS_VALUES.find((sv) => sv.value === cond.value)?.label ??
+                              cond.value}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SUBSCRIPTION_STATUS_VALUES.map((sv) => (
                             <SelectItem key={sv.value} value={sv.value} className="text-xs">
                               {sv.label}
                             </SelectItem>

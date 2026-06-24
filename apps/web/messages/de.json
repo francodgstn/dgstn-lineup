@@ -2042,7 +2042,20 @@
     "assignNoContacts": "Keine passenden Kontakte.",
     "assignSelected": "Zugeordnet zu {name}",
     "save": "Speichern",
-    "contactNoPayments": "Für diesen Kontakt sind noch keine Zahlungen erfasst."
+    "contactNoPayments": "Für diesen Kontakt sind noch keine Zahlungen erfasst.",
+    "memberSubscriptionsHeading": "Stripe-Abrechnung",
+    "subStatus_active": "Aktiv",
+    "subStatus_trialing": "Testphase",
+    "subStatus_past_due": "Überfällig",
+    "subStatus_paused": "Pausiert (eingefroren)",
+    "subStatus_cancelled": "Gekündigt",
+    "subStatus_none": "Kein Abonnement",
+    "freezeBilling": "Abrechnung einfrieren",
+    "resumeBilling": "Abrechnung fortsetzen",
+    "freezeConfirmTitle": "Abrechnung einfrieren?",
+    "freezeConfirmDesc": "Damit wird die Stripe-Abrechnung für dieses Abonnement pausiert. Das Mitglied behält vollen Zugang – nur die Abrechnung wird ausgesetzt. Jederzeit wieder aktivierbar.",
+    "freezeConfirmAction": "Einfrieren",
+    "noMemberSubscriptions": "Keine Stripe-Abonnements für diesen Kontakt."
   },
   "PaymentComment": {
     "preset_subscription_signup": "Abo-Anmeldung",

@@ -2032,7 +2032,20 @@
     "assignNoContacts": "Nessun contatto corrispondente.",
     "assignSelected": "Assegnato a {name}",
     "save": "Salva",
-    "contactNoPayments": "Nessun pagamento registrato per questo contatto."
+    "contactNoPayments": "Nessun pagamento registrato per questo contatto.",
+    "memberSubscriptionsHeading": "Fatturazione Stripe",
+    "subStatus_active": "Attivo",
+    "subStatus_trialing": "In prova",
+    "subStatus_past_due": "Scaduto",
+    "subStatus_paused": "In pausa (congelato)",
+    "subStatus_cancelled": "Cancellato",
+    "subStatus_none": "Nessun abbonamento",
+    "freezeBilling": "Congela fatturazione",
+    "resumeBilling": "Riprendi fatturazione",
+    "freezeConfirmTitle": "Congelare la fatturazione?",
+    "freezeConfirmDesc": "Questo sospende la fatturazione Stripe per questo abbonamento. Il membro mantiene accesso completo — solo la fatturazione viene sospesa. Riattivabile in qualsiasi momento.",
+    "freezeConfirmAction": "Congela fatturazione",
+    "noMemberSubscriptions": "Nessun abbonamento Stripe per questo contatto."
   },
   "PaymentComment": {
     "preset_subscription_signup": "Iscrizione abbonamento",

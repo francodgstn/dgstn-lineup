@@ -348,6 +348,8 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
       currency: sub.currency ?? 'chf',
       application_fee_percent: sub.application_fee_percent ?? null,
       status: sub.status ?? 'incomplete',
+      // Billing freeze (summer break / injury). When set, the rollup → 'paused'.
+      pause_collection: sub.pause_collection ?? null,
       current_period_end: sub.current_period_end
         ? Timestamp.fromMillis((sub.current_period_end as number) * 1000)
         : null,

@@ -52,6 +52,8 @@ export type AutomationCondition =
   | { type: 'subscription'; value: string }
   | { type: 'subscription_missing' } // legacy alias → subscription: none
   | { type: 'subscription_set' } // legacy alias → subscription: any
+  // Stripe billing rollup status (active/trialing/past_due/paused/cancelled/none)
+  | { type: 'subscription_status'; value: string }
   | { type: 'tag'; value: string }
   | { type: 'field_equals'; field: string; value: unknown }
   // Subscription renewal
@@ -99,6 +101,7 @@ export interface ContactData {
   acquisition_stage?: string
   membership_status?: string
   subscription_type_id?: string
+  subscription_status?: string
   total_sessions?: number
   last_session_at?: Timestamp | { seconds: number; nanoseconds: number } | null
   deleted_at?: Timestamp | null
@@ -293,6 +296,10 @@ export function evaluateContactConditions(
           contact.subscription_type_id !== cond.value
         )
           return false
+        break
+
+      case 'subscription_status':
+        if ((contact.subscription_status ?? 'none') !== cond.value) return false
         break
 
       // legacy aliases

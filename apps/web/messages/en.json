@@ -2047,7 +2047,20 @@
     "assignNoContacts": "No matching contacts.",
     "assignSelected": "Assigned to {name}",
     "save": "Save",
-    "contactNoPayments": "No payments recorded for this contact yet."
+    "contactNoPayments": "No payments recorded for this contact yet.",
+    "memberSubscriptionsHeading": "Stripe billing",
+    "subStatus_active": "Active",
+    "subStatus_trialing": "Trialing",
+    "subStatus_past_due": "Past due",
+    "subStatus_paused": "Paused (frozen)",
+    "subStatus_cancelled": "Cancelled",
+    "subStatus_none": "No subscription",
+    "freezeBilling": "Freeze billing",
+    "resumeBilling": "Resume billing",
+    "freezeConfirmTitle": "Freeze billing?",
+    "freezeConfirmDesc": "This pauses Stripe invoicing for this subscription. The member keeps full access — only billing is suspended. Resume any time.",
+    "freezeConfirmAction": "Freeze billing",
+    "noMemberSubscriptions": "No Stripe subscriptions for this contact."
   },
   "PaymentComment": {
     "preset_subscription_signup": "Subscription signup",

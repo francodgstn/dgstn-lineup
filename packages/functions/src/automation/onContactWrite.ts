@@ -22,8 +22,9 @@ function resolveContactTrigger(
   // membership_status changed
   if (before.membership_status !== after.membership_status) return 'membership_status_changed'
 
-  // subscription changed
+  // subscription changed (manual type assignment OR Stripe billing rollup status)
   if (before.subscription_type_id !== after.subscription_type_id) return 'subscription_changed'
+  if (before.subscription_status !== after.subscription_status) return 'subscription_changed'
 
   return null // no relevant change
 }

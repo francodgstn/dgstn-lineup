@@ -39,6 +39,7 @@ export { syncSubscriptionTypesToPublicProfile } from './sync/syncSubscriptionTyp
 export { syncProductsToPublicProfile } from './sync/syncProductsToPublicProfile'
 export { syncPrimaryPlaceToPublicProfile } from './sync/syncPrimaryPlaceToPublicProfile'
 export { onContactSubscriptionChange } from './sync/onContactSubscriptionChange'
+export { onMemberSubscriptionWrite } from './sync/onMemberSubscriptionWrite'
 export { onSessionUpdate } from './sync/onSessionUpdate'
 export { onActivityTypeChange } from './sync/onActivityTypeChange'
 export { onInstalledPluginStatusChange } from './sync/onInstalledPluginStatusChange'
@@ -157,6 +158,8 @@ export {
   createMembershipCheckout,
   createProductCheckout,
   createCourseCheckout,
+  pauseMemberSubscription,
+  resumeMemberSubscription,
 } from './connect/payments'
 export { refundMemberPayment } from './connect/refunds'
 export { handleConnectWebhook } from './connect/webhook'

@@ -26,6 +26,21 @@ export type ContactEntry = (typeof CONTACT_ENTRIES)[number]
 export const CONTACT_SOURCES = ['website', 'referral', 'social', 'event', 'import', 'other'] as const
 export type ContactSource = (typeof CONTACT_SOURCES)[number]
 
+// Subscription axis — contact-level ROLLUP of the per-subscription Stripe status in
+// teams/{teamId}/member_subscriptions. The ONLY axis that pauses: a summer-break or
+// injury freeze suspends BILLING (→ 'paused'), not belonging. Webhook-maintained.
+// Distinct from the acquisition 'trial_*' stages — 'trialing' here is a Stripe free
+// period, never a trial class.
+export const SUBSCRIPTION_ROLLUP_STATUSES = [
+  'active',
+  'trialing',
+  'past_due',
+  'paused',
+  'cancelled',
+  'none',
+] as const
+export type SubscriptionRollupStatus = (typeof SUBSCRIPTION_ROLLUP_STATUSES)[number]
+
 export type ContactGender = 'M' | 'F' | 'other'
 
 export interface ContactAddress {
@@ -100,6 +115,9 @@ export interface Contact {
   subscription_price_id?: string // set only when the chosen type has prices
   subscription_amount?: number // amount snapshot at assignment time
   subscription_type_updated_at?: Timestamp
+  // Contact-level rollup of member_subscriptions Stripe status (webhook-maintained).
+  // 'none' when the contact holds no live subscription. See SubscriptionRollupStatus.
+  subscription_status?: SubscriptionRollupStatus
 
   // Notes (plain text; rich-text JSON stored as string in hmd-lineup)
   notes?: string

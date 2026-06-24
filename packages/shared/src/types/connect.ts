@@ -244,6 +244,13 @@ export interface MemberSubscription {
   last_payment_status?: 'paid' | 'failed'
   /** Idempotency: last processed subscription/invoice event id for this doc. */
   last_event_id?: string
+  /**
+   * Mirrors the Stripe pause_collection object when billing is frozen.
+   * Present (non-null) when the subscription is paused; absent or null otherwise.
+   * The backend sets this optimistically on pauseMemberSubscription /
+   * resumeMemberSubscription before the webhook confirms.
+   */
+  pause_collection?: { behavior: string } | null
   created_at: Timestamp
   updated_at: Timestamp
 }

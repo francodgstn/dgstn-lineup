@@ -23,6 +23,7 @@ import {
   PRODUCTS_SUBCOLLECTION,
   COURSES_COLLECTION,
   TEAMS_COLLECTION,
+  MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   type SubscriptionType,
   type Product,
   type Course,
@@ -31,6 +32,7 @@ import { resolveBaseUrl } from '../utils/env'
 import {
   createOneOffCheckoutSession,
   createSubscriptionCheckoutSession,
+  getConnectStripe,
 } from '../utils/connect/client'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
 
@@ -635,4 +637,65 @@ export const createCourseCheckout = onCall(async (request) => {
     console.error('[connect] createCourseCheckout failed:', err)
     throw new HttpsError('internal', 'Failed to start checkout')
   }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// pause / resume member subscription — the BILLING FREEZE (summer break, injury).
+// Suspends invoicing, not belonging. Uses Stripe pause_collection on the connected
+// account; also mirrors the flag onto the member_subscriptions record so the
+// contact-level subscription_status rollup (onMemberSubscriptionWrite) updates
+// immediately, without waiting for the webhook round-trip.
+// ─────────────────────────────────────────────────────────────────────────────
+async function setSubscriptionPause(
+  uid: string,
+  teamId: string | undefined,
+  subscriptionId: string | undefined,
+  pause: boolean
+): Promise<{ ok: true; paused: boolean }> {
+  if (!teamId) throw new HttpsError('invalid-argument', 'teamId is required')
+  if (!subscriptionId) throw new HttpsError('invalid-argument', 'subscriptionId is required')
+
+  await assertManager(uid, teamId)
+  const team = await loadEnabledTeam(teamId)
+  const { accountId } = requireChargeableAccount(team)
+
+  const stripe = await getConnectStripe()
+  // pause_collection: { behavior: 'void' } freezes invoicing; '' clears it (resume).
+  const pauseValue = pause ? { behavior: 'void' as const } : ''
+  try {
+    await stripe.subscriptions.update(
+      subscriptionId,
+      { pause_collection: pauseValue },
+      { stripeAccount: accountId }
+    )
+  } catch (err) {
+    console.error('[connect] setSubscriptionPause failed:', err)
+    throw new HttpsError('internal', `Failed to ${pause ? 'pause' : 'resume'} the subscription`)
+  }
+
+  // Optimistic mirror → triggers the rollup recompute right away.
+  await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
+    .doc(subscriptionId)
+    .set(
+      { pause_collection: pause ? { behavior: 'void' } : null, updated_at: FieldValue.serverTimestamp() },
+      { merge: true }
+    )
+
+  return { ok: true, paused: pause }
+}
+
+export const pauseMemberSubscription = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+  const data = request.data as { teamId?: string; subscriptionId?: string }
+  return setSubscriptionPause(request.auth.uid, data?.teamId, data?.subscriptionId, true)
+})
+
+export const resumeMemberSubscription = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+  const data = request.data as { teamId?: string; subscriptionId?: string }
+  return setSubscriptionPause(request.auth.uid, data?.teamId, data?.subscriptionId, false)
 })
