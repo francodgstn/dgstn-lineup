@@ -135,23 +135,21 @@ const points = [
   .pay-models { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 14px; }
   .pay-models li { font-size: 14px; line-height: 1.55; color: var(--muted-foreground); }
   .pay-models strong { color: var(--foreground); font-weight: 600; }
+  /* Inline "see the rates" — flows on as a continuation of the Pay-via-Linyup line */
   .pay-rates {
-    display: flex;
-    width: fit-content;
-    align-items: center;
-    gap: 6px;
-    margin-top: 8px;
+    display: inline;
     padding: 0;
     background: none;
     border: 0;
     cursor: pointer;
     font: inherit;
-    font-size: 13.5px;
     font-weight: 600;
     color: var(--primary);
+    white-space: nowrap;
   }
-  .pay-rates :global(svg) { width: 15px; height: 15px; transition: transform 0.15s ease; }
-  .pay-rates:hover :global(svg) { transform: translateX(3px); }
+  .pay-rates:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .pay-rates :global(svg) { width: 14px; height: 14px; vertical-align: -2px; transition: transform 0.15s ease; }
+  .pay-rates:hover :global(svg) { transform: translateX(2px); }
 
   .pay-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 32px; }
   .pay-cta .btn { min-width: 180px; }
