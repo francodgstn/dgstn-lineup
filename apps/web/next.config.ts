@@ -59,6 +59,14 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   typedRoutes: true,
   rewrites: emulatorRewrites,
+  async redirects() {
+    // The app has no marketing root (the landing site is separate), so a bare
+    // root would 404. Send it to the login entry — on the demo (demo.linyup.com)
+    // this lands visitors in the sandbox sign-in instead of a dead page; on the
+    // real app the login page forwards already-authenticated users on to their
+    // dashboard. Config redirects run before the next-intl middleware.
+    return [{ source: '/', destination: '/login', permanent: false }]
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]
   },
