@@ -189,9 +189,9 @@
     "title": "Fatti pagare. Vendi online. Tieni ciò che è tuo.",
     "subtitle": "Incassa abbonamenti e ingressi singoli direttamente sul tuo conto Stripe e apri un negozio pubblico in pochi minuti — nessun intermediario che trattiene i tuoi soldi.",
     "cards": {
-      "models": { "title": "Flessibile e trasparente", "body": "Due modi per incassare: indirizza i pagamenti tramite Linyup direttamente sul tuo conto Stripe (Pay via Linyup), oppure usa il tuo gateway (BYO Stripe / Payrexx) e tracciali qui.", "ratesLink": "Vedi le tariffe Pay via Linyup" },
-      "shop": { "title": "Un negozio che cresce con te", "body": "Vendi abbonamenti, pacchetti lezioni e ingressi singoli da subito — poi aggiungi i corsi online o il negozio prodotti per vendere corsi e merchandising dalla stessa pagina pubblica. I clienti acquistano con un tocco, online, in qualsiasi momento." },
-      "twint": { "title": "TWINT + carte", "body": "Accetta i metodi che i clienti svizzeri usano davvero — inclusi gli abbonamenti ricorrenti via TWINT, non solo i pagamenti una tantum." }
+      "models": { "title": "Flessibile e trasparente", "lead": "Due modi per incassare:", "linyupName": "Pay via Linyup", "linyupBody": "Completamente integrato — i pagamenti arrivano direttamente sul tuo conto Stripe.", "byoName": "BYO Stripe / Payrexx", "byoBody": "Zero commissioni Linyup: mantieni il tuo gateway e traccia qui le transazioni.", "ratesLink": "Vedi le tariffe" },
+      "shop": { "title": "Un negozio che cresce con te", "body": "Vendi <strong>abbonamenti</strong>, pacchetti lezioni e ingressi singoli da subito — poi aggiungi i <strong>corsi online</strong> o il <strong>negozio prodotti</strong> per vendere corsi e merchandising dalla stessa pagina pubblica. I clienti acquistano con un tocco, online, in qualsiasi momento." },
+      "twint": { "title": "TWINT + carte", "body": "Accetta i metodi che i clienti svizzeri usano davvero — inclusi gli abbonamenti ricorrenti via TWINT." }
     },
     "proof": "Un abbonamento pagato con TWINT sul piano Studio costa circa il 2% all-in — più o meno la metà di quanto fanno pagare gli strumenti internazionali solo-carte.",
     "cta": "Inizia gratis",

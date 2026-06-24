@@ -189,9 +189,9 @@
     "title": "Soyez payé. Vendez en ligne. Gardez ce qui vous revient.",
     "subtitle": "Encaissez abonnements et entrées à l'unité directement sur votre propre compte Stripe, et ouvrez une boutique publique en quelques minutes — aucun intermédiaire qui retient votre argent.",
     "cards": {
-      "models": { "title": "Flexible & transparent", "body": "Deux façons d'encaisser : acheminez les paiements via Linyup directement vers votre compte Stripe (Pay via Linyup), ou utilisez votre propre passerelle (BYO Stripe / Payrexx) et suivez-les ici.", "ratesLink": "Voir les tarifs Pay via Linyup" },
-      "shop": { "title": "Une boutique qui grandit avec vous", "body": "Vendez abonnements, cartes de cours et entrées à l'unité dès le départ — puis ajoutez les cours en ligne ou la boutique de produits pour vendre cours et articles depuis la même page publique. Vos clients achètent en un geste, en ligne, à tout moment." },
-      "twint": { "title": "TWINT + cartes", "body": "Acceptez les moyens que les clients suisses utilisent vraiment — y compris les abonnements récurrents sur TWINT, pas seulement les paiements uniques." }
+      "models": { "title": "Flexible & transparent", "lead": "Deux façons d'encaisser :", "linyupName": "Pay via Linyup", "linyupBody": "Entièrement intégré — les paiements arrivent directement sur votre propre compte Stripe.", "byoName": "BYO Stripe / Payrexx", "byoBody": "Aucuns frais Linyup : gardez votre passerelle et suivez simplement les transactions ici.", "ratesLink": "Voir les tarifs" },
+      "shop": { "title": "Une boutique qui grandit avec vous", "body": "Vendez <strong>abonnements</strong>, cartes de cours et entrées à l'unité dès le départ — puis ajoutez les <strong>cours en ligne</strong> ou la <strong>boutique de produits</strong> pour vendre cours et articles depuis la même page publique. Vos clients achètent en un geste, en ligne, à tout moment." },
+      "twint": { "title": "TWINT + cartes", "body": "Acceptez les moyens que les clients suisses utilisent vraiment — y compris les abonnements récurrents sur TWINT." }
     },
     "proof": "Un abonnement payé par TWINT sur la formule Studio coûte environ 2 % tout compris — soit à peu près la moitié de ce que facturent les outils internationaux qui n'acceptent que les cartes.",
     "cta": "Commencer gratuitement",

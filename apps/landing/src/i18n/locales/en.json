@@ -189,9 +189,9 @@
     "title": "Get paid. Sell online. Keep what's yours.",
     "subtitle": "Take subscriptions and drop-ins straight into your own Stripe account, and open a public shop in minutes — no middleman holding your money.",
     "cards": {
-      "models": { "title": "Flexible & transparent", "body": "Two ways to get paid: route payments through Linyup straight into your own Stripe account (Pay via Linyup), or bring your own gateway (BYO Stripe / Payrexx) and just track them here.", "ratesLink": "See the Pay-via-Linyup rates" },
-      "shop": { "title": "A shop that grows with you", "body": "Sell subscriptions, class packs and drop-ins out of the box — then add Online Courses or the Products Shop to sell courses and merch from the same public page. Customers buy in a tap, online, anytime." },
-      "twint": { "title": "TWINT + cards", "body": "Accept the methods Swiss customers actually use — including recurring subscriptions on TWINT, not just one-off payments." }
+      "models": { "title": "Flexible & transparent", "lead": "Two ways to get paid:", "linyupName": "Pay via Linyup", "linyupBody": "Fully integrated — payments land straight in your own Stripe account.", "byoName": "BYO Stripe / Payrexx", "byoBody": "Zero Linyup fee: keep your own gateway and just track transactions here.", "ratesLink": "See the rates" },
+      "shop": { "title": "A shop that grows with you", "body": "Sell <strong>subscriptions</strong>, class packs and drop-ins out of the box — then add <strong>Online Courses</strong> or the <strong>Products Shop</strong> to sell courses and merch from the same public page. Customers buy in a tap, online, anytime." },
+      "twint": { "title": "TWINT + cards", "body": "Accept the methods Swiss customers actually use — including recurring subscriptions on TWINT." }
     },
     "proof": "A subscription paid by TWINT on the Studio tier costs about 2% all-in — roughly half what card-only international tools charge.",
     "cta": "Start for free",

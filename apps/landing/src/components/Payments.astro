@@ -31,24 +31,34 @@ const points = [
       <div class="pay-card pay-card-lead">
         <span class="pay-ico"><i data-lucide="scale"></i></span>
         <h3>{t('payments.cards.models.title')}</h3>
-        <p>{t('payments.cards.models.body')}</p>
-        <button class="pay-rates" type="button" data-rates-open>
-          {t('payments.cards.models.ratesLink')} <i data-lucide="arrow-right"></i>
-        </button>
+        <p class="pay-lead">{t('payments.cards.models.lead')}</p>
+        <ul class="pay-models">
+          <li>
+            <strong>{t('payments.cards.models.linyupName')}</strong> — {t('payments.cards.models.linyupBody')}
+            <button class="pay-rates" type="button" data-rates-open>
+              {t('payments.cards.models.ratesLink')} <i data-lucide="arrow-right"></i>
+            </button>
+          </li>
+          <li>
+            <strong>{t('payments.cards.models.byoName')}</strong> — {t('payments.cards.models.byoBody')}
+          </li>
+        </ul>
       </div>
       {
         points.map(({ key, icon }) => (
           <div class="pay-card">
             <span class="pay-ico"><i data-lucide={icon}></i></span>
             <h3>{t(`payments.cards.${key}.title`)}</h3>
-            <p>{t(`payments.cards.${key}.body`)}</p>
+            <p set:html={t(`payments.cards.${key}.body`)} />
           </div>
         ))
       }
     </div>
 
     <div class="pay-cta">
-      <button class="btn btn-primary" type="button" data-early-access>{t('payments.cta')}</button>
+      <button class="btn btn-primary" type="button" data-early-access>
+        {t('payments.cta')} <i data-lucide="arrow-right"></i>
+      </button>
     </div>
   </div>
 
@@ -121,17 +131,22 @@ const points = [
 
   /* Lead card — subtle accent border to mark it as the "how you get paid" anchor */
   .pay-card-lead { border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); }
+  .pay-lead { margin-top: 7px; font-size: 14.5px; font-weight: 600; color: var(--foreground); }
+  .pay-models { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 14px; }
+  .pay-models li { font-size: 14px; line-height: 1.55; color: var(--muted-foreground); }
+  .pay-models strong { color: var(--foreground); font-weight: 600; }
   .pay-rates {
-    display: inline-flex;
+    display: flex;
+    width: fit-content;
     align-items: center;
     gap: 6px;
-    margin-top: 14px;
+    margin-top: 8px;
     padding: 0;
     background: none;
     border: 0;
     cursor: pointer;
     font: inherit;
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 600;
     color: var(--primary);
   }
