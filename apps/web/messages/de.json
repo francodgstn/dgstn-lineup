@@ -173,6 +173,27 @@
     "demoEmptyLevel": "Keine Kontakte mit gesetztem Rang"
   },
   "Contacts": {
+    "reqEmpty": "Keine offenen Anfragen.",
+    "reqTitle": "Aktualisierungsanfrage",
+    "reqNote": "Notiz",
+    "reqChanges": "Gewünschte Änderungen",
+    "reqNoChanges": "Keine Feldänderungen übermittelt.",
+    "reqCurrent": "Aktuell",
+    "reqRequested": "Angefragt",
+    "reqApprove": "Genehmigen",
+    "reqDiscard": "Verwerfen",
+    "reqProcessing": "Wird verarbeitet…",
+    "reqError": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
+    "reqEmptyValue": "—",
+    "reqf_firstname": "Vorname",
+    "reqf_lastname": "Nachname",
+    "reqf_phone": "Telefon",
+    "reqf_birthdate": "Geburtsdatum",
+    "reqf_gender": "Geschlecht",
+    "reqf_birthplace": "Geburtsort",
+    "reqf_residence": "Wohnort",
+    "reqf_emergencyContact": "Notfallkontakt",
+    "reqf_notes": "Notizen",
     "mainAddress": "Hauptadresse",
     "title": "Kontakte",
     "subtitle": "{total} gesamt · {active} aktiv",
@@ -846,6 +867,7 @@
     "subTypeAddPrice": "Preis hinzufügen",
     "subTypePriceLabelPlaceholder": "Bezeichnung (optional) — z.B. Einführungsangebot",
     "subTypeIncludedMonths": "Monate inkl.",
+    "subTypeReorder": "Zum Sortieren ziehen",
     "subTypeMoveUp": "Nach oben",
     "subTypeMoveDown": "Nach unten",
     "subTypePriceMoveUp": "Nach oben",
@@ -1101,7 +1123,8 @@
     "qrNoSlug": "Richten Sie eine öffentliche URL in den Team-Einstellungen ein, um QR-Codes zu aktivieren.",
     "account": "Konto",
     "lightMode": "Hell",
-    "darkMode": "Dunkel"
+    "darkMode": "Dunkel",
+    "systemMode": "System"
   },
   "BioLink": {
     "title": "Bio-Link",
@@ -1559,6 +1582,7 @@
   "OrgBilling": {
     "title": "Abrechnung",
     "planLabel": "Plan",
+    "periodLabel": "Abrechnungszeitraum",
     "statusLabel": "Status",
     "statusTrial": "Test",
     "statusActive": "Aktiv",

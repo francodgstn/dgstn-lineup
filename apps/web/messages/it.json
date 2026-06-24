@@ -173,6 +173,27 @@
     "demoEmptyLevel": "Nessun contatto con grado impostato"
   },
   "Contacts": {
+    "reqEmpty": "Nessuna richiesta in sospeso.",
+    "reqTitle": "Richiesta di aggiornamento",
+    "reqNote": "Nota",
+    "reqChanges": "Modifiche richieste",
+    "reqNoChanges": "Nessuna modifica ai campi inviata.",
+    "reqCurrent": "Attuale",
+    "reqRequested": "Richiesto",
+    "reqApprove": "Approva",
+    "reqDiscard": "Scarta",
+    "reqProcessing": "Elaborazione…",
+    "reqError": "Qualcosa è andato storto. Riprova.",
+    "reqEmptyValue": "—",
+    "reqf_firstname": "Nome",
+    "reqf_lastname": "Cognome",
+    "reqf_phone": "Telefono",
+    "reqf_birthdate": "Data di nascita",
+    "reqf_gender": "Genere",
+    "reqf_birthplace": "Luogo di nascita",
+    "reqf_residence": "Residenza",
+    "reqf_emergencyContact": "Contatto di emergenza",
+    "reqf_notes": "Note",
     "mainAddress": "Indirizzo principale",
     "title": "Contatti",
     "subtitle": "{total} totali · {active} attivi",
@@ -846,6 +867,7 @@
     "subTypeAddPrice": "Aggiungi prezzo",
     "subTypePriceLabelPlaceholder": "Etichetta (opzionale) — es. Offerta intro",
     "subTypeIncludedMonths": "Mesi incl.",
+    "subTypeReorder": "Trascina per riordinare",
     "subTypeMoveUp": "Sposta su",
     "subTypeMoveDown": "Sposta giù",
     "subTypePriceMoveUp": "Sposta su",
@@ -1101,7 +1123,8 @@
     "qrNoSlug": "Configura un URL pubblico nelle impostazioni del team per attivare i codici QR.",
     "account": "Account",
     "lightMode": "Chiaro",
-    "darkMode": "Scuro"
+    "darkMode": "Scuro",
+    "systemMode": "Sistema"
   },
   "BioLink": {
     "title": "Bio link",
@@ -1559,6 +1582,7 @@
   "OrgBilling": {
     "title": "Fatturazione",
     "planLabel": "Piano",
+    "periodLabel": "Periodo di fatturazione",
     "statusLabel": "Stato",
     "statusTrial": "Prova",
     "statusActive": "Attivo",

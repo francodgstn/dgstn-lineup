@@ -173,6 +173,27 @@
     "demoEmptyLevel": "No contacts with rank set"
   },
   "Contacts": {
+    "reqEmpty": "No pending requests.",
+    "reqTitle": "Update request",
+    "reqNote": "Note",
+    "reqChanges": "Requested changes",
+    "reqNoChanges": "No field changes were submitted.",
+    "reqCurrent": "Current",
+    "reqRequested": "Requested",
+    "reqApprove": "Approve",
+    "reqDiscard": "Discard",
+    "reqProcessing": "Processing…",
+    "reqError": "Something went wrong. Please try again.",
+    "reqEmptyValue": "—",
+    "reqf_firstname": "First name",
+    "reqf_lastname": "Last name",
+    "reqf_phone": "Phone",
+    "reqf_birthdate": "Date of birth",
+    "reqf_gender": "Gender",
+    "reqf_birthplace": "Place of birth",
+    "reqf_residence": "Residence",
+    "reqf_emergencyContact": "Emergency contact",
+    "reqf_notes": "Notes",
     "mainAddress": "Main address",
     "title": "Contacts",
     "subtitle": "{total} total · {active} active",
@@ -846,6 +867,7 @@
     "subTypeAddPrice": "Add price",
     "subTypePriceLabelPlaceholder": "Label (optional) — e.g. Intro offer",
     "subTypeIncludedMonths": "Months incl.",
+    "subTypeReorder": "Drag to reorder",
     "subTypeMoveUp": "Move up",
     "subTypeMoveDown": "Move down",
     "subTypePriceMoveUp": "Move up",
@@ -1101,7 +1123,8 @@
     "qrNoSlug": "Set a bio-link URL in Team Settings to enable QR codes.",
     "account": "Account",
     "lightMode": "Light",
-    "darkMode": "Dark"
+    "darkMode": "Dark",
+    "systemMode": "System"
   },
   "BioLink": {
     "title": "Bio link",
@@ -1559,6 +1582,7 @@
   "OrgBilling": {
     "title": "Billing",
     "planLabel": "Plan",
+    "periodLabel": "Billing period",
     "statusLabel": "Status",
     "statusTrial": "Trial",
     "statusActive": "Active",

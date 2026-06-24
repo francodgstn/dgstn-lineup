@@ -288,7 +288,14 @@ export interface ContactRequest {
   id: string
   contact_id: string
   contact_name?: string
-  requested_at: Timestamp
+  contact_email?: string
+  team_id?: string
+  request_type?: 'data_update'
+  /** The fields the contact submitted (firstname, lastname, phone, …). */
+  submitted_data?: Record<string, unknown>
   note?: string
-  changes: Record<string, unknown>
+  status?: 'pending' | 'approved' | 'discarded'
+  requested_at: Timestamp
+  reviewed_at?: Timestamp
+  reviewed_by?: string
 }

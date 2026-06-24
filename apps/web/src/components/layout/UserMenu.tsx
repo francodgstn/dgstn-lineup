@@ -5,7 +5,7 @@ import { useTranslations, useLocale } from 'next-intl'
 import { useTheme } from 'next-themes'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, usePathname } from '@/i18n/navigation'
-import { QrCode, Sun, Moon, Compass, LogOut } from 'lucide-react'
+import { QrCode, Sun, Moon, Monitor, Compass, LogOut } from 'lucide-react'
 import { START_TOUR_EVENT } from '@/components/onboarding/ProductTour'
 import { QRDialog } from '@/components/layout/QRDialog'
 import {
@@ -37,7 +37,7 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
   const tNav = useTranslations('Nav')
   const tOnb = useTranslations('Onboarding')
   const { user, team } = useAuth()
-  const { resolvedTheme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
   const router = useRouter()
   const pathname = usePathname()
   const locale = useLocale()
@@ -83,14 +83,14 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
 
-            {/* Theme toggle */}
+            {/* Theme toggle — Light / Dark / System (follow OS) */}
             <div className="px-2 py-1.5">
               <div className="flex rounded-md border overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setTheme('light')}
                   className={`flex-1 flex items-center justify-center gap-1 py-1 text-xs transition-colors ${
-                    resolvedTheme === 'light' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'
+                    theme === 'light' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'
                   }`}
                 >
                   <Sun className="h-3 w-3" />
@@ -100,11 +100,21 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
                   type="button"
                   onClick={() => setTheme('dark')}
                   className={`flex-1 flex items-center justify-center gap-1 py-1 text-xs transition-colors ${
-                    resolvedTheme === 'dark' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'
+                    theme === 'dark' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'
                   }`}
                 >
                   <Moon className="h-3 w-3" />
                   {t('darkMode')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTheme('system')}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1 text-xs transition-colors ${
+                    theme === 'system' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'
+                  }`}
+                >
+                  <Monitor className="h-3 w-3" />
+                  {t('systemMode')}
                 </button>
               </div>
             </div>

@@ -39,7 +39,8 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Globe } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Globe, GripVertical } from 'lucide-react'
+import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { formatCurrency } from '@/lib/format'
 
@@ -410,14 +411,14 @@ export const SubscriptionTypesManager = forwardRef<
     invalidate()
   }
 
-  // Reorder a type up/down. Persists `order = position` for the whole list in one
+  // Drag-and-drop reorder. Persists `order = position` for the whole list in one
   // batch (normalizes any docs that never had an explicit order). The list is
   // already sorted by `compareSubscriptionTypes` via the hook.
-  const move = async (index: number, dir: -1 | 1) => {
-    const target = index + dir
-    if (target < 0 || target >= types.length) return
+  const reorder = async (from: number, to: number) => {
+    if (from === to) return
     const next = [...types]
-    ;[next[index], next[target]] = [next[target], next[index]]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
     const batch = writeBatch(db)
     next.forEach((st, i) => {
       if (st.order !== i) {
@@ -446,85 +447,88 @@ export const SubscriptionTypesManager = forwardRef<
           {t('noSubscriptionTypes')}
         </div>
       ) : (
-        <div className="space-y-2">
-          {types.map((st, index) => (
-            <div key={st.id} className="flex items-center gap-3 p-3 rounded-lg border">
-              <div className="flex flex-col">
-                <button
-                  onClick={() => move(index, -1)}
-                  disabled={index === 0}
-                  className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
-                  aria-label={t('subTypeMoveUp')}
-                >
-                  <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-                <button
-                  onClick={() => move(index, 1)}
-                  disabled={index === types.length - 1}
-                  className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
-                  aria-label={t('subTypeMoveDown')}
-                >
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium">{st.name}</p>
-                  <Badge
-                    variant={st.source === 'aggregator' ? 'secondary' : 'outline'}
-                    className="text-xs"
+        <SortableList ids={types.map((st) => st.id)} onReorder={reorder}>
+          <div className="space-y-2">
+            {types.map((st) => (
+              <SortableItem key={st.id} id={st.id}>
+                {({ setNodeRef, style, attributes, listeners, isDragging }) => (
+                  <div
+                    ref={setNodeRef}
+                    style={style}
+                    className={`flex items-center gap-3 p-3 rounded-lg border bg-card ${
+                      isDragging ? 'shadow-lg' : ''
+                    }`}
                   >
-                    {t(
-                      st.source === 'aggregator'
-                        ? 'subTypeSourceAggregator'
-                        : 'subTypeSourceInternal'
-                    )}
-                  </Badge>
-                  {st.active === false && (
-                    <Badge variant="outline" className="text-xs">
-                      {t('subTypeInactive')}
-                    </Badge>
-                  )}
-                  {st.public && (
-                    <Badge variant="outline" className="text-xs gap-1">
-                      <Globe className="h-3 w-3" />
-                      {t('subTypePublicBadge')}
-                    </Badge>
-                  )}
-                </div>
-                {st.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                    {st.description}
-                  </p>
-                )}
-                {(st.prices?.length ?? 0) > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-1">
-                    {st.prices!.filter((p) => p.active !== false).map((p) => (
-                      <span
-                        key={p.id}
-                        className="text-[11px] px-1.5 py-0.5 rounded bg-muted font-medium"
-                      >
-                        {formatCurrency(p.amount, currency)} · {tc(`recurrence_${p.recurrence}`)}
-                      </span>
-                    ))}
+                    <button
+                      type="button"
+                      {...attributes}
+                      {...listeners}
+                      className="p-1 -ml-1 rounded text-muted-foreground hover:bg-muted transition-colors cursor-grab active:cursor-grabbing touch-none"
+                      aria-label={t('subTypeReorder')}
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium">{st.name}</p>
+                        <Badge
+                          variant={st.source === 'aggregator' ? 'secondary' : 'outline'}
+                          className="text-xs"
+                        >
+                          {t(
+                            st.source === 'aggregator'
+                              ? 'subTypeSourceAggregator'
+                              : 'subTypeSourceInternal'
+                          )}
+                        </Badge>
+                        {st.active === false && (
+                          <Badge variant="outline" className="text-xs">
+                            {t('subTypeInactive')}
+                          </Badge>
+                        )}
+                        {st.public && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <Globe className="h-3 w-3" />
+                            {t('subTypePublicBadge')}
+                          </Badge>
+                        )}
+                      </div>
+                      {st.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {st.description}
+                        </p>
+                      )}
+                      {(st.prices?.length ?? 0) > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {st.prices!.filter((p) => p.active !== false).map((p) => (
+                            <span
+                              key={p.id}
+                              className="text-[11px] px-1.5 py-0.5 rounded bg-muted font-medium"
+                            >
+                              {formatCurrency(p.amount, currency)} · {tc(`recurrence_${p.recurrence}`)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => openEdit(st)}
+                      className="p-1.5 rounded hover:bg-muted transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => setDeleting(st.id)}
+                      className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 )}
-              </div>
-              <button
-                onClick={() => openEdit(st)}
-                className="p-1.5 rounded hover:bg-muted transition-colors"
-              >
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-              <button
-                onClick={() => setDeleting(st.id)}
-                className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
+              </SortableItem>
+            ))}
+          </div>
+        </SortableList>
       )}
 
       <SubTypeDialog

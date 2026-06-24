@@ -9,13 +9,13 @@ import {
   doc, serverTimestamp, Timestamp, deleteField, onSnapshot, deleteDoc, setDoc,
   arrayUnion, arrayRemove,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { usePlaces } from '@/hooks/usePlaces'
-import { MainAddressMap } from '@/components/places/MainAddressMap'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -1101,8 +1101,155 @@ function DeletedRow({
 
 // ─── requests tab ─────────────────────────────────────────────────────────────
 
+// Fields a contact may submit in a data-update request (mirrors the function's
+// ALLOWED_UPDATE_FIELDS). Used to render the current → requested comparison.
+const REQUEST_FIELDS = [
+  'firstname', 'lastname', 'phone', 'birthdate', 'gender',
+  'birthplace', 'residence', 'emergencyContact', 'notes',
+] as const
+
+function formatRequestValue(v: unknown): string {
+  if (v === null || v === undefined || v === '') return ''
+  if (v instanceof Timestamp) return v.toDate().toLocaleDateString()
+  if (typeof v === 'object') {
+    return Object.values(v as Record<string, unknown>)
+      .filter((x) => x !== null && x !== undefined && x !== '')
+      .map((x) => String(x))
+      .join(' · ')
+  }
+  return String(v)
+}
+
+function ContactRequestDialog({
+  request, teamId, onClose, onActioned,
+}: {
+  request: ContactRequest | null
+  teamId: string
+  onClose: () => void
+  onActioned: () => void
+}) {
+  const t = useTranslations('Contacts')
+  const [busy, setBusy] = useState<null | 'approve' | 'discard'>(null)
+  const [error, setError] = useState(false)
+
+  // Current contact values, to show what each requested field would change.
+  const { data: contact } = useQuery<Record<string, unknown> | null>({
+    queryKey: ['contact-doc', request?.contact_id],
+    enabled: !!request?.contact_id,
+    queryFn: async () => {
+      if (!request?.contact_id) return null
+      const snap = await getDoc(doc(db, CONTACTS_COLLECTION, request.contact_id))
+      return snap.exists() ? (snap.data() as Record<string, unknown>) : null
+    },
+  })
+
+  useEffect(() => { setError(false); setBusy(null) }, [request?.id])
+
+  const submitted = request?.submitted_data ?? {}
+  const rows = REQUEST_FIELDS
+    .map((field) => ({ field, requested: formatRequestValue(submitted[field]) }))
+    .filter((r) => r.requested !== '')
+
+  async function act(action: 'approve' | 'discard') {
+    if (!request) return
+    setBusy(action)
+    setError(false)
+    try {
+      const fn = httpsCallable(functions, 'manageContactUpdateRequest')
+      await fn({ teamId, requestId: request.id, action })
+      onActioned()
+      onClose()
+    } catch (e) {
+      console.error('manageContactUpdateRequest failed', e)
+      setError(true)
+      setBusy(null)
+    }
+  }
+
+  return (
+    <Dialog open={!!request} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t('reqTitle')}</DialogTitle>
+        </DialogHeader>
+        {request && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium">{request.contact_name ?? request.contact_id}</p>
+              {request.contact_email && (
+                <p className="text-xs text-muted-foreground">{request.contact_email}</p>
+              )}
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {request.requested_at?.toDate().toLocaleString()}
+              </p>
+            </div>
+
+            {request.note && (
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1">{t('reqNote')}</p>
+                <p className="text-sm whitespace-pre-wrap">{request.note}</p>
+              </div>
+            )}
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">{t('reqChanges')}</p>
+              {rows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('reqNoChanges')}</p>
+              ) : (
+                <div className="divide-y rounded-lg border">
+                  {rows.map((r) => {
+                    const current = formatRequestValue(contact?.[r.field])
+                    const changed = current !== r.requested
+                    return (
+                      <div key={r.field} className="px-3 py-2">
+                        <p className="text-xs font-medium">{t(`reqf_${r.field}`)}</p>
+                        <div className="mt-1 grid grid-cols-2 gap-3 text-sm">
+                          <div className="min-w-0">
+                            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {t('reqCurrent')}
+                            </span>
+                            <p className="truncate text-muted-foreground">
+                              {current || t('reqEmptyValue')}
+                            </p>
+                          </div>
+                          <div className="min-w-0">
+                            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {t('reqRequested')}
+                            </span>
+                            <p className={`truncate ${changed ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
+                              {r.requested || t('reqEmptyValue')}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {error && <p className="text-sm text-destructive">{t('reqError')}</p>}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => act('discard')} disabled={busy !== null}>
+            {busy === 'discard' ? t('reqProcessing') : t('reqDiscard')}
+          </Button>
+          <Button onClick={() => act('approve')} disabled={busy !== null}>
+            {busy === 'approve' ? t('reqProcessing') : t('reqApprove')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function RequestsTab({ teamId }: { teamId: string }) {
-  const { data: requests = [], isLoading } = useContactRequests(teamId)
+  const t = useTranslations('Contacts')
+  const qc = useQueryClient()
+  const { data: allRequests = [], isLoading } = useContactRequests(teamId)
+  const requests = allRequests.filter((r) => (r.status ?? 'pending') === 'pending')
+  const [selected, setSelected] = useState<ContactRequest | null>(null)
 
   if (isLoading) return (
     <div className="space-y-2 py-2">
@@ -1110,22 +1257,36 @@ function RequestsTab({ teamId }: { teamId: string }) {
     </div>
   )
   if (requests.length === 0) return (
-    <div className="py-16 text-center text-muted-foreground text-sm">No pending requests.</div>
+    <div className="py-16 text-center text-muted-foreground text-sm">{t('reqEmpty')}</div>
   )
   return (
-    <div className="rounded-xl border overflow-hidden bg-card">
-      {requests.map((r) => (
-        <div key={r.id} className="flex items-start gap-3 px-4 py-3 border-b last:border-0">
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm">{r.contact_name ?? r.contact_id}</p>
-            {r.note && <p className="text-xs text-muted-foreground mt-0.5">{r.note}</p>}
-          </div>
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {r.requested_at?.toDate().toLocaleDateString()}
-          </span>
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="rounded-xl border overflow-hidden bg-card">
+        {requests.map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => setSelected(r)}
+            className="flex w-full items-start gap-3 px-4 py-3 border-b last:border-0 text-left hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm">{r.contact_name ?? r.contact_id}</p>
+              {r.note && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{r.note}</p>}
+            </div>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {r.requested_at?.toDate().toLocaleDateString()}
+            </span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          </button>
+        ))}
+      </div>
+      <ContactRequestDialog
+        request={selected}
+        teamId={teamId}
+        onClose={() => setSelected(null)}
+        onActioned={() => qc.invalidateQueries({ queryKey: ['contact-requests', teamId] })}
+      />
+    </>
   )
 }
 
@@ -1476,8 +1637,6 @@ export default function ContactsPage() {
   const groupsEnabled = isInstalled('contact-groups')
   const { data: contactGroups = [] } = useContactGroups(groupsEnabled ? currentTeamId : null)
   const inOrg = !!team?.org_id
-  const { data: places = [] } = usePlaces(currentTeamId, team?.org_id ?? null)
-  const primaryPlace = places.find((p) => p.scope === 'team' && p.isPrimary)
 
   // Contact cap usage: counts active = non-archived, non-deleted. Over-cap
   // behaviour is tier-specific (contactOverageForPlan) and never per-contact
@@ -1698,7 +1857,7 @@ export default function ContactsPage() {
     { id: 'active',   label: t('tabActive'),   count: active.length },
     { id: 'archived', label: t('tabArchived'),  count: archived.length },
     { id: 'deleted',  label: t('tabDeleted'),   count: deleted.length },
-    { id: 'requests', label: t('tabRequests'),  count: requests.length },
+    { id: 'requests', label: t('tabRequests'),  count: requests.filter((r) => (r.status ?? 'pending') === 'pending').length },
   ]
 
   const selectable = tab === 'active' || tab === 'archived' || tab === 'deleted'
@@ -1782,17 +1941,6 @@ export default function ContactsPage() {
         loading={loadingActive}
         rankingSystems={team?.ranking_systems}
       />
-
-      {/* Main address (team's primary place) */}
-      {primaryPlace && (
-        <MainAddressMap
-          name={primaryPlace.name}
-          address={primaryPlace.address}
-          mapsLink={primaryPlace.mapsLink}
-          heading={t('mainAddress')}
-          className="max-w-md"
-        />
-      )}
 
       {/* Search — sticky, clears with × */}
       <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 backdrop-blur-sm border-b border-border/40">

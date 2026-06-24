@@ -173,6 +173,27 @@
     "demoEmptyLevel": "Aucun contact avec un classement défini"
   },
   "Contacts": {
+    "reqEmpty": "Aucune demande en attente.",
+    "reqTitle": "Demande de mise à jour",
+    "reqNote": "Note",
+    "reqChanges": "Modifications demandées",
+    "reqNoChanges": "Aucune modification de champ soumise.",
+    "reqCurrent": "Actuel",
+    "reqRequested": "Demandé",
+    "reqApprove": "Approuver",
+    "reqDiscard": "Rejeter",
+    "reqProcessing": "Traitement…",
+    "reqError": "Une erreur s'est produite. Veuillez réessayer.",
+    "reqEmptyValue": "—",
+    "reqf_firstname": "Prénom",
+    "reqf_lastname": "Nom",
+    "reqf_phone": "Téléphone",
+    "reqf_birthdate": "Date de naissance",
+    "reqf_gender": "Genre",
+    "reqf_birthplace": "Lieu de naissance",
+    "reqf_residence": "Résidence",
+    "reqf_emergencyContact": "Contact d'urgence",
+    "reqf_notes": "Notes",
     "mainAddress": "Adresse principale",
     "title": "Contacts",
     "subtitle": "{total} au total · {active} actifs",
@@ -846,6 +867,7 @@
     "subTypeAddPrice": "Ajouter un prix",
     "subTypePriceLabelPlaceholder": "Libellé (optionnel) — ex. Offre découverte",
     "subTypeIncludedMonths": "Mois inclus",
+    "subTypeReorder": "Glisser pour réorganiser",
     "subTypeMoveUp": "Monter",
     "subTypeMoveDown": "Descendre",
     "subTypePriceMoveUp": "Monter",
@@ -1101,7 +1123,8 @@
     "qrNoSlug": "Configurez une URL publique dans les paramètres de l'équipe pour activer les QR codes.",
     "account": "Compte",
     "lightMode": "Clair",
-    "darkMode": "Sombre"
+    "darkMode": "Sombre",
+    "systemMode": "Système"
   },
   "BioLink": {
     "title": "Bio link",
@@ -1559,6 +1582,7 @@
   "OrgBilling": {
     "title": "Facturation",
     "planLabel": "Forfait",
+    "periodLabel": "Période de facturation",
     "statusLabel": "Statut",
     "statusTrial": "Essai",
     "statusActive": "Actif",

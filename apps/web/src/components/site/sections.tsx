@@ -475,7 +475,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Membership'} palette={palette} />
+        <Heading text={section.heading ?? 'Pricing'} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -859,7 +859,7 @@ export function sectionNavLabel(section: WebsiteSection): string {
     case 'activities':
       return section.heading || 'Activities'
     case 'pricing':
-      return section.heading || 'Membership'
+      return section.heading || 'Pricing'
     case 'schedule':
       return section.heading || 'Schedule'
     case 'contact':
