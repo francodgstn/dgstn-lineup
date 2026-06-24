@@ -236,8 +236,8 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
         refs: baseRefs,
       })
     )
-    // Trial dropout: trial contact archived without converting
-    if (oldData.type === 'trial') {
+    // Trial dropout: archived while still in the trial funnel (never joined)
+    if (oldData.acquisition_stage === 'trial_booked' || oldData.acquisition_stage === 'trial_attended') {
       const weekLabel = format(new Date(), "R-'W'II")
       promises.push(
         db
@@ -266,22 +266,26 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
     )
   }
 
-  // Contact type change
-  if (oldData.type && newData.type && oldData.type !== newData.type) {
+  // Acquisition stage change
+  if (
+    oldData.acquisition_stage &&
+    newData.acquisition_stage &&
+    oldData.acquisition_stage !== newData.acquisition_stage
+  ) {
     promises.push(
       logActivity(teamId, {
-        event: 'contact_type_change',
+        event: 'acquisition_stage_change',
         parameters: {
-          description: `${fullname} changed from ${oldData.type as string} to ${newData.type as string}.`,
+          description: `${fullname} moved from ${oldData.acquisition_stage as string} to ${newData.acquisition_stage as string}.`,
           contact_firstname: firstname,
           contact_lastname: lastname,
-          contact_type: { before: oldData.type, after: newData.type },
+          acquisition_stage: { before: oldData.acquisition_stage, after: newData.acquisition_stage },
         },
         refs: baseRefs,
       })
     )
-    // Trial conversion: trial contact promoted to student
-    if (oldData.type === 'trial' && newData.type === 'student') {
+    // Trial conversion: crossed into the community (reached 'joined')
+    if (newData.acquisition_stage === 'joined' && oldData.acquisition_stage !== 'joined') {
       const weekLabel = format(new Date(), "R-'W'II")
       promises.push(
         db
@@ -394,6 +398,13 @@ export const trackSessionParticipants = onDocumentWritten(
     if (activityEvent === 'session_participant_add' && sessionStart) {
       counterUpdate.last_session_at = sessionStart
     }
+    // First attendance promotes the acquisition stage trial_booked → trial_attended.
+    // Sticky high-water mark: only advance on attendance, never regress on removal.
+    if (activityEvent === 'session_participant_add' && contact?.acquisition_stage === 'trial_booked') {
+      counterUpdate.acquisition_stage = 'trial_attended'
+      counterUpdate.acquisition_stage_updated_at = FieldValue.serverTimestamp()
+      counterUpdate.trial_attended_at = sessionStart ?? FieldValue.serverTimestamp()
+    }
     await to(db.collection('contacts').doc(contactId).update(counterUpdate))
 
     const description =
@@ -450,7 +461,7 @@ export const weeklyReports = onSchedule(
         const contacts = await getActiveContacts(db, teamId)
         const active_contacts_count = contacts.length
 
-        const contacts_count_by_type = countByField(contacts, 'type')
+        const contacts_count_by_stage = countByField(contacts, 'acquisition_stage')
         const contacts_count_by_membership_status = countByField(contacts, 'membership_status')
         const contacts_count_by_subscription_type = countByField(contacts, 'subscription_type_id')
         const contacts_count_by_recurrence = countByField(
@@ -510,7 +521,7 @@ export const weeklyReports = onSchedule(
           iso_week: weekLabel,
           generated_at: FieldValue.serverTimestamp(),
           active_contacts_count,
-          contacts_count_by_type,
+          contacts_count_by_stage,
           contacts_count_by_membership_status,
           contacts_count_by_subscription_type,
           contacts_count_by_recurrence,

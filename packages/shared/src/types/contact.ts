@@ -8,7 +8,23 @@ export type MembershipStatus =
   | 'active'
   | 'expired'
 
-export type ContactType = 'trial' | 'student' | 'external'
+// ─── Acquisition axis (sticky, event-named funnel) ───────────────────────────
+// Single ordered, OPEN vocab. The stage is a high-water milestone: it advances on
+// transition and never flips backward. Reserved (design-for, don't build):
+// upstream 'enquired'; downstream 'left' | 'won_back'.
+export const ACQUISITION_STAGES = ['trial_booked', 'trial_attended', 'joined'] as const
+export type AcquisitionStage = (typeof ACQUISITION_STAGES)[number]
+
+// How the contact first ENTERED — immutable birth fact, set once by the entry event.
+// 'booking' | 'walk_in' are the trial doors (walk-in is born already 'trial_attended');
+// 'signup' (direct join) and 'import' (migration) are non-trial entries born 'joined'.
+export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import'] as const
+export type ContactEntry = (typeof CONTACT_ENTRIES)[number]
+
+// Source axis — marketing CHANNEL (attribution only), set once, never overwritten.
+// NOTE: 'walk_in' is an ENTRY value, never a source, or the channel is lost.
+export const CONTACT_SOURCES = ['website', 'referral', 'social', 'event', 'import', 'other'] as const
+export type ContactSource = (typeof CONTACT_SOURCES)[number]
 
 export type ContactGender = 'M' | 'F' | 'other'
 
@@ -23,13 +39,6 @@ export interface EmergencyContact {
   name: string
   phone?: string
   email?: string
-}
-
-export interface ContactAcquisition {
-  channel?: string
-  campaign?: string
-  notes?: string
-  acknowledged?: boolean
 }
 
 export interface Contact {
@@ -54,8 +63,28 @@ export interface Contact {
   // Emergency contacts (max 2)
   emergency_contacts?: EmergencyContact[]
 
-  // Team-level membership (legacy / bio-link signup flow)
-  type?: ContactType
+  // ─── Acquisition axis ──────────────────────────────────────────────────────
+  // Sticky high-water funnel position (trial_booked → trial_attended → joined).
+  // Advances on transition, never regresses. Per-session attendance is a fact on
+  // the booking, not here — the booking event PROMOTES the milestone.
+  acquisition_stage: AcquisitionStage
+  acquisition_stage_updated_at?: Timestamp
+  // Immutable birth fact: which door the contact came through; sets the birth stage.
+  // Correctable for data-entry mistakes, but never silently moves the stage.
+  entry?: ContactEntry
+  // Milestone timestamps — set once when the stage first reaches them.
+  trial_attended_at?: Timestamp
+  converted_at?: Timestamp
+
+  // ─── Source axis ───────────────────────────────────────────────────────────
+  // Marketing channel + free-form detail. Set once at creation, never overwritten.
+  source?: ContactSource
+  source_detail?: string
+  // "New contact seen" UX flag (replaces the old acquisition.acknowledged).
+  lead_acknowledged?: boolean
+
+  // Team-level membership (legacy — replaced by the affiliations subcollection in
+  // Phase 2; left intact for now so Phase 1 stays self-contained).
   membership_status?: MembershipStatus
   membership_active?: boolean
   membership_expiration?: Timestamp
@@ -71,9 +100,6 @@ export interface Contact {
   subscription_price_id?: string // set only when the chosen type has prices
   subscription_amount?: number // amount snapshot at assignment time
   subscription_type_updated_at?: Timestamp
-
-  // Acquisition / funnel
-  acquisition?: ContactAcquisition
 
   // Notes (plain text; rich-text JSON stored as string in hmd-lineup)
   notes?: string

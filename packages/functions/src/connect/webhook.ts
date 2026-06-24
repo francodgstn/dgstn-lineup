@@ -217,7 +217,11 @@ async function resolveOrCreateContact(
     firstname,
     lastname,
     ...(info.phone ? { phone: info.phone } : {}),
-    type: 'student',
+    // A buyer who self-creates via the public shop has crossed into the community.
+    acquisition_stage: 'joined',
+    acquisition_stage_updated_at: FieldValue.serverTimestamp(),
+    converted_at: FieldValue.serverTimestamp(),
+    entry: 'signup',
     archived_at: null,
     deleted_at: null,
     created_at: FieldValue.serverTimestamp(),

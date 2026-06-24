@@ -131,7 +131,7 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | `teams` | Copied + `plan: 'studio'`, `organizationId: 'hmd'` added |
 | `activities` | Copied + new fields (`slug`, `type`, `isActive`, `level`) |
 | `session_series` | Copied + recurrence field names normalised |
-| `contacts` + subcollections | Copied; `rank → ranks.hmd`; `notes`, `acquisition` dropped |
+| `contacts` + subcollections | Copied; `rank → ranks.hmd`; `notes` dropped; `type` → acquisition axis (`acquisition_stage`/`entry` + milestone timestamps, `external` → `external` tag); `acquisition.channel` → `source` (+ `source_detail`), `acquisition.acknowledged` → `lead_acknowledged` |
 | `sessions` + participants/bookings | Copied + activity name/type enriched |
 | `events` + invitations/attendees | Copied as `scope='org', orgId='hmd', teamId=null` |
 | Global `checkins` (event check-ins) | Migrated from the top-level `checkins` collection where `event.id == eventId`; doc IDs preserved; `completed_checkins_count` set on each event doc |

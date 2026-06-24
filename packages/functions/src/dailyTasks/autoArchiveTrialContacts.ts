@@ -27,20 +27,23 @@ export async function autoArchiveTrialContacts(): Promise<{ processed: number; a
     console.log(`autoArchiveTrialContacts: processing team ${teamId}, threshold ${days} days`) // eslint-disable-line no-console
 
     try {
-      // Query A: trials that checked in at least once but not within threshold
-      // Query B: trials that never checked in and were created before threshold
+      // Auto-archive targets the trial funnel (not-yet-joined). Attendance promotes
+      // the stage, so a contact with a session is 'trial_attended' and one without is
+      // 'trial_booked' — joined members are excluded by the stage filter.
+      // Query A: attended trials inactive past the threshold (trial_attended)
+      // Query B: booked trials that never attended, created before threshold (trial_booked)
       const [withActivity, withoutActivity] = await Promise.all([
         db
           .collection(CONTACTS_COLLECTION)
           .where('teamId', '==', teamId)
-          .where('type', '==', 'trial')
+          .where('acquisition_stage', '==', 'trial_attended')
           .where('archived_at', '==', null)
           .where('last_session_at', '<', cutoffTs)
           .get(),
         db
           .collection(CONTACTS_COLLECTION)
           .where('teamId', '==', teamId)
-          .where('type', '==', 'trial')
+          .where('acquisition_stage', '==', 'trial_booked')
           .where('archived_at', '==', null)
           .where('last_session_at', '==', null)
           .where('created_at', '<', cutoffTs)

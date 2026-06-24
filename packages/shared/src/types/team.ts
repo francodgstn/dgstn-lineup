@@ -52,6 +52,19 @@ export interface CustomFieldDefinition {
   required?: boolean
 }
 
+// ─── Contact role label ───────────────────────────────────────────────────────
+// The studio-configurable display noun for a contact (student / athlete / client /
+// player / participant / custom). Orthogonal to every status axis — it's what you
+// CALL the person, not where they sit on any axis. Resolved via useRoleLabel() with
+// an i18n fallback; never hardcode the noun in copy.
+export type RoleLabelPreset = 'student' | 'athlete' | 'client' | 'player' | 'participant' | 'custom'
+
+export interface ContactRoleLabel {
+  preset?: RoleLabelPreset
+  singular: string
+  plural: string
+}
+
 // A "page link" target — one of the team's own public surfaces, reachable at
 // /public/{slug}/{route}. Replaces the former per-surface boolean flags
 // (is{Booking,Membership,Courses,Shop}Link) with a single discriminator so new
@@ -165,6 +178,8 @@ export interface Team {
   description?: string
   primaryContact?: string
   sport_type?: string
+  // Display noun for contacts (see ContactRoleLabel). Unset → i18n default.
+  contact_role_label?: ContactRoleLabel
   ranking_systems?: RankingSystem[]
   // Custom Fields plugin — account-wide extra contact field definitions
   custom_field_definitions?: CustomFieldDefinition[]

@@ -704,7 +704,10 @@ export const ProfileScreen: React.FC = () => {
           </View>
           {processedEntries.map((entry) => {
             const isCurrentUser = entry.contact_id === contact?.id;
-            const isTrial = entry.type === 'trial';
+            // Anonymise not-yet-joined (trial) members on the public leaderboard.
+            const isTrial =
+              entry.acquisition_stage === 'trial_booked' ||
+              entry.acquisition_stage === 'trial_attended';
             const lastInitial = entry.lastname ? ` ${entry.lastname[0]}.` : '';
             const fullName = isTrial
               ? ([entry.firstname?.[0], entry.lastname?.[0]].filter(Boolean).join('.') || '?') + '.'

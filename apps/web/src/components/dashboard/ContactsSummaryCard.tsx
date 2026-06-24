@@ -32,7 +32,7 @@ function getField(dim: string): string {
   if (dim === 'membership_status')       return 'contacts_count_by_membership_status'
   if (dim === 'subscription_type')       return 'contacts_count_by_subscription_type'
   if (dim === 'subscription_recurrence') return 'contacts_count_by_recurrence'
-  return 'contacts_count_by_type'
+  return 'contacts_count_by_stage'
 }
 
 function countFor(report: WeeklyReport | undefined, dim: string, value: string): number {
@@ -147,7 +147,7 @@ export function ContactsSummaryCard({
 
   const valueOptions = useMemo(() => {
     if (dimension === 'type') {
-      const types = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_type ?? {})))).sort()
+      const types = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_stage ?? {})))).sort()
       return [
         { value: 'all', label: 'All types', color: typeColor('all') },
         ...types.map((t) => ({ value: t, label: t, color: typeColor(t) })),

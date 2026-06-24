@@ -108,7 +108,13 @@ export const completeMembershipSignup = onCall(async (request) => {
     phone: sanitized.phone,
     birthdate: sanitized.birthdate,
     notes: sanitized.notes,
-    type: 'student',
+    // Acquisition: a direct membership signup crosses straight into the community.
+    // The approval pipeline (requested → active) lives on the membership/affiliation
+    // axis, not here.
+    acquisition_stage: 'joined',
+    acquisition_stage_updated_at: FieldValue.serverTimestamp(),
+    converted_at: FieldValue.serverTimestamp(),
+    entry: 'signup',
     teamId,
     membership_status: 'requested',
     membership_active: false,

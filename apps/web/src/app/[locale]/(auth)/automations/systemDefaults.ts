@@ -26,7 +26,7 @@ export interface SystemRule {
     | { type: 'sessions_attended_min'; value: number }
     | { type: 'sessions_attended_max'; value: number }
     | { type: 'inactivity_days'; value: number }
-    | { type: 'contact_type'; value: string }
+    | { type: 'acquisition_stage'; value: string }
     | { type: 'subscription'; value: string }
   >
   active: false
@@ -139,7 +139,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     conditions: [
       { type: 'bio_link_booking_no_show', delay_days: 1 },
       { type: 'sessions_attended_exactly', value: 0 },
-      { type: 'contact_type', value: 'trial' },
+      { type: 'acquisition_stage', value: 'trial_booked' },
     ],
     active: false,
   },
@@ -150,7 +150,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     conditions: [
       { type: 'bio_link_booking_no_show', delay_days: 5 },
       { type: 'sessions_attended_exactly', value: 0 },
-      { type: 'contact_type', value: 'trial' },
+      { type: 'acquisition_stage', value: 'trial_booked' },
     ],
     active: false,
   },
@@ -160,7 +160,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     name: 'Trial attended — day 1 follow-up',
     conditions: [
       { type: 'sessions_attended_exactly', value: 1 },
-      { type: 'contact_type', value: 'trial' },
+      { type: 'acquisition_stage', value: 'trial_attended' },
       { type: 'subscription', value: 'none' },
     ],
     active: false,
@@ -171,7 +171,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     name: 'Trial attended — 7-day nudge',
     conditions: [
       { type: 'sessions_attended_exactly', value: 1 },
-      { type: 'contact_type', value: 'trial' },
+      { type: 'acquisition_stage', value: 'trial_attended' },
       { type: 'subscription', value: 'none' },
       { type: 'inactivity_days', value: 7 },
     ],
@@ -183,7 +183,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     name: 'Trial attended — 21-day final',
     conditions: [
       { type: 'sessions_attended_exactly', value: 1 },
-      { type: 'contact_type', value: 'trial' },
+      { type: 'acquisition_stage', value: 'trial_attended' },
       { type: 'inactivity_days', value: 21 },
     ],
     active: false,
@@ -194,7 +194,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     name: 'Student inactive — 30 days',
     conditions: [
       { type: 'sessions_attended_min', value: 2 },
-      { type: 'contact_type', value: 'student' },
+      { type: 'acquisition_stage', value: 'joined' },
       { type: 'inactivity_days', value: 30 },
     ],
     active: false,
@@ -205,7 +205,7 @@ export const SYSTEM_RULES: SystemRule[] = [
     name: 'Student inactive — 60 days',
     conditions: [
       { type: 'sessions_attended_min', value: 2 },
-      { type: 'contact_type', value: 'student' },
+      { type: 'acquisition_stage', value: 'joined' },
       { type: 'inactivity_days', value: 60 },
     ],
     active: false,

@@ -29,6 +29,7 @@ export type AutomationTriggerType =
   | 'booking_no_show'
   | 'booking_cancelled'
   | 'membership_status_changed'
+  | 'acquisition_stage_changed'
   | 'subscription_changed'
   // Tier 1+2 — event trigger + optional Cloud Tasks delay
   | 'session_ended'
@@ -46,7 +47,7 @@ export type AutomationCondition =
   | { type: 'sessions_attended_max'; value: number }
   | { type: 'inactivity_days'; value: number }
   | { type: 'inactivity_days_max'; value: number }
-  | { type: 'contact_type'; value: string }
+  | { type: 'acquisition_stage'; value: string }
   | { type: 'membership_status'; value: string }
   | { type: 'subscription'; value: string }
   | { type: 'subscription_missing' } // legacy alias → subscription: none
@@ -95,7 +96,7 @@ export interface ContactData {
   lastname?: string
   email?: string
   email_unsubscribed?: boolean
-  type?: string
+  acquisition_stage?: string
   membership_status?: string
   subscription_type_id?: string
   total_sessions?: number
@@ -275,8 +276,8 @@ export function evaluateContactConditions(
         break
       }
 
-      case 'contact_type':
-        if (contact.type !== cond.value) return false
+      case 'acquisition_stage':
+        if (contact.acquisition_stage !== cond.value) return false
         break
 
       case 'membership_status':
@@ -544,7 +545,7 @@ async function executeActionsForContact(
 
       // update_field — write a whitelisted contact field
       if (action.type === 'update_field') {
-        const ALLOWED_UPDATE_FIELDS = ['type', 'membership_status'] as const
+        const ALLOWED_UPDATE_FIELDS = ['acquisition_stage', 'membership_status'] as const
         const field = action.field
         if (!(ALLOWED_UPDATE_FIELDS as readonly string[]).includes(field)) {
           console.log(
@@ -699,7 +700,7 @@ async function executeActionsForContact(
               firstname: contact.firstname,
               lastname: contact.lastname,
               email: contact.email,
-              type: contact.type,
+              acquisition_stage: contact.acquisition_stage,
               membership_status: contact.membership_status,
               total_sessions: contact.total_sessions,
               tags: contact.tags ?? [],

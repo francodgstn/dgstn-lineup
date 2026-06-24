@@ -88,14 +88,15 @@ export function countByField(
 }
 
 /**
- * Count active contacts by type ('student' | 'external' | 'trial').
+ * Count active contacts by acquisition stage
+ * ('trial_booked' | 'trial_attended' | 'joined').
  */
-export async function countContactsByType(
+export async function countContactsByStage(
   db: admin.firestore.Firestore,
   teamId: string,
 ): Promise<Record<string, number>> {
   const contacts = await getActiveContacts(db, teamId)
-  return countByField(contacts, 'type')
+  return countByField(contacts, 'acquisition_stage')
 }
 
 /**

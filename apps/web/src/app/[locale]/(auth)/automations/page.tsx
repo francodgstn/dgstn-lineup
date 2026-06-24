@@ -187,7 +187,7 @@ const TRIGGER_OPTIONS = [
 ]
 
 const CONDITION_TYPE_OPTIONS = [
-  { value: 'contact_type', label: 'Contact type', input: 'contact_type_select' },
+  { value: 'acquisition_stage', label: 'Acquisition stage', input: 'acquisition_stage_select' },
   { value: 'membership_status', label: 'Membership status', input: 'membership_select' },
   { value: 'subscription', label: 'Subscription', input: 'subscription_select' },
   { value: 'sessions_attended_min', label: 'Sessions attended ≥', input: 'number' },
@@ -203,7 +203,11 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'bio_link_booking_no_show', label: 'Bio-link booking no-show', input: 'none' },
 ]
 
-const CONTACT_TYPE_VALUES = ['trial', 'student', 'external']
+const ACQUISITION_STAGE_VALUES = [
+  { value: 'trial_booked', label: 'Trial booked' },
+  { value: 'trial_attended', label: 'Trial attended' },
+  { value: 'joined', label: 'Joined' },
+]
 const MEMBERSHIP_STATUS_VALUES = [
   'guest',
   'requested',
@@ -502,7 +506,7 @@ function ConditionEditor({
   onChange: (c: FormCondition[]) => void
 }) {
   function add() {
-    onChange([...conditions, { type: 'contact_type', value: 'trial' }])
+    onChange([...conditions, { type: 'acquisition_stage', value: 'trial_booked' }])
   }
   function remove(i: number) {
     onChange(conditions.filter((_, idx) => idx !== i))
@@ -527,8 +531,8 @@ function ConditionEditor({
                   onValueChange={(v: string | null) => {
                     const next = v ?? cond.type
                     const defaultVal =
-                      next === 'contact_type'
-                        ? 'trial'
+                      next === 'acquisition_stage'
+                        ? 'trial_booked'
                         : next === 'membership_status'
                           ? 'active'
                           : next === 'subscription'
@@ -559,7 +563,7 @@ function ConditionEditor({
                 {/* Inline value input (all types except field_equals which gets its own row) */}
                 {!isFieldEquals && (
                   <>
-                    {opt?.input === 'contact_type_select' && (
+                    {opt?.input === 'acquisition_stage_select' && (
                       <Select
                         value={cond.value}
                         onValueChange={(v) => update(i, { value: v ?? '' })}
@@ -568,9 +572,9 @@ function ConditionEditor({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {CONTACT_TYPE_VALUES.map((v) => (
-                            <SelectItem key={v} value={v} className="text-xs">
-                              {v}
+                          {ACQUISITION_STAGE_VALUES.map((s) => (
+                            <SelectItem key={s.value} value={s.value} className="text-xs">
+                              {s.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -676,7 +680,11 @@ function ConditionEditor({
 // ─── Action editor ────────────────────────────────────────────────────────────
 
 const UPDATE_FIELD_OPTIONS = [
-  { value: 'type', label: 'Contact type', values: ['trial', 'student', 'external'] },
+  {
+    value: 'acquisition_stage',
+    label: 'Acquisition stage',
+    values: ['trial_booked', 'trial_attended', 'joined'],
+  },
   {
     value: 'membership_status',
     label: 'Membership status',
@@ -1229,7 +1237,7 @@ const PLACEHOLDER_GROUPS = [
     items: [
       { key: 'firstname', hint: 'First name' },
       { key: 'lastname', hint: 'Last name' },
-      { key: 'contact_type', hint: 'Trial / Student / External' },
+      { key: 'acquisition_stage', hint: 'Trial booked / Trial attended / Joined' },
       { key: 'membership_status', hint: 'Active / Expired / …' },
       { key: 'sessions_count', hint: 'Sessions attended' },
     ],

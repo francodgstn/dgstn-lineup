@@ -308,7 +308,7 @@ export const getEventInvitationDetails = onCall(async (request) => {
       lastname: contact.lastname,
       email: contact.email,
       gender: contact.gender,
-      type: contact.type,
+      acquisition_stage: contact.acquisition_stage,
     },
     attendee,
     token,
@@ -369,7 +369,7 @@ export const handleEventInvitationResponse = onCall(async (request) => {
     lastname: contact.lastname,
     email: contact.email,
     gender: contact.gender,
-    type: contact.type,
+    acquisition_stage: contact.acquisition_stage,
     notes: notes ?? null,
     respondedAt: FieldValue.serverTimestamp(),
   }

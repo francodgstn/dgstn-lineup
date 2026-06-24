@@ -28,11 +28,12 @@ import {
   CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, contactOverageForPlan,
   planHasHardContactCap,
 } from '@linyup/shared'
-import type { Contact, ContactGroup, MembershipStatus, ContactType, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
+import type { Contact, ContactGroup, MembershipStatus, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
+import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES } from '@linyup/shared'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups, expandGroupSelection, flattenGroupTree } from '@/plugins/contact-groups/hooks'
 import { BulkGroupsDialog } from '@/plugins/contact-groups/BulkGroupsDialog'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -89,9 +90,26 @@ const createSchema = z.object({
   lastname: z.string().min(1, 'Required').max(60),
   email: z.string().email('Invalid email').or(z.literal('')).optional(),
   phone: z.string().max(30).optional(),
-  type: z.enum(['trial', 'student', 'external']),
+  /** Which door they came through — determines birth stage */
+  entry: z.enum(['booking', 'walk_in', 'signup', 'import'] as const),
+  source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
+  source_detail: z.string().max(200).optional(),
 })
 type CreateValues = z.infer<typeof createSchema>
+
+/** Map entry choice → initial acquisition_stage + milestone timestamps. */
+function entryToStage(entry: ContactEntry): {
+  acquisition_stage: AcquisitionStage
+  trial_attended_at?: ReturnType<typeof serverTimestamp>
+  converted_at?: ReturnType<typeof serverTimestamp>
+} {
+  switch (entry) {
+    case 'booking': return { acquisition_stage: 'trial_booked' }
+    case 'walk_in': return { acquisition_stage: 'trial_attended', trial_attended_at: serverTimestamp() }
+    case 'signup':
+    case 'import': return { acquisition_stage: 'joined', converted_at: serverTimestamp() }
+  }
+}
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
@@ -228,26 +246,35 @@ function CreateContactDialog({
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch, setValue } = useForm<CreateValues>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch, setValue, control } = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { type: 'trial' },
+    // Default: "Existing member" — manual coach adds are usually existing members
+    defaultValues: { entry: 'signup' },
   })
-  const type = watch('type')
-  const TYPES: ContactType[] = ['trial', 'student', 'external']
+  const entry = watch('entry')
+  // entry options: booking (trial), walk_in (trial attended), signup (member), import (member)
+  const ENTRIES: ContactEntry[] = ['booking', 'walk_in', 'signup']
 
   const onSubmit = async (values: CreateValues) => {
     if (atHardCap) {
       onOpenChange(false)
       return
     }
+    const stageData = entryToStage(values.entry)
     await addDoc(collection(db, CONTACTS_COLLECTION), {
       teamId,
       firstname: values.firstname,
       lastname: values.lastname,
       email: values.email || null,
       phone: values.phone || null,
-      type: values.type,
+      entry: values.entry,
+      source: values.source || null,
+      source_detail: values.source_detail || null,
+      ...stageData,
+      acquisition_stage_updated_at: serverTimestamp(),
       membership_status: 'guest',
+      membership_active: false,
+      lead_acknowledged: false,
       createdBy: userId,
       created_at: serverTimestamp(),
       deleted_at: null,
@@ -267,20 +294,20 @@ function CreateContactDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="contents">
           <div className="space-y-4 pt-1">
-            {/* Type radio */}
+            {/* Entry choice — determines birth stage */}
             <div className="flex gap-2">
-              {TYPES.map((v) => (
+              {ENTRIES.map((v) => (
                 <button
                   key={v}
                   type="button"
-                  onClick={() => setValue('type', v)}
+                  onClick={() => setValue('entry', v)}
                   className={`flex-1 py-1.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                    type === v
+                    entry === v
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'bg-background text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {t(`type_${v}`)}
+                  {t(`entry_${v}`)}
                 </button>
               ))}
             </div>
@@ -305,6 +332,33 @@ function CreateContactDialog({
               <div className="space-y-1">
                 <label className="text-sm font-medium">{t('fieldPhone')}</label>
                 <Input type="tel" {...register('phone')} />
+              </div>
+            </div>
+            {/* Optional source */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">{t('fieldAcquisitionSource')}</label>
+                <Controller
+                  control={control}
+                  name="source"
+                  render={({ field }) => (
+                    <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">—</SelectItem>
+                        {CONTACT_SOURCES.map((s) => (
+                          <SelectItem key={s} value={s}>{t(`source_${s}`)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">{t('fieldAcquisitionSourceDetail')}</label>
+                <Input {...register('source_detail')} placeholder="—" />
               </div>
             </div>
           </div>
@@ -378,7 +432,7 @@ function OverviewPanel({
   const [open, setOpen] = useState(false)
 
   const activeCount = contacts.filter((c) => (c.org_membership_status ?? c.membership_status) === 'active').length
-  const trialCount  = contacts.filter((c) => c.type === 'trial').length
+  const trialBookedCount = contacts.filter((c) => c.acquisition_stage === 'trial_booked').length
 
   return (
     <div className="space-y-3">
@@ -394,7 +448,7 @@ function OverviewPanel({
           <div className="flex items-center gap-3 ml-1 text-xs text-muted-foreground/60">
             <span>{contacts.length} contacts</span>
             {activeCount > 0 && <span>{activeCount} active</span>}
-            {trialCount  > 0 && <span>{trialCount} trials</span>}
+            {trialBookedCount > 0 && <span>{trialBookedCount} {t('statsTrialBooked').toLowerCase()}</span>}
           </div>
         )}
       </button>
@@ -422,7 +476,8 @@ type InactivityPreset = 'never' | '30d' | '60d' | '90d'
 type RankFilter = Record<string, number[]> // systemId → selected level values
 
 interface Filters {
-  types: string[]
+  stages: string[]           // AcquisitionStage values
+  sources: string[]          // ContactSource values
   statuses: string[]
   subscriptions: string[]    // subscription_type_id values; 'none' = no subscription
   groups: string[]           // contact_groups IDs (Contact Groups plugin); parents include subgroups
@@ -433,13 +488,13 @@ interface Filters {
   rankFilter: RankFilter | null
 }
 const EMPTY_FILTERS: Filters = {
-  types: [], statuses: [], subscriptions: [], groups: [],
+  stages: [], sources: [], statuses: [], subscriptions: [], groups: [],
   hasAlerts: false, sessionsMin: null, sessionsMax: null, inactivity: null,
   rankFilter: null,
 }
 
 function countActiveFilters(f: Filters): number {
-  return f.types.length + f.statuses.length + f.subscriptions.length + f.groups.length
+  return f.stages.length + f.sources.length + f.statuses.length + f.subscriptions.length + f.groups.length
     + (f.hasAlerts ? 1 : 0)
     + (f.sessionsMin != null || f.sessionsMax != null ? 1 : 0)
     + (f.inactivity ? 1 : 0)
@@ -453,7 +508,7 @@ interface SavedQuery { id: string; name: string; filters: Filters; pinned?: bool
 const FILTER_PRESETS: SavedQuery[] = [
   { id: 'p-active', name: 'Active members',  filters: { ...EMPTY_FILTERS, statuses: ['active'] } },
   { id: 'p-nosub',  name: 'No subscription', filters: { ...EMPTY_FILTERS, subscriptions: ['none'] } },
-  { id: 'p-trials', name: 'Trials',          filters: { ...EMPTY_FILTERS, types: ['trial'] } },
+  { id: 'p-trials', name: 'Trials',          filters: { ...EMPTY_FILTERS, stages: ['trial_booked', 'trial_attended'] } },
   { id: 'p-alerts', name: 'Has alerts',      filters: { ...EMPTY_FILTERS, hasAlerts: true } },
 ]
 
@@ -720,7 +775,8 @@ function FilterChips({
     ...saved.filter((q) => q.pinned),
   ]
 
-  const TYPE_OPTS   = (['trial', 'student', 'external'] as ContactType[]).map((v) => ({ value: v, label: t(`type_${v}`) }))
+  const STAGE_OPTS  = (ACQUISITION_STAGES as readonly AcquisitionStage[]).map((v) => ({ value: v, label: t(`stage_${v}` as Parameters<typeof t>[0]) }))
+  const SOURCE_OPTS = (CONTACT_SOURCES as readonly ContactSource[]).map((v) => ({ value: v, label: t(`source_${v}` as Parameters<typeof t>[0]) }))
   const STATUS_OPTS = (['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired'] as MembershipStatus[]).map((v) => ({ value: v, label: t(`status_${v}`) }))
   const SUB_OPTS    = [{ value: 'none', label: t('filterSubscriptionNone') }, ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name }))]
   const INACTIVITY_OPTS: { value: InactivityPreset; label: string }[] = [
@@ -794,10 +850,16 @@ function FilterChips({
         </>
       )}
       <div className="h-5 w-px bg-border/50 shrink-0 mx-0.5" />
-      <FilterChip label={t('filterType')} activeLabel={chip(filters.types, TYPE_OPTS, 'types')}
-        isActive={filters.types.length > 0} onClear={() => onChange({ ...filters, types: [] })}>
-        {TYPE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.types.includes(o.value)}
-          onToggle={() => onChange({ ...filters, types: toggle(filters.types, o.value) })} />)}
+      <FilterChip label={t('filterStage')} activeLabel={chip(filters.stages, STAGE_OPTS, 'stages')}
+        isActive={filters.stages.length > 0} onClear={() => onChange({ ...filters, stages: [] })}>
+        {STAGE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.stages.includes(o.value)}
+          onToggle={() => onChange({ ...filters, stages: toggle(filters.stages, o.value) })} />)}
+      </FilterChip>
+
+      <FilterChip label={t('filterSource')} activeLabel={chip(filters.sources, SOURCE_OPTS, 'sources')}
+        isActive={filters.sources.length > 0} onClear={() => onChange({ ...filters, sources: [] })}>
+        {SOURCE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.sources.includes(o.value)}
+          onToggle={() => onChange({ ...filters, sources: toggle(filters.sources, o.value) })} />)}
       </FilterChip>
 
       <FilterChip label={t('filterStatus')} activeLabel={chip(filters.statuses, STATUS_OPTS, 'statuses')}
@@ -920,7 +982,7 @@ function ContactRow({
 }) {
   const router = useRouter()
   const t = useTranslations('Contacts')
-  const isNew = contact.acquisition?.acknowledged === false
+  const isNew = contact.lead_acknowledged === false
   const rankColor = rankingSystems.length > 0
     ? getPrimaryRank(contact, rankingSystems)?.level.color
     : undefined
@@ -974,8 +1036,8 @@ function ContactRow({
               : null
             return (
               <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                {contact.type && (
-                  <Badge variant="outline" className="text-xs">{t(`type_${contact.type}`)}</Badge>
+                {contact.acquisition_stage && (
+                  <Badge variant="outline" className="text-xs">{t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])}</Badge>
                 )}
                 {orgDef ? (
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${MEMBERSHIP_COLOR_CLASSES[orgDef.color] ?? MEMBERSHIP_COLOR_CLASSES.gray}`}>
@@ -1252,17 +1314,16 @@ function BulkSetSubscriptionDialog({
   )
 }
 
-function BulkSetTypeDialog({
+function BulkPromoteStageDialog({
   open, onOpenChange, count, onConfirm,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void
   count: number
-  onConfirm: (type: ContactType) => Promise<void>
+  onConfirm: (stage: AcquisitionStage) => Promise<void>
 }) {
   const t = useTranslations('Contacts')
-  const [selected, setSelected] = useState<ContactType | null>(null)
+  const [selected, setSelected] = useState<AcquisitionStage | null>(null)
   const [busy, setBusy] = useState(false)
-  const TYPES: ContactType[] = ['trial', 'student', 'external']
 
   useEffect(() => { if (open) setSelected(null) }, [open])
 
@@ -1275,17 +1336,17 @@ function BulkSetTypeDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xs">
-        <DialogHeader><DialogTitle>{t('bulkSetTypeTitle')}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t('bulkSetStageTitle')}</DialogTitle></DialogHeader>
         <div className="py-1">
           <div className="flex gap-2">
-            {TYPES.map((v) => (
+            {(ACQUISITION_STAGES as readonly AcquisitionStage[]).map((v) => (
               <button key={v}
                 onClick={() => setSelected(selected === v ? null : v)}
                 className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
                   selected === v ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {t(`type_${v}`)}
+                {t(`stage_${v}` as Parameters<typeof t>[0])}
               </button>
             ))}
           </div>
@@ -1459,7 +1520,7 @@ export default function ContactsPage() {
     if (freeCapBlocked) setCapDialogOpen(true)
     else setDialogOpen(true)
   }
-  const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'type' | 'group-add' | 'group-remove' | null>(null)
+  const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'stage' | 'group-add' | 'group-remove' | null>(null)
 
   // confirm dialogs
   const [confirmArchive, setConfirmArchive] = useState<string[]>([])
@@ -1482,8 +1543,11 @@ export default function ContactsPage() {
   function applyFiltersAndSearch(list: Contact[], f: Filters, q: string): Contact[] {
     let result = list
 
-    if (f.types.length > 0)
-      result = result.filter((c) => c.type && f.types.includes(c.type))
+    if (f.stages.length > 0)
+      result = result.filter((c) => c.acquisition_stage && f.stages.includes(c.acquisition_stage))
+
+    if (f.sources.length > 0)
+      result = result.filter((c) => c.source && f.sources.includes(c.source))
 
     if (f.statuses.length > 0)
       result = result.filter((c) => {
@@ -1615,11 +1679,15 @@ export default function ContactsPage() {
     invalidateContacts()
   }
 
-  const bulkSetContactType = async (contactType: ContactType) => {
+  const bulkPromoteStage = async (stage: AcquisitionStage) => {
+    const now = serverTimestamp()
     await Promise.all([...selected].map((id) =>
       updateDoc(doc(db, CONTACTS_COLLECTION, id), {
-        type: contactType,
-        updatedAt: serverTimestamp(),
+        acquisition_stage: stage,
+        acquisition_stage_updated_at: now,
+        ...(stage === 'trial_attended' ? { trial_attended_at: now } : {}),
+        ...(stage === 'joined' ? { converted_at: now } : {}),
+        updatedAt: now,
       })
     ))
     invalidateContacts()
@@ -1832,7 +1900,7 @@ export default function ContactsPage() {
 
           {!isLoading && currentList.length === 0 && (
             <div className="px-4 py-16 text-center text-muted-foreground text-sm">
-              {search || filters.types.length || filters.statuses.length ? t('emptySearch') : t('empty')}
+              {search || filters.stages.length || filters.sources.length || filters.statuses.length ? t('emptySearch') : t('empty')}
             </div>
           )}
 
@@ -1882,7 +1950,7 @@ export default function ContactsPage() {
           editActions={tab !== 'deleted' ? [
             ...(rankingSystems.length > 0 ? [{ label: t('bulkSetRank'), icon: Award, onClick: () => setBulkEditMode('rank') }] : []),
             { label: t('bulkSetSubscription'), icon: CreditCard, onClick: () => setBulkEditMode('subscription') },
-            { label: t('bulkSetType'), icon: Tag, onClick: () => setBulkEditMode('type') },
+            { label: t('bulkSetStage'), icon: Tag, onClick: () => setBulkEditMode('stage') },
             ...(groupsEnabled ? [
               { label: t('bulkAddToGroup'),      icon: FolderTree, onClick: () => setBulkEditMode('group-add') },
               { label: t('bulkRemoveFromGroup'), icon: FolderTree, onClick: () => setBulkEditMode('group-remove') },
@@ -1979,11 +2047,11 @@ export default function ContactsPage() {
         onConfirm={bulkSetSubscription}
       />
 
-      <BulkSetTypeDialog
-        open={bulkEditMode === 'type'}
+      <BulkPromoteStageDialog
+        open={bulkEditMode === 'stage'}
         onOpenChange={(v) => { if (!v) setBulkEditMode(null) }}
         count={selected.size}
-        onConfirm={bulkSetContactType}
+        onConfirm={bulkPromoteStage}
       />
 
       {groupsEnabled && (

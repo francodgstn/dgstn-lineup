@@ -1789,7 +1789,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "type",
+          "fieldPath": "acquisition_stage",
           "order": "ASCENDING"
         },
         {
@@ -1811,7 +1811,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "type",
+          "fieldPath": "acquisition_stage",
           "order": "ASCENDING"
         },
         {

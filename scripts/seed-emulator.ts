@@ -50,6 +50,63 @@ function daysFromNow(n: number) {
   return d
 }
 
+// Deterministic pseudo-random in [0,1) from a string seed — keeps reruns stable.
+function seededRand(seed: string): number {
+  let h = 2166136261
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return ((h >>> 0) % 100000) / 100000
+}
+
+// Marketing-channel sources (excludes 'walk_in' — that's an entry, not a channel,
+// and 'import', which is reserved for migrated contacts).
+const SEED_SOURCES = ['website', 'referral', 'social', 'event', 'other'] as const
+
+// Pick a deterministic marketing source for a seeded contact.
+function pickSource(seed: string): (typeof SEED_SOURCES)[number] {
+  return SEED_SOURCES[Math.floor(seededRand(seed + 'src') * SEED_SOURCES.length)]
+}
+
+// Derive the acquisition-axis fields written to a contact doc from the seed's
+// authoring `type` + whether the contact has attended a session. The old `type`
+// field is intentionally NOT returned — it must not be written to the doc.
+//   student  → joined  / entry 'signup' / converted_at
+//   external → joined  / entry 'import' + 'external' tag
+//   trial    → trial_attended (if attended) | trial_booked (no-show), entry 'booking'
+function acquisitionFieldsFor(opts: {
+  type: 'student' | 'trial' | 'external'
+  hasAttended: boolean
+  milestoneTs: admin.firestore.Timestamp
+  seed: string
+}): Record<string, unknown> {
+  const { type, hasAttended, milestoneTs, seed } = opts
+  const out: Record<string, unknown> = {
+    acquisition_stage_updated_at: milestoneTs,
+    source: pickSource(seed),
+  }
+  if (type === 'student') {
+    out.acquisition_stage = 'joined'
+    out.entry = 'signup'
+    out.converted_at = milestoneTs
+  } else if (type === 'external') {
+    out.acquisition_stage = 'joined'
+    out.entry = 'import'
+    out.converted_at = milestoneTs
+  } else {
+    out.entry = 'booking'
+    if (hasAttended) {
+      out.acquisition_stage = 'trial_attended'
+      out.trial_attended_at = milestoneTs
+    } else {
+      out.acquisition_stage = 'trial_booked'
+      out.lead_acknowledged = false // freshly-booked no-show lead
+    }
+  }
+  return out
+}
+
 function hoursOffset(base: Date, hours: number) {
   return new Date(base.getTime() + hours * 3_600_000)
 }
@@ -1010,7 +1067,7 @@ async function seedTeam(opts: {
       type: 'trial',
       status: 'requested',
       gender: 'M',
-      totalSessions: 1,
+      totalSessions: 0, // booked a trial but hasn't attended yet → trial_booked no-show cohort
       birthdate: new Date('2003-07-19'),
       birthplace: 'Palermo',
     },
@@ -1076,12 +1133,22 @@ async function seedTeam(opts: {
     const id = `${teamId}-contact-${i.toString().padStart(3, '0')}`
     const subAssign = contactSubRank[i] ?? null
     const rankValue = contactRankMap[i] ?? null
+    // Drop the authoring `type` — it is input convenience only and is never
+    // written to the doc; it maps to the acquisition axis fields below instead.
+    const { type: authoringType, ...contactFields } = c
+    const createdTs = ts(daysFromNow(-Math.floor(Math.random() * 90) - 10))
+    const acquisition = acquisitionFieldsFor({
+      type: authoringType as 'student' | 'trial' | 'external',
+      hasAttended: c.totalSessions > 0,
+      milestoneTs: createdTs,
+      seed: id,
+    })
     await db
       .collection('contacts')
       .doc(id)
       .set({
         teamId,
-        ...c,
+        ...contactFields,
         birthdate: c.birthdate ? ts(c.birthdate) : null,
         membership_status: c.status,
         membership_active: c.status === 'active',
@@ -1090,9 +1157,12 @@ async function seedTeam(opts: {
           c.totalSessions > 0 ? ts(daysFromNow(-Math.floor(Math.random() * 14))) : null,
         current_month_score: Math.floor(Math.random() * 120),
         current_streak: Math.floor(Math.random() * 8),
-        created_at: ts(daysFromNow(-Math.floor(Math.random() * 90) - 10)),
+        created_at: createdTs,
         deleted_at: null,
         archived_at: null,
+        ...acquisition,
+        // 'external' is a tag now, not a status.
+        ...(authoringType === 'external' ? { tags: ['external'] } : {}),
         ...(subAssign
           ? {
               subscription_type_id: subAssign.subId,
@@ -2138,21 +2208,30 @@ async function seedFreeTeam() {
   ]
   for (let i = 0; i < freeContacts.length; i++) {
     const c = freeContacts[i]
+    const id = `${teamId}-contact-${i.toString().padStart(3, '0')}`
+    const createdTs = ts(daysFromNow(-50 + i))
+    // All free-team contacts are joined members (entry 'signup').
+    const acquisition = acquisitionFieldsFor({
+      type: 'student',
+      hasAttended: true,
+      milestoneTs: createdTs,
+      seed: id,
+    })
     await db
       .collection('contacts')
-      .doc(`${teamId}-contact-${i.toString().padStart(3, '0')}`)
+      .doc(id)
       .set({
         teamId,
         ...c,
         email: `${c.firstname.toLowerCase()}.${c.lastname.toLowerCase()}.${teamId}@email.com`,
-        type: 'student',
         membership_status: 'active',
         membership_active: true,
         total_sessions: 5 + i,
         last_session_at: ts(daysFromNow(-(i + 1))),
-        created_at: ts(daysFromNow(-50 + i)),
+        created_at: createdTs,
         deleted_at: null,
         archived_at: null,
+        ...acquisition,
       })
   }
 }

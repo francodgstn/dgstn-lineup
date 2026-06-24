@@ -109,7 +109,7 @@ function buildByWeek(
   } else if (source === 'engagement_rate') {
     const contactsByWeek: Record<string, number> = {}
     for (const r of weeklyReports) {
-      contactsByWeek[r.iso_week] = Object.values(r.contacts_count_by_type ?? {}).reduce(
+      contactsByWeek[r.iso_week] = Object.values(r.contacts_count_by_stage ?? {}).reduce(
         (a, b) => a + b,
         0
       )

@@ -18,7 +18,7 @@ interface MatchedContact {
   firstname: string
   lastname: string
   email: string
-  contact_type: string | null
+  acquisition_stage: string | null
   session_id?: string
 }
 
@@ -129,7 +129,7 @@ export const previewAutomationRule = onCall(async (request) => {
           firstname: contact.firstname || '',
           lastname: contact.lastname || '',
           email: contact.email || '',
-          contact_type: (contact.type as string) || null,
+          acquisition_stage: (contact.acquisition_stage as string) || null,
           session_id: sessionDoc.id,
         })
       }
@@ -170,7 +170,7 @@ export const previewAutomationRule = onCall(async (request) => {
         firstname: contact.firstname || '',
         lastname: contact.lastname || '',
         email: contact.email || '',
-        contact_type: (contact.type as string) || null,
+        acquisition_stage: (contact.acquisition_stage as string) || null,
       })
     }
   }

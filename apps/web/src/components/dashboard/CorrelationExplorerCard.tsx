@@ -20,8 +20,8 @@ const METRICS = [
   { value: 'new_bookings',    label: 'New bookings' },
   { value: 'active_contacts', label: 'Active contacts' },
   { value: 'total_contacts',  label: 'Total contacts' },
-  { value: 'trials',          label: 'Trial contacts' },
-  { value: 'students',        label: 'Students' },
+  { value: 'trials',          label: 'Trials' },
+  { value: 'students',        label: 'Joined' },
   { value: 'engagement_rate', label: 'Engagement %' },
   { value: 'sessions_held',   label: 'Sessions held' },
 ] as const
@@ -131,11 +131,13 @@ export function CorrelationExplorerCard({
         case 'new_bookings':    return newByWeek[week] ?? 0
         case 'active_contacts': return r?.active_contacts_count ?? null
         case 'total_contacts': {
-          const t = r?.contacts_count_by_type
+          const t = r?.contacts_count_by_stage
           return t ? Object.values(t).reduce((s, v) => s + v, 0) : null
         }
-        case 'trials':          return r?.contacts_count_by_type?.trial ?? null
-        case 'students':        return r?.contacts_count_by_type?.student ?? null
+        case 'trials':          return r?.contacts_count_by_stage
+          ? (r.contacts_count_by_stage.trial_booked ?? 0) + (r.contacts_count_by_stage.trial_attended ?? 0)
+          : null
+        case 'students':        return r?.contacts_count_by_stage?.joined ?? null
         case 'engagement_rate': {
           const bk = r?.bookings_count ?? 0
           const ac = r?.active_contacts_count ?? 0

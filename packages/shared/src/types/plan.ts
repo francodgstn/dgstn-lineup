@@ -25,10 +25,10 @@ export interface PlanPrice {
   /**
    * Included contacts. The cap counts ACTIVE (non-archived) contacts only —
    * archived contacts never count and are auto-anonymised after 2 years (see
-   * the retention policy). Both contact types (trial + student) count; a trial
-   * keeps a distinct status flag but is a normal contact for the cap.
-   * null = unlimited (organisation). Over-cap behaviour is per-tier and carries
-   * NO per-contact charge — see `contactOverageForPlan`.
+   * the retention policy). The cap is acquisition-stage-neutral: a contact at any
+   * stage (trial_booked / trial_attended / joined) counts the same — `archived_at`
+   * is the sole input. null = unlimited (organisation). Over-cap behaviour is
+   * per-tier and carries NO per-contact charge — see `contactOverageForPlan`.
    */
   includedContacts: number | null
 }
@@ -312,4 +312,11 @@ export function minimumPlanForFeature(feature: PlanFeature): SaasPlan {
     if (PLAN_FEATURES[plan].includes(feature)) return plan
   }
   return 'organization'
+}
+
+// Affiliations (the belonging axis: club / federation licence / grading) are an
+// opt-in surface for Verein-structured and licence-bound clubs. Available from the
+// Studio tier up, off by default per team (see Team.affiliations_enabled). Phase 2.
+export function planSupportsAffiliations(plan: SaasPlan | null): boolean {
+  return plan === 'studio' || plan === 'organization'
 }

@@ -10,9 +10,9 @@ import type { Contact } from '@linyup/shared'
 import type { SubscriptionTypeDoc } from '@/hooks/useDashboardData'
 
 const TYPE_CONFIG = [
-  { key: 'student',  label: 'Students', color: '#6366F1' },
-  { key: 'trial',    label: 'Trial',    color: '#10B981' },
-  { key: 'external', label: 'External', color: '#F59E0B' },
+  { key: 'trial_booked',   label: 'Trial booked',   color: '#10B981' },
+  { key: 'trial_attended', label: 'Trial attended',  color: '#3B82F6' },
+  { key: 'joined',         label: 'Joined',          color: '#6366F1' },
 ]
 
 const MEMBERSHIP_STATUS_CONFIG = [
@@ -76,7 +76,7 @@ export function RosterCard({ contacts, subscriptionTypes = [] }: Props) {
 
   // Type view
   const typeData = TYPE_CONFIG
-    .map((t) => ({ name: t.label, value: active.filter((c) => c.type === t.key).length, color: t.color }))
+    .map((t) => ({ name: t.label, value: active.filter((c) => c.acquisition_stage === t.key).length, color: t.color }))
     .filter((d) => d.value > 0)
 
   // Membership status view

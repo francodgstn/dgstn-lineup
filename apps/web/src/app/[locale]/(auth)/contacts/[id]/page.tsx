@@ -57,7 +57,9 @@ import {
 import type {
   Contact,
   MembershipStatus,
-  ContactType,
+  AcquisitionStage,
+  ContactEntry,
+  ContactSource,
   ContactGender,
   SubscriptionType,
   SubscriptionHistoryEntry,
@@ -68,6 +70,7 @@ import type {
   ActivityEventType,
   PlanFeature,
 } from '@linyup/shared'
+import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useMembershipTerm } from '@/hooks/useMembershipTerm'
@@ -180,7 +183,6 @@ const profileSchema = z.object({
   birthdate: z.date().optional(),
   birthplace: z.string().max(100).optional(),
   weight: z.coerce.number().min(0).max(500).optional(),
-  type: z.enum(['trial', 'student', 'external']).optional(),
   membership_status: z
     .enum(['guest', 'requested', 'under_review', 'almost_ready', 'active', 'expired'])
     .optional(),
@@ -191,8 +193,11 @@ const profileSchema = z.object({
   address_street_number: z.string().max(20).optional(),
   address_postal_code: z.string().max(20).optional(),
   address_locality: z.string().max(100).optional(),
-  acquisition_channel: z.string().max(100).optional(),
-  acquisition_notes: z.string().max(500).optional(),
+  // Entry — editable for data-entry correction; does NOT move acquisition_stage
+  entry: z.enum(['booking', 'walk_in', 'signup', 'import'] as const).optional(),
+  // Source axis
+  source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
+  source_detail: z.string().max(500).optional(),
   ranks: z.record(z.string(), z.number()).optional(),
   custom_fields: z
     .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
@@ -940,6 +945,58 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
   )
 }
 
+// ─── promote stage button ─────────────────────────────────────────────────────
+
+function PromoteStageButton({
+  contact,
+  onPromoted,
+}: {
+  contact: Contact
+  onPromoted: () => void
+}) {
+  const t = useTranslations('Contacts')
+  const [busy, setBusy] = useState(false)
+  const qc = useQueryClient()
+
+  const nextStage: AcquisitionStage | null =
+    contact.acquisition_stage === 'trial_booked' ? 'trial_attended'
+    : contact.acquisition_stage === 'trial_attended' ? 'joined'
+    : null
+
+  if (!nextStage) return null
+
+  const promote = async () => {
+    setBusy(true)
+    try {
+      const now = serverTimestamp()
+      await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
+        acquisition_stage: nextStage,
+        acquisition_stage_updated_at: now,
+        ...(nextStage === 'trial_attended' ? { trial_attended_at: now } : {}),
+        ...(nextStage === 'joined' ? { converted_at: now } : {}),
+        updatedAt: now,
+      })
+      qc.invalidateQueries({ queryKey: ['contact', contact.id] })
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      onPromoted()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={promote}
+      disabled={busy}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+    >
+      <ArrowRightLeft className="h-3.5 w-3.5" />
+      {t('promoteButton', { stage: t(`stage_${nextStage}` as Parameters<typeof t>[0]) })}
+    </button>
+  )
+}
+
 // ─── profile tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({
@@ -965,7 +1022,6 @@ function ProfileTab({
   const { data: subTypes = [] } = useSubscriptionTypes(teamId)
   const { data: rankingSystems = [] } = useTeamRankingSystems(teamId, orgId)
 
-  const TYPES: ContactType[] = ['trial', 'student', 'external']
   const STATUSES: MembershipStatus[] = [
     'guest',
     'requested',
@@ -996,7 +1052,6 @@ function ProfileTab({
       birthdate: tsToDate(contact.birthdate),
       birthplace: contact.birthplace ?? '',
       weight: contact.weight,
-      type: contact.type,
       membership_status: (contact.org_membership_status ??
         contact.membership_status) as typeof contact.membership_status,
       subscription_type_id: contact.subscription_type_id ?? '',
@@ -1006,8 +1061,9 @@ function ProfileTab({
       address_street_number: contact.address?.street_number ?? '',
       address_postal_code: contact.address?.postal_code ?? '',
       address_locality: contact.address?.locality ?? '',
-      acquisition_channel: contact.acquisition?.channel ?? '',
-      acquisition_notes: contact.acquisition?.notes ?? '',
+      entry: contact.entry,
+      source: contact.source,
+      source_detail: contact.source_detail ?? '',
       ranks: contact.ranks ?? {},
       custom_fields: contact.custom_fields ?? {},
       emergency_contacts: contact.emergency_contacts ?? [],
@@ -1033,7 +1089,6 @@ function ProfileTab({
       birthdate: values.birthdate ? Timestamp.fromDate(values.birthdate) : null,
       birthplace: values.birthplace || null,
       weight: values.weight || null,
-      type: values.type || null,
       ...(membershipFieldLocked
         ? {}
         : { org_membership_status: values.membership_status || 'guest' }),
@@ -1049,11 +1104,10 @@ function ProfileTab({
         postal_code: values.address_postal_code || null,
         locality: values.address_locality || null,
       },
-      acquisition: {
-        channel: values.acquisition_channel || null,
-        notes: values.acquisition_notes || null,
-        acknowledged: contact.acquisition?.acknowledged ?? false,
-      },
+      // Entry is editable as a correction but does NOT move acquisition_stage
+      entry: values.entry || null,
+      source: values.source || null,
+      source_detail: values.source_detail || null,
       ranks: values.ranks ?? {},
       custom_fields: values.custom_fields ?? {},
       emergency_contacts: (values.emergency_contacts ?? []).filter((ec) => ec.name.trim() !== ''),
@@ -1064,31 +1118,74 @@ function ProfileTab({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24">
-      {/* Contact type — segmented control, full width */}
-      <div className="space-y-1.5">
-        <p className="text-sm font-medium">{t('colType')}</p>
-        <Controller
-          control={control}
-          name="type"
-          render={({ field }) => (
-            <div className="inline-flex items-center rounded-lg border bg-background p-1 gap-0.5">
-              {TYPES.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => field.onChange(v)}
-                  className={`px-4 py-1 rounded-md text-sm font-medium transition-all duration-150 ${
-                    field.value === v
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {t(`type_${v}`)}
-                </button>
-              ))}
-            </div>
+      {/* Acquisition stage — read display + Promote action */}
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="space-y-0.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('fieldAcquisitionStage')}</p>
+            <p className="text-sm font-medium">
+              {contact.acquisition_stage
+                ? t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])
+                : '—'}
+            </p>
+          </div>
+          {/* Promote button — only if not already 'joined' */}
+          {contact.acquisition_stage !== 'joined' && (
+            <PromoteStageButton contact={contact} onPromoted={onSaved} />
           )}
-        />
+        </div>
+        {/* Entry — editable correction, does NOT move stage */}
+        <Field label={t('fieldAcquisitionEntry')}>
+          <Controller
+            control={control}
+            name="entry"
+            render={({ field }) => (
+              <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
+                <SelectTrigger className="w-full">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {field.value
+                      ? t(`entry_${field.value}` as Parameters<typeof t>[0])
+                      : <span className="text-muted-foreground">—</span>}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  {(CONTACT_ENTRIES as readonly ContactEntry[]).map((e) => (
+                    <SelectItem key={e} value={e}>{t(`entry_${e}` as Parameters<typeof t>[0])}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <p className="text-xs text-muted-foreground">{t('fieldAcquisitionEntryHelp')}</p>
+        </Field>
+        {/* Source */}
+        <Field label={t('fieldAcquisitionSource')}>
+          <Controller
+            control={control}
+            name="source"
+            render={({ field }) => (
+              <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
+                <SelectTrigger className="w-full">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {field.value
+                      ? t(`source_${field.value}` as Parameters<typeof t>[0])
+                      : <span className="text-muted-foreground">—</span>}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  {(CONTACT_SOURCES as readonly ContactSource[]).map((s) => (
+                    <SelectItem key={s} value={s}>{t(`source_${s}` as Parameters<typeof t>[0])}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </Field>
+        <Field label={t('fieldAcquisitionSourceDetail')}>
+          <Input {...register('source_detail')} />
+        </Field>
       </div>
 
       {/* 2-col section blocks on desktop */}
@@ -1532,14 +1629,7 @@ function ProfileTab({
         </FormBlock>
 
         {/* Acquisition */}
-        <FormBlock title={t('sectionAcquisition')}>
-          <Field label={t('fieldAcquisitionChannel')}>
-            <Input {...register('acquisition_channel')} />
-          </Field>
-          <Field label={t('fieldAcquisitionNotes')}>
-            <Textarea {...register('acquisition_notes')} rows={3} />
-          </Field>
-        </FormBlock>
+        {/* Acquisition fields are now in the stage panel above */}
 
         {/* Custom Fields plugin — always the last card; upsell prompt when not installed */}
         <FormBlock title={t('sectionCustomFields')}>
@@ -1972,6 +2062,7 @@ const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventTyp
   profile: [
     'contact_add',
     'contact_type_change',
+    'acquisition_stage_change',
     'rank_change',
     'subscription_change',
     'contact_archive',
@@ -1991,6 +2082,7 @@ const EVENT_META: Record<ActivityEventType, EventMeta> = {
   contact_unarchive: { Icon: RotateCcw, bg: 'bg-green-500/10', fg: 'text-green-600' },
   contact_delete: { Icon: Trash2, bg: 'bg-red-500/10', fg: 'text-red-600' },
   contact_type_change: { Icon: ArrowRightLeft, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  acquisition_stage_change: { Icon: ArrowRightLeft, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
   rank_change: { Icon: Award, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
   subscription_change: { Icon: CreditCard, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
   session_participant_add: { Icon: CalendarCheck, bg: 'bg-green-500/10', fg: 'text-green-600' },
@@ -2786,8 +2878,7 @@ function ArchivedContactView({
 
   const address = contact.address
   const hasAddress = address && Object.values(address).some(Boolean)
-  const hasAcquisition =
-    contact.acquisition && (contact.acquisition.channel || contact.acquisition.notes)
+  const hasAcquisition = contact.source || contact.source_detail
 
   return (
     <div className="space-y-4">
@@ -2828,7 +2919,10 @@ function ArchivedContactView({
       {/* Core fields */}
       <div className="rounded-xl border bg-card p-5">
         <SectionHeader>{t('sectionBasicInfo')}</SectionHeader>
-        <DetailRow label={t('colType')} value={contact.type ? t(`type_${contact.type}`) : null} />
+        <DetailRow label={t('fieldAcquisitionStage')} value={contact.acquisition_stage ? t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0]) : null} />
+        {contact.entry && (
+          <DetailRow label={t('fieldAcquisitionEntry')} value={t(`entry_${contact.entry}` as Parameters<typeof t>[0])} />
+        )}
         <DetailRow
           label={
             <>
@@ -2878,13 +2972,15 @@ function ArchivedContactView({
         </div>
       )}
 
-      {/* Acquisition */}
+      {/* Source / Acquisition detail */}
       {hasAcquisition && (
         <div className="rounded-xl border bg-card p-5">
           <SectionHeader>{t('sectionAcquisition')}</SectionHeader>
-          <DetailRow label={t('fieldAcquisitionChannel')} value={contact.acquisition?.channel} />
-          {contact.acquisition?.notes && (
-            <DetailRow label={t('fieldAcquisitionNotes')} value={contact.acquisition.notes} />
+          {contact.source && (
+            <DetailRow label={t('fieldAcquisitionSource')} value={t(`source_${contact.source}` as Parameters<typeof t>[0])} />
+          )}
+          {contact.source_detail && (
+            <DetailRow label={t('fieldAcquisitionSourceDetail')} value={contact.source_detail} />
           )}
         </div>
       )}
@@ -3165,8 +3261,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         {t(`status_${contact.org_membership_status ?? contact.membership_status}`)}
                       </Badge>
                     )}
-                    {contact.type && <Badge variant="outline">{t(`type_${contact.type}`)}</Badge>}
-                    {contact.acquisition?.acknowledged === false && (
+                    {contact.acquisition_stage && (
+                      <Badge variant="outline">{t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])}</Badge>
+                    )}
+                    {contact.lead_acknowledged === false && (
                       <Badge className="bg-blue-500 text-white border-blue-500">
                         {t('newBadge')}
                       </Badge>

@@ -6,6 +6,7 @@ export type ActivityEventType =
   | 'contact_unarchive'
   | 'contact_delete'
   | 'contact_type_change'
+  | 'acquisition_stage_change'
   | 'rank_change'
   | 'subscription_change'
   | 'session_participant_add'

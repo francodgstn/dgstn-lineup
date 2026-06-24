@@ -99,6 +99,60 @@ function seededRand(seed: string): number {
   return ((h >>> 0) % 100000) / 100000
 }
 
+// Marketing-channel sources (excludes 'walk_in' — that's an entry, not a channel,
+// and 'import', reserved for migrated contacts).
+const SEED_SOURCES = ['website', 'referral', 'social', 'event', 'other'] as const
+
+// Pick a deterministic marketing source for a seeded contact.
+function pickSource(seed: string): (typeof SEED_SOURCES)[number] {
+  return SEED_SOURCES[Math.floor(seededRand(seed + 'src') * SEED_SOURCES.length)]
+}
+
+// Derive the acquisition-axis fields written to a contact doc from the authoring
+// `type` + whether the contact has attended. The old `type` field is NOT returned —
+// it must not be written to the doc.
+//   student  → joined / entry 'signup'  / converted_at
+//   external → joined / entry 'import'  + 'external' tag (added at the call site)
+//   trial    → trial_attended (attended) | trial_booked (no-show), entry 'booking'
+function acquisitionFieldsFor(opts: {
+  type: 'student' | 'trial' | 'external'
+  hasAttended: boolean
+  milestoneTs: admin.firestore.Timestamp
+  seed: string
+}): Record<string, unknown> {
+  const { type, hasAttended, milestoneTs, seed } = opts
+  const out: Record<string, unknown> = {
+    acquisition_stage_updated_at: milestoneTs,
+    source: pickSource(seed),
+  }
+  if (type === 'student') {
+    out.acquisition_stage = 'joined'
+    out.entry = 'signup'
+    out.converted_at = milestoneTs
+  } else if (type === 'external') {
+    out.acquisition_stage = 'joined'
+    out.entry = 'import'
+    out.converted_at = milestoneTs
+  } else {
+    out.entry = 'booking'
+    if (hasAttended) {
+      out.acquisition_stage = 'trial_attended'
+      out.trial_attended_at = milestoneTs
+    } else {
+      out.acquisition_stage = 'trial_booked'
+      out.lead_acknowledged = false
+    }
+  }
+  return out
+}
+
+// Map an authoring `type` (+ attendance) to its acquisition_stage — used by the
+// weekly-report aggregate so its keys are stage values, not the old type values.
+function stageForPoolEntry(type: 'student' | 'trial' | 'external', totalSessions: number): string {
+  if (type === 'student' || type === 'external') return 'joined'
+  return totalSessions > 0 ? 'trial_attended' : 'trial_booked'
+}
+
 // ── contact pool ────────────────────────────────────────────────────────────
 // 32 sector-neutral people, ordered so any prefix yields a realistic mix of
 // active students, trials, almost-ready leads, expired and external contacts.
@@ -1920,6 +1974,18 @@ async function seedDemoTeam(profile: SectorProfile) {
         )
       : null
 
+    const createdTs = ts(daysFromNow(-Math.floor(seededRand(seed + 'cr') * 200) - 10))
+    const acquisition = acquisitionFieldsFor({
+      type: c.type,
+      hasAttended: c.totalSessions > 0,
+      milestoneTs: createdTs,
+      seed,
+    })
+    // Tags: 'external' replaces the old external status; keep the existing
+    // win-back / lead labels alongside it.
+    const baseTags = c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : []
+    const tags = c.type === 'external' ? [...baseTags, 'external'] : baseTags
+
     await db
       .collection('contacts')
       .doc(id)
@@ -1932,7 +1998,6 @@ async function seedDemoTeam(profile: SectorProfile) {
         gender: c.gender,
         birthplace: c.birthplace,
         birthdate: birthdate ? ts(birthdate) : null,
-        type: c.type,
         membership_status: c.status,
         membership_active: c.status === 'active',
         total_sessions: c.totalSessions,
@@ -1944,9 +2009,10 @@ async function seedDemoTeam(profile: SectorProfile) {
             : c.type === 'trial'
               ? 'Came in via the website trial form — follow up after first class.'
               : '',
-        created_at: ts(daysFromNow(-Math.floor(seededRand(seed + 'cr') * 200) - 10)),
+        created_at: createdTs,
         deleted_at: null,
         archived_at: null,
+        ...acquisition,
         current_month_score: monthScore,
         current_streak: streak,
         max_streak: maxStreak,
@@ -1968,7 +2034,7 @@ async function seedDemoTeam(profile: SectorProfile) {
             }
           : {}),
         ...(rank != null && rankSystemId ? { ranks: { [rankSystemId]: rank } } : {}),
-        tags: c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : [],
+        tags,
       })
 
     // subscription history
@@ -2910,12 +2976,15 @@ function scaleMap(map: Record<string, number>, factor: number): Record<string, n
 
 async function seedWeeklyReports(teamId: string) {
   // Current-snapshot aggregates from the shared contact pool.
-  const byType: Record<string, number> = {}
+  // Keyed by acquisition_stage (trial_booked/trial_attended/joined) to match the
+  // live generateWeeklyReports function, which writes contacts_count_by_stage.
+  const byStage: Record<string, number> = {}
   const byStatus: Record<string, number> = {}
   const byRecurrence: Record<string, number> = {}
   const bySub: Record<string, number> = {}
   for (const c of CONTACT_POOL) {
-    byType[c.type] = (byType[c.type] ?? 0) + 1
+    const stage = stageForPoolEntry(c.type, c.totalSessions)
+    byStage[stage] = (byStage[stage] ?? 0) + 1
     byStatus[c.status] = (byStatus[c.status] ?? 0) + 1
     if (c.sub) {
       bySub[`${teamId}-sub-${c.sub}`] = (bySub[`${teamId}-sub-${c.sub}`] ?? 0) + 1
@@ -2948,7 +3017,7 @@ async function seedWeeklyReports(teamId: string) {
         iso_week: label,
         generated_at: ts(new Date(monday.getTime() + 6 * 86_400_000)),
         active_contacts_count: Math.max(0, Math.round(curActive * factor)),
-        contacts_count_by_type: scaleMap(byType, factor),
+        contacts_count_by_stage: scaleMap(byStage, factor),
         contacts_count_by_membership_status: scaleMap(byStatus, factor),
         contacts_count_by_subscription_type: scaleMap(bySub, factor),
         contacts_count_by_recurrence: scaleMap(byRecurrence, factor),

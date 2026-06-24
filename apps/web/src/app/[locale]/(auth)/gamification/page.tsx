@@ -236,7 +236,7 @@ function LeaderboardTab({ teamId }: { teamId: string }) {
           </div>
         ) : sorted.map((contact, index) => {
           const rank = ranks[index]
-          const isTrial = contact.type === 'trial'
+          const isTrial = contact.acquisition_stage === 'trial_booked' || contact.acquisition_stage === 'trial_attended'
           const displayName = isTrial
             ? initials(contact) + '.'
             : `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim() || '?'

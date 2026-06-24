@@ -5,10 +5,10 @@ import { marked } from 'marked'
 import { wrapInLayout, gradients } from './emailLayout'
 import { getHostingUrl } from './env'
 
-const CONTACT_TYPE_LABELS: Record<string, string> = {
-  trial: 'Trial',
-  student: 'Student',
-  external: 'External',
+const ACQUISITION_STAGE_LABELS: Record<string, string> = {
+  trial_booked: 'Trial booked',
+  trial_attended: 'Trial attended',
+  joined: 'Joined',
 }
 
 const MEMBERSHIP_STATUS_LABELS: Record<string, string> = {
@@ -54,9 +54,9 @@ export function substituteVariables(
     .replaceAll('{{lastname}}', (contact.lastname as string) || '')
     .replaceAll('{{teamName}}', teamName || '')
     .replaceAll(
-      '{{contact_type}}',
-      CONTACT_TYPE_LABELS[(contact.contact_type as string) || ''] ||
-        (contact.contact_type as string) ||
+      '{{acquisition_stage}}',
+      ACQUISITION_STAGE_LABELS[(contact.acquisition_stage as string) || ''] ||
+        (contact.acquisition_stage as string) ||
         ''
     )
     .replaceAll(

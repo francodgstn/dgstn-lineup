@@ -182,7 +182,7 @@ export interface LeaderboardEntry {
   contact_id: string
   firstname: string
   lastname: string
-  type?: string
+  acquisition_stage?: string
   score: number
   rank: number
   streak: number

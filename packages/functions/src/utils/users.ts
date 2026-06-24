@@ -4,7 +4,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { format } from 'date-fns'
 import { to } from './async'
 import {
-  countContactsByType,
+  countContactsByStage,
   countContactsByMembershipStatus,
   countContactsBySubscriptionType,
   countContactsByRecurrence,
@@ -52,9 +52,9 @@ export async function getOrCreateTeamWeeklyReport(
   if (!existing.empty) return existing.docs[0].ref
 
   // No report for this week — compute initial snapshot counts
-  const [contactsByType, contactsByMembership, contactsBySubType, contactsByRecurrence] =
+  const [contactsByStage, contactsByMembership, contactsBySubType, contactsByRecurrence] =
     await Promise.all([
-      countContactsByType(db, teamId),
+      countContactsByStage(db, teamId),
       countContactsByMembershipStatus(db, teamId),
       countContactsBySubscriptionType(db, teamId),
       countContactsByRecurrence(db, teamId),
@@ -81,7 +81,7 @@ export async function getOrCreateTeamWeeklyReport(
     reportRef.set({
       iso_week: format(date, ISO_WEEK_FORMAT),
       teamId,
-      contacts_count_by_type: contactsByType,
+      contacts_count_by_stage: contactsByStage,
       contacts_count_by_membership_status: contactsByMembership,
       contacts_count_by_subscription_type: contactsBySubType,
       contacts_count_by_recurrence: contactsByRecurrence,

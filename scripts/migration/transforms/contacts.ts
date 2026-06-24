@@ -1,6 +1,26 @@
 import { RANKING_HMD, RANKING_KD } from '../config'
 import { matchSubscriptionType, pickSubscriptionPrice } from './subscriptions'
 
+// Map an HMD acquisition channel label (free text) onto the canonical Linyup
+// marketing source. Returns the nearest channel, or 'other' for anything that
+// doesn't clearly fit — the original label is preserved in source_detail.
+function mapAcquisitionChannel(
+  channel: string
+): 'website' | 'referral' | 'social' | 'event' | 'other' {
+  const c = channel.toLowerCase()
+  if (c.includes('website') || c.includes('web site') || c.includes('google')) return 'website'
+  if (
+    c.includes('word-of-mouth') ||
+    c.includes('word of mouth') ||
+    c.includes('passaparola') ||
+    c.includes('referral')
+  )
+    return 'referral'
+  if (c.includes('facebook') || c.includes('instagram') || c.includes('social')) return 'social'
+  if (c.includes('event') || c.includes('seminar') || c.includes('camp')) return 'event'
+  return 'other'
+}
+
 export function transformContact(src: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...src }
 
@@ -8,7 +28,57 @@ export function transformContact(src: Record<string, unknown>): Record<string, u
   if ('residence' in out) { out.address = out.residence; delete out.residence }
   delete out.teacher      // now derived from teamId
   delete out.notes        // old Lexical JSON is stale; new app handles notes differently
-  delete out.acquisition  // lead funnel data — not needed
+
+  // ── Acquisition axis ─────────────────────────────────────────────────────
+  // HMD conflated the funnel into a single `type` ('trial'|'student'|'external').
+  // Linyup splits this into a sticky acquisition_stage + an immutable `entry`
+  // door, plus milestone timestamps. The marketing channel that HMD kept in the
+  // free-text `acquisition` object is captured into the `source` axis (it used
+  // to be dropped). Session activity decides whether a trial has been attended.
+  const hmdType = src.type as 'trial' | 'student' | 'external' | undefined
+  const totalSessions = Number(
+    (src.total_sessions_count as number | undefined) ??
+      (src.total_sessions as number | undefined) ??
+      0
+  )
+  const hasAttended = totalSessions > 0 || src.last_session_at != null
+  // Best available milestone timestamp: created_at is the only reliable date HMD
+  // carries on a contact. Use it for whichever milestones the stage has reached.
+  const milestoneTs = (src.created_at as unknown) ?? null
+
+  if (hmdType === 'student') {
+    out.acquisition_stage = 'joined'
+    out.entry = 'import'
+    out.converted_at = milestoneTs
+  } else if (hmdType === 'external') {
+    out.acquisition_stage = 'joined'
+    out.entry = 'import'
+    out.converted_at = milestoneTs
+  } else {
+    // trial (and any unknown legacy value): a booking-born trial contact
+    out.entry = 'booking'
+    if (hasAttended) {
+      out.acquisition_stage = 'trial_attended'
+      out.trial_attended_at = milestoneTs
+    } else {
+      out.acquisition_stage = 'trial_booked'
+    }
+  }
+  out.acquisition_stage_updated_at = milestoneTs
+  delete out.type
+
+  // Source axis — capture the marketing channel from the old `acquisition` blob.
+  const acquisition = src.acquisition as Record<string, unknown> | undefined
+  const channel = (acquisition?.channel as string | undefined) ?? ''
+  if (channel.trim()) {
+    out.source = mapAcquisitionChannel(channel)
+    if (out.source === 'other') out.source_detail = channel.trim()
+  }
+  // Preserve the "new contact seen" UX flag if HMD recorded it.
+  if (acquisition && 'acknowledged' in acquisition) {
+    out.lead_acknowledged = Boolean(acquisition.acknowledged)
+  }
+  delete out.acquisition
 
   // Build ranks map from all available rank sources:
   //   - contact.rank            → primary HMD belt rank
@@ -28,6 +98,11 @@ export function transformContact(src: Record<string, unknown>): Record<string, u
 
   // New required fields with safe defaults
   out.tags          = out.tags          ?? []
+  // 'external' is no longer a contact status/type — represent it as a tag.
+  if (hmdType === 'external') {
+    const tags = out.tags as unknown[]
+    if (!tags.includes('external')) tags.push('external')
+  }
   out.anonymized_at = out.anonymized_at ?? null
   // Ensure these fields always exist as null so Firestore equality queries work correctly
   out.deleted_at    = out.deleted_at    ?? null

@@ -110,6 +110,53 @@ function seededRand(seed: string): number {
   return ((h >>> 0) % 100000) / 100000
 }
 
+// Marketing-channel sources (excludes 'walk_in' — that's an entry, not a channel,
+// and 'import', reserved for migrated contacts).
+const SEED_SOURCES = ['website', 'referral', 'social', 'event', 'other'] as const
+
+// Pick a deterministic marketing source for a seeded contact.
+function pickSource(seed: string): (typeof SEED_SOURCES)[number] {
+  return SEED_SOURCES[Math.floor(seededRand(seed + 'src') * SEED_SOURCES.length)]
+}
+
+// Derive the acquisition-axis fields written to a contact doc from the authoring
+// `type` + whether the contact has attended. The old `type` field is NOT returned —
+// it must not be written to the doc.
+//   student  → joined / entry 'signup'  / converted_at
+//   external → joined / entry 'import'  + 'external' tag (added at the call site)
+//   trial    → trial_attended (attended) | trial_booked (no-show), entry 'booking'
+function acquisitionFieldsFor(opts: {
+  type: 'student' | 'trial' | 'external'
+  hasAttended: boolean
+  milestoneTs: admin.firestore.Timestamp
+  seed: string
+}): Record<string, unknown> {
+  const { type, hasAttended, milestoneTs, seed } = opts
+  const out: Record<string, unknown> = {
+    acquisition_stage_updated_at: milestoneTs,
+    source: pickSource(seed),
+  }
+  if (type === 'student') {
+    out.acquisition_stage = 'joined'
+    out.entry = 'signup'
+    out.converted_at = milestoneTs
+  } else if (type === 'external') {
+    out.acquisition_stage = 'joined'
+    out.entry = 'import'
+    out.converted_at = milestoneTs
+  } else {
+    out.entry = 'booking'
+    if (hasAttended) {
+      out.acquisition_stage = 'trial_attended'
+      out.trial_attended_at = milestoneTs
+    } else {
+      out.acquisition_stage = 'trial_booked'
+      out.lead_acknowledged = false
+    }
+  }
+  return out
+}
+
 // ── contact pool ────────────────────────────────────────────────────────────
 // 32 entries, ordered so any prefix (15 / 18 / 20 / 30) yields a realistic mix
 // of active students, trials, almost-ready leads, expired and external contacts.
@@ -1211,6 +1258,18 @@ async function seedTeam(opts: TeamSeed) {
         )
       : null
 
+    const createdTs = ts(daysFromNow(-Math.floor(seededRand(seed + 'cr') * 200) - 10))
+    const acquisition = acquisitionFieldsFor({
+      type: c.type,
+      hasAttended: c.totalSessions > 0,
+      milestoneTs: createdTs,
+      seed,
+    })
+    // Tags: 'external' replaces the old external status; keep the existing
+    // win-back / lead labels alongside it.
+    const baseTags = c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : []
+    const tags = c.type === 'external' ? [...baseTags, 'external'] : baseTags
+
     await db
       .collection('contacts')
       .doc(id)
@@ -1223,7 +1282,6 @@ async function seedTeam(opts: TeamSeed) {
         gender: c.gender,
         birthplace: c.birthplace,
         birthdate: birthdate ? ts(birthdate) : null,
-        type: c.type,
         membership_status: c.status,
         membership_active: c.status === 'active',
         ...(orgId
@@ -1238,9 +1296,10 @@ async function seedTeam(opts: TeamSeed) {
             : c.type === 'trial'
               ? `Came in via the website trial form — follow up after first class.`
               : '',
-        created_at: ts(daysFromNow(-Math.floor(seededRand(seed + 'cr') * 200) - 10)),
+        created_at: createdTs,
         deleted_at: null,
         archived_at: null,
+        ...acquisition,
         ...(gamificationEnabled
           ? {
               current_month_score: monthScore,
@@ -1264,7 +1323,7 @@ async function seedTeam(opts: TeamSeed) {
             }
           : {}),
         ...(rank != null ? { ranks: { [rankSystemId]: rank } } : {}),
-        tags: c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : [],
+        tags,
       })
 
     // subscription history

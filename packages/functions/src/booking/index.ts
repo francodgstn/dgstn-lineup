@@ -525,7 +525,7 @@ export const bookSession = onCall(async (request) => {
         : 'This session is for registered members only. Please verify your email.'
       throw new HttpsError('permission-denied', msg)
     }
-    if (authenticatedContact.type === 'trial') {
+    if (authenticatedContact.acquisition_stage !== 'joined') {
       const msg = isCoachingSession
         ? 'This coaching series is for members only. Trial accounts cannot book.'
         : 'This session is for members only. Trial accounts cannot book this class.'
@@ -604,7 +604,11 @@ export const bookSession = onCall(async (request) => {
         lastname: sanitized.lastname,
         email: sanitized.email,
         phone: sanitized.phone,
-        type: 'trial',
+        // Acquisition: a trial booking is born at 'trial_booked' (booked, not yet
+        // attended). First attendance promotes it to 'trial_attended'.
+        acquisition_stage: 'trial_booked',
+        acquisition_stage_updated_at: FieldValue.serverTimestamp(),
+        entry: 'booking',
         teamId: data.teamId,
         membership_status: 'guest',
         membership_active: false,

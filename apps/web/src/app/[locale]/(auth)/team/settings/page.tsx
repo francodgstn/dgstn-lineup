@@ -68,6 +68,8 @@ import type {
   TeamIntegration,
   PaymentGatewayType,
   PublicSurface,
+  RoleLabelPreset,
+  ContactRoleLabel,
 } from '@linyup/shared'
 import {
   CalendarDays,
@@ -242,6 +244,116 @@ function useIsSiteEnabled(teamId: string | null) {
       return snap.exists() && snap.data()?.enabled === true
     },
   })
+}
+
+// ─── contact role label form ──────────────────────────────────────────────────
+
+const ROLE_LABEL_PRESETS: RoleLabelPreset[] = [
+  'student', 'athlete', 'client', 'player', 'participant', 'custom',
+]
+
+/** Preset → default singular/plural in English; the UI shows i18n label for
+ *  the dropdown but the stored singular/plural should be the user's chosen text. */
+const PRESET_DEFAULTS: Record<Exclude<RoleLabelPreset, 'custom'>, { singular: string; plural: string }> = {
+  student: { singular: 'Student', plural: 'Students' },
+  athlete: { singular: 'Athlete', plural: 'Athletes' },
+  client: { singular: 'Client', plural: 'Clients' },
+  player: { singular: 'Player', plural: 'Players' },
+  participant: { singular: 'Participant', plural: 'Participants' },
+}
+
+function ContactRoleLabelForm({ team, teamId }: { team: Team; teamId: string }) {
+  const t = useTranslations('TeamSettings')
+  const tRole = useTranslations('RoleLabel')
+  const qc = useQueryClient()
+
+  const current = team.contact_role_label
+  const [preset, setPreset] = useState<RoleLabelPreset | ''>(current?.preset ?? '')
+  const [singular, setSingular] = useState(current?.singular ?? '')
+  const [plural, setPlural] = useState(current?.plural ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const isCustom = preset === 'custom'
+  const isDirty =
+    (preset || '') !== (current?.preset ?? '') ||
+    singular !== (current?.singular ?? '') ||
+    plural !== (current?.plural ?? '')
+
+  function onPresetChange(p: RoleLabelPreset | '') {
+    setPreset(p)
+    if (p && p !== 'custom') {
+      const defs = PRESET_DEFAULTS[p as Exclude<RoleLabelPreset, 'custom'>]
+      setSingular(defs.singular)
+      setPlural(defs.plural)
+    }
+  }
+
+  async function onSave() {
+    if (!singular.trim() || !plural.trim()) return
+    setSaving(true)
+    try {
+      const label: ContactRoleLabel = {
+        ...(preset ? { preset: preset as RoleLabelPreset } : {}),
+        singular: singular.trim(),
+        plural: plural.trim(),
+      }
+      await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { contact_role_label: label })
+      await qc.invalidateQueries({ queryKey: ['team', teamId] })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3 pt-4 border-t">
+      <div>
+        <p className="text-sm font-medium">{t('roleLabelTitle')}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{t('roleLabelHelp')}</p>
+      </div>
+      <div className="space-y-1.5">
+        <Label>{t('roleLabelPreset')}</Label>
+        <Select value={preset} onValueChange={(v) => onPresetChange(v as RoleLabelPreset | '')}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={t('roleLabelPresetNone')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">{t('roleLabelPresetNone')}</SelectItem>
+            {ROLE_LABEL_PRESETS.map((p) => (
+              <SelectItem key={p} value={p}>{tRole(`preset_${p}`)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {/* Singular + plural — always visible so user can always tweak */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>{t('roleLabelSingular')}</Label>
+          <Input
+            value={singular}
+            onChange={(e) => { setSingular(e.target.value); if (preset !== 'custom') setPreset('custom') }}
+            placeholder={isCustom ? t('roleLabelSingular') : ''}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>{t('roleLabelPlural')}</Label>
+          <Input
+            value={plural}
+            onChange={(e) => { setPlural(e.target.value); if (preset !== 'custom') setPreset('custom') }}
+            placeholder={isCustom ? t('roleLabelPlural') : ''}
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <Button size="sm" onClick={onSave} disabled={saving || !isDirty || !singular.trim() || !plural.trim()}>
+          {saving ? t('saving') : t('save')}
+        </Button>
+        {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
+      </div>
+    </div>
+  )
 }
 
 // ─── general form ─────────────────────────────────────────────────────────────
@@ -2036,7 +2148,12 @@ export default function TeamSettingsPage() {
       ) : (
         <Card>
           <CardContent className="pt-6">
-            {tab === 'general' && <GeneralForm team={team} teamId={currentTeamId} />}
+            {tab === 'general' && (
+              <>
+                <GeneralForm team={team} teamId={currentTeamId} />
+                <ContactRoleLabelForm team={team} teamId={currentTeamId} />
+              </>
+            )}
             {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
             {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
             {tab === 'custom-fields' && isInstalled('custom-fields') && (
