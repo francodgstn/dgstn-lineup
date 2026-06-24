@@ -48,9 +48,7 @@ const FIREBASE_API_KEY = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
         {t('hero.emailCta')} <i data-lucide="arrow-right"></i>
       </button>
     </form>
-    <p class="consent">
-      By signing up you agree to our <a href="/privacy">Privacy Policy</a>. Unsubscribe anytime.
-    </p>
+    <p class="consent" set:html={t('hero.consent')}></p>
     <p class="form-status" id="form-status" aria-live="polite"></p>
   </div>
 </section>

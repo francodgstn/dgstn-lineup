@@ -51,6 +51,31 @@ const canonical = canonicalUrl ?? `${siteUrl}${Astro.url.pathname}`;
         else if (s === 'light') document.documentElement.setAttribute('data-theme', 'light');
       })();
     </script>
+
+    <!-- Locale nudge: on the English root, send the visitor to their browser
+         language (de/fr/it) on first visit, or to whatever they last picked in
+         the switcher. English always wins ties and an explicit "EN" choice. Runs
+         only on "/" so localized pages and /privacy, /legal never redirect. -->
+    <script is:inline>
+      (function () {
+        if (location.pathname !== '/') return;
+        var supported = ['de', 'fr', 'it'];
+        var stored = null;
+        try { stored = localStorage.getItem('linyup:lang'); } catch (e) {}
+        var target = null;
+        if (stored) {
+          if (supported.indexOf(stored) !== -1) target = stored; // 'en' → stay
+        } else {
+          var langs = navigator.languages || [navigator.language || ''];
+          for (var i = 0; i < langs.length; i++) {
+            var code = (langs[i] || '').slice(0, 2).toLowerCase();
+            if (code === 'en') break;                 // English preference → stay
+            if (supported.indexOf(code) !== -1) { target = code; break; }
+          }
+        }
+        if (target) location.replace('/' + target);
+      })();
+    </script>
   </head>
   <body>
     <slot />

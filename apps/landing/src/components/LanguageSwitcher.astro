@@ -83,6 +83,17 @@ const options = (Object.keys(languages) as Language[]).map((lang) => ({
 <script>
   document.getElementById('lang-select')?.addEventListener('change', (e) => {
     const target = e.target as HTMLSelectElement;
-    if (target.value) window.location.href = target.value;
+    if (!target.value) return;
+    // Persist the explicit choice so the root-locale nudge respects it next time
+    // (the option label is the uppercase lang code: EN / DE / FR / IT).
+    const code = target.selectedOptions[0]?.textContent?.trim().toLowerCase();
+    if (code) {
+      try {
+        localStorage.setItem('linyup:lang', code);
+      } catch {
+        /* private mode — fall through to navigation */
+      }
+    }
+    window.location.href = target.value;
   });
 </script>

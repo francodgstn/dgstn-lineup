@@ -11,6 +11,7 @@
     "cta": "Accès anticipé"
   },
   "hero": {
+    "consent": "En vous inscrivant, vous acceptez notre <a href=\"/privacy\">politique de confidentialité</a>. Désabonnement à tout moment.",
     "tagline": "Pour les clubs nouveaux et en croissance",
     "title": "Planifiez vos cours. Connaissez vos membres. Développez votre studio.",
     "subtitle": "Moins d'administratif, plus de coaching — la plateforme moderne et abordable pour coaches et petits studios.",
@@ -35,7 +36,7 @@
   },
   "heroFeatures": {
     "eyebrow": "L'essentiel",
-    "title": "Conçu pour gérer votre club",
+    "title": "Conçu pour gérer votre studio",
     "subtitle": "Tout ce qu'un coach ou un petit studio doit gérer — quelle que soit votre discipline. Simple par défaut.",
     "cards": {
       "sessions": { "title": "Planifiez vos cours", "benefit": "Cours récurrents, places et présences dans un seul calendrier." },
@@ -55,7 +56,7 @@
   "showcase": {
     "eyebrow": "En action",
     "title": "Un vrai aperçu de Linyup",
-    "subtitle": "Pas des maquettes — de vrais écrans d'un studio qui tourne sur Linyup.",
+    "subtitle": "Un vrai studio qui tourne sur Linyup — démo entièrement ouverte, sans inscription ni appel commercial.",
     "dashboardAlt": "Le tableau de bord Linyup",
     "shots": {
       "schedule": { "title": "Toute votre semaine en un coup d'œil", "detail": "Chaque cours, salle et coach dans un seul calendrier en couleurs — et vos membres réservent leur place en ligne." },
@@ -167,20 +168,20 @@
       "name": "Coach",
       "price": "CHF 9",
       "promoPrice": "CHF 4.50",
-      "audience": "Pour les instructeurs solos et coaches privés.",
+      "audience": "Pour les instructeurs solos et coaches privés qui prennent de l'élan.",
       "features": ["Tout de Free", "50 contacts", "App membre + Groupes & Champs perso", "Options à la carte"]
     },
     "studio": {
       "name": "Studio",
       "price": "CHF 35",
       "promoPrice": "CHF 17.50",
-      "audience": "Pour les studios et salles de sport avec plusieurs coaches et cours.",
+      "audience": "Tout équipé — pour les coaches et studios qui veulent une croissance structurée.",
       "features": ["Tout de Coach", "Toutes les options incluses", "App membre, automatisations & analyses avancées", "Plusieurs membres d'équipe"]
     },
     "org": {
       "name": "Organisation",
       "price": "CHF 103",
-      "audience": "Pour les studios multi-sites, fédérations et franchises.",
+      "audience": "Pour les organisations multi-studios, fédérations et franchises.",
       "features": ["Tout de Studio", "Administration centrale multi-équipes", "Événements & messages inter-équipes", "API & rôles avancés"]
     }
   },

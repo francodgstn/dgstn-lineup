@@ -11,6 +11,7 @@
     "cta": "Get early access"
   },
   "hero": {
+    "consent": "By signing up you agree to our <a href=\"/privacy\">Privacy Policy</a>. Unsubscribe anytime.",
     "tagline": "For new and growing clubs",
     "title": "Run your classes. Know your members. Grow your studio.",
     "subtitle": "Less admin, more coaching — the modern, affordable platform for coaches and small studios.",
@@ -35,7 +36,7 @@
   },
   "heroFeatures": {
     "eyebrow": "The essentials",
-    "title": "Built to run your club",
+    "title": "Built to run your studio",
     "subtitle": "Everything a coach or small studio needs to run — whatever you teach. Simple by default.",
     "cards": {
       "sessions": { "title": "Plan your classes", "benefit": "Recurring sessions, capacity, and attendance in one calendar." },
@@ -55,7 +56,7 @@
   "showcase": {
     "eyebrow": "See it in action",
     "title": "A real look inside Linyup",
-    "subtitle": "Not mockups — real screens from a studio running on Linyup.",
+    "subtitle": "A real studio running on Linyup — fully open to explore, no sign-up or sales call needed.",
     "dashboardAlt": "The Linyup dashboard",
     "shots": {
       "schedule": { "title": "See your whole week", "detail": "Every class, room, and coach in one colour-coded calendar — and let members book their spot online." },
@@ -167,20 +168,20 @@
       "name": "Coach",
       "price": "CHF 9",
       "promoPrice": "CHF 4.50",
-      "audience": "For solo instructors and private coaches.",
+      "audience": "For solo instructors and private coaches building momentum.",
       "features": ["Everything in Free", "50 contacts", "Member app + Groups & Custom Fields", "À-la-carte add-ons"]
     },
     "studio": {
       "name": "Studio",
       "price": "CHF 35",
       "promoPrice": "CHF 17.50",
-      "audience": "For studios and gyms with multiple coaches and classes.",
+      "audience": "Fully featured — for coaches and studios ready to grow with structure.",
       "features": ["Everything in Coach", "All add-ons included", "Member app, automations & advanced analytics", "Multiple team members"]
     },
     "org": {
       "name": "Organisation",
       "price": "CHF 103",
-      "audience": "For multi-location studios, federations, and franchises.",
+      "audience": "For multi-studio organisations, federations, and franchises.",
       "features": ["Everything in Studio", "Central multi-team admin", "Cross-team events & messaging", "API & advanced roles"]
     }
   },

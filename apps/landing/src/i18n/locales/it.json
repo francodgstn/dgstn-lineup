@@ -11,9 +11,10 @@
     "cta": "Accesso anticipato"
   },
   "hero": {
+    "consent": "Iscrivendoti accetti la nostra <a href=\"/privacy\">Informativa sulla privacy</a>. Disiscrizione in qualsiasi momento.",
     "tagline": "Per club nuovi e in crescita",
     "title": "Gestisci le tue lezioni. Conosci i tuoi membri. Fai crescere il tuo studio.",
-    "subtitle": "Meno burocrazia, più coaching — la piattaforma moderna e conveniente per coach e piccoli studi.",
+    "subtitle": "Meno amministrazione, più coaching — la piattaforma moderna e conveniente per coach e piccoli studi.",
     "cta": "Inizia gratis",
     "ctaSecondary": "Scopri le funzionalità",
     "comingSoon": "Disponibile a breve",
@@ -35,7 +36,7 @@
   },
   "heroFeatures": {
     "eyebrow": "L'essenziale",
-    "title": "Pensato per gestire il tuo club",
+    "title": "Pensato per gestire il tuo studio",
     "subtitle": "Tutto ciò che serve a un coach o a un piccolo studio — qualunque cosa insegni. Semplice di default.",
     "cards": {
       "sessions": { "title": "Pianifica le tue lezioni", "benefit": "Lezioni ricorrenti, posti e presenze in un unico calendario." },
@@ -55,7 +56,7 @@
   "showcase": {
     "eyebrow": "In azione",
     "title": "Uno sguardo reale dentro Linyup",
-    "subtitle": "Niente mockup — schermate reali di uno studio che usa Linyup.",
+    "subtitle": "Uno studio reale che usa Linyup — demo completamente aperta, senza registrazione né chiamata commerciale.",
     "dashboardAlt": "La dashboard Linyup",
     "shots": {
       "schedule": { "title": "Tutta la settimana a colpo d'occhio", "detail": "Ogni lezione, sala e coach in un unico calendario a colori — e i membri prenotano il posto online." },
@@ -167,20 +168,20 @@
       "name": "Coach",
       "price": "CHF 9",
       "promoPrice": "CHF 4.50",
-      "audience": "Per istruttori singoli e coach privati.",
+      "audience": "Per istruttori singoli e coach privati che prendono slancio.",
       "features": ["Tutto di Free", "50 contatti", "App membri + Gruppi e Campi personalizzati", "Opzioni à la carte"]
     },
     "studio": {
       "name": "Studio",
       "price": "CHF 35",
       "promoPrice": "CHF 17.50",
-      "audience": "Per studi e palestre con più coach e corsi.",
+      "audience": "Completo — per coach e studi che vogliono crescere in modo strutturato.",
       "features": ["Tutto di Coach", "Tutte le opzioni incluse", "App membri, automazioni e analisi avanzate", "Più membri del team"]
     },
     "org": {
       "name": "Organizzazione",
       "price": "CHF 103",
-      "audience": "Per studi multi-sede, federazioni e franchising.",
+      "audience": "Per organizzazioni multi-studio, federazioni e franchising.",
       "features": ["Tutto di Studio", "Amministrazione centrale multi-team", "Eventi e messaggi tra team", "API e ruoli avanzati"]
     }
   },
