@@ -1,0 +1,127 @@
+---
+// Standalone 1200×630 Open Graph / social-share card. It mirrors the hero so the
+// link preview (WhatsApp, iMessage, Slack, X, …) shows the real brand look.
+//
+// It is rendered to /public/og-image.png by headless Chrome and that PNG is what
+// the meta tags point at. Regenerate when the hero copy/brand changes:
+//   1. run the landing dev server
+//   2. chrome --headless --window-size=1200,630 --screenshot=public/og-image.png \
+//        http://localhost:<port>/og
+// The route is noindex so it never shows up in search.
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Linyup — social card</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Anton&family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1200px; height: 630px; overflow: hidden; }
+      .og {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: oklch(0.982 0.004 288);
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        color: oklch(0.155 0.022 288);
+      }
+      /* Soft brand orbs behind the content — same idea as the hero */
+      .orb { position: absolute; border-radius: 50%; filter: blur(72px); }
+      .orb-1 {
+        width: 640px; height: 640px; top: -250px; left: -170px;
+        background: radial-gradient(circle, oklch(0.556 0.237 292 / 0.42), transparent 68%);
+      }
+      .orb-2 {
+        width: 560px; height: 560px; top: -200px; right: -170px;
+        background: radial-gradient(circle, oklch(0.680 0.180 288 / 0.40), transparent 68%);
+      }
+      .inner {
+        position: relative; z-index: 1; height: 100%;
+        padding: 70px 80px; display: flex; flex-direction: column;
+      }
+      .top { display: flex; align-items: center; justify-content: space-between; }
+      .logo { display: flex; align-items: center; gap: 10px; }
+      .logo svg { width: 48px; height: 48px; }
+      .logo .word {
+        font-family: 'Fredoka', sans-serif; font-weight: 600;
+        font-size: 46px; letter-spacing: -0.01em; line-height: 1;
+      }
+      .logo .word .a { color: oklch(0.155 0.022 288); }
+      .logo .word .b { color: oklch(0.556 0.237 292); }
+      .pill {
+        transform: rotate(4deg);
+        background: oklch(0.556 0.237 292); color: #fff;
+        font-weight: 700; font-size: 17px; text-transform: uppercase; letter-spacing: 0.06em;
+        padding: 9px 20px; border-radius: 999px;
+        box-shadow: 0 10px 26px oklch(0.556 0.237 292 / 0.35);
+      }
+      .mid { margin-top: auto; }
+      h1 {
+        font-family: 'Anton', sans-serif; font-weight: 400; text-transform: uppercase;
+        font-size: 86px; line-height: 0.97; letter-spacing: 0.005em;
+        color: oklch(0.350 0.180 288);
+      }
+      h1 span { display: block; }
+      .sub {
+        margin-top: 26px; font-size: 27px; line-height: 1.4; font-weight: 500;
+        color: oklch(0.500 0.030 288); max-width: 940px;
+      }
+      .foot {
+        margin-top: 30px; display: inline-flex; align-items: center; gap: 10px;
+        font-size: 21px; font-weight: 700; color: oklch(0.556 0.237 292);
+      }
+      .foot .dot { width: 7px; height: 7px; border-radius: 50%; background: oklch(0.556 0.237 292); }
+    </style>
+  </head>
+  <body>
+    <div class="og">
+      <span class="orb orb-1"></span>
+      <span class="orb orb-2"></span>
+      <div class="inner">
+        <div class="top">
+          <div class="logo">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <defs>
+                <linearGradient id="lg" x1="0" y1="1" x2="1" y2="0">
+                  <stop offset="0" stop-color="#a78bfa" />
+                  <stop offset="1" stop-color="#5b21b6" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M16 82 Q42 80 58 52 T86 16"
+                fill="none"
+                stroke="url(#lg)"
+                stroke-width="14"
+                stroke-linecap="round"
+              />
+            </svg>
+            <span class="word"><span class="a">liny</span><span class="b">up</span></span>
+          </div>
+          <span class="pill">Coming soon</span>
+        </div>
+
+        <div class="mid">
+          <h1>
+            <span>Run your classes.</span>
+            <span>Know your members.</span>
+            <span>Grow your studio.</span>
+          </h1>
+          <p class="sub">
+            The all-in-one platform for coaches &amp; studios — sessions, bookings,
+            payments and a member app.
+          </p>
+          <div class="foot"><span class="dot"></span> linyup.com</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

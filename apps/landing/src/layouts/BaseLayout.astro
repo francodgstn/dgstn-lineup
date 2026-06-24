@@ -11,6 +11,10 @@ interface Props {
 const { title, description, lang, canonicalUrl } = Astro.props;
 const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? 'https://linyup.com';
 const canonical = canonicalUrl ?? `${siteUrl}${Astro.url.pathname}`;
+// Social-share preview image (1200×630, generated from /og — see og.astro).
+const ogImage = `${siteUrl}/og-image.png`;
+const ogImageAlt = 'Linyup — run your classes, know your members, grow your studio.';
+const ogLocale = ({ en: 'en_US', de: 'de_DE', fr: 'fr_FR', it: 'it_IT' } as const)[lang as 'en' | 'de' | 'fr' | 'it'] ?? 'en_US';
 ---
 
 <!doctype html>
@@ -22,12 +26,26 @@ const canonical = canonicalUrl ?? `${siteUrl}${Astro.url.pathname}`;
     <title>{title}</title>
     <link rel="canonical" href={canonical} />
 
-    <!-- Open Graph -->
+    <!-- Open Graph (link previews — WhatsApp, iMessage, Slack, Facebook, …) -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Linyup" />
+    <meta property="og:locale" content={ogLocale} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:secure_url" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={ogImageAlt} />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={ogImageAlt} />
 
     <!-- Favicon -->
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
