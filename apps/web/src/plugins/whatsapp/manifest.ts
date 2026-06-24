@@ -4,7 +4,7 @@ export const whatsappManifest: PluginManifest = {
   id: 'whatsapp',
   nameKey: 'whatsappName',
   descriptionKey: 'whatsappDescription',
-  category: 'communications',
+  category: 'web',
   minPlan: 'studio',
   status: 'coming_soon',
   iconName: 'MessageCircle',

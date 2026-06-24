@@ -5,7 +5,7 @@ export const onlineCoursesManifest: PluginManifest = {
   id: 'online-courses',
   nameKey: 'onlineCoursesName',
   descriptionKey: 'onlineCoursesDescription',
-  category: 'content',
+  category: 'commerce',
   minPlan: 'studio',
   status: 'available',
   recommended: true,

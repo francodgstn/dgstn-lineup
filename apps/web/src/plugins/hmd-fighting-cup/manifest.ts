@@ -4,7 +4,7 @@ export const hmdFightingCupManifest: PluginManifest = {
   id: 'hmd-fighting-cup',
   nameKey: 'hmdFightingCupName',
   descriptionKey: 'hmdFightingCupDescription',
-  category: 'analytics',
+  category: 'data',
   minPlan: 'studio',
   status: 'available',
   iconName: 'Trophy',

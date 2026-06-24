@@ -22,13 +22,14 @@ import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import {
-  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift, GraduationCap, Trophy, FolderTree,
+  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift, GraduationCap, Trophy, FolderTree, Search,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
@@ -119,14 +120,10 @@ function PluginCard({
   ) : null
 
   const categoryLabel: Record<PluginCategory, string> = {
-    ai: t('categoryAi'),
-    communications: t('categoryCommunications'),
-    website: t('categoryWebsite'),
-    content: t('categoryContent'),
     engagement: t('categoryEngagement'),
-    organization: t('categoryOrganization'),
-    payments: t('categoryPayments'),
-    analytics: 'Analytics',
+    commerce: t('categoryCommerce'),
+    web: t('categoryWeb'),
+    data: t('categoryData'),
   }
 
   const accessBadge =
@@ -274,6 +271,7 @@ export default function PluginsPage() {
   const { openUpgradeModal } = useUpgradeModal()
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
+  const [searchTerm, setSearchTerm] = useState('')
   const [installingId, setInstallingId] = useState<string | null>(null)
   const [configPlugin, setConfigPlugin] = useState<PluginManifest | null>(null)
   const [confirmAddon, setConfirmAddon] = useState<PluginManifest | null>(null)
@@ -352,18 +350,22 @@ export default function PluginsPage() {
 
   // ── Category tabs ──
   const CATEGORIES: { key: CategoryFilter; label: string }[] = [
-    { key: 'all',            label: t('categoryAll') },
-    { key: 'ai',             label: t('categoryAi') },
-    { key: 'communications', label: t('categoryCommunications') },
-    { key: 'website',        label: t('categoryWebsite') },
-    { key: 'content',        label: t('categoryContent') },
-    { key: 'engagement',     label: t('categoryEngagement') },
-    { key: 'payments',       label: t('categoryPayments') },
-    { key: 'organization',   label: t('categoryOrganization') },
+    { key: 'all',        label: t('categoryAll') },
+    { key: 'engagement', label: t('categoryEngagement') },
+    { key: 'commerce',   label: t('categoryCommerce') },
+    { key: 'web',        label: t('categoryWeb') },
+    { key: 'data',       label: t('categoryData') },
   ]
 
+  const search = searchTerm.trim().toLowerCase()
   const filteredPlugins = PLUGIN_REGISTRY
     .filter((m) => categoryFilter === 'all' || m.category === categoryFilter)
+    .filter(
+      (m) =>
+        !search ||
+        t(m.nameKey).toLowerCase().includes(search) ||
+        t(m.descriptionKey).toLowerCase().includes(search),
+    )
     // Recommended plugins float to the top for prominence.
     .sort((a, b) => Number(b.recommended ?? false) - Number(a.recommended ?? false))
 
@@ -396,6 +398,17 @@ export default function PluginsPage() {
           <p className="text-muted-foreground">{t('coachAddonBannerBody')}</p>
         </div>
       )}
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder={t('searchPlaceholder')}
+          className="pl-9"
+        />
+      </div>
 
       {/* Category filter */}
       <div className="flex flex-wrap gap-2">

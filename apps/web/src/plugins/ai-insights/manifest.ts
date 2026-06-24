@@ -4,7 +4,7 @@ export const aiInsightsManifest: PluginManifest = {
   id: 'ai-insights',
   nameKey: 'aiInsightsName',
   descriptionKey: 'aiInsightsDescription',
-  category: 'ai',
+  category: 'data',
   minPlan: 'studio',
   status: 'coming_soon',
   iconName: 'Sparkles',

@@ -13,7 +13,7 @@ export const customFieldsManifest: PluginManifest = {
   id: 'custom-fields',
   nameKey: 'customFieldsName',
   descriptionKey: 'customFieldsDescription',
-  category: 'organization',
+  category: 'data',
   minPlan: 'coach',
   status: 'available',
   recommended: true,

@@ -5,7 +5,7 @@ export const websiteManifest: PluginManifest = {
   id: 'website',
   nameKey: 'websiteName',
   descriptionKey: 'websiteDescription',
-  category: 'website',
+  category: 'web',
   minPlan: 'studio',
   status: 'available',
   recommended: true,

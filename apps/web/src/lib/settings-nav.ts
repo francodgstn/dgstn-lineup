@@ -13,10 +13,14 @@ import {
   UserCog,
   Settings,
   CreditCard,
+  Bell,
+  Award,
+  Wallet,
+  Send,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-export type SettingsGroupKey = 'catalog' | 'automation' | 'account'
+export type SettingsGroupKey = 'catalog' | 'automation' | 'team' | 'account'
 
 export interface SettingsNavItem {
   id: string // stable id used in the pin set + as React key
@@ -36,8 +40,14 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   { id: 'bookingPage', href: '/team/booking', labelKey: 'bookingPage', icon: CalendarCheck, group: 'catalog' },
   { id: 'automations', href: '/automations', labelKey: 'automations', icon: Workflow, group: 'automation' },
   { id: 'plugins', href: '/plugins', labelKey: 'plugins', icon: Puzzle, group: 'automation', exact: true },
+  // Team settings — exploded from the old single "Team settings" entry so each
+  // section is reachable directly (each deep-links to its tab via ?tab=).
+  { id: 'teamGeneral', href: '/team/settings', labelKey: 'teamGeneral', icon: Settings, group: 'team', exact: true },
+  { id: 'teamAlerts', href: '/team/settings?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'team' },
+  { id: 'teamRanking', href: '/team/settings?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'team' },
+  { id: 'teamPayments', href: '/team/settings?tab=payments', labelKey: 'teamPayments', icon: Wallet, group: 'team' },
+  { id: 'teamOutreach', href: '/team/settings?tab=outreach', labelKey: 'teamOutreach', icon: Send, group: 'team' },
   { id: 'managers', href: '/team/members', labelKey: 'managers', icon: UserCog, group: 'account' },
-  { id: 'teamSettings', href: '/team/settings', labelKey: 'teamSettings', icon: Settings, group: 'account' },
   { id: 'billing', href: '/billing', labelKey: 'billing', icon: CreditCard, group: 'account' },
 ]
 
@@ -45,6 +55,7 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
 export const SETTINGS_GROUPS: { key: SettingsGroupKey; labelKey: string }[] = [
   { key: 'catalog', labelKey: 'groupCatalog' },
   { key: 'automation', labelKey: 'groupAutomation' },
+  { key: 'team', labelKey: 'groupTeam' },
   { key: 'account', labelKey: 'groupAccount' },
 ]
 

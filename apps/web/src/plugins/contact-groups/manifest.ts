@@ -7,7 +7,7 @@ export const contactGroupsManifest: PluginManifest = {
   id: 'contact-groups',
   nameKey: 'contactGroupsName',
   descriptionKey: 'contactGroupsDescription',
-  category: 'organization',
+  category: 'data',
   minPlan: 'coach',
   status: 'available',
   recommended: true,

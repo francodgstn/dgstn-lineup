@@ -8,7 +8,7 @@ export const productsManifest: PluginManifest = {
   id: 'products',
   nameKey: 'productsName',
   descriptionKey: 'productsDescription',
-  category: 'payments',
+  category: 'commerce',
   minPlan: 'studio',
   status: 'available',
   addon: PLUGIN_ADDONS['products'],

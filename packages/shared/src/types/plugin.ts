@@ -2,15 +2,12 @@ import type { Timestamp } from './common'
 import type { SaasPlan } from './team'
 
 export type PluginId = string
-export type PluginCategory =
-  | 'ai'
-  | 'communications'
-  | 'website'
-  | 'payments'
-  | 'analytics'
-  | 'content'
-  | 'engagement'
-  | 'organization'
+// Consolidated, user-facing buckets (kept deliberately few + meaningful):
+//   engagement — gamification, referrals
+//   commerce   — products, online courses (things you sell)
+//   web        — website, messaging (whatsapp)
+//   data       — contact groups, custom fields, insights/analytics
+export type PluginCategory = 'engagement' | 'commerce' | 'web' | 'data'
 export type PluginStatus = 'available' | 'coming_soon' | 'beta'
 
 // Template literal union — enables type-safe namespaced IDs like 'plugin:whatsapp:send_message'

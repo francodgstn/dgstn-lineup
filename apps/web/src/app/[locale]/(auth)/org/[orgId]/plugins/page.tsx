@@ -84,14 +84,10 @@ function OrgPluginCard({
   const tOrg = useTranslations('Org')
 
   const categoryLabel: Record<PluginCategory, string> = {
-    ai: t('categoryAi'),
-    communications: t('categoryCommunications'),
-    website: t('categoryWebsite'),
-    content: t('categoryContent'),
     engagement: t('categoryEngagement'),
-    organization: t('categoryOrganization'),
-    payments: t('categoryPayments'),
-    analytics: 'Analytics',
+    commerce: t('categoryCommerce'),
+    web: t('categoryWeb'),
+    data: t('categoryData'),
   }
 
   return (
