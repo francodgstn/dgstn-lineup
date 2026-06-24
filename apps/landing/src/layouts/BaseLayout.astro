@@ -58,5 +58,42 @@ const canonical = canonicalUrl ?? `${siteUrl}${Astro.url.pathname}`;
     <!-- Lucide icons (renders all <i data-lucide> tags) -->
     <script is:inline src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script is:inline>lucide.createIcons();</script>
+
+    <!-- Gentle scroll-reveal: section heads + cards fade/slide up as they enter
+         the viewport. JS-applied (no FOUC for no-JS), and fully skipped when the
+         visitor prefers reduced motion. -->
+    <script is:inline>
+      (function () {
+        if (!('IntersectionObserver' in window)) return;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        var sel = '.sec-head, .hd-copy, .hd-shot, .hf-card, .pay-card, .plan, .trial-wrap, .compare-toggle-wrap, .founder-row';
+        var els = Array.prototype.slice.call(document.querySelectorAll(sel));
+        els.forEach(function (el) { el.classList.add('reveal-init'); });
+        // Stagger cards within their grid so they cascade in.
+        document.querySelectorAll('.hf-grid, .pay-grid, .plans').forEach(function (grid) {
+          Array.prototype.slice.call(grid.children).forEach(function (c, i) {
+            c.style.transitionDelay = Math.min(i * 60, 300) + 'ms';
+          });
+        });
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) { e.target.classList.add('reveal-in'); io.unobserve(e.target); }
+          });
+        }, { threshold: 0.1, rootMargin: '0px 0px -6% 0px' });
+        els.forEach(function (el) { io.observe(el); });
+      })();
+    </script>
+
+    <style is:global>
+      @media (prefers-reduced-motion: no-preference) {
+        .reveal-init { opacity: 0; transform: translateY(20px); will-change: opacity, transform; }
+        .reveal-in {
+          opacity: 1;
+          transform: none;
+          transition: opacity 0.7s cubic-bezier(0.22, 0.61, 0.36, 1),
+            transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+        }
+      }
+    </style>
   </body>
 </html>

@@ -151,6 +151,10 @@ const cmpText = (v: CmpVal): string | null => {
               ))}
             </ul>
 
+            <a class="feat-more" href="#compare" data-open-compare>
+              {t('plans.cmpMore')} <i data-lucide="arrow-down"></i>
+            </a>
+
             <button
               class:list={['btn', 'btn-block', featured ? 'btn-primary' : 'btn-outline']}
               type="button"
@@ -247,6 +251,17 @@ const cmpText = (v: CmpVal): string | null => {
     btn.setAttribute('aria-expanded', String(open));
   });
 
+  // "See the full comparison" links inside the plan cards — expand the table and
+  // scroll to it (the cards only list a few headline features).
+  document.querySelectorAll<HTMLAnchorElement>('[data-open-compare]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      cmp?.classList.add('open');
+      btn?.setAttribute('aria-expanded', 'true');
+      document.getElementById('compare')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
   // Clickable feature labels → open the shared feature-detail modal (defined in
   // Features.astro, which renders on the same page).
   document.querySelectorAll<HTMLElement>('.compare-table .feat-link').forEach((el) => {
@@ -260,10 +275,12 @@ const cmpText = (v: CmpVal): string | null => {
 </script>
 
 <style>
-  .plans-sec { padding: 104px 0; background: var(--purple-50); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .plans-sec { padding: 120px 0; background: var(--purple-50); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  /* A touch more air directly around the cards */
+  .plans-sec .sec-head { margin-bottom: 8px; }
 
   /* Trial + migration note pills under the section head */
-  .trial-wrap { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: -24px 0 36px; }
+  .trial-wrap { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: -8px 0 52px; }
   .trial-note { background: var(--card); }
   .mig-note { color: var(--purple-700); background: var(--purple-50); border-color: var(--purple-200); }
   .mig-note :global(svg) { color: var(--primary); }
@@ -311,9 +328,24 @@ const cmpText = (v: CmpVal): string | null => {
   /* Regular price after the promo period (paid cards) */
   .price-note { margin: 6px 0 0; font-size: 13px; color: var(--muted-foreground); }
 
-  .feat-list { list-style: none; padding: 0; margin: 18px 0; display: flex; flex-direction: column; gap: 9px; }
+  .feat-list { list-style: none; padding: 0; margin: 18px 0 0; display: flex; flex-direction: column; gap: 9px; }
   .feat-list li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; }
   .feat-list :global(svg) { width: 16px; height: 16px; color: var(--success-fg); flex-shrink: 0; }
+
+  /* Muted link to the full comparison — the card only lists a few headline rows */
+  .feat-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 12px 0 0;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+  .feat-more:hover { color: var(--primary); }
+  .feat-more :global(svg) { width: 13px; height: 13px; }
 
   /* CTA pinned to the bottom so cards with differing content stay aligned */
   .plan .btn { margin-top: auto; }
@@ -325,7 +357,7 @@ const cmpText = (v: CmpVal): string | null => {
   /* ── Feature comparison (collapsible) ────────────────────────────────── */
   /* No card chrome — when collapsed the table simply dissolves into the section
      background, and the toggle sits below as a detached button. */
-  .compare { margin-top: 44px; }
+  .compare { margin-top: 60px; }
   /* Collapsed: a taller "peek" (a few more rows) that fades fully into the
      section background at the bottom. */
   .compare-body {

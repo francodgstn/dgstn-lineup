@@ -8,24 +8,11 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
-const DEMO_URL = import.meta.env.PUBLIC_DEMO_URL ?? 'https://demo.linyup.com';
 // Early-access capture — posts to Firestore early_access_requests (same as the
 // pre-launch page). PUBLIC_* so they're available client-side.
+// The live-demo chips now live in HeroShot.astro (paired with the product peek).
 const FIREBASE_PROJECT_ID = import.meta.env.PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-linyup';
 const FIREBASE_API_KEY = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
-
-// Live demo playground (sandbox). Each link goes straight to /preview?team=,
-// which auto-signs into that demo studio. Keep keys in sync with the pre-launch
-// page and DEMO_ACCOUNTS in apps/web/src/lib/demo.ts.
-// All activities are equal peers — no default vertical, and martial arts is not first.
-const DEMO_STUDIOS = [
-  { key: 'dance', accent: '#db2777' },
-  { key: 'crossfit', accent: '#0f172a' },
-  { key: 'yoga', accent: '#9333ea' },
-  { key: 'tennis', accent: '#16a34a' },
-  { key: 'pilates', accent: '#0d9488' },
-  { key: 'grappling', accent: '#dc2626' },
-] as const;
 ---
 
 <section class="hero">
@@ -65,27 +52,6 @@ const DEMO_STUDIOS = [
       By signing up you agree to our <a href="/privacy">Privacy Policy</a>. Unsubscribe anytime.
     </p>
     <p class="form-status" id="form-status" aria-live="polite"></p>
-
-    <!-- Live demo shortcut — every activity is an equal peer; no default vertical -->
-    <div class="demo-cta">
-      <p class="demo-eyebrow"><i data-lucide="play-circle"></i> {t('hero.demoEyebrow')}</p>
-      <div class="demo-chips">
-        {
-          DEMO_STUDIOS.map((studio) => (
-            <a
-              class="demo-chip"
-              href={`${DEMO_URL}/preview?team=${studio.key}`}
-              target="_blank"
-              rel="noopener"
-              style={`--chip-accent: ${studio.accent}`}
-            >
-              <span class="demo-chip-dot"></span>
-              {t(`hero.demoStudios.${studio.key}`)}
-            </a>
-          ))
-        }
-      </div>
-    </div>
   </div>
 </section>
 
@@ -247,55 +213,6 @@ const DEMO_STUDIOS = [
   .form-status.error { color: var(--warning-fg); }
   .consent { margin: 14px auto 0; max-width: 460px; font-size: 12.5px; line-height: 1.5; text-align: center; color: var(--muted-foreground); }
   .consent a { color: var(--primary); text-decoration: underline; }
-
-  /* Live demo shortcut — type chips (narrow so they wrap into a few rows) */
-  /* Wide enough for all demo chips to sit on one line on large screens; the
-     flex row still wraps on narrower viewports. */
-  .demo-cta { max-width: 700px; margin: 36px auto 0; }
-  .demo-eyebrow {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 7px;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted-foreground);
-    margin: 0 0 18px;
-  }
-  .demo-eyebrow :global(svg) { width: 15px; height: 15px; color: var(--primary); }
-
-  .demo-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-  .demo-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 9px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--foreground);
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
-    box-shadow: var(--ring-card), var(--shadow-sm);
-    padding: 9px 16px;
-    transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
-  }
-  .demo-chip:hover {
-    border-color: color-mix(in oklch, var(--primary) 45%, transparent);
-    transform: translateY(-2px);
-    box-shadow: var(--ring-card), var(--shadow-md);
-  }
-  .demo-chip-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--chip-accent, var(--primary));
-    box-shadow: 0 0 8px var(--chip-accent, var(--primary));
-    flex-shrink: 0;
-  }
-  .demo-chip :global(svg) { width: 15px; height: 15px; color: var(--muted-foreground); transition: transform 0.16s ease, color 0.16s ease; flex-shrink: 0; }
-  .demo-chip:hover :global(svg) { color: var(--primary); transform: translateX(3px); }
 
   @media (max-width: 860px) {
     .hero { padding: 64px 0 48px; }

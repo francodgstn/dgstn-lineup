@@ -9,50 +9,141 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
+const DEMO_URL = import.meta.env.PUBLIC_DEMO_URL ?? 'https://demo.linyup.com';
+
+// Live demo playground (sandbox). Each link goes to /preview?team=, which
+// auto-signs into that demo studio. Keys in sync with DEMO_ACCOUNTS in
+// apps/web/src/lib/demo.ts. All activities are equal peers — no default vertical.
+const DEMO_STUDIOS = [
+  { key: 'dance', accent: '#db2777' },
+  { key: 'crossfit', accent: '#0f172a' },
+  { key: 'yoga', accent: '#9333ea' },
+  { key: 'tennis', accent: '#16a34a' },
+  { key: 'pilates', accent: '#0d9488' },
+  { key: 'grappling', accent: '#dc2626' },
+] as const;
 ---
 
-<section class="heroshot">
+<section class="herodemo">
   <div class="wrap">
-    <figure class="frame">
-      <div class="frame-bar" aria-hidden="true">
-        <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
-        <span class="frame-url"><i data-lucide="lock"></i> app.linyup.com/dashboard</span>
+    <div class="hd-grid">
+      <!-- Left: the live-demo chips -->
+      <div class="hd-copy">
+        <p class="demo-eyebrow"><i data-lucide="play-circle"></i> {t('hero.demoEyebrow')}</p>
+        <div class="demo-chips">
+          {
+            DEMO_STUDIOS.map((studio) => (
+              <a
+                class="demo-chip"
+                href={`${DEMO_URL}/preview?team=${studio.key}`}
+                target="_blank"
+                rel="noopener"
+                style={`--chip-accent: ${studio.accent}`}
+              >
+                <span class="demo-chip-dot" />
+                {t(`hero.demoStudios.${studio.key}`)}
+              </a>
+            ))
+          }
+        </div>
       </div>
-      <div class="frame-crop" style={`aspect-ratio: ${dashboard.width} / ${Math.round(dashboard.height / 3)}`}>
-        <img
-          class="frame-img"
-          src={dashboard.src}
-          width={dashboard.width}
-          height={dashboard.height}
-          alt={t('showcase.dashboardAlt')}
-          loading="eager"
-          decoding="async"
-        />
+
+      <!-- Right: the product peek — bleeds toward the bottom-right edge and fades
+           out there, so it "kicks in" as the page scrolls. Hidden on mobile. -->
+      <div class="hd-shot">
+        <figure class="frame">
+          <div class="frame-bar" aria-hidden="true">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="frame-url"><i data-lucide="lock"></i> app.linyup.com/dashboard</span>
+          </div>
+          <div class="frame-crop">
+            <img
+              class="frame-img"
+              src={dashboard.src}
+              width={dashboard.width}
+              height={dashboard.height}
+              alt={t('showcase.dashboardAlt')}
+              loading="eager"
+              decoding="async"
+            />
+          </div>
+        </figure>
       </div>
-    </figure>
+    </div>
   </div>
 </section>
 
 <style>
-  .heroshot { padding: 12px 0 8px; }
+  .herodemo { padding: 40px 0 60px; overflow: hidden; }
 
+  .hd-grid {
+    display: grid;
+    grid-template-columns: 0.82fr 1.18fr;
+    gap: 44px;
+    align-items: center;
+  }
+
+  /* Left column — chips aligned to the top-left */
+  .hd-copy { align-self: center; }
+  .demo-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted-foreground);
+    margin: 0 0 18px;
+  }
+  .demo-eyebrow :global(svg) { width: 15px; height: 15px; color: var(--primary); }
+
+  .demo-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .demo-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--foreground);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--ring-card), var(--shadow-sm);
+    padding: 9px 16px;
+    text-decoration: none;
+    transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+  }
+  .demo-chip:hover {
+    border-color: color-mix(in oklch, var(--primary) 45%, transparent);
+    transform: translateY(-2px);
+    box-shadow: var(--ring-card), var(--shadow-md);
+  }
+  .demo-chip-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--chip-accent, var(--primary));
+    box-shadow: 0 0 8px var(--chip-accent, var(--primary));
+    flex-shrink: 0;
+  }
+
+  /* Right column — the browser frame bleeds past the right edge and is masked to
+     fade toward the bottom-right (the "external" side), sitting a touch lower. */
+  .hd-shot { position: relative; }
   .frame {
-    margin: 0 auto;
-    max-width: 1000px;
+    width: 128%;
+    margin-top: 26px;
     border-radius: 14px;
     overflow: hidden;
     background: var(--card);
     border: 1px solid var(--border);
-    /* Fade the cropped bottom edge (border included) into the page — a long,
-       soft gradient so more of the dashboard shows through in transparency. */
-    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 42%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 0, #000 42%, transparent 100%);
+    box-shadow: var(--ring-card), var(--shadow-lg);
+    -webkit-mask-image: linear-gradient(118deg, #000 46%, transparent 92%);
+    mask-image: linear-gradient(118deg, #000 46%, transparent 92%);
   }
-
-  /* Show only the top ~quarter of the dashboard as a "peek". The crop box height
-     is a quarter of the image's proportion (aspect-ratio set inline from the
-     intrinsic size); the full-width image overflows and is clipped to its top. */
-  .frame-crop { overflow: hidden; }
+  /* Show only the top slice of the dashboard as a peek. */
+  .frame-crop { max-height: 360px; overflow: hidden; }
 
   .frame-bar {
     display: flex;
@@ -80,14 +171,21 @@ const t = useTranslations(lang);
     border-radius: var(--radius-pill);
   }
   .frame-url :global(svg) { width: 12px; height: 12px; }
-
   .frame-img { display: block; width: 100%; height: auto; }
 
-  @media (max-width: 860px) {
-    .heroshot { padding: 4px 0; }
-    .frame { border-radius: 10px; }
-    .frame-bar { height: 32px; }
-    /* Crop the image's right side slightly so the dashboard reads on small screens */
-    .frame-img { width: 100%; }
+  /* Tablet — narrower screenshot bleed, tighter gap */
+  @media (max-width: 1100px) {
+    .hd-grid { grid-template-columns: 0.9fr 1.1fr; gap: 28px; }
+    .frame { width: 124%; }
+    .frame-crop { max-height: 300px; }
+  }
+
+  /* Mobile — hide the screenshot entirely; chips center under the hero */
+  @media (max-width: 760px) {
+    .herodemo { padding: 8px 0 28px; }
+    .hd-grid { grid-template-columns: 1fr; gap: 0; }
+    .hd-shot { display: none; }
+    .demo-eyebrow { justify-content: center; }
+    .demo-chips { justify-content: center; }
   }
 </style>

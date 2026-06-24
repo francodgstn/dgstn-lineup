@@ -130,6 +130,7 @@
     "orgFrom": "From",
     "mostPopular": "Most popular",
     "cmpToggle": "Compare all features",
+    "cmpMore": "See the full comparison",
     "cmpUsage": "Usage & access",
     "cmpCore": "Run your studio",
     "cmpOrg": "Multi-studio Organization",
@@ -203,7 +204,7 @@
     "feeStudio": "0.7%",
     "feeOrg": "from 0.4%",
     "feeOrgNote": "volume discounts available",
-    "feesMicrocopy": "You see exactly what you pay: Stripe's processing fee at cost, plus a small Linyup fee. No bundled markups, no commission on your members' payments."
+    "feesMicrocopy": "You see exactly what you pay: Stripe's processing fee at cost, plus a small Linyup percentage on the payments you take. No fixed per-transaction fee, no markup on Stripe's cut."
   },
   "cta": {
     "title": "Ready to get started?",

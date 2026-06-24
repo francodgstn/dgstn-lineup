@@ -130,6 +130,7 @@
     "orgFrom": "Dès",
     "mostPopular": "Le plus populaire",
     "cmpToggle": "Comparer toutes les fonctionnalités",
+    "cmpMore": "Voir le comparatif complet",
     "cmpUsage": "Usage & accès",
     "cmpCore": "Gérer votre studio",
     "cmpOrg": "Organisation multi-studios",
@@ -203,7 +204,7 @@
     "feeStudio": "0.7%",
     "feeOrg": "dès 0.4%",
     "feeOrgNote": "remises selon le volume disponibles",
-    "feesMicrocopy": "Vous voyez exactement ce que vous payez : les frais de traitement Stripe au prix coûtant, plus une petite commission Linyup. Aucune majoration groupée, aucune commission sur les paiements de vos membres."
+    "feesMicrocopy": "Vous voyez exactement ce que vous payez : les frais de traitement Stripe au prix coûtant, plus un petit pourcentage Linyup sur les paiements que vous encaissez. Aucuns frais fixes par transaction, aucune majoration sur la part de Stripe."
   },
   "cta": {
     "title": "Prêt à vous lancer ?",

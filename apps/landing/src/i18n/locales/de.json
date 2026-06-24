@@ -130,6 +130,7 @@
     "orgFrom": "Ab",
     "mostPopular": "Am beliebtesten",
     "cmpToggle": "Alle Funktionen vergleichen",
+    "cmpMore": "Vollständigen Vergleich ansehen",
     "cmpUsage": "Nutzung & Zugang",
     "cmpCore": "Studio führen",
     "cmpOrg": "Multi-Studio-Organisation",
@@ -203,7 +204,7 @@
     "feeStudio": "0.7%",
     "feeOrg": "ab 0.4%",
     "feeOrgNote": "Mengenrabatte verfügbar",
-    "feesMicrocopy": "Du siehst genau, was du zahlst: Stripes Bearbeitungsgebühr zum Selbstkostenpreis, plus eine kleine Linyup-Gebühr. Keine gebündelten Aufschläge, keine Provision auf die Zahlungen deiner Mitglieder."
+    "feesMicrocopy": "Du siehst genau, was du zahlst: Stripes Bearbeitungsgebühr zum Selbstkostenpreis, plus ein kleiner Linyup-Prozentsatz auf die Zahlungen, die du einnimmst. Keine fixe Transaktionsgebühr, kein Aufschlag auf Stripes Anteil."
   },
   "cta": {
     "title": "Bereit loszulegen?",

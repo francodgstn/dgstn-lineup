@@ -130,6 +130,7 @@
     "orgFrom": "Da",
     "mostPopular": "Il più popolare",
     "cmpToggle": "Confronta tutte le funzionalità",
+    "cmpMore": "Vedi il confronto completo",
     "cmpUsage": "Utilizzo e accesso",
     "cmpCore": "Gestisci lo studio",
     "cmpOrg": "Organizzazione multi-studio",
@@ -203,7 +204,7 @@
     "feeStudio": "0.7%",
     "feeOrg": "da 0.4%",
     "feeOrgNote": "sconti sul volume disponibili",
-    "feesMicrocopy": "Vedi esattamente quanto paghi: la commissione di elaborazione di Stripe al costo, più una piccola commissione Linyup. Nessun ricarico aggregato, nessuna commissione sui pagamenti dei tuoi membri."
+    "feesMicrocopy": "Vedi esattamente quanto paghi: la commissione di elaborazione di Stripe al costo, più una piccola percentuale Linyup sui pagamenti che incassi. Nessun costo fisso per transazione, nessun ricarico sulla quota di Stripe."
   },
   "cta": {
     "title": "Pronto per iniziare?",
