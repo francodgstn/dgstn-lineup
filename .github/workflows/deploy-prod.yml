@@ -32,13 +32,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          # Use the shared CI deploy SA (linyup-ci-deploy) — the identity infra
-          # actually grants prod-project roles to (see infra/environments/prod
-          # terraform.tfvars) and that staging/sandbox deploy with reliably. The
-          # separate GCP_PROD_DEPLOY_SA had a broken Workload Identity binding
-          # (auth failures); reinstate a dedicated prod SA via Terraform — with a
-          # main-only ref condition — before switching back.
-          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+          service_account: ${{ secrets.GCP_PROD_DEPLOY_SA }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
