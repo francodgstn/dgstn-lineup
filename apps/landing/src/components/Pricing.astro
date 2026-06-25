@@ -93,13 +93,6 @@ const cmpText = (v: CmpVal): string | null => {
       <p>{t('plans.subtitle')}</p>
     </div>
 
-    <div class="trial-wrap">
-      <span class="eyebrow trial-note launch-note"><i data-lucide="badge-percent"></i> {t('plans.launchNote')}</span>
-      <span class="eyebrow trial-note"><i data-lucide="badge-check"></i> {t('plans.trialNote')}</span>
-      <span class="eyebrow trial-note mig-note"><i data-lucide="arrow-left-right"></i> {t('plans.migrationNote')}</span>
-      <span class="eyebrow trial-note"><i data-lucide="mountain"></i> {t('plans.swissNote')}</span>
-    </div>
-
     <div class="plans">
       {
         plans.map(({ key, featured }) => {
@@ -288,20 +281,12 @@ const cmpText = (v: CmpVal): string | null => {
 
 <style>
   .plans-sec { padding: 120px 0; background: var(--purple-50); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  /* A touch more air directly around the cards */
-  .plans-sec .sec-head { margin-bottom: 8px; }
+  /* Comfortable gap between the section head and the cards (the old chip row
+     used to bridge this space). */
+  .plans-sec .sec-head { margin-bottom: 56px; }
 
-  /* Trial + migration note pills under the section head */
-  .trial-wrap { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: -8px 0 52px; }
-  .trial-note { background: var(--card); }
-  .mig-note { color: var(--purple-700); background: var(--purple-50); border-color: var(--purple-200); }
-  .mig-note :global(svg) { color: var(--primary); }
-  /* Launch-offer pill — the single public promo (50% off, limited) */
-  .launch-note { color: #fff; background: var(--primary); border-color: transparent; font-weight: 600; }
-  .launch-note :global(svg) { color: #fff; }
-
-  .plans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: stretch; }
-  .plan { background: var(--card); border-radius: var(--radius-xl); box-shadow: var(--ring-card), var(--shadow-sm); padding: 34px 28px; display: flex; flex-direction: column; }
+  .plans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; align-items: stretch; }
+  .plan { background: var(--card); border-radius: var(--radius-xl); box-shadow: var(--ring-card), var(--shadow-sm); padding: 38px 30px; display: flex; flex-direction: column; }
   .plan.featured { box-shadow: var(--shadow-lg); border: 2px solid var(--primary); position: relative; }
   .plan-tag { position: absolute; top: -11px; left: 28px; background: var(--primary); color: #fff; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 10px; border-radius: 99px; }
   .plan h3 { font-family: var(--font-display); font-weight: 600; font-size: 26px; }
@@ -340,7 +325,7 @@ const cmpText = (v: CmpVal): string | null => {
   /* Regular price after the promo period (paid cards) */
   .price-note { margin: 6px 0 0; font-size: 13px; color: var(--muted-foreground); }
 
-  .feat-list { list-style: none; padding: 0; margin: 18px 0 0; display: flex; flex-direction: column; gap: 9px; }
+  .feat-list { list-style: none; padding: 0; margin: 20px 0 0; display: flex; flex-direction: column; gap: 10px; }
   .feat-list li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; }
   .feat-list :global(svg) { width: 16px; height: 16px; color: var(--success-fg); flex-shrink: 0; }
 
@@ -349,7 +334,9 @@ const cmpText = (v: CmpVal): string | null => {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    margin: 12px 0 0;
+    /* Sits between the feature list and the CTA — keep a clear gap below it so
+       it never crowds the button (notably on mobile, where cards stack). */
+    margin: 16px 0 22px;
     font-size: 12.5px;
     font-weight: 500;
     color: var(--muted-foreground);
@@ -359,7 +346,8 @@ const cmpText = (v: CmpVal): string | null => {
   .feat-more:hover { color: var(--primary); }
   .feat-more :global(svg) { width: 13px; height: 13px; }
 
-  /* CTA pinned to the bottom so cards with differing content stay aligned */
+  /* CTA pinned to the bottom so cards with differing content stay aligned. The
+     auto top margin still leaves at least the .feat-more bottom gap above it. */
   .plan .btn { margin-top: auto; }
 
   @media (max-width: 1100px) {
@@ -453,7 +441,10 @@ const cmpText = (v: CmpVal): string | null => {
 
   @media (max-width: 860px) {
     .plans-sec { padding: 72px 0; }
-    .plans { grid-template-columns: 1fr; }
-    .trial-wrap { margin: -12px 0 28px; }
+    .plans-sec .sec-head { margin-bottom: 40px; }
+    .plans { grid-template-columns: 1fr; gap: 20px; }
+    /* A bit more room around each card's CTA when cards stack vertically. */
+    .feat-more { margin: 16px 0 24px; }
+    .plan { padding: 34px 26px; }
   }
 </style>
