@@ -66,8 +66,21 @@ jobs:
       # Backend first: functions, Firestore rules/indexes, and the static landing
       # site. The App Hosting apps (web + admin) are rolled out AFTER this so the
       # frontend never goes live ahead of the backend it depends on.
+      # Retry wrapper: the WIF→STS token exchange occasionally fails ("Failed to
+      # authenticate") and the per-minute Cloud Functions mutation quota 429s on a
+      # full redeploy. Both are transient and converge on re-run (auth blips clear;
+      # already-updated functions are skipped next pass). 30s gaps let the quota reset.
       - name: Deploy to Firebase (Production)
-        run: npx firebase-tools deploy --project production --only functions,hosting:landing,firestore --non-interactive --force
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if npx firebase-tools deploy --project production --only functions,hosting:landing,firestore --non-interactive --force; then
+              exit 0
+            fi
+            echo "::warning::firebase deploy attempt $attempt failed; retrying in 30s…"
+            sleep 30
+          done
+          echo "::error::firebase deploy failed after 5 attempts"
+          exit 1
 
       # App Hosting (Next.js SSR) — web + admin. Auto-rollout is DISABLED on the
       # PROD backends (see infra/README.md §6), so prod ships ONLY through this
@@ -75,7 +88,25 @@ jobs:
       # exact commit being deployed ($GITHUB_SHA) rather than a branch tip, so a
       # concurrent merge can't sneak into the production rollout.
       - name: Roll out web app (App Hosting, prod)
-        run: npx firebase-tools apphosting:rollouts:create linyup-web --project production --git-commit "$GITHUB_SHA" --non-interactive
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if npx firebase-tools apphosting:rollouts:create linyup-web --project production --git-commit "$GITHUB_SHA" --non-interactive; then
+              exit 0
+            fi
+            echo "::warning::web rollout attempt $attempt failed; retrying in 30s…"
+            sleep 30
+          done
+          echo "::error::web rollout failed after 5 attempts"
+          exit 1
 
       - name: Roll out operator console (App Hosting, prod)
-        run: npx firebase-tools apphosting:rollouts:create linyup-admin --project production --git-commit "$GITHUB_SHA" --non-interactive
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if npx firebase-tools apphosting:rollouts:create linyup-admin --project production --git-commit "$GITHUB_SHA" --non-interactive; then
+              exit 0
+            fi
+            echo "::warning::operator console rollout attempt $attempt failed; retrying in 30s…"
+            sleep 30
+          done
+          echo "::error::operator console rollout failed after 5 attempts"
+          exit 1
