@@ -32,7 +32,14 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_PROD_DEPLOY_SA }}
+          # Use the shared CI SA (linyup-ci-deploy@linyup-admin): it's the only
+          # service account with a working Workload Identity binding (provisioned
+          # in infra/bootstrap) and it already holds prod-project roles. The
+          # separate GCP_PROD_DEPLOY_SA has no WIF binding, so impersonation fails
+          # and firebase-tools reports "Failed to authenticate". Reinstate a
+          # dedicated prod SA with a refs/heads/main ref condition via Terraform
+          # later, then switch this back to GCP_PROD_DEPLOY_SA.
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
