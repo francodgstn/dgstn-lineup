@@ -25,7 +25,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Pinned to 22.22.3: Node 22.23.0 carries a keep-alive regression
+          # (nodejs/node#63989) that makes firebase-tools' STS token exchange
+          # fail with "Premature close" under Workload Identity Federation, so
+          # `firebase deploy` reports "Failed to authenticate". Unpin once Node
+          # ships a fix. gcloud (Python) is unaffected.
+          node-version: '22.22.3'
           cache: 'pnpm'
 
       - name: Authenticate to Google Cloud
@@ -69,25 +74,6 @@ jobs:
           # public project key (phc_…). Unset → analytics stays off (no script loads).
           PUBLIC_POSTHOG_KEY: ${{ vars.PROD_POSTHOG_KEY }}
           PUBLIC_POSTHOG_HOST: https://eu.i.posthog.com
-
-      # TEMPORARY DIAGNOSTIC — capture the real auth failure.
-      # firebase-tools masks the WIF→STS→impersonation error as the generic
-      # "Failed to authenticate". This step forces the same exchange via gcloud
-      # (raw STS/IAM error) and via firebase-tools --debug, then prints the
-      # credentials-file type. It never fails the job (continue-on-error), so it
-      # only adds signal. Remove once the WIF/SA issue is resolved.
-      - name: Diagnose auth (debug)
-        continue-on-error: true
-        run: |
-          echo "::group::credentials file (external_account vs service_account)"
-          python3 -c "import json,os;f=os.environ['GOOGLE_APPLICATION_CREDENTIALS'];d=json.load(open(f));print('type:',d.get('type'));print('audience:',d.get('audience'));print('sa_impersonation_url:',d.get('service_account_impersonation_url'))" || true
-          echo "::endgroup::"
-          echo "::group::gcloud token exchange (raw STS/IAM error)"
-          gcloud auth print-access-token --verbosity=debug 2>&1 | tail -60 || true
-          echo "::endgroup::"
-          echo "::group::firebase-tools projects:list --debug (tail)"
-          npx firebase-tools projects:list --debug 2>&1 | tail -80 || true
-          echo "::endgroup::"
 
       # Backend first: functions, Firestore rules/indexes, and the static landing
       # site. The App Hosting apps (web + admin) are rolled out AFTER this so the
