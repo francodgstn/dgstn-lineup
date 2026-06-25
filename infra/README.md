@@ -176,12 +176,17 @@ npx firebase-tools apphosting:backends:create \\
   --project linyup-staging \\
   --app 1:157648925506:web:5e3aa70930d777f8374edb \\
   --backend linyup-web \\
-  --primary-region us-central1 \\
+  --primary-region europe-west4 \\
   --root-dir apps/web \\
   --non-interactive
 ```
 
-> **Note:** App Hosting is not available in europe-west6. Use us-central1.
+> **Region:** Use **europe-west4** (Netherlands) to keep the web tier in the EU,
+> close to Firestore/Functions in europe-west6. App Hosting does **not** run in
+> europe-west6 itself; europe-west4 is the nearest supported EU region. (Older
+> backends were created in `us-central1` because no EU region existed then — see
+> "Moving an existing backend to the EU" below.) The full supported-region list:
+> <https://firebase.google.com/docs/app-hosting/about-app-hosting#locations>.
 
 #### Connect the GitHub repo (Firebase Console -- one-time manual step)
 
@@ -199,6 +204,27 @@ The apps/web/apphosting.yaml file controls the Cloud Run instance (CPU, memory, 
 npx firebase-tools apphosting:secrets:grantaccess firebase-api-key \\
   --project linyup-staging --backend linyup-web
 ```
+
+#### Moving an existing App Hosting backend to the EU
+
+A backend's `--primary-region` is **immutable** — you cannot relocate the
+`us-central1` backends in place. Moving to **europe-west4** means standing up a
+new backend alongside the old one and cutting the custom domain over:
+
+1. **Create a new backend in europe-west4** with a distinct ID (e.g.
+   `linyup-web-eu`), same `--app` / `--root-dir`, per the create command above.
+2. **Connect the GitHub repo** to it (Console → Connect repository, branch `main`,
+   root dir `apps/web`) and, for prod, set its **Environment name** to `prod`.
+3. **Grant secret access** (`apphosting:secrets:grantaccess …`) on the new backend.
+4. **Trigger a rollout** (push to main, or `apphosting:rollouts:create`) and verify
+   the `<backend>--<project>.<region>.hosted.app` URL serves correctly.
+5. **Cut the custom domain over**: remove it from the old backend, add it to the
+   new one, update the DNS records it prints, and re-add it under Authentication →
+   Authorized domains if it changed.
+6. **Delete the old us-central1 backend** once traffic is confirmed on the EU one.
+
+Do the same for `linyup-admin`. There is **no zero-downtime in-place move**; plan a
+short cutover window. Firestore/Functions (europe-west6) are unaffected.
 
 ### 5c. Operator console — apps/admin App Hosting backend (once, per env)
 
@@ -220,7 +246,7 @@ npx firebase-tools apphosting:backends:create \
   --project linyup-staging \
   --app <WEB_APP_ID> \
   --backend linyup-admin \
-  --primary-region us-central1 \
+  --primary-region europe-west4 \
   --root-dir apps/admin \
   --service-account "$(terraform output -raw admin_runtime_sa)" \
   --non-interactive
@@ -318,7 +344,7 @@ cd infra/environments/sandbox && terraform output -json firebase_web_config
 #    applies (NEXT_PUBLIC_DEMO_MODE=true + sandbox Firebase config).
 npx firebase-tools apphosting:backends:create \
   --project linyup-sandbox --app <WEB_APP_ID> --backend linyup-web \
-  --primary-region us-central1 --root-dir apps/web --non-interactive
+  --primary-region europe-west4 --root-dir apps/web --non-interactive
 
 # 5. Seed the six demo Studio tenants (ADC; idempotent — reset:sandbox to wipe first)
 pnpm seed:sandbox
@@ -358,7 +384,7 @@ Demo logins (all `linyup123`, plan `studio`/`active`): `grappling@`, `crossfit@`
 ## Gotchas
 
 - Every `google_firebase_*` resource uses the **google-beta** provider.
-- **App Hosting region** is immutable after backend creation. europe-west6 is unsupported -- use us-central1. The firebaseapphosting.googleapis.com API must be enabled (via terraform apply) before creating the backend.
+- **App Hosting region** is immutable after backend creation. Create new backends in **europe-west4** (nearest supported EU region; europe-west6 itself is still unsupported). The firebaseapphosting.googleapis.com API must be enabled (via terraform apply) before creating the backend. To relocate a backend that was created in `us-central1`, see "Moving an existing App Hosting backend to the EU" below.
 - **App Hosting vs Hosting**: apps/landing uses Firebase Hosting (static, deployed by CI); apps/web uses App Hosting (SSR, auto-deployed via GitHub integration on push to main).
 - Firestore **location is immutable** — `europe-west6` is locked on first apply
   (`prevent_destroy` + `deletion_policy = ABANDON`). Choose deliberately.

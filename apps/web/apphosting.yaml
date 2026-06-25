@@ -45,14 +45,12 @@ env:
     availability:
       - BUILD
       - RUNTIME
-  # PostHog product analytics — left empty so staging does NOT pollute the prod
-  # PostHog project. Set this to a dedicated staging key (or a separate PostHog
-  # environment) if you want staging analytics; empty = no-op.
-  - variable: NEXT_PUBLIC_POSTHOG_KEY
-    value: ""
-    availability:
-      - BUILD
-      - RUNTIME
+  # PostHog product analytics — intentionally NOT set on staging so it does not
+  # pollute the prod PostHog project. initPostHog() treats a missing key as a
+  # no-op (see apps/web/src/lib/posthog.ts). To enable staging analytics, add a
+  # NEXT_PUBLIC_POSTHOG_KEY variable here with a dedicated staging key (a
+  # phc_… value). Do NOT use `value: ""` — App Hosting rejects an empty string
+  # with "either 'value' or 'secret' field is required".
   - variable: NEXT_PUBLIC_POSTHOG_HOST
     value: https://eu.i.posthog.com
     availability:
