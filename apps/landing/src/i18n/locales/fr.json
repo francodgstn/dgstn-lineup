@@ -195,7 +195,7 @@
       "twint": { "title": "TWINT + cartes", "body": "Acceptez les moyens que les clients suisses utilisent vraiment — y compris les abonnements récurrents sur TWINT." }
     },
     "proof": "Un abonnement payé par TWINT sur la formule Studio coûte environ 2 % tout compris — soit à peu près la moitié de ce que facturent les outils internationaux qui n'acceptent que les cartes.",
-    "cta": "Commencer gratuitement",
+    "cta": "Commencer gratuitement",
     "feesTitle": "Frais de paiement, en toute transparence",
     "feesIntro": "Facturés en plus des frais standard de Stripe, que nous répercutons au prix coûtant. Uniquement un pourcentage — aucun frais Linyup fixe par transaction. Même taux sur les cartes et TWINT.",
     "feesPlanHead": "Formule",
@@ -212,13 +212,20 @@
     "subtitle": "Rejoignez les coaches et studios qui utilisent déjà Linyup pour gérer leur activité.",
     "button": "Accès anticipé"
   },
+  "consent": {
+    "message": "Nous utilisons une analyse respectueuse de la vie privée pour comprendre comment les visiteurs utilisent ce site et l'améliorer. Avec votre consentement, nous déposerons des cookies d'analyse — rien ne s'exécute tant que vous n'avez pas choisi.",
+    "accept": "Accepter",
+    "decline": "Refuser",
+    "learnMore": "Confidentialité"
+  },
   "footer": {
     "tagline": "L'outil de gestion moderne pour coaches et studios.",
     "links": {
       "privacy": "Confidentialité",
       "terms": "CGU",
       "legal": "Mentions légales",
-      "contact": "Contact"
+      "contact": "Contact",
+      "cookies": "Paramètres des cookies"
     },
     "copyright": "© {year} Linyup. Tous droits réservés."
   }

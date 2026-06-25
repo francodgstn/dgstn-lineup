@@ -6,10 +6,19 @@ import { format } from 'date-fns'
 import { to } from '../utils/async'
 import { getActiveContacts, countByField } from '../utils/contacts'
 import {
+  ACQUISITION_STAGES,
   CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
   PARTICIPANTS_SUBCOLLECTION,
   TEAM_WEEKLY_REPORTS_SUBCOLLECTION,
 } from '@linyup/shared'
+
+// The acquisition funnel only ever advances forward by design, so a stage that
+// moves to a LOWER ordinal is a deliberate manual correction (e.g. undoing a
+// mistaken promotion) — not an organic transition. Corrections are logged
+// distinctly and must not re-fire conversion analytics or outreach automation.
+function stageRank(stage: unknown): number {
+  return (ACQUISITION_STAGES as readonly string[]).indexOf(stage as string)
+}
 
 const DATE_FORMAT = 'PPP'
 
@@ -272,33 +281,74 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
     newData.acquisition_stage &&
     oldData.acquisition_stage !== newData.acquisition_stage
   ) {
-    promises.push(
-      logActivity(teamId, {
-        event: 'acquisition_stage_change',
-        parameters: {
-          description: `${fullname} moved from ${oldData.acquisition_stage as string} to ${newData.acquisition_stage as string}.`,
-          contact_firstname: firstname,
-          contact_lastname: lastname,
-          acquisition_stage: { before: oldData.acquisition_stage, after: newData.acquisition_stage },
-        },
-        refs: baseRefs,
-      })
-    )
-    // Trial conversion: crossed into the community (reached 'joined')
-    if (newData.acquisition_stage === 'joined' && oldData.acquisition_stage !== 'joined') {
-      const weekLabel = format(new Date(), "R-'W'II")
+    const isCorrection = stageRank(newData.acquisition_stage) < stageRank(oldData.acquisition_stage)
+    if (isCorrection) {
+      // Backward move = manual correction. Log it distinctly for the audit trail.
       promises.push(
-        db
+        logActivity(teamId, {
+          event: 'acquisition_stage_correction',
+          parameters: {
+            description: `${fullname} stage was corrected from ${oldData.acquisition_stage as string} to ${newData.acquisition_stage as string}.`,
+            contact_firstname: firstname,
+            contact_lastname: lastname,
+            acquisition_stage: { before: oldData.acquisition_stage, after: newData.acquisition_stage },
+          },
+          refs: baseRefs,
+        })
+      )
+      // Reverse the weekly conversion tally when undoing a 'joined'. Best-effort:
+      // exact for same-week corrections (the common case); clamped at >= 0 so a
+      // cross-week correction can never push the counter negative.
+      if (oldData.acquisition_stage === 'joined' && newData.acquisition_stage !== 'joined') {
+        const weekLabel = format(new Date(), "R-'W'II")
+        const reportRef = db
           .collection('teams')
           .doc(teamId)
           .collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION)
           .doc(weekLabel)
-          .set({ trial_conversions_count: FieldValue.increment(1) }, { merge: true })
-          .then(() => undefined)
-          .catch((err) => {
-            console.error('trackContacts: trial_conversions_count update failed', err)
-          })
+        promises.push(
+          db
+            .runTransaction(async (tx) => {
+              const snap = await tx.get(reportRef)
+              const current = (snap.get('trial_conversions_count') as number | undefined) ?? 0
+              if (current <= 0) return
+              tx.set(reportRef, { trial_conversions_count: current - 1 }, { merge: true })
+            })
+            .then(() => undefined)
+            .catch((err) => {
+              console.error('trackContacts: trial_conversions_count reversal failed', err)
+            })
+        )
+      }
+    } else {
+      promises.push(
+        logActivity(teamId, {
+          event: 'acquisition_stage_change',
+          parameters: {
+            description: `${fullname} moved from ${oldData.acquisition_stage as string} to ${newData.acquisition_stage as string}.`,
+            contact_firstname: firstname,
+            contact_lastname: lastname,
+            acquisition_stage: { before: oldData.acquisition_stage, after: newData.acquisition_stage },
+          },
+          refs: baseRefs,
+        })
       )
+      // Trial conversion: crossed into the community (reached 'joined')
+      if (newData.acquisition_stage === 'joined' && oldData.acquisition_stage !== 'joined') {
+        const weekLabel = format(new Date(), "R-'W'II")
+        promises.push(
+          db
+            .collection('teams')
+            .doc(teamId)
+            .collection(TEAM_WEEKLY_REPORTS_SUBCOLLECTION)
+            .doc(weekLabel)
+            .set({ trial_conversions_count: FieldValue.increment(1) }, { merge: true })
+            .then(() => undefined)
+            .catch((err) => {
+              console.error('trackContacts: trial_conversions_count update failed', err)
+            })
+        )
+      }
     }
   }
 

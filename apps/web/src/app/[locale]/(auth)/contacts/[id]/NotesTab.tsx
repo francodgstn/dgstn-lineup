@@ -26,6 +26,28 @@ interface ContactNote {
   updated_at: Timestamp
 }
 
+// ─── data ─────────────────────────────────────────────────────────────────────
+// Shared fetcher + query key so the list view and the header badge read the same
+// cache entry — adding/deleting a note in the panel keeps the badge count live.
+
+async function fetchContactNotes(contactId: string): Promise<ContactNote[]> {
+  const snap = await getDocs(
+    query(
+      collection(db, CONTACTS_COLLECTION, contactId, CONTACT_NOTES_SUBCOLLECTION),
+      orderBy('created_at', 'desc')
+    )
+  )
+  return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactNote)
+}
+
+export function useContactNotesCount(contactId: string) {
+  return useQuery({
+    queryKey: ['contact-notes', contactId],
+    queryFn: () => fetchContactNotes(contactId),
+    select: (notes) => notes.length,
+  })
+}
+
 // ─── toolbar ──────────────────────────────────────────────────────────────────
 
 function ToolbarButton({
@@ -235,10 +257,7 @@ export function NotesTab({ contact }: { contact: Contact }) {
 
   const { data: notes = [], isLoading } = useQuery<ContactNote[]>({
     queryKey: ['contact-notes', contact.id],
-    queryFn: async () => {
-      const snap = await getDocs(query(notesRef, orderBy('created_at', 'desc')))
-      return snap.docs.map(d => ({ ...d.data(), id: d.id } as ContactNote))
-    },
+    queryFn: () => fetchContactNotes(contact.id),
   })
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['contact-notes', contact.id] })

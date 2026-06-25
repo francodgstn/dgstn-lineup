@@ -58,6 +58,10 @@ jobs:
           PUBLIC_SITE_URL: https://linyup.com
           PUBLIC_FIREBASE_PROJECT_ID: linyup-prod
           PUBLIC_FIREBASE_API_KEY: ${{ vars.PROD_FIREBASE_API_KEY }}
+          # PostHog product analytics — set the PROD_POSTHOG_KEY repo variable to the
+          # public project key (phc_…). Unset → analytics stays off (no script loads).
+          PUBLIC_POSTHOG_KEY: ${{ vars.PROD_POSTHOG_KEY }}
+          PUBLIC_POSTHOG_HOST: https://eu.i.posthog.com
 
       # Backend first: functions, Firestore rules/indexes, and the static landing
       # site. The App Hosting apps (web + admin) are rolled out AFTER this so the

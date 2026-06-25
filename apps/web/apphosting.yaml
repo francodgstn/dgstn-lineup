@@ -45,3 +45,16 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  # PostHog product analytics — left empty so staging does NOT pollute the prod
+  # PostHog project. Set this to a dedicated staging key (or a separate PostHog
+  # environment) if you want staging analytics; empty = no-op.
+  - variable: NEXT_PUBLIC_POSTHOG_KEY
+    value: ""
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_POSTHOG_HOST
+    value: https://eu.i.posthog.com
+    availability:
+      - BUILD
+      - RUNTIME

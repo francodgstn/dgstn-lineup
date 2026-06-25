@@ -66,9 +66,16 @@ const FIREBASE_API_KEY = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
       document.body.style.overflow = '';
     };
 
+    // Remember which CTA opened the modal so the submit event can be attributed.
+    let lastSource = 'unknown';
+    let lastPlan;
+
     document.querySelectorAll('[data-early-access]').forEach((el) => {
       el.addEventListener('click', (e) => {
         e.preventDefault();
+        lastSource = el.getAttribute('data-ea-source') || el.closest('section')?.id || 'unknown';
+        lastPlan = el.getAttribute('data-plan') || undefined;
+        window.posthog?.capture('early_access_opened', { source: lastSource, plan: lastPlan });
         open();
       });
     });
@@ -117,6 +124,7 @@ const FIREBASE_API_KEY = import.meta.env.PUBLIC_FIREBASE_API_KEY ?? '';
         form.style.display = 'none';
         status.textContent = msgSuccess;
         status.className = 'ea-status success';
+        window.posthog?.capture('early_access_submitted', { source: lastSource, plan: lastPlan });
       } catch (err) {
         console.error('Early access submit error:', err);
         status.textContent = msgError;

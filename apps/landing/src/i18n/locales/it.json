@@ -195,7 +195,7 @@
       "twint": { "title": "TWINT + carte", "body": "Accetta i metodi che i clienti svizzeri usano davvero — inclusi gli abbonamenti ricorrenti via TWINT." }
     },
     "proof": "Un abbonamento pagato con TWINT sul piano Studio costa circa il 2% all-in — più o meno la metà di quanto fanno pagare gli strumenti internazionali solo-carte.",
-    "cta": "Inizia gratis",
+    "cta": "Inizia gratis",
     "feesTitle": "Commissioni di pagamento, ben in vista",
     "feesIntro": "Applicate in aggiunta alla commissione standard di Stripe, che trasferiamo al costo. Solo percentuale — nessuna commissione Linyup fissa per transazione. Stessa tariffa su carte e TWINT.",
     "feesPlanHead": "Piano",
@@ -212,13 +212,20 @@
     "subtitle": "Unisciti ai coach e agli studi che già usano Linyup per gestire la propria attività.",
     "button": "Accesso anticipato"
   },
+  "consent": {
+    "message": "Usiamo analisi rispettose della privacy per capire come i visitatori usano questo sito e migliorarlo. Con il tuo consenso imposteremo cookie di analisi — nulla viene eseguito finché non scegli.",
+    "accept": "Accetta",
+    "decline": "Rifiuta",
+    "learnMore": "Privacy"
+  },
   "footer": {
     "tagline": "Lo strumento di gestione moderno per coach e studi.",
     "links": {
       "privacy": "Privacy",
       "terms": "Termini",
       "legal": "Note legali",
-      "contact": "Contatto"
+      "contact": "Contatto",
+      "cookies": "Impostazioni cookie"
     },
     "copyright": "© {year} Linyup. Tutti i diritti riservati."
   }

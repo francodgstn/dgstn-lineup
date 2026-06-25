@@ -44,6 +44,30 @@ import {
 } from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  // aliased: a local component in this file is already named `AlertDialog`
+  AlertDialog as ConfirmDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet'
+import {
   CONTACTS_COLLECTION,
   TEAMS_COLLECTION,
   ORGANIZATIONS_COLLECTION,
@@ -74,6 +98,7 @@ import type {
   OrgMembershipStatusDef,
 } from '@linyup/shared'
 import {
+  ACQUISITION_STAGES,
   CONTACT_ENTRIES,
   CONTACT_SOURCES,
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
@@ -84,7 +109,7 @@ import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
-import { useForm, Controller, useFieldArray } from 'react-hook-form'
+import { useForm, Controller, useFieldArray, type Control } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -119,9 +144,12 @@ import {
   Flag,
   Link2,
   Info,
-  Users,
   Pencil,
   ShieldCheck,
+  MoreVertical,
+  User,
+  Check,
+  IdCard,
 } from 'lucide-react'
 import {
   Tooltip as UITooltip,
@@ -145,8 +173,9 @@ import {
   Legend,
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
-import { NotesTab } from './NotesTab'
+import { NotesTab, useContactNotesCount } from './NotesTab'
 import { PaymentsTab, MemberSubscriptionsSection } from './PaymentsTab'
+import { PlanGate } from '@/components/plan/PlanGate'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
 
@@ -193,6 +222,10 @@ const profileSchema = z.object({
   // Source axis
   source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
   source_detail: z.string().max(500).optional(),
+  // Acquisition milestone dates — editable (e.g. backdating an imported member)
+  trial_booked_at: z.date().optional(),
+  trial_attended_at: z.date().optional(),
+  converted_at: z.date().optional(),
   ranks: z.record(z.string(), z.number()).optional(),
   custom_fields: z
     .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
@@ -545,14 +578,16 @@ function Field({
   required,
   children,
   error,
+  className,
 }: {
   label: string
   required?: boolean
   children: React.ReactNode
   error?: string
+  className?: string
 }) {
   return (
-    <div className="space-y-1">
+    <div className={`space-y-1 ${className ?? ''}`}>
       <label className="text-sm font-medium">
         {label}
         {required && <span className="text-destructive ml-1">*</span>}
@@ -1050,6 +1085,261 @@ function PromoteStageButton({
   )
 }
 
+// ─── stage correction menu ────────────────────────────────────────────────────
+// The acquisition funnel is one-way by design; this is the escape hatch for a
+// mistaken promotion. Stepping back one stage is treated as a CORRECTION
+// server-side — it does NOT re-fire outreach automation or inflate conversion
+// analytics (see analytics/index.ts + automation/onContactWrite.ts). Milestone
+// timestamps that no longer hold are cleared so a later re-promotion re-stamps
+// the real date.
+
+function StageCorrectionMenu({
+  contact,
+  onCorrected,
+}: {
+  contact: Contact
+  onCorrected: () => void
+}) {
+  const t = useTranslations('Contacts')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const qc = useQueryClient()
+
+  const stages = ACQUISITION_STAGES as readonly string[]
+  const currentRank = stages.indexOf(contact.acquisition_stage)
+  const prevStage = currentRank > 0 ? ACQUISITION_STAGES[currentRank - 1] : null
+
+  // Nothing to revert to at the first stage.
+  if (!prevStage) return null
+
+  const prevStageLabel = t(`stage_${prevStage}` as Parameters<typeof t>[0])
+
+  const revert = async () => {
+    setBusy(true)
+    try {
+      const now = serverTimestamp()
+      const newRank = currentRank - 1
+      const updates: Record<string, unknown> = {
+        acquisition_stage: prevStage,
+        acquisition_stage_updated_at: now,
+        updatedAt: now,
+      }
+      if (newRank < stages.indexOf('joined')) updates.converted_at = null
+      if (newRank < stages.indexOf('trial_attended')) updates.trial_attended_at = null
+      await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), updates)
+      qc.invalidateQueries({ queryKey: ['contact', contact.id] })
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      onCorrected()
+    } finally {
+      setBusy(false)
+      setConfirmOpen(false)
+    }
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={t('stageMenuLabel')}
+          className="flex items-center justify-center h-8 w-8 rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setConfirmOpen(true)}>
+            <RotateCcw className="h-3.5 w-3.5" />
+            {t('revertMenuItem', { stage: prevStageLabel })}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ConfirmDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('revertTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('revertConfirm', { stage: prevStageLabel })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={revert} disabled={busy}>
+              {t('revertButton')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </ConfirmDialog>
+    </>
+  )
+}
+
+// ─── acquisition timeline ─────────────────────────────────────────────────────
+// Horizontal stepper of the funnel stages with the date each milestone was
+// reached. Reached stages show an inline, editable date (deep year range so
+// historical join dates can be backdated, e.g. members imported from another
+// system); future stages are muted. Dates are part of the profile form and save
+// with it — editing a date never moves acquisition_stage, so nothing re-fires.
+
+const MILESTONE_DATE_FIELD: Record<
+  AcquisitionStage,
+  'trial_booked_at' | 'trial_attended_at' | 'converted_at'
+> = {
+  trial_booked: 'trial_booked_at',
+  trial_attended: 'trial_attended_at',
+  joined: 'converted_at',
+}
+
+function AcquisitionTimeline({
+  contact,
+  control,
+}: {
+  contact: Contact
+  control: Control<ProfileValues>
+}) {
+  const t = useTranslations('Contacts')
+  const currentRank = (ACQUISITION_STAGES as readonly string[]).indexOf(contact.acquisition_stage)
+  const fromYear = new Date().getFullYear() - 50
+  const lastIndex = ACQUISITION_STAGES.length - 1
+
+  return (
+    <div className="flex">
+      {ACQUISITION_STAGES.map((stage, i) => {
+        const reached = i <= currentRank
+        const isCurrent = i === currentRank
+        return (
+          <div key={stage} className="flex min-w-0 flex-1 flex-col items-center">
+            {/* connector line + node */}
+            <div className="flex w-full items-center">
+              <span
+                className={`h-0.5 flex-1 ${i === 0 ? 'opacity-0' : i <= currentRank ? 'bg-primary' : 'bg-border'}`}
+              />
+              <span
+                className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 transition-colors ${
+                  reached ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background'
+                } ${isCurrent ? 'ring-4 ring-primary/15' : ''}`}
+              >
+                {reached && <Check className="h-3 w-3" />}
+              </span>
+              <span
+                className={`h-0.5 flex-1 ${i === lastIndex ? 'opacity-0' : i < currentRank ? 'bg-primary' : 'bg-border'}`}
+              />
+            </div>
+            {/* stage label */}
+            <p
+              className={`mt-1.5 text-center text-[11px] font-medium leading-tight ${reached ? 'text-foreground' : 'text-muted-foreground'}`}
+            >
+              {t(`stage_${stage}` as Parameters<typeof t>[0])}
+            </p>
+            {/* milestone date — centered under its step; editable for reached stages */}
+            <div className="mt-1 flex justify-center px-0.5">
+              {reached ? (
+                <Controller
+                  control={control}
+                  name={MILESTONE_DATE_FIELD[stage]}
+                  render={({ field }) => (
+                    <DatePicker
+                      variant="ghost"
+                      value={field.value}
+                      onChange={field.onChange}
+                      fromYear={fromYear}
+                      placeholder="—"
+                      className="text-xs"
+                    />
+                  )}
+                />
+              ) : (
+                <p className="py-2 text-center text-xs text-muted-foreground">—</p>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── notes side panel ─────────────────────────────────────────────────────────
+// Notes live off the tab strip: a sticky-note button with a live count badge in
+// the header opens a right-side sheet hosting the full notes editor. Keeps the
+// tab strip lean and notes one click away from whatever tab you're on.
+
+function NotesPanelButton({ contact }: { contact: Contact }) {
+  const t = useTranslations('Contacts')
+  const [open, setOpen] = useState(false)
+  const { data: count = 0 } = useContactNotesCount(contact.id)
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={t('tabNotes')}
+        title={t('tabNotes')}
+        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      >
+        <StickyNote className="h-4 w-4" />
+        {count > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+            {count}
+          </span>
+        )}
+      </button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="sm:max-w-md!">
+          <SheetHeader>
+            <SheetTitle>{t('tabNotes')}</SheetTitle>
+            <SheetDescription className="sr-only">{t('notesPanelDesc')}</SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-4 pb-6">
+            <NotesTab contact={contact} />
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
+  )
+}
+
+// ─── alerts side panel ────────────────────────────────────────────────────────
+// Same pattern as notes: a header bell button with an active-count badge opens a
+// right-side sheet hosting the alerts manager, keeping the tab strip lean.
+
+function AlertsPanelButton({ contact, teamId }: { contact: Contact; teamId: string | null }) {
+  const t = useTranslations('Contacts')
+  const [open, setOpen] = useState(false)
+  const { data: alerts = [] } = useContactAlerts(contact.id)
+  const count = alerts.filter((a) => !a.archived_at).length
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={t('tabAlerts')}
+        title={t('tabAlerts')}
+        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      >
+        <Bell className="h-4 w-4" />
+        {count > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+            {count}
+          </span>
+        )}
+      </button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="sm:max-w-md!">
+          <SheetHeader>
+            <SheetTitle>{t('tabAlerts')}</SheetTitle>
+            <SheetDescription className="sr-only">{t('alertsPanelDesc')}</SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-4 pb-6">
+            <AlertsTab contact={contact} teamId={teamId} />
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
+  )
+}
+
 // ─── profile tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({
@@ -1094,6 +1384,9 @@ function ProfileTab({
       entry: contact.entry,
       source: contact.source,
       source_detail: contact.source_detail ?? '',
+      trial_booked_at: tsToDate(contact.trial_booked_at) ?? tsToDate(contact.created_at),
+      trial_attended_at: tsToDate(contact.trial_attended_at),
+      converted_at: tsToDate(contact.converted_at),
       ranks: contact.ranks ?? {},
       custom_fields: contact.custom_fields ?? {},
       emergency_contacts: contact.emergency_contacts ?? [],
@@ -1125,6 +1418,13 @@ function ProfileTab({
       entry: values.entry || null,
       source: values.source || null,
       source_detail: values.source_detail || null,
+      // Milestone dates — editing these does NOT change acquisition_stage, so no
+      // automation/analytics fires (safe to backdate an imported member's join).
+      trial_booked_at: values.trial_booked_at ? Timestamp.fromDate(values.trial_booked_at) : null,
+      trial_attended_at: values.trial_attended_at
+        ? Timestamp.fromDate(values.trial_attended_at)
+        : null,
+      converted_at: values.converted_at ? Timestamp.fromDate(values.converted_at) : null,
       ranks: values.ranks ?? {},
       custom_fields: values.custom_fields ?? {},
       emergency_contacts: (values.emergency_contacts ?? []).filter((ec) => ec.name.trim() !== ''),
@@ -1134,79 +1434,160 @@ function ProfileTab({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24">
-      {/* Acquisition stage — read display + Promote action */}
-      <div className="rounded-xl border bg-card p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="space-y-0.5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('fieldAcquisitionStage')}</p>
-            <p className="text-sm font-medium">
-              {contact.acquisition_stage
-                ? t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])
-                : '—'}
-            </p>
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24 lg:w-8/12">
+      {/* Single-column section blocks; fields flow into rows within each block on wider screens */}
+      <div className="space-y-6">
+        {/* Personal information */}
+        <FormBlock title={t('sectionPersonalInfo')}>
+          <div className="flex flex-wrap gap-4">
+            <Field
+              className="flex-1 min-w-[160px]"
+              label={t('fieldFirstname')}
+              required
+              error={errors.firstname?.message}
+            >
+              <Input {...register('firstname')} autoCapitalize="words" />
+            </Field>
+            <Field
+              className="flex-1 min-w-[160px]"
+              label={t('fieldLastname')}
+              required
+              error={errors.lastname?.message}
+            >
+              <Input {...register('lastname')} autoCapitalize="words" />
+            </Field>
+            <Field className="flex-1 min-w-[140px]" label={t('fieldGender')}>
+              <Controller
+                control={control}
+                name="gender"
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={(val) => field.onChange(val || undefined)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {field.value ? (
+                          t(`gender_${field.value}`)
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">—</SelectItem>
+                      {GENDERS.map((g) => (
+                        <SelectItem key={g} value={g}>
+                          {t(`gender_${g}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </Field>
           </div>
-          {/* Promote button — only if not already 'joined' */}
-          {contact.acquisition_stage !== 'joined' && (
-            <PromoteStageButton contact={contact} onPromoted={onSaved} />
-          )}
-        </div>
-        {/* Entry — editable correction, does NOT move stage */}
-        <Field label={t('fieldAcquisitionEntry')}>
-          <Controller
-            control={control}
-            name="entry"
-            render={({ field }) => (
-              <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
-                <SelectTrigger className="w-full">
-                  <span className="flex flex-1 text-left text-sm truncate">
-                    {field.value
-                      ? t(`entry_${field.value}` as Parameters<typeof t>[0])
-                      : <span className="text-muted-foreground">—</span>}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">—</SelectItem>
-                  {(CONTACT_ENTRIES as readonly ContactEntry[]).map((e) => (
-                    <SelectItem key={e} value={e}>{t(`entry_${e}` as Parameters<typeof t>[0])}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          <p className="text-xs text-muted-foreground">{t('fieldAcquisitionEntryHelp')}</p>
-        </Field>
-        {/* Source */}
-        <Field label={t('fieldAcquisitionSource')}>
-          <Controller
-            control={control}
-            name="source"
-            render={({ field }) => (
-              <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
-                <SelectTrigger className="w-full">
-                  <span className="flex flex-1 text-left text-sm truncate">
-                    {field.value
-                      ? t(`source_${field.value}` as Parameters<typeof t>[0])
-                      : <span className="text-muted-foreground">—</span>}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">—</SelectItem>
-                  {(CONTACT_SOURCES as readonly ContactSource[]).map((s) => (
-                    <SelectItem key={s} value={s}>{t(`source_${s}` as Parameters<typeof t>[0])}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </Field>
-        <Field label={t('fieldAcquisitionSourceDetail')}>
-          <Input {...register('source_detail')} />
-        </Field>
-      </div>
+          <div className="flex flex-wrap gap-4">
+            <Field className="flex-1 min-w-[160px]" label={t('fieldBirthdate')}>
+              <Controller
+                control={control}
+                name="birthdate"
+                render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
+              />
+            </Field>
+            <Field className="flex-1 min-w-[160px]" label={t('fieldBirthplace')}>
+              <Input {...register('birthplace')} />
+            </Field>
+            <Field className="flex-1 min-w-[120px]" label={t('fieldWeight')}>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="500"
+                inputMode="decimal"
+                {...register('weight')}
+              />
+            </Field>
+          </div>
+        </FormBlock>
 
-      {/* 2-col section blocks on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Contact */}
+        <FormBlock title={t('sectionContact')}>
+          <div className="flex flex-wrap gap-4">
+            <Field className="flex-1 min-w-[200px]" label={t('colEmail')}>
+              <Input type="email" {...register('email')} inputMode="email" />
+            </Field>
+            <Field className="flex-1 min-w-[180px]" label={t('fieldPhone')}>
+              <Input type="tel" {...register('phone')} inputMode="tel" />
+            </Field>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <Field className="flex-[2] min-w-[200px]" label={t('fieldStreet')}>
+              <Input {...register('address_route')} />
+            </Field>
+            <Field className="flex-1 min-w-[90px]" label={t('fieldStreetNumber')}>
+              <Input {...register('address_street_number')} />
+            </Field>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <Field className="flex-1 min-w-[110px]" label={t('fieldPostalCode')}>
+              <Input {...register('address_postal_code')} />
+            </Field>
+            <Field className="flex-[2] min-w-[180px]" label={t('fieldLocality')}>
+              <Input {...register('address_locality')} />
+            </Field>
+          </div>
+        </FormBlock>
+
+        {/* Emergency contacts */}
+        <FormBlock title={t('sectionEmergencyContacts')}>
+          <div className="space-y-4">
+            {ecFields.map((field, index) => (
+              <div key={field.id} className="rounded-lg border p-3 space-y-2 relative">
+                <button
+                  type="button"
+                  onClick={() => ecRemove(index)}
+                  className="absolute top-2 right-2 p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                  aria-label={t('emergencyContactRemove')}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+                <Field
+                  label={t('emergencyContactName')}
+                  required
+                  error={errors.emergency_contacts?.[index]?.name?.message}
+                >
+                  <Input {...register(`emergency_contacts.${index}.name`)} autoCapitalize="words" />
+                </Field>
+                <Field label={t('emergencyContactPhone')}>
+                  <Input type="tel" inputMode="tel" {...register(`emergency_contacts.${index}.phone`)} />
+                </Field>
+                <Field
+                  label={t('emergencyContactEmail')}
+                  error={errors.emergency_contacts?.[index]?.email?.message}
+                >
+                  <Input type="email" inputMode="email" {...register(`emergency_contacts.${index}.email`)} />
+                </Field>
+              </div>
+            ))}
+            {ecFields.length < 2 && (
+              <button
+                type="button"
+                onClick={() => ecAppend({ name: '', phone: '', email: '' })}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full justify-center"
+              >
+                <Plus className="h-4 w-4" />
+                {t('emergencyContactAdd')}
+              </button>
+            )}
+            {ecFields.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-1">
+                {t('emergencyContactNone')}
+              </p>
+            )}
+          </div>
+        </FormBlock>
+
         {/* Ranks */}
         <FormBlock title={t('sectionRanks')}>
           {rankingSystems.length === 0 ? (
@@ -1331,139 +1712,80 @@ function ProfileTab({
           )}
         </FormBlock>
 
-        {/* Personal information */}
-        <FormBlock title={t('sectionPersonalInfo')}>
-          <Field label={t('fieldFirstname')} required error={errors.firstname?.message}>
-            <Input {...register('firstname')} autoCapitalize="words" />
-          </Field>
-          <Field label={t('fieldLastname')} required error={errors.lastname?.message}>
-            <Input {...register('lastname')} autoCapitalize="words" />
-          </Field>
-          <Field label={t('fieldGender')}>
+        {/* Acquisition — stage timeline + entry/source */}
+        <div className="rounded-xl border bg-card p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('sectionAcquisition')}
+            </p>
+            {/* Forward promote + correction escape hatch (revert a mistaken promotion) */}
+            <div className="flex items-center gap-2">
+              {contact.acquisition_stage !== 'joined' && (
+                <PromoteStageButton contact={contact} onPromoted={onSaved} />
+              )}
+              <StageCorrectionMenu contact={contact} onCorrected={onSaved} />
+            </div>
+          </div>
+          {/* Stage timeline — dates shown as muted text; click a date to adjust (rare) */}
+          <div className="pt-1">
+            <AcquisitionTimeline contact={contact} control={control} />
+          </div>
+          {/* Entry / Source / Source detail — one row on desktop */}
+          <div className="flex flex-wrap items-start gap-4">
+          {/* Entry — editable correction, does NOT move stage */}
+          <Field className="flex-1 min-w-[180px]" label={t('fieldAcquisitionEntry')}>
             <Controller
               control={control}
-              name="gender"
+              name="entry"
               render={({ field }) => (
-                <Select
-                  value={field.value ?? ''}
-                  onValueChange={(val) => field.onChange(val || undefined)}
-                >
+                <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
                   <SelectTrigger className="w-full">
                     <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value ? (
-                        t(`gender_${field.value}`)
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                      {field.value
+                        ? t(`entry_${field.value}` as Parameters<typeof t>[0])
+                        : <span className="text-muted-foreground">—</span>}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">—</SelectItem>
-                    {GENDERS.map((g) => (
-                      <SelectItem key={g} value={g}>
-                        {t(`gender_${g}`)}
-                      </SelectItem>
+                    {(CONTACT_ENTRIES as readonly ContactEntry[]).map((e) => (
+                      <SelectItem key={e} value={e}>{t(`entry_${e}` as Parameters<typeof t>[0])}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-xs text-muted-foreground">{t('fieldAcquisitionEntryHelp')}</p>
+          </Field>
+          {/* Source */}
+          <Field className="flex-1 min-w-[160px]" label={t('fieldAcquisitionSource')}>
+            <Controller
+              control={control}
+              name="source"
+              render={({ field }) => (
+                <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {field.value
+                        ? t(`source_${field.value}` as Parameters<typeof t>[0])
+                        : <span className="text-muted-foreground">—</span>}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">—</SelectItem>
+                    {(CONTACT_SOURCES as readonly ContactSource[]).map((s) => (
+                      <SelectItem key={s} value={s}>{t(`source_${s}` as Parameters<typeof t>[0])}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
             />
           </Field>
-          <Field label={t('fieldBirthdate')}>
-            <Controller
-              control={control}
-              name="birthdate"
-              render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
-            />
+          <Field className="flex-1 min-w-[160px]" label={t('fieldAcquisitionSourceDetail')}>
+            <Input {...register('source_detail')} />
           </Field>
-          <Field label={t('fieldBirthplace')}>
-            <Input {...register('birthplace')} />
-          </Field>
-          <Field label={t('fieldWeight')}>
-            <Input
-              type="number"
-              step="0.1"
-              min="0"
-              max="500"
-              inputMode="decimal"
-              {...register('weight')}
-            />
-          </Field>
-        </FormBlock>
-
-        {/* Contact */}
-        <FormBlock title={t('sectionContact')}>
-          <Field label={t('colEmail')}>
-            <Input type="email" {...register('email')} inputMode="email" />
-          </Field>
-          <Field label={t('fieldPhone')}>
-            <Input type="tel" {...register('phone')} inputMode="tel" />
-          </Field>
-          <Field label={t('fieldStreet')}>
-            <Input {...register('address_route')} />
-          </Field>
-          <Field label={t('fieldStreetNumber')}>
-            <Input {...register('address_street_number')} />
-          </Field>
-          <Field label={t('fieldPostalCode')}>
-            <Input {...register('address_postal_code')} />
-          </Field>
-          <Field label={t('fieldLocality')}>
-            <Input {...register('address_locality')} />
-          </Field>
-        </FormBlock>
-
-        {/* Emergency contacts */}
-        <FormBlock title={t('sectionEmergencyContacts')}>
-          <div className="space-y-4">
-            {ecFields.map((field, index) => (
-              <div key={field.id} className="rounded-lg border p-3 space-y-2 relative">
-                <button
-                  type="button"
-                  onClick={() => ecRemove(index)}
-                  className="absolute top-2 right-2 p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
-                  aria-label={t('emergencyContactRemove')}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-                <Field
-                  label={t('emergencyContactName')}
-                  required
-                  error={errors.emergency_contacts?.[index]?.name?.message}
-                >
-                  <Input {...register(`emergency_contacts.${index}.name`)} autoCapitalize="words" />
-                </Field>
-                <Field label={t('emergencyContactPhone')}>
-                  <Input type="tel" inputMode="tel" {...register(`emergency_contacts.${index}.phone`)} />
-                </Field>
-                <Field
-                  label={t('emergencyContactEmail')}
-                  error={errors.emergency_contacts?.[index]?.email?.message}
-                >
-                  <Input type="email" inputMode="email" {...register(`emergency_contacts.${index}.email`)} />
-                </Field>
-              </div>
-            ))}
-            {ecFields.length < 2 && (
-              <button
-                type="button"
-                onClick={() => ecAppend({ name: '', phone: '', email: '' })}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full justify-center"
-              >
-                <Plus className="h-4 w-4" />
-                {t('emergencyContactAdd')}
-              </button>
-            )}
-            {ecFields.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-1">
-                {t('emergencyContactNone')}
-              </p>
-            )}
           </div>
-        </FormBlock>
-
-        {/* Acquisition */}
-        {/* Acquisition fields are now in the stage panel above */}
+        </div>
 
         {/* Custom Fields plugin — always the last card; upsell prompt when not installed */}
         <FormBlock title={t('sectionCustomFields')}>
@@ -1535,6 +1857,68 @@ function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | n
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ─── membership tab (subscription + affiliation) ──────────────────────────────
+// Both axes describe the contact's ongoing standing with the studio, so they
+// share one tab with a segmented toggle. The subscription side is plan-gated
+// (PlanGate shows the upgrade prompt when locked); affiliation is always shown.
+// `seg` is owned by the page so the header summary chips can deep-link a segment.
+
+function MembershipTab({
+  contact,
+  teamId,
+  orgId,
+  membershipFieldLocked,
+  seg,
+  onSegChange,
+}: {
+  contact: Contact
+  teamId: string | null
+  orgId?: string | null
+  membershipFieldLocked: boolean
+  seg: 'subscription' | 'affiliation'
+  onSegChange: (s: 'subscription' | 'affiliation') => void
+}) {
+  const t = useTranslations('Contacts')
+  const SEGMENTS = [
+    { id: 'subscription', label: t('tabSubscriptions') },
+    { id: 'affiliation', label: t('tabAffiliations') },
+  ] as const
+
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex gap-0.5 rounded-lg border bg-background p-0.5">
+        {SEGMENTS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => onSegChange(s.id)}
+            className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              seg === s.id
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {seg === 'subscription' ? (
+        <PlanGate feature="subscriptions">
+          <SubscriptionsTab contact={contact} teamId={teamId} />
+        </PlanGate>
+      ) : (
+        <AffiliationsTab
+          contact={contact}
+          teamId={teamId}
+          orgId={orgId}
+          membershipFieldLocked={membershipFieldLocked}
+        />
+      )}
     </div>
   )
 }
@@ -1986,6 +2370,7 @@ const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventTyp
     'contact_add',
     'contact_type_change',
     'acquisition_stage_change',
+    'acquisition_stage_correction',
     'rank_change',
     'subscription_change',
     'contact_archive',
@@ -2006,6 +2391,7 @@ const EVENT_META: Record<ActivityEventType, EventMeta> = {
   contact_delete: { Icon: Trash2, bg: 'bg-red-500/10', fg: 'text-red-600' },
   contact_type_change: { Icon: ArrowRightLeft, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
   acquisition_stage_change: { Icon: ArrowRightLeft, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
+  acquisition_stage_correction: { Icon: RotateCcw, bg: 'bg-orange-500/10', fg: 'text-orange-600' },
   rank_change: { Icon: Award, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
   subscription_change: { Icon: CreditCard, bg: 'bg-yellow-500/10', fg: 'text-yellow-600' },
   session_participant_add: { Icon: CalendarCheck, bg: 'bg-green-500/10', fg: 'text-green-600' },
@@ -3402,16 +3788,13 @@ function UpsertAffiliationDialog({
 
 type TabId =
   | 'profile'
-  | 'notes'
   | 'stats'
   | 'activity'
   | 'bookings'
-  | 'subscriptions'
-  | 'affiliations'
+  | 'membership'
   | 'payments'
   | 'goals'
   | 'gamification'
-  | 'alerts'
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -3429,6 +3812,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   })
   const membershipFieldLocked = orgMembershipLocked && !isOrgAdmin
   const [tab, setTab] = useState<TabId>('profile')
+  // Which segment the merged Membership tab shows (deep-linked from header chips)
+  const [membershipSeg, setMembershipSeg] = useState<'subscription' | 'affiliation'>('subscription')
   const router = useRouter()
   const t = useTranslations('Contacts')
   const qc = useQueryClient()
@@ -3473,16 +3858,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const TABS: { id: TabId; label: string; icon: React.ElementType; feature?: PlanFeature }[] = [
-    { id: 'profile', label: t('tabProfile'), icon: Mail },
-    { id: 'notes', label: t('tabNotes'), icon: StickyNote },
-    { id: 'stats', label: t('tabStats'), icon: BarChart2 },
-    { id: 'activity', label: t('tabActivity'), icon: Activity },
-    { id: 'alerts', label: t('tabAlerts'), icon: Bell },
-    { id: 'bookings', label: t('tabBookings'), icon: CalendarDays },
-    { id: 'subscriptions', label: t('tabSubscriptions'), icon: BookOpen, feature: 'subscriptions' },
-    { id: 'affiliations', label: t('tabAffiliations'), icon: Users },
-    { id: 'payments', label: t('tabPayments'), icon: CreditCard },
+    { id: 'profile', label: t('tabProfile'), icon: User },
     { id: 'goals', label: t('tabGoals'), icon: Flag, feature: 'goals' },
+    { id: 'stats', label: t('tabStats'), icon: BarChart2 },
+    { id: 'bookings', label: t('tabBookings'), icon: CalendarDays },
+    { id: 'membership', label: t('tabMembership'), icon: IdCard },
+    { id: 'payments', label: t('tabPayments'), icon: CreditCard },
+    { id: 'activity', label: t('tabActivity'), icon: Activity },
     // Gamification is a plugin — the tab appears only when it's installed (filtered below).
     { id: 'gamification', label: t('tabGamification'), icon: Star },
   ]
@@ -3525,22 +3907,28 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         {t('newBadge')}
                       </Badge>
                     )}
-                    {/* Subscription summary chip */}
+                    {/* Subscription summary chip → Membership tab, Subscription segment */}
                     {contact.subscription_type_name && (
                       <button
                         type="button"
-                        onClick={() => setTab('subscriptions')}
+                        onClick={() => {
+                          setMembershipSeg('subscription')
+                          setTab('membership')
+                        }}
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <BookOpen className="h-3 w-3 shrink-0" />
                         <span>{t('subscriptionHeadingCard')}: {contact.subscription_type_name}</span>
                       </button>
                     )}
-                    {/* Affiliation summary chip */}
+                    {/* Affiliation summary chip → Membership tab, Affiliation segment */}
                     {contact.affiliation_summary?.has_active && (
                       <button
                         type="button"
-                        onClick={() => setTab('affiliations')}
+                        onClick={() => {
+                          setMembershipSeg('affiliation')
+                          setTab('membership')
+                        }}
                         className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 transition-colors"
                       >
                         <CheckCircle className="h-3 w-3 shrink-0" />
@@ -3584,6 +3972,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 </button>
               )}
             </div>
+            {/* Header action cluster — alerts + notes side panels (replace old tabs) */}
+            {!contact.archived_at && !contact.deleted_at && (
+              <div className="flex items-center gap-3 shrink-0">
+                <AlertsPanelButton contact={contact} teamId={currentTeamId} />
+                <NotesPanelButton contact={contact} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -3611,7 +4006,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     onClick={() =>
                       locked ? openUpgradeModal({ feature: tb.feature }) : setTab(tb.id)
                     }
-                    className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                    className={`flex flex-col items-center gap-1 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap min-w-[64px] ${
                       locked
                         ? 'border-transparent text-muted-foreground/50 hover:text-muted-foreground/70'
                         : tab === tb.id
@@ -3619,9 +4014,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                           : 'border-transparent text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
-                    <span className="hidden sm:inline">{tb.label}</span>
-                    {locked && <Lock className="h-3 w-3 text-muted-foreground/30" />}
+                    <Icon className="h-5 w-5" />
+                    <span className="flex items-center gap-1">
+                      {tb.label}
+                      {locked && <Lock className="h-3 w-3 text-muted-foreground/30" />}
+                    </span>
                   </button>
                 )
               }
@@ -3639,19 +4036,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               />
             )}
             {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
-            {tab === 'notes' && <NotesTab contact={contact} />}
             {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}
-            {tab === 'alerts' && <AlertsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'bookings' && <BookingsTab contact={contact} teamId={currentTeamId} />}
-            {tab === 'subscriptions' && (
-              <SubscriptionsTab contact={contact} teamId={currentTeamId} />
-            )}
-            {tab === 'affiliations' && (
-              <AffiliationsTab
+            {tab === 'membership' && (
+              <MembershipTab
                 contact={contact}
                 teamId={currentTeamId}
                 orgId={team?.org_id}
                 membershipFieldLocked={membershipFieldLocked}
+                seg={membershipSeg}
+                onSegChange={setMembershipSeg}
               />
             )}
             {tab === 'payments' && <PaymentsTab contact={contact} teamId={currentTeamId} />}

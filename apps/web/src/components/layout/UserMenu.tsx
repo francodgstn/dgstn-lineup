@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useTheme } from 'next-themes'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, usePathname } from '@/i18n/navigation'
-import { QrCode, Sun, Moon, Monitor, Compass, LogOut } from 'lucide-react'
+import { QrCode, Sun, Moon, Monitor, Compass, LogOut, BarChart3, Settings } from 'lucide-react'
+import { posthog } from '@/lib/posthog'
 import { START_TOUR_EVENT } from '@/components/onboarding/ProductTour'
 import { QRDialog } from '@/components/layout/QRDialog'
 import {
@@ -42,6 +43,29 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname()
   const locale = useLocale()
   const [qrOpen, setQrOpen] = useState(false)
+
+  // Product analytics opt-out. Analytics runs under legitimate interest; this lets
+  // a customer turn it off. PostHog persists + respects the choice across loads.
+  const analyticsEnabled = !!process.env.NEXT_PUBLIC_POSTHOG_KEY
+  const [analyticsOptedOut, setAnalyticsOptedOut] = useState(false)
+  useEffect(() => {
+    if (!analyticsEnabled) return
+    try {
+      setAnalyticsOptedOut(posthog.has_opted_out_capturing())
+    } catch {
+      /* posthog not ready — default to opted-in */
+    }
+  }, [analyticsEnabled])
+
+  function toggleAnalytics() {
+    if (analyticsOptedOut) {
+      posthog.opt_in_capturing()
+      setAnalyticsOptedOut(false)
+    } else {
+      posthog.opt_out_capturing()
+      setAnalyticsOptedOut(true)
+    }
+  }
 
   async function handleSignOut() {
     const { signOut } = await import('@/lib/auth')
@@ -132,8 +156,43 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Product analytics opt-out (only when analytics is configured) */}
+            {analyticsEnabled && (
+              <div className="px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={toggleAnalytics}
+                  aria-pressed={!analyticsOptedOut}
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted transition-colors"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <BarChart3 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-xs font-medium">{t('analytics')}</span>
+                      <span className="truncate text-[11px] text-muted-foreground">
+                        {t('analyticsHint')}
+                      </span>
+                    </span>
+                  </span>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      analyticsOptedOut
+                        ? 'bg-muted text-muted-foreground'
+                        : 'bg-primary/10 text-primary'
+                    }`}
+                  >
+                    {analyticsOptedOut ? t('analyticsOff') : t('analyticsOn')}
+                  </span>
+                </button>
+              </div>
+            )}
             <DropdownMenuSeparator />
 
+            <DropdownMenuItem onClick={() => router.push('/settings')}>
+              <Settings className="h-4 w-4 mr-2" />
+              {tNav('settings')}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(START_TOUR_EVENT))}>
               <Compass className="h-4 w-4 mr-2" />
               {tOnb('replayTour')}

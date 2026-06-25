@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { format, setHours, setMinutes } from 'date-fns'
-import { CalendarIcon, Clock, ChevronDown } from 'lucide-react'
+import { CalendarIcon, Clock, ChevronDown, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -86,6 +86,12 @@ interface DatePickerProps {
   fromYear?: number
   /** Latest selectable year. Default: current year + 5. */
   toYear?: number
+  /**
+   * 'default' renders an input-like bordered trigger.
+   * 'ghost' renders muted text with an edit pencil on hover — for dates that are
+   * rarely edited and should not look like a primary input (e.g. milestone dates).
+   */
+  variant?: 'default' | 'ghost'
 }
 
 export function DatePicker({
@@ -96,17 +102,35 @@ export function DatePicker({
   disabled,
   fromYear = NOW.getFullYear() - 5,
   toYear = NOW.getFullYear() + 5,
+  variant = 'default',
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
+  const isGhost = variant === 'ghost'
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         disabled={disabled}
-        className={cn(triggerBase, !value && 'text-muted-foreground', className)}
+        className={cn(
+          isGhost
+            ? 'group inline-flex items-center gap-1 rounded px-1.5 py-0.5 outline-none transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50'
+            : cn(triggerBase, !value && 'text-muted-foreground'),
+          className
+        )}
       >
-        <CalendarIcon className="h-4 w-4 shrink-0 opacity-50" />
-        {value ? format(value, 'dd MMM yyyy') : placeholder}
+        {isGhost ? (
+          <>
+            <span className="text-muted-foreground transition-colors group-hover:text-foreground">
+              {value ? format(value, 'dd MMM yyyy') : placeholder}
+            </span>
+            <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-70" />
+          </>
+        ) : (
+          <>
+            <CalendarIcon className="h-4 w-4 shrink-0 opacity-50" />
+            {value ? format(value, 'dd MMM yyyy') : placeholder}
+          </>
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
