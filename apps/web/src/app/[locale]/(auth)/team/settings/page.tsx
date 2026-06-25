@@ -1456,8 +1456,6 @@ function PaymentsTab({ teamId }: { teamId: string }) {
           })}
         </div>
       )}
-
-      <p className="text-xs text-muted-foreground">{t('paymentsSecretNote')}</p>
         </CardContent>
       </Card>
 
@@ -2231,7 +2229,11 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
 
   return (
     <div className="space-y-8">
-      <EmailSenderForm teamId={teamId} plan={team.plan} />
+      <Card>
+        <CardContent className="pt-6">
+          <EmailSenderForm teamId={teamId} plan={team.plan} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="pt-6 space-y-5">

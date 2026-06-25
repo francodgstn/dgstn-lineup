@@ -12,6 +12,9 @@ const { lang } = Astro.props;
 const t = useTranslations(lang);
 const year = new Date().getFullYear();
 const copyright = t('footer.copyright').replace('{year}', String(year));
+// Only show "Cookie settings" when analytics is actually wired (a key exists);
+// it reopens the consent banner via window.linyupOpenConsent() (BaseLayout).
+const analyticsEnabled = !!import.meta.env.PUBLIC_POSTHOG_KEY;
 ---
 
 <footer>
@@ -26,6 +29,11 @@ const copyright = t('footer.copyright').replace('{year}', String(year));
             versions and Terms (at signup launch) follow later. */}
         <a href="/privacy">{t('footer.links.privacy')}</a>
         <a href="/legal">{t('footer.links.legal')}</a>
+        {analyticsEnabled && (
+          <button type="button" class="link-btn" data-open-consent>
+            {t('footer.links.cookies')}
+          </button>
+        )}
         <a href="mailto:hello@linyup.com">{t('footer.links.contact')}</a>
         <LanguageSwitcher currentLang={lang} />
       </div>
@@ -34,14 +42,24 @@ const copyright = t('footer.copyright').replace('{year}', String(year));
   </div>
 </footer>
 
+<script>
+  // "Cookie settings" reopens the consent banner (defined in BaseLayout).
+  document.querySelector('[data-open-consent]')?.addEventListener('click', () => {
+    (window as Window & { linyupOpenConsent?: () => void }).linyupOpenConsent?.();
+  });
+</script>
+
 <style>
   footer { padding: 48px 0; border-top: 1px solid var(--border); }
   .foot { display: flex; align-items: center; gap: 16px; }
   .brand { display: inline-flex; align-items: center; }
   .foot .tag { font-size: 13.5px; color: var(--muted-foreground); max-width: 36ch; }
   .foot-links { margin-left: auto; display: flex; align-items: center; gap: 22px; }
-  .foot-links a { font-size: 13.5px; color: var(--muted-foreground); }
-  .foot-links a:hover { color: var(--foreground); }
+  .foot-links a,
+  .foot-links .link-btn { font-size: 13.5px; color: var(--muted-foreground); }
+  .foot-links a:hover,
+  .foot-links .link-btn:hover { color: var(--foreground); }
+  .link-btn { padding: 0; border: 0; background: none; font-family: inherit; cursor: pointer; }
   .copy { font-size: 12.5px; color: var(--muted-foreground); margin-top: 22px; }
 
   @media (max-width: 860px) {

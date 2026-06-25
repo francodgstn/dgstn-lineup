@@ -151,7 +151,7 @@ const cmpText = (v: CmpVal): string | null => {
               ))}
             </ul>
 
-            <a class="feat-more" href="#compare" data-open-compare>
+            <a class="feat-more" href="#compare" data-open-compare data-plan={key}>
               {t('plans.cmpMore')} <i data-lucide="arrow-down"></i>
             </a>
 
@@ -159,6 +159,8 @@ const cmpText = (v: CmpVal): string | null => {
               class:list={['btn', 'btn-block', featured ? 'btn-primary' : 'btn-outline']}
               type="button"
               data-early-access
+              data-ea-source="pricing"
+              data-plan={key}
             >
               {isOrg ? t('plans.talkToUs') : t('plans.earlyAccessCta')}
             </button>
@@ -244,11 +246,19 @@ const cmpText = (v: CmpVal): string | null => {
 </section>
 
 <script>
+  // PostHog (loaded globally in BaseLayout). Optional: no-op when analytics is off.
+  type Capture = (event: string, props?: Record<string, unknown>) => void;
+  const ph = (): Capture | undefined =>
+    (window as unknown as { posthog?: { capture: Capture } }).posthog?.capture.bind(
+      (window as unknown as { posthog?: { capture: Capture } }).posthog,
+    );
+
   const cmp = document.querySelector('.compare');
   const btn = document.querySelector('.compare-toggle');
   btn?.addEventListener('click', () => {
     const open = cmp!.classList.toggle('open');
     btn.setAttribute('aria-expanded', String(open));
+    ph()?.('pricing_compare_toggled', { expanded: open });
   });
 
   // "See the full comparison" links inside the plan cards — expand the table and
@@ -259,6 +269,7 @@ const cmpText = (v: CmpVal): string | null => {
       cmp?.classList.add('open');
       btn?.setAttribute('aria-expanded', 'true');
       document.getElementById('compare')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      ph()?.('pricing_compare_opened', { source: 'plan_card', plan: el.dataset.plan });
     });
   });
 
@@ -267,6 +278,7 @@ const cmpText = (v: CmpVal): string | null => {
   document.querySelectorAll<HTMLElement>('.compare-table .feat-link').forEach((el) => {
     el.addEventListener('click', () => {
       const key = el.dataset.featureKey;
+      ph()?.('pricing_feature_viewed', { feature: key });
       const opener = (window as unknown as { openFeatureModal?: (k: string) => void })
         .openFeatureModal;
       if (key && opener) opener(key);

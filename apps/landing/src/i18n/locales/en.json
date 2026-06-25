@@ -212,13 +212,20 @@
     "subtitle": "Join coaches and studios already using Linyup to run their business.",
     "button": "Get early access"
   },
+  "consent": {
+    "message": "We use privacy-friendly analytics to understand how visitors use this site and improve it. With your consent we'll set analytics cookies — nothing runs until you choose.",
+    "accept": "Accept",
+    "decline": "Decline",
+    "learnMore": "Privacy Policy"
+  },
   "footer": {
     "tagline": "The modern management tool for coaches and studios.",
     "links": {
       "privacy": "Privacy",
       "terms": "Terms",
       "legal": "Legal",
-      "contact": "Contact"
+      "contact": "Contact",
+      "cookies": "Cookie settings"
     },
     "copyright": "© {year} Linyup. All rights reserved."
   }

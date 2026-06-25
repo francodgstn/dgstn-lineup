@@ -21,12 +21,13 @@ export function initPostHog() {
     // We track pageviews manually via PostHogPageView so the locale route prefix
     // is included in every path before sending.
     capture_pageview: false,
-    // Session replay — helps debug UX issues; can be restricted later if needed
-    session_recording: {
-      maskAllInputs: true,        // never capture passwords or form data
-      maskTextSelector: '[data-private]', // opt-in masking for sensitive text nodes
-    },
+    // Session replay is OFF in the product (privacy). Product analytics runs under
+    // legitimate interest in operating and improving the service; customers can opt
+    // out from the user menu. PostHog persists that choice (below) and respects it
+    // automatically on subsequent loads.
+    disable_session_recording: true,
     persistence: 'localStorage+cookie',
+    opt_out_capturing_persistence_type: 'localStorage',
     autocapture: true,
   })
 }

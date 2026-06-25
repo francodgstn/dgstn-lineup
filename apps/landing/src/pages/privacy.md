@@ -2,7 +2,7 @@
 layout: ../layouts/LegalLayout.astro
 title: Privacy Policy
 description: How Linyup processes personal data for website visitors and customers.
-lastUpdated: 23 June 2026
+lastUpdated: 25 June 2026
 ---
 
 # 2. Privacy Policy (Datenschutzerklärung / Politique de confidentialité)
@@ -59,13 +59,17 @@ If you opt in, we may send you product news through our email provider. You can 
 
 ## 2.3 Cookies and analytics
 
-We do not use advertising or analytics cookies, and we do not track you across websites. The site has no third-party analytics, tag manager, advertising pixel, or session-recording tool.
+We use **PostHog** for product analytics — to understand which pages and features visitors engage with (for example, expanding the pricing comparison or opening a feature detail) so we can improve the site. We do not use advertising cookies, advertising pixels, or cross-site tracking, and session recording is switched off.
 
-For one strictly functional purpose we use your browser's local storage: to remember your light or dark theme preference. It is kept only on your device, holds no personal data, and is not shared.
+**Analytics only runs if you agree to it.** On your first visit we ask for your consent through a banner, and nothing analytics-related loads until you choose: if you **accept**, we load PostHog and set analytics cookies on your device; if you **decline** — or simply don't choose — PostHog is never loaded and no analytics cookies are set. You can change your decision at any time via the "Cookie settings" link in the site footer. Your analytics data is hosted in PostHog's **EU region**, and we never use it to identify you personally or track you across other websites.
+
+*Legal basis:* your consent (GDPR Art. 6(1)(a) / FADP), which you may withdraw at any time with effect for the future.
+
+**Inside the Linyup app (for Customers).** When you are signed in and using the product, we also use PostHog to understand how the app is used so we can improve it. There, analytics is **on by default** under our legitimate interest in operating and improving the service (GDPR Art. 6(1)(f) / FADP Art. 31); session recording is switched off, and you can **opt out at any time** from the user menu in the app. The consent banner above governs the public website only.
+
+For two strictly functional purposes we use your browser's local storage: to remember your light or dark theme preference, and to remember your analytics-consent choice. These are essential to honour your own settings, are kept only on your device, hold no personal data, and are not shared — so no separate consent is needed for them.
 
 To display the site, your browser loads some resources from third-party content-delivery networks — web fonts from Google Fonts (Google) and interface icons from unpkg. Fetching those files makes your IP address and browser information visible to those providers; we do not use this to track you. When you submit an email form, the address you enter is sent to Google Firestore to record your request (see Sections 2.2 and 2.4).
-
-Because we set no non-essential cookies or trackers, no cookie-consent banner is needed. If we add analytics in future, we will name the tool here, prefer a privacy-friendly or cookieless option, and — where it is not strictly necessary — ask for your consent before it runs.
 
 ## 2.4 Service providers and recipients
 
@@ -75,6 +79,7 @@ We use carefully selected providers who process data on our behalf under contrac
 |---|---|---|
 | Google Cloud / Firebase (Google) | Hosting, database, file storage, and serverless functions | EU / Switzerland (europe-west6, Zurich) |
 | Brevo (Sendinblue SAS) | Transactional and marketing email | France (EU) |
+| PostHog (PostHog, Inc.) | Privacy-friendly product analytics (cookieless) | EU region (Frankfurt); provider based in the United States |
 | Stripe (Stripe Payments Europe, Ltd.) | Payment processing | Ireland (EU), with group processing in the United States |
 
 Our application infrastructure runs in Google's europe-west6 (Zurich, Switzerland) region and our email provider is in France (EU), so most processing stays within Switzerland and the EU/EEA. Some providers may process data outside Switzerland and the EU/EEA (for example in the United States). Where this happens, transfers are protected by recognized safeguards such as the EU and Swiss Standard Contractual Clauses and, where applicable, an adequacy mechanism such as the EU-U.S. / Swiss-U.S. Data Privacy Framework.

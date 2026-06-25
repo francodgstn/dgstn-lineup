@@ -46,3 +46,16 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  # PostHog product analytics — public project key (safe to embed, like the
+  # Firebase keys above). Paste your prod PostHog project key (phc_…) here to turn
+  # analytics on; while empty, initPostHog() stays a no-op.
+  - variable: NEXT_PUBLIC_POSTHOG_KEY
+    value: phc_qmkpHEQ26DUdFoGPPHZ26Enz2wfPVgHeLegi7ivArCWi
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_POSTHOG_HOST
+    value: https://eu.i.posthog.com
+    availability:
+      - BUILD
+      - RUNTIME

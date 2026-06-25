@@ -80,7 +80,10 @@ export interface Contact {
   // Immutable birth fact: which door the contact came through; sets the birth stage.
   // Correctable for data-entry mistakes, but never silently moves the stage.
   entry?: ContactEntry
-  // Milestone timestamps — set once when the stage first reaches them.
+  // Milestone timestamps — set when the stage first reaches them; editable in the
+  // contact profile (e.g. backdating an imported member who joined long ago).
+  // trial_booked_at is an optional override; the UI falls back to created_at.
+  trial_booked_at?: Timestamp
   trial_attended_at?: Timestamp
   converted_at?: Timestamp
 

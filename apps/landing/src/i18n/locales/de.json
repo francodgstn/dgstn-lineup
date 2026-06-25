@@ -195,7 +195,7 @@
       "twint": { "title": "TWINT + Karten", "body": "Akzeptiere die Methoden, die Schweizer Kunden wirklich nutzen — inklusive wiederkehrender Abos über TWINT." }
     },
     "proof": "Ein per TWINT bezahltes Abo auf der Studio-Stufe kostet rund 2 % all-in — etwa die Hälfte dessen, was nur-Karten-Tools aus dem Ausland berechnen.",
-    "cta": "Kostenlos starten",
+    "cta": "Kostenlos starten",
     "feesTitle": "Zahlungsgebühren, klar sichtbar",
     "feesIntro": "Berechnet zusätzlich zur Standardgebühr von Stripe, die wir zum Selbstkostenpreis weitergeben. Nur Prozente — keine feste Linyup-Gebühr pro Transaktion. Gleicher Satz für Karten und TWINT.",
     "feesPlanHead": "Plan",
@@ -212,13 +212,20 @@
     "subtitle": "Schliess dich Trainern und Studios an, die Linyup bereits für ihr Business nutzen.",
     "button": "Frühen Zugang sichern"
   },
+  "consent": {
+    "message": "Wir nutzen datenschutzfreundliche Analyse, um zu verstehen, wie Besucher diese Seite nutzen, und sie zu verbessern. Mit Ihrer Einwilligung setzen wir Analyse-Cookies – bis Sie wählen, wird nichts ausgeführt.",
+    "accept": "Akzeptieren",
+    "decline": "Ablehnen",
+    "learnMore": "Datenschutz"
+  },
   "footer": {
     "tagline": "Das moderne Verwaltungstool für Trainer und Studios.",
     "links": {
       "privacy": "Datenschutz",
       "terms": "AGB",
       "legal": "Impressum",
-      "contact": "Kontakt"
+      "contact": "Kontakt",
+      "cookies": "Cookie-Einstellungen"
     },
     "copyright": "© {year} Linyup. Alle Rechte vorbehalten."
   }

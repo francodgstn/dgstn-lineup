@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { useTranslations, type Language } from '~/i18n';
 
 interface Props {
   title: string;
@@ -9,6 +10,11 @@ interface Props {
 }
 
 const { title, description, lang, canonicalUrl } = Astro.props;
+const t = useTranslations(lang as Language);
+// Analytics is only wired when a PostHog key is present at build time. When it is,
+// we show the consent banner; when it isn't, posthog-js is tree-shaken and the
+// banner is never rendered (local dev / staging).
+const phKey = import.meta.env.PUBLIC_POSTHOG_KEY;
 const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? 'https://linyup.com';
 const canonical = canonicalUrl ?? `${siteUrl}${Astro.url.pathname}`;
 // Social-share preview image (1200×630, generated from /og — see og.astro).
@@ -70,6 +76,85 @@ const ogLocale = ({ en: 'en_US', de: 'de_DE', fr: 'fr_FR', it: 'it_IT' } as cons
       })();
     </script>
 
+    <!-- PostHog product analytics — CONSENT-FIRST.
+         Nothing loads or runs until the visitor clicks "Accept" in the banner.
+         The choice is stored in localStorage; "Decline" (or no choice) means
+         posthog-js is never even imported. Footer "Cookie settings" reopens the
+         banner via window.linyupOpenConsent(). Processed script: Astro bundles
+         posthog-js (only when a key exists) and inlines import.meta.env. -->
+    <script>
+      // import.meta.env.PUBLIC_POSTHOG_KEY is inlined at build time. When it's
+      // empty (local dev / staging) this whole branch is dead code and posthog-js
+      // is tree-shaken out of the bundle entirely — zero bytes shipped.
+      const key = import.meta.env.PUBLIC_POSTHOG_KEY;
+      const host = import.meta.env.PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com';
+      if (key) {
+        const CONSENT_KEY = 'linyup:analytics-consent';
+        const banner = document.getElementById('cookie-consent');
+        let loaded = false;
+
+        const readConsent = () => {
+          try {
+            return localStorage.getItem(CONSENT_KEY);
+          } catch {
+            return null;
+          }
+        };
+        const writeConsent = (v: 'yes' | 'no') => {
+          try {
+            localStorage.setItem(CONSENT_KEY, v);
+          } catch {
+            /* storage blocked — choice won't persist, honoured for this load only */
+          }
+        };
+        const showBanner = () => banner?.removeAttribute('hidden');
+        const hideBanner = () => banner?.setAttribute('hidden', '');
+
+        // Load + initialise PostHog. Only ever called after explicit consent.
+        const loadPostHog = () => {
+          if (loaded) return;
+          loaded = true;
+          import('posthog-js').then(({ default: posthog }) => {
+            posthog.init(key, {
+              api_host: host,
+              person_profiles: 'identified_only',
+              persistence: 'localStorage+cookie',
+              disable_session_recording: true, // no replay on the marketing site
+            });
+            // Expose for the per-component capture calls (Pricing, EarlyAccessModal).
+            (window as Window & { posthog?: typeof posthog }).posthog = posthog;
+          });
+        };
+
+        // Programmatic consent API (used by the banner buttons and the footer link).
+        const applyConsent = (granted: boolean) => {
+          writeConsent(granted ? 'yes' : 'no');
+          hideBanner();
+          if (granted) {
+            loadPostHog();
+          } else {
+            const ph = (window as Window & { posthog?: { opt_out_capturing: () => void } })
+              .posthog;
+            ph?.opt_out_capturing();
+          }
+        };
+        (window as Window & { linyupConsent?: (granted: boolean) => void }).linyupConsent =
+          applyConsent;
+        (window as Window & { linyupOpenConsent?: () => void }).linyupOpenConsent = showBanner;
+
+        banner
+          ?.querySelectorAll<HTMLButtonElement>('[data-consent]')
+          .forEach((b) =>
+            b.addEventListener('click', () => applyConsent(b.dataset.consent === 'yes')),
+          );
+
+        // First-run decision: honour a stored choice, otherwise ask.
+        const choice = readConsent();
+        if (choice === 'yes') loadPostHog();
+        else if (choice !== 'no') showBanner();
+      }
+    </script>
+
     <!-- Locale nudge: on the English root, send the visitor to their browser
          language (de/fr/it) on first visit, or to whatever they last picked in
          the switcher. English always wins ties and an explicit "EN" choice. Runs
@@ -97,6 +182,24 @@ const ogLocale = ({ en: 'en_US', de: 'de_DE', fr: 'fr_FR', it: 'it_IT' } as cons
   </head>
   <body>
     <slot />
+
+    {
+      phKey && (
+        <div id="cookie-consent" class="cc" hidden role="dialog" aria-labelledby="cc-text">
+          <p class="cc-text" id="cc-text">
+            {t('consent.message')} <a href="/privacy">{t('consent.learnMore')}</a>
+          </p>
+          <div class="cc-actions">
+            <button type="button" class="cc-btn cc-decline" data-consent="no">
+              {t('consent.decline')}
+            </button>
+            <button type="button" class="cc-btn cc-accept" data-consent="yes">
+              {t('consent.accept')}
+            </button>
+          </div>
+        </div>
+      )
+    }
 
     <!-- Lucide icons (renders all <i data-lucide> tags) -->
     <script is:inline src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -126,6 +229,54 @@ const ogLocale = ({ en: 'en_US', de: 'de_DE', fr: 'fr_FR', it: 'it_IT' } as cons
         els.forEach(function (el) { io.observe(el); });
       })();
     </script>
+
+    <!-- Cookie-consent banner — bottom-anchored card, non-blocking -->
+    <style>
+      .cc {
+        position: fixed;
+        z-index: 200;
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        margin: 0 auto;
+        max-width: 640px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 14px 20px;
+        padding: 16px 20px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg, 14px);
+        box-shadow: var(--shadow-lg);
+      }
+      .cc[hidden] { display: none; }
+      .cc-text { flex: 1 1 280px; margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted-foreground); }
+      .cc-text a { color: var(--primary); text-decoration: underline; }
+      .cc-actions { display: flex; gap: 10px; margin-left: auto; }
+      .cc-btn {
+        font: inherit;
+        font-size: 13.5px;
+        font-weight: 600;
+        padding: 9px 18px;
+        border-radius: var(--radius-pill, 99px);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+      }
+      .cc-decline { background: transparent; color: var(--foreground); border: 1px solid var(--border); }
+      .cc-decline:hover { background: var(--purple-50); }
+      .cc-accept { background: var(--primary); color: #fff; border: 1px solid transparent; }
+      .cc-accept:hover { transform: translateY(-1px); }
+      @media (prefers-reduced-motion: no-preference) {
+        .cc:not([hidden]) { animation: cc-in 0.25s cubic-bezier(0.22, 0.61, 0.36, 1); }
+        @keyframes cc-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+      }
+      @media (max-width: 560px) {
+        .cc-actions { width: 100%; }
+        .cc-btn { flex: 1; }
+      }
+    </style>
 
     <style is:global>
       @media (prefers-reduced-motion: no-preference) {

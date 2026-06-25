@@ -8,7 +8,11 @@
 // Trigger path: contacts/{contactId}
 // Contacts are top-level with a teamId field — teamId is read from the document.
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
+import { ACQUISITION_STAGES } from '@linyup/shared'
 import { fireEventRules, type ContactData, type AutomationTriggerType } from '../utils/automationEngine'
+
+const stageRank = (stage: unknown): number =>
+  (ACQUISITION_STAGES as readonly string[]).indexOf(stage as string)
 
 function resolveContactTrigger(
   before: FirebaseFirestore.DocumentData | undefined,
@@ -19,8 +23,15 @@ function resolveContactTrigger(
   // New document — contact created
   if (!before) return 'contact_created'
 
-  // acquisition stage advanced (trial_booked → trial_attended → joined)
-  if (before.acquisition_stage !== after.acquisition_stage) return 'acquisition_stage_changed'
+  // acquisition stage advanced (trial_booked → trial_attended → joined).
+  // Only FORWARD moves fire automation. A backward move is a manual correction
+  // (undoing a mistaken promotion) and must not re-trigger outreach rules.
+  if (before.acquisition_stage !== after.acquisition_stage) {
+    if (stageRank(after.acquisition_stage) > stageRank(before.acquisition_stage)) {
+      return 'acquisition_stage_changed'
+    }
+    // fall through — a correction may still coincide with other relevant changes
+  }
 
   // subscription changed (manual type assignment OR Stripe billing rollup status)
   if (before.subscription_type_id !== after.subscription_type_id) return 'subscription_changed'
