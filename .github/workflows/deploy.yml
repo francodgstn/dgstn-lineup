@@ -22,7 +22,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Pinned to 22.22.3: Node 22.23.0 carries a keep-alive regression
+          # (nodejs/node#63989) that makes firebase-tools' STS token exchange
+          # fail with "Premature close" under Workload Identity Federation, so
+          # `firebase deploy` reports "Failed to authenticate". Unpin once Node
+          # ships a fix. gcloud (Python) is unaffected.
+          node-version: '22.22.3'
           cache: 'pnpm'
 
       # Keyless auth — exchanges the GitHub OIDC token for short-lived GCP
