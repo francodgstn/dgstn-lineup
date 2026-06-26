@@ -37,8 +37,8 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  Search, UserPlus, X, Flame,
-  Star, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
+  Search, UserPlus, X,
+  AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
   MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
   Check, Bookmark, BookmarkPlus, BarChart2, Pin, FolderTree,
 } from 'lucide-react'
@@ -1009,19 +1009,9 @@ function ContactRow({
               <span className="ml-2 text-xs font-semibold text-blue-500">{t('newBadge')}</span>
             )}
           </p>
-          {/* Line 2: email + score/streak (desktop) */}
+          {/* Line 2: email */}
           <p className="text-xs text-muted-foreground flex items-center gap-2 min-w-0">
             <span className="truncate">{contact.email ?? contact.phone ?? '—'}</span>
-            {(contact.current_month_score ?? 0) > 0 && (
-              <span className="hidden md:flex items-center gap-0.5 shrink-0">
-                <Star className="h-3 w-3 text-yellow-500" />{contact.current_month_score}
-              </span>
-            )}
-            {(contact.current_streak ?? 0) > 0 && (
-              <span className="hidden md:flex items-center gap-0.5 shrink-0">
-                <Flame className="h-3 w-3 text-orange-500" />{contact.current_streak}w
-              </span>
-            )}
           </p>
           {/* Line 3: stage + affiliation + subscription chips */}
           <div className="flex items-center gap-1.5 flex-wrap pt-0.5">

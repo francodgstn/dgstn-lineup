@@ -116,6 +116,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Mail,
+  Copy,
   Phone,
   StickyNote,
   Star,
@@ -200,6 +201,12 @@ function tsToDate(ts: unknown): Date | undefined {
   if (typeof ts === 'object' && 'toDate' in (ts as object))
     return (ts as { toDate(): Date }).toDate()
   return undefined
+}
+
+// Elapsed whole days since a date — the caller maps this to a localised,
+// human-readable span ("3 years", "5 months", …) via ICU plurals.
+function daysSince(date: Date): number {
+  return Math.floor((Date.now() - date.getTime()) / 86_400_000)
 }
 
 // ─── schema ───────────────────────────────────────────────────────────────────
@@ -3822,10 +3829,19 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const { isInstalled } = useInstalledPlugins()
 
   const [linkCopied, setLinkCopied] = useState(false)
+  const [emailCopied, setEmailCopied] = useState(false)
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['contact', id] })
     qc.invalidateQueries({ queryKey: ['contacts'] })
+  }
+
+  const handleCopyEmail = () => {
+    if (!contact?.email) return
+    navigator.clipboard.writeText(contact.email).then(() => {
+      setEmailCopied(true)
+      setTimeout(() => setEmailCopied(false), 2000)
+    })
   }
 
   const handleCopyUpdateLink = () => {
@@ -3940,8 +3956,22 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               </div>
               <div className="flex flex-col gap-1 mt-2">
                 {contact.email && (
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Mail className="h-3 w-3 shrink-0" /> {contact.email}
+                  <span className="group/email flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Mail className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{contact.email}</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyEmail}
+                      title={emailCopied ? t('emailCopied') : t('copyEmail')}
+                      aria-label={emailCopied ? t('emailCopied') : t('copyEmail')}
+                      className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {emailCopied ? (
+                        <Check className="h-3 w-3 text-green-600" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                    </button>
                   </span>
                 )}
                 {contact.phone && (
@@ -3951,8 +3981,22 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 )}
                 {contact.created_at && (
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <CalendarDays className="h-3 w-3 shrink-0" /> {t('memberSince')}{' '}
-                    {formatDate(contact.created_at)}
+                    <CalendarDays className="h-3 w-3 shrink-0" />
+                    <span>
+                      {t('joinedOn')} {formatDate(contact.created_at)}
+                      {(() => {
+                        const joined = tsToDate(contact.created_at)
+                        if (!joined) return ''
+                        const days = daysSince(joined)
+                        let span: string
+                        if (days < 1) span = t('timespanToday')
+                        else if (days >= 365) span = t('timespanYears', { count: Math.floor(days / 365) })
+                        else if (days >= 30) span = t('timespanMonths', { count: Math.floor(days / 30) })
+                        else if (days >= 7) span = t('timespanWeeks', { count: Math.floor(days / 7) })
+                        else span = t('timespanDays', { count: days })
+                        return ` · ${span}`
+                      })()}
+                    </span>
                   </span>
                 )}
               </div>
@@ -3994,8 +4038,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         />
       ) : (
         <>
-          {/* Tabs */}
-          <div className="flex gap-0.5 border-b overflow-x-auto">
+          {/* Tabs — horizontally scrollable; buttons keep their width (shrink-0)
+              so labels never get squeezed/overlapped on mobile. */}
+          <div className="flex gap-1 border-b overflow-x-auto">
             {TABS.filter((tb) => tb.id !== 'gamification' || isInstalled('gamification')).map(
               (tb) => {
                 const locked = tb.feature ? !hasFeature(tb.feature) : false
@@ -4006,7 +4051,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     onClick={() =>
                       locked ? openUpgradeModal({ feature: tb.feature }) : setTab(tb.id)
                     }
-                    className={`flex flex-col items-center gap-1 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap min-w-[64px] ${
+                    className={`flex shrink-0 flex-col items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
                       locked
                         ? 'border-transparent text-muted-foreground/50 hover:text-muted-foreground/70'
                         : tab === tb.id

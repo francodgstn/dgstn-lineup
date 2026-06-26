@@ -505,7 +505,15 @@
     "freeCapDialogTitle": "Limite contatti raggiunto",
     "freeCapDialogBody": "Il piano Free include fino a {included} contatti attivi. Passa al Coach per aggiungerne altri — o archivia i contatti di cui non hai più bisogno.",
     "freeCapDialogDismiss": "Non ora",
-    "freeCapDialogCta": "Vedi le opzioni di upgrade"
+    "freeCapDialogCta": "Vedi le opzioni di upgrade",
+    "copyEmail": "Copia email",
+    "emailCopied": "Copiato!",
+    "joinedOn": "Iscritto il",
+    "timespanToday": "oggi",
+    "timespanYears": "{count, plural, one {# anno} other {# anni}}",
+    "timespanMonths": "{count, plural, one {# mese} other {# mesi}}",
+    "timespanWeeks": "{count, plural, one {# settimana} other {# settimane}}",
+    "timespanDays": "{count, plural, one {# giorno} other {# giorni}}"
   },
   "TeamMemberships": {
     "title": "Tessere",
