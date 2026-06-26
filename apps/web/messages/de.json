@@ -513,7 +513,14 @@
     "timespanYears": "{count, plural, one {# Jahr} other {# Jahre}}",
     "timespanMonths": "{count, plural, one {# Monat} other {# Monate}}",
     "timespanWeeks": "{count, plural, one {# Woche} other {# Wochen}}",
-    "timespanDays": "{count, plural, one {# Tag} other {# Tage}}"
+    "timespanDays": "{count, plural, one {# Tag} other {# Tage}}",
+    "engagementLabel": "Engagement",
+    "engagement_active": "Aktiv",
+    "engagement_low": "Niedrig",
+    "engagement_at_risk": "Gefährdet",
+    "engagement_inactive": "Inaktiv",
+    "engagementLastSession": "Zuletzt vor {days, plural, one {# Tag} other {# Tagen}} dabei",
+    "engagementNoSessions": "Noch keine Teilnahme"
   },
   "TeamMemberships": {
     "title": "Mitgliedschaft",
@@ -994,7 +1001,14 @@
     "affiliationsEnabledHelp": "Mitgliedschaftsnachweise (z. B. Vereinsmitgliedschaft, Verbandslizenz) für Kontakte verwalten.",
     "affiliationsUpsell": "Mitgliedschaftsverfolgung erfordert das Studio-Abo oder höher.",
     "roleLabelDefaultHint": "Wird angezeigt, wenn es keine Übersetzung für die Sprache des Betrachters gibt.",
-    "roleLabelAddTranslations": "Übersetzungen hinzufügen (optional)"
+    "roleLabelAddTranslations": "Übersetzungen hinzufügen (optional)",
+    "engagementTitle": "Engagement-Stufen",
+    "engagementHelp": "Wie kürzlich ein Kontakt teilgenommen haben muss, um als engagiert zu gelten. Die Stufe wird auf der Kontaktseite angezeigt (schreibgeschützt).",
+    "engagementActiveWithin": "Aktiv innerhalb (Tage)",
+    "engagementLowWithin": "Niedrig innerhalb (Tage)",
+    "engagementAtRiskWithin": "Gefährdet innerhalb (Tage)",
+    "engagementDaysHint": "Gemessen ab der letzten besuchten Session. Nach dem Gefährdet-Fenster gilt ein Kontakt als inaktiv.",
+    "engagementInvalid": "Jedes Fenster muss größer sein als das vorherige."
   },
   "Bookings": {
     "title": "Buchungen",

@@ -96,6 +96,8 @@ import type {
   Affiliation,
   AffiliationType,
   OrgMembershipStatusDef,
+  EngagementBand,
+  EngagementThresholds,
 } from '@linyup/shared'
 import {
   ACQUISITION_STAGES,
@@ -104,6 +106,7 @@ import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
   DEFAULT_ORG_MEMBERSHIP_STATUSES,
+  computeEngagementBand,
 } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -207,6 +210,50 @@ function tsToDate(ts: unknown): Date | undefined {
 // human-readable span ("3 years", "5 months", …) via ICU plurals.
 function daysSince(date: Date): number {
   return Math.floor((Date.now() - date.getTime()) / 86_400_000)
+}
+
+// Read-only engagement band — a derived "status light" next to the join date.
+// Colours follow the studio playbook: green = healthy, amber = watch,
+// red = urgent (intervention pays off), grey = dormant/lapsed (not an alarm).
+const ENGAGEMENT_PILL: Record<EngagementBand, string> = {
+  active: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  low: 'bg-amber-500/10 text-amber-700 dark:text-amber-500',
+  at_risk: 'bg-red-500/10 text-red-700 dark:text-red-400',
+  inactive: 'bg-muted text-muted-foreground',
+}
+const ENGAGEMENT_DOT: Record<EngagementBand, string> = {
+  active: 'bg-emerald-500',
+  low: 'bg-amber-500',
+  at_risk: 'bg-red-500',
+  inactive: 'bg-muted-foreground/40',
+}
+
+function EngagementBadge({
+  contact,
+  thresholds,
+}: {
+  contact: Contact
+  thresholds?: EngagementThresholds
+}) {
+  const t = useTranslations('Contacts')
+  // Recency of attendance is the signal; fall back to join date for contacts who
+  // have never attended (so a brand-new contact reads "active", not "inactive").
+  const lastMs = tsToDate(contact.last_session_at)?.getTime() ?? null
+  const refMs = lastMs ?? tsToDate(contact.created_at)?.getTime() ?? null
+  const band = computeEngagementBand(refMs, thresholds)
+  const daysAgo = lastMs != null ? Math.floor((Date.now() - lastMs) / 86_400_000) : null
+  const tip = `${t('engagementLabel')} · ${
+    daysAgo == null ? t('engagementNoSessions') : t('engagementLastSession', { days: daysAgo })
+  }`
+  return (
+    <span
+      title={tip}
+      className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${ENGAGEMENT_PILL[band]}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${ENGAGEMENT_DOT[band]}`} />
+      {t(`engagement_${band}` as Parameters<typeof t>[0])}
+    </span>
+  )
 }
 
 // ─── schema ───────────────────────────────────────────────────────────────────
@@ -3999,6 +4046,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     </span>
                   </span>
                 )}
+                {/* Read-only engagement band — derived from attendance recency. */}
+                <EngagementBadge contact={contact} thresholds={team?.engagement_thresholds} />
               </div>
               {/* Contact Groups plugin — membership chips */}
               {isInstalled('contact-groups') && !contact.archived_at && !contact.deleted_at && (

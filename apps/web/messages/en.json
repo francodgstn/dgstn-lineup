@@ -513,7 +513,14 @@
     "timespanYears": "{count, plural, one {# year} other {# years}}",
     "timespanMonths": "{count, plural, one {# month} other {# months}}",
     "timespanWeeks": "{count, plural, one {# week} other {# weeks}}",
-    "timespanDays": "{count, plural, one {# day} other {# days}}"
+    "timespanDays": "{count, plural, one {# day} other {# days}}",
+    "engagementLabel": "Engagement",
+    "engagement_active": "Active",
+    "engagement_low": "Low",
+    "engagement_at_risk": "At risk",
+    "engagement_inactive": "Inactive",
+    "engagementLastSession": "Last attended {days, plural, one {# day} other {# days}} ago",
+    "engagementNoSessions": "No sessions attended yet"
   },
   "TeamMemberships": {
     "title": "Membership",
@@ -994,7 +1001,14 @@
     "affiliationsEnabledHelp": "Track affiliation records (e.g. club membership, federation licence) for contacts.",
     "affiliationsUpsell": "Affiliation tracking requires the Studio plan or above.",
     "roleLabelDefaultHint": "Shown when there's no translation for the viewer's language.",
-    "roleLabelAddTranslations": "Add translations (optional)"
+    "roleLabelAddTranslations": "Add translations (optional)",
+    "engagementTitle": "Engagement bands",
+    "engagementHelp": "How recently a contact must have attended to count as engaged. The band is shown on each contact's page (read-only).",
+    "engagementActiveWithin": "Active within (days)",
+    "engagementLowWithin": "Low within (days)",
+    "engagementAtRiskWithin": "At-risk within (days)",
+    "engagementDaysHint": "Measured from the last attended session. Beyond the at-risk window, a contact counts as inactive.",
+    "engagementInvalid": "Each window must be larger than the one before it."
   },
   "Bookings": {
     "title": "Bookings",

@@ -513,7 +513,14 @@
     "timespanYears": "{count, plural, one {# anno} other {# anni}}",
     "timespanMonths": "{count, plural, one {# mese} other {# mesi}}",
     "timespanWeeks": "{count, plural, one {# settimana} other {# settimane}}",
-    "timespanDays": "{count, plural, one {# giorno} other {# giorni}}"
+    "timespanDays": "{count, plural, one {# giorno} other {# giorni}}",
+    "engagementLabel": "Coinvolgimento",
+    "engagement_active": "Attivo",
+    "engagement_low": "Basso",
+    "engagement_at_risk": "A rischio",
+    "engagement_inactive": "Inattivo",
+    "engagementLastSession": "Ultima presenza {days, plural, one {# giorno} other {# giorni}} fa",
+    "engagementNoSessions": "Nessuna partecipazione finora"
   },
   "TeamMemberships": {
     "title": "Tessere",
@@ -994,7 +1001,14 @@
     "affiliationsEnabledHelp": "Registra le affiliazioni dei contatti (es. tessera club, licenza federale).",
     "affiliationsUpsell": "Il monitoraggio delle affiliazioni richiede il piano Studio o superiore.",
     "roleLabelDefaultHint": "Mostrato quando non c'è una traduzione per la lingua del visitatore.",
-    "roleLabelAddTranslations": "Aggiungi traduzioni (facoltativo)"
+    "roleLabelAddTranslations": "Aggiungi traduzioni (facoltativo)",
+    "engagementTitle": "Livelli di coinvolgimento",
+    "engagementHelp": "Quanto di recente un contatto deve aver partecipato per essere considerato coinvolto. Il livello è mostrato nella pagina del contatto (sola lettura).",
+    "engagementActiveWithin": "Attivo entro (giorni)",
+    "engagementLowWithin": "Basso entro (giorni)",
+    "engagementAtRiskWithin": "A rischio entro (giorni)",
+    "engagementDaysHint": "Misurato dall'ultima sessione frequentata. Oltre la finestra a rischio, un contatto è inattivo.",
+    "engagementInvalid": "Ogni finestra deve essere più grande della precedente."
   },
   "Bookings": {
     "title": "Prenotazioni",

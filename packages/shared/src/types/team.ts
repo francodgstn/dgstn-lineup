@@ -2,6 +2,7 @@ import type { Timestamp } from './common'
 // Type-only import — no runtime cycle (connect.ts imports SaasPlan from here).
 import type { ConnectOnboardingModel, ConnectAccountStatus } from './connect'
 import type { PublicMainAddress } from './place'
+import type { EngagementThresholds } from './engagement'
 
 export type TeamRole = 'owner' | 'manager' | 'viewer'
 
@@ -196,6 +197,9 @@ export interface Team {
   sport_type?: string
   // Display noun for contacts (see ContactRoleLabel). Unset → i18n default.
   contact_role_label?: ContactRoleLabel
+  // Day thresholds for the derived contact engagement band. Unset → defaults
+  // (DEFAULT_ENGAGEMENT_THRESHOLDS). The band itself is never stored.
+  engagement_thresholds?: EngagementThresholds
   ranking_systems?: RankingSystem[]
   // Custom Fields plugin — account-wide extra contact field definitions
   custom_field_definitions?: CustomFieldDefinition[]

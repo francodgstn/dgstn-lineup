@@ -60,6 +60,7 @@ import {
   COURSES_COLLECTION,
   SITE_DRAFTS_COLLECTION,
   isReservedSlug,
+  DEFAULT_ENGAGEMENT_THRESHOLDS,
 } from '@linyup/shared'
 import type {
   Team,
@@ -464,6 +465,84 @@ function ContactRoleLabelForm({ team, teamId }: { team: Team; teamId: string }) 
 
       <div className="flex items-center gap-3">
         <Button size="sm" onClick={onSave} disabled={saving || !singular.trim() || !plural.trim()}>
+          {saving ? t('saving') : t('save')}
+        </Button>
+        {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
+      </div>
+    </div>
+  )
+}
+
+// ─── engagement thresholds ────────────────────────────────────────────────────
+// Day windows that drive the read-only engagement band shown on each contact.
+// The band itself is derived on render (never stored).
+
+function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string }) {
+  const t = useTranslations('TeamSettings')
+  const qc = useQueryClient()
+  const current = team.engagement_thresholds ?? DEFAULT_ENGAGEMENT_THRESHOLDS
+  const [active, setActive] = useState(String(current.active_within_days))
+  const [low, setLow] = useState(String(current.low_within_days))
+  const [atRisk, setAtRisk] = useState(String(current.at_risk_within_days))
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const a = Number(active)
+  const l = Number(low)
+  const r = Number(atRisk)
+  const valid = [a, l, r].every((n) => Number.isInteger(n) && n > 0) && a < l && l < r
+
+  async function onSave() {
+    if (!valid) return
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
+        engagement_thresholds: {
+          active_within_days: a,
+          low_within_days: l,
+          at_risk_within_days: r,
+        },
+      })
+      await qc.invalidateQueries({ queryKey: ['team', teamId] })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const fields: { value: string; set: (v: string) => void; label: string; dot: string }[] = [
+    { value: active, set: setActive, label: t('engagementActiveWithin'), dot: 'bg-emerald-500' },
+    { value: low, set: setLow, label: t('engagementLowWithin'), dot: 'bg-amber-500' },
+    { value: atRisk, set: setAtRisk, label: t('engagementAtRiskWithin'), dot: 'bg-red-500' },
+  ]
+
+  return (
+    <div className="space-y-3 pt-4 border-t">
+      <div>
+        <p className="text-sm font-medium">{t('engagementTitle')}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{t('engagementHelp')}</p>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {fields.map((f) => (
+          <div key={f.label} className="space-y-1.5">
+            <Label className="flex items-center gap-1.5 text-xs">
+              <span className={`h-2 w-2 rounded-full ${f.dot}`} />
+              {f.label}
+            </Label>
+            <Input
+              type="number"
+              min={1}
+              value={f.value}
+              onChange={(e) => f.set(e.target.value)}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">{t('engagementDaysHint')}</p>
+      {!valid && <p className="text-xs text-destructive">{t('engagementInvalid')}</p>}
+      <div className="flex items-center gap-3">
+        <Button size="sm" onClick={onSave} disabled={saving || !valid}>
           {saving ? t('saving') : t('save')}
         </Button>
         {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
@@ -2258,6 +2337,7 @@ export default function TeamSettingsPage() {
               <>
                 <GeneralForm team={team} teamId={currentTeamId} />
                 <ContactRoleLabelForm team={team} teamId={currentTeamId} />
+                <EngagementThresholdsForm team={team} teamId={currentTeamId} />
               </>
             )}
             {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
