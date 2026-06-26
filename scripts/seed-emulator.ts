@@ -339,12 +339,20 @@ async function seedTeam(opts: {
     .filter((st) => st.active !== false)
     .map((st) => {
       const recurrence = recurrenceForSub(st.id)
-      const entry: { id: string; name: string; description?: string; prices?: { amount: number; recurrence: string }[] } = {
+      const entry: {
+        id: string
+        name: string
+        description?: string
+        prices?: { id: string; amount: number; recurrence: string }[]
+      } = {
         id: st.id,
         name: st.name,
       }
       if (st.description) entry.description = st.description
-      if (st.price != null && recurrence) entry.prices = [{ amount: st.price, recurrence }]
+      // The public shop's Buy button is gated on price.id (a stable client id, not a
+      // Stripe id) — mirror it here so checkout can resolve the chosen price.
+      if (st.price != null && recurrence)
+        entry.prices = [{ id: `${st.id}-price`, amount: st.price, recurrence }]
       return entry
     })
 

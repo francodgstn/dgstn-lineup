@@ -1580,10 +1580,13 @@ async function seedDemoTeam(profile: SectorProfile) {
       id: string
       name: string
       description?: string
-      prices?: { amount: number; recurrence: string }[]
+      prices?: { id: string; amount: number; recurrence: string }[]
     } = { id: subIdOf(st.kind), name: st.name }
     if (st.description) entry.description = st.description
-    if (st.price != null && recurrence) entry.prices = [{ amount: st.price, recurrence }]
+    // price.id (stable client id) must mirror the raw subscription_types write so the
+    // shop's Buy button enables and checkout can resolve the chosen price.
+    if (st.price != null && recurrence)
+      entry.prices = [{ id: `${subIdOf(st.kind)}-price`, amount: st.price, recurrence }]
     return entry
   })
 
