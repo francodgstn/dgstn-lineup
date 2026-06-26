@@ -177,6 +177,8 @@ function buildSection(d: Dict, id: string, type: string): WebsiteSection | null 
         windowDays: num(d.windowDays, 1, 60, 7),
         maxItems: num(d.maxItems, 0, 50, 0) || undefined,
         activityId: optStr(d.activityId, 64),
+        displayMode: d.displayMode === 'week' ? 'week' : 'list',
+        showBooking: bool(d.showBooking),
       }) as unknown as WebsiteSection
     }
     case 'contact': {

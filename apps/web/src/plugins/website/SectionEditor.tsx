@@ -353,6 +353,20 @@ function ScheduleFields({ s, onChange }: { s: ScheduleSection; onChange: (p: Pat
           </Select>
         </Field>
       </div>
+      <Field label="Default view">
+        {/* Visitors can still switch list ↔ week on the live site; this sets the default. */}
+        <Select value={s.displayMode ?? 'list'} onValueChange={(v) => onChange({ displayMode: v as ScheduleSection['displayMode'] })}>
+          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="list">List</SelectItem>
+            <SelectItem value="week">Weekly calendar</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <label className="flex items-center justify-between rounded-lg border p-3">
+        <span className="text-sm">Show “Book” icon on each session</span>
+        <Switch checked={s.showBooking ?? false} onCheckedChange={(v) => onChange({ showBooking: v })} />
+      </label>
     </div>
   )
 }

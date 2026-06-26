@@ -29,6 +29,9 @@ import {
   Mail,
   Clock,
   CalendarDays,
+  CalendarPlus,
+  CalendarRange,
+  List,
   ArrowRight,
 } from 'lucide-react'
 import type {
@@ -553,15 +556,42 @@ interface SessionEntry {
   id: string
   activityName?: string
   activityColor?: string
+  activityId?: string
   start: Timestamp
   end?: Timestamp
   location?: string
 }
 
+// Group sorted sessions into ordered per-day buckets (used by the list dividers).
+interface DayGroup {
+  key: string // YYYY-MM-DD
+  date: Date
+  sessions: SessionEntry[]
+}
+function groupByDay(sessions: SessionEntry[]): DayGroup[] {
+  const groups = new Map<string, DayGroup>()
+  for (const s of sessions) {
+    const d = s.start.toDate()
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    let g = groups.get(key)
+    if (!g) {
+      g = { key, date: new Date(d.getFullYear(), d.getMonth(), d.getDate()), sessions: [] }
+      groups.set(key, g)
+    }
+    g.sessions.push(s)
+  }
+  return [...groups.values()].sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+const fmtTime = (d: Date) =>
+  d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+
 function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: RenderCtx }) {
   const { palette, slug, teamId, preview } = ctx
   const [sessions, setSessions] = useState<SessionEntry[]>([])
   const [loading, setLoading] = useState(true)
+  // Studio sets the default view; visitors can switch with the toggle below.
+  const [view, setView] = useState<'list' | 'week'>(section.displayMode ?? 'list')
 
   useEffect(() => {
     let alive = true
@@ -582,11 +612,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
         const list = snap.docs
           .map((d) => ({ ...(d.data() as Omit<SessionEntry, 'id'>), id: d.id }))
           .filter((s) => s.start && s.start.toDate() <= windowEnd)
-          .filter(
-            (s) =>
-              !section.activityId ||
-              (s as { activityId?: string }).activityId === section.activityId
-          )
+          .filter((s) => !section.activityId || s.activityId === section.activityId)
         setSessions(list)
       })
       .catch(() => {
@@ -602,12 +628,194 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
 
   // Cap how many sessions are listed (0/unset = show all in the window).
   const visible = section.maxItems ? sessions.slice(0, section.maxItems) : sessions
+  const days = groupByDay(visible)
+  const bookHref = preview ? undefined : `/public/${slug}/booking`
+
+  // Small reserve affordance on a single session — deliberately understated.
+  const BookButton = () =>
+    section.showBooking ? (
+      <a
+        {...linkProps(bookHref, preview)}
+        aria-label="Book"
+        title="Book"
+        className="shrink-0 rounded-full p-1.5 transition-opacity hover:opacity-70"
+        style={{ color: palette.accent }}
+      >
+        <CalendarPlus className="h-4 w-4" />
+      </a>
+    ) : null
+
+  // Subtle day label + hairline used by the list view (and the mobile week view).
+  const DayDivider = ({ date }: { date: Date }) => (
+    <div className="flex items-center gap-3 pt-3 first:pt-0">
+      <span
+        className="text-xs font-semibold uppercase tracking-wide"
+        style={{ color: palette.muted }}
+      >
+        {date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}
+      </span>
+      <span className="h-px flex-1" style={{ background: palette.border }} />
+    </div>
+  )
+
+  const ListView = () => (
+    <div className="space-y-2.5">
+      {days.map((g) => (
+        <div key={g.key} className="space-y-2.5">
+          <DayDivider date={g.date} />
+          {g.sessions.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center gap-4 rounded-xl border px-4 py-3"
+              style={{ borderColor: palette.border, background: palette.bg }}
+            >
+              <div
+                className="h-10 w-1.5 shrink-0 rounded-full"
+                style={{ background: s.activityColor || palette.accent }}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: palette.text }}>
+                  {s.activityName ?? 'Session'}
+                </p>
+                {s.location && (
+                  <p className="text-xs" style={{ color: palette.muted }}>
+                    {s.location}
+                  </p>
+                )}
+              </div>
+              <p className="text-sm shrink-0" style={{ color: palette.text }}>
+                {fmtTime(s.start.toDate())}
+              </p>
+              <BookButton />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+
+  // A compact session chip used inside the weekly grid columns.
+  const Chip = ({ s }: { s: SessionEntry }) => (
+    <div
+      className="flex items-center gap-1.5 rounded-md border px-2 py-1"
+      style={{ borderColor: palette.border, background: palette.bg }}
+    >
+      <span
+        className="h-3 w-1 shrink-0 rounded-full"
+        style={{ background: s.activityColor || palette.accent }}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-semibold" style={{ color: palette.text }}>
+          {fmtTime(s.start.toDate())}
+        </span>
+        <span className="block truncate text-[11px]" style={{ color: palette.muted }}>
+          {s.activityName ?? 'Session'}
+        </span>
+      </span>
+      <BookButton />
+    </div>
+  )
+
+  // Canonical 7-day week starting today (a weekly calendar is inherently 7 days;
+  // windowDays still governs the list view).
+  const weekStart = new Date()
+  weekStart.setHours(0, 0, 0, 0)
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(weekStart)
+    date.setDate(weekStart.getDate() + i)
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+    return { date, sessions: days.find((d) => d.key === key)?.sessions ?? [] }
+  })
+
+  const WeekView = () => (
+    <>
+      {/* Desktop: full 7-column week (empty days shown as columns). */}
+      <div className="hidden gap-1.5 sm:grid sm:grid-cols-7">
+        {weekDays.map(({ date, sessions: ds }) => (
+          <div key={date.toISOString()} className="flex flex-col gap-1.5">
+            <div className="text-center">
+              <p className="text-xs font-semibold" style={{ color: palette.text }}>
+                {date.toLocaleDateString(undefined, { weekday: 'short' })}
+              </p>
+              <p className="text-[11px]" style={{ color: palette.muted }}>
+                {date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+              </p>
+            </div>
+            {ds.length === 0 ? (
+              <span className="py-2 text-center text-xs" style={{ color: palette.muted }}>
+                —
+              </span>
+            ) : (
+              ds.map((s) => <Chip key={s.id} s={s} />)
+            )}
+          </div>
+        ))}
+      </div>
+      {/* Mobile: stack only the days that have sessions, with the same divider. */}
+      <div className="space-y-3 sm:hidden">
+        {days.length === 0 ? (
+          <p className="text-center text-sm" style={{ color: palette.muted }}>
+            No upcoming sessions.
+          </p>
+        ) : (
+          days.map((g) => (
+            <div key={g.key} className="space-y-1.5">
+              <DayDivider date={g.date} />
+              {g.sessions.map((s) => (
+                <Chip key={s.id} s={s} />
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    </>
+  )
+
+  const ToggleButton = ({
+    mode,
+    icon: Icon,
+    label,
+  }: {
+    mode: 'list' | 'week'
+    icon: typeof List
+    label: string
+  }) => {
+    const active = view === mode
+    return (
+      <button
+        type="button"
+        onClick={() => setView(mode)}
+        aria-label={label}
+        aria-pressed={active}
+        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors"
+        style={
+          active
+            ? { background: palette.accent, color: palette.onAccent }
+            : { color: palette.muted }
+        }
+      >
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </button>
+    )
+  }
 
   return (
     <section id={section.id} className="py-20" style={{ background: palette.surface }}>
       <div className="mx-auto max-w-3xl px-6">
         <Heading text={section.heading ?? 'Schedule'} palette={palette} />
-        <div className="mt-10 space-y-2.5">
+
+        <div className="mt-4 flex justify-center">
+          <div
+            className="inline-flex items-center gap-1 rounded-full border p-1"
+            style={{ borderColor: palette.border }}
+          >
+            <ToggleButton mode="list" icon={List} label="List" />
+            <ToggleButton mode="week" icon={CalendarRange} label="Week" />
+          </div>
+        </div>
+
+        <div className="mt-8">
           {loading ? (
             <p className="text-center text-sm" style={{ color: palette.muted }}>
               Loading…
@@ -616,50 +824,16 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
             <p className="text-center text-sm" style={{ color: palette.muted }}>
               No upcoming sessions.
             </p>
+          ) : view === 'week' ? (
+            <WeekView />
           ) : (
-            visible.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center gap-4 rounded-xl border px-4 py-3"
-                style={{ borderColor: palette.border, background: palette.bg }}
-              >
-                <div
-                  className="h-10 w-1.5 shrink-0 rounded-full"
-                  style={{ background: s.activityColor || palette.accent }}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate" style={{ color: palette.text }}>
-                    {s.activityName ?? 'Session'}
-                  </p>
-                  {s.location && (
-                    <p className="text-xs" style={{ color: palette.muted }}>
-                      {s.location}
-                    </p>
-                  )}
-                </div>
-                <div className="text-right text-sm shrink-0" style={{ color: palette.muted }}>
-                  <p style={{ color: palette.text }}>
-                    {s.start
-                      .toDate()
-                      .toLocaleDateString(undefined, {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                  </p>
-                  <p className="text-xs">
-                    {s.start
-                      .toDate()
-                      .toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
-            ))
+            <ListView />
           )}
         </div>
+
         <div className="mt-8 text-center">
           <a
-            {...linkProps(preview ? undefined : `/public/${slug}/booking`, preview)}
+            {...linkProps(bookHref, preview)}
             className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
             style={{ background: palette.accent, color: palette.onAccent }}
           >
