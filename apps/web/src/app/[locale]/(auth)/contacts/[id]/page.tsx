@@ -218,7 +218,7 @@ const profileSchema = z.object({
   address_postal_code: z.string().max(20).optional(),
   address_locality: z.string().max(100).optional(),
   // Entry — editable for data-entry correction; does NOT move acquisition_stage
-  entry: z.enum(['booking', 'walk_in', 'signup', 'import'] as const).optional(),
+  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form'] as const).optional(),
   // Source axis
   source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
   source_detail: z.string().max(500).optional(),

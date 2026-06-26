@@ -23,6 +23,10 @@ export interface ActivePublicSurfaces {
   site: boolean
   space: boolean
   booking: boolean
+  // ≥1 published Custom Form exists (custom-forms plugin active). Optional — forms
+  // are reached via their own /public/{slug}/forms/{slug} URLs, not a default
+  // surface, so this is a discovery signal (e.g. a bio-link entry), not a redirect target.
+  forms?: boolean
 }
 
 export interface RankLevel {

@@ -17,6 +17,7 @@ import {
   CHECKINS_COLLECTION,
   SESSION_SERIES_COLLECTION,
   COURSES_COLLECTION,
+  FORMS_COLLECTION,
   COACH_AVAILABILITY_COLLECTION,
   REFERRAL_CODES_COLLECTION,
   REFERRALS_COLLECTION,
@@ -85,6 +86,7 @@ export const TENANT_DATA_COLLECTIONS: TenantCollection[] = [
   { collection: CHECKINS_COLLECTION, match: { by: 'field', field: 'teamId' } },
   { collection: SESSION_SERIES_COLLECTION, match: { by: 'field', field: 'teamId' } },
   { collection: COURSES_COLLECTION, match: { by: 'field', field: 'teamId' } },
+  { collection: FORMS_COLLECTION, match: { by: 'field', field: 'teamId' } },
   { collection: COACH_AVAILABILITY_COLLECTION, match: { by: 'field', field: 'teamId' } },
   // referrals key the team via `team_id`; referral_codes via `teamId`.
   { collection: REFERRALS_COLLECTION, match: { by: 'field', field: 'team_id' } },

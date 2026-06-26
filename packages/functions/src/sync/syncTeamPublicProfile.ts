@@ -6,6 +6,7 @@ import {
   INSTALLED_PLUGINS_SUBCOLLECTION,
   SITE_PUBLISHED_COLLECTION,
   COURSES_COLLECTION,
+  FORMS_COLLECTION,
   resolveSystemLinkTarget,
 } from '@linyup/shared'
 import type { PublicSurface, ActivePublicSurfaces } from '@linyup/shared'
@@ -57,6 +58,22 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     spaceActive = !publishedCourseSnap.empty
   }
 
+  // forms: custom-forms plugin active AND ≥1 published, non-archived form
+  const formsPluginSnap = await db
+    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/custom-forms`)
+    .get()
+  let formsActive = false
+  if (formsPluginSnap.exists && formsPluginSnap.data()?.status === 'active') {
+    const publishedFormSnap = await db
+      .collection(FORMS_COLLECTION)
+      .where('teamId', '==', teamId)
+      .where('status', '==', 'published')
+      .where('archived_at', '==', null)
+      .limit(1)
+      .get()
+    formsActive = !publishedFormSnap.empty
+  }
+
   // booking: base feature — available whenever booking settings have been configured
   // (bookingSettings lands on the public_profile via syncBookingSettings; here we
   // mirror the same signal used elsewhere: the settings sub-doc existence / field).
@@ -67,6 +84,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     site: siteActive,
     space: spaceActive,
     booking: bookingActive,
+    forms: formsActive,
   }
 
   // ── default_public_surface ───────────────────────────────────────────────────

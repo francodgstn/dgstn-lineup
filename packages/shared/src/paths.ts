@@ -109,6 +109,12 @@ export const COURSE_LESSONS_SUBCOLLECTION = 'lessons'
 // Doc id is the buyer's contactId; written only by the Connect webhook (admin SDK).
 export const COURSE_PURCHASES_SUBCOLLECTION = 'purchases'
 
+// Custom Forms plugin (form builder + submissions backend)
+// forms/{formId}: team-scoped form (fields embedded on the doc).
+// submissions: written ONLY by the submitForm Cloud Function (Admin SDK).
+export const FORMS_COLLECTION = 'forms'
+export const FORM_SUBMISSIONS_SUBCOLLECTION = 'submissions'
+
 // Website plugin (studio site builder)
 // site_drafts: PRIVATE working copy (manager+). site_published: PUBLIC snapshot
 // (public read, written only by the publishWebsite Cloud Function). Both keyed by teamId.

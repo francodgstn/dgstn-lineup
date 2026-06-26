@@ -945,6 +945,32 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------
+    // Custom Forms plugin — form builder + submissions backend
+    // Authoring (admin web): team members read, managers+ write. The public form
+    // page renders from the world-readable forms/{id}/public_profile/{id} summary
+    // (collection group), never this collection. Submissions are written ONLY by
+    // the submitForm Cloud Function (Admin SDK); team members read them back.
+    // ----------------------------------------------
+    match /forms/{formId} {
+      allow get: if isAuthed() && isTeamMember(resource.data.teamId);
+      // Collection LIST: resource.data is NOT available for query rules. Staff only;
+      // the public form page reads via public_profile (collection group).
+      allow list: if isAuthed();
+      allow create: if hasTeamRole(request.resource.data.teamId, 'manager');
+      allow update, delete: if hasTeamRole(resource.data.teamId, 'manager');
+
+      // forms/{id}/public_profile/{id} is world-readable via the global
+      // /{path=**}/public_profile rule (drives the public form page) — no block here.
+
+      // Submissions: team members read; only the submitForm Cloud Function writes.
+      match /submissions/{submissionId} {
+        allow read: if isAuthed()
+          && isTeamMember(get(/databases/$(database)/documents/forms/$(formId)).data.teamId);
+        allow write: if false; // Cloud Functions only
+      }
+    }
+
+    // ----------------------------------------------
     // Website plugin — studio site builder
     // ----------------------------------------------
 

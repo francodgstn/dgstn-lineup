@@ -37,6 +37,7 @@ export { syncTeamPublicProfile } from './sync/syncTeamPublicProfile'
 export { syncSessionPublicProfile } from './sync/syncSessionPublicProfile'
 export { syncActivityPublicProfile } from './sync/syncActivityPublicProfile'
 export { syncCoursePublicProfile } from './sync/syncCoursePublicProfile'
+export { syncFormPublicProfile } from './sync/syncFormPublicProfile'
 export { indexUser } from './sync/indexUser'
 export { syncSubscriptionTypesToPublicProfile } from './sync/syncSubscriptionTypesToPublicProfile'
 export { syncProductsToPublicProfile } from './sync/syncProductsToPublicProfile'
@@ -182,6 +183,9 @@ export {
 
 // Bio-link
 export { getInTouchForm } from './bio-link/getInTouchForm'
+
+// Custom Forms plugin — public submission callable
+export { submitForm } from './forms/submitForm'
 
 // Website plugin (studio site builder) — publish/unpublish the public snapshot
 export { publishWebsite, unpublishWebsite } from './website'

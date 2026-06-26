@@ -10,8 +10,9 @@ export type AcquisitionStage = (typeof ACQUISITION_STAGES)[number]
 
 // How the contact first ENTERED — immutable birth fact, set once by the entry event.
 // 'booking' | 'walk_in' are the trial doors (walk-in is born already 'trial_attended');
-// 'signup' (direct join) and 'import' (migration) are non-trial entries born 'joined'.
-export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import'] as const
+// 'signup' (direct join) and 'import' (migration) are non-trial entries born 'joined';
+// 'form' is a lead captured via a published Custom Form (top-of-funnel, born 'trial_booked').
+export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form'] as const
 export type ContactEntry = (typeof CONTACT_ENTRIES)[number]
 
 // Source axis — marketing CHANNEL (attribution only), set once, never overwritten.

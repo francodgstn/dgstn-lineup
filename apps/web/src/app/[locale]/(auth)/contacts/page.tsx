@@ -87,7 +87,7 @@ const createSchema = z.object({
   email: z.string().email('Invalid email').or(z.literal('')).optional(),
   phone: z.string().max(30).optional(),
   /** Which door they came through — determines birth stage */
-  entry: z.enum(['booking', 'walk_in', 'signup', 'import'] as const),
+  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form'] as const),
   source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
   source_detail: z.string().max(200).optional(),
 })
@@ -100,7 +100,8 @@ function entryToStage(entry: ContactEntry): {
   converted_at?: ReturnType<typeof serverTimestamp>
 } {
   switch (entry) {
-    case 'booking': return { acquisition_stage: 'trial_booked' }
+    case 'booking':
+    case 'form': return { acquisition_stage: 'trial_booked' }
     case 'walk_in': return { acquisition_stage: 'trial_attended', trial_attended_at: serverTimestamp() }
     case 'signup':
     case 'import': return { acquisition_stage: 'joined', converted_at: serverTimestamp() }
