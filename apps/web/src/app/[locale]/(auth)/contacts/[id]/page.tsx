@@ -271,15 +271,6 @@ const profileSchema = z.object({
   address_street_number: z.string().max(20).optional(),
   address_postal_code: z.string().max(20).optional(),
   address_locality: z.string().max(100).optional(),
-  // Entry — editable for data-entry correction; does NOT move acquisition_stage
-  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form'] as const).optional(),
-  // Source axis
-  source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
-  source_detail: z.string().max(500).optional(),
-  // Acquisition milestone dates — editable (e.g. backdating an imported member)
-  trial_booked_at: z.date().optional(),
-  trial_attended_at: z.date().optional(),
-  converted_at: z.date().optional(),
   ranks: z.record(z.string(), z.number()).optional(),
   custom_fields: z
     .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
@@ -296,6 +287,19 @@ const profileSchema = z.object({
     .optional(),
 })
 type ProfileValues = z.infer<typeof profileSchema>
+
+// Acquisition card has its own form (it lives in the Membership tab, separate from
+// the profile form). Editing entry/source/milestone dates never moves the
+// acquisition_stage — that's driven only by the promote/correct controls.
+const acquisitionSchema = z.object({
+  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form'] as const).optional(),
+  source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
+  source_detail: z.string().max(500).optional(),
+  trial_booked_at: z.date().optional(),
+  trial_attended_at: z.date().optional(),
+  converted_at: z.date().optional(),
+})
+type AcquisitionValues = z.infer<typeof acquisitionSchema>
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
@@ -1248,7 +1252,7 @@ function AcquisitionTimeline({
   control,
 }: {
   contact: Contact
-  control: Control<ProfileValues>
+  control: Control<AcquisitionValues>
 }) {
   const t = useTranslations('Contacts')
   const currentRank = (ACQUISITION_STAGES as readonly string[]).indexOf(contact.acquisition_stage)
@@ -1394,6 +1398,140 @@ function AlertsPanelButton({ contact, teamId }: { contact: Contact; teamId: stri
   )
 }
 
+// ─── acquisition card ─────────────────────────────────────────────────────────
+// Self-contained card (own form + save) hosting the funnel stage timeline and the
+// entry/source attribution. Lives in the Membership tab — the start of the
+// business relationship.
+
+function AcquisitionCard({ contact, onSaved }: { contact: Contact; onSaved: () => void }) {
+  const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { isSubmitting, isDirty },
+  } = useForm<AcquisitionValues>({
+    resolver: zodResolver(acquisitionSchema),
+    defaultValues: {
+      entry: contact.entry,
+      source: contact.source,
+      source_detail: contact.source_detail ?? '',
+      trial_booked_at: tsToDate(contact.trial_booked_at) ?? tsToDate(contact.created_at),
+      trial_attended_at: tsToDate(contact.trial_attended_at),
+      converted_at: tsToDate(contact.converted_at),
+    },
+  })
+
+  const onSubmit = async (values: AcquisitionValues) => {
+    await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
+      // Editable as a correction — does NOT move acquisition_stage.
+      entry: values.entry || null,
+      source: values.source || null,
+      source_detail: values.source_detail || null,
+      // Milestone dates — editing these does NOT change acquisition_stage, so no
+      // automation/analytics fires (safe to backdate an imported member's join).
+      trial_booked_at: values.trial_booked_at ? Timestamp.fromDate(values.trial_booked_at) : null,
+      trial_attended_at: values.trial_attended_at
+        ? Timestamp.fromDate(values.trial_attended_at)
+        : null,
+      converted_at: values.converted_at ? Timestamp.fromDate(values.converted_at) : null,
+      updatedAt: serverTimestamp(),
+    })
+    reset(values)
+    onSaved()
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="rounded-xl border bg-card p-4 space-y-4"
+    >
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('sectionAcquisition')}
+        </p>
+        {/* Forward promote + correction escape hatch (revert a mistaken promotion) */}
+        <div className="flex items-center gap-2">
+          {contact.acquisition_stage !== 'joined' && (
+            <PromoteStageButton contact={contact} onPromoted={onSaved} />
+          )}
+          <StageCorrectionMenu contact={contact} onCorrected={onSaved} />
+        </div>
+      </div>
+      {/* Stage timeline — dates shown as muted text; click a date to adjust (rare) */}
+      <div className="pt-1">
+        <AcquisitionTimeline contact={contact} control={control} />
+      </div>
+      {/* Entry / Source / Source detail — one row on desktop */}
+      <div className="flex flex-wrap items-start gap-4">
+        {/* Entry — editable correction, does NOT move stage */}
+        <Field className="flex-1 min-w-[180px]" label={t('fieldAcquisitionEntry')}>
+          <Controller
+            control={control}
+            name="entry"
+            render={({ field }) => (
+              <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
+                <SelectTrigger className="w-full">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {field.value
+                      ? t(`entry_${field.value}` as Parameters<typeof t>[0])
+                      : <span className="text-muted-foreground">—</span>}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  {(CONTACT_ENTRIES as readonly ContactEntry[]).map((e) => (
+                    <SelectItem key={e} value={e}>{t(`entry_${e}` as Parameters<typeof t>[0])}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <p className="text-xs text-muted-foreground">{t('fieldAcquisitionEntryHelp')}</p>
+        </Field>
+        {/* Source */}
+        <Field className="flex-1 min-w-[160px]" label={t('fieldAcquisitionSource')}>
+          <Controller
+            control={control}
+            name="source"
+            render={({ field }) => (
+              <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
+                <SelectTrigger className="w-full">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {field.value
+                      ? t(`source_${field.value}` as Parameters<typeof t>[0])
+                      : <span className="text-muted-foreground">—</span>}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  {(CONTACT_SOURCES as readonly ContactSource[]).map((s) => (
+                    <SelectItem key={s} value={s}>{t(`source_${s}` as Parameters<typeof t>[0])}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </Field>
+        <Field className="flex-1 min-w-[160px]" label={t('fieldAcquisitionSourceDetail')}>
+          <Input {...register('source_detail')} />
+        </Field>
+      </div>
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={isSubmitting || !isDirty}
+          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+        >
+          {isSubmitting ? tCommon('loading') : t('saveChanges')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 // ─── profile tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({
@@ -1435,12 +1573,6 @@ function ProfileTab({
       address_street_number: contact.address?.street_number ?? '',
       address_postal_code: contact.address?.postal_code ?? '',
       address_locality: contact.address?.locality ?? '',
-      entry: contact.entry,
-      source: contact.source,
-      source_detail: contact.source_detail ?? '',
-      trial_booked_at: tsToDate(contact.trial_booked_at) ?? tsToDate(contact.created_at),
-      trial_attended_at: tsToDate(contact.trial_attended_at),
-      converted_at: tsToDate(contact.converted_at),
       ranks: contact.ranks ?? {},
       custom_fields: contact.custom_fields ?? {},
       emergency_contacts: contact.emergency_contacts ?? [],
@@ -1468,17 +1600,6 @@ function ProfileTab({
         postal_code: values.address_postal_code || null,
         locality: values.address_locality || null,
       },
-      // Entry is editable as a correction but does NOT move acquisition_stage
-      entry: values.entry || null,
-      source: values.source || null,
-      source_detail: values.source_detail || null,
-      // Milestone dates — editing these does NOT change acquisition_stage, so no
-      // automation/analytics fires (safe to backdate an imported member's join).
-      trial_booked_at: values.trial_booked_at ? Timestamp.fromDate(values.trial_booked_at) : null,
-      trial_attended_at: values.trial_attended_at
-        ? Timestamp.fromDate(values.trial_attended_at)
-        : null,
-      converted_at: values.converted_at ? Timestamp.fromDate(values.converted_at) : null,
       ranks: values.ranks ?? {},
       custom_fields: values.custom_fields ?? {},
       emergency_contacts: (values.emergency_contacts ?? []).filter((ec) => ec.name.trim() !== ''),
@@ -1766,81 +1887,6 @@ function ProfileTab({
           )}
         </FormBlock>
 
-        {/* Acquisition — stage timeline + entry/source */}
-        <div className="rounded-xl border bg-card p-4 space-y-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('sectionAcquisition')}
-            </p>
-            {/* Forward promote + correction escape hatch (revert a mistaken promotion) */}
-            <div className="flex items-center gap-2">
-              {contact.acquisition_stage !== 'joined' && (
-                <PromoteStageButton contact={contact} onPromoted={onSaved} />
-              )}
-              <StageCorrectionMenu contact={contact} onCorrected={onSaved} />
-            </div>
-          </div>
-          {/* Stage timeline — dates shown as muted text; click a date to adjust (rare) */}
-          <div className="pt-1">
-            <AcquisitionTimeline contact={contact} control={control} />
-          </div>
-          {/* Entry / Source / Source detail — one row on desktop */}
-          <div className="flex flex-wrap items-start gap-4">
-          {/* Entry — editable correction, does NOT move stage */}
-          <Field className="flex-1 min-w-[180px]" label={t('fieldAcquisitionEntry')}>
-            <Controller
-              control={control}
-              name="entry"
-              render={({ field }) => (
-                <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
-                  <SelectTrigger className="w-full">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value
-                        ? t(`entry_${field.value}` as Parameters<typeof t>[0])
-                        : <span className="text-muted-foreground">—</span>}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">—</SelectItem>
-                    {(CONTACT_ENTRIES as readonly ContactEntry[]).map((e) => (
-                      <SelectItem key={e} value={e}>{t(`entry_${e}` as Parameters<typeof t>[0])}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            <p className="text-xs text-muted-foreground">{t('fieldAcquisitionEntryHelp')}</p>
-          </Field>
-          {/* Source */}
-          <Field className="flex-1 min-w-[160px]" label={t('fieldAcquisitionSource')}>
-            <Controller
-              control={control}
-              name="source"
-              render={({ field }) => (
-                <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
-                  <SelectTrigger className="w-full">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value
-                        ? t(`source_${field.value}` as Parameters<typeof t>[0])
-                        : <span className="text-muted-foreground">—</span>}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">—</SelectItem>
-                    {(CONTACT_SOURCES as readonly ContactSource[]).map((s) => (
-                      <SelectItem key={s} value={s}>{t(`source_${s}` as Parameters<typeof t>[0])}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </Field>
-          <Field className="flex-1 min-w-[160px]" label={t('fieldAcquisitionSourceDetail')}>
-            <Input {...register('source_detail')} />
-          </Field>
-          </div>
-        </div>
-
         {/* Custom Fields plugin — always the last card; upsell prompt when not installed */}
         <FormBlock title={t('sectionCustomFields')}>
           <Controller
@@ -1928,6 +1974,7 @@ function MembershipTab({
   membershipFieldLocked,
   seg,
   onSegChange,
+  onSaved,
 }: {
   contact: Contact
   teamId: string | null
@@ -1935,6 +1982,7 @@ function MembershipTab({
   membershipFieldLocked: boolean
   seg: 'subscription' | 'affiliation'
   onSegChange: (s: 'subscription' | 'affiliation') => void
+  onSaved: () => void
 }) {
   const t = useTranslations('Contacts')
   const SEGMENTS = [
@@ -1944,6 +1992,9 @@ function MembershipTab({
 
   return (
     <div className="space-y-4">
+      {/* Acquisition — the start of the business relationship (moved here from Profile) */}
+      <AcquisitionCard contact={contact} onSaved={onSaved} />
+
       <div className="inline-flex gap-0.5 rounded-lg border bg-background p-0.5">
         {SEGMENTS.map((s) => (
           <button
@@ -4140,6 +4191,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 membershipFieldLocked={membershipFieldLocked}
                 seg={membershipSeg}
                 onSegChange={setMembershipSeg}
+                onSaved={invalidate}
               />
             )}
             {tab === 'payments' && <PaymentsTab contact={contact} teamId={currentTeamId} />}
