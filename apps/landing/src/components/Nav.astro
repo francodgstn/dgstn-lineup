@@ -71,6 +71,9 @@ const DEMO_STUDIOS = [
         </svg>
       </button>
       <a class="btn btn-ghost login" href={`${APP_URL}/login`}>{t('nav.login')}</a>
+      <a class="btn btn-ghost demo-cta" href={`${DEMO_URL}/try`} target="_blank" rel="noopener">
+        <i data-lucide="play-circle"></i> <span class="demo-cta-label">{t('nav.liveDemo')}</span>
+      </a>
       <button class="btn btn-primary" type="button" data-early-access data-ea-source="nav">{t('nav.cta')}</button>
     </div>
   </div>
@@ -177,9 +180,19 @@ const DEMO_STUDIOS = [
   .theme-btn:hover { border-color: var(--primary); color: var(--primary); }
   .theme-btn svg { display: block; }
 
+  /* "Live demo" secondary button — stays visible (even on mobile) so the demo is
+     always one click away. Outlined to read as secondary next to the primary CTA. */
+  .demo-cta { gap: 6px; border: 1px solid var(--border); }
+  .demo-cta:hover { border-color: var(--primary); color: var(--primary); }
+  .demo-cta :global(svg) { width: 16px; height: 16px; display: inline-block; }
+
   @media (max-width: 860px) {
     .nav-links { display: none; }
     .login { display: none; }
+  }
+  /* On the tightest screens, collapse the demo button to its icon to save room. */
+  @media (max-width: 520px) {
+    .demo-cta-label { display: none; }
   }
 </style>
 

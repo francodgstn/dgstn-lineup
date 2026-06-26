@@ -1595,7 +1595,7 @@ function ProfileTab({
               <Award className="h-6 w-6 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">{t('rankNoSystemsPrompt')}</p>
               <Link
-                href="/team/settings"
+                href="/settings/team"
                 className="text-sm text-primary hover:underline underline-offset-2"
               >
                 {t('rankNoSystemsLink')}

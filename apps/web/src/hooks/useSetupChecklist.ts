@@ -66,12 +66,12 @@ export function useSetupChecklist(teamId: string | null, team: Team | null) {
 
   const d = queryResult.data
   const steps: SetupStep[] = [
-    { key: 'activities', href: '/activities', done: !!d?.activities },
+    { key: 'activities', href: '/offer/activities', done: !!d?.activities },
     { key: 'sessions', href: '/schedule', done: !!d?.sessions },
     { key: 'subscriptions', href: '/subscriptions', done: !!d?.subscriptions },
     { key: 'bioLink', href: '/team/bio-link', done: !!d?.bioLink },
     { key: 'contacts', href: '/contacts', done: !!d?.contacts },
-    { key: 'ranks', href: '/team/settings', done: ranksDone, optional: true },
+    { key: 'ranks', href: '/settings/team', done: ranksDone, optional: true },
   ]
 
   const required = steps.filter((s) => !s.optional)

@@ -13,12 +13,6 @@ export const productsManifest: PluginManifest = {
   status: 'available',
   addon: PLUGIN_ADDONS['products'],
   iconName: 'Tag',
-  navContributions: [
-    {
-      href: '/plugins/products',
-      labelKey: 'productsNavLabel',
-      icon: 'Tag',
-      section: 'operations',
-    },
-  ],
+  // Nav lives in the main "Offer" section (see (auth)/layout.tsx), shown only when
+  // installed — so it is not contributed to the sidebar plugin-nav here.
 }

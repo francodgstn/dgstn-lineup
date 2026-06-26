@@ -1332,7 +1332,7 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground italic">No custom variables yet.</p>
             <Link
-              href="/team/settings"
+              href="/settings/team"
               className="text-xs text-primary hover:underline"
               onClick={() => {}}
             >
@@ -1357,7 +1357,7 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
               </button>
             ))}
             <Link
-              href="/team/settings"
+              href="/settings/team"
               className="block text-xs text-muted-foreground hover:underline mt-1 px-2"
             >
               Manage in Settings → Outreach

@@ -81,6 +81,9 @@ const DEMO_STUDIOS = [
     grid-template-columns: 0.82fr 1.18fr;
     gap: 44px;
     align-items: center;
+    /* Deliberately off-centre: nudge the whole row to the right so the
+       composition feels dynamic rather than symmetric (reset on mobile). */
+    margin-left: clamp(20px, 3.5vw, 52px);
   }
 
   /* Left column — chips aligned to the top-left */
@@ -98,19 +101,19 @@ const DEMO_STUDIOS = [
   }
   .demo-eyebrow :global(svg) { width: 15px; height: 15px; color: var(--primary); }
 
-  .demo-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .demo-chips { display: flex; flex-wrap: wrap; gap: 12px; }
   .demo-chip {
     display: inline-flex;
     align-items: center;
-    gap: 9px;
-    font-size: 14px;
+    gap: 10px;
+    font-size: 15.5px;
     font-weight: 600;
     color: var(--foreground);
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius-pill);
     box-shadow: var(--ring-card), var(--shadow-sm);
-    padding: 9px 16px;
+    padding: 12px 20px;
     text-decoration: none;
     transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
   }
@@ -120,8 +123,8 @@ const DEMO_STUDIOS = [
     box-shadow: var(--ring-card), var(--shadow-md);
   }
   .demo-chip-dot {
-    width: 9px;
-    height: 9px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: var(--chip-accent, var(--primary));
     box-shadow: 0 0 8px var(--chip-accent, var(--primary));
@@ -183,9 +186,51 @@ const DEMO_STUDIOS = [
   /* Mobile — hide the screenshot entirely; chips center under the hero */
   @media (max-width: 760px) {
     .herodemo { padding: 8px 0 28px; }
-    .hd-grid { grid-template-columns: 1fr; gap: 0; }
+    .hd-grid { grid-template-columns: 1fr; gap: 0; margin-left: 0; }
     .hd-shot { display: none; }
     .demo-eyebrow { justify-content: center; }
     .demo-chips { justify-content: center; }
+  }
+</style>
+
+<!-- Stronger, directional entrance, layered on top of the shared scroll-reveal in
+     BaseLayout (which adds .reveal-init / .reveal-in to .hd-copy + .hd-shot): the
+     demo chips cascade in from the left one-by-one, paired with the product peek
+     floating in from the right. is:global so it can combine HeroShot's classes with
+     the runtime reveal classes. Fully skipped under prefers-reduced-motion. -->
+<style is:global>
+  @media (prefers-reduced-motion: no-preference) {
+    /* Chips cascade individually, so neutralise the container's own block reveal
+       and let .hd-copy only act as the in-view trigger. */
+    .hd-copy.reveal-init,
+    .hd-copy.reveal-in { opacity: 1; transform: none; }
+    .hd-copy.reveal-init .demo-eyebrow,
+    .hd-copy.reveal-init .demo-chip { opacity: 0; }
+    /* Explicit resting state once revealed — the chips never get stuck hidden if
+       the entrance animation doesn't run; the animation's backwards fill keeps each
+       chip hidden until its own delay elapses, which is what gives the cascade. */
+    .hd-copy.reveal-in .demo-eyebrow,
+    .hd-copy.reveal-in .demo-chip { opacity: 1; }
+    .hd-copy.reveal-in .demo-eyebrow {
+      animation: hd-float-left 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    .hd-copy.reveal-in .demo-chip {
+      animation: hd-float-left 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    .hd-copy.reveal-in .demo-chip:nth-child(1) { animation-delay: 0.12s; }
+    .hd-copy.reveal-in .demo-chip:nth-child(2) { animation-delay: 0.19s; }
+    .hd-copy.reveal-in .demo-chip:nth-child(3) { animation-delay: 0.26s; }
+    .hd-copy.reveal-in .demo-chip:nth-child(4) { animation-delay: 0.33s; }
+    .hd-copy.reveal-in .demo-chip:nth-child(5) { animation-delay: 0.40s; }
+    .hd-copy.reveal-in .demo-chip:nth-child(6) { animation-delay: 0.47s; }
+
+    /* Product peek floats in from the right (starts further off-screen, lands flush). */
+    .hd-shot.reveal-init { transform: translateX(64px); }
+    .hd-shot.reveal-in { transform: none; }
+  }
+
+  @keyframes hd-float-left {
+    from { opacity: 0; transform: translateX(-34px); }
+    to { opacity: 1; transform: none; }
   }
 </style>

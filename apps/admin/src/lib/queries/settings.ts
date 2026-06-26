@@ -1,4 +1,11 @@
 import 'server-only'
+import {
+  APP_SETTINGS_COLLECTION,
+  PUBLIC_SETTINGS_DOC,
+  type AnnouncementStyle,
+  type PlatformAnnouncement,
+} from '@linyup/shared'
+import { adminDb } from '@/lib/firebase-admin'
 import { secretExists, SecretManagerUnavailableError } from '@/lib/secret-manager'
 
 // Secret Manager secret names that back Brevo. Stable identifiers — these match
@@ -42,5 +49,31 @@ export async function getBrevoStatus(): Promise<BrevoStatus> {
     apiKeyConfigured,
     webhookSecretConfigured,
     systemSender: BREVO_SYSTEM_SENDER,
+  }
+}
+
+export interface AnnouncementStatus {
+  enabled: boolean
+  text: string | null
+  style: AnnouncementStyle
+  updatedMs: number | null
+  updatedBy: string | null
+}
+
+// Reads the platform announcement banner config from the world-readable
+// app_settings/public doc (fields live flat alongside the signup flag). Missing
+// doc / fields = disabled, default 'info' style.
+export async function getAnnouncementStatus(): Promise<AnnouncementStatus> {
+  const snap = await adminDb.collection(APP_SETTINGS_COLLECTION).doc(PUBLIC_SETTINGS_DOC).get()
+  if (!snap.exists) {
+    return { enabled: false, text: null, style: 'info', updatedMs: null, updatedBy: null }
+  }
+  const d = snap.data() as PlatformAnnouncement
+  return {
+    enabled: d.announcement_enabled === true,
+    text: d.announcement_text ?? null,
+    style: d.announcement_style ?? 'info',
+    updatedMs: d.announcement_updated_at?.toMillis?.() ?? null,
+    updatedBy: d.announcement_updated_by ?? null,
   }
 }

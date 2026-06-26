@@ -235,6 +235,16 @@ const cmpText = (v: CmpVal): string | null => {
         <i data-lucide="chevron-down"></i>
       </button>
     </div>
+
+    <!-- A light "challenge us" invitation after the comparison — deliberately
+         low-key (no card chrome), nudging people to tell us what they're missing. -->
+    <div class="challenge">
+      <p class="challenge-title">{t('plans.challengeTitle')}</p>
+      <p class="challenge-body">{t('plans.challengeBody')}</p>
+      <button class="challenge-cta" type="button" data-early-access data-ea-source="pricing-challenge">
+        {t('plans.challengeCta')} <i data-lucide="arrow-right"></i>
+      </button>
+    </div>
   </div>
 </section>
 
@@ -438,6 +448,45 @@ const cmpText = (v: CmpVal): string | null => {
   .cell-yes :global(svg) { width: 18px; height: 18px; }
   .cell-no { color: var(--muted-foreground); opacity: 0.45; }
   .cell-txt { font-size: 13px; font-weight: 600; color: var(--foreground); }
+
+  /* "Challenge us" — a quiet invitation after the comparison, not a card/banner */
+  .challenge {
+    margin: 40px auto 0;
+    max-width: 560px;
+    text-align: center;
+    padding: 22px 26px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-xl);
+    background: color-mix(in oklch, var(--primary) 4%, transparent);
+  }
+  .challenge-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--foreground);
+  }
+  .challenge-body {
+    margin-top: 6px;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--muted-foreground);
+  }
+  .challenge-cta {
+    margin-top: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--primary);
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .challenge-cta:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .challenge-cta :global(svg) { width: 15px; height: 15px; transition: transform 0.15s ease; }
+  .challenge-cta:hover :global(svg) { transform: translateX(2px); }
 
   @media (max-width: 860px) {
     .plans-sec { padding: 72px 0; }

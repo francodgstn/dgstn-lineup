@@ -50,7 +50,7 @@ export function CustomFieldsCardBody({
         <ListPlus className="h-6 w-6 text-muted-foreground/50" />
         <p className="text-sm text-muted-foreground">{t('customFieldsActivatePrompt')}</p>
         <Link
-          href="/plugins"
+          href="/settings/plugins"
           className="text-sm text-primary hover:underline underline-offset-2"
         >
           {t('customFieldsActivateLink')}
@@ -66,7 +66,7 @@ export function CustomFieldsCardBody({
         <ListPlus className="h-6 w-6 text-muted-foreground/50" />
         <p className="text-sm text-muted-foreground">{t('customFieldsNoFieldsPrompt')}</p>
         <Link
-          href={'/team/settings?tab=custom-fields' as Route}
+          href={'/settings/team?tab=custom-fields' as Route}
           className="text-sm text-primary hover:underline underline-offset-2"
         >
           {t('customFieldsConfigureLink')}

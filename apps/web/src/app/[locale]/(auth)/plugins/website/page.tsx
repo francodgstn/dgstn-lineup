@@ -389,7 +389,7 @@ export default function WebsiteBuilderPage() {
         <p className="font-medium">{t('notInstalledTitle')}</p>
         <p className="mt-1 text-sm text-muted-foreground">{t('notInstalledBody')}</p>
         <Link
-          href={'/plugins' as Route}
+          href={'/settings/plugins' as Route}
           className="mt-4 inline-block text-sm text-primary hover:underline"
         >
           {t('goToPlugins')} →

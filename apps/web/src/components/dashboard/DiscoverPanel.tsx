@@ -113,7 +113,7 @@ function SuggestionRow({ manifest }: { manifest: PluginManifest }) {
     // addon, or non-owner included → send to the catalog to complete the flow
     return (
       <Link
-        href={'/plugins' as Route}
+        href={'/settings/plugins' as Route}
         className="inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium hover:bg-muted"
       >
         {access.kind === 'addon'
@@ -158,7 +158,7 @@ function PluginsTab() {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
         <p className="text-sm text-muted-foreground">{t('allInstalled')}</p>
-        <Link href={'/plugins' as Route} className="text-xs text-primary hover:underline">
+        <Link href={'/settings/plugins' as Route} className="text-xs text-primary hover:underline">
           {t('browseAll')} →
         </Link>
       </div>
@@ -173,7 +173,7 @@ function PluginsTab() {
         ))}
       </div>
       <Link
-        href={'/plugins' as Route}
+        href={'/settings/plugins' as Route}
         className="mt-4 inline-flex items-center gap-1 text-xs text-primary hover:underline"
       >
         {t('browseAll')} <ArrowRight className="h-3 w-3" />

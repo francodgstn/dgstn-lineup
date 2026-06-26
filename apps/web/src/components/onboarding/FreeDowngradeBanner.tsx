@@ -49,7 +49,7 @@ export function FreeDowngradeBanner() {
             {t('downgradeBannerBody', { count: PLAN_PRICING.free.includedContacts ?? 0 })}
           </p>
           <Link
-            href="/billing"
+            href="/settings/billing"
             className="inline-block mt-2 text-sm font-semibold text-sky-700 dark:text-sky-300 hover:underline"
           >
             {t('downgradeBannerCta')} →

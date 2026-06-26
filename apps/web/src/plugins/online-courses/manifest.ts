@@ -11,13 +11,6 @@ export const onlineCoursesManifest: PluginManifest = {
   recommended: true,
   addon: PLUGIN_ADDONS['online-courses'],
   iconName: 'GraduationCap',
-  navContributions: [
-    {
-      href: '/plugins/online-courses',
-      labelKey: 'onlineCoursesNavLabel',
-      icon: 'GraduationCap',
-      minPlan: 'studio',
-      section: 'engage',
-    },
-  ],
+  // Nav lives in the main "Offer" section (see (auth)/layout.tsx), shown only when
+  // installed — so it is not contributed to the sidebar plugin-nav here.
 }

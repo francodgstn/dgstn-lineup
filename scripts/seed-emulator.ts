@@ -513,6 +513,55 @@ async function seedTeam(opts: {
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
     })
 
+  // Shop products (merch) mirrored into the team's public_profile so the public
+  // /shop "Products" tab renders. priceAmount is major units (CHF), like the
+  // subscription prices above. No images → the shop shows a placeholder icon.
+  const shopProducts = [
+    {
+      id: `${teamId}-prod-tee`,
+      name: 'Club Training Tee',
+      description: 'Breathable performance tee with the studio crest.',
+      priceAmount: 35,
+      variantLabel: 'Size',
+      variants: [
+        { id: 's', label: 'S' },
+        { id: 'm', label: 'M' },
+        { id: 'l', label: 'L' },
+        { id: 'xl', label: 'XL' },
+      ],
+    },
+    {
+      id: `${teamId}-prod-bottle`,
+      name: 'Insulated Water Bottle',
+      description: '750ml stainless steel — keeps drinks cold for 24h.',
+      priceAmount: 28,
+    },
+    {
+      id: `${teamId}-prod-gloves`,
+      name: 'Pro Sparring Gloves',
+      description: 'Studio-branded sparring gloves built to last.',
+      priceAmount: 69,
+      variantLabel: 'Weight',
+      variants: [
+        { id: '12oz', label: '12 oz' },
+        { id: '14oz', label: '14 oz' },
+        { id: '16oz', label: '16 oz' },
+      ],
+    },
+    {
+      id: `${teamId}-prod-hoodie`,
+      name: 'Heavyweight Hoodie',
+      description: 'Cozy 400gsm hoodie for cooldowns and the street.',
+      priceAmount: 75,
+      variantLabel: 'Size',
+      variants: [
+        { id: 's', label: 'S' },
+        { id: 'm', label: 'M' },
+        { id: 'l', label: 'L' },
+      ],
+    },
+  ]
+
   // Public profile
   await db
     .collection('teams')
@@ -568,6 +617,7 @@ async function seedTeam(opts: {
       showBranding: false, // paid plans carry no "Powered by Linyup" badge
       default_currency: 'CHF',
       aggregator_subscription_types: publicSubTypes,
+      products: shopProducts,
       membershipRequiredFields: null,
       membershipOptionalFields: null,
       updated_at: ts(new Date()),
@@ -1753,8 +1803,9 @@ async function seedCourses(teamId: string, uid: string) {
     title: string
     summary: string
     status: 'draft' | 'published'
-    accessType: 'free' | 'registered' | 'subscription'
+    accessType: 'free' | 'registered' | 'subscription' | 'purchase'
     subscriptionTypeIds?: string[]
+    priceAmount?: number // major units (CHF); required for the 'purchase' tier
     modules: ModuleSeed[]
   }
 
@@ -1921,6 +1972,34 @@ async function seedCourses(teamId: string, uid: string) {
         },
       ],
     },
+    {
+      title: 'Competition Masterclass',
+      summary:
+        'A premium, self-paced masterclass on building a competition game — strategy, conditioning and mindset.',
+      status: 'published',
+      accessType: 'purchase',
+      priceAmount: 49,
+      modules: [
+        {
+          title: 'Build your A-game',
+          summary: 'The strategy and structure behind a winning competition plan.',
+          lessons: [
+            {
+              title: 'Designing your competition game plan',
+              type: 'video',
+              mediaSource: 'vimeo',
+              mediaUrl: 'https://vimeo.com/76979871',
+              durationSeconds: 1080,
+            },
+            {
+              title: 'Peaking: the 8-week conditioning block',
+              type: 'text',
+              body: '<h3>Peaking for competition</h3><p>An 8-week block that ramps intensity while protecting recovery, so you arrive on the day sharp and fresh.</p>',
+            },
+          ],
+        },
+      ],
+    },
   ]
 
   for (let ci = 0; ci < courseSeeds.length; ci++) {
@@ -1935,6 +2014,9 @@ async function seedCourses(teamId: string, uid: string) {
     const accessRule = {
       type: cs.accessType,
       ...(cs.subscriptionTypeIds ? { subscriptionTypeIds: cs.subscriptionTypeIds } : {}),
+      ...(cs.accessType === 'purchase' && cs.priceAmount != null
+        ? { priceAmount: cs.priceAmount }
+        : {}),
     }
 
     await db
@@ -1973,6 +2055,9 @@ async function seedCourses(teamId: string, uid: string) {
           summary: cs.summary,
           coverImageUrl: null,
           accessType: cs.accessType,
+          ...(cs.accessType === 'purchase' && cs.priceAmount != null
+            ? { priceAmount: cs.priceAmount }
+            : {}),
           subscriptionTypeIds: cs.subscriptionTypeIds ?? [],
           moduleCount: cs.modules.length,
           lessonCount,

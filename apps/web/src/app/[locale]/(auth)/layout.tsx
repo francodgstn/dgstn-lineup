@@ -6,6 +6,7 @@ import { Link, useRouter, usePathname } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { MobileHeader } from '@/components/layout/MobileHeader'
+import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
 import { UserMenu } from '@/components/layout/UserMenu'
 import {
   LayoutDashboard,
@@ -26,6 +27,10 @@ import {
   FolderTree,
   SlidersHorizontal,
   X,
+  Workflow,
+  Zap,
+  Tag,
+  Package,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -63,6 +68,8 @@ type NavItem = {
   requiresOrg?: boolean
   // Only shown when the team has the Stripe Connect feature flag enabled.
   requiresConnect?: boolean
+  // Only shown when the named plugin is installed (e.g. online-courses, products).
+  requiresPlugin?: string
   // Active only on an exact path match (not prefix) — for hub routes like
   // /plugins whose children (/plugins/website, …) have their own nav items.
   exact?: boolean
@@ -83,11 +90,32 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/bookings', labelKey: 'bookings', icon: ClipboardList },
       { href: '/contacts', labelKey: 'contacts', icon: Users },
       { href: '/payments', labelKey: 'payments', icon: Wallet, requiresConnect: true },
+      // Automations is operational (workflows acting on contacts/bookings), so it
+      // lives in Run rather than Grow.
+      { href: '/automations', labelKey: 'automations', icon: Workflow },
+    ],
+  },
+  {
+    // What the studio sells — pulled out of Settings into its own section. Courses
+    // and products only appear once their plugin is installed (requiresPlugin).
+    labelKey: 'sectionOffer',
+    items: [
+      { href: '/offer/activities', labelKey: 'activities', icon: Zap },
+      { href: '/offer/subscriptions', labelKey: 'subscriptions', icon: Tag },
+      {
+        href: '/offer/online-courses',
+        labelKey: 'onlineCourses',
+        icon: GraduationCap,
+        requiresPlugin: 'online-courses',
+      },
+      { href: '/offer/products', labelKey: 'products', icon: Package, requiresPlugin: 'products' },
     ],
   },
   {
     labelKey: 'sectionGrow',
-    items: [{ href: '/team/bio-link', labelKey: 'bioLink', icon: Globe }],
+    items: [
+      { href: '/team/bio-link', labelKey: 'bioLink', icon: Globe },
+    ],
   },
 ]
 
@@ -345,7 +373,7 @@ function PluginNavItem({
           <Tooltip>
             <TooltipTrigger
               onClick={() => {
-                router.push('/plugins' as Route)
+                router.push('/settings/plugins' as Route)
                 onLinkClick?.()
               }}
               title={collapsed ? linkLabel : undefined}
@@ -496,6 +524,13 @@ function SettingsNavGroup({
       )}
       {!sectionCollapsed && (
         <div className="space-y-0.5">
+          {/* All settings — the gateway to the full hub: first, and a normal nav row
+              (not a muted footnote) so it reads as the primary entry point. */}
+          <NavLink
+            item={{ href: '/settings', labelKey: 'allSettings', icon: SlidersHorizontal, exact: true }}
+            collapsed={collapsed}
+            onClick={onLinkClick}
+          />
           {pinned.map((item) => (
             <NavLink
               key={item.id}
@@ -504,21 +539,6 @@ function SettingsNavGroup({
               onClick={onLinkClick}
             />
           ))}
-          {collapsed ? (
-            <NavLink
-              item={{ href: '/settings', labelKey: 'allSettings', icon: SlidersHorizontal, exact: true }}
-              collapsed
-              onClick={onLinkClick}
-            />
-          ) : (
-            <Link
-              href={'/settings' as Route}
-              onClick={onLinkClick}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-muted-foreground/70 hover:text-foreground transition-colors"
-            >
-              {t('allSettings')} <span aria-hidden>»</span>
-            </Link>
-          )}
         </div>
       )}
     </div>
@@ -536,6 +556,7 @@ function SidebarContent({
 }) {
   const t = useTranslations('Nav')
   const { team, currentTeamId } = useAuth()
+  const { isInstalled } = useInstalledPlugins()
   const inOrg = !!team?.org_id
   // Show the Payments dashboard once a team has started Connect onboarding (an
   // account exists, not operator-disabled) OR has any BYO gateway configured —
@@ -606,7 +627,12 @@ function SidebarContent({
               {!secCollapsed && (
                 <div className="space-y-0.5">
                   {section.items
-                    .filter((item) => (!item.requiresOrg || inOrg) && (!item.requiresConnect || connectOn))
+                    .filter(
+                      (item) =>
+                        (!item.requiresOrg || inOrg) &&
+                        (!item.requiresConnect || connectOn) &&
+                        (!item.requiresPlugin || isInstalled(item.requiresPlugin)),
+                    )
                     .map((item) => (
                       <NavLink
                         key={item.href}
@@ -664,8 +690,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Settings detail pages get a back link to the hub in their heading area.
-  const onSettingsPage = SETTINGS_ITEMS.some((i) => i.href === pathname)
+  // Settings detail pages now live under the /settings/* shell, which owns its rail
+  // (desktop) + back-link (mobile). Only standalone settings items that stay outside
+  // that shell (e.g. /plugins) still get the hub back-link injected here.
+  const onSettingsPage =
+    !pathname.startsWith('/settings') && SETTINGS_ITEMS.some((i) => i.href === pathname)
 
   useEffect(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
@@ -722,6 +751,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
         {/* Main column: mobile header + scrollable content (no top bar on desktop) */}
         <div className="flex flex-col flex-1 min-w-0 min-h-screen">
+          <AnnouncementBar />
           <MobileHeader onMobileMenu={() => setMobileOpen(true)} />
           <main className="flex-1">
             <div className="max-w-5xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-8">

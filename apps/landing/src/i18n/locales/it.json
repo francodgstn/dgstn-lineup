@@ -7,6 +7,7 @@
     "features": "Funzionalità",
     "pricing": "Prezzi",
     "demo": "Demo live",
+    "liveDemo": "Provala dal vivo",
     "login": "Accedi",
     "cta": "Accesso anticipato"
   },
@@ -131,6 +132,9 @@
     "orgFrom": "Da",
     "mostPopular": "Il più popolare",
     "cmpToggle": "Confronta tutte le funzionalità",
+    "challengeTitle": "Manca una funzione?",
+    "challengeBody": "Tutto ciò che il tuo strumento attuale fa e Linyup no — diccelo. Se porta valore reale, la realizziamo, spesso anche meglio.",
+    "challengeCta": "Sfidaci",
     "cmpMore": "Vedi il confronto completo",
     "cmpUsage": "Utilizzo e accesso",
     "cmpCore": "Gestisci lo studio",

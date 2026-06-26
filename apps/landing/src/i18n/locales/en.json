@@ -7,6 +7,7 @@
     "features": "Features",
     "pricing": "Pricing",
     "demo": "Live demo",
+    "liveDemo": "Try it live",
     "login": "Log in",
     "cta": "Get early access"
   },
@@ -131,6 +132,9 @@
     "orgFrom": "From",
     "mostPopular": "Most popular",
     "cmpToggle": "Compare all features",
+    "challengeTitle": "Missing a feature?",
+    "challengeBody": "Whatever your current tool does that Linyup doesn't — tell us. If it brings real value, we'll build it, and most likely do it better.",
+    "challengeCta": "Challenge us",
     "cmpMore": "See the full comparison",
     "cmpUsage": "Usage & access",
     "cmpCore": "Run your studio",
