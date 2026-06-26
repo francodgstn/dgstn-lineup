@@ -66,7 +66,8 @@
     "settings": "Impostazioni",
     "billing": "Fatturazione",
     "payments": "Pagamenti",
-    "signOut": "Esci"
+    "signOut": "Esci",
+    "affiliations": "Affiliazioni"
   },
   "Login": {
     "subtitle": "Accedi al tuo account",
@@ -983,7 +984,9 @@
     "tabAffiliations": "Affiliazioni",
     "affiliationsEnabledLabel": "Abilita affiliazioni",
     "affiliationsEnabledHelp": "Registra le affiliazioni dei contatti (es. tessera club, licenza federale).",
-    "affiliationsUpsell": "Il monitoraggio delle affiliazioni richiede il piano Studio o superiore."
+    "affiliationsUpsell": "Il monitoraggio delle affiliazioni richiede il piano Studio o superiore.",
+    "roleLabelDefaultHint": "Mostrato quando non c'è una traduzione per la lingua del visitatore.",
+    "roleLabelAddTranslations": "Aggiungi traduzioni (facoltativo)"
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -1018,6 +1021,14 @@
     "rebookInProgress": "Spostamento in corso…",
     "filterFrom": "Dal",
     "filterTo": "Al",
+    "range_all": "Tutto il periodo",
+    "range_today": "Oggi",
+    "range_yesterday": "Ieri",
+    "range_last7": "Ultimi 7 giorni",
+    "range_last30": "Ultimi 30 giorni",
+    "range_thisWeek": "Questa settimana",
+    "range_thisMonth": "Questo mese",
+    "range_custom": "Personalizzato",
     "empty": "Nessuna prenotazione ancora.",
     "emptySearch": "Nessuna prenotazione corrisponde alla ricerca."
   },
@@ -1450,7 +1461,18 @@
     "orgManagedHint": "Gestito dall'organizzazione — contatta il tuo admin org per rimuoverlo.",
     "customFormsName": "Moduli",
     "customFormsDescription": "Crea e condividi moduli — raccogli risposte pubblicamente o dai tuoi contatti.",
-    "customFormsNavLabel": "Moduli"
+    "customFormsNavLabel": "Moduli",
+    "detailsLink": "Dettagli",
+    "badgeUpgrade": "{plan}",
+    "legendTitle": "Legenda",
+    "legendCategory": "Categoria",
+    "legendCategoryDesc": "Gruppo plugin",
+    "legendRecommendedDesc": "Consigliato per la maggior parte dei team",
+    "legendIncludedDesc": "Incluso nel piano",
+    "legendAddonDesc": "Disponibile come componente aggiuntivo a pagamento",
+    "screenshotAlt": "Screenshot di {name}",
+    "screenshotPlaceholder": "Anteprima non disponibile",
+    "emptySearch": "Nessun plugin corrisponde alla ricerca."
   },
   "ContactGroups": {
     "title": "Gruppi di contatti",
@@ -1559,17 +1581,17 @@
     "cancel": "Annulla"
   },
   "OrgMembershipStatuses": {
-    "title": "Stati tessera",
-    "description": "Definisci le fasi del processo di tessera. Gli stati predefiniti possono essere rinominati; quelli personalizzati possono essere eliminati.",
+    "title": "Stati di affiliazione",
+    "description": "Definisci le fasi del processo di affiliazione. Gli stati predefiniti possono essere rinominati; quelli personalizzati possono essere eliminati.",
     "addButton": "Aggiungi stato",
     "saveDefaults": "Salva predefiniti",
     "isBuiltIn": "Predefinito",
     "countsAsActive": "Conta come attivo",
-    "countsAsActiveLabel": "Conta come tessera attiva",
+    "countsAsActiveLabel": "Conta come affiliazione attiva",
     "countsAsActiveDesc": "I contatti in questo stato sono considerati membri attivi. L'impostazione di questo stato richiederà una data di scadenza.",
     "isFinal": "Stato finale",
     "isFinalLabel": "Stato finale / terminale",
-    "isFinalDesc": "I contatti in questo stato non sono previsti avanzare. Usato per tessere scadute o rifiutate.",
+    "isFinalDesc": "I contatti in questo stato non sono previsti avanzare. Usato per affiliazioni scadute o rifiutate.",
     "resetButton": "Ripristina predefiniti",
     "confirmResetTitle": "Ripristinare gli stati predefiniti?",
     "confirmResetMessage": "Tutti gli stati attuali saranno sostituiti con i 6 predefiniti. I contatti manterranno il loro valore attuale, ma gli stati personalizzati verranno rimossi.",
@@ -1645,17 +1667,23 @@
     "saveSuccess": "Impostazioni salvate.",
     "saveError": "Salvataggio fallito. Riprova.",
     "terminologyTitle": "Terminologia",
-    "terminologyDescription": "Personalizza il termine usato per il concetto di iscrizione nell'app.",
+    "terminologyDescription": "Personalizza il termine usato per il concetto di affiliazione nell'app.",
     "membershipTermLabel": "Termine per \"Iscrizione\" (singolare)",
     "membershipTermHint": "Lascia vuoto per usare il valore predefinito",
     "terminologySaveSuccess": "Terminologia salvata.",
     "terminologySaveError": "Salvataggio fallito. Riprova.",
-    "lockMembershipTitle": "Blocca campo iscrizione",
-    "lockMembershipDescription": "Quando attivo, solo gli admin dell'org possono modificare lo stato iscrizione, il flag attivo e la scadenza sui contatti. I manager del team vedono questi campi in sola lettura.",
+    "lockMembershipTitle": "Blocca campo affiliazione",
+    "lockMembershipDescription": "Quando attivo, solo gli admin dell'org possono modificare lo stato di affiliazione, il flag attivo e la scadenza sui contatti. I manager del team vedono questi campi in sola lettura.",
     "lockMembershipEnabled": "Bloccato — solo gli admin dell'org possono modificare",
     "lockMembershipDisabled": "Sbloccato — i manager del team possono modificare",
     "lockMembershipSaved": "Impostazione salvata.",
-    "lockMembershipError": "Salvataggio fallito. Riprova."
+    "lockMembershipError": "Salvataggio fallito. Riprova.",
+    "terminologyTermLabel": "Termine",
+    "terminologyPresetDefault": "Predefinito (Affiliazione)",
+    "terminologyPresetCustom": "Personalizzato…",
+    "terminologyDefaultLabel": "Termine",
+    "terminologyDefaultHint": "Inseriscine almeno uno — diventa il valore predefinito per tutte le lingue.",
+    "terminologyAddTranslations": "Aggiungi traduzioni (facoltativo)"
   },
   "OrgInvite": {
     "title": "Invito organizzazione",
@@ -2459,5 +2487,9 @@
     "submitError": "Invio non riuscito. Riprova.",
     "thankYou": "Grazie!",
     "thankYouBody": "La tua risposta è stata ricevuta."
+  },
+  "OfferAffiliations": {
+    "title": "Affiliazioni",
+    "subtitle": "Definisci i tipi di affiliazione che i tuoi contatti possono detenere (es. tessera club, licenza federale)."
   }
 }

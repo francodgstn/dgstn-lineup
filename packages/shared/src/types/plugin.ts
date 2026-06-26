@@ -77,6 +77,8 @@ export interface PluginManifest {
   addon?: { coachPriceMonthly: number; stripeLookupKey: string }
 
   iconName: string // lucide icon name resolved at runtime
+  /** Optional URL (or public path) to a screenshot shown in the plugin detail modal. */
+  screenshot?: string
   automationTriggers?: PluginAutomationTrigger[]
   automationActions?: PluginAutomationAction[]
   navContributions?: PluginNavContribution[]

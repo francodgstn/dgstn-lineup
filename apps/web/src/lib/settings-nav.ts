@@ -14,7 +14,6 @@ import {
   Award,
   Wallet,
   Send,
-  Share2,
   ListChecks,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -54,7 +53,7 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   { id: 'teamOutreach', href: '/settings/team?tab=outreach', labelKey: 'teamOutreach', icon: Send, group: 'studio' },
   { id: 'teamAlerts', href: '/settings/team?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'studio' },
   { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio' },
-  { id: 'teamAffiliations', href: '/settings/team?tab=affiliations', labelKey: 'teamAffiliations', icon: Share2, group: 'studio', gate: 'affiliations' },
+  // Affiliations moved to the main nav's "Offer" section (/offer/affiliations).
   { id: 'teamCustomFields', href: '/settings/team?tab=custom-fields', labelKey: 'teamCustomFields', icon: ListChecks, group: 'studio', gate: 'customFields' },
   { id: 'plugins', href: '/settings/plugins', labelKey: 'plugins', icon: Puzzle, group: 'studio', exact: true },
   // Account — workspace admin.

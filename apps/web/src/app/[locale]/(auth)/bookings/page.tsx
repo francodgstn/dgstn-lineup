@@ -114,6 +114,70 @@ function avatarColor(id: string) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
+// ─── quick date ranges ──────────────────────────────────────────────────────────
+// Predefined windows for the bookings date filter. Selecting one fills the From/To
+// fields (yyyy-mm-dd, the format the DatePicker + filter already use); editing either
+// field manually flips the dropdown back to "custom".
+
+type QuickRange =
+  | 'all'
+  | 'today'
+  | 'yesterday'
+  | 'last7'
+  | 'last30'
+  | 'thisWeek'
+  | 'thisMonth'
+  | 'custom'
+
+const QUICK_RANGES: Exclude<QuickRange, 'custom'>[] = [
+  'all',
+  'today',
+  'yesterday',
+  'last7',
+  'last30',
+  'thisWeek',
+  'thisMonth',
+]
+
+function ymd(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// Returns local-calendar from/to dates (yyyy-mm-dd) for a preset, or empty strings.
+function rangeForPreset(preset: QuickRange): { from: string; to: string } {
+  if (preset === 'all' || preset === 'custom') return { from: '', to: '' }
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  let from = new Date(today)
+  const to = new Date(today)
+  switch (preset) {
+    case 'today':
+      break
+    case 'yesterday':
+      from.setDate(today.getDate() - 1)
+      to.setDate(today.getDate() - 1)
+      break
+    case 'last7':
+      from.setDate(today.getDate() - 6)
+      break
+    case 'last30':
+      from.setDate(today.getDate() - 29)
+      break
+    case 'thisWeek': {
+      const mondayOffset = (today.getDay() + 6) % 7 // Mon = 0
+      from.setDate(today.getDate() - mondayOffset)
+      break
+    }
+    case 'thisMonth':
+      from = new Date(today.getFullYear(), today.getMonth(), 1)
+      break
+  }
+  return { from: ymd(from), to: ymd(to) }
+}
+
 type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'no_show' | 'rebooked'
 
 const STATUS_VARIANT: Record<BookingStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -570,8 +634,18 @@ export default function BookingsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [quickRange, setQuickRange] = useState<QuickRange>('all')
   const [rebookTarget, setRebookTarget] = useState<Booking | null>(null)
   const t = useTranslations('Bookings')
+
+  // Apply a predefined window: fills From/To and (re)applies the date filter.
+  const applyQuickRange = useCallback((preset: QuickRange) => {
+    setQuickRange(preset)
+    if (preset === 'custom') return
+    const { from, to } = rangeForPreset(preset)
+    setDateFrom(from)
+    setDateTo(to)
+  }, [])
 
   const statusLabel: Record<BookingStatus, string> = {
     pending: t('statusPending'),
@@ -684,11 +758,29 @@ export default function BookingsPage() {
             className="pl-9"
           />
         </div>
+        <Select value={quickRange} onValueChange={(v) => applyQuickRange(v as QuickRange)}>
+          <SelectTrigger className="h-9 w-[10rem] shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {QUICK_RANGES.map((r) => (
+              <SelectItem key={r} value={r}>
+                {t(`range_${r}` as Parameters<typeof t>[0])}
+              </SelectItem>
+            ))}
+            {quickRange === 'custom' && (
+              <SelectItem value="custom">{t('range_custom')}</SelectItem>
+            )}
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground shrink-0">{t('filterFrom')}</span>
           <DatePicker
             value={dateFrom ? new Date(dateFrom) : undefined}
-            onChange={(d) => setDateFrom(d ? d.toISOString().split('T')[0] : '')}
+            onChange={(d) => {
+              setDateFrom(d ? d.toISOString().split('T')[0] : '')
+              setQuickRange('custom')
+            }}
             placeholder="—"
             className="w-[9rem]"
           />
@@ -697,7 +789,10 @@ export default function BookingsPage() {
           <span className="text-xs text-muted-foreground shrink-0">{t('filterTo')}</span>
           <DatePicker
             value={dateTo ? new Date(dateTo) : undefined}
-            onChange={(d) => setDateTo(d ? d.toISOString().split('T')[0] : '')}
+            onChange={(d) => {
+              setDateTo(d ? d.toISOString().split('T')[0] : '')
+              setQuickRange('custom')
+            }}
             placeholder="—"
             className="w-[9rem]"
           />

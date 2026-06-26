@@ -66,7 +66,8 @@
     "settings": "Paramètres",
     "billing": "Facturation",
     "payments": "Paiements",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "affiliations": "Affiliations"
   },
   "Login": {
     "subtitle": "Connectez-vous à votre compte",
@@ -983,7 +984,9 @@
     "tabAffiliations": "Affiliations",
     "affiliationsEnabledLabel": "Activer les affiliations",
     "affiliationsEnabledHelp": "Suivre les affiliations (ex. adhésion au club, licence fédérale) des contacts.",
-    "affiliationsUpsell": "Le suivi des affiliations nécessite l'abonnement Studio ou supérieur."
+    "affiliationsUpsell": "Le suivi des affiliations nécessite l'abonnement Studio ou supérieur.",
+    "roleLabelDefaultHint": "Affiché lorsqu'aucune traduction n'existe pour la langue du visiteur.",
+    "roleLabelAddTranslations": "Ajouter des traductions (facultatif)"
   },
   "Bookings": {
     "title": "Réservations",
@@ -1018,6 +1021,14 @@
     "rebookInProgress": "Déplacement en cours…",
     "filterFrom": "Du",
     "filterTo": "Au",
+    "range_all": "Toute la période",
+    "range_today": "Aujourd'hui",
+    "range_yesterday": "Hier",
+    "range_last7": "7 derniers jours",
+    "range_last30": "30 derniers jours",
+    "range_thisWeek": "Cette semaine",
+    "range_thisMonth": "Ce mois-ci",
+    "range_custom": "Personnalisé",
     "empty": "Aucune réservation pour l'instant.",
     "emptySearch": "Aucune réservation ne correspond à votre recherche."
   },
@@ -1450,7 +1461,18 @@
     "orgManagedHint": "Géré par l'organisation — contactez votre admin org pour le supprimer.",
     "customFormsName": "Formulaires",
     "customFormsDescription": "Créez et partagez des formulaires — collectez des réponses publiquement ou auprès de vos contacts.",
-    "customFormsNavLabel": "Formulaires"
+    "customFormsNavLabel": "Formulaires",
+    "detailsLink": "Détails",
+    "badgeUpgrade": "{plan}",
+    "legendTitle": "Légende",
+    "legendCategory": "Catégorie",
+    "legendCategoryDesc": "Groupe de plugin",
+    "legendRecommendedDesc": "Recommandé pour la plupart des équipes",
+    "legendIncludedDesc": "Inclus dans votre abonnement",
+    "legendAddonDesc": "Disponible en supplément payant",
+    "screenshotAlt": "Capture d'écran de {name}",
+    "screenshotPlaceholder": "Aucun aperçu disponible",
+    "emptySearch": "Aucun plugin ne correspond à votre recherche."
   },
   "ContactGroups": {
     "title": "Groupes de contacts",
@@ -1559,17 +1581,17 @@
     "cancel": "Annuler"
   },
   "OrgMembershipStatuses": {
-    "title": "Statuts d'adhésion",
-    "description": "Définissez les étapes de votre processus d'adhésion. Les statuts intégrés peuvent être renommés ; les personnalisés peuvent être supprimés.",
+    "title": "Statuts d'affiliation",
+    "description": "Définissez les étapes de votre processus d'affiliation. Les statuts intégrés peuvent être renommés ; les personnalisés peuvent être supprimés.",
     "addButton": "Ajouter un statut",
     "saveDefaults": "Enregistrer les défauts",
     "isBuiltIn": "Intégré",
     "countsAsActive": "Compte comme actif",
-    "countsAsActiveLabel": "Compte comme adhésion active",
+    "countsAsActiveLabel": "Compte comme affiliation active",
     "countsAsActiveDesc": "Les contacts dans ce statut sont considérés comme membres actifs. La définition de ce statut demande une date d'expiration.",
     "isFinal": "État final",
     "isFinalLabel": "État final / terminal",
-    "isFinalDesc": "Les contacts dans ce statut ne sont pas censés progresser. Utilisé pour marquer les adhésions expirées ou refusées.",
+    "isFinalDesc": "Les contacts dans ce statut ne sont pas censés progresser. Utilisé pour marquer les affiliations expirées ou refusées.",
     "resetButton": "Réinitialiser aux défauts",
     "confirmResetTitle": "Réinitialiser aux statuts par défaut ?",
     "confirmResetMessage": "Tous les statuts actuels seront remplacés par les 6 statuts par défaut. Les contacts conserveront leur valeur actuelle, mais les statuts personnalisés seront supprimés.",
@@ -1645,17 +1667,23 @@
     "saveSuccess": "Paramètres enregistrés.",
     "saveError": "Échec de l'enregistrement. Veuillez réessayer.",
     "terminologyTitle": "Terminologie",
-    "terminologyDescription": "Personnalisez le terme utilisé pour le concept d'adhésion dans l'application.",
+    "terminologyDescription": "Personnalisez le terme utilisé pour le concept d'affiliation dans l'application.",
     "membershipTermLabel": "Terme pour « Adhésion » (singulier)",
     "membershipTermHint": "Laisser vide pour utiliser la valeur par défaut",
     "terminologySaveSuccess": "Terminologie enregistrée.",
     "terminologySaveError": "Échec de l'enregistrement. Veuillez réessayer.",
-    "lockMembershipTitle": "Verrouiller le champ adhésion",
-    "lockMembershipDescription": "Quand activé, seuls les admins de l'org peuvent modifier le statut d'adhésion, le flag actif et la date d'expiration des contacts. Les managers d'équipe voient ces champs en lecture seule.",
+    "lockMembershipTitle": "Verrouiller le champ affiliation",
+    "lockMembershipDescription": "Quand activé, seuls les admins de l'org peuvent modifier le statut d'affiliation, le flag actif et la date d'expiration des contacts. Les managers d'équipe voient ces champs en lecture seule.",
     "lockMembershipEnabled": "Verrouillé — seuls les admins de l'org peuvent modifier",
     "lockMembershipDisabled": "Déverrouillé — les managers d'équipe peuvent modifier",
     "lockMembershipSaved": "Paramètre enregistré.",
-    "lockMembershipError": "Échec de l'enregistrement. Veuillez réessayer."
+    "lockMembershipError": "Échec de l'enregistrement. Veuillez réessayer.",
+    "terminologyTermLabel": "Terme",
+    "terminologyPresetDefault": "Par défaut (Affiliation)",
+    "terminologyPresetCustom": "Personnalisé…",
+    "terminologyDefaultLabel": "Terme",
+    "terminologyDefaultHint": "Saisissez-en au moins un — il devient la valeur par défaut pour toutes les langues.",
+    "terminologyAddTranslations": "Ajouter des traductions (facultatif)"
   },
   "OrgInvite": {
     "title": "Invitation d'organisation",
@@ -2459,5 +2487,9 @@
     "submitError": "Échec de l’envoi. Veuillez réessayer.",
     "thankYou": "Merci !",
     "thankYouBody": "Votre réponse a bien été reçue."
+  },
+  "OfferAffiliations": {
+    "title": "Affiliations",
+    "subtitle": "Définissez les types d'affiliation que vos contacts peuvent détenir (ex. adhésion club, licence fédérale)."
   }
 }

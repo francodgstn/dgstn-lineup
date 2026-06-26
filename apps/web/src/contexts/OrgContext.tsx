@@ -12,8 +12,11 @@ export function resolveOrgMembershipTerm(
   termObj: Partial<Record<string, string>> | undefined,
   locale: string,
 ): string {
-  if (!termObj) return 'Membership'
-  return termObj[locale] ?? termObj['en'] ?? 'Membership'
+  if (!termObj) return 'Affiliation'
+  // Viewer locale → English → any filled language → default. The last fallback
+  // lets a studio that entered only one translation have it apply everywhere.
+  const firstFilled = Object.values(termObj).find((v) => v && v.trim())
+  return termObj[locale] ?? termObj['en'] ?? firstFilled ?? 'Affiliation'
 }
 
 interface OrgContextValue {

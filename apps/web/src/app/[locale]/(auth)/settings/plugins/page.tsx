@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
@@ -27,9 +27,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
+import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import {
-  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift, GraduationCap, Trophy, FolderTree, Search,
+  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift,
+  GraduationCap, Trophy, FolderTree, Search, Tag, ListPlus, ClipboardList,
+  ImageIcon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
@@ -49,6 +52,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
   GraduationCap,
   Trophy,
   FolderTree,
+  Tag,
+  ListPlus,
+  ClipboardList,
 }
 
 function PluginIcon({ name, className }: { name: string; className?: string }) {
@@ -74,6 +80,110 @@ function useIsOwner(teamId: string | null, userId: string | null) {
 
 type CategoryFilter = 'all' | PluginCategory
 
+// ─── Badge helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Returns the compact badge set for a plugin card or detail modal.
+ *
+ * Badges rendered (in order, only when relevant):
+ *   1. Category — always shown (muted, outline style).
+ *   2. "Recommended" — amber tint, only when manifest.recommended is true.
+ *   3. Plan / price — green "Included", primary-tinted add-on price, or
+ *      upgrade requirement. Omitted when access.kind === 'included' AND plan is
+ *      studio/org (it's the default — not worth saying).
+ *   4. Status — "Coming soon" / "Beta" when not 'available'. Installed status
+ *      is shown separately in the card (not as a badge here).
+ */
+function PluginBadges({
+  manifest,
+  access,
+  categoryLabel,
+  showInstalled,
+  installedByOrg,
+}: {
+  manifest: PluginManifest
+  access: PluginAccess
+  categoryLabel: string
+  showInstalled?: boolean
+  installedByOrg?: boolean
+}) {
+  const t = useTranslations('Plugins')
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {/* Category */}
+      <Badge variant="outline" className="text-xs text-muted-foreground">
+        {categoryLabel}
+      </Badge>
+
+      {/* Recommended */}
+      {manifest.recommended && (
+        <Badge
+          variant="secondary"
+          className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+        >
+          {t('recommended')}
+        </Badge>
+      )}
+
+      {/* Plan / price tier */}
+      {access.kind === 'included' && (
+        <Badge variant="outline" className="text-xs border-green-500/50 text-green-600">
+          {t('accessIncluded')}
+        </Badge>
+      )}
+      {access.kind === 'addon' && (
+        <Badge
+          variant="secondary"
+          className="text-xs border-primary/30 bg-primary/10 text-primary"
+        >
+          {t('addonPrice', { price: access.priceMonthly })}
+        </Badge>
+      )}
+      {access.kind === 'upgrade' && (
+        <Badge variant="outline" className="text-xs">
+          {t('badgeUpgrade', { plan: access.minPlan })}
+        </Badge>
+      )}
+
+      {/* Status */}
+      {manifest.status === 'coming_soon' && (
+        <Badge variant="secondary" className="text-xs">
+          {t('statusComingSoon')}
+        </Badge>
+      )}
+      {manifest.status === 'beta' && (
+        <Badge
+          variant="secondary"
+          className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+        >
+          {t('statusBeta')}
+        </Badge>
+      )}
+
+      {/* Installed state (optional — shown in modal or when caller requests it) */}
+      {showInstalled && (
+        installedByOrg ? (
+          <Badge
+            variant="secondary"
+            className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+          >
+            {t('orgManagedBadge')}
+          </Badge>
+        ) : (
+          <Badge
+            variant="outline"
+            className="text-xs border-green-500 text-green-600"
+          >
+            <span className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
+            {t('statusInstalled')}
+          </Badge>
+        )
+      )}
+    </div>
+  )
+}
+
 // ─── Plugin card ──────────────────────────────────────────────────────────────
 
 function PluginCard({
@@ -86,109 +196,91 @@ function PluginCard({
   onRemove,
   onConfigure,
   onUpgrade,
+  onDetails,
   installing,
+  categoryLabel,
 }: {
   manifest: PluginManifest
   access: PluginAccess
   isInstalled: boolean
-  /** True when the plugin is installed at org level (not removable by the team). */
   installedByOrg: boolean
   isOwner: boolean
   onInstall: () => void
   onRemove: () => void
   onConfigure: () => void
   onUpgrade: () => void
+  onDetails: () => void
   installing: boolean
+  categoryLabel: string
 }) {
   const t = useTranslations('Plugins')
 
-  const statusBadge = isInstalled ? (
-    installedByOrg ? (
-      <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-        {t('orgManagedBadge')}
-      </Badge>
-    ) : (
-      <Badge variant="outline" className="border-green-500 text-green-600 text-xs">
-        <span className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
-        {t('statusInstalled')}
-      </Badge>
-    )
-  ) : manifest.status === 'coming_soon' ? (
-    <Badge variant="secondary" className="text-xs">{t('statusComingSoon')}</Badge>
-  ) : manifest.status === 'beta' ? (
-    <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">{t('statusBeta')}</Badge>
-  ) : null
-
-  const categoryLabel: Record<PluginCategory, string> = {
-    engagement: t('categoryEngagement'),
-    commerce: t('categoryCommerce'),
-    web: t('categoryWeb'),
-    data: t('categoryData'),
-  }
-
-  const accessBadge =
-    access.kind === 'included' ? (
-      <Badge variant="outline" className="text-xs border-green-500/50 text-green-600">
-        {t('accessIncluded')}
-      </Badge>
-    ) : access.kind === 'addon' ? (
-      <Badge variant="secondary" className="text-xs border-primary/30 bg-primary/10 text-primary">
-        {t('addonPrice', { price: access.priceMonthly })}
-      </Badge>
-    ) : null
-
   return (
-    <div className="rounded-lg border bg-card p-5 flex flex-col gap-3">
-      {/* Header */}
+    <div
+      className="group rounded-xl border bg-card p-4 flex flex-col gap-3 cursor-pointer hover:border-foreground/20 hover:shadow-sm transition-all"
+      onClick={onDetails}
+      role="button"
+      tabIndex={0}
+      aria-label={t(manifest.nameKey as Parameters<typeof t>[0])}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onDetails() }}
+    >
+      {/* Header row: icon + name + installed dot */}
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
-          <PluginIcon name={manifest.iconName} className="h-5 w-5 text-muted-foreground" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted group-hover:bg-muted/80 transition-colors">
+          <PluginIcon name={manifest.iconName} className="h-4.5 w-4.5 text-muted-foreground" />
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-            <span className="font-medium text-sm leading-tight">
+        <div className="flex-1 min-w-0 pt-0.5">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm leading-tight truncate">
               {t(manifest.nameKey as Parameters<typeof t>[0])}
             </span>
-            {manifest.recommended && (
-              <Badge variant="secondary" className="text-xs border-primary/30 bg-primary/10 text-primary">
-                {t('recommended')}
-              </Badge>
+            {isInstalled && (
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0"
+                aria-label={t('statusInstalled')}
+              />
             )}
-            {accessBadge}
-            {statusBadge}
           </div>
-          <div className="flex items-center gap-1.5">
-            {access.kind === 'upgrade' && (
-              <Badge variant="outline" className="text-xs py-0">{access.minPlan}</Badge>
-            )}
-            <span className="text-xs text-muted-foreground">{categoryLabel[manifest.category]}</span>
-          </div>
+          {/* One-line description */}
+          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+            {t(manifest.descriptionKey as Parameters<typeof t>[0])}
+          </p>
         </div>
       </div>
 
-      {/* Description */}
-      <p className="text-sm text-muted-foreground leading-relaxed">
-        {t(manifest.descriptionKey as Parameters<typeof t>[0])}
-      </p>
+      {/* Badges row */}
+      <PluginBadges
+        manifest={manifest}
+        access={access}
+        categoryLabel={categoryLabel}
+      />
 
-      {/* Actions */}
+      {/* Action row — stop propagation so card-click (→ details) is separate */}
       {isOwner && (
-        <div className="mt-auto pt-1">
+        <div
+          className="mt-auto pt-1 flex items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
           {isInstalled ? (
             installedByOrg ? (
-              // Org-managed plugins cannot be uninstalled at the team level
-              <p className="text-xs text-muted-foreground">{t('orgManagedHint')}</p>
+              <span className="text-xs text-muted-foreground">{t('orgManagedHint')}</span>
             ) : (
-              <div className="flex gap-2">
+              <>
                 {manifest.hasOwnerConfig && (
                   <Button size="sm" variant="outline" onClick={onConfigure}>
                     {t('configure')}
                   </Button>
                 )}
-                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={onRemove}
+                >
                   {t('remove')}
                 </Button>
-              </div>
+              </>
             )
           ) : access.kind === 'upgrade' ? (
             <Button size="sm" variant="outline" onClick={onUpgrade}>
@@ -197,26 +289,168 @@ function PluginCard({
           ) : access.kind === 'addon' ? (
             <Button
               size="sm"
-              variant="outline"
+              variant="default"
               onClick={onInstall}
               disabled={manifest.status === 'coming_soon' || installing}
             >
               {installing ? t('installing') : t('addonAdd', { price: access.priceMonthly })}
             </Button>
           ) : (
-            // included (club/org)
             <Button
               size="sm"
-              variant="outline"
+              variant="default"
               onClick={onInstall}
               disabled={manifest.status === 'coming_soon' || installing}
             >
               {installing ? t('installing') : t('install')}
             </Button>
           )}
+          <button
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
+            onClick={onDetails}
+          >
+            {t('detailsLink')}
+          </button>
         </div>
       )}
     </div>
+  )
+}
+
+// ─── Plugin detail modal ──────────────────────────────────────────────────────
+
+function PluginDetailModal({
+  manifest,
+  access,
+  isInstalled,
+  installedByOrg,
+  isOwner,
+  onInstall,
+  onRemove,
+  onConfigure,
+  onUpgrade,
+  installing,
+  categoryLabel,
+  open,
+  onClose,
+}: {
+  manifest: PluginManifest | null
+  access: PluginAccess | null
+  isInstalled: boolean
+  installedByOrg: boolean
+  isOwner: boolean
+  onInstall: () => void
+  onRemove: () => void
+  onConfigure: () => void
+  onUpgrade: () => void
+  installing: boolean
+  categoryLabel: string
+  open: boolean
+  onClose: () => void
+}) {
+  const t = useTranslations('Plugins')
+
+  if (!manifest || !access) return null
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+              <PluginIcon name={manifest.iconName} className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <DialogTitle className="text-base">
+              {t(manifest.nameKey as Parameters<typeof t>[0])}
+            </DialogTitle>
+          </div>
+        </DialogHeader>
+
+        {/* Screenshot area */}
+        {manifest.screenshot ? (
+          <div className="rounded-lg overflow-hidden border bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={manifest.screenshot}
+              alt={t('screenshotAlt', { name: t(manifest.nameKey as Parameters<typeof t>[0]) })}
+              className="w-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="rounded-lg border bg-muted/50 flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+            <ImageIcon className="h-8 w-8 opacity-30" />
+            <span className="text-xs">{t('screenshotPlaceholder')}</span>
+          </div>
+        )}
+
+        {/* Full description */}
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {t(manifest.descriptionKey as Parameters<typeof t>[0])}
+        </p>
+
+        {/* Badges */}
+        <PluginBadges
+          manifest={manifest}
+          access={access}
+          categoryLabel={categoryLabel}
+          showInstalled={isInstalled}
+          installedByOrg={installedByOrg}
+        />
+
+        {/* Org-managed hint */}
+        {isInstalled && installedByOrg && (
+          <p className="text-xs text-muted-foreground">{t('orgManagedHint')}</p>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t('cancel')}</Button>
+
+          {isOwner && (
+            isInstalled ? (
+              installedByOrg ? null : (
+                <div className="flex gap-2">
+                  {manifest.hasOwnerConfig && (
+                    <Button
+                      variant="outline"
+                      onClick={() => { onClose(); onConfigure() }}
+                    >
+                      {t('configure')}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => { onClose(); onRemove() }}
+                  >
+                    {t('remove')}
+                  </Button>
+                </div>
+              )
+            ) : access.kind === 'upgrade' ? (
+              <Button onClick={() => { onClose(); onUpgrade() }}>
+                {t('upgradeCta')}
+              </Button>
+            ) : access.kind === 'addon' ? (
+              <Button
+                onClick={() => { onClose(); onInstall() }}
+                disabled={manifest.status === 'coming_soon' || installing}
+              >
+                {installing
+                  ? t('installing')
+                  : t('addonAdd', { price: access.priceMonthly })}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => { onClose(); onInstall() }}
+                disabled={manifest.status === 'coming_soon' || installing}
+              >
+                {installing ? t('installing') : t('install')}
+              </Button>
+            )
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -260,6 +494,41 @@ function PluginConfigDialog({
   )
 }
 
+// ─── Badge legend ─────────────────────────────────────────────────────────────
+
+function BadgeLegend() {
+  const t = useTranslations('Plugins')
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+      <span className="font-medium text-foreground">{t('legendTitle')}</span>
+      <span className="flex items-center gap-1.5">
+        <Badge variant="outline" className="text-xs text-muted-foreground pointer-events-none">
+          {t('legendCategory')}
+        </Badge>
+        {t('legendCategoryDesc')}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <Badge variant="secondary" className="text-xs bg-amber-50 text-amber-700 border-amber-200 pointer-events-none">
+          {t('recommended')}
+        </Badge>
+        {t('legendRecommendedDesc')}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <Badge variant="outline" className="text-xs border-green-500/50 text-green-600 pointer-events-none">
+          {t('accessIncluded')}
+        </Badge>
+        {t('legendIncludedDesc')}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <Badge variant="secondary" className="text-xs border-primary/30 bg-primary/10 text-primary pointer-events-none">
+          + CHF X/mo
+        </Badge>
+        {t('legendAddonDesc')}
+      </span>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PluginsPage() {
@@ -269,12 +538,30 @@ export default function PluginsPage() {
   const { data: isOwner, isLoading: roleLoading } = useIsOwner(currentTeamId, user?.uid ?? null)
   const { plan, isTrialing } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
+  const searchParams = useSearchParams()
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [installingId, setInstallingId] = useState<string | null>(null)
   const [configPlugin, setConfigPlugin] = useState<PluginManifest | null>(null)
+  const [detailPlugin, setDetailPlugin] = useState<PluginManifest | null>(null)
   const [confirmAddon, setConfirmAddon] = useState<PluginManifest | null>(null)
+
+  // ── Deep-link: ?plugin=<id> auto-opens the detail modal once per distinct value ──
+  // Track the last param value we acted on so that closing the modal does not
+  // reopen it (the param stays in the URL until the user navigates away).
+  const lastAutoOpenedRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const pluginParam = searchParams.get('plugin')
+    if (!pluginParam) return
+    // Only auto-open once per distinct param value.
+    if (lastAutoOpenedRef.current === pluginParam) return
+    const manifest = PLUGIN_REGISTRY.find((m) => m.id === pluginParam)
+    if (!manifest) return
+    lastAutoOpenedRef.current = pluginParam
+    setDetailPlugin(manifest)
+  }, [searchParams])
 
   // ── Install mutation ──
   const installMutation = useMutation({
@@ -307,8 +594,7 @@ export default function PluginsPage() {
     onError: () => toast.error(t('errorRemove')),
   })
 
-  // ── Coach add-on mutations (go through Cloud Functions: Stripe item if paid,
-  //    free during trial). Install state syncs back via useInstalledPlugins. ──
+  // ── Coach add-on mutations ──
   const activateAddonMutation = useMutation({
     mutationFn: async (manifest: PluginManifest) => {
       if (!currentTeamId) throw new Error('Not authenticated')
@@ -328,8 +614,6 @@ export default function PluginsPage() {
     onError: () => toast.error(t('errorRemove')),
   })
 
-  // Route install/remove by access kind: add-ons → functions (with a price
-  // confirm when the coach is already paying), included plugins → client-side.
   function handleInstall(manifest: PluginManifest) {
     const access = pluginAccessForPlan(manifest, plan)
     if (access.kind === 'addon') {
@@ -357,6 +641,13 @@ export default function PluginsPage() {
     { key: 'data',       label: t('categoryData') },
   ]
 
+  const categoryLabelMap: Record<PluginCategory, string> = {
+    engagement: t('categoryEngagement'),
+    commerce: t('categoryCommerce'),
+    web: t('categoryWeb'),
+    data: t('categoryData'),
+  }
+
   const search = searchTerm.trim().toLowerCase()
   const filteredPlugins = PLUGIN_REGISTRY
     .filter((m) => categoryFilter === 'all' || m.category === categoryFilter)
@@ -366,8 +657,15 @@ export default function PluginsPage() {
         t(m.nameKey).toLowerCase().includes(search) ||
         t(m.descriptionKey).toLowerCase().includes(search),
     )
-    // Recommended plugins float to the top for prominence.
     .sort((a, b) => Number(b.recommended ?? false) - Number(a.recommended ?? false))
+
+  // Detail plugin's access + installed state (derived)
+  const detailAccess = detailPlugin ? pluginAccessForPlan(detailPlugin, plan) : null
+  const detailIsInstalled = detailPlugin ? isInstalled(detailPlugin.id) : false
+  const detailEntry = detailPlugin
+    ? installedPlugins.find((e) => e.manifest.id === detailPlugin.id)
+    : null
+  const detailInstalledByOrg = detailEntry?.source === 'org'
 
   if (isLoading) {
     return (
@@ -376,8 +674,8 @@ export default function PluginsPage() {
           <Skeleton className="h-7 w-32" />
           <Skeleton className="h-4 w-72" />
         </div>
-        <div className="grid gap-6 sm:grid-cols-2">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-36 rounded-xl" />)}
         </div>
       </div>
     )
@@ -391,7 +689,7 @@ export default function PluginsPage() {
         <p className="text-sm text-muted-foreground mt-1">{t('subtitle')}</p>
       </div>
 
-      {/* Coach add-on hint: plugins are included on Club, paid add-ons on Coach */}
+      {/* Coach add-on hint */}
       {plan === 'coach' && (
         <div className="rounded-lg border border-primary/30 bg-primary/[0.04] px-4 py-3 text-sm">
           <p className="font-medium">{t('coachAddonBannerTitle')}</p>
@@ -424,8 +722,11 @@ export default function PluginsPage() {
         ))}
       </div>
 
+      {/* Badge legend */}
+      <BadgeLegend />
+
       {/* Grid */}
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         {filteredPlugins.map((manifest) => {
           const entry = installedPlugins.find((e) => e.manifest.id === manifest.id)
           return (
@@ -437,10 +738,12 @@ export default function PluginsPage() {
               installedByOrg={entry?.source === 'org'}
               isOwner={!!isOwner}
               installing={installingId === manifest.id}
+              categoryLabel={categoryLabelMap[manifest.category]}
               onInstall={() => handleInstall(manifest)}
               onRemove={() => handleRemove(manifest)}
               onConfigure={() => setConfigPlugin(manifest)}
               onUpgrade={() => openUpgradeModal({ minPlan: manifest.minPlan })}
+              onDetails={() => setDetailPlugin(manifest)}
             />
           )
         })}
@@ -448,9 +751,26 @@ export default function PluginsPage() {
 
       {filteredPlugins.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-12">
-          {t('categoryAll')} — no plugins in this category yet.
+          {t('emptySearch')}
         </p>
       )}
+
+      {/* Plugin detail modal */}
+      <PluginDetailModal
+        manifest={detailPlugin}
+        access={detailAccess}
+        isInstalled={detailIsInstalled}
+        installedByOrg={detailInstalledByOrg}
+        isOwner={!!isOwner}
+        installing={detailPlugin ? installingId === detailPlugin.id : false}
+        categoryLabel={detailPlugin ? categoryLabelMap[detailPlugin.category] : ''}
+        onInstall={() => { if (detailPlugin) handleInstall(detailPlugin) }}
+        onRemove={() => { if (detailPlugin) handleRemove(detailPlugin) }}
+        onConfigure={() => { if (detailPlugin) setConfigPlugin(detailPlugin) }}
+        onUpgrade={() => { if (detailPlugin) openUpgradeModal({ minPlan: detailPlugin.minPlan }) }}
+        open={!!detailPlugin}
+        onClose={() => setDetailPlugin(null)}
+      />
 
       {/* Config dialog */}
       <PluginConfigDialog

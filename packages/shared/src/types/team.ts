@@ -63,10 +63,22 @@ export interface CustomFieldDefinition {
 // an i18n fallback; never hardcode the noun in copy.
 export type RoleLabelPreset = 'student' | 'athlete' | 'client' | 'player' | 'participant' | 'custom'
 
-export interface ContactRoleLabel {
-  preset?: RoleLabelPreset
+export type TermLocale = 'en' | 'de' | 'fr' | 'it'
+
+export interface RoleLabelTranslation {
   singular: string
   plural: string
+}
+
+export interface ContactRoleLabel {
+  preset?: RoleLabelPreset
+  // Default label — used when no translation exists for the viewer's locale.
+  // (Back-compat: pre-multilanguage data only has these two fields.)
+  singular: string
+  plural: string
+  // Optional per-locale overrides. Any locale absent here falls back to the
+  // default singular/plural above. A studio can fill as few as one language.
+  translations?: Partial<Record<TermLocale, RoleLabelTranslation>>
 }
 
 // A "page link" target — one of the team's own public surfaces, reachable at

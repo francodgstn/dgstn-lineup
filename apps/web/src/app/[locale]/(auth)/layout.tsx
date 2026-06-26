@@ -31,6 +31,7 @@ import {
   Zap,
   Tag,
   Package,
+  IdCard,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -70,6 +71,9 @@ type NavItem = {
   requiresConnect?: boolean
   // Only shown when the named plugin is installed (e.g. online-courses, products).
   requiresPlugin?: string
+  // Hidden entirely unless the team's plan is at least this tier. Distinct from
+  // minPlan, which keeps the item visible but locked with an upgrade prompt.
+  requiresPlan?: SaasPlan
   // Active only on an exact path match (not prefix) — for hub routes like
   // /plugins whose children (/plugins/website, …) have their own nav items.
   exact?: boolean
@@ -109,6 +113,8 @@ const NAV_SECTIONS: NavSection[] = [
         requiresPlugin: 'online-courses',
       },
       { href: '/offer/products', labelKey: 'products', icon: Package, requiresPlugin: 'products' },
+      // Affiliations (club membership / federation licence). Studio tier and up.
+      { href: '/offer/affiliations', labelKey: 'affiliations', icon: IdCard, requiresPlan: 'studio' },
     ],
   },
   {
@@ -364,7 +370,8 @@ function PluginNavItem({
   const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
   const linkLabel = t(nav.labelKey as Parameters<typeof t>[0])
 
-  // Recommended but not installed → muted discovery item → /plugins. Hover
+  // Recommended but not installed → muted discovery item. Clicking opens the
+  // plugin's detail modal on the marketplace (deep-linked via ?plugin=). Hover
   // reveals a × to hide the suggestion (browser-only).
   if (!nav.installed) {
     return (
@@ -373,7 +380,7 @@ function PluginNavItem({
           <Tooltip>
             <TooltipTrigger
               onClick={() => {
-                router.push('/settings/plugins' as Route)
+                router.push(`/settings/plugins?plugin=${nav.pluginId}` as Route)
                 onLinkClick?.()
               }}
               title={collapsed ? linkLabel : undefined}
@@ -557,6 +564,7 @@ function SidebarContent({
   const t = useTranslations('Nav')
   const { team, currentTeamId } = useAuth()
   const { isInstalled } = useInstalledPlugins()
+  const { isAtLeast } = usePlan()
   const inOrg = !!team?.org_id
   // Show the Payments dashboard once a team has started Connect onboarding (an
   // account exists, not operator-disabled) OR has any BYO gateway configured —
@@ -631,7 +639,8 @@ function SidebarContent({
                       (item) =>
                         (!item.requiresOrg || inOrg) &&
                         (!item.requiresConnect || connectOn) &&
-                        (!item.requiresPlugin || isInstalled(item.requiresPlugin)),
+                        (!item.requiresPlugin || isInstalled(item.requiresPlugin)) &&
+                        (!item.requiresPlan || isAtLeast(item.requiresPlan)),
                     )
                     .map((item) => (
                       <NavLink

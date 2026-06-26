@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
@@ -124,6 +124,34 @@ function memberLabel(m: MemberDoc) {
 }
 function getItemMs(item: ListItem) {
   return (item.data.start as { toDate(): Date }).toDate().getTime()
+}
+
+// Day-divider helpers — group the list by calendar day with a human label.
+function dayKey(ms: number) {
+  const d = new Date(ms)
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+function startOfDay(d: Date) {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+function dayDividerLabel(
+  ms: number,
+  rel: { today: string; tomorrow: string; yesterday: string }
+) {
+  const d = new Date(ms)
+  const diffDays = Math.round((startOfDay(d).getTime() - startOfDay(new Date()).getTime()) / 86400000)
+  const now = new Date()
+  const dayMonth = d.toLocaleDateString([], {
+    day: 'numeric',
+    month: 'long',
+    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
+  })
+  if (diffDays === 0) return `${rel.today} · ${dayMonth}`
+  if (diffDays === 1) return `${rel.tomorrow} · ${dayMonth}`
+  if (diffDays === -1) return `${rel.yesterday} · ${dayMonth}`
+  return `${d.toLocaleDateString([], { weekday: 'long' })}, ${dayMonth}`
 }
 
 // ─── schemas ──────────────────────────────────────────────────────────────────
@@ -732,6 +760,7 @@ export default function CalendarPage() {
   const { currentTeamId, user, team, isOrgAdmin } = useAuth()
   const qc = useQueryClient()
   const t = useTranslations('Calendar')
+  const tCommon = useTranslations('Common')
   const orgId = team?.org_id ?? null
 
   const today = useMemo(() => new Date(), [])
@@ -973,22 +1002,41 @@ export default function CalendarPage() {
               </div>
             )}
             {!isListLoading &&
-              listItems.map((item) => (
-                <ListItemRow
-                  key={`${item.kind}-${item.data.id}`}
-                  item={item}
-                  activities={activitiesQ.data ?? []}
-                  onEdit={() => {
-                    if (item.kind === 'session')
-                      setSessionDialog({ open: true, editing: item.data })
-                    else setEventDialog({ open: true, editing: item.data })
-                  }}
-                  onDelete={() => {
-                    if (item.kind === 'session') handleDeleteSession(item.data)
-                    else handleDeleteEvent(item.data)
-                  }}
-                />
-              ))}
+              (() => {
+                let lastDay = ''
+                return listItems.map((item) => {
+                  const ms = getItemMs(item)
+                  const dk = dayKey(ms)
+                  const showDivider = dk !== lastDay
+                  lastDay = dk
+                  return (
+                    <Fragment key={`${item.kind}-${item.data.id}`}>
+                      {showDivider && (
+                        <div className="px-4 py-1.5 bg-muted/40 border-b text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {dayDividerLabel(ms, {
+                            today: tCommon('today'),
+                            tomorrow: tCommon('tomorrow'),
+                            yesterday: tCommon('yesterday'),
+                          })}
+                        </div>
+                      )}
+                      <ListItemRow
+                        item={item}
+                        activities={activitiesQ.data ?? []}
+                        onEdit={() => {
+                          if (item.kind === 'session')
+                            setSessionDialog({ open: true, editing: item.data })
+                          else setEventDialog({ open: true, editing: item.data })
+                        }}
+                        onDelete={() => {
+                          if (item.kind === 'session') handleDeleteSession(item.data)
+                          else handleDeleteEvent(item.data)
+                        }}
+                      />
+                    </Fragment>
+                  )
+                })
+              })()}
           </div>
         </>
       )}

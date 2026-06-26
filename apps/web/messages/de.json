@@ -66,7 +66,8 @@
     "settings": "Einstellungen",
     "billing": "Abrechnung",
     "payments": "Zahlungen",
-    "signOut": "Abmelden"
+    "signOut": "Abmelden",
+    "affiliations": "Affiliationen"
   },
   "Login": {
     "subtitle": "Bei Ihrem Konto anmelden",
@@ -983,7 +984,9 @@
     "tabAffiliations": "Mitgliedschaften",
     "affiliationsEnabledLabel": "Mitgliedschaften aktivieren",
     "affiliationsEnabledHelp": "Mitgliedschaftsnachweise (z. B. Vereinsmitgliedschaft, Verbandslizenz) für Kontakte verwalten.",
-    "affiliationsUpsell": "Mitgliedschaftsverfolgung erfordert das Studio-Abo oder höher."
+    "affiliationsUpsell": "Mitgliedschaftsverfolgung erfordert das Studio-Abo oder höher.",
+    "roleLabelDefaultHint": "Wird angezeigt, wenn es keine Übersetzung für die Sprache des Betrachters gibt.",
+    "roleLabelAddTranslations": "Übersetzungen hinzufügen (optional)"
   },
   "Bookings": {
     "title": "Buchungen",
@@ -1018,6 +1021,14 @@
     "rebookInProgress": "Wird umgebucht…",
     "filterFrom": "Von",
     "filterTo": "Bis",
+    "range_all": "Gesamter Zeitraum",
+    "range_today": "Heute",
+    "range_yesterday": "Gestern",
+    "range_last7": "Letzte 7 Tage",
+    "range_last30": "Letzte 30 Tage",
+    "range_thisWeek": "Diese Woche",
+    "range_thisMonth": "Dieser Monat",
+    "range_custom": "Benutzerdefiniert",
     "empty": "Noch keine Buchungen.",
     "emptySearch": "Keine Buchungen gefunden."
   },
@@ -1450,7 +1461,18 @@
     "orgManagedHint": "Wird von der Organisation verwaltet – wende dich an deinen Org-Admin zum Entfernen.",
     "customFormsName": "Formulare",
     "customFormsDescription": "Formulare erstellen und teilen – Antworten öffentlich oder von deinen Kontakten sammeln.",
-    "customFormsNavLabel": "Formulare"
+    "customFormsNavLabel": "Formulare",
+    "detailsLink": "Details",
+    "badgeUpgrade": "{plan}",
+    "legendTitle": "Legende",
+    "legendCategory": "Kategorie",
+    "legendCategoryDesc": "Plugin-Gruppe",
+    "legendRecommendedDesc": "Für die meisten Teams empfohlen",
+    "legendIncludedDesc": "In deinem Tarif enthalten",
+    "legendAddonDesc": "Als kostenpflichtiges Add-on verfügbar",
+    "screenshotAlt": "{name} Screenshot",
+    "screenshotPlaceholder": "Keine Vorschau verfügbar",
+    "emptySearch": "Keine Plugins entsprechen deiner Suche."
   },
   "ContactGroups": {
     "title": "Kontaktgruppen",
@@ -1559,17 +1581,17 @@
     "cancel": "Abbrechen"
   },
   "OrgMembershipStatuses": {
-    "title": "Mitgliedschaftsstatus",
-    "description": "Definiere die Stufen deines Mitgliedschaftsprozesses. Integrierte Status können umbenannt werden; benutzerdefinierte können gelöscht werden.",
+    "title": "Affiliationsstatus",
+    "description": "Definiere die Stufen deines Affiliationsprozesses. Integrierte Status können umbenannt werden; benutzerdefinierte können gelöscht werden.",
     "addButton": "Status hinzufügen",
     "saveDefaults": "Standards speichern",
     "isBuiltIn": "Integriert",
     "countsAsActive": "Gilt als aktiv",
-    "countsAsActiveLabel": "Gilt als aktive Mitgliedschaft",
+    "countsAsActiveLabel": "Gilt als aktive Affiliation",
     "countsAsActiveDesc": "Kontakte mit diesem Status gelten als aktive Mitglieder. Das Setzen dieses Status fordert ein Ablaufdatum an.",
     "isFinal": "Endstatus",
     "isFinalLabel": "Endgültiger Status",
-    "isFinalDesc": "Kontakte mit diesem Status werden nicht weiter bearbeitet. Wird für abgelaufene oder abgelehnte Mitgliedschaften verwendet.",
+    "isFinalDesc": "Kontakte mit diesem Status werden nicht weiter bearbeitet. Wird für abgelaufene oder abgelehnte Affiliationen verwendet.",
     "resetButton": "Auf Standard zurücksetzen",
     "confirmResetTitle": "Auf Standardstatus zurücksetzen?",
     "confirmResetMessage": "Alle aktuellen Status werden durch die 6 Standardstatus ersetzt. Kontakte behalten ihren aktuellen Statuswert, benutzerdefinierte Status werden entfernt.",
@@ -1645,17 +1667,23 @@
     "saveSuccess": "Einstellungen gespeichert.",
     "saveError": "Speichern fehlgeschlagen. Bitte versuche es erneut.",
     "terminologyTitle": "Terminologie",
-    "terminologyDescription": "Passe den Begriff für das Mitgliedschaftskonzept in der App an.",
+    "terminologyDescription": "Passe den Begriff für das Affiliationskonzept in der App an.",
     "membershipTermLabel": "Begriff für \"Mitgliedschaft\" (Singular)",
     "membershipTermHint": "Leer lassen für den Standardbegriff",
     "terminologySaveSuccess": "Terminologie gespeichert.",
     "terminologySaveError": "Speichern fehlgeschlagen. Bitte versuche es erneut.",
-    "lockMembershipTitle": "Mitgliedschaftsfeld sperren",
-    "lockMembershipDescription": "Wenn aktiviert, können nur Org-Admins den Mitgliedschaftsstatus, das Aktiv-Kennzeichen und das Ablaufdatum bei Kontakten ändern. Team-Manager sehen diese Felder als schreibgeschützt.",
+    "lockMembershipTitle": "Affiliationsfeld sperren",
+    "lockMembershipDescription": "Wenn aktiviert, können nur Org-Admins den Affiliationsstatus, das Aktiv-Kennzeichen und das Ablaufdatum bei Kontakten ändern. Team-Manager sehen diese Felder als schreibgeschützt.",
     "lockMembershipEnabled": "Gesperrt — nur Org-Admins können bearbeiten",
     "lockMembershipDisabled": "Entsperrt — Team-Manager können bearbeiten",
     "lockMembershipSaved": "Einstellung gespeichert.",
-    "lockMembershipError": "Speichern fehlgeschlagen. Bitte versuche es erneut."
+    "lockMembershipError": "Speichern fehlgeschlagen. Bitte versuche es erneut.",
+    "terminologyTermLabel": "Begriff",
+    "terminologyPresetDefault": "Standard (Affiliation)",
+    "terminologyPresetCustom": "Benutzerdefiniert…",
+    "terminologyDefaultLabel": "Begriff",
+    "terminologyDefaultHint": "Gib mindestens einen ein — er wird zum Standard für alle Sprachen.",
+    "terminologyAddTranslations": "Übersetzungen hinzufügen (optional)"
   },
   "OrgInvite": {
     "title": "Organisationseinladung",
@@ -2459,5 +2487,9 @@
     "submitError": "Senden fehlgeschlagen. Bitte versuche es erneut.",
     "thankYou": "Vielen Dank!",
     "thankYouBody": "Deine Antwort ist eingegangen."
+  },
+  "OfferAffiliations": {
+    "title": "Affiliationen",
+    "subtitle": "Lege fest, welche Arten von Affiliationen deine Kontakte halten können (z.B. Vereinsmitgliedschaft, Verbandslizenz)."
   }
 }

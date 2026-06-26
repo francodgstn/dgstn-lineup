@@ -66,7 +66,8 @@
     "settings": "Settings",
     "billing": "Billing",
     "payments": "Payments",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "affiliations": "Affiliations"
   },
   "Login": {
     "subtitle": "Sign in to your account",
@@ -983,7 +984,9 @@
     "tabAffiliations": "Affiliations",
     "affiliationsEnabledLabel": "Enable affiliations",
     "affiliationsEnabledHelp": "Track affiliation records (e.g. club membership, federation licence) for contacts.",
-    "affiliationsUpsell": "Affiliation tracking requires the Studio plan or above."
+    "affiliationsUpsell": "Affiliation tracking requires the Studio plan or above.",
+    "roleLabelDefaultHint": "Shown when there's no translation for the viewer's language.",
+    "roleLabelAddTranslations": "Add translations (optional)"
   },
   "Bookings": {
     "title": "Bookings",
@@ -1018,6 +1021,14 @@
     "rebookInProgress": "Rebooking…",
     "filterFrom": "From",
     "filterTo": "To",
+    "range_all": "All time",
+    "range_today": "Today",
+    "range_yesterday": "Yesterday",
+    "range_last7": "Last 7 days",
+    "range_last30": "Last 30 days",
+    "range_thisWeek": "This week",
+    "range_thisMonth": "This month",
+    "range_custom": "Custom",
     "empty": "No bookings yet.",
     "emptySearch": "No bookings match your search."
   },
@@ -1450,7 +1461,18 @@
     "orgManagedHint": "Managed by the organization — contact your org admin to remove.",
     "customFormsName": "Custom Forms",
     "customFormsDescription": "Build and share forms — collect responses publicly or from your contacts.",
-    "customFormsNavLabel": "Forms"
+    "customFormsNavLabel": "Forms",
+    "detailsLink": "Details",
+    "badgeUpgrade": "{plan}",
+    "legendTitle": "Legend",
+    "legendCategory": "Category",
+    "legendCategoryDesc": "Plugin group",
+    "legendRecommendedDesc": "Suggested for most teams",
+    "legendIncludedDesc": "Included in your plan",
+    "legendAddonDesc": "Available as a paid add-on",
+    "screenshotAlt": "{name} screenshot",
+    "screenshotPlaceholder": "No preview available",
+    "emptySearch": "No plugins match your search."
   },
   "ContactGroups": {
     "title": "Contact Groups",
@@ -1559,17 +1581,17 @@
     "cancel": "Cancel"
   },
   "OrgMembershipStatuses": {
-    "title": "Membership Statuses",
-    "description": "Define the stages in your membership workflow. Built-in statuses can be renamed; custom ones can be deleted.",
+    "title": "Affiliation Statuses",
+    "description": "Define the stages in your affiliation workflow. Built-in statuses can be renamed; custom ones can be deleted.",
     "addButton": "Add status",
     "saveDefaults": "Save defaults",
     "isBuiltIn": "Built-in",
     "countsAsActive": "Counts as active",
-    "countsAsActiveLabel": "Counts as active membership",
+    "countsAsActiveLabel": "Counts as active affiliation",
     "countsAsActiveDesc": "Contacts in this status are considered active members. Setting this status will prompt for an expiration date.",
     "isFinal": "Final state",
     "isFinalLabel": "Final / terminal state",
-    "isFinalDesc": "Contacts in this status are not expected to move forward. Used to mark expired or rejected memberships.",
+    "isFinalDesc": "Contacts in this status are not expected to move forward. Used to mark expired or rejected affiliations.",
     "resetButton": "Reset to defaults",
     "confirmResetTitle": "Reset to default statuses?",
     "confirmResetMessage": "All current statuses will be replaced with the 6 built-in defaults. Contacts will keep their current status value, but any custom statuses will be removed.",
@@ -1645,17 +1667,23 @@
     "saveSuccess": "Settings saved.",
     "saveError": "Failed to save. Please try again.",
     "terminologyTitle": "Terminology",
-    "terminologyDescription": "Customize how the membership concept is called across the app.",
+    "terminologyDescription": "Customize what the affiliation concept is called across the app.",
     "membershipTermLabel": "Term for \"Membership\" (singular)",
     "membershipTermHint": "Leave blank to keep the default",
     "terminologySaveSuccess": "Terminology saved.",
     "terminologySaveError": "Failed to save. Please try again.",
-    "lockMembershipTitle": "Lock membership field",
-    "lockMembershipDescription": "When enabled, only org admins can change membership status, active flag, and expiration on contacts. Team managers see these fields as read-only.",
+    "lockMembershipTitle": "Lock affiliation field",
+    "lockMembershipDescription": "When enabled, only org admins can change affiliation status, active flag, and expiration on contacts. Team managers see these fields as read-only.",
     "lockMembershipEnabled": "Locked — only org admins can edit",
     "lockMembershipDisabled": "Unlocked — team managers can edit",
     "lockMembershipSaved": "Setting saved.",
-    "lockMembershipError": "Failed to save. Please try again."
+    "lockMembershipError": "Failed to save. Please try again.",
+    "terminologyTermLabel": "Term",
+    "terminologyPresetDefault": "Default (Affiliation)",
+    "terminologyPresetCustom": "Custom…",
+    "terminologyDefaultLabel": "Term",
+    "terminologyDefaultHint": "Enter at least one — it becomes the default for every language.",
+    "terminologyAddTranslations": "Add translations (optional)"
   },
   "OrgInvite": {
     "title": "Organization invitation",
@@ -2459,5 +2487,9 @@
     "submitError": "Could not submit. Please try again.",
     "thankYou": "Thank you!",
     "thankYouBody": "Your response has been received."
+  },
+  "OfferAffiliations": {
+    "title": "Affiliations",
+    "subtitle": "Define the types of affiliation your contacts can hold (e.g. club membership, federation licence)."
   }
 }

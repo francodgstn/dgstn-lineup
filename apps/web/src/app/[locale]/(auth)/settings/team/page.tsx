@@ -59,9 +59,7 @@ import {
   ALERT_PRESETS_SUBCOLLECTION,
   COURSES_COLLECTION,
   SITE_DRAFTS_COLLECTION,
-  AFFILIATION_TYPES_SUBCOLLECTION,
   isReservedSlug,
-  planSupportsAffiliations,
 } from '@linyup/shared'
 import type {
   Team,
@@ -73,8 +71,8 @@ import type {
   PublicSurface,
   RoleLabelPreset,
   ContactRoleLabel,
-  AffiliationType,
-  AffiliationIssuer,
+  RoleLabelTranslation,
+  TermLocale,
 } from '@linyup/shared'
 import {
   CalendarDays,
@@ -90,6 +88,7 @@ import {
   Clock,
   XCircle,
   Lock,
+  ChevronDown,
 } from 'lucide-react'
 import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
 import { RANK_PRESETS } from '@/lib/rank-presets'
@@ -257,14 +256,51 @@ const ROLE_LABEL_PRESETS: RoleLabelPreset[] = [
   'student', 'athlete', 'client', 'player', 'participant', 'custom',
 ]
 
-/** Preset → default singular/plural in English; the UI shows i18n label for
- *  the dropdown but the stored singular/plural should be the user's chosen text. */
-const PRESET_DEFAULTS: Record<Exclude<RoleLabelPreset, 'custom'>, { singular: string; plural: string }> = {
-  student: { singular: 'Student', plural: 'Students' },
-  athlete: { singular: 'Athlete', plural: 'Athletes' },
-  client: { singular: 'Client', plural: 'Clients' },
-  player: { singular: 'Player', plural: 'Players' },
-  participant: { singular: 'Participant', plural: 'Participants' },
+// Languages a label/term can be translated into (Switzerland's four).
+const TERM_LOCALES: { key: TermLocale; flag: string; label: string }[] = [
+  { key: 'en', flag: '🇬🇧', label: 'EN' },
+  { key: 'de', flag: '🇩🇪', label: 'DE' },
+  { key: 'fr', flag: '🇫🇷', label: 'FR' },
+  { key: 'it', flag: '🇮🇹', label: 'IT' },
+]
+
+/** Preset → fully translated singular/plural per language. Picking a preset stores
+ *  the English pair as the default plus translations for every language, so the
+ *  label localises automatically. Custom keeps only what the studio types. */
+const ROLE_PRESET_TRANSLATIONS: Record<
+  Exclude<RoleLabelPreset, 'custom'>,
+  Record<TermLocale, RoleLabelTranslation>
+> = {
+  student: {
+    en: { singular: 'Student', plural: 'Students' },
+    de: { singular: 'Schüler', plural: 'Schüler' },
+    fr: { singular: 'Élève', plural: 'Élèves' },
+    it: { singular: 'Studente', plural: 'Studenti' },
+  },
+  athlete: {
+    en: { singular: 'Athlete', plural: 'Athletes' },
+    de: { singular: 'Athlet', plural: 'Athleten' },
+    fr: { singular: 'Athlète', plural: 'Athlètes' },
+    it: { singular: 'Atleta', plural: 'Atleti' },
+  },
+  client: {
+    en: { singular: 'Client', plural: 'Clients' },
+    de: { singular: 'Kunde', plural: 'Kunden' },
+    fr: { singular: 'Client', plural: 'Clients' },
+    it: { singular: 'Cliente', plural: 'Clienti' },
+  },
+  player: {
+    en: { singular: 'Player', plural: 'Players' },
+    de: { singular: 'Spieler', plural: 'Spieler' },
+    fr: { singular: 'Joueur', plural: 'Joueurs' },
+    it: { singular: 'Giocatore', plural: 'Giocatori' },
+  },
+  participant: {
+    en: { singular: 'Participant', plural: 'Participants' },
+    de: { singular: 'Teilnehmer', plural: 'Teilnehmer' },
+    fr: { singular: 'Participant', plural: 'Participants' },
+    it: { singular: 'Partecipante', plural: 'Partecipanti' },
+  },
 }
 
 function ContactRoleLabelForm({ team, teamId }: { team: Team; teamId: string }) {
@@ -276,32 +312,66 @@ function ContactRoleLabelForm({ team, teamId }: { team: Team; teamId: string }) 
   const [preset, setPreset] = useState<RoleLabelPreset | ''>(current?.preset ?? '')
   const [singular, setSingular] = useState(current?.singular ?? '')
   const [plural, setPlural] = useState(current?.plural ?? '')
+  const [translations, setTranslations] = useState<Partial<Record<TermLocale, RoleLabelTranslation>>>(
+    current?.translations ?? {}
+  )
+  const [showTranslations, setShowTranslations] = useState(
+    !!current?.translations && Object.keys(current.translations).length > 0
+  )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
   const isCustom = preset === 'custom'
-  const isDirty =
-    (preset || '') !== (current?.preset ?? '') ||
-    singular !== (current?.singular ?? '') ||
-    plural !== (current?.plural ?? '')
 
   function onPresetChange(p: RoleLabelPreset | '') {
     setPreset(p)
     if (p && p !== 'custom') {
-      const defs = PRESET_DEFAULTS[p as Exclude<RoleLabelPreset, 'custom'>]
-      setSingular(defs.singular)
-      setPlural(defs.plural)
+      // Predefined option: store the English default + every translation.
+      const tr = ROLE_PRESET_TRANSLATIONS[p as Exclude<RoleLabelPreset, 'custom'>]
+      setSingular(tr.en.singular)
+      setPlural(tr.en.plural)
+      setTranslations({ ...tr })
+      setShowTranslations(false)
     }
+  }
+
+  // Editing the default flips a predefined option to "custom" and drops the preset
+  // translations — custom starts as just a default the studio can translate itself.
+  function onDefaultChange(field: 'singular' | 'plural', value: string) {
+    if (field === 'singular') setSingular(value)
+    else setPlural(value)
+    if (preset !== 'custom') {
+      setPreset('custom')
+      setTranslations({})
+      setShowTranslations(false)
+    }
+  }
+
+  function updateTranslation(loc: TermLocale, field: 'singular' | 'plural', value: string) {
+    setTranslations((prev) => ({
+      ...prev,
+      [loc]: { singular: '', plural: '', ...prev[loc], [field]: value },
+    }))
   }
 
   async function onSave() {
     if (!singular.trim() || !plural.trim()) return
     setSaving(true)
     try {
+      // Keep only languages where BOTH forms are filled; the rest fall back to the
+      // default. So a studio can add as few as one translation.
+      const cleaned: Partial<Record<TermLocale, RoleLabelTranslation>> = {}
+      for (const { key } of TERM_LOCALES) {
+        const tr = translations[key]
+        if (tr?.singular?.trim() && tr?.plural?.trim()) {
+          cleaned[key] = { singular: tr.singular.trim(), plural: tr.plural.trim() }
+        }
+      }
       const label: ContactRoleLabel = {
         ...(preset ? { preset: preset as RoleLabelPreset } : {}),
         singular: singular.trim(),
         plural: plural.trim(),
+        ...(Object.keys(cleaned).length > 0 ? { translations: cleaned } : {}),
       }
       await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { contact_role_label: label })
       await qc.invalidateQueries({ queryKey: ['team', teamId] })
@@ -332,13 +402,14 @@ function ContactRoleLabelForm({ team, teamId }: { team: Team; teamId: string }) 
           </SelectContent>
         </Select>
       </div>
-      {/* Singular + plural — always visible so user can always tweak */}
+      {/* Default singular + plural — used when there's no translation for the
+          viewer's language. Always visible so the studio can always tweak. */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>{t('roleLabelSingular')}</Label>
           <Input
             value={singular}
-            onChange={(e) => { setSingular(e.target.value); if (preset !== 'custom') setPreset('custom') }}
+            onChange={(e) => onDefaultChange('singular', e.target.value)}
             placeholder={isCustom ? t('roleLabelSingular') : ''}
           />
         </div>
@@ -346,13 +417,53 @@ function ContactRoleLabelForm({ team, teamId }: { team: Team; teamId: string }) 
           <Label>{t('roleLabelPlural')}</Label>
           <Input
             value={plural}
-            onChange={(e) => { setPlural(e.target.value); if (preset !== 'custom') setPreset('custom') }}
+            onChange={(e) => onDefaultChange('plural', e.target.value)}
             placeholder={isCustom ? t('roleLabelPlural') : ''}
           />
         </div>
       </div>
+      <p className="text-xs text-muted-foreground">{t('roleLabelDefaultHint')}</p>
+
+      {/* Optional per-language translations (custom only — presets are pre-translated) */}
+      {isCustom && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowTranslations((v) => !v)}
+            className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTranslations ? '' : '-rotate-90'}`} />
+            {t('roleLabelAddTranslations')}
+          </button>
+          {showTranslations && (
+            <div className="space-y-2 rounded-lg border p-3">
+              {TERM_LOCALES.map(({ key, flag, label }) => (
+                <div key={key} className="grid grid-cols-[2.5rem_1fr_1fr] items-center gap-2">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <span>{flag}</span>
+                    <span>{label}</span>
+                  </span>
+                  <Input
+                    value={translations[key]?.singular ?? ''}
+                    onChange={(e) => updateTranslation(key, 'singular', e.target.value)}
+                    placeholder={t('roleLabelSingular')}
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    value={translations[key]?.plural ?? ''}
+                    onChange={(e) => updateTranslation(key, 'plural', e.target.value)}
+                    placeholder={t('roleLabelPlural')}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onSave} disabled={saving || !isDirty || !singular.trim() || !plural.trim()}>
+        <Button size="sm" onClick={onSave} disabled={saving || !singular.trim() || !plural.trim()}>
           {saving ? t('saving') : t('save')}
         </Button>
         {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
@@ -1630,227 +1741,6 @@ function PaymentsTab({ teamId }: { teamId: string }) {
   )
 }
 
-// ─── affiliation types tab ────────────────────────────────────────────────────
-
-function AffiliationTypesTab({ teamId, team }: { teamId: string; team: Team }) {
-  const t = useTranslations('TeamAffiliationTypes')
-  const tSettings = useTranslations('TeamSettings')
-  const qc = useQueryClient()
-
-  const { data: types = [], isLoading } = useQuery<AffiliationType[]>({
-    queryKey: ['team-affiliation-types', teamId],
-    queryFn: async () => {
-      const snap = await getDocs(
-        collection(db, TEAMS_COLLECTION, teamId, AFFILIATION_TYPES_SUBCOLLECTION),
-      )
-      return snap.docs
-        .map((d) => ({ ...d.data(), id: d.id } as AffiliationType))
-        .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
-    },
-    staleTime: 5 * 60_000,
-  })
-
-  const [formOpen, setFormOpen] = useState(false)
-  const [editing, setEditing] = useState<AffiliationType | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<AffiliationType | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
-
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000) }
-  function invalidate() { qc.invalidateQueries({ queryKey: ['team-affiliation-types', teamId] }) }
-
-  function AffTypeDialog() {
-    const [key, setKey] = useState(editing?.key ?? '')
-    const [label, setLabel] = useState(editing?.label ?? '')
-    const [defaultIssuer, setDefaultIssuer] = useState<AffiliationIssuer>(editing?.default_issuer ?? 'team')
-    const [validityMonths, setValidityMonths] = useState(editing?.default_validity_months?.toString() ?? '')
-    const [active, setActive] = useState(editing?.active ?? true)
-    const [saving, setSaving] = useState(false)
-
-    async function handleSave() {
-      if (!key.trim() || !label.trim()) return
-      setSaving(true)
-      try {
-        const id = editing?.id ?? `${key.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}_${Date.now()}`
-        const payload: Omit<AffiliationType, 'id'> = {
-          key: key.trim(),
-          label: label.trim(),
-          default_issuer: defaultIssuer,
-          ...(validityMonths ? { default_validity_months: Number(validityMonths) } : {}),
-          active,
-          order: editing?.order ?? types.length,
-        }
-        const { setDoc: fsSetDoc } = await import('firebase/firestore')
-        await fsSetDoc(
-          doc(db, TEAMS_COLLECTION, teamId, AFFILIATION_TYPES_SUBCOLLECTION, id),
-          payload,
-          { merge: true },
-        )
-        invalidate()
-        showToast(t('saved'))
-        setFormOpen(false)
-        setEditing(null)
-      } finally {
-        setSaving(false)
-      }
-    }
-
-    return (
-      <Dialog open={formOpen} onOpenChange={(v) => { if (!v) { setFormOpen(false); setEditing(null) } }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing ? t('editTitle') : t('addTitle')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <Label>{t('keyLabel')}</Label>
-              <Input
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-                placeholder={t('keyPlaceholder')}
-                disabled={!!editing}
-              />
-              <p className="text-xs text-muted-foreground">{t('keyHelp')}</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t('labelLabel')}</Label>
-              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('labelPlaceholder')} autoFocus={!editing} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t('issuerLabel')}</Label>
-              <Select value={defaultIssuer} onValueChange={(v) => setDefaultIssuer(v as AffiliationIssuer)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="team">{t('issuer_team')}</SelectItem>
-                  <SelectItem value="org">{t('issuer_org')}</SelectItem>
-                  <SelectItem value="external">{t('issuer_external')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t('defaultValidityLabel')}</Label>
-              <Input type="number" min={0} value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} placeholder={t('defaultValidityPlaceholder')} />
-            </div>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="h-4 w-4 rounded border-input accent-primary" />
-              {t('activeLabel')}
-            </label>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setFormOpen(false); setEditing(null) }} disabled={saving}>{t('cancel')}</Button>
-            <Button onClick={handleSave} disabled={saving || !key.trim() || !label.trim()}>{saving ? '…' : t('save')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    )
-  }
-
-  // Affiliations enabled toggle
-  const affiliationsEnabled = team.affiliations_enabled ?? false
-  const [enablingAff, setEnablingAff] = useState(false)
-
-  async function toggleAffiliations(next: boolean) {
-    setEnablingAff(true)
-    try {
-      await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { affiliations_enabled: next })
-      qc.invalidateQueries({ queryKey: ['team', teamId] })
-    } finally {
-      setEnablingAff(false)
-    }
-  }
-
-  if (!planSupportsAffiliations(team.plan ?? null)) {
-    return (
-      <div className="py-8 text-center text-muted-foreground text-sm space-y-2">
-        <p>{tSettings('affiliationsUpsell')}</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-5">
-      {/* Enable toggle */}
-      <div className="flex items-center justify-between gap-4 pb-4 border-b">
-        <div>
-          <p className="text-sm font-medium">{tSettings('affiliationsEnabledLabel')}</p>
-          <p className="text-xs text-muted-foreground">{tSettings('affiliationsEnabledHelp')}</p>
-        </div>
-        <Switch checked={affiliationsEnabled} onCheckedChange={toggleAffiliations} disabled={enablingAff} />
-      </div>
-
-      {affiliationsEnabled && (
-        <>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">{t('description')}</p>
-            <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true) }}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              {t('addButton')}
-            </Button>
-          </div>
-
-          {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
-            </div>
-          ) : types.length === 0 ? (
-            <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">{t('noTypes')}</div>
-          ) : (
-            <div className="divide-y rounded-md border">
-              {types.map((at) => (
-                <div key={at.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{at.label}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{at.key}</p>
-                  </div>
-                  <Badge variant="outline" className="text-xs shrink-0">{t(`issuer_${at.default_issuer}` as 'issuer_team')}</Badge>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(at); setFormOpen(true) }}>
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteTarget(at)}>
-                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {formOpen && <AffTypeDialog />}
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('confirmDeleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('confirmDeleteMessage')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={async () => {
-                if (!deleteTarget) return
-                const { deleteDoc: fsDeleteDoc } = await import('firebase/firestore')
-                await fsDeleteDoc(doc(db, TEAMS_COLLECTION, teamId, AFFILIATION_TYPES_SUBCOLLECTION, deleteTarget.id))
-                invalidate()
-                showToast(t('deleted'))
-                setDeleteTarget(null)
-              }}
-            >
-              {t('deleteButton')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {toast && (
-        <div className="fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white bg-green-600 z-50">
-          {toast}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── outreach tab ─────────────────────────────────────────────────────────────
 
 const KEY_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/
@@ -2303,7 +2193,7 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = 'general' | 'alerts' | 'ranking' | 'payments' | 'outreach' | 'custom-fields' | 'affiliations'
+type SettingsTab = 'general' | 'alerts' | 'ranking' | 'payments' | 'outreach' | 'custom-fields'
 
 export default function TeamSettingsPage() {
   const { currentTeamId } = useAuth()
@@ -2334,10 +2224,8 @@ export default function TeamSettingsPage() {
     { id: 'ranking', label: t('tabRanking') },
     { id: 'payments', label: t('tabPayments') },
     { id: 'outreach', label: 'Outreach' },
-    // Affiliations tab — visible when plan supports it
-    ...(planSupportsAffiliations(team.plan ?? null)
-      ? [{ id: 'affiliations' as SettingsTab, label: t('tabAffiliations') }]
-      : []),
+    // Affiliations moved out of Settings into the main nav's "Offer" section
+    // (/offer/affiliations).
     // Custom Fields plugin — tab appears only when the plugin is installed
     ...(isInstalled('custom-fields')
       ? [{ id: 'custom-fields' as SettingsTab, label: t('tabCustomFields') }]
@@ -2374,7 +2262,6 @@ export default function TeamSettingsPage() {
             )}
             {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
             {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
-            {tab === 'affiliations' && <AffiliationTypesTab teamId={currentTeamId} team={team} />}
             {tab === 'custom-fields' && isInstalled('custom-fields') && (
               <CustomFieldsTab teamId={currentTeamId} team={team} />
             )}
