@@ -164,6 +164,7 @@ export {
   createCourseCheckout,
   pauseMemberSubscription,
   resumeMemberSubscription,
+  cancelMemberSubscription,
 } from './connect/payments'
 export { refundMemberPayment } from './connect/refunds'
 export { handleConnectWebhook } from './connect/webhook'

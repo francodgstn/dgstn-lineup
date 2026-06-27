@@ -174,7 +174,7 @@ import {
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab, useContactNotesCount } from './NotesTab'
-import { PaymentsTab, MemberSubscriptionsSection } from './PaymentsTab'
+import { PaymentsTab, MemberSubscriptionsSection, useContactMemberSubscriptions } from './PaymentsTab'
 import { PlanGate } from '@/components/plan/PlanGate'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
@@ -2080,6 +2080,7 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
         open={assignOpen}
         onOpenChange={setAssignOpen}
         contact={contact}
+        teamId={teamId}
         subTypes={subTypes}
         currency={currency}
         onSaved={() => { invalidateContact(); invalidateHistory() }}
@@ -2094,6 +2095,7 @@ function SetSubscriptionDialog({
   open,
   onOpenChange,
   contact,
+  teamId,
   subTypes,
   currency,
   onSaved,
@@ -2101,15 +2103,32 @@ function SetSubscriptionDialog({
   open: boolean
   onOpenChange: (v: boolean) => void
   contact: Contact
+  teamId: string | null
   subTypes: SubscriptionType[]
   currency: string
   onSaved: () => void
 }) {
   const t = useTranslations('Contacts')
+  const qc = useQueryClient()
   const [typeId, setTypeId] = useState(contact.subscription_type_id ?? '')
   const [priceId, setPriceId] = useState(contact.subscription_price_id ?? '')
   const [recurrence, setRecurrence] = useState(contact.subscription_recurrence ?? '')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // false = keep the contact's current billing running (default, non-destructive);
+  // true = cancel any live Stripe subscription as part of this reassignment.
+  const [stopCurrent, setStopCurrent] = useState(false)
+
+  // Live Stripe subscriptions (billing) — distinct from the manual single field. Only
+  // these can be "stopped" (the manual field is replaced by the assignment regardless).
+  const { data: memberSubs = [] } = useContactMemberSubscriptions(teamId, contact.id)
+  const liveStripeSubs = memberSubs.filter(
+    (s) =>
+      !!s.subscriptionId &&
+      !s.duplicate &&
+      ['active', 'trialing', 'past_due', 'paused'].includes(s.status as string)
+  )
+  const hasActive = liveStripeSubs.length > 0 || !!contact.subscription_type_id
 
   const RECURRENCES = ['per_class', 'weekly', 'biweekly', 'monthly', 'quarterly', 'annual']
 
@@ -2123,7 +2142,20 @@ function SetSubscriptionDialog({
   const save = async () => {
     if (!typeId) return
     setSaving(true)
+    setError(null)
     try {
+      // Stop current billing first (if chosen) so a failure aborts before we reassign.
+      if (stopCurrent && liveStripeSubs.length > 0 && teamId) {
+        const cancelFn = httpsCallable<
+          { teamId: string; subscriptionId: string },
+          { ok: boolean }
+        >(functions, 'cancelMemberSubscription')
+        for (const s of liveStripeSubs) {
+          await cancelFn({ teamId, subscriptionId: s.subscriptionId })
+        }
+        qc.invalidateQueries({ queryKey: ['contact-member-subscriptions', teamId, contact.id] })
+      }
+
       const typeName = subTypes.find((s) => s.id === typeId)?.name ?? ''
       const chosenPrice = activePrices.find((p) => p.id === priceId)
       await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
@@ -2136,6 +2168,9 @@ function SetSubscriptionDialog({
       })
       onSaved()
       onOpenChange(false)
+    } catch (err) {
+      console.error('[contact] set subscription failed:', err)
+      setError(t('cancelError'))
     } finally {
       setSaving(false)
     }
@@ -2230,6 +2265,66 @@ function SetSubscriptionDialog({
               </Select>
             </Field>
           ) : null}
+
+          {/* Active-subscription awareness: a contact may hold several different plans,
+              never two of the same. We surface what's already active (the manual plan +
+              any live Stripe billing) and — when there's live billing to act on — let the
+              manager keep it running or stop it as part of this reassignment. */}
+          {hasActive && (
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                {t('currentlyActiveTitle')}
+              </p>
+              <ul className="space-y-1">
+                {contact.subscription_type_name && (
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                    <span className="truncate">{contact.subscription_type_name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {t('currentManualTag')}
+                    </span>
+                  </li>
+                )}
+                {liveStripeSubs.map((s) => (
+                  <li key={s.id} className="flex items-center gap-2 text-sm">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                    <span className="truncate">
+                      {s.subscriptionTypeName || formatCurrency((s.amount ?? 0) / 100, currency)}
+                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {t('currentBillingTag')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {liveStripeSubs.length > 0 && (
+                <div className="pt-1 space-y-1.5">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="stopCurrent"
+                      checked={!stopCurrent}
+                      onChange={() => setStopCurrent(false)}
+                      className="mt-0.5 accent-primary"
+                    />
+                    <span className="text-sm">{t('keepCurrentOption')}</span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="stopCurrent"
+                      checked={stopCurrent}
+                      onChange={() => setStopCurrent(true)}
+                      className="mt-0.5 accent-primary"
+                    />
+                    <span className="text-sm">{t('stopCurrentOption')}</span>
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
+          {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
         <DialogFooter className="flex items-center justify-between">
           {contact.subscription_type_id && (
@@ -3902,13 +3997,21 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     {contact.acquisition_stage && (
                       <Badge variant="outline">{t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])}</Badge>
                     )}
+                    {contact.pending_signup && (
+                      <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800">
+                        {t('pendingSignup')}
+                      </Badge>
+                    )}
                     {contact.lead_acknowledged === false && (
                       <Badge className="bg-blue-500 text-white border-blue-500">
                         {t('newBadge')}
                       </Badge>
                     )}
-                    {/* Subscription summary chip → Membership tab, Subscription segment */}
-                    {contact.subscription_type_name && (
+                    {/* Subscription summary chip → Membership tab, Subscription segment.
+                        Shows the primary live subscription + "+N" when the contact holds
+                        several different types (full list lives in the Membership tab). */}
+                    {((contact.active_subscriptions?.length ?? 0) > 0 ||
+                      contact.subscription_type_name) && (
                       <button
                         type="button"
                         onClick={() => {
@@ -3918,7 +4021,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <BookOpen className="h-3 w-3 shrink-0" />
-                        <span>{t('subscriptionHeadingCard')}: {contact.subscription_type_name}</span>
+                        <span>
+                          {t('subscriptionHeadingCard')}:{' '}
+                          {(contact.active_subscriptions?.length ?? 0) > 0
+                            ? `${contact.active_subscriptions![0].subscription_type_name ?? contact.subscription_type_name}${
+                                contact.active_subscriptions!.length > 1
+                                  ? ` +${contact.active_subscriptions!.length - 1}`
+                                  : ''
+                              }`
+                            : contact.subscription_type_name}
+                        </span>
                       </button>
                     )}
                     {/* Affiliation summary chip → Membership tab, Affiliation segment */}

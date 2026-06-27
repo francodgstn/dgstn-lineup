@@ -7,10 +7,12 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { assertVerifiableCode } from './verificationCode'
 import { to } from '../utils/async'
 import {
+  CONTACTS_COLLECTION,
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
   TEAMS_COLLECTION,
   planSupportsAffiliations,
+  normalizeEmail,
   type AffiliationType,
 } from '@linyup/shared'
 
@@ -107,32 +109,73 @@ export const completeMembershipSignup = onCall(async (request) => {
     notes: contactDetails.notes?.trim() || null,
   }
 
-  // Create contact
-  const contactRef = admin.firestore().collection('contacts').doc()
-  await contactRef.set({
+  // Resolve-or-create. A 'full'-mode shop purchase already created a pending-signup
+  // contact (the Connect webhook); finalizing must UPDATE that contact, not fork a
+  // duplicate. Email is NOT unique in Linyup (a parent address may control several
+  // child contacts), so match all active contacts by team+email and pick deliberately.
+  const db = admin.firestore()
+  const normEmail = normalizeEmail(email)
+  const matchSnap = await db
+    .collection(CONTACTS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .where('email', '==', normEmail)
+    .get()
+  const activeMatches = matchSnap.docs.filter((d) => {
+    const c = d.data()
+    return c.archived_at == null && c.deleted_at == null
+  })
+
+  // The profile fields the buyer just filled — written on both finalize and create.
+  // pending_signup/signup_completed_at flip the contact from "paid, awaiting signup"
+  // to fully signed.
+  const profile = {
     firstname: sanitized.firstname,
     lastname: sanitized.lastname,
-    email,
+    email: normEmail,
     phone: sanitized.phone,
     birthdate: sanitized.birthdate,
     notes: sanitized.notes,
-    // Acquisition: a direct membership signup crosses straight into the community.
-    // The approval pipeline (requested → active) lives on the affiliation axis, not here.
-    acquisition_stage: 'joined',
-    acquisition_stage_updated_at: FieldValue.serverTimestamp(),
-    converted_at: FieldValue.serverTimestamp(),
-    entry: 'signup',
-    teamId,
-    archived_at: null,
-    deleted_at: null,
-    created_at: FieldValue.serverTimestamp(),
-  })
+    pending_signup: false,
+    signup_completed_at: FieldValue.serverTimestamp(),
+  }
+
+  let contactRef: admin.firestore.DocumentReference
+  if (activeMatches.length === 0) {
+    // No prior contact (minimal/off purchase, or signup without a purchase) — create.
+    contactRef = db.collection(CONTACTS_COLLECTION).doc()
+    await contactRef.set({
+      ...profile,
+      // Birth facts set on CREATE only; a finalize of an existing contact preserves
+      // whatever stage/entry it already carries. The approval pipeline (requested →
+      // active) lives on the affiliation axis, not here.
+      acquisition_stage: 'joined',
+      acquisition_stage_updated_at: FieldValue.serverTimestamp(),
+      converted_at: FieldValue.serverTimestamp(),
+      entry: 'signup',
+      teamId,
+      archived_at: null,
+      deleted_at: null,
+      created_at: FieldValue.serverTimestamp(),
+    })
+  } else {
+    // Finalize the existing contact. >1 active match (shared family email) → newest;
+    // never overwrite the birth facts (acquisition_stage/entry/converted_at) it holds.
+    if (activeMatches.length > 1) {
+      activeMatches.sort(
+        (a, b) => (b.data().created_at?.toMillis?.() ?? 0) - (a.data().created_at?.toMillis?.() ?? 0),
+      )
+      console.log(
+        `[completeMembershipSignup] ${activeMatches.length} contacts share ${normEmail} (team=${teamId}) — finalizing newest ${activeMatches[0].id}`,
+      )
+    }
+    contactRef = activeMatches[0].ref
+    await contactRef.set(profile, { merge: true })
+  }
   const contactId = contactRef.id
 
   // ── Create a PENDING affiliation (if affiliations are enabled + plan allows) ──
   // Best-effort: signup must not fail if the affiliation catalog is missing.
   try {
-    const db = admin.firestore()
     if (team.affiliations_enabled && planSupportsAffiliations(team.plan ?? null)) {
       // Find the first active affiliation type in the team's catalog.
       // Prefer org-issued types if the team belongs to an org; else team-local.
@@ -176,20 +219,36 @@ export const completeMembershipSignup = onCall(async (request) => {
       }
 
       if (affiliationTypeId) {
-        const affRef = contactRef.collection(CONTACT_AFFILIATIONS_SUBCOLLECTION).doc()
-        await affRef.set({
-          id: affRef.id,
-          teamId,
-          affiliation_type_id: affiliationTypeId,
-          issuer: affiliationIssuer,
-          ...(affiliationOrgId ? { org_id: affiliationOrgId } : {}),
-          status_id: 'requested',
-          active: false, // 'requested' countsAsActive=false
-          created_by: null,
-          created_at: FieldValue.serverTimestamp(),
-          updated_at: FieldValue.serverTimestamp(),
-        })
-        console.log(`[completeMembershipSignup] created pending affiliation for contact ${contactId}`)
+        // Idempotent: when finalizing an existing contact, don't stack a second pending
+        // affiliation of the same type if one is already active or requested.
+        const [, existingAffSnap] = await to(
+          contactRef
+            .collection(CONTACT_AFFILIATIONS_SUBCOLLECTION)
+            .where('affiliation_type_id', '==', affiliationTypeId)
+            .where('status_id', 'in', ['requested', 'active'])
+            .limit(1)
+            .get(),
+        )
+        if (existingAffSnap && !existingAffSnap.empty) {
+          console.log(
+            `[completeMembershipSignup] affiliation of type ${affiliationTypeId} already present for contact ${contactId}, skipping`,
+          )
+        } else {
+          const affRef = contactRef.collection(CONTACT_AFFILIATIONS_SUBCOLLECTION).doc()
+          await affRef.set({
+            id: affRef.id,
+            teamId,
+            affiliation_type_id: affiliationTypeId,
+            issuer: affiliationIssuer,
+            ...(affiliationOrgId ? { org_id: affiliationOrgId } : {}),
+            status_id: 'requested',
+            active: false, // 'requested' countsAsActive=false
+            created_by: null,
+            created_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          })
+          console.log(`[completeMembershipSignup] created pending affiliation for contact ${contactId}`)
+        }
       } else {
         console.log(`[completeMembershipSignup] no affiliation types found for team ${teamId}, skipping`)
       }

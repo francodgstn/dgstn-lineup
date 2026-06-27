@@ -25,7 +25,7 @@
     "emulators:hmd": "firebase emulators:start --only auth,firestore,functions,storage --import=./snapshots/hmd-migration --export-on-exit=./snapshots/hmd-migration --project demo-linyup",
     "emulators:export:demo": "firebase emulators:export ./snapshots/demo --project demo-linyup",
     "emulators:export:hmd": "firebase emulators:export ./snapshots/hmd-migration --project demo-linyup",
-    "stripe:listen": "stripe listen --forward-to localhost:5001/demo-linyup/europe-west6/handleStripeWebhook",
+    "stripe:listen": "stripe listen --forward-to localhost:5001/demo-linyup/europe-west6/handleStripeWebhook --forward-connect-to localhost:5001/demo-linyup/europe-west6/handleConnectWebhook",
     "stripe:sync": "tsx scripts/stripe-sync.ts",
     "migrate:hmd": "tsx --tsconfig tsconfig.scripts.json scripts/migrate-hmd.ts",
     "promote:team": "tsx --tsconfig tsconfig.scripts.json scripts/promote-team.ts",

@@ -227,6 +227,15 @@ export interface MemberSubscription {
   customerId: string
   contactId?: string | null
   priceId: string
+  /**
+   * The STUDIO's stable subscription-type identity (from checkout metadata), as opposed
+   * to `priceId` which is Stripe's ad-hoc price id (regenerated each checkout because
+   * prices are inline price_data). Used to detect/prevent a second subscription of the
+   * same type and to roll up Contact.active_subscriptions. Absent on legacy docs.
+   */
+  subscriptionTypeId?: string | null
+  subscriptionTypeName?: string | null
+  recurrence?: string | null
   amount: number // per-period Rappen
   currency: string // 'chf'
   /** Platform fee taken per invoice, as a percent (Stripe application_fee_percent). */
@@ -244,6 +253,12 @@ export interface MemberSubscription {
   last_payment_status?: 'paid' | 'failed'
   /** Idempotency: last processed subscription/invoice event id for this doc. */
   last_event_id?: string
+  /**
+   * Set true when the webhook auto-cancelled this subscription because the contact
+   * already held a live subscription of the same type (duplicate that slipped past the
+   * checkout guard). The Stripe sub is cancelled and its charge refunded.
+   */
+  duplicate?: boolean
   /**
    * Mirrors the Stripe pause_collection object when billing is frozen.
    * Present (non-null) when the subscription is paused; absent or null otherwise.

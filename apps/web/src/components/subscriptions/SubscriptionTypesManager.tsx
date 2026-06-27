@@ -70,6 +70,7 @@ const subTypeSchema = z.object({
   source: z.enum(['internal', 'aggregator']).default('internal'),
   active: z.boolean().optional(),
   public: z.boolean().optional(),
+  checkout_contact_mode: z.enum(['off', 'minimal', 'full']).optional(),
   prices: z.array(priceSchema).optional(),
 })
 type SubTypeData = z.infer<typeof subTypeSchema>
@@ -83,6 +84,7 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
     // New subscription types default to visible on the public pricing page;
     // existing ones keep whatever was saved.
     public: editing ? (editing.public ?? false) : true,
+    checkout_contact_mode: editing?.checkout_contact_mode ?? 'minimal',
     prices: (editing?.prices ?? []).map((p) => ({
       id: p.id,
       amount: p.amount,
@@ -137,6 +139,7 @@ function SubTypeDialog({
   const source = watch('source')
   const active = watch('active') ?? true
   const isPublic = watch('public') ?? false
+  const contactMode = watch('checkout_contact_mode') ?? 'minimal'
 
   async function onSubmit(data: SubTypeData) {
     const prices = (data.prices ?? []).map((p) => {
@@ -158,6 +161,7 @@ function SubTypeDialog({
       source: data.source,
       active: data.active ?? true,
       public: data.public ?? false,
+      checkout_contact_mode: data.checkout_contact_mode ?? 'minimal',
       prices,
     }
     if (editing) {
@@ -242,6 +246,29 @@ function SubTypeDialog({
             </div>
             <Switch checked={isPublic} onCheckedChange={(v) => setValue('public', v)} />
           </div>
+
+          {isPublic && (
+            <div className="space-y-1.5">
+              <Label>{t('subTypeCheckoutContact')}</Label>
+              <div className="flex gap-2">
+                {(['off', 'minimal', 'full'] as const).map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setValue('checkout_contact_mode', val)}
+                    className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                      contactMode === val
+                        ? 'border-primary bg-primary/5 text-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:border-foreground/30'
+                    }`}
+                  >
+                    {t(`subTypeContactMode_${val}` as Parameters<typeof t>[0])}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">{t('subTypeCheckoutContactDesc')}</p>
+            </div>
+          )}
 
           {/* Pricing (optional) — kept secondary so the simple flow stays one-field */}
           <div className="space-y-2 rounded-lg border border-dashed p-3">

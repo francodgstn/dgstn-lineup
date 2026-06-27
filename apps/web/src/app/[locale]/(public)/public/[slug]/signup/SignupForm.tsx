@@ -56,6 +56,9 @@ export default function SignupForm({ slug }: Props) {
   const [codeId, setCodeId] = useState('')
   const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  // Arriving from a 'full'-mode shop purchase (pay/result CTA): the buyer already paid
+  // and we have their email — prefill it and reframe the flow as "finishing" signup.
+  const [fromCheckout, setFromCheckout] = useState(false)
 
   useEffect(() => {
     if (countdown <= 0) return
@@ -64,6 +67,17 @@ export default function SignupForm({ slug }: Props) {
   }, [countdown])
 
   const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('from') === 'checkout') setFromCheckout(true)
+    const prefill = params.get('email')
+    if (prefill) {
+      setEmail(prefill)
+      emailForm.setValue('email', prefill)
+    }
+  }, [emailForm])
   const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
   const detailsForm = useForm<DetailsValues>({ resolver: zodResolver(detailsSchema) })
 
@@ -165,9 +179,13 @@ export default function SignupForm({ slug }: Props) {
         showBranding={showBranding}
       >
         <div>
-          <h1 className="text-2xl font-bold">Register at {teamName}</h1>
+          <h1 className="text-2xl font-bold">
+            {fromCheckout ? 'Finish your registration' : `Register at ${teamName}`}
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Enter your email to get started. We&apos;ll send a quick verification code.
+            {fromCheckout
+              ? `Payment received. Confirm your email to finish setting up your account at ${teamName}.`
+              : "Enter your email to get started. We'll send a quick verification code."}
           </p>
         </div>
 

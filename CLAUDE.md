@@ -363,7 +363,12 @@ pnpm dev:landing        # Astro marketing site (port 4321)
 pnpm dev:mobile         # Expo student app
 
 # ── Optional extra terminals ──
-pnpm stripe:listen      # forward Stripe test webhooks to the local Functions emulator
+pnpm stripe:listen      # forward Stripe test webhooks (platform + Connect) to the local
+                        # Functions emulator. Forwards to BOTH handleStripeWebhook (SaaS
+                        # billing) and --forward-connect-to handleConnectWebhook (member→
+                        # studio payments). Copy the printed whsec_… into
+                        # packages/functions/.env.local as STRIPE_CONNECT_WEBHOOK_SECRET
+                        # (and STRIPE_WEBHOOK_SECRET), then restart the emulator.
 pnpm functions:watch    # rebuild Cloud Functions on save (when editing functions)
 ```
 

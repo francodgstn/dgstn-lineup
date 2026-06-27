@@ -87,7 +87,7 @@ function RollupBadge({
 
 // ─── member subscriptions hook ────────────────────────────────────────────────
 
-function useContactMemberSubscriptions(teamId: string | null, contactId: string) {
+export function useContactMemberSubscriptions(teamId: string | null, contactId: string) {
   return useQuery<Array<MemberSubscription & { id: string }>>({
     queryKey: ['contact-member-subscriptions', teamId, contactId],
     enabled: !!teamId,
@@ -157,8 +157,10 @@ export function MemberSubscriptionsSection({
   // Confirm dialog state: null = closed, string = subscriptionId to freeze
   const [freezeTarget, setFreezeTarget] = useState<string | null>(null)
 
-  // Only show recurring subscriptions (those that have a Stripe subscriptionId)
-  const recurringOnly = subs.filter((s) => !!s.subscriptionId)
+  // Only show recurring subscriptions (those that have a Stripe subscriptionId).
+  // Hide auto-cancelled duplicates (same-type re-buys the webhook refunded) — they
+  // aren't real memberships, just an artefact the buyer was refunded for.
+  const recurringOnly = subs.filter((s) => !!s.subscriptionId && !s.duplicate)
 
   if (isLoading) {
     return <Skeleton className="h-16 rounded" />
@@ -194,10 +196,12 @@ export function MemberSubscriptionsSection({
             <div key={sub.id} className="flex items-center gap-3 p-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">
-                  {formatMoneyMinor(sub.amount, sub.currency)}
+                  {sub.subscriptionTypeName || formatMoneyMinor(sub.amount, sub.currency)}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {sub.subscriptionId}
+                <p className="text-xs text-muted-foreground truncate">
+                  {sub.subscriptionTypeName
+                    ? formatMoneyMinor(sub.amount, sub.currency)
+                    : sub.subscriptionId}
                 </p>
               </div>
               <Badge

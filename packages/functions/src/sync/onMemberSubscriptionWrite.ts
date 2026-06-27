@@ -13,6 +13,7 @@ import {
   TEAMS_COLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   type SubscriptionRollupStatus,
+  type ActiveSubscriptionSummary,
 } from '@linyup/shared'
 
 // Map a single member_subscription record to a rollup status. A set pause_collection
@@ -65,15 +66,43 @@ export const onMemberSubscriptionWrite = onDocumentWritten(
       .get()
 
     let best: SubscriptionRollupStatus = 'none'
+    // Build the multi-subscription list in the same pass: the LIVE subs (active /
+    // trialing / past_due / paused), deduped by the studio's stable type id, keeping the
+    // most-live status per type. Refunded duplicates and legacy docs without a type id
+    // are skipped.
+    const byType = new Map<string, ActiveSubscriptionSummary>()
     for (const d of snap.docs) {
-      const s = recordRollupStatus(d.data())
+      const data = d.data()
+      const s = recordRollupStatus(data)
       if (ROLLUP_PRIORITY.indexOf(s) < ROLLUP_PRIORITY.indexOf(best)) best = s
+
+      const typeId = data.subscriptionTypeId as string | undefined
+      const isLive = s === 'active' || s === 'trialing' || s === 'past_due' || s === 'paused'
+      if (!typeId || !isLive || data.duplicate) continue
+      const existing = byType.get(typeId)
+      if (!existing || ROLLUP_PRIORITY.indexOf(s) < ROLLUP_PRIORITY.indexOf(existing.status)) {
+        byType.set(typeId, {
+          subscription_type_id: typeId,
+          subscription_type_name: (data.subscriptionTypeName as string | null) ?? null,
+          recurrence: (data.recurrence as string | null) ?? null,
+          amount: Math.round((data.amount as number) ?? 0) / 100, // Rappen → major units
+          status: s,
+        })
+      }
     }
+    const activeSubscriptions = Array.from(byType.values())
 
     const contactRef = db.collection(CONTACTS_COLLECTION).doc(contactId)
     const contactSnap = await contactRef.get()
     if (!contactSnap.exists || contactSnap.data()?.teamId !== teamId) return
-    if (contactSnap.data()?.subscription_status === best) return // idempotent
-    await contactRef.update({ subscription_status: best })
+    const cur = contactSnap.data() ?? {}
+    const statusChanged = cur.subscription_status !== best
+    const listChanged =
+      JSON.stringify(cur.active_subscriptions ?? []) !== JSON.stringify(activeSubscriptions)
+    if (!statusChanged && !listChanged) return // idempotent
+    await contactRef.update({
+      ...(statusChanged ? { subscription_status: best } : {}),
+      ...(listChanged ? { active_subscriptions: activeSubscriptions } : {}),
+    })
   }
 )

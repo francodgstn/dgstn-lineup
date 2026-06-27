@@ -1028,16 +1028,28 @@ function ContactRow({
             {contact.acquisition_stage && (
               <Badge variant="outline" className="text-xs">{t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])}</Badge>
             )}
+            {contact.pending_signup && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                {t('pendingSignup')}
+              </span>
+            )}
             {contact.affiliation_summary?.has_active && (
               <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${MEMBERSHIP_COLOR_CLASSES.green}`}>
                 {t('affiliationChip')}
               </span>
             )}
-            {contact.subscription_type_name && (
+            {(contact.active_subscriptions?.length ?? 0) > 0 ? (
+              <Badge variant="secondary" className="text-xs font-normal">
+                {contact.active_subscriptions![0].subscription_type_name ??
+                  contact.subscription_type_name}
+                {contact.active_subscriptions!.length > 1 &&
+                  ` +${contact.active_subscriptions!.length - 1}`}
+              </Badge>
+            ) : contact.subscription_type_name ? (
               <Badge variant="secondary" className="text-xs font-normal">
                 {contact.subscription_type_name}
               </Badge>
-            )}
+            ) : null}
           </div>
         </div>
       </button>
