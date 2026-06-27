@@ -7,12 +7,6 @@ lastUpdated: 23 June 2026
 
 # 1. Legal Notice (Impressum / Mentions légales)
 
-> Switzerland has no general Impressum duty like Germany's, but the Unfair
-> Competition Act (UWG Art. 3 para. 1 lit. s) requires anyone offering goods or
-> services online commercially to state a clear identity and a way to be
-> contacted, including an email address. This notice covers that and is good
-> practice regardless.
-
 **Site operator**
 
 This website (linyup.com) and the Linyup service are operated by:
@@ -50,6 +44,15 @@ to its accuracy, completeness, or timeliness. Liability for damages arising from
 the use of this website is excluded to the extent permitted by law. This website
 may contain links to third-party websites; their content is the responsibility
 of their operators, and we accept no liability for it.
+
+**Pricing and offers**
+
+Any prices, plans, discounts, and promotional offers shown on this website are
+indicative and provided for general information only. They are non-binding, do
+not constitute a binding offer, and may change or be withdrawn at any time
+without notice. The features included in each plan, and their availability, may
+also change as the service evolves. The terms that apply are those presented and
+agreed at the point of subscription.
 
 **Copyright**
 

@@ -9,7 +9,13 @@
     "demo": "Démo live",
     "liveDemo": "Tester en direct",
     "login": "Connexion",
-    "cta": "Accès anticipé"
+    "cta": "Accès anticipé",
+    "language": "Langue",
+    "theme": "Thème",
+    "themeLight": "Clair",
+    "themeDark": "Sombre",
+    "themeSystem": "Système",
+    "menu": "Menu"
   },
   "hero": {
     "consent": "En vous inscrivant, vous acceptez notre <a href=\"/privacy\">politique de confidentialité</a>. Désabonnement à tout moment.",
@@ -103,6 +109,18 @@
       }
     },
     "more": "Et plus encore à explorer"
+  },
+  "whyUs": {
+    "title": "Pourquoi Linyup",
+    "subtitle": "Beaucoup d'outils en couvrent une partie. Nous avons créé Linyup parce que nous n'en avons trouvé aucun qui couvre tout.",
+    "points": [
+      "Tout au même endroit — séances, réservations, contacts, paiements, adhésions, cours et une app membre, au lieu d'assembler cinq outils.",
+      "Conçu pour toute discipline — pas limité à un seul sport ni à un modèle unique et rigide.",
+      "Votre marque, vos langues — en marque blanche et pleinement utilisable en anglais, allemand, français et italien.",
+      "Tarifs justes et transparents — une offre vraiment gratuite, des frais de paiement bas et sans engagement.",
+      "Vos données vous appartiennent — migration gratuite à l'entrée, export facile à la sortie, hébergé en Suisse et respectueux de la vie privée.",
+      "Fait pour être utilisé — moderne, rapide et assez simple pour que votre équipe l'adopte vraiment."
+    ]
   },
   "features": {
     "title": "Tout ce qu'il vous faut pour gérer un studio moderne",
@@ -306,7 +324,7 @@
     "cmpOrg": "Organisation multi-studios",
     "cmpContacts": "Contacts",
     "cmpContactsNote": "Compte uniquement les contacts actifs (non archivés). Studio peut ajouter des blocs de +250 pour CHF 10/mois ; les contacts archivés sont anonymisés automatiquement après 2 ans.",
-    "cmpMembers": "Plusieurs membres d'équipe",
+    "cmpMembers": "Plusieurs gestionnaires/observateurs",
     "cmpUiLanguages": "Interface moderne en 4 langues",
     "cmpUiLanguagesNote": "English · Deutsch · Français · Italiano",
     "cmpBranding": "Retirer la marque Linyup",

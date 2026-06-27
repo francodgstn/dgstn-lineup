@@ -9,7 +9,13 @@
     "demo": "Live-Demo",
     "liveDemo": "Live testen",
     "login": "Anmelden",
-    "cta": "Frühen Zugang sichern"
+    "cta": "Frühen Zugang sichern",
+    "language": "Sprache",
+    "theme": "Design",
+    "themeLight": "Hell",
+    "themeDark": "Dunkel",
+    "themeSystem": "System",
+    "menu": "Menü"
   },
   "hero": {
     "consent": "Mit der Anmeldung stimmst du unserer <a href=\"/privacy\">Datenschutzerklärung</a> zu. Jederzeit abbestellbar.",
@@ -103,6 +109,18 @@
       }
     },
     "more": "Und mehr zu entdecken"
+  },
+  "whyUs": {
+    "title": "Warum Linyup",
+    "subtitle": "Viele Tools decken einen Teil davon ab. Wir haben Linyup gebaut, weil wir keines gefunden haben, das alles abdeckt.",
+    "points": [
+      "Alles an einem Ort — Sessions, Buchungen, Kontakte, Zahlungen, Mitgliedschaften, Kurse und eine Mitglieder-App, statt fünf Tools zusammenzustückeln.",
+      "Für jede Disziplin gemacht — nicht auf eine einzelne Sportart oder eine starre Einheitslösung festgelegt.",
+      "Deine Marke, deine Sprachen — White-Label und voll nutzbar auf Englisch, Deutsch, Französisch und Italienisch.",
+      "Faire, transparente Preise — eine wirklich kostenlose Stufe, niedrige Zahlungsgebühren und keine Bindung.",
+      "Deine Daten gehören dir — kostenlose Migration rein, einfacher Export raus, in der Schweiz gehostet und datenschutzfreundlich.",
+      "Zum Benutzen gemacht — modern, schnell und einfach genug, dass dein Team es wirklich nutzt."
+    ]
   },
   "features": {
     "title": "Alles, was du für ein modernes Studio brauchst",
@@ -306,7 +324,7 @@
     "cmpOrg": "Multi-Studio-Organisation",
     "cmpContacts": "Kontakte",
     "cmpContactsNote": "Zählt nur aktive (nicht archivierte) Kontakte. Studio kann +250er-Blöcke für CHF 10/Monat hinzufügen; archivierte Kontakte werden nach 2 Jahren automatisch anonymisiert.",
-    "cmpMembers": "Mehrere Teammitglieder",
+    "cmpMembers": "Mehrere Studio-Manager/Betrachter",
     "cmpUiLanguages": "Moderne UI in 4 Sprachen",
     "cmpUiLanguagesNote": "English · Deutsch · Français · Italiano",
     "cmpBranding": "Linyup-Branding entfernen",

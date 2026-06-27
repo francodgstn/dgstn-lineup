@@ -76,6 +76,15 @@ const COMPARE: { heading: string; rows: { label: string; note?: string; feature?
   },
 ];
 
+// Per-section ordering: rows that are ✓ for every plan (shared by all) float to
+// the top of their section, so the differentiating rows cluster together below
+// and the actual differences are easier to scan. Stable within each partition.
+const allYes = (vals: CmpVal[]) => vals.every((v) => v === true);
+const COMPARE_SORTED = COMPARE.map((group) => ({
+  ...group,
+  rows: [...group.rows].sort((a, b) => Number(allYes(b.values)) - Number(allYes(a.values))),
+}));
+
 // Sentinel/literal → display text; null means render a ✓/— icon instead.
 const cmpText = (v: CmpVal): string | null => {
   if (v === 'unlimited') return t('plans.cmpUnlimited');
@@ -176,7 +185,7 @@ const cmpText = (v: CmpVal): string | null => {
           </thead>
           <tbody>
             {
-              COMPARE.map((group) => (
+              COMPARE_SORTED.map((group) => (
                 <Fragment>
                   <tr class="cmp-group">
                     <th colspan={plans.length + 1}>{t(group.heading)}</th>

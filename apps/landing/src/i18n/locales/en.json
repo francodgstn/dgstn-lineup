@@ -9,7 +9,13 @@
     "demo": "Live demo",
     "liveDemo": "Try it live",
     "login": "Log in",
-    "cta": "Get early access"
+    "cta": "Get early access",
+    "language": "Language",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "menu": "Menu"
   },
   "hero": {
     "consent": "By signing up you agree to our <a href=\"/privacy\">Privacy Policy</a>. Unsubscribe anytime.",
@@ -103,6 +109,18 @@
       }
     },
     "more": "And more to explore"
+  },
+  "whyUs": {
+    "title": "Why Linyup",
+    "subtitle": "Plenty of tools cover part of this. We built Linyup because we couldn't find one that covers it all.",
+    "points": [
+      "Everything in one place — sessions, bookings, contacts, payments, memberships, courses and a member app, instead of stitching five tools together.",
+      "Built for any discipline — not locked to a single sport or a rigid, one-size-fits-all template.",
+      "Your brand, your languages — white-label and fully usable in English, German, French and Italian.",
+      "Fair, transparent pricing — a genuinely free tier, low payment fees and no lock-in.",
+      "You own your data — free migration in, easy export out, Swiss-hosted and privacy-first.",
+      "Made to be used — modern, fast and simple enough that your team actually adopts it."
+    ]
   },
   "features": {
     "title": "Everything you need to run a modern studio",
@@ -306,7 +324,7 @@
     "cmpOrg": "Multi-studio Organization",
     "cmpContacts": "Contacts",
     "cmpContactsNote": "Counts active (non-archived) contacts only. Studio can add +250 blocks for CHF 10/mo; archived contacts auto-anonymise after 2 years.",
-    "cmpMembers": "Multiple team members",
+    "cmpMembers": "Multiple studio managers/viewers",
     "cmpUiLanguages": "Modern UI in 4 languages",
     "cmpUiLanguagesNote": "English · Deutsch · Français · Italiano",
     "cmpBranding": "Remove Linyup branding",
