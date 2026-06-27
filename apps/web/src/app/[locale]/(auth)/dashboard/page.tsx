@@ -517,11 +517,13 @@ function ContactsSnapshot({
       <RosterCard contacts={all} />
       <EngagementCard contacts={all} thresholds={engagementThresholds} />
       <DemographicsCard contacts={all} rankingSystems={rankingSystems} />
-      <TriggeredAlertsCard contacts={all} />
+      {/* Triggered alerts — temporarily hidden (TriggeredAlertsCard below is kept for re-enabling) */}
     </div>
   )
 }
 
+// Temporarily hidden from the Contacts snapshot — kept here to re-enable later.
+/* eslint-disable @typescript-eslint/no-unused-vars */
 function TriggeredAlertsCard({ contacts }: { contacts: Contact[] }) {
   const t = useTranslations('Dashboard')
 
@@ -586,6 +588,7 @@ function TriggeredAlertsCard({ contacts }: { contacts: Contact[] }) {
     </Card>
   )
 }
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 // ─── trends upsell (Coach plan) ──────────────────────────────────────────────
 
