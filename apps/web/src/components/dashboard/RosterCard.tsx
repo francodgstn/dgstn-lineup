@@ -2,23 +2,33 @@
 
 import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { useTranslations } from 'next-intl'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import type { Contact } from '@linyup/shared'
-import type { SubscriptionTypeDoc } from '@/hooks/useDashboardData'
 
-const TYPE_CONFIG = [
-  { key: 'trial_booked',   label: 'Trial booked',   color: '#10B981' },
-  { key: 'trial_attended', label: 'Trial attended',  color: '#3B82F6' },
-  { key: 'joined',         label: 'Joined',          color: '#6366F1' },
-]
+// Acquisition stage is mutually exclusive (a contact is in exactly one), so it's
+// shown as a donut — true "parts of a whole".
+const STAGE_CONFIG = [
+  { key: 'trial_booked',   tKey: 'stage_trial_booked',   color: '#10B981' },
+  { key: 'trial_attended', tKey: 'stage_trial_attended', color: '#3B82F6' },
+  { key: 'joined',         tKey: 'stage_joined',         color: '#6366F1' },
+] as const
 
+const SERIES_COLORS = ['#6366F1', '#10B981', '#F59E0B', '#8B5CF6', '#0EA5E9', '#EF4444', '#84CC16', '#14B8A6']
+const NONE_COLOR = '#D1D5DB'
 
-const SUB_COLORS = ['#6366F1','#10B981','#F59E0B','#8B5CF6','#0EA5E9','#EF4444','#84CC16','#6B21A8']
+type Datum = { name: string; value: number; color: string }
 
-function DonutChart({ data, total }: { data: { name: string; value: number; color: string }[]; total: number }) {
+// Fallback display for an affiliation type_key (e.g. 'federation_licence').
+function humanizeKey(k: string): string {
+  const s = k.replace(/[_-]+/g, ' ').trim()
+  return s ? s[0].toUpperCase() + s.slice(1) : k
+}
+
+function DonutChart({ data, total }: { data: Datum[]; total: number }) {
   if (!data.length || total === 0) return null
   return (
     <ResponsiveContainer width="100%" height={160}>
@@ -36,7 +46,7 @@ function DonutChart({ data, total }: { data: { name: string; value: number; colo
   )
 }
 
-function Legend({ data, total }: { data: { name: string; value: number; color: string }[]; total: number }) {
+function DonutLegend({ data, total }: { data: Datum[]; total: number }) {
   return (
     <div className="flex flex-col gap-1 mt-2">
       {data.map((item) => {
@@ -55,92 +65,112 @@ function Legend({ data, total }: { data: { name: string; value: number; color: s
   )
 }
 
-interface Props {
-  contacts: Contact[]
-  subscriptionTypes?: SubscriptionTypeDoc[]
+// Multi-valued breakdown: each bar is an independent count of contacts holding
+// that value, measured against the total contact count. Bars may sum to more
+// than 100% (a contact can hold several) — that's why this is bars, not a pie.
+function BarList({ data, total }: { data: Datum[]; total: number }) {
+  return (
+    <div className="flex flex-col gap-2.5 pt-1 max-h-[200px] overflow-y-auto">
+      {data.map((item) => {
+        const pct = total > 0 ? Math.round((item.value / total) * 100) : 0
+        return (
+          <div key={item.name} className="space-y-1">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="flex-1 truncate">{item.name}</span>
+              <span className="text-muted-foreground tabular-nums shrink-0">{item.value} ({pct}%)</span>
+            </div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: item.color }} />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
-export function RosterCard({ contacts, subscriptionTypes = [] }: Props) {
-  const [view, setView] = useState('type')
+export function RosterCard({ contacts }: { contacts: Contact[] }) {
+  const t = useTranslations('Contacts')
+  const [view, setView] = useState<'type' | 'affiliation' | 'subscription'>('type')
 
   const active = contacts.filter((c) => !c.archived_at)
   const total = active.length
 
-  // Type view
-  const typeData = TYPE_CONFIG
-    .map((t) => ({ name: t.label, value: active.filter((c) => c.acquisition_stage === t.key).length, color: t.color }))
+  // ── Type (exclusive) ──
+  const typeData: Datum[] = STAGE_CONFIG
+    .map((s) => ({ name: t(s.tKey), value: active.filter((c) => c.acquisition_stage === s.key).length, color: s.color }))
     .filter((d) => d.value > 0)
 
-  // Affiliation view — split by has_active from affiliation_summary
-  const affiliatedCount = active.filter((c) => c.affiliation_summary?.has_active).length
-  const membershipData = [
-    { name: 'Affiliated', value: affiliatedCount, color: '#10B981' },
-    { name: 'Not affiliated', value: active.length - affiliatedCount, color: '#9CA3AF' },
-  ].filter((d) => d.value > 0)
-
-  // Subscription view
-  const subData = subscriptionTypes.map((st, i) => ({
-    name: st.name,
-    value: active.filter((c) => (c as { subscription_type_id?: string }).subscription_type_id === st.id).length,
-    color: SUB_COLORS[i % SUB_COLORS.length],
-  }))
-  const unassigned = total - active.filter((c) => (c as { subscription_type_id?: string }).subscription_type_id).length
-  if (unassigned > 0 && subData.length > 0) subData.push({ name: 'No subscription', value: unassigned, color: '#D1D5DB' })
-  const subDataFiltered = subData.filter((d) => d.value > 0)
-
-  // Billing recurrence view
-  const subscribed = active.filter((c) => (c as { subscription_type_id?: string }).subscription_type_id)
-  const recCounts: Record<string, number> = {}
-  for (const c of subscribed) {
-    const key = (c as { subscription_recurrence?: string }).subscription_recurrence ?? 'unset'
-    recCounts[key] = (recCounts[key] ?? 0) + 1
+  // ── Affiliation by type (multi) ──
+  const affCounts = new Map<string, number>()
+  let noAff = 0
+  for (const c of active) {
+    const types = Array.from(new Set(c.affiliation_summary?.types ?? []))
+    if (types.length === 0) { noAff++; continue }
+    types.forEach((k) => affCounts.set(k, (affCounts.get(k) ?? 0) + 1))
   }
-  const recurrenceData = Object.entries(recCounts)
-    .map(([name, value], i) => ({ name: name === 'unset' ? 'Not set' : name, value, color: SUB_COLORS[i % SUB_COLORS.length] }))
-    .filter((d) => d.value > 0)
-  const unsubscribed = total - subscribed.length
-  if (unsubscribed > 0 && recurrenceData.length > 0)
-    recurrenceData.push({ name: 'No subscription', value: unsubscribed, color: '#D1D5DB' })
+  const affData: Datum[] = [...affCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([key, value], i) => ({ name: humanizeKey(key), value, color: SERIES_COLORS[i % SERIES_COLORS.length] }))
+  if (noAff > 0) affData.push({ name: t('filterAffiliationNone'), value: noAff, color: NONE_COLOR })
 
-  const currentData =
-    view === 'type'       ? typeData :
-    view === 'membership' ? membershipData :
-    view === 'recurrence' ? recurrenceData :
-    subDataFiltered
+  // ── Subscription by type (multi) — straight off the denormalised snapshots ──
+  const subCounts = new Map<string, { name: string; count: number }>()
+  let noSub = 0
+  for (const c of active) {
+    // Distinct subscription types this contact holds (a type counts once per contact).
+    const distinct = new Map<string, string>() // typeId → name
+    for (const s of c.active_subscriptions ?? []) {
+      if (!distinct.has(s.subscription_type_id)) distinct.set(s.subscription_type_id, s.subscription_type_name ?? '—')
+    }
+    if (distinct.size === 0) { noSub++; continue }
+    for (const [id, name] of distinct) {
+      const cur = subCounts.get(id) ?? { name, count: 0 }
+      cur.count++
+      subCounts.set(id, cur)
+    }
+  }
+  const subData: Datum[] = [...subCounts.values()]
+    .sort((a, b) => b.count - a.count)
+    .map((e, i) => ({ name: e.name, value: e.count, color: SERIES_COLORS[i % SERIES_COLORS.length] }))
+  if (noSub > 0) subData.push({ name: t('filterSubscriptionNone'), value: noSub, color: NONE_COLOR })
 
-  const showEmptySubscriptions = (view === 'subscription' || view === 'recurrence') && subscriptionTypes.length === 0
+  const isMulti = view === 'affiliation' || view === 'subscription'
+  const barData = view === 'affiliation' ? affData : subData
+  const hasData = view === 'type' ? typeData.length > 0 : barData.length > 0
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-
           <div className="flex-1 min-w-0">
-            <CardTitle>Overview</CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">{total} active contacts</p>
+            <CardTitle>{t('statsTitle')}</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('overviewActiveContacts', { count: total })}</p>
           </div>
-          <Select value={view} onValueChange={(v) => { if (v) setView(v) }}>
-            <SelectTrigger size="sm" className="w-[120px] text-xs"><SelectValue /></SelectTrigger>
+          <Select value={view} onValueChange={(v) => { if (v) setView(v as typeof view) }}>
+            <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="type">Type</SelectItem>
-              <SelectItem value="membership">Membership</SelectItem>
-              <SelectItem value="subscription">Subscription</SelectItem>
-              <SelectItem value="recurrence">Billing</SelectItem>
+              <SelectItem value="type">{t('overviewViewType')}</SelectItem>
+              <SelectItem value="affiliation">{t('overviewViewAffiliation')}</SelectItem>
+              <SelectItem value="subscription">{t('overviewViewSubscription')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </CardHeader>
       <CardContent className="pt-0 pb-4">
-        {showEmptySubscriptions ? (
-          <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <p className="text-sm text-muted-foreground">No subscription types defined yet.</p>
-          </div>
-        ) : currentData.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">No data yet</p>
+        {total === 0 || !hasData ? (
+          <p className="text-sm text-muted-foreground py-4">{t('overviewEmpty')}</p>
+        ) : view === 'type' ? (
+          <>
+            <DonutChart key={view} data={typeData} total={total} />
+            <DonutLegend data={typeData} total={total} />
+          </>
         ) : (
           <>
-            <DonutChart key={view} data={currentData} total={total} />
-            <Legend data={currentData} total={total} />
+            <BarList data={barData} total={total} />
+            {isMulti && (
+              <p className="text-[11px] text-muted-foreground mt-3 leading-snug">{t('overviewOverlapNote')}</p>
+            )}
           </>
         )}
       </CardContent>
