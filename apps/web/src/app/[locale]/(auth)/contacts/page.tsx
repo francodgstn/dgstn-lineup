@@ -815,6 +815,12 @@ function FilterChips({
 
   const activityIsActive = filters.inactivity !== null || filters.sessionsMin !== null || filters.sessionsMax !== null
 
+  // Combined "Acquisition" chip label: stage and source parts joined.
+  const acqParts: string[] = []
+  if (filters.stages.length) acqParts.push(chip(filters.stages, STAGE_OPTS, 'stages'))
+  if (filters.sources.length) acqParts.push(chip(filters.sources, SOURCE_OPTS, 'sources'))
+  const acqActiveLabel = acqParts.join(' · ')
+
   const rankActiveLabel = (() => {
     const rf = filters.rankFilter
     if (!rf) return ''
@@ -862,16 +868,19 @@ function FilterChips({
         </>
       )}
       <div className="h-5 w-px bg-border/50 shrink-0 mx-0.5" />
-      <FilterChip label={t('filterStage')} activeLabel={chip(filters.stages, STAGE_OPTS, 'stages')}
-        isActive={filters.stages.length > 0} onClear={() => onChange({ ...filters, stages: [] })}>
-        {STAGE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.stages.includes(o.value)}
-          onToggle={() => onChange({ ...filters, stages: toggle(filters.stages, o.value) })} />)}
-      </FilterChip>
-
-      <FilterChip label={t('filterSource')} activeLabel={chip(filters.sources, SOURCE_OPTS, 'sources')}
-        isActive={filters.sources.length > 0} onClear={() => onChange({ ...filters, sources: [] })}>
-        {SOURCE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.sources.includes(o.value)}
-          onToggle={() => onChange({ ...filters, sources: toggle(filters.sources, o.value) })} />)}
+      {/* Acquisition — stage + source in one chip, split by a light divider */}
+      <FilterChip label={t('filterAcquisition')} activeLabel={acqActiveLabel}
+        isActive={filters.stages.length > 0 || filters.sources.length > 0}
+        onClear={() => onChange({ ...filters, stages: [], sources: [] })}>
+        <div className="p-1 space-y-0.5">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">{t('filterStage')}</p>
+          {STAGE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.stages.includes(o.value)}
+            onToggle={() => onChange({ ...filters, stages: toggle(filters.stages, o.value) })} />)}
+          <div className="border-t my-1.5 mx-1" />
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">{t('filterSource')}</p>
+          {SOURCE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.sources.includes(o.value)}
+            onToggle={() => onChange({ ...filters, sources: toggle(filters.sources, o.value) })} />)}
+        </div>
       </FilterChip>
 
       <FilterChip label={t('filterAffiliation')} activeLabel={chip(filters.statuses, AFFIL_OPTS, 'statuses')}
