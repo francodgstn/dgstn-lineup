@@ -530,6 +530,8 @@
     "engagement_inactive": "Arrêté",
     "engagementLastSession": "Dernière présence il y a {days, plural, one {# jour} other {# jours}}",
     "engagementNoSessions": "Aucune participation pour le moment",
+    "engagementCardSubtitle": "{count, plural, one {# contact} other {# contacts}}",
+    "engagementCardEmpty": "Aucune donnée",
     "relationshipTimeline": "Chronologie de la relation",
     "timelineNow": "Maintenant",
     "tabReorder": "Réorganiser les onglets",

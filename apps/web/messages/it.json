@@ -530,6 +530,8 @@
     "engagement_inactive": "Fermo",
     "engagementLastSession": "Ultima presenza {days, plural, one {# giorno} other {# giorni}} fa",
     "engagementNoSessions": "Nessuna partecipazione finora",
+    "engagementCardSubtitle": "{count, plural, one {# contatto} other {# contatti}}",
+    "engagementCardEmpty": "Nessun dato",
     "relationshipTimeline": "Cronologia della relazione",
     "timelineNow": "Ora",
     "tabReorder": "Riordina schede",

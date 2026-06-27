@@ -530,6 +530,8 @@
     "engagement_inactive": "Stopped",
     "engagementLastSession": "Last attended {days, plural, one {# day} other {# days}} ago",
     "engagementNoSessions": "No sessions attended yet",
+    "engagementCardSubtitle": "{count, plural, one {# contact} other {# contacts}}",
+    "engagementCardEmpty": "No data yet",
     "relationshipTimeline": "Relationship timeline",
     "timelineNow": "Now",
     "tabReorder": "Reorder tabs",

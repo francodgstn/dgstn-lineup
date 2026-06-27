@@ -28,7 +28,7 @@ import {
   CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, contactOverageForPlan,
   planHasHardContactCap,
 } from '@linyup/shared'
-import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan, EngagementBand } from '@linyup/shared'
+import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan, EngagementBand, EngagementThresholds } from '@linyup/shared'
 import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS, computeEngagementBand } from '@linyup/shared'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups, expandGroupSelection, flattenGroupTree } from '@/plugins/contact-groups/hooks'
@@ -44,6 +44,7 @@ import {
 } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
+import { EngagementCard } from '@/components/dashboard/EngagementCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { getPrimaryRank } from '@/lib/rank-utils'
@@ -417,11 +418,12 @@ function ConfirmDialog({
 // ─── overview panel ───────────────────────────────────────────────────────────
 
 function OverviewPanel({
-  contacts, loading, rankingSystems,
+  contacts, loading, rankingSystems, engagementThresholds,
 }: {
   contacts: Contact[]
   loading: boolean
   rankingSystems?: RankingSystem[]
+  engagementThresholds?: EngagementThresholds
 }) {
   const t = useTranslations('Contacts')
   const [open, setOpen] = useState(false)
@@ -449,13 +451,15 @@ function OverviewPanel({
       </button>
       {open && (
         loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Skeleton className="h-52 rounded-xl" />
             <Skeleton className="h-52 rounded-xl" />
             <Skeleton className="h-52 rounded-xl" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <RosterCard contacts={contacts} />
+            <EngagementCard contacts={contacts} thresholds={engagementThresholds} />
             <DemographicsCard contacts={contacts} rankingSystems={rankingSystems} />
           </div>
         )
@@ -1985,6 +1989,7 @@ export default function ContactsPage() {
         contacts={active}
         loading={loadingActive}
         rankingSystems={team?.ranking_systems}
+        engagementThresholds={team?.engagement_thresholds}
       />
 
       {/* Search — sticky, clears with × */}

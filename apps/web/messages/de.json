@@ -530,6 +530,8 @@
     "engagement_inactive": "Gestoppt",
     "engagementLastSession": "Zuletzt vor {days, plural, one {# Tag} other {# Tagen}} dabei",
     "engagementNoSessions": "Noch keine Teilnahme",
+    "engagementCardSubtitle": "{count, plural, one {# Kontakt} other {# Kontakte}}",
+    "engagementCardEmpty": "Noch keine Daten",
     "relationshipTimeline": "Beziehungsverlauf",
     "timelineNow": "Jetzt",
     "tabReorder": "Tabs neu anordnen",

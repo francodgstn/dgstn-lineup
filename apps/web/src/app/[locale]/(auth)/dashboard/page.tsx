@@ -50,6 +50,7 @@ import type {
   SubscriptionType,
   UserProfile,
   Team,
+  EngagementThresholds,
 } from '@linyup/shared'
 import { getDailyQuote } from '@/data/quotes'
 import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
@@ -58,6 +59,7 @@ import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SetupChecklist } from '@/components/onboarding/SetupChecklist'
 import { RosterCard } from '@/components/dashboard/RosterCard'
+import { EngagementCard } from '@/components/dashboard/EngagementCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { ContactsSummaryCard } from '@/components/dashboard/ContactsSummaryCard'
 import { BookingsTrendCard } from '@/components/dashboard/BookingsTrendCard'
@@ -491,15 +493,17 @@ function ContactsSnapshot({
   contacts,
   loading,
   rankingSystems,
+  engagementThresholds,
 }: {
   contacts: Contact[] | undefined
   loading: boolean
   rankingSystems?: RankingSystem[]
+  engagementThresholds?: EngagementThresholds
 }) {
   if (loading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {[1, 2, 3].map((i) => (
+        {[1, 2, 3, 4].map((i) => (
           <Skeleton key={i} className="h-40 rounded-xl" />
         ))}
       </div>
@@ -511,6 +515,7 @@ function ContactsSnapshot({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <RosterCard contacts={all} />
+      <EngagementCard contacts={all} thresholds={engagementThresholds} />
       <DemographicsCard contacts={all} rankingSystems={rankingSystems} />
       <TriggeredAlertsCard contacts={all} />
     </div>
@@ -846,6 +851,7 @@ export default function DashboardPage() {
           contacts={contacts}
           loading={contactsLoading}
           rankingSystems={team?.ranking_systems}
+          engagementThresholds={team?.engagement_thresholds}
         />
       </section>
 
