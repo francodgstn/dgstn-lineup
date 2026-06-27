@@ -37,7 +37,6 @@ import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
 import type { SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
-import { useRoleLabel } from '@/hooks/useRoleLabel'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { SettingsPinsProvider, useSettingsPins } from '@/contexts/SettingsPinsContext'
 import { SETTINGS_ITEMS } from '@/lib/settings-nav'
@@ -140,17 +139,9 @@ function NavLink({
   const pathname = usePathname()
   const t = useTranslations('Nav')
   const { isAtLeast } = usePlan()
-  const { team } = useAuth()
-  const role = useRoleLabel()
   const { openUpgradeModal } = useUpgradeModal()
   const Icon = item.icon
-
-  // The Contacts entry adopts the studio's configured role label (e.g. "Students")
-  // when one is set; otherwise it keeps the generic "Contacts".
-  const label =
-    item.labelKey === 'contacts' && team?.contact_role_label
-      ? role.plural
-      : t(item.labelKey as Parameters<typeof t>[0])
+  const label = t(item.labelKey as Parameters<typeof t>[0])
 
   const isLocked = !!item.minPlan && !isAtLeast(item.minPlan)
 

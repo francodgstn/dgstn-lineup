@@ -109,7 +109,6 @@ import {
   computeEngagementBand,
 } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
-import { useRoleLabel } from '@/hooks/useRoleLabel'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
@@ -1316,15 +1315,9 @@ function AcquisitionTimeline({
   control: Control<ProfileValues>
 }) {
   const t = useTranslations('Contacts')
-  const role = useRoleLabel()
   const currentRank = (ACQUISITION_STAGES as readonly string[]).indexOf(contact.acquisition_stage)
   const fromYear = new Date().getFullYear() - 50
   const lastIndex = ACQUISITION_STAGES.length - 1
-  // The final stage reads "Joined as {contact label}" (e.g. "Joined as Student").
-  const stageLabel = (stage: AcquisitionStage) =>
-    stage === 'joined'
-      ? t('joinedAs', { label: role.singular })
-      : t(`stage_${stage}` as Parameters<typeof t>[0])
 
   return (
     <div className="flex">
@@ -1353,7 +1346,7 @@ function AcquisitionTimeline({
             <p
               className={`mt-1.5 text-center text-[11px] font-medium leading-tight ${reached ? 'text-foreground' : 'text-muted-foreground'}`}
             >
-              {stageLabel(stage)}
+              {t(`stage_${stage}` as Parameters<typeof t>[0])}
             </p>
             {/* milestone date — centered under its step; editable for reached stages */}
             <div className="mt-1 flex justify-center px-0.5">
@@ -2008,7 +2001,6 @@ function MembershipTab({
   onSegChange: (s: 'subscription' | 'affiliation') => void
 }) {
   const t = useTranslations('Contacts')
-  const role = useRoleLabel()
   const SEGMENTS = [
     { id: 'subscription', label: t('tabSubscriptions') },
     { id: 'affiliation', label: t('tabAffiliations') },
@@ -2032,7 +2024,7 @@ function MembershipTab({
   const milestones: TimelineMilestone[] = [
     { ts: contact.trial_booked_at, label: t('stage_trial_booked'), tone: 'neutral' as const },
     { ts: contact.trial_attended_at, label: t('stage_trial_attended'), tone: 'neutral' as const },
-    { ts: contact.converted_at, label: t('joinedAs', { label: role.singular }), tone: 'positive' as const },
+    { ts: contact.converted_at, label: t('stage_joined'), tone: 'positive' as const },
     { ts: contact.archived_at, label: t('archivedBadge'), tone: 'negative' as const },
   ].flatMap(({ ts, label, tone }) => {
     const date = tsToDate(ts)

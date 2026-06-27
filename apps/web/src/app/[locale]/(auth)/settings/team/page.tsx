@@ -70,10 +70,6 @@ import type {
   TeamIntegration,
   PaymentGatewayType,
   PublicSurface,
-  RoleLabelPreset,
-  ContactRoleLabel,
-  RoleLabelTranslation,
-  TermLocale,
 } from '@linyup/shared'
 import {
   CalendarDays,
@@ -89,7 +85,6 @@ import {
   Clock,
   XCircle,
   Lock,
-  ChevronDown,
 } from 'lucide-react'
 import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
 import { RANK_PRESETS } from '@/lib/rank-presets'
@@ -249,228 +244,6 @@ function useIsSiteEnabled(teamId: string | null) {
       return snap.exists() && snap.data()?.enabled === true
     },
   })
-}
-
-// ─── contact role label form ──────────────────────────────────────────────────
-
-const ROLE_LABEL_PRESETS: RoleLabelPreset[] = [
-  'student', 'athlete', 'client', 'player', 'participant', 'custom',
-]
-
-// Languages a label/term can be translated into (Switzerland's four).
-const TERM_LOCALES: { key: TermLocale; flag: string; label: string }[] = [
-  { key: 'en', flag: '🇬🇧', label: 'EN' },
-  { key: 'de', flag: '🇩🇪', label: 'DE' },
-  { key: 'fr', flag: '🇫🇷', label: 'FR' },
-  { key: 'it', flag: '🇮🇹', label: 'IT' },
-]
-
-/** Preset → fully translated singular/plural per language. Picking a preset stores
- *  the English pair as the default plus translations for every language, so the
- *  label localises automatically. Custom keeps only what the studio types. */
-const ROLE_PRESET_TRANSLATIONS: Record<
-  Exclude<RoleLabelPreset, 'custom'>,
-  Record<TermLocale, RoleLabelTranslation>
-> = {
-  student: {
-    en: { singular: 'Student', plural: 'Students' },
-    de: { singular: 'Schüler', plural: 'Schüler' },
-    fr: { singular: 'Élève', plural: 'Élèves' },
-    it: { singular: 'Studente', plural: 'Studenti' },
-  },
-  athlete: {
-    en: { singular: 'Athlete', plural: 'Athletes' },
-    de: { singular: 'Athlet', plural: 'Athleten' },
-    fr: { singular: 'Athlète', plural: 'Athlètes' },
-    it: { singular: 'Atleta', plural: 'Atleti' },
-  },
-  client: {
-    en: { singular: 'Client', plural: 'Clients' },
-    de: { singular: 'Kunde', plural: 'Kunden' },
-    fr: { singular: 'Client', plural: 'Clients' },
-    it: { singular: 'Cliente', plural: 'Clienti' },
-  },
-  player: {
-    en: { singular: 'Player', plural: 'Players' },
-    de: { singular: 'Spieler', plural: 'Spieler' },
-    fr: { singular: 'Joueur', plural: 'Joueurs' },
-    it: { singular: 'Giocatore', plural: 'Giocatori' },
-  },
-  participant: {
-    en: { singular: 'Participant', plural: 'Participants' },
-    de: { singular: 'Teilnehmer', plural: 'Teilnehmer' },
-    fr: { singular: 'Participant', plural: 'Participants' },
-    it: { singular: 'Partecipante', plural: 'Partecipanti' },
-  },
-}
-
-function ContactRoleLabelForm({ team, teamId }: { team: Team; teamId: string }) {
-  const t = useTranslations('TeamSettings')
-  const tRole = useTranslations('RoleLabel')
-  const qc = useQueryClient()
-
-  const current = team.contact_role_label
-  const [preset, setPreset] = useState<RoleLabelPreset | ''>(current?.preset ?? '')
-  const [singular, setSingular] = useState(current?.singular ?? '')
-  const [plural, setPlural] = useState(current?.plural ?? '')
-  const [translations, setTranslations] = useState<Partial<Record<TermLocale, RoleLabelTranslation>>>(
-    current?.translations ?? {}
-  )
-  const [showTranslations, setShowTranslations] = useState(
-    !!current?.translations && Object.keys(current.translations).length > 0
-  )
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  const isCustom = preset === 'custom'
-
-  function onPresetChange(p: RoleLabelPreset | '') {
-    setPreset(p)
-    if (p && p !== 'custom') {
-      // Predefined option: store the English default + every translation.
-      const tr = ROLE_PRESET_TRANSLATIONS[p as Exclude<RoleLabelPreset, 'custom'>]
-      setSingular(tr.en.singular)
-      setPlural(tr.en.plural)
-      setTranslations({ ...tr })
-      setShowTranslations(false)
-    }
-  }
-
-  // Editing the default flips a predefined option to "custom" and drops the preset
-  // translations — custom starts as just a default the studio can translate itself.
-  function onDefaultChange(field: 'singular' | 'plural', value: string) {
-    if (field === 'singular') setSingular(value)
-    else setPlural(value)
-    if (preset !== 'custom') {
-      setPreset('custom')
-      setTranslations({})
-      setShowTranslations(false)
-    }
-  }
-
-  function updateTranslation(loc: TermLocale, field: 'singular' | 'plural', value: string) {
-    setTranslations((prev) => ({
-      ...prev,
-      [loc]: { singular: '', plural: '', ...prev[loc], [field]: value },
-    }))
-  }
-
-  async function onSave() {
-    if (!singular.trim() || !plural.trim()) return
-    setSaving(true)
-    try {
-      // Keep only languages where BOTH forms are filled; the rest fall back to the
-      // default. So a studio can add as few as one translation.
-      const cleaned: Partial<Record<TermLocale, RoleLabelTranslation>> = {}
-      for (const { key } of TERM_LOCALES) {
-        const tr = translations[key]
-        if (tr?.singular?.trim() && tr?.plural?.trim()) {
-          cleaned[key] = { singular: tr.singular.trim(), plural: tr.plural.trim() }
-        }
-      }
-      const label: ContactRoleLabel = {
-        ...(preset ? { preset: preset as RoleLabelPreset } : {}),
-        singular: singular.trim(),
-        plural: plural.trim(),
-        ...(Object.keys(cleaned).length > 0 ? { translations: cleaned } : {}),
-      }
-      await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { contact_role_label: label })
-      await qc.invalidateQueries({ queryKey: ['team', teamId] })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="space-y-3 pt-4 border-t">
-      <div>
-        <p className="text-sm font-medium">{t('roleLabelTitle')}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{t('roleLabelHelp')}</p>
-      </div>
-      <div className="space-y-1.5">
-        <Label>{t('roleLabelPreset')}</Label>
-        <Select value={preset} onValueChange={(v) => onPresetChange(v as RoleLabelPreset | '')}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder={t('roleLabelPresetNone')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">{t('roleLabelPresetNone')}</SelectItem>
-            {ROLE_LABEL_PRESETS.map((p) => (
-              <SelectItem key={p} value={p}>{tRole(`preset_${p}`)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      {/* Default singular + plural — used when there's no translation for the
-          viewer's language. Always visible so the studio can always tweak. */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>{t('roleLabelSingular')}</Label>
-          <Input
-            value={singular}
-            onChange={(e) => onDefaultChange('singular', e.target.value)}
-            placeholder={isCustom ? t('roleLabelSingular') : ''}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label>{t('roleLabelPlural')}</Label>
-          <Input
-            value={plural}
-            onChange={(e) => onDefaultChange('plural', e.target.value)}
-            placeholder={isCustom ? t('roleLabelPlural') : ''}
-          />
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">{t('roleLabelDefaultHint')}</p>
-
-      {/* Optional per-language translations (custom only — presets are pre-translated) */}
-      {isCustom && (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setShowTranslations((v) => !v)}
-            className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTranslations ? '' : '-rotate-90'}`} />
-            {t('roleLabelAddTranslations')}
-          </button>
-          {showTranslations && (
-            <div className="space-y-2 rounded-lg border p-3">
-              {TERM_LOCALES.map(({ key, flag, label }) => (
-                <div key={key} className="grid grid-cols-[2.5rem_1fr_1fr] items-center gap-2">
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <span>{flag}</span>
-                    <span>{label}</span>
-                  </span>
-                  <Input
-                    value={translations[key]?.singular ?? ''}
-                    onChange={(e) => updateTranslation(key, 'singular', e.target.value)}
-                    placeholder={t('roleLabelSingular')}
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    value={translations[key]?.plural ?? ''}
-                    onChange={(e) => updateTranslation(key, 'plural', e.target.value)}
-                    placeholder={t('roleLabelPlural')}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onSave} disabled={saving || !singular.trim() || !plural.trim()}>
-          {saving ? t('saving') : t('save')}
-        </Button>
-        {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
-      </div>
-    </div>
-  )
 }
 
 // ─── engagement thresholds ────────────────────────────────────────────────────
@@ -2336,7 +2109,6 @@ export default function TeamSettingsPage() {
             {tab === 'general' && (
               <>
                 <GeneralForm team={team} teamId={currentTeamId} />
-                <ContactRoleLabelForm team={team} teamId={currentTeamId} />
                 <EngagementThresholdsForm team={team} teamId={currentTeamId} />
               </>
             )}

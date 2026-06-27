@@ -57,31 +57,6 @@ export interface CustomFieldDefinition {
   required?: boolean
 }
 
-// ─── Contact role label ───────────────────────────────────────────────────────
-// The studio-configurable display noun for a contact (student / athlete / client /
-// player / participant / custom). Orthogonal to every status axis — it's what you
-// CALL the person, not where they sit on any axis. Resolved via useRoleLabel() with
-// an i18n fallback; never hardcode the noun in copy.
-export type RoleLabelPreset = 'student' | 'athlete' | 'client' | 'player' | 'participant' | 'custom'
-
-export type TermLocale = 'en' | 'de' | 'fr' | 'it'
-
-export interface RoleLabelTranslation {
-  singular: string
-  plural: string
-}
-
-export interface ContactRoleLabel {
-  preset?: RoleLabelPreset
-  // Default label — used when no translation exists for the viewer's locale.
-  // (Back-compat: pre-multilanguage data only has these two fields.)
-  singular: string
-  plural: string
-  // Optional per-locale overrides. Any locale absent here falls back to the
-  // default singular/plural above. A studio can fill as few as one language.
-  translations?: Partial<Record<TermLocale, RoleLabelTranslation>>
-}
-
 // A "page link" target — one of the team's own public surfaces, reachable at
 // /public/{slug}/{route}. Replaces the former per-surface boolean flags
 // (is{Booking,Membership,Courses,Shop}Link) with a single discriminator so new
@@ -195,8 +170,6 @@ export interface Team {
   description?: string
   primaryContact?: string
   sport_type?: string
-  // Display noun for contacts (see ContactRoleLabel). Unset → i18n default.
-  contact_role_label?: ContactRoleLabel
   // Day thresholds for the derived contact engagement band. Unset → defaults
   // (DEFAULT_ENGAGEMENT_THRESHOLDS). The band itself is never stored.
   engagement_thresholds?: EngagementThresholds

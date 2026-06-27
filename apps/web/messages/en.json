@@ -530,7 +530,6 @@
     "engagementNoSessions": "No sessions attended yet",
     "relationshipTimeline": "Relationship timeline",
     "timelineNow": "Now",
-    "joinedAs": "Joined as {label}",
     "tabReorder": "Reorder tabs",
     "tabReorderDone": "Done"
   },
@@ -854,16 +853,6 @@
     "empty": "No activities yet.",
     "emptyAction": "Create your first activity"
   },
-  "RoleLabel": {
-    "defaultSingular": "Member",
-    "defaultPlural": "Members",
-    "preset_student": "Student",
-    "preset_athlete": "Athlete",
-    "preset_client": "Client",
-    "preset_player": "Player",
-    "preset_participant": "Participant",
-    "preset_custom": "Custom"
-  },
   "TeamSettings": {
     "title": "Team settings",
     "noTeam": "No team found.",
@@ -885,12 +874,6 @@
     "defaultSurfaceBooking": "Booking",
     "defaultSurfaceSite": "Website",
     "defaultSurfaceSpace": "Online Courses",
-    "roleLabelTitle": "Contact role label",
-    "roleLabelHelp": "How you refer to a contact (e.g. 'student', 'athlete'). Used throughout the app.",
-    "roleLabelPreset": "Role preset",
-    "roleLabelSingular": "Singular",
-    "roleLabelPlural": "Plural",
-    "roleLabelPresetNone": "Select preset…",
     "save": "Save changes",
     "saving": "Saving…",
     "saved": "Saved!",
@@ -1017,8 +1000,6 @@
     "affiliationsEnabledLabel": "Enable affiliations",
     "affiliationsEnabledHelp": "Track affiliation records (e.g. club membership, federation licence) for contacts.",
     "affiliationsUpsell": "Affiliation tracking requires the Studio plan or above.",
-    "roleLabelDefaultHint": "Shown when there's no translation for the viewer's language.",
-    "roleLabelAddTranslations": "Add translations (optional)",
     "engagementTitle": "Engagement bands",
     "engagementHelp": "How recently a contact must have attended to count as engaged. The band is shown on each contact's page (read-only).",
     "engagementActiveWithin": "Active within (days)",

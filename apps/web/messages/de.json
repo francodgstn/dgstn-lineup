@@ -530,7 +530,6 @@
     "engagementNoSessions": "Noch keine Teilnahme",
     "relationshipTimeline": "Beziehungsverlauf",
     "timelineNow": "Jetzt",
-    "joinedAs": "Beigetreten als {label}",
     "tabReorder": "Tabs neu anordnen",
     "tabReorderDone": "Fertig"
   },
@@ -854,16 +853,6 @@
     "empty": "Noch keine Aktivitäten.",
     "emptyAction": "Erste Aktivität erstellen"
   },
-  "RoleLabel": {
-    "defaultSingular": "Mitglied",
-    "defaultPlural": "Mitglieder",
-    "preset_student": "Schüler/in",
-    "preset_athlete": "Sportler/in",
-    "preset_client": "Kunde/Kundin",
-    "preset_player": "Spieler/in",
-    "preset_participant": "Teilnehmer/in",
-    "preset_custom": "Benutzerdefiniert"
-  },
   "TeamSettings": {
     "title": "Team-Einstellungen",
     "noTeam": "Kein Team gefunden.",
@@ -885,12 +874,6 @@
     "defaultSurfaceBooking": "Buchung",
     "defaultSurfaceSite": "Website",
     "defaultSurfaceSpace": "Online-Kurse",
-    "roleLabelTitle": "Bezeichnung für Kontakte",
-    "roleLabelHelp": "Wie du einen Kontakt nennst (z. B. 'Schüler', 'Sportler'). Wird überall in der App verwendet.",
-    "roleLabelPreset": "Vorlage",
-    "roleLabelSingular": "Einzahl",
-    "roleLabelPlural": "Mehrzahl",
-    "roleLabelPresetNone": "Vorlage wählen…",
     "save": "Änderungen speichern",
     "saving": "Wird gespeichert…",
     "saved": "Gespeichert!",
@@ -1017,8 +1000,6 @@
     "affiliationsEnabledLabel": "Mitgliedschaften aktivieren",
     "affiliationsEnabledHelp": "Mitgliedschaftsnachweise (z. B. Vereinsmitgliedschaft, Verbandslizenz) für Kontakte verwalten.",
     "affiliationsUpsell": "Mitgliedschaftsverfolgung erfordert das Studio-Abo oder höher.",
-    "roleLabelDefaultHint": "Wird angezeigt, wenn es keine Übersetzung für die Sprache des Betrachters gibt.",
-    "roleLabelAddTranslations": "Übersetzungen hinzufügen (optional)",
     "engagementTitle": "Engagement-Stufen",
     "engagementHelp": "Wie kürzlich ein Kontakt teilgenommen haben muss, um als engagiert zu gelten. Die Stufe wird auf der Kontaktseite angezeigt (schreibgeschützt).",
     "engagementActiveWithin": "Aktiv innerhalb (Tage)",
