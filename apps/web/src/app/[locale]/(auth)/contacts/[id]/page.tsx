@@ -1310,14 +1310,74 @@ const MILESTONE_DATE_FIELD: Record<
 function AcquisitionTimeline({
   contact,
   control,
+  orientation = 'horizontal',
 }: {
   contact: Contact
   control: Control<ProfileValues>
+  orientation?: 'horizontal' | 'vertical'
 }) {
   const t = useTranslations('Contacts')
   const currentRank = (ACQUISITION_STAGES as readonly string[]).indexOf(contact.acquisition_stage)
   const fromYear = new Date().getFullYear() - 50
   const lastIndex = ACQUISITION_STAGES.length - 1
+
+  // Vertical variant — earliest stage on top; the rail (node + connector below)
+  // runs down the left, label + editable date to the right. Used in the 2-column
+  // acquisition card and whenever the layout stacks on small screens.
+  if (orientation === 'vertical') {
+    return (
+      <ol className="flex flex-col">
+        {ACQUISITION_STAGES.map((stage, i) => {
+          const reached = i <= currentRank
+          const isCurrent = i === currentRank
+          const isLast = i === lastIndex
+          return (
+            <li key={stage} className="flex gap-3">
+              {/* rail: node + connector down to the next node */}
+              <div className="flex flex-col items-center">
+                <span
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 transition-colors ${
+                    reached ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background'
+                  } ${isCurrent ? 'ring-4 ring-primary/15' : ''}`}
+                >
+                  {reached && <Check className="h-3 w-3" />}
+                </span>
+                {!isLast && (
+                  <span className={`my-1 w-0.5 flex-1 ${i < currentRank ? 'bg-primary' : 'bg-border'}`} />
+                )}
+              </div>
+              {/* label + milestone date */}
+              <div className={`min-w-0 ${isLast ? '' : 'pb-4'}`}>
+                <p
+                  className={`text-[13px] font-medium leading-5 ${reached ? 'text-foreground' : 'text-muted-foreground'}`}
+                >
+                  {t(`stage_${stage}` as Parameters<typeof t>[0])}
+                </p>
+                {reached ? (
+                  <Controller
+                    control={control}
+                    name={MILESTONE_DATE_FIELD[stage]}
+                    render={({ field }) => (
+                      <DatePicker
+                        variant="ghost"
+                        value={field.value}
+                        onChange={field.onChange}
+                        fromYear={fromYear}
+                        placeholder="—"
+                        className="-ml-1.5 mt-0.5 text-xs"
+                      />
+                    )}
+                  />
+                ) : (
+                  <p className="mt-0.5 text-xs text-muted-foreground">—</p>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+    )
+  }
 
   return (
     <div className="flex">
@@ -1844,64 +1904,70 @@ function ProfileTab({
               <StageCorrectionMenu contact={contact} onCorrected={onSaved} />
             </div>
           </div>
-          {/* Stage timeline — dates shown as muted text; click a date to adjust (rare) */}
-          <div className="pt-1">
-            <AcquisitionTimeline contact={contact} control={control} />
-          </div>
-          {/* Entry / Source / Source detail — one row on desktop */}
-          <div className="flex flex-wrap items-start gap-4">
-            {/* Entry — editable correction, does NOT move stage */}
-            <Field className="flex-1 min-w-[180px]" label={t('fieldAcquisitionEntry')}>
-              <Controller
-                control={control}
-                name="entry"
-                render={({ field }) => (
-                  <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
-                    <SelectTrigger className="w-full">
-                      <span className="flex flex-1 text-left text-sm truncate">
-                        {field.value
-                          ? t(`entry_${field.value}` as Parameters<typeof t>[0])
-                          : <span className="text-muted-foreground">—</span>}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">—</SelectItem>
-                      {(CONTACT_ENTRIES as readonly ContactEntry[]).map((e) => (
-                        <SelectItem key={e} value={e}>{t(`entry_${e}` as Parameters<typeof t>[0])}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              <p className="text-xs text-muted-foreground">{t('fieldAcquisitionEntryHelp')}</p>
-            </Field>
-            {/* Source */}
-            <Field className="flex-1 min-w-[160px]" label={t('fieldAcquisitionSource')}>
-              <Controller
-                control={control}
-                name="source"
-                render={({ field }) => (
-                  <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
-                    <SelectTrigger className="w-full">
-                      <span className="flex flex-1 text-left text-sm truncate">
-                        {field.value
-                          ? t(`source_${field.value}` as Parameters<typeof t>[0])
-                          : <span className="text-muted-foreground">—</span>}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">—</SelectItem>
-                      {(CONTACT_SOURCES as readonly ContactSource[]).map((s) => (
-                        <SelectItem key={s} value={s}>{t(`source_${s}` as Parameters<typeof t>[0])}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </Field>
-            <Field className="flex-1 min-w-[160px]" label={t('fieldAcquisitionSourceDetail')}>
-              <Input {...register('source_detail')} />
-            </Field>
+          {/* Two columns on desktop: inputs left, vertical stage timeline right, with
+              a light divider between. Stacks on mobile — inputs first, timeline below. */}
+          <div className="grid gap-x-6 gap-y-5 md:grid-cols-[minmax(0,1fr)_1px_minmax(190px,240px)]">
+            {/* Left — entry / source / source detail, stacked */}
+            <div className="space-y-4">
+              {/* Entry — editable correction, does NOT move stage */}
+              <Field label={t('fieldAcquisitionEntry')}>
+                <Controller
+                  control={control}
+                  name="entry"
+                  render={({ field }) => (
+                    <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
+                      <SelectTrigger className="w-full">
+                        <span className="flex flex-1 text-left text-sm truncate">
+                          {field.value
+                            ? t(`entry_${field.value}` as Parameters<typeof t>[0])
+                            : <span className="text-muted-foreground">—</span>}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">—</SelectItem>
+                        {(CONTACT_ENTRIES as readonly ContactEntry[]).map((e) => (
+                          <SelectItem key={e} value={e}>{t(`entry_${e}` as Parameters<typeof t>[0])}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="text-xs text-muted-foreground">{t('fieldAcquisitionEntryHelp')}</p>
+              </Field>
+              {/* Source */}
+              <Field label={t('fieldAcquisitionSource')}>
+                <Controller
+                  control={control}
+                  name="source"
+                  render={({ field }) => (
+                    <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
+                      <SelectTrigger className="w-full">
+                        <span className="flex flex-1 text-left text-sm truncate">
+                          {field.value
+                            ? t(`source_${field.value}` as Parameters<typeof t>[0])
+                            : <span className="text-muted-foreground">—</span>}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">—</SelectItem>
+                        {(CONTACT_SOURCES as readonly ContactSource[]).map((s) => (
+                          <SelectItem key={s} value={s}>{t(`source_${s}` as Parameters<typeof t>[0])}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </Field>
+              <Field label={t('fieldAcquisitionSourceDetail')}>
+                <Input {...register('source_detail')} />
+              </Field>
+            </div>
+            {/* Divider — vertical on desktop, hidden when stacked */}
+            <div className="hidden md:block bg-border" />
+            {/* Right — vertical stage timeline (earliest on top) */}
+            <div className="md:pt-0.5">
+              <AcquisitionTimeline contact={contact} control={control} orientation="vertical" />
+            </div>
           </div>
         </div>
 
