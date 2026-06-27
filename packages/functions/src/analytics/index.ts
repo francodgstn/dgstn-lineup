@@ -4,7 +4,7 @@ import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { format } from 'date-fns'
 import { to } from '../utils/async'
-import { getActiveContacts, countByField } from '../utils/contacts'
+import { getActiveContacts, countByField, countByDistinctKeys } from '../utils/contacts'
 import {
   ACQUISITION_STAGES,
   CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
@@ -515,11 +515,16 @@ export const weeklyReports = onSchedule(
         const contacts_with_active_affiliation = contacts.filter(
           (c) => (c.affiliation_summary as { has_active?: boolean } | undefined)?.has_active === true
         ).length
-        const contacts_count_by_subscription_type = countByField(contacts, 'subscription_type_id')
-        const contacts_count_by_recurrence = countByField(
-          contacts.filter((c) => c.subscription_type_id),
-          'subscription_recurrence'
-        )
+        const contacts_count_by_affiliation_type = countByDistinctKeys(contacts, (c) => {
+          return (c.affiliation_summary as { types?: string[] } | undefined)?.types ?? []
+        })
+        const contacts_with_active_subscription = contacts.filter(
+          (c) => ((c.active_subscriptions as Array<{ subscription_type_id: string }> | undefined) ?? []).length > 0
+        ).length
+        const contacts_count_by_subscription_type = countByDistinctKeys(contacts, (c) => {
+          const subs = (c.active_subscriptions as Array<{ subscription_type_id: string }> | undefined) ?? []
+          return subs.map((s) => s.subscription_type_id)
+        })
 
         const weekStart = Timestamp.fromMillis(now.getTime() - 7 * 24 * 3600 * 1000)
         const [, sessionsSnap] = await to(
@@ -575,8 +580,9 @@ export const weeklyReports = onSchedule(
           active_contacts_count,
           contacts_count_by_stage,
           contacts_with_active_affiliation,
+          contacts_count_by_affiliation_type,
+          contacts_with_active_subscription,
           contacts_count_by_subscription_type,
-          contacts_count_by_recurrence,
           sessions_count,
           sessions_count_by_type,
           bookings_count,

@@ -3,6 +3,7 @@ import type { MigrationConfig } from '../config'
 import { sourceDb, targetDb } from '../config'
 import { BatchWriter } from '../batch-writer'
 import { CANONICAL_SUBSCRIPTION_TYPES } from '../transforms/subscriptions'
+import { transformTeamWeeklyReport } from '../transforms/team-weekly-reports'
 
 const TEAM_SUBCOLLECTIONS = [
   'team_members',          // must come first — rules depend on this for read access
@@ -60,7 +61,15 @@ export async function pass11TeamSubcollections(
           const existing = await tgtRef.get()
           if (existing.exists) { bw.skip(); continue }
         }
-        bw.set(tgtRef, d.data())
+
+        // Apply per-subcollection transforms before writing.
+        // team_weekly_reports: remap to the new field contract (drop deprecated fields,
+        // derive new affiliation/subscription counts, remap or omit HMD-specific keys).
+        const data =
+          sub === 'team_weekly_reports'
+            ? transformTeamWeeklyReport(d.data() as Record<string, unknown>)
+            : d.data()
+        bw.set(tgtRef, data)
 
         if (sub === 'team_members' && adminUid && d.id === adminUid) {
           adminHandledInSource = true

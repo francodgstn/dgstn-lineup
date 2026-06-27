@@ -27,18 +27,26 @@ function paletteColor(i: number) { return PALETTE[i % PALETTE.length] }
 // ─── dimensions ──────────────────────────────────────────────────────────────
 // Built dynamically inside the component so the membership term can be injected.
 
-function getField(dim: string): string {
-  if (dim === 'subscription_type') return 'contacts_count_by_subscription_type'
-  return 'contacts_count_by_stage'
+// Fallback display for an affiliation type_key (e.g. 'federation_licence').
+function humanizeKey(k: string): string {
+  const s = k.replace(/[_-]+/g, ' ').trim()
+  return s ? s[0].toUpperCase() + s.slice(1) : k
 }
 
 function countFor(report: WeeklyReport | undefined, dim: string, value: string): number {
   if (!report) return 0
-  // Affiliation is a single denormalised scalar per week (contacts with ≥1 active
-  // affiliation), not a by-value map — so it's a single trend line.
-  if (dim === 'affiliation') return report.contacts_with_active_affiliation ?? 0
-  const field = getField(dim) as keyof WeeklyReport
-  const map = (report[field] as Record<string, number>) ?? {}
+  // Affiliation & subscription are multi-valued (a contact may hold several): the
+  // "all" series is the distinct-contact scalar, per-value series the by-type map.
+  if (dim === 'affiliation') {
+    if (value === 'all') return report.contacts_with_active_affiliation ?? 0
+    return report.contacts_count_by_affiliation_type?.[value] ?? 0
+  }
+  if (dim === 'subscription_type') {
+    if (value === 'all') return report.contacts_with_active_subscription ?? 0
+    return report.contacts_count_by_subscription_type?.[value] ?? 0
+  }
+  // Acquisition stage is exclusive, so summing the map gives distinct contacts.
+  const map = report.contacts_count_by_stage ?? {}
   if (value === 'all') return Object.values(map).reduce((s, v) => s + v, 0)
   return map[value] ?? 0
 }
@@ -152,14 +160,17 @@ export function ContactsSummaryCard({
       ]
     }
     if (dimension === 'affiliation') {
-      // Single denormalised scalar — one trend of contacts with an active affiliation.
-      return [{ value: 'all', label: 'Affiliated', color: typeColor('member') }]
+      const keys = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_affiliation_type ?? {})))).sort()
+      return [
+        { value: 'all', label: 'Affiliated', color: typeColor('member') },
+        ...keys.map((k, i) => ({ value: k, label: humanizeKey(k), color: paletteColor(i) })),
+      ]
     }
     // subscription_type
     const ids = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_subscription_type ?? {}))))
     const nameMap = Object.fromEntries((subscriptionTypes ?? []).map((st) => [st.id, st.name]))
     return [
-      { value: 'all', label: 'All subscriptions', color: FALLBACK },
+      { value: 'all', label: 'Subscribed', color: FALLBACK },
       ...ids.map((id, i) => ({ value: id, label: nameMap[id] ?? id, color: paletteColor(i) })),
     ]
   }, [dimension, weeklyReports, subscriptionTypes])

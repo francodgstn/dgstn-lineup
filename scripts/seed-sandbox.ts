@@ -3043,16 +3043,24 @@ async function seedWeeklyReports(teamId: string) {
   // live generateWeeklyReports function, which writes contacts_count_by_stage.
   const byStage: Record<string, number> = {}
   const byStatus: Record<string, number> = {}
-  const byRecurrence: Record<string, number> = {}
+  const byAffiliationType: Record<string, number> = {}
   const bySub: Record<string, number> = {}
+  let withAffiliation = 0
+  let withSubscription = 0
   for (const c of CONTACT_POOL) {
     const stage = stageForPoolEntry(c.type, c.totalSessions)
     byStage[stage] = (byStage[stage] ?? 0) + 1
     byStatus[c.status] = (byStatus[c.status] ?? 0) + 1
+    // Affiliation: standalone studios issue a team-local 'club' to every
+    // non-external, non-guest contact (mirrors the contact seeding above).
+    // by-type counts every holder; the scalar only counts active statuses.
+    if (c.type !== 'external' && c.status !== 'guest') {
+      byAffiliationType.club = (byAffiliationType.club ?? 0) + 1
+      if (statusCountsAsActive(c.status)) withAffiliation++
+    }
     if (c.sub) {
       bySub[`${teamId}-sub-${c.sub}`] = (bySub[`${teamId}-sub-${c.sub}`] ?? 0) + 1
-      const rec = c.sub === 'monthly' || c.sub === 'quarterly' || c.sub === 'annual' ? c.sub : null
-      if (rec) byRecurrence[rec] = (byRecurrence[rec] ?? 0) + 1
+      withSubscription++
     }
   }
   const curActive = CONTACT_POOL.length
@@ -3082,8 +3090,10 @@ async function seedWeeklyReports(teamId: string) {
         active_contacts_count: Math.max(0, Math.round(curActive * factor)),
         contacts_count_by_stage: scaleMap(byStage, factor),
         contacts_count_by_membership_status: scaleMap(byStatus, factor),
+        contacts_with_active_affiliation: Math.round(withAffiliation * factor),
+        contacts_count_by_affiliation_type: scaleMap(byAffiliationType, factor),
+        contacts_with_active_subscription: Math.round(withSubscription * factor),
         contacts_count_by_subscription_type: scaleMap(bySub, factor),
-        contacts_count_by_recurrence: scaleMap(byRecurrence, factor),
         sessions_count: group + coaching,
         sessions_count_by_type: { group_class: group, coaching },
         bookings_count: bookings,

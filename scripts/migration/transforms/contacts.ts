@@ -222,8 +222,28 @@ export function transformContact(src: Record<string, unknown>): Record<string, u
     out.subscription_amount    = price.amount
     // Keep subscription_recurrence authoritative from the chosen price
     out.subscription_recurrence = price.recurrence
+
+    // Populate active_subscriptions with a single-entry summary so the live
+    // weeklyReports Cloud Function can count subscriptions by type correctly.
+    // This mirrors the shape of ActiveSubscriptionSummary (packages/shared) and
+    // carries the same quality of data as the flat subscription_* snapshot fields
+    // already written above — a best-effort migration record, not a Stripe object.
+    // The `status` is set to 'active' because HMD did not track Stripe rollup
+    // status; contacts with a subscription_type were active members by definition.
+    // onMemberSubscriptionWrite will replace this array once real Stripe
+    // subscriptions are created for the team.
+    out.active_subscriptions = [
+      {
+        subscription_type_id:   match.typeId,
+        subscription_type_name: match.typeName,
+        recurrence:             price.recurrence,
+        amount:                 price.amount,
+        status:                 'active',
+      },
+    ]
   }
-  // If match is null, leave all subscription_* fields unchanged (pass through source values).
+  // If match is null, leave all subscription_* fields unchanged (pass through source values)
+  // and do not write active_subscriptions (no reliable canonical mapping available).
 
   return out
 }

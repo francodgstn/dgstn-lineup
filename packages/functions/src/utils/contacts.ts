@@ -123,3 +123,24 @@ export async function countContactsByRecurrence(
     'subscription_recurrence',
   )
 }
+
+/**
+ * Counts contacts by a set of keys derived from each contact via `getKeys`.
+ * Each key returned by `getKeys` is deduplicated per contact (using a Set)
+ * before incrementing, so a contact that maps to the same key twice counts once.
+ * Returns a map of { key → count }.
+ */
+export function countByDistinctKeys(
+  contacts: admin.firestore.DocumentData[],
+  getKeys: (c: admin.firestore.DocumentData) => string[],
+): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const c of contacts) {
+    const seen = new Set(getKeys(c))
+    for (const key of seen) {
+      if (!key) continue
+      counts[key] = (counts[key] ?? 0) + 1
+    }
+  }
+  return counts
+}
