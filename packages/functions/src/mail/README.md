@@ -82,6 +82,15 @@ defaults shown):
    Subscribe to: `delivered`, `hardBounce`, `softBounce`, `blocked`, `spam`,
    `invalid`/`invalid_email`, `unsubscribed`.
 
+## Receiving replies (inbound)
+
+Brevo is **send-only** — it has no inbox, so replies to Linyup mail (`hello@`, and
+`studios@` when the Reply-To is stripped) need a separate inbound path. That path —
+**OVH email redirection** for receiving plus **Gmail "Send mail as" via Brevo's SMTP
+relay** for replying — lives entirely in DNS / OVH / a personal Gmail account, with no
+dependency on this module. See [`docs/email-inbound.md`](../../../../docs/email-inbound.md)
+for the full runbook.
+
 ## BYO domain flow
 
 `registerSenderDomain` → Brevo `POST /senders/domains` → persists `pending` config +
