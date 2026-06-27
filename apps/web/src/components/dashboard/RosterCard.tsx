@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import type { Contact } from '@linyup/shared'
+import type { Contact, EngagementBand, EngagementThresholds } from '@linyup/shared'
+import { ENGAGEMENT_BANDS, computeEngagementBand } from '@linyup/shared'
 
 // Acquisition stage is mutually exclusive (a contact is in exactly one), so it's
 // shown as a donut — true "parts of a whole".
@@ -16,6 +17,15 @@ const STAGE_CONFIG = [
   { key: 'trial_attended', tKey: 'stage_trial_attended', color: '#3B82F6' },
   { key: 'joined',         tKey: 'stage_joined',         color: '#6366F1' },
 ] as const
+
+// Engagement band is also exclusive (each contact lands in exactly one), so it's
+// a donut too. Colours mirror the contact-page meter.
+const ENGAGEMENT_COLOR: Record<EngagementBand, string> = {
+  active: '#10B981',   // Regular
+  low: '#F59E0B',      // Slipping
+  at_risk: '#EF4444',  // At risk
+  inactive: '#9CA3AF', // Stopped
+}
 
 const SERIES_COLORS = ['#6366F1', '#10B981', '#F59E0B', '#8B5CF6', '#0EA5E9', '#EF4444', '#84CC16', '#14B8A6']
 const NONE_COLOR = '#D1D5DB'
@@ -26,6 +36,13 @@ type Datum = { name: string; value: number; color: string }
 function humanizeKey(k: string): string {
   const s = k.replace(/[_-]+/g, ' ').trim()
   return s ? s[0].toUpperCase() + s.slice(1) : k
+}
+
+function tsToMs(ts: unknown): number | null {
+  if (!ts) return null
+  if (typeof (ts as { toDate?: unknown }).toDate === 'function') return (ts as { toDate(): Date }).toDate().getTime()
+  if (typeof (ts as { seconds?: unknown }).seconds === 'number') return (ts as { seconds: number }).seconds * 1000
+  return null
 }
 
 function DonutChart({ data, total }: { data: Datum[]; total: number }) {
@@ -89,15 +106,32 @@ function BarList({ data, total }: { data: Datum[]; total: number }) {
   )
 }
 
-export function RosterCard({ contacts }: { contacts: Contact[] }) {
+export function RosterCard({
+  contacts,
+  thresholds,
+}: {
+  contacts: Contact[]
+  thresholds?: EngagementThresholds
+}) {
   const t = useTranslations('Contacts')
-  const [view, setView] = useState<'type' | 'affiliation' | 'subscription'>('type')
+  const [view, setView] = useState<'engagement' | 'acquisition' | 'affiliation' | 'subscription'>('engagement')
 
   const active = contacts.filter((c) => !c.archived_at)
   const total = active.length
 
-  // ── Type (exclusive) ──
-  const typeData: Datum[] = STAGE_CONFIG
+  // ── Engagement band (exclusive) — derived from attendance recency ──
+  const engCounts: Record<EngagementBand, number> = { active: 0, low: 0, at_risk: 0, inactive: 0 }
+  const now = Date.now()
+  for (const c of active) {
+    const refMs = tsToMs(c.last_session_at) ?? tsToMs(c.created_at)
+    engCounts[computeEngagementBand(refMs, thresholds, now)]++
+  }
+  const engData: Datum[] = (ENGAGEMENT_BANDS as EngagementBand[])
+    .map((b) => ({ name: t(`engagement_${b}` as Parameters<typeof t>[0]), value: engCounts[b], color: ENGAGEMENT_COLOR[b] }))
+    .filter((d) => d.value > 0)
+
+  // ── Acquisition stage (exclusive) ──
+  const acqData: Datum[] = STAGE_CONFIG
     .map((s) => ({ name: t(s.tKey), value: active.filter((c) => c.acquisition_stage === s.key).length, color: s.color }))
     .filter((d) => d.value > 0)
 
@@ -136,8 +170,9 @@ export function RosterCard({ contacts }: { contacts: Contact[] }) {
   if (noSub > 0) subData.push({ name: t('filterSubscriptionNone'), value: noSub, color: NONE_COLOR })
 
   const isMulti = view === 'affiliation' || view === 'subscription'
+  const donutData = view === 'engagement' ? engData : acqData
   const barData = view === 'affiliation' ? affData : subData
-  const hasData = view === 'type' ? typeData.length > 0 : barData.length > 0
+  const hasData = isMulti ? barData.length > 0 : donutData.length > 0
 
   return (
     <Card>
@@ -148,9 +183,10 @@ export function RosterCard({ contacts }: { contacts: Contact[] }) {
             <p className="text-xs text-muted-foreground mt-0.5">{t('overviewActiveContacts', { count: total })}</p>
           </div>
           <Select value={view} onValueChange={(v) => { if (v) setView(v as typeof view) }}>
-            <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="w-[140px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="type">{t('overviewViewType')}</SelectItem>
+              <SelectItem value="engagement">{t('overviewViewEngagement')}</SelectItem>
+              <SelectItem value="acquisition">{t('overviewViewType')}</SelectItem>
               <SelectItem value="affiliation">{t('overviewViewAffiliation')}</SelectItem>
               <SelectItem value="subscription">{t('overviewViewSubscription')}</SelectItem>
             </SelectContent>
@@ -160,17 +196,15 @@ export function RosterCard({ contacts }: { contacts: Contact[] }) {
       <CardContent className="pt-0 pb-4">
         {total === 0 || !hasData ? (
           <p className="text-sm text-muted-foreground py-4">{t('overviewEmpty')}</p>
-        ) : view === 'type' ? (
+        ) : isMulti ? (
           <>
-            <DonutChart key={view} data={typeData} total={total} />
-            <DonutLegend data={typeData} total={total} />
+            <BarList data={barData} total={total} />
+            <p className="text-[11px] text-muted-foreground mt-3 leading-snug">{t('overviewOverlapNote')}</p>
           </>
         ) : (
           <>
-            <BarList data={barData} total={total} />
-            {isMulti && (
-              <p className="text-[11px] text-muted-foreground mt-3 leading-snug">{t('overviewOverlapNote')}</p>
-            )}
+            <DonutChart key={view} data={donutData} total={total} />
+            <DonutLegend data={donutData} total={total} />
           </>
         )}
       </CardContent>

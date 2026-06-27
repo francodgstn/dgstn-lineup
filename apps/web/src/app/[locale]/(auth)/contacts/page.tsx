@@ -44,7 +44,6 @@ import {
 } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
-import { EngagementCard } from '@/components/dashboard/EngagementCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { getPrimaryRank } from '@/lib/rank-utils'
@@ -451,15 +450,13 @@ function OverviewPanel({
       </button>
       {open && (
         loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Skeleton className="h-52 rounded-xl" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Skeleton className="h-52 rounded-xl" />
             <Skeleton className="h-52 rounded-xl" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <RosterCard contacts={contacts} />
-            <EngagementCard contacts={contacts} thresholds={engagementThresholds} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <RosterCard contacts={contacts} thresholds={engagementThresholds} />
             <DemographicsCard contacts={contacts} rankingSystems={rankingSystems} />
           </div>
         )

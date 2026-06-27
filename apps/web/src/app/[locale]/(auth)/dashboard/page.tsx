@@ -59,7 +59,6 @@ import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SetupChecklist } from '@/components/onboarding/SetupChecklist'
 import { RosterCard } from '@/components/dashboard/RosterCard'
-import { EngagementCard } from '@/components/dashboard/EngagementCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { ContactsSummaryCard } from '@/components/dashboard/ContactsSummaryCard'
 import { BookingsTrendCard } from '@/components/dashboard/BookingsTrendCard'
@@ -514,16 +513,13 @@ function ContactsSnapshot({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <RosterCard contacts={all} />
-      <EngagementCard contacts={all} thresholds={engagementThresholds} />
+      <RosterCard contacts={all} thresholds={engagementThresholds} />
       <DemographicsCard contacts={all} rankingSystems={rankingSystems} />
-      {/* Triggered alerts — temporarily hidden (TriggeredAlertsCard below is kept for re-enabling) */}
+      <TriggeredAlertsCard contacts={all} />
     </div>
   )
 }
 
-// Temporarily hidden from the Contacts snapshot — kept here to re-enable later.
-/* eslint-disable @typescript-eslint/no-unused-vars */
 function TriggeredAlertsCard({ contacts }: { contacts: Contact[] }) {
   const t = useTranslations('Dashboard')
 
@@ -588,7 +584,6 @@ function TriggeredAlertsCard({ contacts }: { contacts: Contact[] }) {
     </Card>
   )
 }
-/* eslint-enable @typescript-eslint/no-unused-vars */
 
 // ─── trends upsell (Coach plan) ──────────────────────────────────────────────
 
@@ -791,7 +786,15 @@ export default function DashboardPage() {
         {/* ── 2. Quick actions (single dropdown chip on very small screens) ── */}
         <QuickActions teamSlug={teamSlug} />
 
-        {/* ── 3. Highlights ── */}
+        {/* ── 3. Agenda + discovery panel ── */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <AgendaCard teamId={currentTeamId} />
+          </div>
+          <DiscoverPanel />
+        </div>
+
+        {/* ── 4. Highlights ── */}
         <StatsStrip>
           <StatCard
             title={t('statEngaged')}
@@ -837,14 +840,6 @@ export default function DashboardPage() {
             href="/contacts"
           />
         </StatsStrip>
-
-        {/* ── 4. Agenda + discovery panel ── */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <AgendaCard teamId={currentTeamId} />
-          </div>
-          <DiscoverPanel />
-        </div>
       </section>
 
       {/* ── 3. Contacts snapshot ── */}

@@ -28,13 +28,15 @@ function paletteColor(i: number) { return PALETTE[i % PALETTE.length] }
 // Built dynamically inside the component so the membership term can be injected.
 
 function getField(dim: string): string {
-  if (dim === 'subscription_type')       return 'contacts_count_by_subscription_type'
-  if (dim === 'subscription_recurrence') return 'contacts_count_by_recurrence'
+  if (dim === 'subscription_type') return 'contacts_count_by_subscription_type'
   return 'contacts_count_by_stage'
 }
 
 function countFor(report: WeeklyReport | undefined, dim: string, value: string): number {
   if (!report) return 0
+  // Affiliation is a single denormalised scalar per week (contacts with ≥1 active
+  // affiliation), not a by-value map — so it's a single trend line.
+  if (dim === 'affiliation') return report.contacts_with_active_affiliation ?? 0
   const field = getField(dim) as keyof WeeklyReport
   const map = (report[field] as Record<string, number>) ?? {}
   if (value === 'all') return Object.values(map).reduce((s, v) => s + v, 0)
@@ -131,9 +133,9 @@ export function ContactsSummaryCard({
   trendsWeeks = 13, subscriptionTypes = [], title,
 }: Props) {
   const DIMENSIONS = [
-    { value: 'type',                    label: 'Acquisition stage' },
-    { value: 'subscription_type',       label: 'Subscription' },
-    { value: 'subscription_recurrence', label: 'Billing recurrence' },
+    { value: 'type',              label: 'Acquisition stage' },
+    { value: 'affiliation',       label: 'Affiliation' },
+    { value: 'subscription_type', label: 'Subscription' },
   ]
 
   const [dimension, setDimension] = useState('type')
@@ -149,12 +151,9 @@ export function ContactsSummaryCard({
         ...types.map((t) => ({ value: t, label: t, color: typeColor(t) })),
       ]
     }
-    if (dimension === 'subscription_recurrence') {
-      const recs = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_recurrence ?? {})))).sort()
-      return [
-        { value: 'all', label: 'All recurrences', color: FALLBACK },
-        ...recs.map((r, i) => ({ value: r, label: r, color: paletteColor(i) })),
-      ]
+    if (dimension === 'affiliation') {
+      // Single denormalised scalar — one trend of contacts with an active affiliation.
+      return [{ value: 'all', label: 'Affiliated', color: typeColor('member') }]
     }
     // subscription_type
     const ids = Array.from(new Set(weeklyReports.flatMap((r) => Object.keys(r.contacts_count_by_subscription_type ?? {}))))
