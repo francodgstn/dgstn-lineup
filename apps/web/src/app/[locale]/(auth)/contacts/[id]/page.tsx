@@ -180,6 +180,11 @@ import { GoalsTab } from './GoalsTab'
 import { NotesTab, useContactNotesCount } from './NotesTab'
 import { PaymentsTab, MemberSubscriptionsSection, useContactMemberSubscriptions } from './PaymentsTab'
 import { PlanGate } from '@/components/plan/PlanGate'
+import {
+  RelationshipTimeline,
+  type TimelineMilestone,
+  type TimelineSpan,
+} from '@/components/contacts/RelationshipTimeline'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
 
@@ -1990,8 +1995,40 @@ function MembershipTab({
     { id: 'affiliation', label: t('tabAffiliations') },
   ] as const
 
+  // Relationship timeline data — subscription + affiliation periods as spans, and
+  // the acquisition milestones as points. Concurrent spans are packed by the ribbon.
+  const { data: subHistory = [] } = useSubscriptionHistory(contact.id)
+  const { data: affiliations = [] } = useContactAffiliations(contact.id)
+
+  const subscriptionSpans: TimelineSpan[] = subHistory.flatMap((h) => {
+    const start = tsToDate(h.start_date)
+    if (!start) return []
+    return [{ id: h.id, label: h.subscription_type_name ?? '—', start, end: tsToDate(h.end_date) ?? null }]
+  })
+  const affiliationSpans: TimelineSpan[] = affiliations.flatMap((a) => {
+    const start = tsToDate(a.valid_from)
+    if (!start) return []
+    return [{ id: a.id, label: a.label ?? a.type_key ?? '—', start, end: tsToDate(a.valid_until) ?? null }]
+  })
+  const milestones: TimelineMilestone[] = [
+    { ts: contact.trial_booked_at, label: t('stage_trial_booked'), tone: 'neutral' as const },
+    { ts: contact.trial_attended_at, label: t('stage_trial_attended'), tone: 'neutral' as const },
+    { ts: contact.converted_at, label: t('stage_joined'), tone: 'positive' as const },
+    { ts: contact.archived_at, label: t('archivedBadge'), tone: 'negative' as const },
+  ].flatMap(({ ts, label, tone }) => {
+    const date = tsToDate(ts)
+    return date ? [{ id: label, label, date, tone }] : []
+  })
+
   return (
     <div className="space-y-4">
+      {/* Relationship overview — read-only lifeline of acquisition + subs + affiliations */}
+      <RelationshipTimeline
+        milestones={milestones}
+        subscriptions={subscriptionSpans}
+        affiliations={affiliationSpans}
+      />
+
       {/* Acquisition — the start of the business relationship (moved here from Profile) */}
       <AcquisitionCard contact={contact} onSaved={onSaved} />
 
