@@ -40,15 +40,40 @@
     "title": "Built to run your studio",
     "subtitle": "Everything a coach or small studio needs to run — whatever you teach. Simple by default.",
     "cards": {
-      "sessions": { "title": "Plan your classes", "benefit": "Recurring sessions, capacity, and attendance in one calendar." },
-      "bookings": { "title": "Take bookings online", "benefit": "Members reserve their spot in a tap." },
-      "memberships": { "title": "Manage subscriptions", "benefit": "Sell plans and track every renewal automatically." },
-      "payments": { "title": "Collect payments", "benefit": "Dues collect themselves — no more chasing." },
-      "rankings": { "title": "Track ranks & levels", "benefit": "Grade members and keep them chasing the next level." },
-      "mobileApp": { "title": "Give members an app", "benefit": "A branded iOS and Android app to book and check in." },
-      "automations": { "title": "Automate the busywork", "benefit": "Welcome, remind, and win back contacts on autopilot." }
+      "sessions": {
+        "title": "Plan your classes",
+        "benefit": "Recurring sessions, capacity, and attendance in one calendar."
+      },
+      "bookings": {
+        "title": "Take bookings online",
+        "benefit": "Members reserve their spot in a tap."
+      },
+      "memberships": {
+        "title": "Manage subscriptions",
+        "benefit": "Sell plans and track every renewal automatically."
+      },
+      "payments": {
+        "title": "Collect payments",
+        "benefit": "Dues collect themselves — no more chasing."
+      },
+      "rankings": {
+        "title": "Track ranks & levels",
+        "benefit": "Grade members and keep them chasing the next level."
+      },
+      "mobileApp": {
+        "title": "Give members an app",
+        "benefit": "A branded iOS and Android app to book and check in."
+      },
+      "automations": {
+        "title": "Automate the busywork",
+        "benefit": "Welcome, remind, and win back contacts on autopilot."
+      }
     },
-    "cta": { "title": "See it all in action", "body": "Take a real studio for a spin — no sign-up needed.", "button": "Explore the live demo" }
+    "cta": {
+      "title": "See it all in action",
+      "body": "Take a real studio for a spin — no sign-up needed.",
+      "button": "Explore the live demo"
+    }
   },
   "proof": {
     "label": "Lock in early-user pricing — get in touch",
@@ -60,10 +85,22 @@
     "subtitle": "A real studio running on Linyup — fully open to explore, no sign-up or sales call needed.",
     "dashboardAlt": "The Linyup dashboard",
     "shots": {
-      "schedule": { "title": "See your whole week", "detail": "Every class, room, and coach in one colour-coded calendar — and let members book their spot online." },
-      "contact": { "title": "Track every member's progress", "detail": "Attendance, streaks, and a performance radar on every profile." },
-      "courses": { "title": "Sell online courses", "detail": "Package your curriculum into courses contacts follow at their own pace." },
-      "biolink": { "title": "Bio-link, web site and shop", "detail": "One shareable link to your schedule, booking, courses, shop and website — with live preview." }
+      "schedule": {
+        "title": "See your whole week",
+        "detail": "Every class, room, and coach in one colour-coded calendar — and let members book their spot online."
+      },
+      "contact": {
+        "title": "Track every member's progress",
+        "detail": "Attendance, streaks, and a performance radar on every profile."
+      },
+      "courses": {
+        "title": "Sell online courses",
+        "detail": "Package your curriculum into courses contacts follow at their own pace."
+      },
+      "biolink": {
+        "title": "Bio-link, web site and shop",
+        "detail": "One shareable link to your schedule, booking, courses, shop and website — with live preview."
+      }
     },
     "more": "And more to explore"
   },
@@ -75,36 +112,155 @@
     "moreSubtitle": "Tap any feature to see how it works.",
     "comingSoon": "Coming soon",
     "cards": {
-      "sessions": { "title": "Sessions", "description": "Schedule classes and track attendance.", "detail": "Build your weekly timetable in minutes — recurring classes, capacity limits, and attendance, all in one calendar." },
-      "calendar": { "title": "Calendar", "description": "See your whole week at a glance.", "detail": "Your entire studio's week in one colour-coded view, by activity and instructor — never double-book a room again." },
-      "contacts": { "title": "Contacts", "description": "Every member profile in one place.", "detail": "A complete profile for every member — notes, history, ranks, and subscription status, always a click away." },
-      "bookings": { "title": "Bookings", "description": "Let members book sessions online.", "detail": "Members reserve their spot in a tap and you get a clean, real-time roster for every single session." },
-      "checkins": { "title": "Check-ins", "description": "Fast QR check-in at the door.", "detail": "Check members in with a quick scan — no clipboards, no spreadsheets, just an accurate attendance record." },
-      "trials": { "title": "Trials", "description": "Turn trial visitors into regulars.", "detail": "Capture every trial sign-up and nudge them toward a subscription with built-in follow-ups that convert." },
-      "memberships": { "title": "Subscriptions", "description": "Manage plans and renewals.", "detail": "Sell monthly, quarterly, or annual plans and track every renewal automatically — no spreadsheet required." },
-      "payments": { "title": "Payments", "description": "Collect dues without the chasing.", "detail": "Two ways to get paid: route payments through Linyup into your own Stripe account ('Pay via Linyup'), or bring your own gateway (BYO) and just track them here." },
-      "paymentFee": { "title": "Linyup payment fee", "detail": "A small % on top of Stripe's fee — charged only when you collect with 'Pay via Linyup'. Bring your own gateway (BYO) and there's no Linyup fee." },
-      "biolink": { "title": "Bio link", "description": "One link for everything you offer.", "detail": "One shareable link with your schedule, booking, and sign-up — perfect for your Instagram or TikTok bio." },
-      "website": { "title": "Website", "description": "A booking site, ready out of the box.", "detail": "Launch a polished studio website with your schedule and pricing built in — no designer, no code." },
-      "mobileApp": { "title": "Member app", "description": "iOS & Android app for your members.", "detail": "Your members get a branded iOS and Android app to book, check in, and stay in the loop wherever they are." },
-      "automations": { "title": "Automations", "description": "Put the busywork on autopilot.", "detail": "Set it once and let Linyup welcome new contacts, send reminders, and win back lapsed ones — automatically." },
-      "gamification": { "title": "Gamification", "description": "Reward streaks, keep members hooked.", "detail": "Points, streaks, and badges that turn simply showing up into a habit your members genuinely love." },
-      "rankings": { "title": "Rankings", "description": "Levels & leaderboards that motivate.", "detail": "Track ranks, levels, and leaderboards that keep contacts chasing their next milestone — and coming back." },
-      "referrals": { "title": "Referrals", "description": "Turn contacts into your marketers.", "detail": "Reward contacts for bringing friends, with referrals tracked and credited automatically. Your best growth channel." },
-      "courses": { "title": "Courses", "description": "Sell structured multi-week programs.", "detail": "Package your expertise into multi-week online courses your contacts can buy and follow at their own pace." },
-      "events": { "title": "Events", "description": "Run competitions, camps & workshops.", "detail": "Run competitions, camps, and workshops with sign-ups, invitations, and check-in all built in." },
-      "eventForms": { "title": "Event forms", "description": "Custom sign-up & check-in fields.", "detail": "Collect exactly the information you need at sign-up with fully custom fields for every event type." },
-      "groups": { "title": "Groups", "description": "Organise contacts into cohorts.", "detail": "Organise contacts into squads, levels, or committees for targeted communication and effortless management." },
-      "customFields": { "title": "Custom fields", "description": "Track exactly the data you need.", "detail": "Add the fields your studio actually needs and track any data on any contact — your CRM, your rules." },
-      "analytics": { "title": "Analytics", "description": "Trends & engagement at a glance.", "detail": "See attendance, retention, and engagement trends so you always know what's working — and what needs attention." },
-      "whatsapp": { "title": "WhatsApp", "description": "Reach members where they already are.", "detail": "Send reminders, updates, and re-engagement messages on WhatsApp, right where your members already are." },
-      "aiInsights": { "title": "AI insights", "description": "Spot churn risk before it happens.", "detail": "Let AI flag contacts at risk of leaving and even draft the perfect message to win them back before they're gone." },
-      "coaching": { "title": "1:1 Coaching", "description": "Bookable 1:1 appointments.", "detail": "Publish availability slots clients book themselves from your bio link — with .ics calendar invites, reminders and buffer times. Your personal-trainer hook." },
-      "goals": { "title": "Goals & progress", "description": "Set targets, track progress.", "detail": "Set long-term goals and short-term tasks, log progress with photos and check-ins, and keep every member moving toward their next milestone." },
-      "products": { "title": "Products shop", "description": "Sell merch, gear and packs.", "detail": "Sell physical or digital products — merch, gear, bundles — from your public shop, paid straight into your own Stripe account." },
-      "forms": { "title": "Forms", "description": "Custom forms for any flow.", "detail": "Build custom forms for sign-ups, intake, waivers and more — collect exactly the data you need, your way. Coming soon." },
-      "api": { "title": "API access", "description": "Build on your own data.", "detail": "Programmatic access to your studio's data so you can integrate Linyup with your other tools and build custom workflows." },
-      "team": { "title": "Team & roles", "description": "Invite coaches, assign permissions.", "detail": "Invite coaches and managers with the right permissions for each role — everyone sees exactly what they should." }
+      "sessions": {
+        "title": "Sessions",
+        "description": "Schedule classes and track attendance.",
+        "detail": "Build your weekly timetable in minutes — recurring classes, capacity limits, and attendance, all in one calendar."
+      },
+      "calendar": {
+        "title": "Calendar",
+        "description": "See your whole week at a glance.",
+        "detail": "Your entire studio's week in one colour-coded view, by activity and instructor — never double-book a room again."
+      },
+      "contacts": {
+        "title": "Contacts",
+        "description": "Every member profile in one place.",
+        "detail": "A complete profile for every member — notes, history, ranks, and subscription status, always a click away."
+      },
+      "bookings": {
+        "title": "Bookings",
+        "description": "Let members book sessions online.",
+        "detail": "Members reserve their spot in a tap and you get a clean, real-time roster for every single session."
+      },
+      "checkins": {
+        "title": "Check-ins",
+        "description": "Fast QR check-in at the door.",
+        "detail": "Check members in with a quick scan — no clipboards, no spreadsheets, just an accurate attendance record."
+      },
+      "trials": {
+        "title": "Trials",
+        "description": "Turn trial visitors into regulars.",
+        "detail": "Capture every trial sign-up and nudge them toward a subscription with built-in follow-ups that convert."
+      },
+      "memberships": {
+        "title": "Subscriptions",
+        "description": "Manage plans and renewals.",
+        "detail": "Sell monthly, quarterly, or annual plans and track every renewal automatically — no spreadsheet required."
+      },
+      "payments": {
+        "title": "Payments",
+        "description": "Collect dues without the chasing.",
+        "detail": "Two ways to get paid: route payments through Linyup into your own Stripe account ('Pay via Linyup'), or bring your own gateway (BYO) and just track them here."
+      },
+      "paymentFee": {
+        "title": "Linyup payment fee",
+        "detail": "A small % on top of Stripe's fee — charged only when you collect with 'Pay via Linyup'. Bring your own gateway (BYO) and there's no Linyup fee."
+      },
+      "biolink": {
+        "title": "Bio link",
+        "description": "One link for everything you offer.",
+        "detail": "One shareable link with your schedule, booking, and sign-up — perfect for your Instagram or TikTok bio."
+      },
+      "website": {
+        "title": "Website",
+        "description": "A booking site, ready out of the box.",
+        "detail": "Launch a polished studio website with your schedule and pricing built in — no designer, no code."
+      },
+      "mobileApp": {
+        "title": "Member app",
+        "description": "iOS & Android app for your members.",
+        "detail": "Your members get a branded iOS and Android app to book, check in, and stay in the loop wherever they are."
+      },
+      "automations": {
+        "title": "Automations",
+        "description": "Put the busywork on autopilot.",
+        "detail": "Set it once and let Linyup welcome new contacts, send reminders, and win back lapsed ones — automatically."
+      },
+      "gamification": {
+        "title": "Gamification",
+        "description": "Reward streaks, keep members hooked.",
+        "detail": "Points, streaks, and badges that turn simply showing up into a habit your members genuinely love."
+      },
+      "rankings": {
+        "title": "Rankings",
+        "description": "Levels & leaderboards that motivate.",
+        "detail": "Track ranks, levels, and leaderboards that keep contacts chasing their next milestone — and coming back."
+      },
+      "referrals": {
+        "title": "Referrals",
+        "description": "Turn contacts into your marketers.",
+        "detail": "Reward contacts for bringing friends, with referrals tracked and credited automatically. Your best growth channel."
+      },
+      "courses": {
+        "title": "Courses",
+        "description": "Sell structured multi-week programs.",
+        "detail": "Package your expertise into multi-week online courses your contacts can buy and follow at their own pace."
+      },
+      "events": {
+        "title": "Events",
+        "description": "Run competitions, camps & workshops.",
+        "detail": "Run competitions, camps, and workshops with sign-ups, invitations, and check-in all built in."
+      },
+      "eventForms": {
+        "title": "Event forms",
+        "description": "Custom sign-up & check-in fields.",
+        "detail": "Collect exactly the information you need at sign-up with fully custom fields for every event type."
+      },
+      "groups": {
+        "title": "Groups",
+        "description": "Organise contacts into cohorts.",
+        "detail": "Organise contacts into squads, levels, or committees for targeted communication and effortless management."
+      },
+      "customFields": {
+        "title": "Custom fields",
+        "description": "Track exactly the data you need.",
+        "detail": "Add the fields your studio actually needs and track any data on any contact — your CRM, your rules."
+      },
+      "analytics": {
+        "title": "Analytics",
+        "description": "Trends & engagement at a glance.",
+        "detail": "See attendance, retention, and engagement trends so you always know what's working — and what needs attention."
+      },
+      "whatsapp": {
+        "title": "WhatsApp",
+        "description": "Reach members where they already are.",
+        "detail": "Send reminders, updates, and re-engagement messages on WhatsApp, right where your members already are."
+      },
+      "aiInsights": {
+        "title": "AI insights",
+        "description": "Spot churn risk before it happens.",
+        "detail": "Let AI flag contacts at risk of leaving and even draft the perfect message to win them back before they're gone."
+      },
+      "coaching": {
+        "title": "1:1 Coaching",
+        "description": "Bookable 1:1 appointments.",
+        "detail": "Publish availability slots clients book themselves from your bio link — with .ics calendar invites, reminders and buffer times. Your personal-trainer hook."
+      },
+      "goals": {
+        "title": "Goals & progress",
+        "description": "Set targets, track progress.",
+        "detail": "Set long-term goals and short-term tasks, log progress with photos and check-ins, and keep every member moving toward their next milestone."
+      },
+      "products": {
+        "title": "Products shop",
+        "description": "Sell merch, gear and packs.",
+        "detail": "Sell physical or digital products — merch, gear, bundles — from your public shop, paid straight into your own Stripe account."
+      },
+      "forms": {
+        "title": "Forms",
+        "description": "Custom forms for any flow.",
+        "detail": "Build custom forms for sign-ups, intake, waivers and more — collect exactly the data you need, your way. Coming soon."
+      },
+      "api": {
+        "title": "API access",
+        "description": "Build on your own data.",
+        "detail": "Programmatic access to your studio's data so you can integrate Linyup with your other tools and build custom workflows."
+      },
+      "team": {
+        "title": "Team & roles",
+        "description": "Invite coaches, assign permissions.",
+        "detail": "Invite coaches and managers with the right permissions for each role — everyone sees exactly what they should."
+      }
     }
   },
   "migration": {
@@ -112,9 +268,18 @@
     "title": "We migrate your data for you",
     "subtitle": "Moving from another tool is the worst part of switching — so leave it to us. We bring over your contacts, schedule, subscriptions and history. You just review the result and tell us what to adjust.",
     "badge": "Free white-glove migration for early adopters",
-    "send": { "title": "Send us your data", "detail": "An export or spreadsheet from your current tool — whatever you already have." },
-    "migrate": { "title": "We do the heavy lifting", "detail": "We map and import your contacts, schedule, subscriptions and history into Linyup." },
-    "review": { "title": "You review & instruct", "detail": "Check the result and just tell us what to adjust. Nothing goes live until it's right." },
+    "send": {
+      "title": "Send us your data",
+      "detail": "An export or spreadsheet from your current tool — whatever you already have."
+    },
+    "migrate": {
+      "title": "We do the heavy lifting",
+      "detail": "We map and import your contacts, schedule, subscriptions and history into Linyup."
+    },
+    "review": {
+      "title": "You review & instruct",
+      "detail": "Check the result and just tell us what to adjust. Nothing goes live until it's right."
+    },
     "cta": "Talk to us about migrating"
   },
   "plans": {
@@ -165,27 +330,46 @@
       "name": "Free",
       "price": "Free",
       "audience": "For coaches just getting started.",
-      "features": ["Up to 15 contacts", "Booking page & bio link", "Sessions, subscriptions & goals"]
+      "features": [
+        "Up to 15 contacts",
+        "Booking page & bio link",
+        "Sessions, subscriptions & goals"
+      ]
     },
     "coach": {
       "name": "Coach",
       "price": "CHF 9",
       "promoPrice": "CHF 4.50",
       "audience": "For solo instructors and private coaches building momentum.",
-      "features": ["Everything in Free", "50 contacts", "Member app + Groups & Custom Fields", "À-la-carte add-ons"]
+      "features": [
+        "Everything in Free",
+        "50 contacts",
+        "Member app + Groups & Custom Fields",
+        "À-la-carte add-ons"
+      ]
     },
     "studio": {
       "name": "Studio",
       "price": "CHF 35",
       "promoPrice": "CHF 17.50",
       "audience": "Fully featured — for coaches and studios ready to grow with structure.",
-      "features": ["Everything in Coach", "All add-ons included", "Member app, automations & advanced analytics", "Multiple team members"]
+      "features": [
+        "Everything in Coach",
+        "All add-ons included",
+        "Member app, automations & advanced analytics",
+        "Multiple team members"
+      ]
     },
     "org": {
       "name": "Organisation",
       "price": "CHF 103",
       "audience": "For multi-studio organisations, federations, and franchises.",
-      "features": ["Everything in Studio", "Central multi-team admin", "Cross-team events & messaging", "API & advanced roles"]
+      "features": [
+        "Everything in Studio",
+        "Central multi-team admin",
+        "Cross-team events & messaging",
+        "API & advanced roles"
+      ]
     }
   },
   "payments": {
@@ -193,9 +377,26 @@
     "title": "Get paid. Sell online. Keep what's yours.",
     "subtitle": "Take subscriptions and drop-ins straight into your own Stripe account, and open a public shop in minutes — no middleman holding your money.",
     "cards": {
-      "models": { "title": "Accept online payments from day 0", "intro": "Sell <strong>Subscriptions</strong>, <strong>Affiliations</strong>, <strong>Online Courses</strong> and <strong>Products</strong> in your very own online shop. Or integrate your offers in the website.", "lead": "Two ways to get paid:", "linyupName": "Pay via Linyup", "linyupBody": "Fully integrated cards and TWINT payments. 2-minute setup of your account on Stripe. We do not hold your money — payments land straight in your own Stripe account.", "byoName": "BYO Stripe / Payrexx", "byoBody": "Zero Linyup fee: keep your own gateway and just track transactions here.", "ratesLink": "See the rates" },
-      "shop": { "title": "A shop that grows with you", "body": "Sell <strong>subscriptions</strong>, class packs and drop-ins out of the box — then add <strong>Online Courses</strong> or the <strong>Products Shop</strong> to sell courses and merch from the same public page. Customers buy in a tap, online, anytime." },
-      "twint": { "title": "TWINT + cards", "body": "Accept the methods Swiss customers actually use — including recurring subscriptions on TWINT." }
+      "sell": {
+        "title": "Sell online",
+        "body": "Sell <strong>Subscriptions</strong>, <strong>Affiliations</strong>, <strong>Online Courses</strong> and <strong>Products</strong> in your very own online shop. Or integrate your offers in the website."
+      },
+      "pay": {
+        "title": "Accept payments",
+        "linyupName": "Pay via Linyup",
+        "linyupBody": "TWINT + cards, fully integrated with your offers. We do not hold your money — payments land straight in your own Stripe account. Fees apply,",
+        "byoName": "BYO Stripe / Payrexx",
+        "byoBody": "Zero Linyup fee: keep your own gateway and just get the overview of the transaction in Linyup.",
+        "ratesLink": "see the rates"
+      },
+      "shop": {
+        "title": "A shop that grows with you",
+        "body": "Sell <strong>subscriptions</strong>, class packs and drop-ins out of the box — then add <strong>Online Courses</strong> or the <strong>Products Shop</strong> to sell courses and merch from the same public page. Customers buy in a tap, online, anytime."
+      },
+      "twint": {
+        "title": "TWINT + cards",
+        "body": "Accept the methods Swiss customers actually use — including recurring subscriptions on TWINT."
+      }
     },
     "proof": "A subscription paid by TWINT on the Studio tier costs about 2% all-in — roughly half what card-only international tools charge.",
     "cta": "Start for free",

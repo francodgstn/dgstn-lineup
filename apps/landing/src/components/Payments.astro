@@ -11,8 +11,8 @@ const { lang } = Astro.props;
 const t = useTranslations(lang);
 
 // The headline upgrade for this release — "Accept Payments + Shop" gets its own
-// full-width section: a single card (what you can sell + the two ways to get paid)
-// next to the /shop screenshot. Copy is pulled from the `payments` namespace.
+// full-width section: two cards (what you can sell + how you get paid) next to the
+// /shop screenshot. Copy is pulled from the `payments` namespace.
 ---
 
 <section id="payments" class="pay-sec">
@@ -25,20 +25,23 @@ const t = useTranslations(lang);
 
     <div class="pay-row">
       <div class="pay-cards">
+        <div class="pay-card">
+          <span class="pay-ico"><i data-lucide="store"></i></span>
+          <h3>{t('payments.cards.sell.title')}</h3>
+          <p class="pay-intro" set:html={t('payments.cards.sell.body')} />
+        </div>
         <div class="pay-card pay-card-lead">
           <span class="pay-ico"><i data-lucide="credit-card"></i></span>
-          <h3>{t('payments.cards.models.title')}</h3>
-          <p class="pay-intro" set:html={t('payments.cards.models.intro')} />
-          <p class="pay-lead">{t('payments.cards.models.lead')}</p>
+          <h3>{t('payments.cards.pay.title')}</h3>
           <ul class="pay-models">
             <li>
-              <strong>{t('payments.cards.models.linyupName')}</strong> — {t('payments.cards.models.linyupBody')}
+              <strong>{t('payments.cards.pay.linyupName')}</strong> — {t('payments.cards.pay.linyupBody')}
               <button class="pay-rates" type="button" data-rates-open>
-                {t('payments.cards.models.ratesLink')} <i data-lucide="arrow-right"></i>
+                {t('payments.cards.pay.ratesLink')} <i data-lucide="arrow-right"></i>
               </button>
             </li>
             <li>
-              <strong>{t('payments.cards.models.byoName')}</strong> — {t('payments.cards.models.byoBody')}
+              <strong>{t('payments.cards.pay.byoName')}</strong> — {t('payments.cards.pay.byoBody')}
             </li>
           </ul>
         </div>

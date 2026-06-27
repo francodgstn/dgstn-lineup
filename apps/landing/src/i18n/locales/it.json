@@ -40,15 +40,40 @@
     "title": "Pensato per gestire il tuo studio",
     "subtitle": "Tutto ciò che serve a un coach o a un piccolo studio — qualunque cosa insegni. Semplice di default.",
     "cards": {
-      "sessions": { "title": "Pianifica le tue lezioni", "benefit": "Lezioni ricorrenti, posti e presenze in un unico calendario." },
-      "bookings": { "title": "Accetta prenotazioni online", "benefit": "I membri riservano il posto con un tocco." },
-      "memberships": { "title": "Gestisci gli abbonamenti", "benefit": "Vendi piani e traccia ogni rinnovo automaticamente." },
-      "payments": { "title": "Incassa i pagamenti", "benefit": "Le quote si incassano da sole — niente più solleciti." },
-      "rankings": { "title": "Traccia gradi e livelli", "benefit": "Valuta i membri e tienili motivati verso il livello successivo." },
-      "mobileApp": { "title": "Dai un'app ai tuoi membri", "benefit": "Un'app iOS e Android col tuo brand per prenotare e fare check-in." },
-      "automations": { "title": "Automatizza il lavoro ripetitivo", "benefit": "Dai il benvenuto, ricorda e recupera i contatti in automatico." }
+      "sessions": {
+        "title": "Pianifica le tue lezioni",
+        "benefit": "Lezioni ricorrenti, posti e presenze in un unico calendario."
+      },
+      "bookings": {
+        "title": "Accetta prenotazioni online",
+        "benefit": "I membri riservano il posto con un tocco."
+      },
+      "memberships": {
+        "title": "Gestisci gli abbonamenti",
+        "benefit": "Vendi piani e traccia ogni rinnovo automaticamente."
+      },
+      "payments": {
+        "title": "Incassa i pagamenti",
+        "benefit": "Le quote si incassano da sole — niente più solleciti."
+      },
+      "rankings": {
+        "title": "Traccia gradi e livelli",
+        "benefit": "Valuta i membri e tienili motivati verso il livello successivo."
+      },
+      "mobileApp": {
+        "title": "Dai un'app ai tuoi membri",
+        "benefit": "Un'app iOS e Android col tuo brand per prenotare e fare check-in."
+      },
+      "automations": {
+        "title": "Automatizza il lavoro ripetitivo",
+        "benefit": "Dai il benvenuto, ricorda e recupera i contatti in automatico."
+      }
     },
-    "cta": { "title": "Guardalo all'opera", "body": "Prova uno studio reale — senza registrarti.", "button": "Esplora la demo live" }
+    "cta": {
+      "title": "Guardalo all'opera",
+      "body": "Prova uno studio reale — senza registrarti.",
+      "button": "Esplora la demo live"
+    }
   },
   "proof": {
     "label": "Blocca il prezzo early-user — contattaci",
@@ -60,10 +85,22 @@
     "subtitle": "Uno studio reale che usa Linyup — demo completamente aperta, senza registrazione né chiamata commerciale.",
     "dashboardAlt": "La dashboard Linyup",
     "shots": {
-      "schedule": { "title": "Tutta la settimana a colpo d'occhio", "detail": "Ogni lezione, sala e coach in un unico calendario a colori — e i membri prenotano il posto online." },
-      "contact": { "title": "Segui i progressi di ogni membro", "detail": "Presenze, serie e un radar delle performance su ogni profilo." },
-      "courses": { "title": "Vendi corsi online", "detail": "Trasforma le tue competenze in corsi che i contatti seguono al proprio ritmo." },
-      "biolink": { "title": "Bio-link, sito web e shop", "detail": "Un link condivisibile a orario, prenotazioni, corsi, shop e sito web — con anteprima live." }
+      "schedule": {
+        "title": "Tutta la settimana a colpo d'occhio",
+        "detail": "Ogni lezione, sala e coach in un unico calendario a colori — e i membri prenotano il posto online."
+      },
+      "contact": {
+        "title": "Segui i progressi di ogni membro",
+        "detail": "Presenze, serie e un radar delle performance su ogni profilo."
+      },
+      "courses": {
+        "title": "Vendi corsi online",
+        "detail": "Trasforma le tue competenze in corsi che i contatti seguono al proprio ritmo."
+      },
+      "biolink": {
+        "title": "Bio-link, sito web e shop",
+        "detail": "Un link condivisibile a orario, prenotazioni, corsi, shop e sito web — con anteprima live."
+      }
     },
     "more": "E altro ancora da scoprire"
   },
@@ -75,36 +112,155 @@
     "moreSubtitle": "Tocca una funzionalità per vedere come funziona.",
     "comingSoon": "Disponibile a breve",
     "cards": {
-      "sessions": { "title": "Sessioni", "description": "Pianifica le lezioni e traccia le presenze.", "detail": "Crea il tuo orario settimanale in pochi minuti — lezioni ricorrenti, limiti di posti e presenze in un unico calendario." },
-      "calendar": { "title": "Calendario", "description": "Tutta la settimana in un colpo d'occhio.", "detail": "Tutta la settimana del tuo studio in una vista a colori per attività e istruttore — mai più doppie prenotazioni." },
-      "contacts": { "title": "Contatti", "description": "Ogni profilo membro in un solo posto.", "detail": "Un profilo completo per ogni membro — note, cronologia, gradi e stato dell'abbonamento, sempre a portata di clic." },
-      "bookings": { "title": "Prenotazioni", "description": "I membri prenotano online.", "detail": "I membri riservano il posto con un tocco e tu ottieni un elenco chiaro e in tempo reale per ogni sessione." },
-      "checkins": { "title": "Check-in", "description": "Check-in QR veloce all'ingresso.", "detail": "Registra i membri con una scansione — niente fogli o tabelle, solo presenze sempre precise." },
-      "trials": { "title": "Prove", "description": "Trasforma le prove in clienti fissi.", "detail": "Cattura ogni iscrizione di prova e guidala verso l'abbonamento con follow-up integrati che convertono." },
-      "memberships": { "title": "Abbonamenti", "description": "Gestisci piani e rinnovi.", "detail": "Vendi piani mensili, trimestrali o annuali e traccia ogni rinnovo automaticamente — senza alcun foglio di calcolo." },
-      "payments": { "title": "Pagamenti", "description": "Incassa senza rincorrere nessuno.", "detail": "Due modi per incassare: indirizza i pagamenti tramite Linyup sul tuo conto Stripe («Pay via Linyup»), oppure usa il tuo gateway (BYO) e tracciali qui." },
-      "paymentFee": { "title": "Commissione di pagamento Linyup", "detail": "Una piccola % oltre alla commissione Stripe — addebitata solo con «Pay via Linyup». Con il tuo gateway (BYO), nessuna commissione Linyup." },
-      "biolink": { "title": "Bio link", "description": "Un link per tutto ciò che offri.", "detail": "Un unico link condivisibile con orario, prenotazioni e iscrizioni — perfetto per la tua bio Instagram o TikTok." },
-      "website": { "title": "Sito web", "description": "Un sito di prenotazione pronto all'uso.", "detail": "Lancia un sito curato per il tuo studio con orario e prezzi integrati — senza designer né codice." },
-      "mobileApp": { "title": "App membri", "description": "App iOS e Android per i tuoi membri.", "detail": "I tuoi membri hanno un'app iOS e Android col tuo brand per prenotare, fare check-in e restare aggiornati ovunque." },
-      "automations": { "title": "Automazioni", "description": "Il lavoro ripetitivo in pilota automatico.", "detail": "Imposta una volta e lascia che Linyup dia il benvenuto, invii promemoria e recuperi i contatti inattivi — in automatico." },
-      "gamification": { "title": "Gamification", "description": "Premia le serie, fidelizza i membri.", "detail": "Punti, serie e badge che trasformano il semplice presentarsi in un'abitudine che i tuoi membri adorano." },
-      "rankings": { "title": "Classifiche", "description": "Livelli e classifiche che motivano.", "detail": "Traccia gradi, livelli e classifiche che spingono i contatti verso il prossimo traguardo — e li fanno tornare." },
-      "referrals": { "title": "Referral", "description": "I contatti diventano i tuoi promotori.", "detail": "Premia i contatti che portano amici — referral tracciati e accreditati in automatico. Il tuo miglior canale di crescita." },
-      "courses": { "title": "Corsi online", "description": "Vendi programmi di più settimane.", "detail": "Trasforma le tue competenze in corsi online di più settimane che i tuoi contatti acquistano e seguono al proprio ritmo." },
-      "events": { "title": "Eventi", "description": "Gare, stage e workshop.", "detail": "Organizza gare, stage e workshop — con iscrizioni, inviti e check-in già integrati." },
-      "eventForms": { "title": "Moduli evento", "description": "Campi di iscrizione personalizzati.", "detail": "Raccogli all'iscrizione esattamente le informazioni che ti servono, con campi personalizzati per ogni tipo di evento." },
-      "groups": { "title": "Gruppi", "description": "Organizza i contatti in coorti.", "detail": "Organizza i contatti in squadre, livelli o comitati per una comunicazione mirata e una gestione senza sforzo." },
-      "customFields": { "title": "Campi personalizzati", "description": "Traccia esattamente i dati che ti servono.", "detail": "Aggiungi i campi di cui il tuo studio ha davvero bisogno e traccia qualsiasi dato su qualsiasi contatto." },
-      "analytics": { "title": "Analisi", "description": "Tendenze ed engagement a colpo d'occhio.", "detail": "Vedi presenze, retention e tendenze di engagement per sapere sempre cosa funziona — e cosa richiede attenzione." },
-      "whatsapp": { "title": "WhatsApp", "description": "Raggiungi i membri dove già sono.", "detail": "Invia promemoria, aggiornamenti e messaggi di riattivazione su WhatsApp, proprio dove i tuoi membri già sono." },
-      "aiInsights": { "title": "Insight AI", "description": "Individua il rischio di abbandono in anticipo.", "detail": "Lascia che l'AI individui i contatti a rischio abbandono e prepari il messaggio giusto per riconquistarli in tempo." },
-      "coaching": { "title": "Coaching 1:1", "description": "Appuntamenti individuali prenotabili.", "detail": "Pubblica slot di disponibilità che i clienti prenotano da soli dal tuo bio-link — con inviti .ics, promemoria e tempi cuscinetto. Il tuo asso da personal trainer." },
-      "goals": { "title": "Obiettivi e progressi", "description": "Imposta obiettivi, monitora i progressi.", "detail": "Imposta obiettivi a lungo termine e attività a breve, registra i progressi con foto e check-in e mantieni ogni membro in rotta verso il traguardo successivo." },
-      "products": { "title": "Negozio prodotti", "description": "Vendi merch, attrezzatura e pacchetti.", "detail": "Vendi prodotti fisici o digitali — merch, attrezzatura, bundle — dal tuo negozio pubblico, incassati direttamente sul tuo conto Stripe." },
-      "forms": { "title": "Moduli", "description": "Moduli personalizzati per ogni flusso.", "detail": "Crea moduli personalizzati per iscrizioni, accoglienza, liberatorie e altro — raccogli esattamente i dati che ti servono. Prossimamente." },
-      "api": { "title": "Accesso API", "description": "Costruisci sui tuoi dati.", "detail": "Accesso programmatico ai dati del tuo studio per integrare Linyup con i tuoi altri strumenti e creare flussi personalizzati." },
-      "team": { "title": "Team e ruoli", "description": "Invita coach, assegna i permessi.", "detail": "Invita coach e manager con i permessi giusti per ogni ruolo — ognuno vede esattamente ciò che deve." }
+      "sessions": {
+        "title": "Sessioni",
+        "description": "Pianifica le lezioni e traccia le presenze.",
+        "detail": "Crea il tuo orario settimanale in pochi minuti — lezioni ricorrenti, limiti di posti e presenze in un unico calendario."
+      },
+      "calendar": {
+        "title": "Calendario",
+        "description": "Tutta la settimana in un colpo d'occhio.",
+        "detail": "Tutta la settimana del tuo studio in una vista a colori per attività e istruttore — mai più doppie prenotazioni."
+      },
+      "contacts": {
+        "title": "Contatti",
+        "description": "Ogni profilo membro in un solo posto.",
+        "detail": "Un profilo completo per ogni membro — note, cronologia, gradi e stato dell'abbonamento, sempre a portata di clic."
+      },
+      "bookings": {
+        "title": "Prenotazioni",
+        "description": "I membri prenotano online.",
+        "detail": "I membri riservano il posto con un tocco e tu ottieni un elenco chiaro e in tempo reale per ogni sessione."
+      },
+      "checkins": {
+        "title": "Check-in",
+        "description": "Check-in QR veloce all'ingresso.",
+        "detail": "Registra i membri con una scansione — niente fogli o tabelle, solo presenze sempre precise."
+      },
+      "trials": {
+        "title": "Prove",
+        "description": "Trasforma le prove in clienti fissi.",
+        "detail": "Cattura ogni iscrizione di prova e guidala verso l'abbonamento con follow-up integrati che convertono."
+      },
+      "memberships": {
+        "title": "Abbonamenti",
+        "description": "Gestisci piani e rinnovi.",
+        "detail": "Vendi piani mensili, trimestrali o annuali e traccia ogni rinnovo automaticamente — senza alcun foglio di calcolo."
+      },
+      "payments": {
+        "title": "Pagamenti",
+        "description": "Incassa senza rincorrere nessuno.",
+        "detail": "Due modi per incassare: indirizza i pagamenti tramite Linyup sul tuo conto Stripe («Pay via Linyup»), oppure usa il tuo gateway (BYO) e tracciali qui."
+      },
+      "paymentFee": {
+        "title": "Commissione di pagamento Linyup",
+        "detail": "Una piccola % oltre alla commissione Stripe — addebitata solo con «Pay via Linyup». Con il tuo gateway (BYO), nessuna commissione Linyup."
+      },
+      "biolink": {
+        "title": "Bio link",
+        "description": "Un link per tutto ciò che offri.",
+        "detail": "Un unico link condivisibile con orario, prenotazioni e iscrizioni — perfetto per la tua bio Instagram o TikTok."
+      },
+      "website": {
+        "title": "Sito web",
+        "description": "Un sito di prenotazione pronto all'uso.",
+        "detail": "Lancia un sito curato per il tuo studio con orario e prezzi integrati — senza designer né codice."
+      },
+      "mobileApp": {
+        "title": "App membri",
+        "description": "App iOS e Android per i tuoi membri.",
+        "detail": "I tuoi membri hanno un'app iOS e Android col tuo brand per prenotare, fare check-in e restare aggiornati ovunque."
+      },
+      "automations": {
+        "title": "Automazioni",
+        "description": "Il lavoro ripetitivo in pilota automatico.",
+        "detail": "Imposta una volta e lascia che Linyup dia il benvenuto, invii promemoria e recuperi i contatti inattivi — in automatico."
+      },
+      "gamification": {
+        "title": "Gamification",
+        "description": "Premia le serie, fidelizza i membri.",
+        "detail": "Punti, serie e badge che trasformano il semplice presentarsi in un'abitudine che i tuoi membri adorano."
+      },
+      "rankings": {
+        "title": "Classifiche",
+        "description": "Livelli e classifiche che motivano.",
+        "detail": "Traccia gradi, livelli e classifiche che spingono i contatti verso il prossimo traguardo — e li fanno tornare."
+      },
+      "referrals": {
+        "title": "Referral",
+        "description": "I contatti diventano i tuoi promotori.",
+        "detail": "Premia i contatti che portano amici — referral tracciati e accreditati in automatico. Il tuo miglior canale di crescita."
+      },
+      "courses": {
+        "title": "Corsi online",
+        "description": "Vendi programmi di più settimane.",
+        "detail": "Trasforma le tue competenze in corsi online di più settimane che i tuoi contatti acquistano e seguono al proprio ritmo."
+      },
+      "events": {
+        "title": "Eventi",
+        "description": "Gare, stage e workshop.",
+        "detail": "Organizza gare, stage e workshop — con iscrizioni, inviti e check-in già integrati."
+      },
+      "eventForms": {
+        "title": "Moduli evento",
+        "description": "Campi di iscrizione personalizzati.",
+        "detail": "Raccogli all'iscrizione esattamente le informazioni che ti servono, con campi personalizzati per ogni tipo di evento."
+      },
+      "groups": {
+        "title": "Gruppi",
+        "description": "Organizza i contatti in coorti.",
+        "detail": "Organizza i contatti in squadre, livelli o comitati per una comunicazione mirata e una gestione senza sforzo."
+      },
+      "customFields": {
+        "title": "Campi personalizzati",
+        "description": "Traccia esattamente i dati che ti servono.",
+        "detail": "Aggiungi i campi di cui il tuo studio ha davvero bisogno e traccia qualsiasi dato su qualsiasi contatto."
+      },
+      "analytics": {
+        "title": "Analisi",
+        "description": "Tendenze ed engagement a colpo d'occhio.",
+        "detail": "Vedi presenze, retention e tendenze di engagement per sapere sempre cosa funziona — e cosa richiede attenzione."
+      },
+      "whatsapp": {
+        "title": "WhatsApp",
+        "description": "Raggiungi i membri dove già sono.",
+        "detail": "Invia promemoria, aggiornamenti e messaggi di riattivazione su WhatsApp, proprio dove i tuoi membri già sono."
+      },
+      "aiInsights": {
+        "title": "Insight AI",
+        "description": "Individua il rischio di abbandono in anticipo.",
+        "detail": "Lascia che l'AI individui i contatti a rischio abbandono e prepari il messaggio giusto per riconquistarli in tempo."
+      },
+      "coaching": {
+        "title": "Coaching 1:1",
+        "description": "Appuntamenti individuali prenotabili.",
+        "detail": "Pubblica slot di disponibilità che i clienti prenotano da soli dal tuo bio-link — con inviti .ics, promemoria e tempi cuscinetto. Il tuo asso da personal trainer."
+      },
+      "goals": {
+        "title": "Obiettivi e progressi",
+        "description": "Imposta obiettivi, monitora i progressi.",
+        "detail": "Imposta obiettivi a lungo termine e attività a breve, registra i progressi con foto e check-in e mantieni ogni membro in rotta verso il traguardo successivo."
+      },
+      "products": {
+        "title": "Negozio prodotti",
+        "description": "Vendi merch, attrezzatura e pacchetti.",
+        "detail": "Vendi prodotti fisici o digitali — merch, attrezzatura, bundle — dal tuo negozio pubblico, incassati direttamente sul tuo conto Stripe."
+      },
+      "forms": {
+        "title": "Moduli",
+        "description": "Moduli personalizzati per ogni flusso.",
+        "detail": "Crea moduli personalizzati per iscrizioni, accoglienza, liberatorie e altro — raccogli esattamente i dati che ti servono. Prossimamente."
+      },
+      "api": {
+        "title": "Accesso API",
+        "description": "Costruisci sui tuoi dati.",
+        "detail": "Accesso programmatico ai dati del tuo studio per integrare Linyup con i tuoi altri strumenti e creare flussi personalizzati."
+      },
+      "team": {
+        "title": "Team e ruoli",
+        "description": "Invita coach, assegna i permessi.",
+        "detail": "Invita coach e manager con i permessi giusti per ogni ruolo — ognuno vede esattamente ciò che deve."
+      }
     }
   },
   "migration": {
@@ -112,9 +268,18 @@
     "title": "Migriamo i tuoi dati per te",
     "subtitle": "Spostarsi da un altro strumento è la parte peggiore di un cambio — quindi lascia fare a noi. Trasferiamo i tuoi contatti, l'orario, gli abbonamenti e lo storico. Tu devi solo controllare il risultato e dirci cosa modificare.",
     "badge": "Migrazione completa gratuita per i primi iscritti",
-    "send": { "title": "Inviaci i tuoi dati", "detail": "Un export o un foglio di calcolo dal tuo strumento attuale — qualsiasi cosa tu abbia già." },
-    "migrate": { "title": "Pensiamo noi al lavoro pesante", "detail": "Mappiamo e importiamo i tuoi contatti, l'orario, gli abbonamenti e lo storico in Linyup." },
-    "review": { "title": "Tu controlli e indichi", "detail": "Controlla il risultato e dicci semplicemente cosa modificare. Niente va online finché non è perfetto." },
+    "send": {
+      "title": "Inviaci i tuoi dati",
+      "detail": "Un export o un foglio di calcolo dal tuo strumento attuale — qualsiasi cosa tu abbia già."
+    },
+    "migrate": {
+      "title": "Pensiamo noi al lavoro pesante",
+      "detail": "Mappiamo e importiamo i tuoi contatti, l'orario, gli abbonamenti e lo storico in Linyup."
+    },
+    "review": {
+      "title": "Tu controlli e indichi",
+      "detail": "Controlla il risultato e dicci semplicemente cosa modificare. Niente va online finché non è perfetto."
+    },
     "cta": "Parliamo della tua migrazione"
   },
   "plans": {
@@ -165,27 +330,46 @@
       "name": "Free",
       "price": "Gratuito",
       "audience": "Per coach che stanno iniziando.",
-      "features": ["Fino a 15 contatti", "Pagina di prenotazione e bio link", "Sessioni, abbonamenti e obiettivi"]
+      "features": [
+        "Fino a 15 contatti",
+        "Pagina di prenotazione e bio link",
+        "Sessioni, abbonamenti e obiettivi"
+      ]
     },
     "coach": {
       "name": "Coach",
       "price": "CHF 9",
       "promoPrice": "CHF 4.50",
       "audience": "Per istruttori singoli e coach privati che prendono slancio.",
-      "features": ["Tutto di Free", "50 contatti", "App membri + Gruppi e Campi personalizzati", "Opzioni à la carte"]
+      "features": [
+        "Tutto di Free",
+        "50 contatti",
+        "App membri + Gruppi e Campi personalizzati",
+        "Opzioni à la carte"
+      ]
     },
     "studio": {
       "name": "Studio",
       "price": "CHF 35",
       "promoPrice": "CHF 17.50",
       "audience": "Completo — per coach e studi che vogliono crescere in modo strutturato.",
-      "features": ["Tutto di Coach", "Tutte le opzioni incluse", "App membri, automazioni e analisi avanzate", "Più membri del team"]
+      "features": [
+        "Tutto di Coach",
+        "Tutte le opzioni incluse",
+        "App membri, automazioni e analisi avanzate",
+        "Più membri del team"
+      ]
     },
     "org": {
       "name": "Organizzazione",
       "price": "CHF 103",
       "audience": "Per organizzazioni multi-studio, federazioni e franchising.",
-      "features": ["Tutto di Studio", "Amministrazione centrale multi-team", "Eventi e messaggi tra team", "API e ruoli avanzati"]
+      "features": [
+        "Tutto di Studio",
+        "Amministrazione centrale multi-team",
+        "Eventi e messaggi tra team",
+        "API e ruoli avanzati"
+      ]
     }
   },
   "payments": {
@@ -193,9 +377,26 @@
     "title": "Fatti pagare. Vendi online. Tieni ciò che è tuo.",
     "subtitle": "Incassa abbonamenti e ingressi singoli direttamente sul tuo conto Stripe e apri un negozio pubblico in pochi minuti — nessun intermediario che trattiene i tuoi soldi.",
     "cards": {
-      "models": { "title": "Incassa online fin dal primo giorno", "intro": "Vendi <strong>abbonamenti</strong>, <strong>affiliazioni</strong>, <strong>corsi online</strong> e <strong>prodotti</strong> nel tuo shop online. Oppure integra le tue offerte nel sito web.", "lead": "Due modi per incassare:", "linyupName": "Pay via Linyup", "linyupBody": "Carte e TWINT completamente integrati. Account Stripe configurato in 2 minuti. Non tratteniamo il tuo denaro — i pagamenti arrivano direttamente sul tuo account Stripe.", "byoName": "BYO Stripe / Payrexx", "byoBody": "Zero commissioni Linyup: mantieni il tuo gateway e traccia qui le transazioni.", "ratesLink": "Vedi le tariffe" },
-      "shop": { "title": "Un negozio che cresce con te", "body": "Vendi <strong>abbonamenti</strong>, pacchetti lezioni e ingressi singoli da subito — poi aggiungi i <strong>corsi online</strong> o il <strong>negozio prodotti</strong> per vendere corsi e merchandising dalla stessa pagina pubblica. I clienti acquistano con un tocco, online, in qualsiasi momento." },
-      "twint": { "title": "TWINT + carte", "body": "Accetta i metodi che i clienti svizzeri usano davvero — inclusi gli abbonamenti ricorrenti via TWINT." }
+      "sell": {
+        "title": "Vendi online",
+        "body": "Vendi <strong>abbonamenti</strong>, <strong>affiliazioni</strong>, <strong>corsi online</strong> e <strong>prodotti</strong> nel tuo shop online. Oppure integra le tue offerte nel sito web."
+      },
+      "pay": {
+        "title": "Accetta pagamenti",
+        "linyupName": "Pay via Linyup",
+        "linyupBody": "TWINT + carte, completamente integrati con le tue offerte. Non tratteniamo il tuo denaro — i pagamenti arrivano direttamente sul tuo account Stripe. Si applicano commissioni,",
+        "byoName": "BYO Stripe / Payrexx",
+        "byoBody": "Zero commissioni Linyup: mantieni il tuo gateway e ottieni qui la panoramica delle transazioni.",
+        "ratesLink": "vedi le tariffe"
+      },
+      "shop": {
+        "title": "Un negozio che cresce con te",
+        "body": "Vendi <strong>abbonamenti</strong>, pacchetti lezioni e ingressi singoli da subito — poi aggiungi i <strong>corsi online</strong> o il <strong>negozio prodotti</strong> per vendere corsi e merchandising dalla stessa pagina pubblica. I clienti acquistano con un tocco, online, in qualsiasi momento."
+      },
+      "twint": {
+        "title": "TWINT + carte",
+        "body": "Accetta i metodi che i clienti svizzeri usano davvero — inclusi gli abbonamenti ricorrenti via TWINT."
+      }
     },
     "proof": "Un abbonamento pagato con TWINT sul piano Studio costa circa il 2% all-in — più o meno la metà di quanto fanno pagare gli strumenti internazionali solo-carte.",
     "cta": "Inizia gratis",
