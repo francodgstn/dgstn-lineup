@@ -14,6 +14,7 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  horizontalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -53,10 +54,13 @@ export function SortableList({
   ids,
   onReorder,
   children,
+  horizontal = false,
 }: {
   ids: string[]
   onReorder: (from: number, to: number) => void
   children: ReactNode
+  /** Lay items out left-to-right (e.g. a tab strip) instead of top-to-bottom. */
+  horizontal?: boolean
 }) {
   const sensors = useSensors(
     // Small drag threshold so taps/clicks on cards still register normally.
@@ -74,7 +78,10 @@ export function SortableList({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+      <SortableContext
+        items={ids}
+        strategy={horizontal ? horizontalListSortingStrategy : verticalListSortingStrategy}
+      >
         {children}
       </SortableContext>
     </DndContext>

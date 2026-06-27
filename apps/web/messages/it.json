@@ -530,7 +530,9 @@
     "engagementNoSessions": "Nessuna partecipazione finora",
     "relationshipTimeline": "Cronologia della relazione",
     "timelineNow": "Ora",
-    "joinedAs": "Iscritto come {label}"
+    "joinedAs": "Iscritto come {label}",
+    "tabReorder": "Riordina schede",
+    "tabReorderDone": "Fatto"
   },
   "TeamMemberships": {
     "title": "Tessere",

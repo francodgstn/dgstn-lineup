@@ -530,7 +530,9 @@
     "engagementNoSessions": "No sessions attended yet",
     "relationshipTimeline": "Relationship timeline",
     "timelineNow": "Now",
-    "joinedAs": "Joined as {label}"
+    "joinedAs": "Joined as {label}",
+    "tabReorder": "Reorder tabs",
+    "tabReorderDone": "Done"
   },
   "TeamMemberships": {
     "title": "Membership",

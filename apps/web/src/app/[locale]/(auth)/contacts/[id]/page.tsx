@@ -186,6 +186,7 @@ import {
   type TimelineMilestone,
   type TimelineSpan,
 } from '@/components/contacts/RelationshipTimeline'
+import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
 
@@ -216,6 +217,50 @@ function tsToDate(ts: unknown): Date | undefined {
 // human-readable span ("3 years", "5 months", …) via ICU plurals.
 function daysSince(date: Date): number {
   return Math.floor((Date.now() - date.getTime()) / 86_400_000)
+}
+
+// ─── tab order (per-browser) ──────────────────────────────────────────────────
+// The contact-detail tab strip is user-reorderable in an opt-in "edit" mode; the
+// chosen order is saved per-browser (same pattern as the sidebar's collapse state).
+const CONTACT_TAB_ORDER_KEY = 'linyup_contact_tab_order'
+
+function useContactTabOrder(): [string[], (order: string[]) => void] {
+  const [order, setOrderState] = useState<string[]>([])
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CONTACT_TAB_ORDER_KEY)
+      if (raw) setOrderState(JSON.parse(raw) as string[])
+    } catch {
+      /* ignore malformed storage */
+    }
+  }, [])
+  const setOrder = (next: string[]) => {
+    setOrderState(next)
+    try {
+      localStorage.setItem(CONTACT_TAB_ORDER_KEY, JSON.stringify(next))
+    } catch {
+      /* ignore */
+    }
+  }
+  return [order, setOrder]
+}
+
+// Stable-sort tabs by their position in the saved order; unknown ids keep their
+// natural order at the end (so a newly-installed plugin tab just appends).
+function applyTabOrder<T extends { id: string }>(tabs: T[], order: string[]): T[] {
+  if (order.length === 0) return tabs
+  const rank = (id: string) => {
+    const i = order.indexOf(id)
+    return i === -1 ? Number.POSITIVE_INFINITY : i
+  }
+  return [...tabs].sort((a, b) => rank(a.id) - rank(b.id))
+}
+
+function moveItem<T>(arr: T[], from: number, to: number): T[] {
+  const next = [...arr]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
 }
 
 // Read-only engagement band — a derived signal-strength "meter" next to the join
@@ -4020,6 +4065,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   })
   const membershipFieldLocked = orgMembershipLocked && !isOrgAdmin
   const [tab, setTab] = useState<TabId>('profile')
+  // User-reorderable tab strip (opt-in edit mode; order persisted per-browser).
+  const [tabOrder, setTabOrder] = useContactTabOrder()
+  const [editingTabs, setEditingTabs] = useState(false)
   // Which segment the merged Membership tab shows (deep-linked from header chips)
   const [membershipSeg, setMembershipSeg] = useState<'subscription' | 'affiliation'>('subscription')
   const router = useRouter()
@@ -4263,36 +4311,100 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       ) : (
         <>
           {/* Tabs — horizontally scrollable; buttons keep their width (shrink-0)
-              so labels never get squeezed/overlapped on mobile. */}
-          <div className="flex gap-1 border-b overflow-x-auto">
-            {TABS.filter((tb) => tb.id !== 'gamification' || isInstalled('gamification')).map(
-              (tb) => {
-                const locked = tb.feature ? !hasFeature(tb.feature) : false
-                const Icon = tb.icon
-                return (
-                  <button
-                    key={tb.id}
-                    onClick={() =>
-                      locked ? openUpgradeModal({ feature: tb.feature }) : setTab(tb.id)
-                    }
-                    className={`flex shrink-0 flex-col items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                      locked
-                        ? 'border-transparent text-muted-foreground/50 hover:text-muted-foreground/70'
-                        : tab === tb.id
-                          ? 'border-primary text-foreground'
-                          : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span className="flex items-center gap-1">
-                      {tb.label}
-                      {locked && <Lock className="h-3 w-3 text-muted-foreground/30" />}
-                    </span>
-                  </button>
-                )
-              }
-            )}
-          </div>
+              so labels never get squeezed/overlapped on mobile. An opt-in edit
+              mode makes the strip drag-reorderable (order saved per-browser). */}
+          {(() => {
+            const visibleTabs = applyTabOrder(
+              TABS.filter((tb) => tb.id !== 'gamification' || isInstalled('gamification')),
+              tabOrder
+            )
+            const visibleIds = visibleTabs.map((tb) => tb.id)
+
+            const tabClass = (tb: (typeof TABS)[number], locked: boolean) =>
+              `flex shrink-0 flex-col items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                locked
+                  ? 'border-transparent text-muted-foreground/50 hover:text-muted-foreground/70'
+                  : tab === tb.id
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`
+
+            const tabInner = (tb: (typeof TABS)[number], locked: boolean) => {
+              const Icon = tb.icon
+              return (
+                <>
+                  <Icon className="h-5 w-5" />
+                  <span className="flex items-center gap-1">
+                    {tb.label}
+                    {locked && <Lock className="h-3 w-3 text-muted-foreground/30" />}
+                  </span>
+                </>
+              )
+            }
+
+            return (
+              <div className="flex items-stretch gap-1 border-b">
+                <div className="flex flex-1 gap-1 overflow-x-auto">
+                  {editingTabs ? (
+                    <SortableList
+                      horizontal
+                      ids={visibleIds}
+                      onReorder={(from, to) => setTabOrder(moveItem(visibleIds, from, to))}
+                    >
+                      {visibleTabs.map((tb) => {
+                        const locked = tb.feature ? !hasFeature(tb.feature) : false
+                        return (
+                          <SortableItem key={tb.id} id={tb.id}>
+                            {({ setNodeRef, style, attributes, listeners, isDragging }) => (
+                              <button
+                                ref={setNodeRef}
+                                style={style}
+                                {...attributes}
+                                {...listeners}
+                                type="button"
+                                className={`${tabClass(tb, locked)} cursor-grab rounded-t-md bg-muted/40 active:cursor-grabbing ${isDragging ? 'opacity-60' : ''}`}
+                              >
+                                {tabInner(tb, locked)}
+                              </button>
+                            )}
+                          </SortableItem>
+                        )
+                      })}
+                    </SortableList>
+                  ) : (
+                    visibleTabs.map((tb) => {
+                      const locked = tb.feature ? !hasFeature(tb.feature) : false
+                      return (
+                        <button
+                          key={tb.id}
+                          onClick={() =>
+                            locked ? openUpgradeModal({ feature: tb.feature }) : setTab(tb.id)
+                          }
+                          className={tabClass(tb, locked)}
+                        >
+                          {tabInner(tb, locked)}
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+                {/* Edit-mode toggle — secondary action */}
+                <button
+                  type="button"
+                  onClick={() => setEditingTabs((v) => !v)}
+                  title={editingTabs ? t('tabReorderDone') : t('tabReorder')}
+                  aria-label={editingTabs ? t('tabReorderDone') : t('tabReorder')}
+                  className={`mb-1 flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-lg border transition-colors ${
+                    editingTabs
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  {editingTabs ? <Check className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}
+                </button>
+              </div>
+            )
+          })()}
 
           {/* Tab content */}
           <div>

@@ -530,7 +530,9 @@
     "engagementNoSessions": "Aucune participation pour le moment",
     "relationshipTimeline": "Chronologie de la relation",
     "timelineNow": "Maintenant",
-    "joinedAs": "Inscrit comme {label}"
+    "joinedAs": "Inscrit comme {label}",
+    "tabReorder": "Réorganiser les onglets",
+    "tabReorderDone": "Terminé"
   },
   "TeamMemberships": {
     "title": "Adhésion",
