@@ -1006,7 +1006,17 @@
     "engagementLowWithin": "Faible sous (jours)",
     "engagementAtRiskWithin": "À risque sous (jours)",
     "engagementDaysHint": "Mesuré depuis la dernière séance suivie. Au-delà de la fenêtre à risque, un contact est inactif.",
-    "engagementInvalid": "Chaque fenêtre doit être plus grande que la précédente."
+    "engagementInvalid": "Chaque fenêtre doit être plus grande que la précédente.",
+    "autoSectionTitle": "Automatisations",
+    "autoCreate": "Créer",
+    "autoCreateSubscribed": "Quand on s'abonne à ceci",
+    "autoCreateUnsubscribed": "Quand on se désabonne de ceci",
+    "autoNone": "Aucune automatisation ne référence cet abonnement.",
+    "autoUntitled": "Automatisation sans titre",
+    "autoPaused": "En pause",
+    "autoTriggerSubscribed": "Quand abonné",
+    "autoTriggerUnsubscribed": "Quand désabonné",
+    "autoTriggerChanged": "Quand l'abonnement change"
   },
   "Bookings": {
     "title": "Réservations",

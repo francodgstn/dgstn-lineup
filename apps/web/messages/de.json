@@ -1006,7 +1006,17 @@
     "engagementLowWithin": "Niedrig innerhalb (Tage)",
     "engagementAtRiskWithin": "Gefährdet innerhalb (Tage)",
     "engagementDaysHint": "Gemessen ab der letzten besuchten Session. Nach dem Gefährdet-Fenster gilt ein Kontakt als inaktiv.",
-    "engagementInvalid": "Jedes Fenster muss größer sein als das vorherige."
+    "engagementInvalid": "Jedes Fenster muss größer sein als das vorherige.",
+    "autoSectionTitle": "Automatisierungen",
+    "autoCreate": "Erstellen",
+    "autoCreateSubscribed": "Wenn dies abonniert wird",
+    "autoCreateUnsubscribed": "Wenn dies gekündigt wird",
+    "autoNone": "Noch keine Automatisierung bezieht sich auf dieses Abo.",
+    "autoUntitled": "Unbenannte Automatisierung",
+    "autoPaused": "Pausiert",
+    "autoTriggerSubscribed": "Wenn abonniert",
+    "autoTriggerUnsubscribed": "Wenn gekündigt",
+    "autoTriggerChanged": "Wenn sich das Abo ändert"
   },
   "Bookings": {
     "title": "Buchungen",

@@ -1006,7 +1006,17 @@
     "engagementLowWithin": "Low within (days)",
     "engagementAtRiskWithin": "At-risk within (days)",
     "engagementDaysHint": "Measured from the last attended session. Beyond the at-risk window, a contact counts as inactive.",
-    "engagementInvalid": "Each window must be larger than the one before it."
+    "engagementInvalid": "Each window must be larger than the one before it.",
+    "autoSectionTitle": "Automations",
+    "autoCreate": "Create",
+    "autoCreateSubscribed": "When subscribed to this",
+    "autoCreateUnsubscribed": "When unsubscribed from this",
+    "autoNone": "No automations reference this subscription yet.",
+    "autoUntitled": "Untitled automation",
+    "autoPaused": "Paused",
+    "autoTriggerSubscribed": "When subscribed",
+    "autoTriggerUnsubscribed": "When unsubscribed",
+    "autoTriggerChanged": "When subscription changes"
   },
   "Bookings": {
     "title": "Bookings",

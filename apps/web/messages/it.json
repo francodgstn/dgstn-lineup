@@ -1006,7 +1006,17 @@
     "engagementLowWithin": "Basso entro (giorni)",
     "engagementAtRiskWithin": "A rischio entro (giorni)",
     "engagementDaysHint": "Misurato dall'ultima sessione frequentata. Oltre la finestra a rischio, un contatto è inattivo.",
-    "engagementInvalid": "Ogni finestra deve essere più grande della precedente."
+    "engagementInvalid": "Ogni finestra deve essere più grande della precedente.",
+    "autoSectionTitle": "Automazioni",
+    "autoCreate": "Crea",
+    "autoCreateSubscribed": "Quando ci si abbona a questo",
+    "autoCreateUnsubscribed": "Quando ci si disiscrive da questo",
+    "autoNone": "Nessuna automazione fa riferimento a questo abbonamento.",
+    "autoUntitled": "Automazione senza titolo",
+    "autoPaused": "In pausa",
+    "autoTriggerSubscribed": "Quando abbonato",
+    "autoTriggerUnsubscribed": "Quando disiscritto",
+    "autoTriggerChanged": "Quando l'abbonamento cambia"
   },
   "Bookings": {
     "title": "Prenotazioni",

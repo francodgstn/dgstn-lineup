@@ -87,6 +87,10 @@ export type AutomationAction =
   // Targets the contact's FIRST affiliation whose type_key matches affiliation_type_key
   // (or any affiliation if affiliation_type_key is omitted). Best-effort: no-op if none found.
   | { type: 'set_affiliation_status'; status_id: string; affiliation_type_key?: string }
+  // Contact Groups plugin — add/remove a contact from a group (Contact.group_ids).
+  // No-op if group_id is missing/empty.
+  | { type: 'add_to_group'; group_id: string }
+  | { type: 'remove_from_group'; group_id: string }
   // Plugin-contributed actions (namespaced: 'plugin:{pluginId}:{name}')
   | { type: PluginActionId; config?: Record<string, unknown> }
 
@@ -418,10 +422,31 @@ export function evaluateContactConditions(
 }
 
 // ---------------------------------------------------------------------------
+// Pure action-payload helpers (exported for testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the Firestore update payload for an add_to_group or remove_from_group
+ * action, or null if group_id is missing/empty (no-op guard).
+ * Pure — no Firestore calls; used by executeActionsForContact and by unit tests.
+ */
+export function groupActionUpdate(
+  action: { type: 'add_to_group' | 'remove_from_group'; group_id: string }
+): { group_ids: ReturnType<typeof FieldValue.arrayUnion> | ReturnType<typeof FieldValue.arrayRemove> } | null {
+  if (!action.group_id) return null
+  return {
+    group_ids:
+      action.type === 'add_to_group'
+        ? FieldValue.arrayUnion(action.group_id)
+        : FieldValue.arrayRemove(action.group_id),
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Action execution helpers
 // ---------------------------------------------------------------------------
 
-interface ResolvedActions {
+export interface ResolvedActions {
   template: Record<string, unknown> | null
   alertPreset: Record<string, unknown> | null
   language: string
@@ -515,9 +540,11 @@ async function createContactAlertDoc(
  * - update_field:  self-contained (field allowlist enforced at runtime)
  * - notify_team:   self-contained (team email resolved at runtime)
  * - log_activity:  self-contained (always succeeds)
- * - assign_tag / webhook: Phase 2+ — no-ops, not errors
+ * - assign_tag / remove_tag / add_to_group / remove_from_group / webhook: self-contained
+ *
+ * Exported for use by rule validators and tests.
  */
-function hasResolvableActions(actions: AutomationAction[], resolved: ResolvedActions): boolean {
+export function hasResolvableActions(actions: AutomationAction[], resolved: ResolvedActions): boolean {
   for (const a of actions) {
     if (a.type === 'send_email' && resolved.template) return true
     if (a.type === 'create_alert' && resolved.alertPreset) return true
@@ -526,6 +553,8 @@ function hasResolvableActions(actions: AutomationAction[], resolved: ResolvedAct
     if (a.type === 'log_activity') return true
     if (a.type === 'assign_tag') return true
     if (a.type === 'remove_tag') return true
+    if (a.type === 'add_to_group') return true
+    if (a.type === 'remove_from_group') return true
     if (a.type === 'webhook') return true
   }
   return false
@@ -727,6 +756,60 @@ async function executeActionsForContact(
           })
         )
         executed++
+      }
+
+      // add_to_group — add the contact to a Contact Group (group_ids arrayUnion)
+      if (action.type === 'add_to_group') {
+        const payload = groupActionUpdate(action)
+        if (!payload) {
+          console.log(
+            `[automationEngine] add_to_group: missing group_id for rule ${ruleId}, skipping`
+          )
+        } else {
+          await admin.firestore().collection('contacts').doc(contactId).update(payload)
+          await to(
+            logActivity(teamId, {
+              date: FieldValue.serverTimestamp(),
+              event: 'automation_add_to_group',
+              parameters: {
+                description:
+                  `Automation added ${contact.firstname || ''} ${contact.lastname || ''} to group '${action.group_id}'.`.trim(),
+                group_id: action.group_id,
+                rule_id: ruleId,
+                automated: true,
+              },
+              refs: { contact: contactId, user: null },
+            })
+          )
+          executed++
+        }
+      }
+
+      // remove_from_group — remove the contact from a Contact Group (group_ids arrayRemove)
+      if (action.type === 'remove_from_group') {
+        const payload = groupActionUpdate(action)
+        if (!payload) {
+          console.log(
+            `[automationEngine] remove_from_group: missing group_id for rule ${ruleId}, skipping`
+          )
+        } else {
+          await admin.firestore().collection('contacts').doc(contactId).update(payload)
+          await to(
+            logActivity(teamId, {
+              date: FieldValue.serverTimestamp(),
+              event: 'automation_remove_from_group',
+              parameters: {
+                description:
+                  `Automation removed ${contact.firstname || ''} ${contact.lastname || ''} from group '${action.group_id}'.`.trim(),
+                group_id: action.group_id,
+                rule_id: ruleId,
+                automated: true,
+              },
+              refs: { contact: contactId, user: null },
+            })
+          )
+          executed++
+        }
       }
 
       // set_affiliation_status — update the status (and active flag) of the

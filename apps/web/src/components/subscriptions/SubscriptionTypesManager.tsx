@@ -41,6 +41,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Globe, GripVertical } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
+import { SubscriptionAutomationsSection } from '@/components/subscriptions/SubscriptionAutomationsSection'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { formatCurrency } from '@/lib/format'
 
@@ -387,6 +388,9 @@ function SubTypeDialog({
               </div>
             )}
           </div>
+
+          {/* Automations referencing this subscription + a quick create shortcut */}
+          {editing && <SubscriptionAutomationsSection teamId={teamId} subscriptionType={editing} />}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

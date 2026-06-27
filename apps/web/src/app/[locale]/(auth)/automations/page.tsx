@@ -85,7 +85,9 @@ import {
 } from 'lucide-react'
 import { TEAMS_COLLECTION, SUBSCRIPTION_ROLLUP_STATUSES } from '@linyup/shared'
 import type { SubscriptionType } from '@linyup/shared'
-import { Link } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
+import { useSearchParams } from 'next/navigation'
+import type { Route } from 'next'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -997,6 +999,7 @@ function RuleDialog({
   onSaved,
   triggerOptions: triggerOptionsProp,
   actionTypeLabels: actionTypeLabelsProp,
+  prefill,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -1012,6 +1015,8 @@ function RuleDialog({
     supportsDelay: boolean
   }>
   actionTypeLabels?: Record<string, string>
+  // Deep-link prefill for a NEW rule (e.g. from the subscription editor).
+  prefill?: { triggerType?: string; subscriptionTypeId?: string }
 }) {
   const resolvedTriggerOptions = triggerOptionsProp ?? TRIGGER_OPTIONS
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
@@ -1073,15 +1078,20 @@ function RuleDialog({
       setTriggerSubTypeId(editing.trigger.subscriptionTypeId ?? '')
       setTriggerAffTypeKey(editing.trigger.affiliationTypeKey ?? '')
     } else {
-      reset({ name: '', trigger_type: 'schedule_daily', delay_minutes: 0, active: true })
+      reset({
+        name: '',
+        trigger_type: prefill?.triggerType ?? 'schedule_daily',
+        delay_minutes: 0,
+        active: true,
+      })
       setConditions([])
       setActions([])
       setWebhookEndpointId('')
-      setTriggerSubTypeId('')
+      setTriggerSubTypeId(prefill?.subscriptionTypeId ?? '')
       setTriggerAffTypeKey('')
     }
     setSubmitError('')
-  }, [open, editing, reset])
+  }, [open, editing, reset, prefill])
 
   const onSubmit = async (values: RuleFormValues) => {
     setSubmitError('')
@@ -1756,10 +1766,38 @@ export default function AutomationsPage() {
 
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
+  const [prefill, setPrefill] = useState<
+    { triggerType?: string; subscriptionTypeId?: string } | undefined
+  >(undefined)
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [webhooksOpen, setWebhooksOpen] = useState(false)
   const [quickStarting, setQuickStarting] = useState(false)
+
+  // Deep-link entry: ?editRule=<id> opens that rule; ?newTrigger=<type>&subType=<id>
+  // opens a NEW rule prefilled (e.g. from the subscription editor). Params are cleared
+  // after handling so closing the dialog doesn't reopen it.
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    const editRule = searchParams.get('editRule')
+    const newTrigger = searchParams.get('newTrigger')
+    const subType = searchParams.get('subType')
+    if (editRule) {
+      const r = rules.find((x) => x.id === editRule)
+      if (!r) return // rules not loaded yet — re-run when they are
+      setPrefill(undefined)
+      setEditingRule(r)
+      setRuleDialogOpen(true)
+      router.replace('/automations' as Route)
+    } else if (newTrigger) {
+      setEditingRule(null)
+      setPrefill({ triggerType: newTrigger, subscriptionTypeId: subType ?? undefined })
+      setRuleDialogOpen(true)
+      router.replace('/automations' as Route)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, rules])
 
   const invalidateRules = () =>
     qc.invalidateQueries({ queryKey: ['automation_rules', currentTeamId] })
@@ -1968,7 +2006,10 @@ export default function AutomationsPage() {
         <>
           <RuleDialog
             open={ruleDialogOpen}
-            onOpenChange={setRuleDialogOpen}
+            onOpenChange={(v) => {
+              setRuleDialogOpen(v)
+              if (!v) setPrefill(undefined)
+            }}
             teamId={currentTeamId}
             editing={editingRule}
             templates={templates}
@@ -1976,6 +2017,7 @@ export default function AutomationsPage() {
             onSaved={invalidateRules}
             triggerOptions={allTriggerOptions}
             actionTypeLabels={allActionTypeLabels}
+            prefill={prefill}
           />
           <TemplateDialog
             open={templateDialogOpen}
