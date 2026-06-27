@@ -40,11 +40,15 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
 import { usePlan } from '@/hooks/usePlan'
+import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +84,7 @@ import {
   Webhook,
 } from 'lucide-react'
 import { TEAMS_COLLECTION, SUBSCRIPTION_ROLLUP_STATUSES } from '@linyup/shared'
+import type { SubscriptionType } from '@linyup/shared'
 import { Link } from '@/i18n/navigation'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
@@ -158,56 +163,74 @@ interface FormAction {
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
+// `group` drives the sectioned dropdown (SelectGroup + divider). Order below.
+const TRIGGER_GROUP_ORDER = ['Contact', 'Booking', 'Attendance', 'Subscription', 'Affiliation', 'General', 'Plugins']
+const CONDITION_GROUP_ORDER = ['Acquisition', 'Subscription', 'Affiliation', 'Attendance', 'Other']
+
 const TRIGGER_OPTIONS = [
-  { value: 'schedule_daily', label: 'Daily scan (scheduled)', icon: Clock, supportsDelay: false },
-  { value: 'contact_created', label: 'Contact created', icon: UserPlus, supportsDelay: true },
-  {
-    value: 'booking_confirmed',
-    label: 'Booking confirmed',
-    icon: CheckCircle,
-    supportsDelay: true,
-  },
-  { value: 'booking_no_show', label: 'Booking marked no-show', icon: XCircle, supportsDelay: true },
-  { value: 'booking_cancelled', label: 'Booking cancelled', icon: XCircle, supportsDelay: true },
-  {
-    value: 'affiliation_changed',
-    label: 'Affiliation changed',
-    icon: ShieldCheck,
-    supportsDelay: true,
-  },
-  {
-    value: 'subscription_changed',
-    label: 'Subscription changed',
-    icon: CreditCard,
-    supportsDelay: true,
-  },
-  { value: 'session_ended', label: 'Session ended', icon: CalendarCheck, supportsDelay: true },
-  { value: 'inbound_webhook', label: 'Inbound webhook', icon: Webhook, supportsDelay: false },
-  { value: 'manual', label: 'Manual only', icon: Play, supportsDelay: false },
+  { value: 'schedule_daily', label: 'Daily scan (scheduled)', icon: Clock, supportsDelay: false, group: 'General' },
+  { value: 'contact_created', label: 'Contact created', icon: UserPlus, supportsDelay: true, group: 'Contact' },
+  { value: 'booking_confirmed', label: 'Booking confirmed', icon: CheckCircle, supportsDelay: true, group: 'Booking' },
+  { value: 'booking_no_show', label: 'Booking marked no-show', icon: XCircle, supportsDelay: true, group: 'Booking' },
+  { value: 'booking_cancelled', label: 'Booking cancelled', icon: XCircle, supportsDelay: true, group: 'Booking' },
+  { value: 'affiliation_changed', label: 'Affiliation changed', icon: ShieldCheck, supportsDelay: true, group: 'Affiliation' },
+  { value: 'subscription_changed', label: 'Subscription changed', icon: CreditCard, supportsDelay: true, group: 'Subscription' },
+  { value: 'session_ended', label: 'Session ended', icon: CalendarCheck, supportsDelay: true, group: 'Attendance' },
+  { value: 'inbound_webhook', label: 'Inbound webhook', icon: Webhook, supportsDelay: false, group: 'General' },
+  { value: 'manual', label: 'Manual only', icon: Play, supportsDelay: false, group: 'General' },
 ]
 
 const CONDITION_TYPE_OPTIONS = [
-  { value: 'acquisition_stage', label: 'Acquisition stage', input: 'acquisition_stage_select' },
-  { value: 'has_affiliation', label: 'Has an active affiliation', input: 'none' },
-  { value: 'affiliation_type', label: 'Affiliation type', input: 'affiliation_type_select' },
-  { value: 'subscription', label: 'Subscription', input: 'subscription_select' },
-  { value: 'sessions_attended_min', label: 'Sessions attended ≥', input: 'number' },
-  { value: 'sessions_attended_max', label: 'Sessions attended ≤', input: 'number' },
-  { value: 'sessions_attended_exactly', label: 'Sessions attended =', input: 'number' },
-  { value: 'inactivity_days', label: 'Inactive for at least (days)', input: 'number' },
-  { value: 'inactivity_days_max', label: 'Inactive for at most (days)', input: 'number' },
-  { value: 'subscription_expires_in', label: 'Subscription expires in ≤ (days)', input: 'number' },
-  { value: 'days_since_created', label: 'Days since created ≥', input: 'number' },
-  { value: 'tag', label: 'Has tag', input: 'text' },
-  { value: 'field_equals', label: 'Field equals', input: 'field_equals' },
-  { value: 'birthday_today', label: 'Birthday today', input: 'none' },
-  { value: 'bio_link_booking_no_show', label: 'Bio-link booking no-show', input: 'none' },
-  {
-    value: 'subscription_status',
-    label: 'Subscription billing status',
-    input: 'subscription_status_select',
-  },
+  { value: 'acquisition_stage', label: 'Acquisition stage', input: 'acquisition_stage_select', group: 'Acquisition' },
+  { value: 'days_since_created', label: 'Days since created ≥', input: 'number', group: 'Acquisition' },
+  { value: 'subscription', label: 'Subscription', input: 'subscription_select', group: 'Subscription' },
+  { value: 'subscription_status', label: 'Subscription billing status', input: 'subscription_status_select', group: 'Subscription' },
+  { value: 'subscription_expires_in', label: 'Subscription expires in ≤ (days)', input: 'number', group: 'Subscription' },
+  { value: 'has_affiliation', label: 'Has an active affiliation', input: 'none', group: 'Affiliation' },
+  { value: 'affiliation_type', label: 'Affiliation type', input: 'affiliation_type_select', group: 'Affiliation' },
+  { value: 'sessions_attended_min', label: 'Sessions attended ≥', input: 'number', group: 'Attendance' },
+  { value: 'sessions_attended_max', label: 'Sessions attended ≤', input: 'number', group: 'Attendance' },
+  { value: 'sessions_attended_exactly', label: 'Sessions attended =', input: 'number', group: 'Attendance' },
+  { value: 'inactivity_days', label: 'Inactive for at least (days)', input: 'number', group: 'Attendance' },
+  { value: 'inactivity_days_max', label: 'Inactive for at most (days)', input: 'number', group: 'Attendance' },
+  { value: 'bio_link_booking_no_show', label: 'Bio-link booking no-show', input: 'none', group: 'Attendance' },
+  { value: 'tag', label: 'Has tag', input: 'text', group: 'Other' },
+  { value: 'field_equals', label: 'Field equals', input: 'field_equals', group: 'Other' },
+  { value: 'birthday_today', label: 'Birthday today', input: 'none', group: 'Other' },
 ]
+
+// Render a flat option list as grouped <SelectGroup> sections with dividers, in the
+// given group order (unknown groups — e.g. plugin-contributed — fall to the end).
+type GroupableOption = { value: string; label: string; group?: string }
+function renderGroupedOptions(
+  options: ReadonlyArray<GroupableOption>,
+  order: string[]
+) {
+  const byGroup = new Map<string, GroupableOption[]>()
+  for (const o of options) {
+    const g = o.group ?? 'Plugins'
+    const arr = byGroup.get(g) ?? []
+    arr.push(o)
+    byGroup.set(g, arr)
+  }
+  const groups = [
+    ...order.filter((g) => byGroup.has(g)),
+    ...[...byGroup.keys()].filter((g) => !order.includes(g)),
+  ]
+  return groups.map((g, gi) => (
+    <React.Fragment key={g}>
+      {gi > 0 && <SelectSeparator />}
+      <SelectGroup>
+        <SelectLabel>{g}</SelectLabel>
+        {byGroup.get(g)!.map((o) => (
+          <SelectItem key={o.value} value={o.value} className="text-xs">
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectGroup>
+    </React.Fragment>
+  ))
+}
 
 const SUBSCRIPTION_STATUS_VALUES = SUBSCRIPTION_ROLLUP_STATUSES.map((v) => ({
   value: v,
@@ -230,10 +253,6 @@ const ACQUISITION_STAGE_VALUES = [
   { value: 'trial_attended', label: 'Trial attended' },
   { value: 'joined', label: 'Joined' },
 ]
-const SUBSCRIPTION_VALUES = [
-  { value: 'any', label: 'Any subscription' },
-  { value: 'none', label: 'No subscription' },
-]
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
   send_email: 'Send email',
@@ -252,12 +271,15 @@ function triggerLabel(type: string): string {
   return TRIGGER_OPTIONS.find((t) => t.value === type)?.label ?? type
 }
 
-function conditionSummary(c: AutomationCondition): string {
+function conditionSummary(c: AutomationCondition, subName?: (id: string) => string): string {
   const opt = CONDITION_TYPE_OPTIONS.find((o) => o.value === c.type)
   if (!opt) return c.type
   if (opt.input === 'none') return opt.label
   if (opt.input === 'number') return `${opt.label} ${c.value ?? ''}`
   if (c.type === 'field_equals') return `${c.field ?? '?'} = ${c.value ?? ''}`
+  if (c.type === 'subscription' && c.value && c.value !== 'any' && c.value !== 'none') {
+    return `Subscription: ${subName?.(c.value) ?? c.value}`
+  }
   return `${opt.label}: ${c.value ?? ''}`
 }
 
@@ -368,6 +390,7 @@ function TriggerIcon({ type, className }: { type: string; className?: string }) 
 function RuleCard({
   rule,
   templates,
+  subscriptionTypes,
   onEdit,
   onToggle,
   onRunNow,
@@ -375,12 +398,14 @@ function RuleCard({
 }: {
   rule: AutomationRule
   templates: OutreachTemplate[]
+  subscriptionTypes: SubscriptionType[]
   onEdit: () => void
   onToggle: () => void
   onRunNow: () => void
   onDelete: () => void
 }) {
   const [running, setRunning] = useState(false)
+  const subName = (id: string) => subscriptionTypes.find((s) => s.id === id)?.name ?? id
 
   async function handleRunNow() {
     setRunning(true)
@@ -471,7 +496,7 @@ function RuleCard({
               key={i}
               className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium text-muted-foreground bg-muted"
             >
-              {conditionSummary(c)}
+              {conditionSummary(c, subName)}
             </span>
           ))}
         </div>
@@ -515,10 +540,19 @@ function RuleCard({
 function ConditionEditor({
   conditions,
   onChange,
+  subscriptionTypes,
 }: {
   conditions: FormCondition[]
   onChange: (c: FormCondition[]) => void
+  subscriptionTypes: SubscriptionType[]
 }) {
+  // 'any' / 'none' plus the team's actual subscription types, so a rule can target
+  // a specific one (e.g. "subscribed to Athlete plan").
+  const subscriptionOptions = [
+    { value: 'any', label: 'Any subscription', group: 'General' },
+    { value: 'none', label: 'No subscription', group: 'General' },
+    ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name, group: 'Subscription types' })),
+  ]
   function add() {
     onChange([...conditions, { type: 'acquisition_stage', value: 'trial_booked' }])
   }
@@ -568,11 +602,7 @@ function ConditionEditor({
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {CONDITION_TYPE_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="text-xs">
-                        {o.label}
-                      </SelectItem>
-                    ))}
+                    {renderGroupedOptions(CONDITION_TYPE_OPTIONS, CONDITION_GROUP_ORDER)}
                   </SelectContent>
                 </Select>
 
@@ -611,16 +641,12 @@ function ConditionEditor({
                       >
                         <SelectTrigger className="h-8 text-xs">
                           <span className="flex flex-1 text-left text-xs truncate">
-                            {SUBSCRIPTION_VALUES.find((sv) => sv.value === cond.value)?.label ??
+                            {subscriptionOptions.find((sv) => sv.value === cond.value)?.label ??
                               cond.value}
                           </span>
                         </SelectTrigger>
                         <SelectContent>
-                          {SUBSCRIPTION_VALUES.map((sv) => (
-                            <SelectItem key={sv.value} value={sv.value} className="text-xs">
-                              {sv.label}
-                            </SelectItem>
-                          ))}
+                          {renderGroupedOptions(subscriptionOptions, ['General', 'Subscription types'])}
                         </SelectContent>
                       </Select>
                     )}
@@ -982,6 +1008,7 @@ function RuleDialog({
   actionTypeLabels?: Record<string, string>
 }) {
   const resolvedTriggerOptions = triggerOptionsProp ?? TRIGGER_OPTIONS
+  const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
   const [conditions, setConditions] = useState<FormCondition[]>([])
   const [actions, setActions] = useState<FormAction[]>([])
   const [webhookEndpointId, setWebhookEndpointId] = useState('')
@@ -1154,11 +1181,7 @@ function RuleDialog({
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {resolvedTriggerOptions.map((t) => (
-                      <SelectItem key={t.value} value={t.value} className="text-xs">
-                        {t.label}
-                      </SelectItem>
-                    ))}
+                    {renderGroupedOptions(resolvedTriggerOptions, TRIGGER_GROUP_ORDER)}
                   </SelectContent>
                 </Select>
               </div>
@@ -1217,7 +1240,11 @@ function RuleDialog({
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Conditions <span className="normal-case font-normal">(all must match)</span>
             </p>
-            <ConditionEditor conditions={conditions} onChange={setConditions} />
+            <ConditionEditor
+              conditions={conditions}
+              onChange={setConditions}
+              subscriptionTypes={subscriptionTypes}
+            />
           </div>
 
           <Separator />
@@ -1652,6 +1679,7 @@ export default function AutomationsPage() {
   }
 
   const { data: rules = [], isLoading: rulesLoading } = useRules(currentTeamId)
+  const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
   const { data: templates = [] } = useTemplates(currentTeamId)
   const { data: webhookEndpoints = [] } = useQuery<WebhookEndpoint[]>({
     queryKey: ['webhook_endpoints', currentTeamId],
@@ -1823,6 +1851,7 @@ export default function AutomationsPage() {
                   key={rule.id}
                   rule={rule}
                   templates={templates}
+                  subscriptionTypes={subscriptionTypes}
                   onEdit={() => {
                     setEditingRule(rule)
                     setRuleDialogOpen(true)
@@ -1848,6 +1877,7 @@ export default function AutomationsPage() {
                   key={rule.id}
                   rule={rule}
                   templates={templates}
+                  subscriptionTypes={subscriptionTypes}
                   onEdit={() => {
                     setEditingRule(rule)
                     setRuleDialogOpen(true)
