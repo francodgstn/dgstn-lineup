@@ -33,6 +33,8 @@ export interface PublicSurfaceFlags {
   siteLive: boolean
   /** A published course exists (plugin + content) — the /space portal is live. */
   spaceLive: boolean
+  /** A sellable channel is enabled — the /shop surface is live. */
+  shopLive: boolean
   /** Booking is a base feature — always live. */
   bookingLive: boolean
 }
@@ -85,6 +87,7 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
     websiteActive: isInstalled('website'),
     siteLive: activeSurfaces?.site ?? false,
     spaceLive: activeSurfaces?.space ?? false,
+    shopLive: activeSurfaces?.shop ?? false,
     bookingLive: activeSurfaces?.booking ?? true,
   }
 

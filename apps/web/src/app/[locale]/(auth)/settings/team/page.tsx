@@ -57,8 +57,6 @@ import {
 import {
   TEAMS_COLLECTION,
   ALERT_PRESETS_SUBCOLLECTION,
-  COURSES_COLLECTION,
-  SITE_DRAFTS_COLLECTION,
   isReservedSlug,
   DEFAULT_ENGAGEMENT_THRESHOLDS,
 } from '@linyup/shared'
@@ -69,7 +67,6 @@ import type {
   RankLevel,
   TeamIntegration,
   PaymentGatewayType,
-  PublicSurface,
 } from '@linyup/shared'
 import {
   CalendarDays,
@@ -93,7 +90,6 @@ import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { Separator } from '@/components/ui/separator'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -139,9 +135,6 @@ const generalSchema = z.object({
     .min(3, 'At least 3 characters')
     .max(50, 'Max 50 characters')
     .regex(SLUG_REGEX, 'Only lowercase letters, numbers and hyphens'),
-  default_public_surface: z
-    .enum(['bio-link', 'site', 'space', 'booking'])
-    .default('bio-link'),
 })
 type GeneralData = z.infer<typeof generalSchema>
 
@@ -212,36 +205,6 @@ function useGatewayIntegrations(teamId: string | null) {
         )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TeamIntegration)
-    },
-  })
-}
-
-// ─── data helpers for GeneralForm surface picker ─────────────────────────────
-
-function useHasPublishedCourse(teamId: string | null) {
-  return useQuery<boolean>({
-    queryKey: ['has-published-course', teamId],
-    enabled: !!teamId,
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, COURSES_COLLECTION),
-          where('teamId', '==', teamId),
-          where('status', '==', 'published'),
-        ),
-      )
-      return !snap.empty
-    },
-  })
-}
-
-function useIsSiteEnabled(teamId: string | null) {
-  return useQuery<boolean>({
-    queryKey: ['site-draft-enabled', teamId],
-    enabled: !!teamId,
-    queryFn: async () => {
-      const snap = await getDoc(doc(db, SITE_DRAFTS_COLLECTION, teamId!))
-      return snap.exists() && snap.data()?.enabled === true
     },
   })
 }
@@ -333,26 +296,6 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
   const [slugChecking, setSlugChecking] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const { isInstalled } = useInstalledPlugins()
-  const { data: hasPublishedCourse = false } = useHasPublishedCourse(teamId)
-  const { data: isSiteEnabled = false } = useIsSiteEnabled(teamId)
-
-  // Surfaces available depend on installed plugins + live state.
-  // bio-link is always available.
-  // booking is always available (booking is a core feature, not a plugin).
-  // site: only if website plugin installed AND draft is enabled (= published).
-  // space: only if online-courses plugin installed AND ≥1 published non-archived course.
-  const availableSurfaces: { value: PublicSurface; label: string }[] = [
-    { value: 'bio-link', label: t('defaultSurfaceBioLink') },
-    { value: 'booking', label: t('defaultSurfaceBooking') },
-    ...(isInstalled('website') && isSiteEnabled
-      ? [{ value: 'site' as PublicSurface, label: t('defaultSurfaceSite') }]
-      : []),
-    ...(isInstalled('online-courses') && hasPublishedCourse
-      ? [{ value: 'space' as PublicSurface, label: t('defaultSurfaceSpace') }]
-      : []),
-  ]
-
   const {
     register,
     handleSubmit,
@@ -365,7 +308,6 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
       description: team.description ?? '',
       sport_type: team.sport_type ?? '',
       slug: team.slug,
-      default_public_surface: (team.default_public_surface as PublicSurface | undefined) ?? 'bio-link',
     },
   })
 
@@ -385,7 +327,6 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
       description: data.description ?? '',
       sport_type: data.sport_type ?? '',
       slug: data.slug,
-      default_public_surface: data.default_public_surface,
     })
     await qc.invalidateQueries({ queryKey: ['team', teamId] })
     setSaved(true)
@@ -460,32 +401,6 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           <p className="text-destructive text-xs">{errors.slug.message}</p>
         )}
         <p className="text-xs text-muted-foreground">{t('slugHelp')}</p>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="default_public_surface">{t('defaultPublicSurface')}</Label>
-        <Controller
-          name="default_public_surface"
-          control={control}
-          render={({ field }) => (
-            <Select
-              value={field.value}
-              onValueChange={(v) => field.onChange(v as PublicSurface)}
-            >
-              <SelectTrigger className="w-full" id="default_public_surface">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableSurfaces.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        />
-        <p className="text-xs text-muted-foreground">{t('defaultPublicSurfaceHelp')}</p>
       </div>
 
       <div className="flex items-center gap-3 pt-2">

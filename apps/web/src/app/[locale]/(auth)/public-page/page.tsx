@@ -180,6 +180,7 @@ export default function PublicPageHub() {
     { value: 'bio-link', label: t('surfaceBioLink') },
     ...(flags.spaceLive ? [{ value: 'space' as const, label: t('surfaceSpace') }] : []),
     ...(flags.siteLive ? [{ value: 'site' as const, label: t('surfaceWebsite') }] : []),
+    ...(flags.shopLive ? [{ value: 'shop' as const, label: t('surfaceShop') }] : []),
     { value: 'booking', label: t('surfaceBooking') },
   ]
   const currentDefault = pendingDefault ?? defaultSurface

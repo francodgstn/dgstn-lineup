@@ -87,10 +87,24 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // Default to true — booking works on every plan, plugin-free.
   const bookingActive = true
 
+  // shop: live when a sellable channel is enabled — the products or online-courses
+  // plugin, or Stripe Connect (subscriptions). The public shop aggregates whatever
+  // exists, so this capability check is enough to offer it as a landing surface.
+  const productsPluginSnap = await db
+    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/products`)
+    .get()
+  const productsPluginActive = productsPluginSnap.exists && productsPluginSnap.data()?.status === 'active'
+  const onlineCoursesActive =
+    onlineCoursesPluginSnap.exists && onlineCoursesPluginSnap.data()?.status === 'active'
+  const connectEnabled =
+    (data.payments as { connectStatus?: string } | undefined)?.connectStatus === 'enabled'
+  const shopActive = productsPluginActive || onlineCoursesActive || connectEnabled
+
   const active_public_surfaces: ActivePublicSurfaces = {
     site: siteActive,
     space: spaceActive,
     booking: bookingActive,
+    shop: shopActive,
     forms: formsActive,
   }
 
