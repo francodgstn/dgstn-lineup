@@ -66,8 +66,11 @@ describe('groupActionUpdate — Firestore payload', () => {
   })
 
   it('returns null (no-op) when group_id is an empty string', () => {
-    // @ts-expect-error — testing the runtime guard for callers that bypass TS
-    const payload = groupActionUpdate({ type: 'add_to_group', group_id: '' })
+    // Cast via unknown to exercise the runtime guard without a TS error
+    // (group_id: string allows '' at the type level; the runtime guard rejects it)
+    const payload = groupActionUpdate(
+      { type: 'add_to_group', group_id: '' } as unknown as { type: 'add_to_group'; group_id: string }
+    )
     assert.equal(payload, null)
   })
 

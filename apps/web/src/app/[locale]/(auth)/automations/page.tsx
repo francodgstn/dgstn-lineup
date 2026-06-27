@@ -91,6 +91,7 @@ import type { Route } from 'next'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { useContactGroups } from '@/plugins/contact-groups/hooks'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ interface FormAction {
   message?: string // log_activity — log message
   tag?: string // assign_tag / remove_tag
   url?: string // webhook
+  group_id?: string // add_to_group / remove_from_group
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -270,6 +272,8 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   notify_team: 'Notify team (email)',
   log_activity: 'Log activity entry',
   webhook: 'Webhook (POST)',
+  add_to_group: 'Add to group',
+  remove_from_group: 'Remove from group',
   create_alert: 'Create alert (coming soon)',
 }
 
@@ -753,11 +757,15 @@ function ActionEditor({
   templates,
   onChange,
   actionTypeLabels: labelOverrides,
+  contactGroups,
+  groupsEnabled,
 }: {
   actions: FormAction[]
   templates: OutreachTemplate[]
   onChange: (a: FormAction[]) => void
   actionTypeLabels?: Record<string, string>
+  contactGroups: { id: string; name: string }[]
+  groupsEnabled: boolean
 }) {
   const resolvedActionLabels = labelOverrides ?? ACTION_TYPE_LABELS
   function add() {
@@ -793,6 +801,7 @@ function ActionEditor({
                     message: undefined,
                     tag: undefined,
                     url: undefined,
+                    group_id: undefined,
                   })
                 }
               >
@@ -823,6 +832,16 @@ function ActionEditor({
                   <SelectItem value="webhook" className="text-xs">
                     Webhook (POST)
                   </SelectItem>
+                  {groupsEnabled && (
+                    <>
+                      <SelectItem value="add_to_group" className="text-xs">
+                        Add to group
+                      </SelectItem>
+                      <SelectItem value="remove_from_group" className="text-xs">
+                        Remove from group
+                      </SelectItem>
+                    </>
+                  )}
                   <SelectItem value="create_alert" className="text-xs">
                     Create alert (coming soon)
                   </SelectItem>
@@ -957,6 +976,31 @@ function ActionEditor({
                 onChange={(e) => update(i, { url: e.target.value })}
               />
             )}
+
+            {(action.type === 'add_to_group' || action.type === 'remove_from_group') && (
+              <Select value={action.group_id ?? ''} onValueChange={(v) => update(i, { group_id: v ?? '' })}>
+                <SelectTrigger className="h-8 text-xs">
+                  <span className="flex flex-1 text-left text-xs truncate">
+                    {contactGroups.find((g) => g.id === action.group_id)?.name ?? (
+                      <span className="text-muted-foreground">Select group</span>
+                    )}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {contactGroups.length === 0 ? (
+                    <SelectItem value="__none" disabled className="text-xs text-muted-foreground">
+                      No groups yet
+                    </SelectItem>
+                  ) : (
+                    contactGroups.map((g) => (
+                      <SelectItem key={g.id} value={g.id} className="text-xs">
+                        {g.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <Button
@@ -1020,6 +1064,9 @@ function RuleDialog({
 }) {
   const resolvedTriggerOptions = triggerOptionsProp ?? TRIGGER_OPTIONS
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
+  const { isInstalled } = useInstalledPlugins()
+  const groupsEnabled = isInstalled('contact-groups')
+  const { data: contactGroups = [] } = useContactGroups(groupsEnabled ? teamId : null)
   const [conditions, setConditions] = useState<FormCondition[]>([])
   const [actions, setActions] = useState<FormAction[]>([])
   const [webhookEndpointId, setWebhookEndpointId] = useState('')
@@ -1072,6 +1119,7 @@ function RuleDialog({
           message: a.message,
           tag: (a as { tag?: string }).tag,
           url: (a as { url?: string }).url,
+          group_id: (a as { group_id?: string }).group_id,
         }))
       )
       setWebhookEndpointId(editing.trigger.webhook_endpoint_id ?? '')
@@ -1128,6 +1176,10 @@ function RuleDialog({
         }),
         actions: actions
           .filter((a) => a.type !== 'create_alert') // skip placeholder
+          .filter(
+            (a) =>
+              !((a.type === 'add_to_group' || a.type === 'remove_from_group') && !a.group_id)
+          )
           .map((a) => {
             if (a.type === 'send_email') return { type: 'send_email', templateId: a.templateId }
             if (a.type === 'update_field')
@@ -1138,6 +1190,9 @@ function RuleDialog({
             if (a.type === 'assign_tag') return { type: 'assign_tag', tag: a.tag ?? '' }
             if (a.type === 'remove_tag') return { type: 'remove_tag', tag: a.tag ?? '' }
             if (a.type === 'webhook') return { type: 'webhook', url: a.url ?? '' }
+            if (a.type === 'add_to_group') return { type: 'add_to_group', group_id: a.group_id ?? '' }
+            if (a.type === 'remove_from_group')
+              return { type: 'remove_from_group', group_id: a.group_id ?? '' }
             return { type: a.type }
           }),
         updated_at: serverTimestamp(),
@@ -1330,6 +1385,8 @@ function RuleDialog({
               templates={templates}
               onChange={setActions}
               actionTypeLabels={actionTypeLabelsProp}
+              contactGroups={contactGroups}
+              groupsEnabled={groupsEnabled}
             />
           </div>
 
