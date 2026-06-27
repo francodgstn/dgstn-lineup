@@ -193,7 +193,7 @@
     "title": "Get paid. Sell online. Keep what's yours.",
     "subtitle": "Take subscriptions and drop-ins straight into your own Stripe account, and open a public shop in minutes — no middleman holding your money.",
     "cards": {
-      "models": { "title": "Flexible & transparent", "lead": "Two ways to get paid:", "linyupName": "Pay via Linyup", "linyupBody": "Fully integrated — payments land straight in your own Stripe account.", "byoName": "BYO Stripe / Payrexx", "byoBody": "Zero Linyup fee: keep your own gateway and just track transactions here.", "ratesLink": "See the rates" },
+      "models": { "title": "Accept online payments from day 0", "intro": "Sell <strong>Subscriptions</strong>, <strong>Affiliations</strong>, <strong>Online Courses</strong> and <strong>Products</strong> in your very own online shop. Or integrate your offers in the website.", "lead": "Two ways to get paid:", "linyupName": "Pay via Linyup", "linyupBody": "Fully integrated cards and TWINT payments. 2-minute setup of your account on Stripe. We do not hold your money — payments land straight in your own Stripe account.", "byoName": "BYO Stripe / Payrexx", "byoBody": "Zero Linyup fee: keep your own gateway and just track transactions here.", "ratesLink": "See the rates" },
       "shop": { "title": "A shop that grows with you", "body": "Sell <strong>subscriptions</strong>, class packs and drop-ins out of the box — then add <strong>Online Courses</strong> or the <strong>Products Shop</strong> to sell courses and merch from the same public page. Customers buy in a tap, online, anytime." },
       "twint": { "title": "TWINT + cards", "body": "Accept the methods Swiss customers actually use — including recurring subscriptions on TWINT." }
     },

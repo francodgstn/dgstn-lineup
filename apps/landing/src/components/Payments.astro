@@ -11,13 +11,8 @@ const { lang } = Astro.props;
 const t = useTranslations(lang);
 
 // The headline upgrade for this release — "Accept Payments + Shop" gets its own
-// full-width section. A lead "flexible & transparent" card (the two payment
-// models: Pay via Linyup + BYO Stripe/Payrexx, with a rates modal) is followed
-// by the two product cards. Copy is pulled from the `payments` i18n namespace.
-const points = [
-  { key: 'shop', icon: 'store' },
-  { key: 'twint', icon: 'smartphone' },
-] as const;
+// full-width section: a single card (what you can sell + the two ways to get paid)
+// next to the /shop screenshot. Copy is pulled from the `payments` namespace.
 ---
 
 <section id="payments" class="pay-sec">
@@ -31,8 +26,9 @@ const points = [
     <div class="pay-row">
       <div class="pay-cards">
         <div class="pay-card pay-card-lead">
-          <span class="pay-ico"><i data-lucide="scale"></i></span>
+          <span class="pay-ico"><i data-lucide="credit-card"></i></span>
           <h3>{t('payments.cards.models.title')}</h3>
+          <p class="pay-intro" set:html={t('payments.cards.models.intro')} />
           <p class="pay-lead">{t('payments.cards.models.lead')}</p>
           <ul class="pay-models">
             <li>
@@ -46,15 +42,6 @@ const points = [
             </li>
           </ul>
         </div>
-        {
-          points.map(({ key, icon }) => (
-            <div class="pay-card">
-              <span class="pay-ico"><i data-lucide={icon}></i></span>
-              <h3>{t(`payments.cards.${key}.title`)}</h3>
-              <p set:html={t(`payments.cards.${key}.body`)} />
-            </div>
-          ))
-        }
       </div>
 
       <figure class="pay-shot">
@@ -120,8 +107,8 @@ const points = [
   .sec-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 34px; line-height: 1.15; }
   .sec-head p { margin-top: 12px; font-size: 17px; color: var(--muted-foreground); }
 
-  /* Two columns: the three payment cards stacked on the left, the /shop
-     screenshot framed on the right. */
+  /* Two columns: the single payment card on the left, the /shop screenshot
+     framed on the right. */
   .pay-row {
     display: grid;
     grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
@@ -170,10 +157,12 @@ const points = [
 
   /* Lead card — subtle accent border to mark it as the "how you get paid" anchor */
   .pay-card-lead { border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); }
-  .pay-lead { margin-top: 7px; font-size: 14.5px; font-weight: 600; color: var(--foreground); }
+  .pay-lead { margin-top: 18px; font-size: 14.5px; font-weight: 600; color: var(--foreground); }
   .pay-models { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 14px; }
   .pay-models li { font-size: 14px; line-height: 1.55; color: var(--muted-foreground); }
   .pay-models strong { color: var(--foreground); font-weight: 600; }
+  /* Intro line — what you can sell + where. */
+  .pay-intro :global(strong) { color: var(--foreground); font-weight: 600; }
   /* Inline "see the rates" — flows on as a continuation of the Pay-via-Linyup line */
   .pay-rates {
     display: inline;
