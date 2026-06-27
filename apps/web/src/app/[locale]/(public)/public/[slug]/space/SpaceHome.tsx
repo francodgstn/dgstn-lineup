@@ -187,7 +187,13 @@ export default function SpaceHome() {
           )}
         </div>
 
-        {/* Courses section */}
+        {/* Portal intro — frames this as the contact portal (courses are its first module). */}
+        <p className="mt-1.5 text-sm" style={{ color: textMuted }}>
+          {t('portalIntro')}
+        </p>
+
+        {/* Module: Courses — the portal's first module. Future portal modules
+            (bookings, subscriptions, profile) render as sibling sections here. */}
         <div className="mt-8">
           <h2 className="text-sm font-semibold uppercase tracking-wide mb-4" style={{ color: textMuted }}>
             {t('coursesSection')}

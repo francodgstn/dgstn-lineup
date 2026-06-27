@@ -32,6 +32,7 @@ import {
   Tag,
   Package,
   IdCard,
+  LayoutTemplate,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -120,6 +121,9 @@ const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionGrow',
     items: [
+      // Orientation hub for everything customer-facing; bio-link stays as its own
+      // deep editor (the hub links into it).
+      { href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate },
       { href: '/team/bio-link', labelKey: 'bioLink', icon: Globe },
     ],
   },

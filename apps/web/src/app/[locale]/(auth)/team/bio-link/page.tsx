@@ -7,7 +7,7 @@ import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
 import { useSaveShortcut } from '@/hooks/useSaveShortcut'
 import { useForm, useFieldArray, Controller, useWatch, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -653,16 +653,15 @@ type Tab = 'appearance' | 'links' | 'social'
 export default function TeamBioLinkEditorPage() {
   const { currentTeamId } = useAuth()
   const { data: team, isLoading } = useTeam(currentTeamId)
-  const { isInstalled } = useInstalledPlugins()
-  const coursesActive = isInstalled('online-courses')
-  const connectEnabled = team?.payments?.connectStatus === 'enabled'
+  // Public-surface availability comes from the shared usePublicSurfaces hook so the
+  // page-link picker and the "Public page" hub read identical state (no drift).
+  const { flags } = usePublicSurfaces()
+  const { coursesActive, connectEnabled, productsActive, websiteActive } = flags
 
   // Page-link surfaces this team can offer (before subtracting already-added). The
   // generic `shop` target stays valid for back-compat but isn't suggested — the three
   // shop sections (memberships/products/courses) deep-link the relevant tab instead.
   // booking/signup are base features; the rest follow their plugin / Connect state.
-  const productsActive = isInstalled('products')
-  const websiteActive = isInstalled('website')
   const offeredTargets: SystemLinkTarget[] = [
     'booking',
     'signup',

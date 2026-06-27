@@ -40,13 +40,18 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     websitePluginSnap.data()?.status === 'active' &&
     sitePublishedSnap.exists
 
-  // space: online-courses plugin active AND ≥1 published, non-archived course
+  // Portal (stored under the stable `space` key): the contact portal. Today the
+  // published-course library is its ONLY module, so the portal is live when the
+  // online-courses plugin is active AND ≥1 published, non-archived course exists.
+  // Seam: as the portal grows (bookings, subscriptions, profile), OR each new
+  // module's liveness into `spaceActive` below — `space` stays the portal's
+  // on/off signal, no longer hard-tied to "has a course".
   const onlineCoursesPluginSnap = await db
     .doc(
       `${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/online-courses`
     )
     .get()
-  let spaceActive = false
+  let portalCoursesLive = false
   if (onlineCoursesPluginSnap.exists && onlineCoursesPluginSnap.data()?.status === 'active') {
     const publishedCourseSnap = await db
       .collection(COURSES_COLLECTION)
@@ -55,8 +60,10 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       .where('archived_at', '==', null)
       .limit(1)
       .get()
-    spaceActive = !publishedCourseSnap.empty
+    portalCoursesLive = !publishedCourseSnap.empty
   }
+  // OR additional portal-module signals into this as the portal grows.
+  const spaceActive = portalCoursesLive
 
   // forms: custom-forms plugin active AND ≥1 published, non-archived form
   const formsPluginSnap = await db
