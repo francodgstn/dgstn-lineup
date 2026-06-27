@@ -529,7 +529,8 @@
     "engagementLastSession": "Zuletzt vor {days, plural, one {# Tag} other {# Tagen}} dabei",
     "engagementNoSessions": "Noch keine Teilnahme",
     "relationshipTimeline": "Beziehungsverlauf",
-    "timelineNow": "Jetzt"
+    "timelineNow": "Jetzt",
+    "joinedAs": "Beigetreten als {label}"
   },
   "TeamMemberships": {
     "title": "Mitgliedschaft",

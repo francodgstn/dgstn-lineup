@@ -529,7 +529,8 @@
     "engagementLastSession": "Ultima presenza {days, plural, one {# giorno} other {# giorni}} fa",
     "engagementNoSessions": "Nessuna partecipazione finora",
     "relationshipTimeline": "Cronologia della relazione",
-    "timelineNow": "Ora"
+    "timelineNow": "Ora",
+    "joinedAs": "Iscritto come {label}"
   },
   "TeamMemberships": {
     "title": "Tessere",

@@ -529,7 +529,8 @@
     "engagementLastSession": "Last attended {days, plural, one {# day} other {# days}} ago",
     "engagementNoSessions": "No sessions attended yet",
     "relationshipTimeline": "Relationship timeline",
-    "timelineNow": "Now"
+    "timelineNow": "Now",
+    "joinedAs": "Joined as {label}"
   },
   "TeamMemberships": {
     "title": "Membership",

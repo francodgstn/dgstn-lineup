@@ -25,9 +25,11 @@ export interface TimelineSpan {
 
 const DAY = 86_400_000
 
+// Acquisition-stage markers use the accent colour (matching the stepper in the
+// Acquisition card); only a dropout stands out in red.
 const MILESTONE_DOT: Record<NonNullable<TimelineMilestone['tone']>, string> = {
-  neutral: 'bg-muted-foreground',
-  positive: 'bg-emerald-500',
+  neutral: 'bg-primary',
+  positive: 'bg-primary',
   negative: 'bg-red-500',
 }
 
