@@ -1392,6 +1392,24 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "public_profile",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "start",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "referrals",
       "queryScope": "COLLECTION",
       "fields": [

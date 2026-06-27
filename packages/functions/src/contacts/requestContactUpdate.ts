@@ -1,7 +1,9 @@
 // Ported from hmd-lineup/functions/src/requestContactUpdate/index.js
-// Creates a contact data update request. Supports two auth modes:
-//   1. authToken  — from the student app (membership token)
-//   2. codeId     — from the bio-link email-verification flow
+// Creates a contact data update request. Supports three auth modes:
+//   1. authToken      — from the student app (membership token)
+//   2. contact session — the passwordless contact session (web Space portal /
+//                        mobile), identified by the custom-token claims
+//   3. codeId         — from the bio-link email-verification flow
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
@@ -18,8 +20,17 @@ export const requestContactUpdate = onCall(async (request) => {
     note?: string
   }
 
-  if (!codeId && !authToken)
-    throw new HttpsError('invalid-argument', 'Missing required field: codeId or authToken')
+  // Contact-session claims, minted by buildContactSession: { contactId, teamId,
+  // sessionExpires (epoch ms) }. Present when an authenticated portal contact calls.
+  const sessionContactId = request.auth?.token?.contactId as string | undefined
+  const sessionTeamId = request.auth?.token?.teamId as string | undefined
+  const sessionExpires = request.auth?.token?.sessionExpires as number | undefined
+
+  if (!codeId && !authToken && !sessionContactId)
+    throw new HttpsError(
+      'invalid-argument',
+      'Missing required field: codeId, authToken, or a contact session'
+    )
   if (!contactDetails)
     throw new HttpsError('invalid-argument', 'Missing required field: contactDetails')
 
@@ -53,6 +64,17 @@ export const requestContactUpdate = onCall(async (request) => {
     teamId = tokenData.team_id as string
     tokenRef = tokenDoc.ref
     console.log(`Token-based contact update request from contact ${contactId} for team ${teamId}`)
+  } else if (sessionContactId) {
+    // ── Contact-session auth (web Space portal / mobile) ────────────────────────
+    // Trust the custom-token claims (minted server-side after email verification);
+    // refuse a session past its 7-day window.
+    if (!sessionTeamId)
+      throw new HttpsError('permission-denied', 'Contact session is missing a team')
+    if (typeof sessionExpires === 'number' && sessionExpires < Date.now())
+      throw new HttpsError('deadline-exceeded', 'Contact session has expired. Please sign in again.')
+    contactId = sessionContactId
+    teamId = sessionTeamId
+    console.log(`Session-based contact update request from contact ${contactId} for team ${teamId}`)
   } else {
     // ── Code-based auth (bio-link email verification) ───────────────────────────
     if (!contactId) throw new HttpsError('invalid-argument', 'Missing required field: contactId')

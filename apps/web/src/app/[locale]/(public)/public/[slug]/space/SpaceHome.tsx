@@ -6,12 +6,12 @@ import { db } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { GraduationCap, Lock, LogOut } from 'lucide-react'
-import { resolveBackground, getTextColor } from '@/lib/bioLink'
+import { GraduationCap, Lock, CreditCard, CalendarClock, User, ChevronRight } from 'lucide-react'
 import { formatCurrency } from '@/lib/format'
 import { useSpaceAuth } from './SpaceAuthProvider'
+import { useSpaceTheme } from './useSpaceTheme'
+import { useSpaceContact } from './useSpaceContact'
 import { usePublicTeam } from '../PublicTeamProvider'
-import SignInDialog from './SignInDialog'
 
 // ─── Public course card data (from public_profile subcollection) ───────────────
 
@@ -52,19 +52,71 @@ function hasAccess(
   return false
 }
 
+// ─── Dashboard band (authenticated members) ────────────────────────────────────
+
+function DashboardBand() {
+  const t = useTranslations('Space')
+  const { slug, contact } = useSpaceAuth()
+  const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
+  const { data: fullContact } = useSpaceContact()
+
+  if (!contact) return null
+  const activeSub = fullContact?.active_subscriptions?.[0]
+  const subName = activeSub?.subscription_type_name ?? fullContact?.subscription_type_name ?? null
+  const hasAff = fullContact?.affiliation_summary?.has_active === true
+  const membershipLabel = subName ?? (hasAff ? t('membershipActive') : t('membershipNone'))
+
+  const quickLinks = [
+    { href: `/public/${slug}/space/bookings`, label: t('navBookings'), icon: CalendarClock },
+    { href: `/public/${slug}/space/account`, label: t('navAccount'), icon: User },
+  ]
+
+  return (
+    <div className="mt-6 rounded-2xl p-4" style={{ background: cardBg, border: `1px solid ${cardBorder}` }}>
+      <p className="text-xs" style={{ color: textMuted }}>{t('welcomeBack')}</p>
+      <p className="text-lg font-semibold" style={{ color: textMain }}>
+        {contact.firstname} {contact.lastname}
+      </p>
+      <div
+        className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+        style={{ background: `${accent}22`, color: textMain }}
+      >
+        <CreditCard className="h-3.5 w-3.5" />
+        {membershipLabel}
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {quickLinks.map((q) => {
+          const Icon = q.icon
+          return (
+            <Link
+              key={q.href}
+              href={q.href as Route}
+              className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-80"
+              style={{ background: `${accent}14`, color: textMain }}
+            >
+              <Icon className="h-4 w-4" style={{ color: accent }} />
+              <span className="flex-1 text-sm font-medium">{q.label}</span>
+              <ChevronRight className="h-4 w-4" style={{ color: textMuted }} />
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SpaceHome() {
   const t = useTranslations('Space')
-  const { slug, teamId, isAuthenticated, contact, logout, openSignIn } = useSpaceAuth()
-  // Team branding already resolved once by the parent PublicTeamProvider (layout).
+  const { slug, teamId, isAuthenticated, contact, openSignIn } = useSpaceAuth()
+  const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { team } = usePublicTeam()
   const currency = team?.default_currency ?? 'CHF'
   const [courses, setCourses] = useState<PublicCourseCard[]>([])
   const [purchasedCourseIds, setPurchasedCourseIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
-  const [signInOpen, setSignInOpen] = useState(false)
-  const [systemDark, setSystemDark] = useState(false)
 
   useEffect(() => {
     // Load published courses for this team from public_profile
@@ -111,149 +163,72 @@ export default function SpaceHome() {
     }
   }, [isAuthenticated, contact?.id, teamId])
 
-  useEffect(() => {
-    if (team?.bioLinkTheme !== 'auto') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    setSystemDark(mq.matches)
-    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [team?.bioLinkTheme])
-
-  const isDark =
-    team?.bioLinkTheme === 'dark' || (team?.bioLinkTheme === 'auto' && systemDark)
-  const bg = team?.bioLinkBackground
-  const bgStyle = resolveBackground(bg, isDark)
-  const textScheme = getTextColor(bg, isDark)
-  const onDark = textScheme === 'light'
-  const accent = team?.bioLinkAccentColor ?? '#6366f1'
-  const textMain = onDark ? '#f9fafb' : '#111827'
-  const textMuted = onDark ? 'rgba(249,250,251,0.65)' : '#6b7280'
-  const cardBg = onDark ? 'rgba(255,255,255,0.08)' : '#ffffff'
-  const cardBorder = onDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)'
-
   return (
-    <div
-      className="min-h-screen w-full"
-      style={{ background: bgStyle, color: textMain, fontFamily: 'inherit' }}
-    >
-      <div className="max-w-[640px] mx-auto px-5 pb-16">
-        {/* Header */}
-        <div className="pt-10 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            {team?.profileImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={team.profileImage}
-                alt={team?.name ?? ''}
-                className="h-10 w-10 rounded-full object-cover"
-              />
-            ) : (
-              <div
-                className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                style={{ background: accent }}
-              >
-                {team?.name?.[0]?.toUpperCase() ?? '?'}
-              </div>
-            )}
-            <h1 className="text-xl font-bold" style={{ color: textMain }}>
-              {team?.name}
-            </h1>
-          </div>
-
-          {/* Auth button */}
-          {isAuthenticated && contact ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: textMuted }}>
-                {t('signedInAs', { name: `${contact.firstname} ${contact.lastname}` })}
-              </span>
-              <button
-                onClick={() => logout()}
-                className="h-8 w-8 rounded-full flex items-center justify-center transition-opacity hover:opacity-70"
-                style={{ background: cardBg, border: `1px solid ${cardBorder}`, color: textMain }}
-                title={t('signOut')}
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => { openSignIn(); setSignInOpen(true) }}
-              className="text-sm font-medium px-4 py-1.5 rounded-full transition-opacity hover:opacity-80"
-              style={{ background: accent, color: '#fff' }}
-            >
-              {t('signIn')}
-            </button>
-          )}
-        </div>
-
-        {/* Portal intro — frames this as the contact portal (courses are its first module). */}
-        <p className="mt-1.5 text-sm" style={{ color: textMuted }}>
+    <>
+      {/* Authenticated members get a dashboard band; anonymous visitors a light intro. */}
+      {isAuthenticated && contact ? (
+        <DashboardBand />
+      ) : (
+        <p className="mt-6 text-sm" style={{ color: textMuted }}>
           {t('portalIntro')}
         </p>
+      )}
 
-        {/* Module: Courses — the portal's first module. Future portal modules
-            (bookings, subscriptions, profile) render as sibling sections here. */}
-        <div className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide mb-4" style={{ color: textMuted }}>
-            {t('coursesSection')}
-          </h2>
+      {/* Module: Courses — the portal's first module. Future portal modules
+          (bookings, subscriptions, profile) live in their own routes. */}
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wide mb-4" style={{ color: textMuted }}>
+          {t('coursesSection')}
+        </h2>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="h-6 w-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: accent, borderTopColor: 'transparent' }} />
-            </div>
-          ) : courses.length === 0 ? (
-            <p className="text-sm text-center py-12" style={{ color: textMuted }}>
-              {t('noPublishedCourses')}
-            </p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {courses.map((course) => {
-                const accessible = hasAccess(
-                  course,
-                  isAuthenticated,
-                  contact?.subscription_type_id,
-                  purchasedCourseIds
-                )
-                return (
-                  <CourseCard
-                    key={course.id}
-                    course={course}
-                    slug={slug}
-                    accessible={accessible}
-                    accent={accent}
-                    cardBg={cardBg}
-                    cardBorder={cardBorder}
-                    textMain={textMain}
-                    textMuted={textMuted}
-                    currency={currency}
-                    t={t}
-                    onSignIn={() => { openSignIn(); setSignInOpen(true) }}
-                  />
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Branding */}
-        {team?.showBranding === true && (
-          <p className="mt-12 text-center text-[11px]" style={{ color: textMuted }}>
-            {t('poweredBy')}{' '}
-            <Link href={'/' as Route} className="hover:underline font-medium" style={{ color: textMuted }}>
-              Linyup
-            </Link>
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="h-6 w-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: accent, borderTopColor: 'transparent' }} />
+          </div>
+        ) : courses.length === 0 ? (
+          <p className="text-sm text-center py-12" style={{ color: textMuted }}>
+            {t('noPublishedCourses')}
           </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {courses.map((course) => {
+              const accessible = hasAccess(
+                course,
+                isAuthenticated,
+                contact?.subscription_type_id,
+                purchasedCourseIds
+              )
+              return (
+                <CourseCard
+                  key={course.id}
+                  course={course}
+                  slug={slug}
+                  accessible={accessible}
+                  accent={accent}
+                  cardBg={cardBg}
+                  cardBorder={cardBorder}
+                  textMain={textMain}
+                  textMuted={textMuted}
+                  currency={currency}
+                  t={t}
+                  onSignIn={openSignIn}
+                />
+              )
+            })}
+          </div>
         )}
       </div>
 
-      <SignInDialog
-        open={signInOpen}
-        onOpenChange={setSignInOpen}
-        slug={slug}
-      />
-    </div>
+      {/* Branding */}
+      {team?.showBranding === true && (
+        <p className="mt-12 text-center text-[11px]" style={{ color: textMuted }}>
+          {t('poweredBy')}{' '}
+          <Link href={'/' as Route} className="hover:underline font-medium" style={{ color: textMuted }}>
+            Linyup
+          </Link>
+        </p>
+      )}
+    </>
   )
 }
 

@@ -41,6 +41,8 @@ interface SpaceAuthContextValue {
   error: string | null
   /** Call to initiate the sign-in flow */
   openSignIn: () => void
+  /** Cancel an in-progress sign-in flow (no-op once authenticated). */
+  closeSignIn: () => void
   sendCode: (email: string) => Promise<void>
   verifyCode: (code: string) => Promise<void>
   selectContact: (contactId: string) => Promise<void>
@@ -240,6 +242,14 @@ export function SpaceAuthProvider({ slug, children }: Props) {
     }
   }, [])
 
+  const closeSignIn = useCallback(() => {
+    // Reset the transient sign-in flow without signing an authenticated user out.
+    setStep((s) => (s === 'authenticated' ? s : 'idle'))
+    setMatchedContacts([])
+    setRequiresSignup(false)
+    setError(null)
+  }, [])
+
   const clearError = useCallback(() => setError(null), [])
 
   const value: SpaceAuthContextValue = {
@@ -253,6 +263,7 @@ export function SpaceAuthProvider({ slug, children }: Props) {
     signupEmail,
     error,
     openSignIn,
+    closeSignIn,
     sendCode,
     verifyCode,
     selectContact,
