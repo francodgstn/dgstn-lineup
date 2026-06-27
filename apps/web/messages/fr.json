@@ -295,6 +295,7 @@
     "filterAlerts": "Alertes",
     "filterAlertsLabel": "A des alertes actives",
     "filterGroups": "Groupes",
+    "filterEngagement": "Engagement",
     "clearFilters": "Effacer",
     "selectAll": "Tout sélectionner",
     "selectAllCount": "{count} sur {total} sélectionné(s)",

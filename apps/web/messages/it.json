@@ -295,6 +295,7 @@
     "filterAlerts": "Avvisi",
     "filterAlertsLabel": "Ha avvisi attivi",
     "filterGroups": "Gruppi",
+    "filterEngagement": "Coinvolgimento",
     "clearFilters": "Cancella",
     "selectAll": "Seleziona tutti",
     "selectAllCount": "{count} di {total} selezionati",

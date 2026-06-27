@@ -28,8 +28,8 @@ import {
   CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, contactOverageForPlan,
   planHasHardContactCap,
 } from '@linyup/shared'
-import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan } from '@linyup/shared'
-import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES } from '@linyup/shared'
+import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan, EngagementBand } from '@linyup/shared'
+import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS, computeEngagementBand } from '@linyup/shared'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups, expandGroupSelection, flattenGroupTree } from '@/plugins/contact-groups/hooks'
 import { BulkGroupsDialog } from '@/plugins/contact-groups/BulkGroupsDialog'
@@ -476,6 +476,7 @@ interface Filters {
   statuses: string[]
   subscriptions: string[]    // subscription_type_id values; 'none' = no subscription
   groups: string[]           // contact_groups IDs (Contact Groups plugin); parents include subgroups
+  engagement: EngagementBand[] // derived band: active / low / at_risk / inactive
   hasAlerts: boolean
   sessionsMin: number | null
   sessionsMax: number | null
@@ -483,13 +484,14 @@ interface Filters {
   rankFilter: RankFilter | null
 }
 const EMPTY_FILTERS: Filters = {
-  stages: [], sources: [], statuses: [], subscriptions: [], groups: [],
+  stages: [], sources: [], statuses: [], subscriptions: [], groups: [], engagement: [],
   hasAlerts: false, sessionsMin: null, sessionsMax: null, inactivity: null,
   rankFilter: null,
 }
 
 function countActiveFilters(f: Filters): number {
   return f.stages.length + f.sources.length + f.statuses.length + f.subscriptions.length + f.groups.length
+    + f.engagement.length
     + (f.hasAlerts ? 1 : 0)
     + (f.sessionsMin != null || f.sessionsMax != null ? 1 : 0)
     + (f.inactivity ? 1 : 0)
@@ -529,7 +531,7 @@ function useScrollLockOnOpen() {
   return { open, onOpenChange }
 }
 
-function CheckOption({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
+function CheckOption({ label, checked, onToggle, dot }: { label: string; checked: boolean; onToggle: () => void; dot?: string }) {
   return (
     <button type="button" onClick={onToggle}
       className="flex items-center gap-2.5 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left"
@@ -537,9 +539,18 @@ function CheckOption({ label, checked, onToggle }: { label: string; checked: boo
       <span className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-primary border-primary' : 'border-input'}`}>
         {checked && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
       </span>
+      {dot && <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${dot}`} />}
       <span className="truncate">{label}</span>
     </button>
   )
+}
+
+// Band → dot colour for the engagement filter (mirrors the meter on the contact page).
+const ENGAGEMENT_DOT: Record<EngagementBand, string> = {
+  active: 'bg-emerald-500',
+  low: 'bg-amber-500',
+  at_risk: 'bg-red-500',
+  inactive: 'bg-muted-foreground/40',
 }
 
 function FilterChip({ label, activeLabel, isActive, onClear, children }: {
@@ -783,6 +794,9 @@ function FilterChips({
     { value: '60d',   label: t('filterInactivity60d') },
     { value: '90d',   label: t('filterInactivity90d') },
   ]
+  const ENGAGEMENT_OPTS = (ENGAGEMENT_BANDS as readonly EngagementBand[]).map((v) => ({
+    value: v, label: t(`engagement_${v}` as Parameters<typeof t>[0]), dot: ENGAGEMENT_DOT[v],
+  }))
 
   function chip(arr: string[], opts: { value: string; label: string }[], noun: string) {
     if (!arr.length) return ''
@@ -928,6 +942,13 @@ function FilterChips({
               className="h-7 text-xs w-20" />
           </div>
         </div>
+      </FilterChip>
+
+      <FilterChip label={t('filterEngagement')} activeLabel={chip(filters.engagement, ENGAGEMENT_OPTS, 'bands')}
+        isActive={filters.engagement.length > 0} onClear={() => onChange({ ...filters, engagement: [] })}>
+        {ENGAGEMENT_OPTS.map((o) => <CheckOption key={o.value} label={o.label} dot={o.dot}
+          checked={filters.engagement.includes(o.value)}
+          onToggle={() => onChange({ ...filters, engagement: toggle(filters.engagement, o.value) })} />)}
       </FilterChip>
 
       <button type="button"
@@ -1749,6 +1770,17 @@ export default function ContactsPage() {
       )
     }
 
+    // Engagement band — derived on the fly from attendance recency (last attended
+    // session, falling back to join date), measured against the team's thresholds.
+    if (f.engagement.length > 0) {
+      const now = Date.now()
+      const thresholds = team?.engagement_thresholds
+      result = result.filter((c) => {
+        const refMs = tsToDate(c.last_session_at)?.getTime() ?? tsToDate(c.created_at)?.getTime() ?? null
+        return f.engagement.includes(computeEngagementBand(refMs, thresholds, now))
+      })
+    }
+
     const sq = q.trim().toLowerCase()
     if (sq)
       result = result.filter((c) =>
@@ -1759,10 +1791,11 @@ export default function ContactsPage() {
     return result
   }
 
-  /* eslint-disable react-hooks/exhaustive-deps -- applyFiltersAndSearch closes over contactGroups */
-  const filteredActive   = useMemo(() => applyFiltersAndSearch(active,   filters, search), [active,   filters, search, contactGroups])
-  const filteredArchived = useMemo(() => applyFiltersAndSearch(archived, filters, search), [archived, filters, search, contactGroups])
-  const filteredDeleted  = useMemo(() => applyFiltersAndSearch(deleted,  filters, search), [deleted,  filters, search, contactGroups])
+  /* eslint-disable react-hooks/exhaustive-deps -- applyFiltersAndSearch closes over contactGroups + team thresholds */
+  const engagementThresholds = team?.engagement_thresholds
+  const filteredActive   = useMemo(() => applyFiltersAndSearch(active,   filters, search), [active,   filters, search, contactGroups, engagementThresholds])
+  const filteredArchived = useMemo(() => applyFiltersAndSearch(archived, filters, search), [archived, filters, search, contactGroups, engagementThresholds])
+  const filteredDeleted  = useMemo(() => applyFiltersAndSearch(deleted,  filters, search), [deleted,  filters, search, contactGroups, engagementThresholds])
   /* eslint-enable react-hooks/exhaustive-deps */
 
   // ── current list & loading state ──────────────────────────────────────────
