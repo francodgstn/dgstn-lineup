@@ -342,7 +342,7 @@
     "sectionAcquisition": "Acquisition",
     "fieldAcquisitionStage": "Acquisition stage",
     "fieldAcquisitionEntry": "How added",
-    "fieldAcquisitionEntryHelp": "Changing this does not move the acquisition stage — it is a data-entry correction only.",
+    "fieldAcquisitionEntryHelp": "Changing this does not move the acquisition stage.",
     "fieldAcquisitionSource": "Marketing source",
     "fieldAcquisitionSourceDetail": "Source detail",
     "actionPromote": "Promote stage",

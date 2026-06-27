@@ -342,7 +342,7 @@
     "sectionAcquisition": "Akquisition",
     "fieldAcquisitionStage": "Akquisitionsphase",
     "fieldAcquisitionEntry": "Wie hinzugefügt",
-    "fieldAcquisitionEntryHelp": "Diese Änderung verschiebt die Akquisitionsphase nicht — sie ist nur eine Datenkorrektur.",
+    "fieldAcquisitionEntryHelp": "Diese Änderung verschiebt die Akquisitionsphase nicht.",
     "fieldAcquisitionSource": "Marketingquelle",
     "fieldAcquisitionSourceDetail": "Quellendetail",
     "actionPromote": "Phase befördern",

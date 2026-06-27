@@ -342,7 +342,7 @@
     "sectionAcquisition": "Acquisition",
     "fieldAcquisitionStage": "Étape d'acquisition",
     "fieldAcquisitionEntry": "Comment ajouté",
-    "fieldAcquisitionEntryHelp": "Cette modification ne change pas l'étape d'acquisition — c'est une correction de données uniquement.",
+    "fieldAcquisitionEntryHelp": "Cette modification ne change pas l'étape d'acquisition.",
     "fieldAcquisitionSource": "Source marketing",
     "fieldAcquisitionSourceDetail": "Détail de la source",
     "actionPromote": "Promouvoir l'étape",
