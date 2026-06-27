@@ -1,12 +1,14 @@
 // Sync trigger: recomputes Contact.affiliation_summary whenever any affiliation
 // doc under contacts/{contactId}/affiliations/{affiliationId} is written/deleted.
-// Also fires the 'affiliation_changed' automation trigger.
+// Also fires delta-aware affiliation_added / affiliation_removed automation triggers
+// (one event per type_key that changed), plus the legacy coarse affiliation_changed
+// trigger for back-compat with existing rules.
 
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
-import { fireEventRules, type ContactData } from '../utils/automationEngine'
+import { fireEventRules, type ContactData, type EventDelta } from '../utils/automationEngine'
 import {
   CONTACTS_COLLECTION,
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
@@ -31,7 +33,17 @@ export const onAffiliationWrite = onDocumentWritten(
 
     const db = admin.firestore()
 
-    // ── 1. Recompute affiliation_summary from all current affiliations ─────────
+    // ── 1. Snapshot the PREVIOUS summary before recomputing ───────────────────
+    // We read the contact doc once and reuse it for both the idempotency check
+    // and the automation context below.
+    const [, contactSnap] = await to(
+      db.collection(CONTACTS_COLLECTION).doc(contactId).get(),
+    )
+    const contactData = contactSnap?.data()
+    const existingSummary = contactData?.affiliation_summary as AffiliationSummary | undefined
+    const previousTypes = new Set<string>(existingSummary?.types ?? [])
+
+    // ── 2. Recompute affiliation_summary from all current affiliations ─────────
     const [snapErr, affiliationsSnap] = await to(
       db
         .collection(CONTACTS_COLLECTION)
@@ -62,20 +74,16 @@ export const onAffiliationWrite = onDocumentWritten(
     ]
 
     const newSummary: AffiliationSummary = { has_active, types, org_ids }
+    const newTypes = new Set<string>(types)
 
     // Idempotent: only write if the summary actually changed
-    const [, contactSnap] = await to(
-      db.collection(CONTACTS_COLLECTION).doc(contactId).get(),
-    )
-    const existing = contactSnap?.data()?.affiliation_summary as AffiliationSummary | undefined
-
     const summaryChanged =
-      !existing ||
-      existing.has_active !== newSummary.has_active ||
+      !existingSummary ||
+      existingSummary.has_active !== newSummary.has_active ||
       JSON.stringify([...newSummary.types].sort()) !==
-        JSON.stringify([...(existing.types ?? [])].sort()) ||
+        JSON.stringify([...(existingSummary.types ?? [])].sort()) ||
       JSON.stringify([...newSummary.org_ids].sort()) !==
-        JSON.stringify([...(existing.org_ids ?? [])].sort())
+        JSON.stringify([...(existingSummary.org_ids ?? [])].sort())
 
     if (summaryChanged) {
       const [updateErr] = await to(
@@ -89,8 +97,7 @@ export const onAffiliationWrite = onDocumentWritten(
       }
     }
 
-    // ── 2. Fire affiliation_changed automation trigger ─────────────────────────
-    const contactData = contactSnap?.data()
+    // ── 3. Fire automation triggers ───────────────────────────────────────────
     if (!contactData) return
 
     const contact: ContactData = {
@@ -100,6 +107,32 @@ export const onAffiliationWrite = onDocumentWritten(
       affiliation_summary: newSummary,
     }
 
-    await fireEventRules(teamId, 'affiliation_changed', [contact])
+    // Delta events — one per type_key added or removed
+    const addedKeys: string[] = []
+    const removedKeys: string[] = []
+
+    for (const key of newTypes) {
+      if (!previousTypes.has(key)) addedKeys.push(key)
+    }
+    for (const key of previousTypes) {
+      if (!newTypes.has(key)) removedKeys.push(key)
+    }
+
+    for (const key of addedKeys) {
+      const delta: EventDelta = { affiliationTypeKey: key }
+      console.log(`[onAffiliationWrite] contact=${contactId} team=${teamId} trigger=affiliation_added key=${key}`) // eslint-disable-line no-console
+      await fireEventRules(teamId, 'affiliation_added', [contact], undefined, delta)
+    }
+    for (const key of removedKeys) {
+      const delta: EventDelta = { affiliationTypeKey: key }
+      console.log(`[onAffiliationWrite] contact=${contactId} team=${teamId} trigger=affiliation_removed key=${key}`) // eslint-disable-line no-console
+      await fireEventRules(teamId, 'affiliation_removed', [contact], undefined, delta)
+    }
+
+    // Legacy coarse trigger — fires whenever the summary changed (any add or remove),
+    // so existing 'affiliation_changed' rules keep working without migration.
+    if (summaryChanged) {
+      await fireEventRules(teamId, 'affiliation_changed', [contact])
+    }
   },
 )

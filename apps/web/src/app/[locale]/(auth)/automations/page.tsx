@@ -96,6 +96,8 @@ interface AutomationTrigger {
   type: string
   delayMinutes?: number
   webhook_endpoint_id?: string // inbound_webhook only
+  subscriptionTypeId?: string // subscription_added/removed: scope to a specific type ('' = any)
+  affiliationTypeKey?: string // affiliation_added/removed: scope to a specific type key ('' = any)
 }
 
 interface AutomationCondition {
@@ -173,8 +175,12 @@ const TRIGGER_OPTIONS = [
   { value: 'booking_confirmed', label: 'Booking confirmed', icon: CheckCircle, supportsDelay: true, group: 'Booking' },
   { value: 'booking_no_show', label: 'Booking marked no-show', icon: XCircle, supportsDelay: true, group: 'Booking' },
   { value: 'booking_cancelled', label: 'Booking cancelled', icon: XCircle, supportsDelay: true, group: 'Booking' },
-  { value: 'affiliation_changed', label: 'Affiliation changed', icon: ShieldCheck, supportsDelay: true, group: 'Affiliation' },
-  { value: 'subscription_changed', label: 'Subscription changed', icon: CreditCard, supportsDelay: true, group: 'Subscription' },
+  { value: 'subscription_added', label: 'Subscription added', icon: CreditCard, supportsDelay: true, group: 'Subscription' },
+  { value: 'subscription_removed', label: 'Subscription removed', icon: CreditCard, supportsDelay: true, group: 'Subscription' },
+  { value: 'subscription_changed', label: 'Subscription changed (any)', icon: CreditCard, supportsDelay: true, group: 'Subscription' },
+  { value: 'affiliation_added', label: 'Affiliation added', icon: ShieldCheck, supportsDelay: true, group: 'Affiliation' },
+  { value: 'affiliation_removed', label: 'Affiliation removed', icon: ShieldCheck, supportsDelay: true, group: 'Affiliation' },
+  { value: 'affiliation_changed', label: 'Affiliation changed (any)', icon: ShieldCheck, supportsDelay: true, group: 'Affiliation' },
   { value: 'session_ended', label: 'Session ended', icon: CalendarCheck, supportsDelay: true, group: 'Attendance' },
   { value: 'inbound_webhook', label: 'Inbound webhook', icon: Webhook, supportsDelay: false, group: 'General' },
   { value: 'manual', label: 'Manual only', icon: Play, supportsDelay: false, group: 'General' },
@@ -1012,6 +1018,9 @@ function RuleDialog({
   const [conditions, setConditions] = useState<FormCondition[]>([])
   const [actions, setActions] = useState<FormAction[]>([])
   const [webhookEndpointId, setWebhookEndpointId] = useState('')
+  // Scope for the added/removed delta triggers ('' = any type).
+  const [triggerSubTypeId, setTriggerSubTypeId] = useState('')
+  const [triggerAffTypeKey, setTriggerAffTypeKey] = useState('')
   const [submitError, setSubmitError] = useState('')
 
   const {
@@ -1061,11 +1070,15 @@ function RuleDialog({
         }))
       )
       setWebhookEndpointId(editing.trigger.webhook_endpoint_id ?? '')
+      setTriggerSubTypeId(editing.trigger.subscriptionTypeId ?? '')
+      setTriggerAffTypeKey(editing.trigger.affiliationTypeKey ?? '')
     } else {
       reset({ name: '', trigger_type: 'schedule_daily', delay_minutes: 0, active: true })
       setConditions([])
       setActions([])
       setWebhookEndpointId('')
+      setTriggerSubTypeId('')
+      setTriggerAffTypeKey('')
     }
     setSubmitError('')
   }, [open, editing, reset])
@@ -1083,6 +1096,16 @@ function RuleDialog({
             : {}),
           ...(values.trigger_type === 'inbound_webhook' && webhookEndpointId
             ? { webhook_endpoint_id: webhookEndpointId }
+            : {}),
+          ...((values.trigger_type === 'subscription_added' ||
+            values.trigger_type === 'subscription_removed') &&
+          triggerSubTypeId
+            ? { subscriptionTypeId: triggerSubTypeId }
+            : {}),
+          ...((values.trigger_type === 'affiliation_added' ||
+            values.trigger_type === 'affiliation_removed') &&
+          triggerAffTypeKey.trim()
+            ? { affiliationTypeKey: triggerAffTypeKey.trim() }
             : {}),
         },
         conditions: conditions.map((c) => {
@@ -1229,6 +1252,44 @@ function RuleDialog({
                     </SelectContent>
                   </Select>
                 )}
+              </div>
+            )}
+
+            {/* Delta trigger scope — which subscription type was added/removed */}
+            {(triggerType === 'subscription_added' || triggerType === 'subscription_removed') && (
+              <div>
+                <Label className="text-xs">Subscription type</Label>
+                <Select value={triggerSubTypeId} onValueChange={(v) => setTriggerSubTypeId(v ?? '')}>
+                  <SelectTrigger className="mt-1 h-8 text-xs">
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {triggerSubTypeId
+                        ? (subscriptionTypes.find((s) => s.id === triggerSubTypeId)?.name ??
+                          triggerSubTypeId)
+                        : 'Any subscription'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="" className="text-xs">Any subscription</SelectItem>
+                    {subscriptionTypes.map((s) => (
+                      <SelectItem key={s.id} value={s.id} className="text-xs">
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Delta trigger scope — which affiliation type was added/removed */}
+            {(triggerType === 'affiliation_added' || triggerType === 'affiliation_removed') && (
+              <div>
+                <Label className="text-xs">Affiliation type key (optional)</Label>
+                <Input
+                  className="mt-1 h-8 text-xs"
+                  placeholder="any — or a type key (e.g. club_membership)"
+                  value={triggerAffTypeKey}
+                  onChange={(e) => setTriggerAffTypeKey(e.target.value)}
+                />
               </div>
             )}
           </div>

@@ -29,8 +29,15 @@ export type AutomationTriggerType =
   | 'booking_no_show'
   | 'booking_cancelled'
   | 'acquisition_stage_changed'
+  // Legacy coarse subscription/affiliation triggers (back-compat; still accepted by engine)
   | 'subscription_changed'
   | 'affiliation_changed'
+  // Delta-aware subscription triggers — carry the specific type that was added/removed
+  | 'subscription_added'
+  | 'subscription_removed'
+  // Delta-aware affiliation triggers — carry the specific type_key that was added/removed
+  | 'affiliation_added'
+  | 'affiliation_removed'
   // Tier 1+2 — event trigger + optional Cloud Tasks delay
   | 'session_ended'
   // Inbound webhook — external system POSTs to a team's unique URL
@@ -91,6 +98,14 @@ export interface AutomationRule {
     type: AutomationTriggerType
     delayMinutes?: number
     webhook_endpoint_id?: string // inbound_webhook: which endpoint fires this rule
+    // Delta scoping for subscription_added / subscription_removed:
+    // when set, the rule only fires when the specific subscription type was added/removed.
+    // Absent or empty string = match ANY add/remove.
+    subscriptionTypeId?: string
+    // Delta scoping for affiliation_added / affiliation_removed:
+    // when set, the rule only fires when the specific affiliation type_key was added/removed.
+    // Absent or empty string = match ANY add/remove.
+    affiliationTypeKey?: string
   }
   conditions: AutomationCondition[]
   actions: AutomationAction[]
@@ -110,6 +125,10 @@ export interface ContactData {
   acquisition_stage?: string
   subscription_type_id?: string
   subscription_status?: string
+  // All currently-active subscriptions the contact holds, deduped by type.
+  // Maintained by onMemberSubscriptionWrite. Absent/empty = no active subscriptions.
+  // The condition evaluator checks this in addition to subscription_type_id for back-compat.
+  active_subscriptions?: { subscription_type_id: string }[]
   total_sessions?: number
   last_session_at?: Timestamp | { seconds: number; nanoseconds: number } | null
   deleted_at?: Timestamp | null
@@ -129,6 +148,18 @@ export interface ContactData {
 export interface AutomationContext {
   /** Extra data passed by the triggering event (e.g. sessionId for session_ended) */
   [key: string]: unknown
+}
+
+/**
+ * Delta payload for subscription_added/removed and affiliation_added/removed triggers.
+ * Carries the specific type that changed so the engine can scope rules that opt-in
+ * to a particular type via trigger.subscriptionTypeId / trigger.affiliationTypeKey.
+ */
+export interface EventDelta {
+  /** For subscription_added / subscription_removed: the subscription_type_id that changed. */
+  subscriptionTypeId?: string
+  /** For affiliation_added / affiliation_removed: the affiliation type_key that changed. */
+  affiliationTypeKey?: string
 }
 
 export interface RunRuleOptions {
@@ -299,28 +330,45 @@ export function evaluateContactConditions(
         if (!contact.affiliation_summary?.types?.includes(cond.value)) return false
         break
 
-      case 'subscription':
-        if (cond.value === 'none' && contact.subscription_type_id) return false
-        if (cond.value === 'any' && !contact.subscription_type_id) return false
-        if (
-          cond.value !== 'none' &&
-          cond.value !== 'any' &&
-          contact.subscription_type_id !== cond.value
-        )
-          return false
+      case 'subscription': {
+        // Gather the full set of subscription type IDs the contact holds.
+        // active_subscriptions is the authoritative multi-sub array; subscription_type_id
+        // is the legacy primary field kept for back-compat. Union both to catch contacts
+        // that only have the primary field set (manual assignment, pre-Stripe data).
+        const activeSubs = contact.active_subscriptions ?? []
+        const activeSubIds = new Set<string>(activeSubs.map((s) => s.subscription_type_id))
+        if (contact.subscription_type_id) activeSubIds.add(contact.subscription_type_id)
+
+        if (cond.value === 'none') {
+          // Passes only when the contact holds NO subscriptions at all
+          if (activeSubIds.size > 0) return false
+        } else if (cond.value === 'any') {
+          // Passes only when the contact holds at least one subscription
+          if (activeSubIds.size === 0) return false
+        } else {
+          // Specific subscription type ID — passes when it is in the active set
+          if (!activeSubIds.has(cond.value)) return false
+        }
         break
+      }
 
       case 'subscription_status':
         if ((contact.subscription_status ?? 'none') !== cond.value) return false
         break
 
-      // legacy aliases
-      case 'subscription_missing':
-        if (contact.subscription_type_id) return false
+      // legacy aliases — use the same multi-sub logic as the canonical 'subscription' condition
+      case 'subscription_missing': {
+        const activeSubs = contact.active_subscriptions ?? []
+        const hasAny = activeSubs.length > 0 || Boolean(contact.subscription_type_id)
+        if (hasAny) return false
         break
-      case 'subscription_set':
-        if (!contact.subscription_type_id) return false
+      }
+      case 'subscription_set': {
+        const activeSubs = contact.active_subscriptions ?? []
+        const hasAny = activeSubs.length > 0 || Boolean(contact.subscription_type_id)
+        if (!hasAny) return false
         break
+      }
 
       case 'tag':
         if (!contact.tags?.includes(cond.value)) return false
@@ -1171,13 +1219,19 @@ export async function enqueueDelayedRule(
 /**
  * Finds all active automation rules for the given team and triggerType,
  * then runs each against the supplied subjects.
- * Called by onContactWrite, onBookingWrite, onSessionWrite triggers.
+ * Called by onContactWrite, onBookingWrite, onSessionWrite, onAffiliationWrite triggers.
+ *
+ * @param delta  For subscription_added/removed and affiliation_added/removed: the specific
+ *               type that changed. Rules with a matching trigger.subscriptionTypeId or
+ *               trigger.affiliationTypeKey are scoped to this delta; absent/empty = match any.
+ *               Unused for all other trigger types — pass undefined or omit.
  */
 export async function fireEventRules(
   teamId: string,
   triggerType: AutomationTriggerType,
   subjects: ContactData[],
-  _context?: AutomationContext
+  _context?: AutomationContext,
+  delta?: EventDelta
 ): Promise<void> {
   const db = admin.firestore()
 
@@ -1217,6 +1271,24 @@ export async function fireEventRules(
       triggerType === 'inbound_webhook' &&
       rule.trigger.webhook_endpoint_id &&
       rule.trigger.webhook_endpoint_id !== _context?.webhook_endpoint_id
+    )
+      continue
+
+    // Delta scoping for subscription_added / subscription_removed:
+    // if the rule specifies a subscriptionTypeId, only fire when the delta matches.
+    if (
+      (triggerType === 'subscription_added' || triggerType === 'subscription_removed') &&
+      rule.trigger.subscriptionTypeId &&
+      rule.trigger.subscriptionTypeId !== delta?.subscriptionTypeId
+    )
+      continue
+
+    // Delta scoping for affiliation_added / affiliation_removed:
+    // if the rule specifies an affiliationTypeKey, only fire when the delta matches.
+    if (
+      (triggerType === 'affiliation_added' || triggerType === 'affiliation_removed') &&
+      rule.trigger.affiliationTypeKey &&
+      rule.trigger.affiliationTypeKey !== delta?.affiliationTypeKey
     )
       continue
 

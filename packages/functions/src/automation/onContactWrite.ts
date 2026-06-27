@@ -1,43 +1,111 @@
 // Tier 1 event trigger — fires automation rules in real-time when a contact document
-// is created or has key fields updated (acquisition_stage, subscription_type_id).
+// is created or has key fields updated.
 //
-// NOTE: affiliation_changed is no longer fired from here. It is fired from the
-// onAffiliationWrite trigger (sync/onAffiliationWrite.ts) which has direct access
-// to the affiliation data and fires after the summary has been recomputed.
+// Subscription delta logic:
+//   Before/after active_subscriptions arrays are diffed by subscription_type_id.
+//   The legacy primary field (subscription_type_id) is folded into both sides so
+//   contacts that only carry the primary field (manual assignment, pre-Stripe data)
+//   are handled correctly. Each added/removed type id fires one subscription_added /
+//   subscription_removed event — a single write can emit multiple events.
 //
 // Trigger path: contacts/{contactId}
 // Contacts are top-level with a teamId field — teamId is read from the document.
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { ACQUISITION_STAGES } from '@linyup/shared'
-import { fireEventRules, type ContactData, type AutomationTriggerType } from '../utils/automationEngine'
+import {
+  fireEventRules,
+  type ContactData,
+  type AutomationTriggerType,
+  type EventDelta,
+} from '../utils/automationEngine'
 
 const stageRank = (stage: unknown): number =>
   (ACQUISITION_STAGES as readonly string[]).indexOf(stage as string)
 
-function resolveContactTrigger(
+/**
+ * Builds the set of subscription type IDs a contact holds from a Firestore document
+ * snapshot. Combines active_subscriptions (multi-sub array) with the legacy primary
+ * subscription_type_id so both representations are covered.
+ */
+function resolveSubIds(doc: FirebaseFirestore.DocumentData | undefined): Set<string> {
+  const ids = new Set<string>()
+  if (!doc) return ids
+  const primary = doc.subscription_type_id as string | undefined
+  if (primary) ids.add(primary)
+  const active = doc.active_subscriptions as Array<{ subscription_type_id: string }> | undefined
+  for (const s of active ?? []) {
+    if (s.subscription_type_id) ids.add(s.subscription_type_id)
+  }
+  return ids
+}
+
+interface ContactEvent {
+  triggerType: AutomationTriggerType
+  delta?: EventDelta
+}
+
+/**
+ * Computes the ordered list of automation events to fire for a single contact write.
+ * Returns an empty array when no relevant change is detected (including deletes).
+ */
+function resolveContactEvents(
   before: FirebaseFirestore.DocumentData | undefined,
   after: FirebaseFirestore.DocumentData | undefined
-): AutomationTriggerType | null {
-  if (!after) return null // deleted — no automation on delete
+): ContactEvent[] {
+  if (!after) return [] // deleted — no automation on delete
+
+  const events: ContactEvent[] = []
 
   // New document — contact created
-  if (!before) return 'contact_created'
-
-  // acquisition stage advanced (trial_booked → trial_attended → joined).
-  // Only FORWARD moves fire automation. A backward move is a manual correction
-  // (undoing a mistaken promotion) and must not re-trigger outreach rules.
-  if (before.acquisition_stage !== after.acquisition_stage) {
-    if (stageRank(after.acquisition_stage) > stageRank(before.acquisition_stage)) {
-      return 'acquisition_stage_changed'
-    }
-    // fall through — a correction may still coincide with other relevant changes
+  if (!before) {
+    events.push({ triggerType: 'contact_created' })
+    return events
   }
 
-  // subscription changed (manual type assignment OR Stripe billing rollup status)
-  if (before.subscription_type_id !== after.subscription_type_id) return 'subscription_changed'
-  if (before.subscription_status !== after.subscription_status) return 'subscription_changed'
+  // acquisition_stage advanced (trial_booked → trial_attended → joined).
+  // Only FORWARD moves fire automation. A backward move is a manual correction
+  // (undoing a mistaken promotion) and must not re-trigger outreach rules.
+  if (
+    before.acquisition_stage !== after.acquisition_stage &&
+    stageRank(after.acquisition_stage) > stageRank(before.acquisition_stage)
+  ) {
+    events.push({ triggerType: 'acquisition_stage_changed' })
+  }
 
-  return null // no relevant change
+  // Subscription delta — diff the full set of subscription type IDs.
+  const beforeSubIds = resolveSubIds(before)
+  const afterSubIds = resolveSubIds(after)
+
+  const hasSubChange =
+    before.subscription_type_id !== after.subscription_type_id ||
+    before.subscription_status !== after.subscription_status ||
+    JSON.stringify([...beforeSubIds].sort()) !== JSON.stringify([...afterSubIds].sort())
+
+  if (hasSubChange) {
+    // Fire delta events for each added/removed type
+    for (const id of afterSubIds) {
+      if (!beforeSubIds.has(id)) {
+        events.push({
+          triggerType: 'subscription_added',
+          delta: { subscriptionTypeId: id },
+        })
+      }
+    }
+    for (const id of beforeSubIds) {
+      if (!afterSubIds.has(id)) {
+        events.push({
+          triggerType: 'subscription_removed',
+          delta: { subscriptionTypeId: id },
+        })
+      }
+    }
+
+    // Also fire the legacy coarse trigger so existing rules that watch
+    // 'subscription_changed' keep working without migration.
+    events.push({ triggerType: 'subscription_changed' })
+  }
+
+  return events
 }
 
 export const onContactWrite = onDocumentWritten(
@@ -46,8 +114,8 @@ export const onContactWrite = onDocumentWritten(
     const before = event.data?.before?.data()
     const after = event.data?.after?.data()
 
-    const triggerType = resolveContactTrigger(before, after)
-    if (!triggerType) return
+    const contactEvents = resolveContactEvents(before, after)
+    if (contactEvents.length === 0) return
 
     const teamId = (after?.teamId || before?.teamId) as string | undefined
     if (!teamId) {
@@ -63,8 +131,9 @@ export const onContactWrite = onDocumentWritten(
       ...(after as Omit<ContactData, 'id'>),
     }
 
-    console.log(`[onContactWrite] contact=${event.params.contactId} team=${teamId} trigger=${triggerType}`) // eslint-disable-line no-console
-
-    await fireEventRules(teamId, triggerType, [contact])
+    for (const { triggerType, delta } of contactEvents) {
+      console.log(`[onContactWrite] contact=${event.params.contactId} team=${teamId} trigger=${triggerType}${delta?.subscriptionTypeId ? ` subId=${delta.subscriptionTypeId}` : ''}`) // eslint-disable-line no-console
+      await fireEventRules(teamId, triggerType, [contact], undefined, delta)
+    }
   }
 )
