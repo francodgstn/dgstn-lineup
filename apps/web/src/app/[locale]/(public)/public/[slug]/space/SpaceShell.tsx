@@ -1,5 +1,6 @@
 'use client'
 
+import { useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { LogOut } from 'lucide-react'
 import { useSpaceAuth } from './SpaceAuthProvider'
@@ -18,6 +19,13 @@ export default function SpaceShell({ children }: { children: React.ReactNode }) 
   // The sign-in dialog is driven by the auth step, so any trigger (header button
   // or a course card's "sign in to access") opens it via openSignIn().
   const signInOpen = step === 'email' || step === 'code' || step === 'selectContact'
+
+  // Must be stable: SignInDialog depends on it in a useEffect, so an inline
+  // arrow would re-fire that effect every render (→ infinite update loop).
+  const onSignInOpenChange = useCallback(
+    (open: boolean) => { if (!open) closeSignIn() },
+    [closeSignIn]
+  )
 
   return (
     <div className="min-h-screen w-full" style={{ background: bgStyle, color: textMain, fontFamily: 'inherit' }}>
@@ -69,7 +77,7 @@ export default function SpaceShell({ children }: { children: React.ReactNode }) 
         {children}
       </div>
 
-      <SignInDialog open={signInOpen} onOpenChange={(o) => { if (!o) closeSignIn() }} slug={slug} />
+      <SignInDialog open={signInOpen} onOpenChange={onSignInOpenChange} slug={slug} />
     </div>
   )
 }
