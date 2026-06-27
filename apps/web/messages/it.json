@@ -1755,7 +1755,10 @@
     "tip_website_title": "Pubblica un sito per il tuo studio",
     "tip_website_body": "Trasforma il tuo bio link in un sito completo con il plugin Sito web.",
     "tip_recurring_title": "Fai ripetere i corsi",
-    "tip_recurring_body": "Crea una sessione ricorrente invece di aggiungere ogni corso a mano."
+    "tip_recurring_body": "Crea una sessione ricorrente invece di aggiungere ogni corso a mano.",
+    "tabOnboarding": "Configurazione",
+    "dismiss": "Nascondi",
+    "optional": "facoltativo"
   },
   "Website": {
     "sectionPlaces": "Sedi",

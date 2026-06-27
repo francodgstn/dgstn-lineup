@@ -1755,7 +1755,10 @@
     "tip_website_title": "Publiez un site pour votre studio",
     "tip_website_body": "Transformez votre bio link en site complet avec le plugin Site web.",
     "tip_recurring_title": "Faites répéter vos cours",
-    "tip_recurring_body": "Créez une séance récurrente au lieu d'ajouter chaque cours à la main."
+    "tip_recurring_body": "Créez une séance récurrente au lieu d'ajouter chaque cours à la main.",
+    "tabOnboarding": "Configuration",
+    "dismiss": "Masquer",
+    "optional": "facultatif"
   },
   "Website": {
     "sectionPlaces": "Lieux",

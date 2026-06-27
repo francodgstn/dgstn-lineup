@@ -1755,7 +1755,10 @@
     "tip_website_title": "Publish a studio website",
     "tip_website_body": "Turn your bio link into a full website with the Website plugin.",
     "tip_recurring_title": "Set classes to repeat",
-    "tip_recurring_body": "Create a recurring session instead of adding each class by hand."
+    "tip_recurring_body": "Create a recurring session instead of adding each class by hand.",
+    "tabOnboarding": "Setup",
+    "dismiss": "Dismiss",
+    "optional": "optional"
   },
   "Website": {
     "sectionPlaces": "Places",

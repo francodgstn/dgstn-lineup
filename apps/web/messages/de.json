@@ -1755,7 +1755,10 @@
     "tip_website_title": "Veröffentliche eine Studio-Website",
     "tip_website_body": "Mach aus deinem Bio-Link eine vollständige Website mit dem Website-Plugin.",
     "tip_recurring_title": "Kurse wiederholen lassen",
-    "tip_recurring_body": "Erstelle eine wiederkehrende Session, statt jeden Kurs einzeln anzulegen."
+    "tip_recurring_body": "Erstelle eine wiederkehrende Session, statt jeden Kurs einzeln anzulegen.",
+    "tabOnboarding": "Einrichtung",
+    "dismiss": "Ausblenden",
+    "optional": "optional"
   },
   "Website": {
     "sectionPlaces": "Orte",

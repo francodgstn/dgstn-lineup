@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { useMutation } from '@tanstack/react-query'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { toast } from 'sonner'
-import { Puzzle, Lightbulb, ArrowRight, RefreshCw, Plus } from 'lucide-react'
+import { Puzzle, Lightbulb, ArrowRight, RefreshCw, Plus, ListChecks, Check } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,9 +24,13 @@ import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
+import { useSetupChecklist, type SetupStep } from '@/hooks/useSetupChecklist'
 import { TIPS } from '@/data/tips'
 
-type Tab = 'plugins' | 'tips'
+type Tab = 'plugins' | 'tips' | 'onboarding'
+
+// Per-browser dismissal of the onboarding reminder tab.
+const ONBOARDING_DISMISS_KEY = 'linyup_onboarding_tab_dismissed'
 
 // ─── plugin suggestion row ──────────────────────────────────────────────────
 
@@ -231,15 +235,98 @@ function TipsTab() {
   )
 }
 
+// ─── onboarding (setup) tab ───────────────────────────────────────────────────
+// A reminder of the initial setup steps — title + done state, each linking to the
+// relevant page. Auto-completes from real data (useSetupChecklist).
+
+function OnboardingTab({ steps, onDismiss }: { steps: SetupStep[]; onDismiss: () => void }) {
+  const t = useTranslations('Onboarding')
+  const tDiscover = useTranslations('Discover')
+  const required = steps.filter((s) => !s.optional)
+  const requiredDone = required.filter((s) => s.done).length
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <div className="flex-1 space-y-0.5">
+        {steps.map((s) => (
+          <Link
+            key={s.key}
+            href={s.href as Route}
+            className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-muted/50 transition-colors"
+          >
+            <span
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                s.done
+                  ? 'border-emerald-500 bg-emerald-500 text-white'
+                  : 'border-muted-foreground/30'
+              }`}
+            >
+              {s.done && <Check className="h-3 w-3" />}
+            </span>
+            <span
+              className={`text-sm ${s.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}
+            >
+              {t(`setup.steps.${s.key}.label` as Parameters<typeof t>[0])}
+            </span>
+            {s.optional && (
+              <span className="text-[10px] text-muted-foreground">({tDiscover('optional')})</span>
+            )}
+          </Link>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center justify-between">
+        <span className="text-[11px] text-muted-foreground">
+          {requiredDone}/{required.length}
+        </span>
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onDismiss}>
+          {tDiscover('dismiss')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ─── panel ──────────────────────────────────────────────────────────────────
 
 export function DiscoverPanel() {
   const t = useTranslations('Discover')
-  const [tab, setTab] = useState<Tab>('plugins')
+  const { currentTeamId, team } = useAuth()
+  const { steps, allRequiredDone } = useSetupChecklist(currentTeamId, team)
+
+  const [dismissed, setDismissed] = useState(false)
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(ONBOARDING_DISMISS_KEY) === '1') setDismissed(true)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  // The onboarding reminder shows until every required step is done or it's dismissed.
+  const showOnboarding = !dismissed && !allRequiredDone
+
+  const [tab, setTab] = useState<Tab>('tips')
+  // If the onboarding tab was selected and then disappears, fall back to Tips.
+  useEffect(() => {
+    if (tab === 'onboarding' && !showOnboarding) setTab('tips')
+  }, [tab, showOnboarding])
+
+  function dismissOnboarding() {
+    try {
+      localStorage.setItem(ONBOARDING_DISMISS_KEY, '1')
+    } catch {
+      /* ignore */
+    }
+    setDismissed(true)
+    setTab('tips')
+  }
 
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
-    { key: 'plugins', label: t('tabPlugins'), icon: Puzzle },
+    ...(showOnboarding
+      ? [{ key: 'onboarding' as Tab, label: t('tabOnboarding'), icon: ListChecks }]
+      : []),
     { key: 'tips', label: t('tabTips'), icon: Lightbulb },
+    { key: 'plugins', label: t('tabPlugins'), icon: Puzzle },
   ]
 
   return (
@@ -262,7 +349,13 @@ export function DiscoverPanel() {
         ))}
       </div>
       <CardContent className="flex flex-1 flex-col p-4">
-        {tab === 'plugins' ? <PluginsTab /> : <TipsTab />}
+        {tab === 'plugins' ? (
+          <PluginsTab />
+        ) : tab === 'onboarding' ? (
+          <OnboardingTab steps={steps} onDismiss={dismissOnboarding} />
+        ) : (
+          <TipsTab />
+        )}
       </CardContent>
     </Card>
   )
