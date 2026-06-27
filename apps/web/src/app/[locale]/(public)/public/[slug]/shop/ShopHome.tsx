@@ -15,7 +15,7 @@ import { ShoppingBag, GraduationCap, Loader2, X } from 'lucide-react'
 import { db, functions } from '@/lib/firebase'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { formatCurrency } from '@/lib/format'
-import { resolveProductPrice } from '@linyup/shared'
+import { resolveProductPrice, type CheckoutContactMode } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
 
 interface PlanPrice {
@@ -30,6 +30,7 @@ interface PlanEntry {
   name: string
   description?: string
   prices?: PlanPrice[]
+  checkout_contact_mode?: CheckoutContactMode
 }
 
 interface ProductVariantEntry {
@@ -68,7 +69,7 @@ interface RawCoursePublicProfile {
 type Tab = 'memberships' | 'products' | 'courses'
 
 type Checkout =
-  | { kind: 'membership'; typeId: string; typeName: string; price: PlanPrice }
+  | { kind: 'membership'; typeId: string; typeName: string; price: PlanPrice; mode: CheckoutContactMode }
   | { kind: 'product'; product: ProductEntry; variantId: string | null }
   | { kind: 'course'; course: CourseEntry }
 
@@ -108,6 +109,8 @@ export default function ShopHome({
   const [checkout, setCheckout] = useState<Checkout | null>(null)
   const [courseFocusHandled, setCourseFocusHandled] = useState(false)
   const [email, setEmail] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -234,9 +237,16 @@ export default function ShopHome({
     [t]
   )
 
-  function openMembership(typeId: string, typeName: string, price: PlanPrice) {
-    setCheckout({ kind: 'membership', typeId, typeName, price })
+  function openMembership(
+    typeId: string,
+    typeName: string,
+    price: PlanPrice,
+    mode: CheckoutContactMode
+  ) {
+    setCheckout({ kind: 'membership', typeId, typeName, price, mode })
     setEmail(prefillEmail())
+    setFirstName('')
+    setLastName('')
     setError(null)
   }
 
@@ -266,6 +276,16 @@ export default function ShopHome({
       setError(t('emailInvalid'))
       return
     }
+    // Memberships (unless mode 'off') collect the buyer's name so checkout creates a
+    // real contact.
+    if (
+      checkout.kind === 'membership' &&
+      checkout.mode !== 'off' &&
+      (!firstName.trim() || !lastName.trim())
+    ) {
+      setError(t('nameRequired'))
+      return
+    }
     setSubmitting(true)
     setError(null)
     try {
@@ -277,6 +297,8 @@ export default function ShopHome({
             subscriptionTypeId: string
             priceId: string
             memberEmail: string
+            firstName: string
+            lastName: string
             slug: string
             locale: string
             origin?: string
@@ -288,6 +310,8 @@ export default function ShopHome({
           subscriptionTypeId: checkout.typeId,
           priceId: checkout.price.id,
           memberEmail: email.trim(),
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
           slug,
           locale,
           origin: window.location.origin,
@@ -343,7 +367,13 @@ export default function ShopHome({
       }
     } catch (err) {
       const code = (err as FunctionsError)?.code
-      setError(code === 'functions/failed-precondition' ? t('notAvailable') : t('checkoutError'))
+      setError(
+        code === 'functions/already-exists'
+          ? t('alreadySubscribed')
+          : code === 'functions/failed-precondition'
+            ? t('notAvailable')
+            : t('checkoutError')
+      )
       setSubmitting(false)
     }
   }
@@ -467,7 +497,14 @@ export default function ShopHome({
                       <button
                         type="button"
                         disabled={!price.id}
-                        onClick={() => openMembership(plan.id, plan.name, price)}
+                        onClick={() =>
+                          openMembership(
+                            plan.id,
+                            plan.name,
+                            price,
+                            plan.checkout_contact_mode ?? 'minimal'
+                          )
+                        }
                         className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-40"
                         style={{ background: accent, color: '#ffffff' }}
                       >
@@ -660,6 +697,32 @@ export default function ShopHome({
               </p>
             )}
 
+            {checkout.kind === 'membership' && checkout.mode !== 'off' && (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium">{t('firstNameLabel')}</label>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder={t('firstNameLabel')}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: cardBorder, background: onDark ? 'rgba(0,0,0,0.2)' : '#fff', color: textMain }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium">{t('lastNameLabel')}</label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder={t('lastNameLabel')}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: cardBorder, background: onDark ? 'rgba(0,0,0,0.2)' : '#fff', color: textMain }}
+                  />
+                </div>
+              </div>
+            )}
             <label className="mt-4 block text-xs font-medium">{t('emailLabel')}</label>
             <input
               type="email"

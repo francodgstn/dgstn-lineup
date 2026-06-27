@@ -35,6 +35,16 @@ export const SUBSCRIPTION_ROLLUP_STATUSES = [
 ] as const
 export type SubscriptionRollupStatus = (typeof SUBSCRIPTION_ROLLUP_STATUSES)[number]
 
+// One entry of Contact.active_subscriptions — a compact snapshot of a LIVE Stripe
+// member subscription, deduped by type. Maintained by onMemberSubscriptionWrite.
+export interface ActiveSubscriptionSummary {
+  subscription_type_id: string
+  subscription_type_name: string | null
+  recurrence: string | null
+  amount: number // major units (CHF), per period
+  status: SubscriptionRollupStatus
+}
+
 export type ContactGender = 'M' | 'F' | 'other'
 
 export interface ContactAddress {
@@ -87,6 +97,13 @@ export interface Contact {
   trial_booked_at?: Timestamp
   trial_attended_at?: Timestamp
   converted_at?: Timestamp
+  // "Paid at checkout but hasn't finished signup yet" — set true only on a contact
+  // created by a 'full'-mode shop purchase (consent + the studio's required fields
+  // still owed). Cleared, with signup_completed_at stamped, when the buyer finishes
+  // the signup-finalize flow. Absent ⇒ not pending (a minimal/back-office contact is
+  // considered complete). See CheckoutContactMode.
+  pending_signup?: boolean
+  signup_completed_at?: Timestamp | null
 
   // ─── Source axis ───────────────────────────────────────────────────────────
   // Marketing channel + free-form detail. Set once at creation, never overwritten.
@@ -101,7 +118,12 @@ export interface Contact {
   // list + Firestore rules read; maintained by the onAffiliationWrite trigger.
   affiliation_summary?: AffiliationSummary
 
-  // Subscription (one active subscription per contact)
+  // Subscription — the single fields below are the "primary / most-recent" snapshot
+  // (manual assignment, or the latest Stripe purchase). A contact may hold SEVERAL
+  // different active subscription types at once (never two of the same) — the full set
+  // lives in active_subscriptions, maintained by onMemberSubscriptionWrite from the
+  // member_subscriptions docs. Read active_subscriptions for display; the single fields
+  // remain for back-compat (filters, manual assignment).
   subscription_type_id?: string
   subscription_type_name?: string
   subscription_recurrence?: string // authoritative; derived from the chosen price when one exists
@@ -111,6 +133,10 @@ export interface Contact {
   // Contact-level rollup of member_subscriptions Stripe status (webhook-maintained).
   // 'none' when the contact holds no live subscription. See SubscriptionRollupStatus.
   subscription_status?: SubscriptionRollupStatus
+  // All LIVE Stripe subscriptions the contact holds, deduped by type (webhook-maintained
+  // by onMemberSubscriptionWrite). Empty/absent when none. Drives the multi-subscription
+  // chips on the contacts list + detail.
+  active_subscriptions?: ActiveSubscriptionSummary[]
 
   // Notes (plain text; rich-text JSON stored as string in hmd-lineup)
   notes?: string
@@ -234,6 +260,14 @@ export interface SubscriptionPrice {
   active?: boolean // default true; inactive prices are hidden from the table + assignment
 }
 
+// How the public shop captures a contact when this subscription is bought:
+//   'off'     — no contact created at checkout (the studio links the payment later)
+//   'minimal' — collect first/last name + email and create a member contact (default)
+//   'full'    — collect first/last name + email, then redirect the buyer to the signup
+//               page to finish their profile + consent (contact is 'pending signup')
+export type CheckoutContactMode = 'off' | 'minimal' | 'full'
+export const CHECKOUT_CONTACT_MODES: CheckoutContactMode[] = ['off', 'minimal', 'full']
+
 export interface SubscriptionType {
   id: string
   name: string
@@ -246,6 +280,8 @@ export interface SubscriptionType {
   // values sort last (by name) until the studio reorders.
   order?: number
   prices?: SubscriptionPrice[] // optional; absent = the simple "just a container" flow
+  // Public-shop contact capture for this type (absent ⇒ 'minimal').
+  checkout_contact_mode?: CheckoutContactMode
 }
 
 /** Stable sort for subscription types: explicit `order` first (asc), then name. */

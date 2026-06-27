@@ -35,6 +35,7 @@ import {
   getConnectStripe,
 } from '../utils/connect/client'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
+import { resolveSingleContact } from '../utils/contacts'
 
 // Stripe's minimum charge for CHF is ~0.50 CHF.
 const MIN_AMOUNT_RAPPEN = 50
@@ -352,6 +353,8 @@ export const createMembershipCheckout = onCall(async (request) => {
     subscriptionTypeId?: string
     priceId?: string
     memberEmail?: string
+    firstName?: string
+    lastName?: string
     slug?: string
     locale?: string
     idempotencyKey?: string
@@ -386,6 +389,14 @@ export const createMembershipCheckout = onCall(async (request) => {
   if (subType.public !== true || subType.active === false) {
     throw new HttpsError('failed-precondition', 'This item is not available')
   }
+  // Contact-capture mode is read server-side (never trust the client). Unless 'off',
+  // the buyer's first + last name are required so the webhook creates a real contact.
+  const contactMode = subType.checkout_contact_mode ?? 'minimal'
+  const firstName = (data.firstName ?? '').trim().slice(0, 500)
+  const lastName = (data.lastName ?? '').trim().slice(0, 500)
+  if (contactMode !== 'off' && (!firstName || !lastName)) {
+    throw new HttpsError('invalid-argument', 'First and last name are required')
+  }
   const price = (subType.prices ?? []).find((p) => p.id === priceId && p.active !== false)
   if (!price) throw new HttpsError('not-found', 'Price not found on this subscription type')
 
@@ -394,7 +405,43 @@ export const createMembershipCheckout = onCall(async (request) => {
     throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
   }
 
-  const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=shop` : ''
+  // Block buying a subscription type the buyer ALREADY actively holds (recurring only —
+  // one-off drop-ins may legitimately stack). A contact may hold several *different*
+  // types at once, but never two of the same. Best-effort: we only have the typed email,
+  // so we resolve a single active contact; family-shared emails (>1 match) or first-time
+  // buyers fall through and the webhook safety net cancels+refunds any duplicate. Query
+  // by contactId only (single-field index, like onMemberSubscriptionWrite) and filter
+  // type/status in memory — a contact has few subscriptions.
+  if (isRecurringRecurrence(price.recurrence)) {
+    const { contactId: existingContactId } = await resolveSingleContact(teamId, email)
+    if (existingContactId) {
+      const subsSnap = await admin
+        .firestore()
+        .collection(TEAMS_COLLECTION)
+        .doc(teamId)
+        .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
+        .where('contactId', '==', existingContactId)
+        .get()
+      const LIVE = new Set(['active', 'trialing', 'past_due'])
+      const holdsSameType = subsSnap.docs.some((d) => {
+        const s = d.data()
+        return (
+          s.subscriptionTypeId === subscriptionTypeId && LIVE.has(s.status as string) && !s.duplicate
+        )
+      })
+      if (holdsSameType) {
+        throw new HttpsError('already-exists', 'You already have this subscription.')
+      }
+    }
+  }
+
+  // A 'full' purchase lands the buyer on the signup-finalize page (email prefilled);
+  // the rest return to the shop. The result page only honours seg=signup on success.
+  const seg = contactMode === 'full' ? 'signup' : 'shop'
+  const emailQuery = contactMode === 'full' ? `&email=${encodeURIComponent(email)}` : ''
+  const slugQuery = data.slug
+    ? `&slug=${encodeURIComponent(data.slug)}&seg=${seg}${emailQuery}`
+    : ''
   const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
   const productName = price.label ? `${subType.name} — ${price.label}` : subType.name
 
@@ -408,6 +455,11 @@ export const createMembershipCheckout = onCall(async (request) => {
     recurrence: price.recurrence,
   }
   if (price.included_months) metadata.includedMonths = String(price.included_months)
+  // The webhook builds the contact from these names; contactMode tells it whether to
+  // mark the contact 'pending signup' (full) or treat it as complete (minimal).
+  metadata.contactMode = contactMode
+  if (firstName) metadata.firstname = firstName
+  if (lastName) metadata.lastname = lastName
 
   const interval = recurrenceToStripeInterval(price.recurrence)
   const idempotencyKey =
@@ -698,4 +750,42 @@ export const resumeMemberSubscription = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
   const data = request.data as { teamId?: string; subscriptionId?: string }
   return setSubscriptionPause(request.auth.uid, data?.teamId, data?.subscriptionId, false)
+})
+
+// Cancel a member's recurring subscription on the studio's connected account. Used when
+// a manager reassigns a contact's plan and chooses to STOP their current billing (the
+// manual-assign "stop current" path). Idempotent-ish: cancelling an already-cancelled
+// sub throws, which we surface as 'internal'.
+export const cancelMemberSubscription = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+  const { teamId, subscriptionId } = (request.data ?? {}) as {
+    teamId?: string
+    subscriptionId?: string
+  }
+  if (!teamId) throw new HttpsError('invalid-argument', 'teamId is required')
+  if (!subscriptionId) throw new HttpsError('invalid-argument', 'subscriptionId is required')
+
+  await assertManager(request.auth.uid, teamId)
+  const team = await loadEnabledTeam(teamId)
+  const { accountId } = requireChargeableAccount(team)
+
+  const stripe = await getConnectStripe()
+  try {
+    await stripe.subscriptions.cancel(subscriptionId, undefined, { stripeAccount: accountId })
+  } catch (err) {
+    console.error('[connect] cancelMemberSubscription failed:', err)
+    throw new HttpsError('internal', 'Failed to cancel the subscription')
+  }
+
+  // Optimistic mirror → onMemberSubscriptionWrite recomputes the rollup + drops it from
+  // active_subscriptions immediately (the webhook confirms shortly after).
+  await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
+    .doc(subscriptionId)
+    .set({ status: 'canceled', updated_at: FieldValue.serverTimestamp() }, { merge: true })
+
+  return { ok: true, canceled: true }
 })

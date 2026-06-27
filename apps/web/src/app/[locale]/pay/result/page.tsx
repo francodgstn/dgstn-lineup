@@ -11,14 +11,35 @@ export const dynamic = 'force-dynamic'
 export default async function PayResultPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; slug?: string; seg?: string }>
+  searchParams: Promise<{ status?: string; slug?: string; seg?: string; email?: string }>
 }) {
-  const { status, slug, seg } = await searchParams
+  const { status, slug, seg, email } = await searchParams
   const t = await getTranslations('PayResult')
   const success = status === 'success'
-  // Course purchases land here with seg=space: success means a lifetime entitlement was
-  // granted — point the buyer to their Space (where they watch) rather than the shop.
-  const toSpace = seg === 'space'
+  // Course purchases land with seg=space — point the buyer to their Space (where they
+  // watch). A 'full' membership lands with seg=signup so the buyer finishes their
+  // registration (consent + the studio's required fields). Both only on success.
+  const toSpace = success && seg === 'space'
+  const toSignup = success && seg === 'signup'
+
+  // Primary CTA target + label.
+  let ctaHref = `/public/${slug}/shop`
+  let ctaLabel = t('backToShop')
+  if (toSpace) {
+    ctaHref = `/public/${slug}/space`
+    ctaLabel = t('openSpace')
+  } else if (toSignup) {
+    ctaHref = `/public/${slug}/signup?from=checkout${email ? `&email=${encodeURIComponent(email)}` : ''}`
+    ctaLabel = t('completeRegistration')
+  }
+
+  const body = success
+    ? toSpace
+      ? t('successBodyCourse')
+      : toSignup
+        ? t('successBodySignup')
+        : t('successBody')
+    : t('cancelledBody')
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
@@ -31,15 +52,13 @@ export default async function PayResultPage({
         <h1 className="text-xl font-semibold">
           {success ? t('successTitle') : t('cancelledTitle')}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          {success ? (toSpace ? t('successBodyCourse') : t('successBody')) : t('cancelledBody')}
-        </p>
+        <p className="text-sm text-muted-foreground">{body}</p>
         {slug ? (
           <Link
-            href={`/public/${slug}/${success && toSpace ? 'space' : 'shop'}` as Route}
+            href={ctaHref as Route}
             className="inline-block text-sm font-medium text-primary hover:underline"
           >
-            {success && toSpace ? t('openSpace') : t('backToShop')}
+            {ctaLabel}
           </Link>
         ) : (
           <p className="text-sm text-muted-foreground">{t('close')}</p>

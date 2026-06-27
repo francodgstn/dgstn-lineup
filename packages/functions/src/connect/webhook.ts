@@ -34,6 +34,7 @@ import { getSecret } from '../utils/secrets'
 import {
   constructConnectWebhookEvent,
   getConnectStripe,
+  refundDirectCharge,
   retrieveAccountStatus,
 } from '../utils/connect/client'
 import { persistAccountStatus } from './access'
@@ -78,6 +79,32 @@ function memberSubscriptionRef(teamId: string, subscriptionId: string) {
     .doc(teamId)
     .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
     .doc(subscriptionId)
+}
+
+/** True if the contact holds a LIVE (active/trialing/past_due) member subscription of
+ * the given type OTHER than excludeSubId (and not an already-flagged duplicate). The
+ * checkout safety net uses this to detect a same-type double purchase. Queries by
+ * contactId only (single-field index, like onMemberSubscriptionWrite) and filters in
+ * memory — a contact has few subscriptions. */
+async function contactHasOtherLiveSameType(
+  teamId: string,
+  contactId: string,
+  subscriptionTypeId: string,
+  excludeSubId: string
+): Promise<boolean> {
+  const snap = await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
+    .where('contactId', '==', contactId)
+    .get()
+  const live = new Set(['active', 'trialing', 'past_due'])
+  return snap.docs.some((d) => {
+    if (d.id === excludeSubId) return false
+    const s = d.data()
+    return s.subscriptionTypeId === subscriptionTypeId && live.has(s.status as string) && !s.duplicate
+  })
 }
 
 // ─── contact membership linkage (mirror of handlePayrexxWebhook) ─────────────────
@@ -189,7 +216,14 @@ async function activeContactCount(teamId: string): Promise<number> {
 async function resolveOrCreateContact(
   teamId: string,
   plan: SaasPlan,
-  info: { email: string; name?: string | null; phone?: string | null }
+  info: {
+    email: string
+    name?: string | null
+    phone?: string | null
+    firstname?: string | null
+    lastname?: string | null
+  },
+  pendingSignup = false
 ): Promise<string | null> {
   const db = admin.firestore()
   const { contactId, count } = await resolveSingleContact(teamId, info.email)
@@ -212,7 +246,13 @@ async function resolveOrCreateContact(
     }
   }
 
-  const { firstname, lastname } = splitName(info.name)
+  // Prefer the first/last name captured in the shop modal (passed via checkout
+  // metadata); fall back to splitting Stripe's single `name` (unreliable — e.g. empty
+  // for TWINT, or "First Last" merged on the card).
+  const metaFirst = (info.firstname ?? '').trim()
+  const metaLast = (info.lastname ?? '').trim()
+  const { firstname, lastname } =
+    metaFirst || metaLast ? { firstname: metaFirst, lastname: metaLast } : splitName(info.name)
   const ref = db.collection(CONTACTS_COLLECTION).doc()
   await ref.set({
     teamId,
@@ -225,6 +265,10 @@ async function resolveOrCreateContact(
     acquisition_stage_updated_at: FieldValue.serverTimestamp(),
     converted_at: FieldValue.serverTimestamp(),
     entry: 'signup',
+    // 'full' checkout: paid but the buyer still has to finish signup (consent + the
+    // studio's required fields). Flag it so the dashboard shows "pending signup" and the
+    // signup-finalize page completes it. Set only on CREATE — never flip a returning member.
+    ...(pendingSignup ? { pending_signup: true, signup_completed_at: null } : {}),
     archived_at: null,
     deleted_at: null,
     created_at: FieldValue.serverTimestamp(),
@@ -347,6 +391,11 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
       customerId: typeof sub.customer === 'string' ? sub.customer : (sub.customer?.id ?? null),
       contactId: md.contactId ?? null,
       priceId: item?.price?.id ?? null,
+      // The studio's stable type identity (from checkout metadata) — priceId above is
+      // Stripe's ad-hoc inline price, useless for "same type" comparisons.
+      subscriptionTypeId: md.subscriptionTypeId ?? null,
+      subscriptionTypeName: md.subscriptionTypeName ?? null,
+      recurrence: md.recurrence ?? null,
       amount: item?.price?.unit_amount ?? 0,
       currency: sub.currency ?? 'chf',
       application_fee_percent: sub.application_fee_percent ?? null,
@@ -436,7 +485,18 @@ async function handleCheckoutCompleted(
   if (!contactId && email) {
     const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
     const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
-    contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
+    contactId = await resolveOrCreateContact(
+      team.teamId,
+      plan,
+      {
+        email,
+        name,
+        phone,
+        firstname: md.firstname ?? null,
+        lastname: md.lastname ?? null,
+      },
+      md.contactMode === 'full'
+    )
   }
   if (!contactId) return // cap-blocked or no email — payment is still recorded by other handlers
 
@@ -446,6 +506,7 @@ async function handleCheckoutCompleted(
   if (session.mode === 'subscription' && session.subscription) {
     const subId =
       typeof session.subscription === 'string' ? session.subscription : session.subscription.id
+    let latestPaymentIntentId: string | null = null
     if (accountId) {
       try {
         const stripe = await getConnectStripe()
@@ -454,16 +515,57 @@ async function handleCheckoutCompleted(
           { metadata: { ...md, contactId } },
           { stripeAccount: accountId }
         )
-        const sub: any = await stripe.subscriptions.retrieve(subId, undefined, {
-          stripeAccount: accountId,
-        })
+        const sub: any = await stripe.subscriptions.retrieve(
+          subId,
+          { expand: ['latest_invoice.payment_intent'] },
+          { stripeAccount: accountId }
+        )
         const cpe = sub.current_period_end as number | undefined
         membershipExpiration = cpe ? Timestamp.fromMillis(cpe * 1000) : null
+        const pi = sub.latest_invoice?.payment_intent
+        latestPaymentIntentId = typeof pi === 'string' ? pi : (pi?.id ?? null)
       } catch (err) {
         console.error('[connect] subscription backfill/retrieve failed:', err)
       }
     }
-    await memberSubscriptionRef(team.teamId, subId).set({ contactId }, { merge: true })
+    await memberSubscriptionRef(team.teamId, subId).set(
+      { contactId, subscriptionTypeId: md.subscriptionTypeId ?? null },
+      { merge: true }
+    )
+
+    // Safety net: if the contact already holds a LIVE subscription of THIS SAME type (a
+    // duplicate that slipped past the checkout guard — two tabs, or a late email link),
+    // cancel this new subscription and refund its charge. A contact may hold several
+    // *different* types at once, never two of the same.
+    if (
+      md.subscriptionTypeId &&
+      (await contactHasOtherLiveSameType(team.teamId, contactId, md.subscriptionTypeId, subId))
+    ) {
+      if (accountId) {
+        try {
+          const stripe = await getConnectStripe()
+          await stripe.subscriptions.cancel(subId, undefined, { stripeAccount: accountId })
+          if (latestPaymentIntentId) {
+            await refundDirectCharge({
+              accountId,
+              paymentIntentId: latestPaymentIntentId,
+              reason: 'duplicate',
+              idempotencyKey: `dup-refund:${subId}`,
+            })
+          }
+        } catch (err) {
+          console.error('[connect] duplicate subscription cancel/refund failed:', err)
+        }
+      }
+      await memberSubscriptionRef(team.teamId, subId).set(
+        { status: 'canceled', duplicate: true, updated_at: FieldValue.serverTimestamp() },
+        { merge: true }
+      )
+      console.log(
+        `[connect] duplicate same-type subscription ${subId} (type=${md.subscriptionTypeId}, contact=${contactId}) — cancelled + refunded`
+      )
+      return // do NOT snapshot the refunded duplicate onto the contact
+    }
   } else {
     const months = md.includedMonths ? parseInt(md.includedMonths, 10) : 0
     membershipExpiration = months > 0 ? addMonths(months) : null

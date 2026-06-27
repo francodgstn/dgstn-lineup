@@ -1580,8 +1580,13 @@ async function seedDemoTeam(profile: SectorProfile) {
       id: string
       name: string
       description?: string
+      checkout_contact_mode?: string
       prices?: { id: string; amount: number; recurrence: string }[]
-    } = { id: subIdOf(st.kind), name: st.name }
+    } = {
+      id: subIdOf(st.kind),
+      name: st.name,
+      checkout_contact_mode: recurrence && recurrence !== 'per_class' ? 'full' : 'minimal',
+    }
     if (st.description) entry.description = st.description
     // price.id (stable client id) must mirror the raw subscription_types write so the
     // shop's Buy button enables and checkout can resolve the chosen price.
@@ -1869,6 +1874,7 @@ async function seedDemoTeam(profile: SectorProfile) {
         active: true,
         // Surface every plan on the bio-link / website pricing table.
         public: true,
+        checkout_contact_mode: recurrence && recurrence !== 'per_class' ? 'full' : 'minimal',
         prices,
         teamId,
         created_at: ts(daysFromNow(-120)),

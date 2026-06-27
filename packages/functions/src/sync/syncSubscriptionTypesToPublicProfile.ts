@@ -68,10 +68,13 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
         id: string
         name: string
         description?: string
+        checkout_contact_mode?: string
         prices?: PublicPrice[]
       } = {
         id: d.id,
         name: data.name as string,
+        // Public-shop contact-capture mode (absent ⇒ 'minimal'); the shop modal reads it.
+        checkout_contact_mode: (data.checkout_contact_mode as string | undefined) ?? 'minimal',
       }
       if (typeof data.description === 'string' && data.description) {
         entry.description = data.description

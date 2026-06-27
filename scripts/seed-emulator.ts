@@ -343,10 +343,14 @@ async function seedTeam(opts: {
         id: string
         name: string
         description?: string
+        checkout_contact_mode?: string
         prices?: { id: string; amount: number; recurrence: string }[]
       } = {
         id: st.id,
         name: st.name,
+        // Recurring memberships create a full member (then finish signup); the per-class
+        // drop-in just captures name + email. Demos both checkout-contact modes.
+        checkout_contact_mode: recurrence && recurrence !== 'per_class' ? 'full' : 'minimal',
       }
       if (st.description) entry.description = st.description
       // The public shop's Buy button is gated on price.id (a stable client id, not a
@@ -907,6 +911,7 @@ async function seedTeam(opts: {
         active: st.active,
         // Surface every active plan on the bio-link / website pricing table.
         public: st.active !== false,
+        checkout_contact_mode: recurrence && recurrence !== 'per_class' ? 'full' : 'minimal',
         prices,
         teamId,
         created_at: ts(daysFromNow(-60)),
