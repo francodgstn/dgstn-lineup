@@ -37,6 +37,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
 import type { SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
+import { useRoleLabel } from '@/hooks/useRoleLabel'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { SettingsPinsProvider, useSettingsPins } from '@/contexts/SettingsPinsContext'
 import { SETTINGS_ITEMS } from '@/lib/settings-nav'
@@ -139,8 +140,17 @@ function NavLink({
   const pathname = usePathname()
   const t = useTranslations('Nav')
   const { isAtLeast } = usePlan()
+  const { team } = useAuth()
+  const role = useRoleLabel()
   const { openUpgradeModal } = useUpgradeModal()
   const Icon = item.icon
+
+  // The Contacts entry adopts the studio's configured role label (e.g. "Students")
+  // when one is set; otherwise it keeps the generic "Contacts".
+  const label =
+    item.labelKey === 'contacts' && team?.contact_role_label
+      ? role.plural
+      : t(item.labelKey as Parameters<typeof t>[0])
 
   const isLocked = !!item.minPlan && !isAtLeast(item.minPlan)
 
@@ -159,7 +169,7 @@ function NavLink({
           openUpgradeModal({ minPlan: item.minPlan })
           onClick?.()
         }}
-        title={collapsed ? t(item.labelKey as Parameters<typeof t>[0]) : undefined}
+        title={collapsed ? label : undefined}
         className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${
           collapsed ? 'justify-center px-2' : ''
         }`}
@@ -167,7 +177,7 @@ function NavLink({
         <Icon className="h-4 w-4 shrink-0" />
         {!collapsed && (
           <>
-            <span className="flex-1 text-left">{t(item.labelKey as Parameters<typeof t>[0])}</span>
+            <span className="flex-1 text-left">{label}</span>
             <Lock className="h-3 w-3 shrink-0 text-muted-foreground/30" />
           </>
         )}
@@ -180,7 +190,7 @@ function NavLink({
       href={item.href as Route}
       onClick={onClick}
       data-tour={`nav-${item.labelKey}`}
-      title={collapsed ? t(item.labelKey as Parameters<typeof t>[0]) : undefined}
+      title={collapsed ? label : undefined}
       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
         isActive
           ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
@@ -188,7 +198,7 @@ function NavLink({
       } ${collapsed ? 'justify-center px-2' : ''}`}
     >
       <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-      {!collapsed && <span>{t(item.labelKey as Parameters<typeof t>[0])}</span>}
+      {!collapsed && <span>{label}</span>}
     </Link>
   )
 }

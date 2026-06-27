@@ -13,6 +13,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
+import { useRoleLabel } from '@/hooks/useRoleLabel'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -1630,6 +1631,10 @@ export default function ContactsPage() {
   const { openUpgradeModal } = useUpgradeModal()
   const qc = useQueryClient()
   const t = useTranslations('Contacts')
+  const role = useRoleLabel()
+  // Use the studio's configured role label (e.g. "Students") as the page title
+  // when set; otherwise the generic "Contacts".
+  const pageTitle = team?.contact_role_label ? role.plural : t('title')
 
   const { data: active = [], isLoading: loadingActive } = useActiveContacts(currentTeamId)
   const { data: archived = [], isLoading: loadingArchived } = useArchivedContacts(currentTeamId)
@@ -1872,7 +1877,7 @@ export default function ContactsPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-1.5">
-            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{pageTitle}</h1>
             <SectionIntro sectionKey="contacts" />
           </div>
           {!loadingActive && (
