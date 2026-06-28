@@ -42,6 +42,11 @@ import {
   buildAffiliationSummary,
   statusCountsAsActive,
 } from './lib/affiliations'
+import {
+  buildStorefrontPageLinks,
+  seedStoreProducts,
+  seedStoreCourses,
+} from './lib/storefront'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // On the emulator, write into the namespace the web app + emulator use
@@ -1518,33 +1523,9 @@ async function seedDemoTeam(profile: SectorProfile) {
   await upsertAuthUser({ uid, email, displayName: ownerName, password: DEMO_PASSWORD })
 
   // ── team doc + public profile ─────────────────────────────────────────────
-  const portalLinks = [
-    {
-      label: 'Book Now',
-      description: 'Reserve your spot in a session',
-      target: 'booking',
-      showInBioLink: true,
-      iconName: 'CalendarPlus',
-      url: null,
-    },
-    {
-      label: 'Join as Member',
-      description: 'Join our community and become a member',
-      target: 'signup',
-      showInBioLink: true,
-      iconName: 'UserCheck',
-      url: null,
-    },
-    // Courses system link — every sandbox team installs the online-courses plugin.
-    {
-      label: 'Online Courses',
-      description: 'Watch and learn between classes',
-      target: 'space',
-      showInBioLink: true,
-      iconName: 'GraduationCap',
-      url: null,
-    },
-  ]
+  // Every sandbox team installs the full storefront (memberships, products,
+  // courses, website), so the bio-link surfaces all of them.
+  const portalLinks = buildStorefrontPageLinks()
   const bioLinkBackground = { type: 'gradient', color: portalGradient }
 
   await db
@@ -3023,6 +3004,26 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
         })
     }
   }
+
+  // ── storefront extras: a Products shop tab + a sellable (purchase) course. The
+  // website above covers the Site surface and the two courses above cover the
+  // Space portal; this fills the remaining shop tabs so every sandbox demo team
+  // has items in all shop sections. ──
+  const storefront = {
+    teamId,
+    uid,
+    teamName,
+    teamSlug,
+    accentColor,
+    description,
+    primaryActivity: activities[0]?.name ?? 'Training',
+    email: `${teamSlug}@linyup.com`,
+    locationLabel: locations[0],
+    currency: 'CHF',
+    installedDaysAgo: 200,
+  }
+  await seedStoreProducts(storefront)
+  await seedStoreCourses(storefront, { includeFree: false })
 }
 
 // ── team weekly reports — a year of history so the dashboard trend charts

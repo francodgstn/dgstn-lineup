@@ -46,6 +46,13 @@ import {
   statusCountsAsActive,
   type SeedAffiliationType,
 } from './lib/affiliations'
+import {
+  buildStorefrontPageLinks,
+  buildBasicPageLinks,
+  seedStoreProducts,
+  seedStoreWebsite,
+  seedStoreCourses,
+} from './lib/storefront'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
 
@@ -494,85 +501,11 @@ async function seedTeam(opts: {
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
-      links: [
-        {
-          label: 'Book Now',
-          target: 'booking',
-          showInBioLink: true,
-          iconName: 'CalendarPlus',
-          url: null,
-        },
-        {
-          label: 'Join as Member',
-          target: 'signup',
-          showInBioLink: true,
-          iconName: 'UserCheck',
-          url: null,
-        },
-        // Courses system link — only the studio tier installs the online-courses plugin.
-        ...(plan === 'studio'
-          ? [
-              {
-                label: 'Online Courses',
-                target: 'space',
-                showInBioLink: true,
-                iconName: 'GraduationCap',
-                url: null,
-              },
-            ]
-          : []),
-      ],
+      // Coach plan can't install the storefront plugins (studio+ only), so it gets
+      // the lighter link set (booking + signup + memberships shop).
+      links: plan === 'coach' ? buildBasicPageLinks() : buildStorefrontPageLinks(),
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
     })
-
-  // Shop products (merch) mirrored into the team's public_profile so the public
-  // /shop "Products" tab renders. priceAmount is major units (CHF), like the
-  // subscription prices above. No images → the shop shows a placeholder icon.
-  const shopProducts = [
-    {
-      id: `${teamId}-prod-tee`,
-      name: 'Club Training Tee',
-      description: 'Breathable performance tee with the studio crest.',
-      priceAmount: 35,
-      variantLabel: 'Size',
-      variants: [
-        { id: 's', label: 'S' },
-        { id: 'm', label: 'M' },
-        { id: 'l', label: 'L' },
-        { id: 'xl', label: 'XL' },
-      ],
-    },
-    {
-      id: `${teamId}-prod-bottle`,
-      name: 'Insulated Water Bottle',
-      description: '750ml stainless steel — keeps drinks cold for 24h.',
-      priceAmount: 28,
-    },
-    {
-      id: `${teamId}-prod-gloves`,
-      name: 'Pro Sparring Gloves',
-      description: 'Studio-branded sparring gloves built to last.',
-      priceAmount: 69,
-      variantLabel: 'Weight',
-      variants: [
-        { id: '12oz', label: '12 oz' },
-        { id: '14oz', label: '14 oz' },
-        { id: '16oz', label: '16 oz' },
-      ],
-    },
-    {
-      id: `${teamId}-prod-hoodie`,
-      name: 'Heavyweight Hoodie',
-      description: 'Cozy 400gsm hoodie for cooldowns and the street.',
-      priceAmount: 75,
-      variantLabel: 'Size',
-      variants: [
-        { id: 's', label: 'S' },
-        { id: 'm', label: 'M' },
-        { id: 'l', label: 'L' },
-      ],
-    },
-  ]
 
   // Public profile
   await db
@@ -592,33 +525,7 @@ async function seedTeam(opts: {
       bioLinkAccentColor: accentColor,
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
-      links: [
-        {
-          label: 'Book Now',
-          target: 'booking',
-          showInBioLink: true,
-          iconName: 'CalendarPlus',
-          url: null,
-        },
-        {
-          label: 'Join as Member',
-          target: 'signup',
-          showInBioLink: true,
-          iconName: 'UserCheck',
-          url: null,
-        },
-        ...(plan === 'studio'
-          ? [
-              {
-                label: 'Online Courses',
-                target: 'space',
-                showInBioLink: true,
-                iconName: 'GraduationCap',
-                url: null,
-              },
-            ]
-          : []),
-      ],
+      links: plan === 'coach' ? buildBasicPageLinks() : buildStorefrontPageLinks(),
       bookingSettings: {
         flowType: 'activity-first',
         windowMonths: 2,
@@ -629,7 +536,8 @@ async function seedTeam(opts: {
       showBranding: false, // paid plans carry no "Powered by Linyup" badge
       default_currency: 'CHF',
       aggregator_subscription_types: publicSubTypes,
-      products: shopProducts,
+      // products mirror is written by seedStoreProducts (studio+ only) at the end
+      // of seedTeam, via a merge into this same public_profile doc.
       membershipRequiredFields: null,
       membershipOptionalFields: null,
       updated_at: ts(new Date()),
@@ -1778,9 +1686,34 @@ async function seedTeam(opts: {
   }
 
   // ── online courses (Online Courses LMS plugin) ──────────────────────────────
-  // Only the studio-tier account showcases the plugin (courses is a studio+ feature).
+  // Only the studio-tier account showcases the full course library (studio+ feature).
   if (plan === 'studio') {
     await seedCourses(teamId, uid)
+  }
+
+  // ── storefront (studio+ only — products/website/online-courses are minPlan studio) ──
+  // Gives studio/organization demo teams a complete public storefront: a Products
+  // shop tab, a published website, a sellable course, and the full bio-link set.
+  if (plan === 'studio' || plan === 'organization') {
+    const storefront = {
+      teamId,
+      uid,
+      teamName,
+      teamSlug,
+      accentColor,
+      description: `${teamName} — managed with Linyup.`,
+      primaryActivity: activities[0]?.name ?? 'Training',
+      email,
+      currency: 'CHF',
+      installedDaysAgo: 60,
+    }
+    await seedStoreProducts(storefront)
+    await seedStoreWebsite(storefront)
+    // Studio already seeds a full course set above (incl. a purchase course); the
+    // organization tier has none of its own, so give it a free + sellable course here.
+    if (plan === 'organization') {
+      await seedStoreCourses(storefront, { includeFree: true })
+    }
   }
 }
 

@@ -58,6 +58,13 @@ import {
   buildAffiliationSummary,
   statusCountsAsActive,
 } from './lib/affiliations'
+import {
+  buildStorefrontPageLinks,
+  buildBasicPageLinks,
+  seedStoreProducts,
+  seedStoreWebsite,
+  seedStoreCourses,
+} from './lib/storefront'
 
 const PROJECT_ID = 'linyup-staging'
 
@@ -775,24 +782,9 @@ async function seedTeam(opts: TeamSeed) {
   // ── team doc ──────────────────────────────────────────────────────────────────
   const trialEndsAt = plan === 'coach' ? ts(daysFromNow(14)) : undefined
   const teamLanguage = 'en'
-  const portalLinks = [
-    {
-      label: 'Book Now',
-      description: 'Reserve your spot in a session',
-      target: 'booking',
-      showInBioLink: true,
-      iconName: 'CalendarPlus',
-      url: null,
-    },
-    {
-      label: 'Join as Member',
-      description: 'Join our community and become a member',
-      target: 'signup',
-      showInBioLink: true,
-      iconName: 'UserCheck',
-      url: null,
-    },
-  ]
+  // Coach plan can't install the storefront plugins (studio+ only), so it gets the
+  // lighter link set; studio/org teams surface the full storefront.
+  const portalLinks = plan === 'coach' ? buildBasicPageLinks() : buildStorefrontPageLinks()
   const bioLinkBackground = { type: 'gradient', color: portalGradient }
   await db
     .collection('teams')
@@ -1936,6 +1928,27 @@ async function seedTeam(opts: TeamSeed) {
       sessionExpires,
       created_at: ts(now()),
     })
+
+  // ── storefront (studio+ only — products/website/online-courses are minPlan studio) ──
+  // Gives studio/organization teams a complete public storefront: a Products shop
+  // tab, a published website, free + sellable courses, and the full bio-link set.
+  if (plan === 'studio' || plan === 'organization') {
+    const storefront = {
+      teamId,
+      uid,
+      teamName,
+      teamSlug,
+      accentColor,
+      description: tagline,
+      primaryActivity: activities[0]?.name ?? 'Training',
+      email,
+      currency: 'CHF',
+      installedDaysAgo: 120,
+    }
+    await seedStoreProducts(storefront)
+    await seedStoreWebsite(storefront)
+    await seedStoreCourses(storefront, { includeFree: true })
+  }
 
   console.log(
     `   ✓ ${teamName} (${plan}) — ${contactCount} contacts, ${sessionDefs.length} sessions`
