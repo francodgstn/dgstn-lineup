@@ -158,9 +158,22 @@ export default function EmbedSection({ slug, sectionId }: { slug: string; sectio
   // `@container` so the sections' container-query variants (@2xl:, @3xl:) respond
   // to the iframe width, exactly as they do inside WebsiteRenderer. A transparent
   // background lets the host page show through so the widget blends in.
+  //
+  // onClick: the widget lives in a cross-origin iframe, so a link that navigates
+  // in-frame would try to load a frame-denied app page (booking, sign-up and the
+  // studio's own site all send X-Frame-Options: DENY) and silently fail. Open
+  // every link in a new top-level tab instead — delegated here so it catches the
+  // CTA links any section type renders.
   return (
     <div
       ref={rootRef}
+      onClick={(e) => {
+        const anchor = (e.target as HTMLElement).closest('a')
+        const href = anchor?.getAttribute('href')
+        if (!anchor || !href || href.startsWith('#')) return
+        e.preventDefault()
+        window.open(anchor.href, '_blank', 'noopener,noreferrer')
+      }}
       className="@container"
       style={{
         background: resolved.transparent ? 'transparent' : palette.bg,
