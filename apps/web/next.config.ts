@@ -33,19 +33,10 @@ const emulatorRewrites = async () => {
   }
 }
 
-// Demo builds (sandbox) are embedded as a live preview on the landing page, so
-// they allow framing from our own origins; everywhere else framing is denied.
-const isDemoBuild = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
-
 const securityHeaders = [
-  // Prevent clickjacking
-  isDemoBuild
-    ? {
-        key: 'Content-Security-Policy',
-        value:
-          "frame-ancestors 'self' https://linyup.com https://*.linyup.com https://*.web.app http://localhost:* http://127.0.0.1:*",
-      }
-    : { key: 'X-Frame-Options', value: 'DENY' },
+  // Framing headers (X-Frame-Options / frame-ancestors) are set per-path in
+  // src/proxy.ts so the public /embed/* widget routes can be framed by a studio's
+  // own website while the rest of the app stays frame-denied.
   // Stop browsers from MIME-sniffing
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   // Control referrer in cross-origin requests

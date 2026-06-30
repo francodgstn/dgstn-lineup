@@ -16,6 +16,7 @@ import {
   EyeOff,
   ExternalLink,
   Check,
+  Copy,
 } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -257,9 +258,90 @@ function sectionSummary(s: WebsiteSection): string {
   }
 }
 
+// ─── embed panel ──────────────────────────────────────────────────────────────
+
+// Per-section iframe snippets so a studio can embed individual sections into
+// their own external website. The embed endpoint reads the published snapshot,
+// so copying is gated until the site is published. embed.js (served from the app
+// origin) auto-resizes the iframe to its content height.
+function EmbedPanel({
+  slug,
+  sections,
+  published,
+}: {
+  slug: string
+  sections: WebsiteSection[]
+  published: boolean
+}) {
+  const t = useTranslations('Website')
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const visible = sections.filter((s) => !s.hidden)
+
+  const snippetFor = (id: string) =>
+    `<iframe src="${origin}/embed/${slug}/${id}" data-linyup-embed style="width:100%;border:0" loading="lazy"></iframe>\n<script src="${origin}/embed.js" async></script>`
+
+  async function copy(id: string) {
+    try {
+      await navigator.clipboard.writeText(snippetFor(id))
+      toast.success(t('embedCopied'))
+    } catch {
+      toast.error(t('embedCopyError'))
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">{t('embedIntro')}</p>
+      {!published && (
+        <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          {t('embedPublishFirst')}
+        </div>
+      )}
+      {visible.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('embedNoSections')}</p>
+      ) : (
+        <div className="space-y-3">
+          {visible.map((s) => {
+            const lib = SECTION_LIBRARY.find((l) => l.type === s.type)
+            return (
+              <div key={s.id} className="rounded-lg border bg-card p-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <DynamicIcon name={lib?.icon ?? 'Square'} className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {lib ? t(lib.labelKey as Parameters<typeof t>[0]) : s.type}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{sectionSummary(s)}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto shrink-0"
+                    disabled={!published}
+                    onClick={() => copy(s.id)}
+                  >
+                    <Copy className="mr-1 h-3.5 w-3.5" />
+                    {t('embedCopy')}
+                  </Button>
+                </div>
+                <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                  <code>{snippetFor(s.id)}</code>
+                </pre>
+              </div>
+            )
+          })}
+          <p className="text-xs text-muted-foreground">{t('embedScriptNote')}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'sections' | 'appearance'
+type Tab = 'sections' | 'appearance' | 'embed'
 
 export default function WebsiteBuilderPage() {
   const t = useTranslations('Website')
@@ -481,6 +563,7 @@ export default function WebsiteBuilderPage() {
               [
                 ['sections', t('tabSections')],
                 ['appearance', t('tabAppearance')],
+                ['embed', t('tabEmbed')],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -496,6 +579,8 @@ export default function WebsiteBuilderPage() {
 
           {tab === 'appearance' ? (
             <AppearancePanel meta={draft.meta} onChange={patchMeta} />
+          ) : tab === 'embed' ? (
+            <EmbedPanel slug={slug} sections={draft.sections} published={draft.enabled} />
           ) : (
             <div className="space-y-2.5">
               <SortableList ids={draft.sections.map((s) => s.id)} onReorder={reorderSections}>
