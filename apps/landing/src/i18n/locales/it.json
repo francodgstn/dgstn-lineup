@@ -110,24 +110,12 @@
     },
     "more": "E altro ancora da scoprire"
   },
-  "whyUs": {
-    "title": "Perché Linyup",
-    "subtitle": "Molti strumenti ne coprono una parte. Abbiamo creato Linyup perché non ne abbiamo trovato uno che li copra tutti.",
-    "points": [
-      "Tutto in un unico posto — sessioni, prenotazioni, contatti, pagamenti, abbonamenti, corsi e un'app per i membri, invece di mettere insieme cinque strumenti.",
-      "Pensato per qualsiasi disciplina — non legato a un solo sport né a un modello unico e rigido.",
-      "Il tuo brand, le tue lingue — white-label e pienamente utilizzabile in inglese, tedesco, francese e italiano.",
-      "Prezzi equi e trasparenti — un piano davvero gratuito, commissioni di pagamento basse e nessun vincolo.",
-      "I tuoi dati sono tuoi — migrazione gratuita in entrata, esportazione facile in uscita, ospitato in Svizzera e attento alla privacy.",
-      "Fatto per essere usato — moderno, veloce e abbastanza semplice da far sì che il tuo team lo adotti davvero."
-    ]
-  },
   "features": {
     "title": "Tutto ciò di cui hai bisogno per gestire uno studio moderno",
     "subtitle": "Dal coach solo all'organizzazione multi-sede, Linyup si adatta al tuo modo di lavorare.",
     "moreEyebrow": "E c'è di più",
     "moreTitle": "Tutto ciò che Linyup fa in più",
-    "moreSubtitle": "Tocca una funzionalità per vedere come funziona.",
+    "moreSubtitle": "Molti strumenti ne coprono una parte. Abbiamo creato Linyup perché non ne abbiamo trovato uno che li copra tutti a un prezzo equo.",
     "comingSoon": "Disponibile a breve",
     "cards": {
       "sessions": {

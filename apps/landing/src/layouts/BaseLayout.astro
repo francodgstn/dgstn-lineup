@@ -212,11 +212,11 @@ const ogLocale = ({ en: 'en_US', de: 'de_DE', fr: 'fr_FR', it: 'it_IT' } as cons
       (function () {
         if (!('IntersectionObserver' in window)) return;
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-        var sel = '.sec-head, .hd-copy, .hd-shot, .hf-card, .pay-card, .plan, .trial-wrap, .compare-toggle-wrap, .founder-row';
+        var sel = '.sec-head, .hd-copy, .hd-shot, .hf-card, .pay-card, .plan, .trial-wrap, .compare-toggle-wrap, .founder-row, .shot';
         var els = Array.prototype.slice.call(document.querySelectorAll(sel));
         els.forEach(function (el) { el.classList.add('reveal-init'); });
         // Stagger cards within their grid so they cascade in.
-        document.querySelectorAll('.hf-grid, .pay-grid, .plans').forEach(function (grid) {
+        document.querySelectorAll('.hf-grid, .pay-grid, .plans, .showcase-grid').forEach(function (grid) {
           Array.prototype.slice.call(grid.children).forEach(function (c, i) {
             c.style.transitionDelay = Math.min(i * 60, 300) + 'ms';
           });

@@ -110,24 +110,12 @@
     },
     "more": "Und mehr zu entdecken"
   },
-  "whyUs": {
-    "title": "Warum Linyup",
-    "subtitle": "Viele Tools decken einen Teil davon ab. Wir haben Linyup gebaut, weil wir keines gefunden haben, das alles abdeckt.",
-    "points": [
-      "Alles an einem Ort — Sessions, Buchungen, Kontakte, Zahlungen, Mitgliedschaften, Kurse und eine Mitglieder-App, statt fünf Tools zusammenzustückeln.",
-      "Für jede Disziplin gemacht — nicht auf eine einzelne Sportart oder eine starre Einheitslösung festgelegt.",
-      "Deine Marke, deine Sprachen — White-Label und voll nutzbar auf Englisch, Deutsch, Französisch und Italienisch.",
-      "Faire, transparente Preise — eine wirklich kostenlose Stufe, niedrige Zahlungsgebühren und keine Bindung.",
-      "Deine Daten gehören dir — kostenlose Migration rein, einfacher Export raus, in der Schweiz gehostet und datenschutzfreundlich.",
-      "Zum Benutzen gemacht — modern, schnell und einfach genug, dass dein Team es wirklich nutzt."
-    ]
-  },
   "features": {
     "title": "Alles, was du für ein modernes Studio brauchst",
     "subtitle": "Von der Einzelperson bis zur Mehrstandort-Organisation — Linyup passt sich deiner Arbeitsweise an.",
     "moreEyebrow": "Und es gibt mehr",
     "moreTitle": "Alles andere, was Linyup kann",
-    "moreSubtitle": "Tippe auf eine Funktion, um zu sehen, wie sie funktioniert.",
+    "moreSubtitle": "Viele Tools decken einen Teil davon ab. Wir haben Linyup gebaut, weil wir keines gefunden haben, das alles zu einem fairen Preis abdeckt.",
     "comingSoon": "Bald verfügbar",
     "cards": {
       "sessions": {
