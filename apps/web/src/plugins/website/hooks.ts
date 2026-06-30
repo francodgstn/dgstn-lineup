@@ -5,8 +5,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage, functions } from '@/lib/firebase'
-import { SITE_DRAFTS_COLLECTION, SITE_PUBLISHED_COLLECTION } from '@linyup/shared'
-import type { SiteDraft, PublishedSite } from '@linyup/shared'
+import {
+  SITE_DRAFTS_COLLECTION,
+  SITE_PUBLISHED_COLLECTION,
+  EMBED_WIDGETS_COLLECTION,
+} from '@linyup/shared'
+import type { SiteDraft, PublishedSite, EmbedWidget, EmbedWidgetSet, SocialLink } from '@linyup/shared'
 
 // ─── queries ────────────────────────────────────────────────────────────────
 
@@ -34,6 +38,18 @@ export function usePublishedSite(teamId: string | null) {
   })
 }
 
+/** Public standalone embed widgets (embed_widgets/{teamId}) — builder reads/writes. */
+export function useEmbedWidgets(teamId: string | null) {
+  return useQuery<EmbedWidgetSet | null>({
+    queryKey: ['embed-widgets', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const d = await getDoc(doc(db, EMBED_WIDGETS_COLLECTION, teamId!))
+      return d.exists() ? (d.data() as EmbedWidgetSet) : null
+    },
+  })
+}
+
 // ─── mutations ────────────────────────────────────────────────────────────────
 
 /** Persist the draft (full overwrite — the draft is the complete document). */
@@ -47,6 +63,28 @@ export async function saveSiteDraft(teamId: string, userId: string, draft: SiteD
     sections: draft.sections,
   })
   await setDoc(doc(db, SITE_DRAFTS_COLLECTION, teamId), {
+    ...payload,
+    updated_at: serverTimestamp(),
+    updatedBy: userId,
+  })
+}
+
+/** Persist the team's standalone embed widgets (full overwrite — there's no
+ *  draft/publish split; the doc IS the public config, so "save = live"). */
+export async function saveEmbedWidgets(
+  teamId: string,
+  userId: string,
+  slug: string,
+  widgets: EmbedWidget[],
+  socialLinks?: SocialLink[]
+): Promise<void> {
+  const payload = stripUndefinedDeep({
+    teamId,
+    slug,
+    widgets,
+    socialLinks: socialLinks ?? [],
+  })
+  await setDoc(doc(db, EMBED_WIDGETS_COLLECTION, teamId), {
     ...payload,
     updated_at: serverTimestamp(),
     updatedBy: userId,

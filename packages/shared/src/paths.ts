@@ -120,6 +120,9 @@ export const FORM_SUBMISSIONS_SUBCOLLECTION = 'submissions'
 // (public read, written only by the publishWebsite Cloud Function). Both keyed by teamId.
 export const SITE_DRAFTS_COLLECTION = 'site_drafts'
 export const SITE_PUBLISHED_COLLECTION = 'site_published'
+// Standalone embed widgets (decoupled from the published site). PUBLIC snapshot
+// keyed by teamId; managers author it directly (no draft/publish split).
+export const EMBED_WIDGETS_COLLECTION = 'embed_widgets'
 
 // Stripe Connect (member → studio payments — studio's own Stripe balance).
 // connect_accounts is TOP-LEVEL, keyed by the Stripe connected account id

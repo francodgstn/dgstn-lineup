@@ -25,6 +25,7 @@ import {
   SAAS_SUBSCRIPTIONS_COLLECTION,
   SITE_DRAFTS_COLLECTION,
   SITE_PUBLISHED_COLLECTION,
+  EMBED_WIDGETS_COLLECTION,
   // platform-wide / cross-tenant
   USERS_COLLECTION,
   APP_SETTINGS_COLLECTION,
@@ -104,6 +105,7 @@ export const TENANT_DATA_COLLECTIONS: TenantCollection[] = [
   { collection: SAAS_SUBSCRIPTIONS_COLLECTION, match: { by: 'docId' } },
   { collection: SITE_DRAFTS_COLLECTION, match: { by: 'docId' } },
   { collection: SITE_PUBLISHED_COLLECTION, match: { by: 'docId' } },
+  { collection: EMBED_WIDGETS_COLLECTION, match: { by: 'docId' } },
 ]
 
 /**

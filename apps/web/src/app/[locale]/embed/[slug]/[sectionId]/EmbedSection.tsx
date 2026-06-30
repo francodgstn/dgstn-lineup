@@ -3,53 +3,120 @@
 import { useEffect, useRef, useState } from 'react'
 import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { SITE_PUBLISHED_COLLECTION } from '@linyup/shared'
-import type { PublishedSite } from '@linyup/shared'
+import { EMBED_WIDGETS_COLLECTION, SITE_PUBLISHED_COLLECTION } from '@linyup/shared'
+import type {
+  EmbedWidgetSet,
+  PublishedSite,
+  WebsiteSection,
+  SiteMeta,
+  SiteFont,
+  SocialLink,
+} from '@linyup/shared'
 import { SectionBlock, type RenderCtx } from '@/components/site/sections'
 import { buildPalette, FONT_STACK } from '@/components/site/theme'
 
+// What we render once resolution settles, independent of where it came from.
+interface Resolved {
+  section: WebsiteSection
+  themeMeta: { theme: SiteMeta['theme']; accentColor?: string }
+  font: SiteFont
+  transparent: boolean
+  slug: string
+  teamId: string
+  socialLinks?: SocialLink[]
+}
+
 /**
- * Renders a single published website section in isolation for embedding. Reuses
- * the exact public read from PublicSite (site_published by slug — no auth, no
- * restricted data) and the same SectionBlock renderer + theme helpers the full
- * site uses, minus the header/footer/nav chrome.
+ * Renders a single embeddable section in isolation, chrome-less, for iframing
+ * into a studio's own website. Resolves **widget-first**: a standalone widget
+ * (embed_widgets/{teamId}, authored without building a Linyup site) wins; if none
+ * matches the id we fall back to a published site section (site_published) so
+ * snippets created from the website builder keep working. Both reads are fully
+ * public (no auth, public mirrors only) and reuse the same SectionBlock renderer.
  *
- * Reports its content height to the parent frame on every layout change so
- * public/embed.js can size the host iframe to fit (live sections like schedule
- * and pricing load their data async, which grows the height after first paint).
+ * Reports its content height to the parent frame so public/embed.js can size the
+ * host iframe (live sections like schedule/pricing load data async, growing the
+ * height after first paint).
  */
 export default function EmbedSection({ slug, sectionId }: { slug: string; sectionId: string }) {
-  const [site, setSite] = useState<PublishedSite | null>(null)
+  const [resolved, setResolved] = useState<Resolved | null>(null)
   const [loading, setLoading] = useState(true)
   const [systemDark, setSystemDark] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
-  // Single public read — mirrors PublicSite.tsx.
   useEffect(() => {
-    const q = query(
-      collection(db, SITE_PUBLISHED_COLLECTION),
-      where('slug', '==', slug),
-      limit(1)
-    )
-    getDocs(q)
-      .then((snap) => {
-        if (!snap.empty) setSite(snap.docs[0].data() as PublishedSite)
-      })
-      .catch(() => {
-        /* leave null → unavailable */
-      })
-      .finally(() => setLoading(false))
-  }, [slug])
+    let cancelled = false
 
-  // Mirror WebsiteRenderer's auto-theme handling.
+    async function run() {
+      // 1) Standalone widget (decoupled from any published site).
+      try {
+        const wsnap = await getDocs(
+          query(collection(db, EMBED_WIDGETS_COLLECTION), where('slug', '==', slug), limit(1))
+        )
+        if (!wsnap.empty) {
+          const set = wsnap.docs[0].data() as EmbedWidgetSet
+          const w = set.widgets?.find((x) => x.id === sectionId && !x.hidden)
+          if (w) {
+            if (!cancelled) {
+              setResolved({
+                section: w,
+                themeMeta: { theme: w.theme?.theme ?? 'light', accentColor: w.theme?.accentColor },
+                font: w.theme?.font ?? 'sans',
+                transparent: w.theme?.background === 'transparent',
+                slug: set.slug,
+                teamId: set.teamId,
+                socialLinks: set.socialLinks,
+              })
+              setLoading(false)
+            }
+            return
+          }
+        }
+      } catch {
+        /* fall through to site sections */
+      }
+
+      // 2) Fall back to a published site section.
+      try {
+        const ssnap = await getDocs(
+          query(collection(db, SITE_PUBLISHED_COLLECTION), where('slug', '==', slug), limit(1))
+        )
+        if (!ssnap.empty) {
+          const site = ssnap.docs[0].data() as PublishedSite
+          const sec = site.sections.find((s) => s.id === sectionId && !s.hidden)
+          if (sec && !cancelled) {
+            setResolved({
+              section: sec,
+              themeMeta: { theme: site.meta.theme, accentColor: site.meta.accentColor },
+              font: site.meta.font,
+              transparent: false,
+              slug: site.slug,
+              teamId: site.teamId,
+              socialLinks: site.socialLinks,
+            })
+          }
+        }
+      } catch {
+        /* leave unresolved → unavailable */
+      }
+      if (!cancelled) setLoading(false)
+    }
+
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [slug, sectionId])
+
+  // Resolve the 'auto' theme against the viewer's system preference.
   useEffect(() => {
-    if (site?.meta.theme !== 'auto') return
+    if (resolved?.themeMeta.theme !== 'auto') return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     setSystemDark(mq.matches)
     const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches)
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
-  }, [site?.meta.theme])
+  }, [resolved?.themeMeta.theme])
 
   // Tell the parent how tall we are (embed.js resizes the iframe to match).
   useEffect(() => {
@@ -63,12 +130,11 @@ export default function EmbedSection({ slug, sectionId }: { slug: string; sectio
     const ro = new ResizeObserver(post)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [slug, sectionId, site, loading])
+  }, [slug, sectionId, resolved, loading])
 
   if (loading) return <div ref={rootRef} style={{ minHeight: 1 }} />
 
-  const section = site?.sections.find((s) => s.id === sectionId && !s.hidden)
-  if (!site || !section) {
+  if (!resolved) {
     return (
       <div
         ref={rootRef}
@@ -79,25 +145,30 @@ export default function EmbedSection({ slug, sectionId }: { slug: string; sectio
     )
   }
 
-  const palette = buildPalette(site.meta, systemDark)
-  const font = FONT_STACK[site.meta.font] ?? FONT_STACK.sans
+  const palette = buildPalette(resolved.themeMeta, systemDark)
+  const font = FONT_STACK[resolved.font] ?? FONT_STACK.sans
   const ctx: RenderCtx = {
     palette,
-    slug: site.slug,
-    teamId: site.teamId,
+    slug: resolved.slug,
+    teamId: resolved.teamId,
     preview: false,
-    socialLinks: site.socialLinks,
+    socialLinks: resolved.socialLinks,
   }
 
   // `@container` so the sections' container-query variants (@2xl:, @3xl:) respond
-  // to the iframe width, exactly as they do inside WebsiteRenderer.
+  // to the iframe width, exactly as they do inside WebsiteRenderer. A transparent
+  // background lets the host page show through so the widget blends in.
   return (
     <div
       ref={rootRef}
       className="@container"
-      style={{ background: palette.bg, color: palette.text, fontFamily: font }}
+      style={{
+        background: resolved.transparent ? 'transparent' : palette.bg,
+        color: palette.text,
+        fontFamily: font,
+      }}
     >
-      <SectionBlock section={section} ctx={ctx} />
+      <SectionBlock section={resolved.section} ctx={ctx} />
     </div>
   )
 }

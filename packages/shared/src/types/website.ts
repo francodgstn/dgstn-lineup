@@ -211,3 +211,42 @@ export interface PublishedSite {
   published_at?: Timestamp
   updated_at?: Timestamp
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Standalone embed widgets
+//
+// A studio that already has its own website can embed individual Linyup sections
+// (schedule, pricing, …) WITHOUT building or publishing a Linyup site. Each widget
+// is just a WebsiteSection authored on its own, with its own look. Stored PUBLICLY
+// at embed_widgets/{teamId} (public read, manager write — the config IS the public
+// config, so there is no draft/publish split like the full site). The /embed route
+// resolves a widget by id first, then falls back to a published site section.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Per-widget look. Standalone widgets have no SiteMeta, so each carries its own. */
+export interface WidgetTheme {
+  theme: SiteTheme
+  accentColor?: string
+  font?: SiteFont
+  /** 'transparent' lets the host page's background show through (blends in). */
+  background: 'solid' | 'transparent'
+}
+
+/** One standalone, embeddable widget: a section plus a studio-facing label and look. */
+export type EmbedWidget = WebsiteSection & {
+  /** Studio-facing name shown in the builder list (the section type is the fallback). */
+  label?: string
+  theme?: WidgetTheme
+}
+
+/** PUBLIC per-team set of standalone widgets — embed_widgets/{teamId}.
+ *  Public read, manager write. */
+export interface EmbedWidgetSet {
+  teamId: string
+  slug: string
+  widgets: EmbedWidget[]
+  /** Denormalised from the team so contact widgets can render social icons. */
+  socialLinks?: SocialLink[]
+  updated_at?: Timestamp
+  updatedBy?: string
+}

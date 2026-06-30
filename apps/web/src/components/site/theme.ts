@@ -13,7 +13,10 @@ export interface SitePalette {
   onAccent: string
 }
 
-export function buildPalette(meta: SiteMeta, systemDark: boolean): SitePalette {
+export function buildPalette(
+  meta: { theme: SiteMeta['theme']; accentColor?: string },
+  systemDark: boolean
+): SitePalette {
   const isDark = meta.theme === 'dark' || (meta.theme === 'auto' && systemDark)
   const accent = meta.accentColor || '#6366f1'
   return isDark

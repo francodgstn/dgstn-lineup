@@ -989,6 +989,16 @@ service cloud.firestore {
       allow write: if false; // Cloud Functions only
     }
 
+    // Standalone embed widgets. Keyed by teamId. World-readable so the public
+    // /embed/[slug]/[widgetId] route can render a widget without a published site.
+    // Authored directly by managers (the widget config IS the public config — no
+    // private draft to sanitise), so client write is allowed for the team's own doc.
+    match /embed_widgets/{teamId} {
+      allow read;            // fully public
+      allow write: if hasTeamRole(teamId, 'manager')
+                   && request.resource.data.teamId == teamId;
+    }
+
     // ----------------------------------------------
     // SaaS Subscriptions (Lineup-specific)
     // Billing state managed exclusively by Cloud Functions (Stripe webhook handler)
