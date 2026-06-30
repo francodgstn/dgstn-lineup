@@ -172,6 +172,11 @@
         "description": "Buchungsseite, sofort einsatzbereit.",
         "detail": "Starte eine schicke Studio-Website mit Plan und Preisen — ohne Designer, ohne Code."
       },
+      "embeds": {
+        "title": "Einbettungen",
+        "description": "Linyup in deine eigene Website einbinden.",
+        "detail": "Schon eine Website? Bette Plan, Preise und weitere Bereiche als Widgets ein, die mit Linyup synchron bleiben — kein Neuaufbau, einfach ein Snippet einfügen."
+      },
       "mobileApp": {
         "title": "Mitglieder-App",
         "description": "iOS- & Android-App für deine Mitglieder.",
@@ -331,6 +336,7 @@
     "cmpAddon": "Add-on",
     "cmpLimited": "Eingeschränkt",
     "cmpAutomationsNote": "Free & Coach: beschränkt auf Ihre aktiven Module & Add-ons. Studio schaltet den vollen Umfang frei.",
+    "cmpWebsiteNote": "Enthält einbettbare Bereiche — Plan, Preise, Aktivitäten und mehr — die du in deine bestehende Website einfügen kannst.",
     "cmpSoon": "Bald",
     "free": {
       "name": "Free",

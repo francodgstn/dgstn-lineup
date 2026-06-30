@@ -172,6 +172,11 @@
         "description": "A booking site, ready out of the box.",
         "detail": "Launch a polished studio website with your schedule and pricing built in — no designer, no code."
       },
+      "embeds": {
+        "title": "Embeds",
+        "description": "Add Linyup to your own website.",
+        "detail": "Already have a website? Embed your schedule, pricing, and other sections as widgets that stay in sync with Linyup — no rebuild, just paste a snippet."
+      },
       "mobileApp": {
         "title": "Member app",
         "description": "iOS & Android app for your members.",
@@ -331,6 +336,7 @@
     "cmpAddon": "Add-on",
     "cmpLimited": "Limited",
     "cmpAutomationsNote": "Free & Coach: limited to your active modules & add-ons. Studio unlocks the full suite.",
+    "cmpWebsiteNote": "Includes embeddable sections — schedule, pricing, activities and more — you can drop into your existing website.",
     "cmpSoon": "Soon",
     "free": {
       "name": "Free",

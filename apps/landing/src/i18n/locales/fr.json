@@ -172,6 +172,11 @@
         "description": "Un site de réservation clé en main.",
         "detail": "Lancez un site de studio soigné avec planning et tarifs intégrés — sans designer ni code."
       },
+      "embeds": {
+        "title": "Intégrations",
+        "description": "Ajoutez Linyup à votre propre site.",
+        "detail": "Vous avez déjà un site ? Intégrez votre planning, vos tarifs et d'autres sections sous forme de widgets synchronisés avec Linyup — sans tout refaire, il suffit de coller un extrait de code."
+      },
       "mobileApp": {
         "title": "App membre",
         "description": "App iOS & Android pour vos membres.",
@@ -331,6 +336,7 @@
     "cmpAddon": "Option",
     "cmpLimited": "Limité",
     "cmpAutomationsNote": "Free et Coach : limité à vos modules et options actifs. Studio débloque la suite complète.",
+    "cmpWebsiteNote": "Inclut des sections intégrables — planning, tarifs, activités et plus — à insérer dans votre site existant.",
     "cmpSoon": "Bientôt",
     "free": {
       "name": "Free",
