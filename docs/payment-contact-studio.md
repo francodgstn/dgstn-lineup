@@ -160,6 +160,40 @@ On a successful payment the webhook **updates the buyer's contact**:
 unique email match. Managers create a payment link from the **Payments dashboard →
 "Create payment link"** (pick type + price + member email).
 
+## Drop-in (pay-per-class booking)
+
+A contact **not covered** by an activity's access rule can pay a **per-class** drop-in fee
+to book a single **group-class** session, over the same Connect one-off checkout. No
+membership is created — a drop-in is a single paid booking, not a subscription.
+
+- **Config.** Set per activity under the activity's **"Who can book"** section
+  (`offer/activities`): `Activity.dropIn = { enabled, priceAmount }` (major units, the team's
+  currency). Only shown for gated tiers (`members` / `subscription`); an `open` class is free,
+  so drop-in doesn't apply. Denormalised to the activity `public_profile` for the booking UI.
+- **Flow (hold-pending → webhook-confirm).** The public **`createDropInCheckout`** callable
+  (`booking/dropIn.ts`) resolves/creates the contact (payment is the proof — **no email
+  verification**), writes a **PENDING** booking hold
+  (`sessions/{id}/bookings/{contactId}` with `status: 'pending'`, `payment_status: 'required'`,
+  `expires_at` ≈ now + 30 min), then starts a one-off Connect Checkout with metadata
+  `{ kind: 'drop_in', sessionId, contactId }`. The amount is computed **server-side** from
+  `dropIn.priceAmount`; the call is rate-limited like the other public checkouts.
+- **Confirmation.** The `checkout.session.completed` webhook (`handleDropInCheckout` in
+  `connect/webhook.ts`) flips the hold to `status: 'confirmed'`, `payment_status: 'paid'`,
+  writes `member_payments/{pi}` (`purpose: 'drop_in'`, `sessionId`), counts it toward the
+  session, and logs a `drop_in_booked` activity entry. It is idempotent on redelivery,
+  **refunds a duplicate second charge** for an already-confirmed booking, and **recreates**
+  the booking from metadata if the hold was swept before payment landed (a paid charge is
+  never lost).
+- **Holds.** Unpaid holds are released by the daily **`expirePendingBookings`** task
+  (`payment_status == 'required' && expires_at <= now`; composite index on the `bookings`
+  collection group). A pending hold does **not** block a later free `bookSession` (only a
+  confirmed booking / attendance does).
+- **Booking UI.** `/public/{slug}/booking` offers a **"Drop-in — pay to book"** path for a
+  gated class with drop-in enabled; members who are covered still book free via sign-in.
+  Stripe redirects to `/{locale}/pay/result?seg=booking`.
+- **Scope.** Group-class only (coaching is rejected — 1:1 capacity model). The mobile app
+  books coaching only, so it has no drop-in surface.
+
 ## Functions
 
 | Function | Type | Who | What |
@@ -170,6 +204,7 @@ unique email match. Managers create a payment link from the **Payments dashboard
 | `createMemberPayment` | callable | manager+ | Ad-hoc one-off direct-charge Checkout Session (+ `application_fee_amount`). |
 | `createMemberSubscription` | callable | manager+ | Ad-hoc subscription Checkout Session (+ `application_fee_percent`). |
 | `createMembershipCheckout` / `createProductCheckout` / `createCourseCheckout` | callable (public) | anyone | Member self-checkout from the public shop (email only). |
+| `createDropInCheckout` | callable (public) | anyone | Pay-per-class booking — writes a pending booking hold + a one-off Checkout; the webhook confirms the booking on payment. See [Drop-in](#drop-in-pay-per-class-booking). |
 | `refundMemberPayment` | callable | manager+ | Refund a charge, reversing the platform fee proportionally. |
 | `updatePaymentRecord` | callable | manager+ | (Re)assign the contact + edit the comment (shared with BYO). |
 | `handleConnectWebhook` | onRequest (public) | Stripe | Verify + reconcile account / payment / subscription / refund / dispute state + contact membership. |
@@ -248,6 +283,33 @@ invoice.paid, invoice.payment_failed
    `amount_refunded` + `status`; the application fee is reversed proportionally.
 7. **Dispute:** trigger `charge.dispute.created` (e.g. card `4000 0000 0000 0259`) → status
    surfaces on the payment doc.
+
+### Drop-in (pay-per-class)
+
+End-to-end for the [drop-in flow](#drop-in-pay-per-class-booking). Needs a test team with
+Connect enabled + a chargeable connected account (steps 1–3 above) and the Connect webhook
+forwarded (see [Webhook setup](#webhook-setup)).
+
+1. **Configure a drop-in class.** In `offer/activities`, create a **group-class** activity
+   with a **gated** access rule (*Members only* or *Specific subscriptions*) and **drop-in
+   enabled** with a price (e.g. `25`). Add a **future session** for it.
+2. **Book as a non-member.** Open `/public/{slug}/booking`, pick the class → **"Drop-in —
+   pay to book"** → fill name + email → pay with test card `4242 4242 4242 4242`.
+3. **Expect the confirmation.** The `checkout.session.completed` webhook (`kind: drop_in`)
+   flips `sessions/{sessionId}/bookings/{contactId}` from `status: pending` /
+   `payment_status: required` to `status: confirmed` / `payment_status: paid`, and writes
+   `teams/{teamId}/member_payments/{pi}` with `purpose: drop_in` + `sessionId`. Verify both
+   in the Firestore emulator UI ([localhost:4000](http://localhost:4000)); the buyer lands
+   on `/{locale}/pay/result?seg=booking`.
+4. **Coverage refusal.** As a contact who *does* hold the required subscription, the
+   callable throws `failed-precondition` ("you can already book this class for free") — the
+   booking UI routes covered members to the free sign-in path instead.
+5. **Abandoned hold.** Start a checkout but don't pay → the booking stays `pending`; confirm
+   it does **not** block a later free `bookSession`, and that the daily
+   `expirePendingBookings` task deletes it once `expires_at` passes.
+6. **Double-charge guard.** Pay two Checkout sessions for the same class+contact → the
+   second `checkout.session.completed` finds the booking already `confirmed` and issues an
+   automatic refund (a duplicate `member_payments` row lands as `status: refunded`).
 
 Unit tests for the fee calculation: `pnpm --filter @linyup/functions test`
 (`computePlatformFee` / `applyTakeRate`). Build `@linyup/shared` first.
