@@ -9,10 +9,10 @@ import { FieldValue } from 'firebase-admin/firestore'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   ORGANIZATIONS_COLLECTION,
-  ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
-  DEFAULT_ORG_MEMBERSHIP_STATUSES,
+  ORG_AFFILIATION_STATUSES_SUBCOLLECTION,
+  DEFAULT_ORG_AFFILIATION_STATUSES,
   type Affiliation,
-  type OrgMembershipStatusDef,
+  type OrgAffiliationStatusDef,
   type AffiliationIssuer,
 } from '@linyup/shared'
 
@@ -20,7 +20,7 @@ const BATCH_SIZE = 400
 
 // Resolve the "expired" status id for a given issuer/org combination.
 // The expired status is: isFinal===true && countsAsActive===false.
-// Defaults to 'expired' (the built-in DEFAULT_ORG_MEMBERSHIP_STATUSES id) if no
+// Defaults to 'expired' (the built-in DEFAULT_ORG_AFFILIATION_STATUSES id) if no
 // custom org status fits that shape.
 async function resolveExpiredStatusId(
   issuer: AffiliationIssuer,
@@ -34,11 +34,11 @@ async function resolveExpiredStatusId(
       const snap = await db
         .collection(ORGANIZATIONS_COLLECTION)
         .doc(orgId)
-        .collection(ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION)
+        .collection(ORG_AFFILIATION_STATUSES_SUBCOLLECTION)
         .get()
 
       if (!snap.empty) {
-        const statuses = snap.docs.map((d) => d.data() as OrgMembershipStatusDef)
+        const statuses = snap.docs.map((d) => d.data() as OrgAffiliationStatusDef)
         const expiredDef = statuses.find((s) => s.isFinal && !s.countsAsActive)
         if (expiredDef) return expiredDef.id
       }
@@ -47,8 +47,8 @@ async function resolveExpiredStatusId(
     }
   }
 
-  // Use DEFAULT_ORG_MEMBERSHIP_STATUSES for team/external or when org lookup fails
-  const defaultExpired = DEFAULT_ORG_MEMBERSHIP_STATUSES.find((s) => s.isFinal && !s.countsAsActive)
+  // Use DEFAULT_ORG_AFFILIATION_STATUSES for team/external or when org lookup fails
+  const defaultExpired = DEFAULT_ORG_AFFILIATION_STATUSES.find((s) => s.isFinal && !s.countsAsActive)
   return defaultExpired?.id ?? fallback
 }
 

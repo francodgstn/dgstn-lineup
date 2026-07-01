@@ -20,7 +20,7 @@ export const AFFILIATIONS_OUTPUT_KEY = '__affiliations'
 const ORG_CLUB_TYPE = { id: 'club', key: 'club', label: 'Club membership' }
 const TEAM_CLUB_TYPE = { id: 'club', key: 'club', label: 'Club membership' }
 
-// Only 'active' counts as an active affiliation (mirrors DEFAULT_ORG_MEMBERSHIP_STATUSES).
+// Only 'active' counts as an active affiliation (mirrors DEFAULT_ORG_AFFILIATION_STATUSES).
 const ACTIVE_COUNTING_STATUS_IDS = new Set(['active'])
 
 function statusCountsAsActive(statusId: string): boolean {

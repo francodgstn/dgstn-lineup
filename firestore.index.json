@@ -4,25 +4,46 @@
       "collectionGroup": "teams",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "plan_status", "order": "ASCENDING" },
-        { "fieldPath": "trial_ends_at", "order": "ASCENDING" }
+        {
+          "fieldPath": "plan_status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "trial_ends_at",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "subscription_types",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "public", "order": "ASCENDING" },
-        { "fieldPath": "active", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "public",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "purchases",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "contactId", "order": "ASCENDING" },
-        { "fieldPath": "teamId", "order": "ASCENDING" }
+        {
+          "fieldPath": "contactId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        }
       ],
       "density": "SPARSE_ALL"
     },
@@ -109,20 +130,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "org_membership_active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "org_membership_expiration",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "contacts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
           "fieldPath": "teamId",
           "order": "ASCENDING"
         },
@@ -156,24 +163,6 @@
         },
         {
           "fieldPath": "teamId",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "contacts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "teamId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "org_membership_status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "lastname",
           "order": "ASCENDING"
         }
       ]
@@ -714,72 +703,6 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "membership_status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "teamId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "lastname",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "firstname",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "contacts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "archived_at",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "deleted_at",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "teamId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "type",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "membership_status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "lastname",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "firstname",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "contacts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "archived_at",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "deleted_at",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "type",
           "order": "ASCENDING"
         },
@@ -873,29 +796,6 @@
         },
         {
           "fieldPath": "firstname",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "contacts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "deleted_at",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "teacher",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "membership_expiration",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "lastname",
           "order": "ASCENDING"
         }
       ],
@@ -984,29 +884,6 @@
         },
         {
           "fieldPath": "firstname",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "contacts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "deleted_at",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "teamId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "membership_expiration",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "lastname",
           "order": "ASCENDING"
         }
       ],

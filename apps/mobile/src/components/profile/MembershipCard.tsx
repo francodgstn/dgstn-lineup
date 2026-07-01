@@ -31,7 +31,7 @@ interface MembershipCardProps {
   onSaveWeight: () => void;
   onCancelWeightEdit: () => void;
   isSavingWeight: boolean;
-  membershipTerm?: string;
+  affiliationTerm?: string;
 }
 
 const PillHandle: React.FC<{
@@ -57,7 +57,7 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
   onEditWeight,
   onSaveWeight,
   onCancelWeightEdit,
-  membershipTerm = 'Membership',
+  affiliationTerm = 'Membership',
 }) => {
   const theme = useTheme();
   const chevronAnim = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
@@ -140,7 +140,7 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
                 HWALMOODO & KOREAN-DRAGON
               </Text>
               <Text variant="labelSmall" style={styles.orgSubLabel}>
-                {membershipTerm.toUpperCase()} CARD
+                {affiliationTerm.toUpperCase()} CARD
               </Text>
             </View>
             <TouchableRipple onPress={onShowStatusModal} style={styles.statusBadgeContainer}>

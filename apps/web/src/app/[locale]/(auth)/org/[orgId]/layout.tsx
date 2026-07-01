@@ -10,13 +10,13 @@ import type { Route } from 'next'
 
 function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNode }) {
   const t = useTranslations('Org')
-  const { org, loading, membershipTerm } = useOrg()
+  const { org, loading, affiliationTerm } = useOrg()
   const pathname = usePathname()
 
   const tabs = [
     { href: `/org/${orgId}/teams`,       label: t('tabTeams'),       icon: Building2 },
     { href: `/org/${orgId}/events`,      label: t('tabEvents'),      icon: CalendarRange },
-    { href: `/org/${orgId}/memberships`, label: membershipTerm,      icon: IdCard },
+    { href: `/org/${orgId}/affiliations`, label: affiliationTerm,      icon: IdCard },
     { href: `/org/${orgId}/ranking`,     label: t('tabRanking'),     icon: Shield },
     { href: `/org/${orgId}/places`,      label: t('tabPlaces'),      icon: MapPin },
     { href: `/org/${orgId}/plugins`,     label: t('tabPlugins'),     icon: Blocks },

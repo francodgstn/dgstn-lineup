@@ -14,13 +14,13 @@ import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
   ORGANIZATIONS_COLLECTION,
-  ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
+  ORG_AFFILIATION_STATUSES_SUBCOLLECTION,
   TEAMS_COLLECTION,
-  DEFAULT_ORG_MEMBERSHIP_STATUSES,
+  DEFAULT_ORG_AFFILIATION_STATUSES,
   planSupportsAffiliations,
   type Affiliation,
   type AffiliationType,
-  type OrgMembershipStatusDef,
+  type OrgAffiliationStatusDef,
   type AffiliationIssuer,
 } from '@linyup/shared'
 
@@ -29,21 +29,21 @@ import {
 async function resolveStatusDefs(
   issuer: AffiliationIssuer,
   orgId: string | undefined,
-): Promise<OrgMembershipStatusDef[]> {
+): Promise<OrgAffiliationStatusDef[]> {
   if (issuer === 'org' && orgId) {
     const db = admin.firestore()
     const [err, snap] = await to(
       db
         .collection(ORGANIZATIONS_COLLECTION)
         .doc(orgId)
-        .collection(ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION)
+        .collection(ORG_AFFILIATION_STATUSES_SUBCOLLECTION)
         .get(),
     )
     if (!err && snap && !snap.empty) {
-      return snap.docs.map((d) => d.data() as OrgMembershipStatusDef)
+      return snap.docs.map((d) => d.data() as OrgAffiliationStatusDef)
     }
   }
-  return DEFAULT_ORG_MEMBERSHIP_STATUSES
+  return DEFAULT_ORG_AFFILIATION_STATUSES
 }
 
 async function resolveAffiliationType(
@@ -80,7 +80,7 @@ async function resolveAffiliationType(
 
 /** Check whether the caller is allowed to write this affiliation.
  * Mirrors the Firestore rules' orgMembershipWriteAllowed logic:
- * if issuer==='org' and the org has lock_org_membership:true, only org_admin may write. */
+ * if issuer==='org' and the org has lock_affiliation:true, only org_admin may write. */
 async function affiliationWriteAllowed(
   uid: string,
   teamId: string,
@@ -97,7 +97,7 @@ async function affiliationWriteAllowed(
   if (!orgSnap?.exists) return // org not found — allow the manager to proceed
 
   const orgData = orgSnap.data()!
-  if (!orgData.lock_org_membership) return // not locked — manager is enough
+  if (!orgData.lock_affiliation) return // not locked — manager is enough
 
   // Locked: caller must also be an org_admin.
   const [, memberSnap] = await to(

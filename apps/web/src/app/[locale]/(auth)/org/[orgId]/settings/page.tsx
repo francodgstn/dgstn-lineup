@@ -31,15 +31,15 @@ import {
 import { Settings, IdCard, Pencil, Trash2, Plus, ChevronUp, ChevronDown, RotateCcw, Languages, Lock, Mail, Copy, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import { deleteField } from 'firebase/firestore'
 import {
-  ORGANIZATIONS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
-  DEFAULT_ORG_MEMBERSHIP_STATUSES, AFFILIATION_TYPES_SUBCOLLECTION,
+  ORGANIZATIONS_COLLECTION, ORG_AFFILIATION_STATUSES_SUBCOLLECTION,
+  DEFAULT_ORG_AFFILIATION_STATUSES, AFFILIATION_TYPES_SUBCOLLECTION,
 } from '@linyup/shared'
-import type { OrgMembershipStatusDef, MembershipStatusColor, Organization, AffiliationType, AffiliationIssuer } from '@linyup/shared'
+import type { OrgAffiliationStatusDef, AffiliationStatusColor, Organization, AffiliationType, AffiliationIssuer } from '@linyup/shared'
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
 
 // ─── colour config ────────────────────────────────────────────────────────────
 
-const COLORS: { id: MembershipStatusColor; bg: string; label: string }[] = [
+const COLORS: { id: AffiliationStatusColor; bg: string; label: string }[] = [
   { id: 'gray',   bg: 'bg-gray-400',   label: 'Gray' },
   { id: 'yellow', bg: 'bg-yellow-400', label: 'Yellow' },
   { id: 'blue',   bg: 'bg-blue-500',   label: 'Blue' },
@@ -62,27 +62,27 @@ const COLOR_DOT: Record<string, string> = {
 // ─── hook: auto-init defaults on first load ───────────────────────────────────
 
 function useStatusDefs(orgId: string) {
-  return useQuery<OrgMembershipStatusDef[]>({
+  return useQuery<OrgAffiliationStatusDef[]>({
     queryKey: ['org-membership-statuses', orgId],
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const snap = await getDocs(
-        collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION),
+        collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION),
       )
       if (snap.empty) {
         // Auto-initialize with defaults on first visit to this settings page
         const batch = writeBatch(db)
-        DEFAULT_ORG_MEMBERSHIP_STATUSES.forEach((s) => {
+        DEFAULT_ORG_AFFILIATION_STATUSES.forEach((s) => {
           batch.set(
-            doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, s.id),
+            doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION, s.id),
             { ...s, updated_at: serverTimestamp() },
           )
         })
         await batch.commit()
-        return DEFAULT_ORG_MEMBERSHIP_STATUSES
+        return DEFAULT_ORG_AFFILIATION_STATUSES
       }
       return snap.docs
-        .map((d) => ({ ...d.data(), id: d.id } as OrgMembershipStatusDef))
+        .map((d) => ({ ...d.data(), id: d.id } as OrgAffiliationStatusDef))
         .sort((a, b) => a.order - b.order)
     },
   })
@@ -99,16 +99,16 @@ function StatusFormDialog({
   onSaved,
 }: {
   open: boolean
-  editing: OrgMembershipStatusDef | null
+  editing: OrgAffiliationStatusDef | null
   nextOrder: number
   orgId: string
   onClose: () => void
   onSaved: () => void
 }) {
-  const t = useTranslations('OrgMembershipStatuses')
+  const t = useTranslations('OrgAffiliationStatuses')
   const [label, setLabel] = useState('')
   const [description, setDescription] = useState('')
-  const [color, setColor] = useState<MembershipStatusColor>('gray')
+  const [color, setColor] = useState<AffiliationStatusColor>('gray')
   const [countsAsActive, setCountsAsActive] = useState(false)
   const [isFinal, setIsFinal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -132,7 +132,7 @@ function StatusFormDialog({
     try {
       const id = editing?.id
         ?? label.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') + '_' + Date.now()
-      const payload: Omit<OrgMembershipStatusDef, 'id'> = {
+      const payload: Omit<OrgAffiliationStatusDef, 'id'> = {
         label: label.trim(),
         description: description.trim(),
         color,
@@ -142,7 +142,7 @@ function StatusFormDialog({
         isFinal,
       }
       await setDoc(
-        doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, id),
+        doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION, id),
         { ...payload, updated_at: serverTimestamp() },
         { merge: true },
       )
@@ -236,13 +236,13 @@ function StatusFormDialog({
 // ─── membership statuses card ─────────────────────────────────────────────────
 
 function MembershipStatusesCard({ orgId, isAdmin }: { orgId: string; isAdmin: boolean }) {
-  const t = useTranslations('OrgMembershipStatuses')
+  const t = useTranslations('OrgAffiliationStatuses')
   const qc = useQueryClient()
   const { data: defs = [], isLoading } = useStatusDefs(orgId)
   const [toast, setToast] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
-  const [editing, setEditing] = useState<OrgMembershipStatusDef | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<OrgMembershipStatusDef | null>(null)
+  const [editing, setEditing] = useState<OrgAffiliationStatusDef | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<OrgAffiliationStatusDef | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [working, setWorking] = useState(false)
 
@@ -265,7 +265,7 @@ function MembershipStatusesCard({ orgId, isAdmin }: { orgId: string; isAdmin: bo
       const batch = writeBatch(db)
       reordered.forEach((s, i) => {
         batch.update(
-          doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, s.id),
+          doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION, s.id),
           { order: i },
         )
       })
@@ -281,14 +281,14 @@ function MembershipStatusesCard({ orgId, isAdmin }: { orgId: string; isAdmin: bo
     setWorking(true)
     try {
       await deleteDoc(
-        doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, deleteTarget.id),
+        doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION, deleteTarget.id),
       )
       // Re-compact order values after deletion
       const remaining = defs.filter((s) => s.id !== deleteTarget.id)
       const batch = writeBatch(db)
       remaining.forEach((s, i) => {
         batch.update(
-          doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, s.id),
+          doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION, s.id),
           { order: i },
         )
       })
@@ -307,12 +307,12 @@ function MembershipStatusesCard({ orgId, isAdmin }: { orgId: string; isAdmin: bo
       // Delete all current statuses
       const batch = writeBatch(db)
       defs.forEach((s) => {
-        batch.delete(doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, s.id))
+        batch.delete(doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION, s.id))
       })
       // Write all defaults
-      DEFAULT_ORG_MEMBERSHIP_STATUSES.forEach((s) => {
+      DEFAULT_ORG_AFFILIATION_STATUSES.forEach((s) => {
         batch.set(
-          doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, s.id),
+          doc(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION, s.id),
           { ...s, updated_at: serverTimestamp() },
         )
       })
@@ -527,7 +527,7 @@ function TerminologyCard({
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    const m = org?.membership_term ?? {}
+    const m = org?.affiliation_term ?? {}
     const detected = detectTermPreset(m)
     if (detected) {
       setPreset(detected)
@@ -559,7 +559,7 @@ function TerminologyCard({
     if (p === 'custom') {
       // Seed the default with the current resolved term so the user can tweak it.
       if (!def.trim()) {
-        const current = LOCALES.map(({ key }) => org?.membership_term?.[key]).find((v) => v && v.trim())
+        const current = LOCALES.map(({ key }) => org?.affiliation_term?.[key]).find((v) => v && v.trim())
         setDef(current ?? '')
       }
     } else {
@@ -591,7 +591,7 @@ function TerminologyCard({
         for (const { key } of LOCALES) map[key] = translations[key]?.trim() || d
         value = map
       }
-      await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), { membership_term: value })
+      await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), { affiliation_term: value })
       qc.invalidateQueries({ queryKey: ['org', orgId] })
       qc.invalidateQueries({ queryKey: ['org-membership-term'] })
       onSaved(t('terminologySaveSuccess'))
@@ -676,7 +676,7 @@ function TerminologyCard({
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">{t('membershipTermHint')}</p>
+        <p className="text-xs text-muted-foreground">{t('affiliationTermHint')}</p>
         {isAdmin && (
           <Button size="sm" onClick={handleSave} disabled={saving}>
             {saving ? '…' : t('saveButton')}
@@ -703,16 +703,16 @@ function MembershipLockCard({
   const t = useTranslations('OrgSettings')
   const qc = useQueryClient()
   const [saving, setSaving] = useState(false)
-  const locked = org?.lock_org_membership ?? false
+  const locked = org?.lock_affiliation ?? false
 
   async function handleToggle(next: boolean) {
     setSaving(true)
     try {
-      await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), { lock_org_membership: next })
+      await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), { lock_affiliation: next })
       qc.invalidateQueries({ queryKey: ['org', orgId] })
-      onSaved(t('lockMembershipSaved'))
+      onSaved(t('lockAffiliationSaved'))
     } catch {
-      onSaved(t('lockMembershipError'), 'error')
+      onSaved(t('lockAffiliationError'), 'error')
     } finally {
       setSaving(false)
     }
@@ -725,20 +725,20 @@ function MembershipLockCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Lock className="h-4 w-4" />
-          {t('lockMembershipTitle')}
+          {t('lockAffiliationTitle')}
         </CardTitle>
-        <CardDescription>{t('lockMembershipDescription')}</CardDescription>
+        <CardDescription>{t('lockAffiliationDescription')}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            {locked ? t('lockMembershipEnabled') : t('lockMembershipDisabled')}
+            {locked ? t('lockAffiliationEnabled') : t('lockAffiliationDisabled')}
           </p>
           <Switch
             checked={locked}
             onCheckedChange={handleToggle}
             disabled={saving}
-            aria-label={t('lockMembershipTitle')}
+            aria-label={t('lockAffiliationTitle')}
           />
         </div>
       </CardContent>

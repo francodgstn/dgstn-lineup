@@ -16,12 +16,12 @@ export interface Organization {
   // Ranking systems shared across all teams in the org.
   // When set, overrides individual team ranking_systems for all linked teams.
   ranking_systems?: RankingSystem[]
-  // Per-locale custom term for the membership concept (e.g. "Affiliation", "Lizenz").
-  // Resolved at render time: term[locale] ?? term['en'] ?? 'Membership'.
-  membership_term?: Partial<Record<'en' | 'de' | 'fr' | 'it', string>>
-  // When true, org_membership_* fields on contacts are read-only for team managers.
-  // Only org admins (and org-level automations when implemented) may write them.
-  lock_org_membership?: boolean
+  // Per-locale custom label for the affiliation concept (e.g. "Membership", "Lizenz").
+  // Resolved at render time: term[locale] ?? term['en'] ?? 'Affiliation'.
+  affiliation_term?: Partial<Record<'en' | 'de' | 'fr' | 'it', string>>
+  // When true, a contact's affiliation status is read-only for team managers.
+  // Only org admins (and org-level automations when implemented) may change it.
+  lock_affiliation?: boolean
   created: Timestamp
   createdBy: string
 }

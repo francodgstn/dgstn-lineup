@@ -5,11 +5,11 @@
  * (membership_status / org_membership_status / *_active / *_expiration) on the
  * contact doc with a multi-valued AFFILIATION set: each affiliation is its own
  * doc under contacts/{id}/affiliations, plus an org/team affiliation_types
- * catalog and the reused org membership_statuses status defs.
+ * catalog and the reused org affiliation_statuses status defs.
  *
  * Path constants + status defs mirror @linyup/shared (CONTACT_AFFILIATIONS_SUBCOLLECTION,
- * AFFILIATION_TYPES_SUBCOLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
- * DEFAULT_ORG_MEMBERSHIP_STATUSES, Affiliation, AffiliationType). They are
+ * AFFILIATION_TYPES_SUBCOLLECTION, ORG_AFFILIATION_STATUSES_SUBCOLLECTION,
+ * DEFAULT_ORG_AFFILIATION_STATUSES, Affiliation, AffiliationType). They are
  * re-declared here because the seed scripts compile under tsconfig.scripts.json,
  * which does not resolve the @linyup/shared workspace import.
  */
@@ -17,13 +17,13 @@
 // ── Firestore path constants (mirror @linyup/shared/paths) ─────────────────────
 export const CONTACT_AFFILIATIONS_SUBCOLLECTION = 'affiliations'
 export const AFFILIATION_TYPES_SUBCOLLECTION = 'affiliation_types'
-export const ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION = 'membership_statuses'
+export const ORG_AFFILIATION_STATUSES_SUBCOLLECTION = 'affiliation_statuses'
 
-// ── Default org membership status defs (mirror @linyup/shared DEFAULT_ORG_MEMBERSHIP_STATUSES) ──
+// ── Default org membership status defs (mirror @linyup/shared DEFAULT_ORG_AFFILIATION_STATUSES) ──
 // The built-in fallback status vocabulary, reused as affiliation statuses. Only
 // `active` counts as active; `expired` is final. The same shape an org carries at
-// organizations/{orgId}/membership_statuses.
-export const DEFAULT_ORG_MEMBERSHIP_STATUSES = [
+// organizations/{orgId}/affiliation_statuses.
+export const DEFAULT_ORG_AFFILIATION_STATUSES = [
   { id: 'guest',        label: 'Guest',        description: 'No membership process started.',                    color: 'gray',   order: 0, isBuiltIn: true, countsAsActive: false, isFinal: false },
   { id: 'requested',    label: 'Requested',    description: 'Member has submitted a request, awaiting review.',  color: 'yellow', order: 1, isBuiltIn: true, countsAsActive: false, isFinal: false },
   { id: 'under_review', label: 'Under review', description: 'Documents are being reviewed by the organisation.', color: 'blue',   order: 2, isBuiltIn: true, countsAsActive: false, isFinal: false },
@@ -35,7 +35,7 @@ export const DEFAULT_ORG_MEMBERSHIP_STATUSES = [
 // Set of status ids whose `countsAsActive` is true — drives the affiliation's
 // denormalized `active` boolean and the summary `has_active` rollup.
 const ACTIVE_COUNTING_STATUS_IDS: ReadonlySet<string> = new Set(
-  DEFAULT_ORG_MEMBERSHIP_STATUSES.filter((s) => s.countsAsActive).map((s) => s.id)
+  DEFAULT_ORG_AFFILIATION_STATUSES.filter((s) => s.countsAsActive).map((s) => s.id)
 )
 
 /** True when the given status id counts as an active affiliation. */

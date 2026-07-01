@@ -7,10 +7,10 @@ import type { Timestamp } from './common'
 // grading), each its own record with an issuer, a (configurable) status, and a
 // validity window. Belonging never freezes — that's the subscription axis.
 //
-// Status vocabulary is REUSED from the existing org membership status defs
-// (OrgMembershipStatusDef in ./membership) — there is no parallel canonical enum.
-// Each affiliation stores its `status_id` plus a denormalised `active` boolean
-// (from the status def's countsAsActive) that drives the rollups.
+// Status vocabulary is REUSED across all affiliation types — the configurable
+// OrgAffiliationStatusDef defs (below) are the single canonical set; there is no
+// parallel enum. Each affiliation stores its `status_id` plus a denormalised
+// `active` boolean (from the status def's countsAsActive) that drives the rollups.
 
 // Who grants / issues the affiliation:
 //  - 'team'     the studio grants it itself (an internal club membership)
@@ -29,7 +29,7 @@ export interface Affiliation {
   issuer: AffiliationIssuer
   org_id?: string // set when issuer === 'org' — references organizations/{orgId}
   issuer_name?: string // governing-body name when issuer === 'external'
-  status_id: string // a configurable status def (org's membership_statuses, or the built-in defaults)
+  status_id: string // a configurable status def (org's affiliation_statuses, or the built-in defaults)
   active: boolean // denormalized from the status def's countsAsActive — drives rollups
   reference?: string // licence / registration number
   valid_from?: Timestamp
@@ -62,3 +62,32 @@ export interface AffiliationSummary {
   types: string[] // distinct type_keys the contact holds
   org_ids: string[] // distinct org_ids of the contact's org-issued affiliations
 }
+
+// ─── Affiliation status defs (org-configurable) ──────────────────────────────
+// The configurable status vocabulary an affiliation's `status_id` points at,
+// stored at organizations/{orgId}/affiliation_statuses. Reused across every
+// affiliation type; `countsAsActive` drives the denormalised `active` rollup.
+// (The status `id`s below are stable identifiers referenced by Affiliation.status_id.)
+
+export type AffiliationStatusColor =
+  | 'gray' | 'yellow' | 'blue' | 'purple' | 'green' | 'red' | 'orange'
+
+export interface OrgAffiliationStatusDef {
+  id: string
+  label: string
+  description: string
+  color: AffiliationStatusColor
+  order: number
+  isBuiltIn: boolean
+  countsAsActive: boolean
+  isFinal: boolean
+}
+
+export const DEFAULT_ORG_AFFILIATION_STATUSES: OrgAffiliationStatusDef[] = [
+  { id: 'guest', label: 'Guest', description: 'No affiliation process started.', color: 'gray', order: 0, isBuiltIn: true, countsAsActive: false, isFinal: false },
+  { id: 'requested', label: 'Requested', description: 'A request has been submitted, awaiting review.', color: 'yellow', order: 1, isBuiltIn: true, countsAsActive: false, isFinal: false },
+  { id: 'under_review', label: 'Under review', description: 'Documents are being reviewed by the organisation.', color: 'blue', order: 2, isBuiltIn: true, countsAsActive: false, isFinal: false },
+  { id: 'almost_ready', label: 'Almost ready', description: 'Review complete, awaiting final confirmation.', color: 'purple', order: 3, isBuiltIn: true, countsAsActive: false, isFinal: false },
+  { id: 'active', label: 'Active', description: 'Valid affiliation, recognised by the federation.', color: 'green', order: 4, isBuiltIn: true, countsAsActive: true, isFinal: false },
+  { id: 'expired', label: 'Expired', description: 'The affiliation period has ended. Renewal required.', color: 'red', order: 5, isBuiltIn: true, countsAsActive: false, isFinal: true },
+]

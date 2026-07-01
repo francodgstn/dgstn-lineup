@@ -7,15 +7,15 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
-import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { useOrg } from '@/contexts/OrgContext'
+import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
+import { useAuth } from '@/contexts/AuthContext'
 import {
-  ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION,
-  CONTACTS_COLLECTION, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
-  DEFAULT_ORG_MEMBERSHIP_STATUSES, AFFILIATION_TYPES_SUBCOLLECTION, CONTACT_AFFILIATIONS_SUBCOLLECTION,
+  CONTACTS_COLLECTION, ORGANIZATIONS_COLLECTION, ORG_AFFILIATION_STATUSES_SUBCOLLECTION,
+  DEFAULT_ORG_AFFILIATION_STATUSES, AFFILIATION_TYPES_SUBCOLLECTION, CONTACT_AFFILIATIONS_SUBCOLLECTION,
 } from '@linyup/shared'
-import type { Contact, OrgMembershipStatusDef, Affiliation, AffiliationType } from '@linyup/shared'
+import type { Contact, OrgAffiliationStatusDef, Affiliation, AffiliationType } from '@linyup/shared'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,9 +26,9 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
-import { Search } from 'lucide-react'
+import { Search, IdCard } from 'lucide-react'
 
-// ─── colour map ───────────────────────────────────────────────────────────────
+// ─── colour map ────────────────────────────────────────────────────────────────
 
 const COLOR_CLASSES: Record<string, string> = {
   gray:   'bg-gray-100   text-gray-700   dark:bg-gray-800   dark:text-gray-300',
@@ -40,98 +40,108 @@ const COLOR_CLASSES: Record<string, string> = {
   orange: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
 }
 
-// ─── types ────────────────────────────────────────────────────────────────────
-
-interface TeamMeta { id: string; name: string }
-interface ContactRow extends Contact { teamName?: string }
-
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
-function useOrgTeamIds(orgId: string) {
-  return useQuery<TeamMeta[]>({
-    queryKey: ['org-teams-meta', orgId],
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_TEAMS_SUBCOLLECTION),
-          where('status', '==', 'active'),
-        ),
-      )
-      const rows = snap.docs.map((d) => ({ id: d.data().teamId as string, name: '' }))
-      await Promise.all(
-        rows.map(async (row) => {
-          const teamSnap = await getDocs(query(collection(db, 'teams'), where('__name__', '==', row.id)))
-          if (!teamSnap.empty) row.name = teamSnap.docs[0].data().name ?? row.id
-        }),
-      )
-      return rows
-    },
-    staleTime: 5 * 60_000,
-  })
-}
-
-function useOrgContacts(teams: TeamMeta[] | undefined) {
-  const teamIds = teams?.map((t) => t.id) ?? []
-  return useQuery<ContactRow[]>({
-    queryKey: ['org-contacts', teamIds],
-    enabled: teamIds.length > 0,
+function useTeamContacts(teamId: string | null) {
+  return useQuery<Contact[]>({
+    queryKey: ['team-contacts-membership', teamId],
+    enabled: !!teamId,
     staleTime: 2 * 60_000,
     queryFn: async () => {
-      const teamNameById = Object.fromEntries((teams ?? []).map((t) => [t.id, t.name]))
-      const results: ContactRow[] = []
-      const chunks: string[][] = []
-      for (let i = 0; i < teamIds.length; i += 30) chunks.push(teamIds.slice(i, i + 30))
-      await Promise.all(
-        chunks.map(async (chunk) => {
-          const snap = await getDocs(
-            query(
-              collection(db, CONTACTS_COLLECTION),
-              where('teamId', 'in', chunk),
-              where('deleted_at', '==', null),
-            ),
-          )
-          snap.docs.forEach((d) => {
-            const data = { ...d.data(), id: d.id } as ContactRow
-            data.teamName = teamNameById[data.teamId] ?? data.teamId
-            results.push(data)
-          })
-        }),
+      if (!teamId) return []
+      const snap = await getDocs(
+        query(
+          collection(db, CONTACTS_COLLECTION),
+          where('teamId', '==', teamId),
+          where('deleted_at', '==', null),
+        ),
       )
-      return results.sort((a, b) =>
-        `${a.lastname ?? ''} ${a.firstname ?? ''}`.localeCompare(`${b.lastname ?? ''} ${b.firstname ?? ''}`),
-      )
+      return snap.docs
+        .map((d) => ({ ...d.data(), id: d.id } as Contact))
+        .sort((a, b) =>
+          `${a.lastname ?? ''} ${a.firstname ?? ''}`.localeCompare(`${b.lastname ?? ''} ${b.firstname ?? ''}`),
+        )
     },
   })
 }
 
-function useStatusDefs(orgId: string) {
-  return useQuery<OrgMembershipStatusDef[]>({
+function useStatusDefs(orgId: string | null | undefined) {
+  return useQuery<OrgAffiliationStatusDef[]>({
     queryKey: ['org-membership-statuses', orgId],
+    enabled: true,
     staleTime: 5 * 60_000,
     queryFn: async () => {
+      if (!orgId) return DEFAULT_ORG_AFFILIATION_STATUSES
       const snap = await getDocs(
-        collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION),
+        collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION),
       )
-      if (snap.empty) return DEFAULT_ORG_MEMBERSHIP_STATUSES
-      const defs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as OrgMembershipStatusDef))
-      const byId = Object.fromEntries(DEFAULT_ORG_MEMBERSHIP_STATUSES.map((s) => [s.id, s]))
+      if (snap.empty) return DEFAULT_ORG_AFFILIATION_STATUSES
+      const defs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as OrgAffiliationStatusDef))
+      const byId = Object.fromEntries(DEFAULT_ORG_AFFILIATION_STATUSES.map((s) => [s.id, s]))
       defs.forEach((d) => { byId[d.id] = d })
       return Object.values(byId).sort((a, b) => a.order - b.order)
     },
   })
 }
 
-function useOrgAffiliationTypes(orgId: string) {
+function useAffiliationTypes(teamId: string | null, orgId: string | null | undefined) {
   return useQuery<AffiliationType[]>({
-    queryKey: ['org-affiliation-types', orgId],
+    queryKey: ['affiliation-types', teamId, orgId],
+    enabled: !!teamId,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const snap = await getDocs(
-        collection(db, ORGANIZATIONS_COLLECTION, orgId, AFFILIATION_TYPES_SUBCOLLECTION),
+      const results: AffiliationType[] = []
+      if (orgId) {
+        const snap = await getDocs(
+          collection(db, ORGANIZATIONS_COLLECTION, orgId, AFFILIATION_TYPES_SUBCOLLECTION),
+        )
+        snap.docs.forEach((d) => results.push({ ...d.data(), id: d.id } as AffiliationType))
+      }
+      if (teamId) {
+        const snap = await getDocs(
+          collection(db, 'teams', teamId, AFFILIATION_TYPES_SUBCOLLECTION),
+        )
+        snap.docs.forEach((d) => {
+          if (!results.find((r) => r.id === d.id)) {
+            results.push({ ...d.data(), id: d.id } as AffiliationType)
+          }
+        })
+      }
+      return results.sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    },
+  })
+}
+
+function useContactAffiliations(contactIds: string[], typeId: string | null) {
+  return useQuery<Record<string, Affiliation>>({
+    queryKey: ['contact-affiliations-by-type', contactIds, typeId],
+    enabled: contactIds.length > 0 && !!typeId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const result: Record<string, Affiliation> = {}
+      // Query the affiliations sub-collection for each contact in batches
+      const chunks: string[][] = []
+      for (let i = 0; i < contactIds.length; i += 10) chunks.push(contactIds.slice(i, i + 10))
+      await Promise.all(
+        chunks.map(async (chunk) => {
+          const snap = await getDocs(
+            query(
+              collectionGroup(db, CONTACT_AFFILIATIONS_SUBCOLLECTION),
+              where('affiliation_type_id', '==', typeId),
+              where('teamId', '==', chunk[0].split('__')[0] || chunk[0]), // use teamId filter
+            ),
+          )
+          snap.docs.forEach((d) => {
+            const aff = { ...d.data(), id: d.id } as Affiliation
+            // parent doc id is the contactId
+            const contactId = d.ref.parent.parent?.id
+            if (contactId && chunk.includes(contactId)) {
+              result[contactId] = aff
+            }
+          })
+        }),
       )
-      return snap.docs
-        .map((d) => ({ ...d.data(), id: d.id } as AffiliationType))
-        .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+      return result
     },
   })
 }
@@ -149,7 +159,7 @@ function contactName(c: Contact) {
 
 // ─── status badge ─────────────────────────────────────────────────────────────
 
-function StatusBadge({ statusId, defs }: { statusId: string; defs: OrgMembershipStatusDef[] }) {
+function StatusBadge({ statusId, defs }: { statusId: string; defs: OrgAffiliationStatusDef[] }) {
   const def = defs.find((s) => s.id === statusId) ?? defs.find((s) => s.id === 'guest')
   if (!def) return <span className="text-xs text-muted-foreground">—</span>
   return (
@@ -159,11 +169,13 @@ function StatusBadge({ statusId, defs }: { statusId: string; defs: OrgMembership
   )
 }
 
-// ─── affiliation summary chip ─────────────────────────────────────────────────
+// ─── affiliation summary chip (All types view) ────────────────────────────────
 
 function AffiliationSummaryChip({ contact, affiliationTypes }: { contact: Contact; affiliationTypes: AffiliationType[] }) {
   const summary = contact.affiliation_summary
-  if (!summary?.has_active) return <span className="text-xs text-muted-foreground">—</span>
+  if (!summary?.has_active) {
+    return <span className="text-xs text-muted-foreground">—</span>
+  }
   const labels = (summary.types ?? []).map(
     (key) => affiliationTypes.find((t) => t.key === key)?.label ?? key,
   )
@@ -189,17 +201,11 @@ function ExpirationDialog({
   onConfirm: (date: Date | null) => void
   onCancel: () => void
 }) {
-  const t = useTranslations('OrgAffiliations')
+  const t = useTranslations('TeamAffiliations')
   const [value, setValue] = useState('')
 
-  function handleConfirm() {
-    onConfirm(value ? new Date(value) : null)
-    setValue('')
-  }
-  function handleCancel() {
-    setValue('')
-    onCancel()
-  }
+  function handleConfirm() { onConfirm(value ? new Date(value) : null); setValue('') }
+  function handleCancel() { setValue(''); onCancel() }
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleCancel() }}>
@@ -209,13 +215,8 @@ function ExpirationDialog({
           <DialogDescription>{t('expirationDialogDesc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5 py-2">
-          <Label htmlFor="exp-date">{t('expirationLabel')}</Label>
-          <Input
-            id="exp-date"
-            type="date"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
+          <Label htmlFor="tm-exp-date">{t('expirationLabel')}</Label>
+          <Input id="tm-exp-date" type="date" value={value} onChange={(e) => setValue(e.target.value)} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel}>{t('cancel')}</Button>
@@ -226,26 +227,26 @@ function ExpirationDialog({
   )
 }
 
-// ─── contact row ──────────────────────────────────────────────────────────────
+// ─── contact row (type-specific view) ────────────────────────────────────────
 
 function ContactAffiliationRow({
   contact,
   affiliation,
   defs,
-  isAdmin,
-  orgId,
+  canEdit,
   affiliationTypeId,
+  teamId,
   onUpdated,
 }: {
-  contact: ContactRow
+  contact: Contact
   affiliation: Affiliation | undefined
-  defs: OrgMembershipStatusDef[]
-  isAdmin: boolean
-  orgId: string
+  defs: OrgAffiliationStatusDef[]
+  canEdit: boolean
   affiliationTypeId: string
+  teamId: string
   onUpdated: () => void
 }) {
-  const t = useTranslations('OrgAffiliations')
+  const t = useTranslations('TeamAffiliations')
   const currentStatusId = affiliation?.status_id ?? 'guest'
   const [pending, setPending] = useState<string | null>(null)
   const [showExpiry, setShowExpiry] = useState(false)
@@ -255,12 +256,11 @@ function ContactAffiliationRow({
   const { mutate: saveAffiliation, isPending: saving } = useMutation({
     mutationFn: async ({ statusId, validUntil }: { statusId: string; validUntil?: string | null }) => {
       await upsertAffiliation({
-        teamId: contact.teamId,
+        teamId,
         contactId: contact.id,
         affiliationId: affiliation?.id,
         affiliation_type_id: affiliationTypeId,
-        issuer: 'org',
-        org_id: orgId,
+        issuer: 'team',
         status_id: statusId,
         valid_until: validUntil ?? null,
       })
@@ -289,11 +289,8 @@ function ContactAffiliationRow({
             <div className="text-xs text-muted-foreground truncate max-w-[200px]">{contact.email}</div>
           )}
         </td>
-        <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
-          {contact.teamName ?? '—'}
-        </td>
         <td className="px-4 py-3">
-          {isAdmin ? (
+          {canEdit ? (
             <Select value={currentStatusId} onValueChange={handleStatusChange} disabled={saving}>
               <SelectTrigger className="h-7 w-[160px] text-xs border-0 bg-transparent p-0 shadow-none focus:ring-0 hover:bg-muted rounded px-2">
                 <SelectValue>
@@ -315,7 +312,7 @@ function ContactAffiliationRow({
             <StatusBadge statusId={currentStatusId} defs={defs} />
           )}
         </td>
-        <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
+        <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
           {affiliation?.valid_until
             ? formatExpiry(affiliation.valid_until as { toDate(): Date }, t('noExpiration'))
             : t('noExpiration')}
@@ -336,38 +333,42 @@ function ContactAffiliationRow({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-export default function OrgMembershipsPage() {
-  const { orgId } = useParams<{ orgId: string }>()
-  const t = useTranslations('OrgAffiliations')
-  const { isAdmin, membershipTerm } = useOrg()
+export default function TeamAffiliationsPage() {
+  const t = useTranslations('TeamAffiliations')
+  const { currentTeamId, team, teamRole } = useAuth()
+  const affiliationTerm = useAffiliationTerm()
   const qc = useQueryClient()
+
+  const orgId = team?.org_id
+  const canEdit = teamRole === 'owner' || teamRole === 'manager'
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('__all__')
   const [selectedTypeId, setSelectedTypeId] = useState<string>('__all__')
 
-  const { data: teams, isLoading: teamsLoading } = useOrgTeamIds(orgId)
-  const { data: contacts, isLoading: contactsLoading } = useOrgContacts(teams)
-  const { data: rawDefs } = useStatusDefs(orgId)
-  const { data: affiliationTypes = [], isLoading: typesLoading } = useOrgAffiliationTypes(orgId)
+  const { data: contacts, isLoading: contactsLoading } = useTeamContacts(currentTeamId)
+  const { data: rawDefs, isLoading: defsLoading } = useStatusDefs(orgId)
+  const { data: affiliationTypes = [], isLoading: typesLoading } = useAffiliationTypes(currentTeamId, orgId)
 
-  const defs: OrgMembershipStatusDef[] = rawDefs ?? DEFAULT_ORG_MEMBERSHIP_STATUSES
-  const isLoading = teamsLoading || contactsLoading || typesLoading
+  const defs: OrgAffiliationStatusDef[] = rawDefs ?? DEFAULT_ORG_AFFILIATION_STATUSES
+  const isLoading = contactsLoading || defsLoading || typesLoading
 
+  // For type-specific view: load each contact's affiliation for the selected type
+  const contactIds = useMemo(() => contacts?.map((c) => c.id) ?? [], [contacts])
   const activeTypeId = selectedTypeId !== '__all__' ? selectedTypeId : null
 
-  // Load affiliations by type for the org
+  // Fetch affiliations per contact for the selected type using collectionGroup
   const { data: affiliationsByContact = {} } = useQuery<Record<string, Affiliation>>({
-    queryKey: ['org-affiliations-for-type', orgId, activeTypeId],
-    enabled: !!orgId && !!activeTypeId,
+    queryKey: ['contact-affiliations-for-type', currentTeamId, activeTypeId],
+    enabled: !!currentTeamId && !!activeTypeId,
     staleTime: 60_000,
     queryFn: async () => {
-      if (!orgId || !activeTypeId) return {}
+      if (!currentTeamId || !activeTypeId) return {}
       const result: Record<string, Affiliation> = {}
       const snap = await getDocs(
         query(
           collectionGroup(db, CONTACT_AFFILIATIONS_SUBCOLLECTION),
-          where('org_id', '==', orgId),
+          where('teamId', '==', currentTeamId),
           where('affiliation_type_id', '==', activeTypeId),
         ),
       )
@@ -379,18 +380,15 @@ export default function OrgMembershipsPage() {
     },
   })
 
-  const totalActive = useMemo(
-    () => contacts?.filter((c) => c.affiliation_summary?.has_active).length ?? 0,
-    [contacts],
-  )
-
   const filtered = useMemo(() => {
     if (!contacts) return []
     return contacts.filter((c) => {
+      // In "all types" view: filter by affiliation_summary.has_active
       if (selectedTypeId === '__all__') {
         if (statusFilter === 'affiliated' && !c.affiliation_summary?.has_active) return false
         if (statusFilter === 'not_affiliated' && c.affiliation_summary?.has_active) return false
       } else {
+        // In type-specific view: filter by the loaded affiliation's status
         const aff = affiliationsByContact[c.id]
         const statusId = aff?.status_id ?? 'guest'
         if (statusFilter !== '__all__' && statusId !== statusFilter) return false
@@ -402,6 +400,11 @@ export default function OrgMembershipsPage() {
       return true
     })
   }, [contacts, statusFilter, search, selectedTypeId, affiliationsByContact])
+
+  const totalActive = useMemo(
+    () => contacts?.filter((c) => c.affiliation_summary?.has_active).length ?? 0,
+    [contacts],
+  )
 
   const countsByStatus = useMemo(() => {
     if (selectedTypeId === '__all__') return {}
@@ -415,22 +418,29 @@ export default function OrgMembershipsPage() {
   }, [contacts, selectedTypeId, affiliationsByContact])
 
   function invalidate() {
-    qc.invalidateQueries({ queryKey: ['org-contacts'] })
-    qc.invalidateQueries({ queryKey: ['org-affiliations-for-type', orgId, activeTypeId] })
+    qc.invalidateQueries({ queryKey: ['team-contacts-membership', currentTeamId] })
+    qc.invalidateQueries({ queryKey: ['contact-affiliations-for-type', currentTeamId, activeTypeId] })
+  }
+
+  if (!orgId && affiliationTypes.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
+        <IdCard className="h-10 w-10 opacity-30" />
+        <p className="text-sm">{t('noOrg')}</p>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">{membershipTerm}</h2>
-          {contacts && (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t('subtitle', { total: contacts.length, active: totalActive })}
-            </p>
-          )}
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{affiliationTerm}</h1>
+        {contacts && (
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {t('subtitle', { total: contacts.length, active: totalActive })}
+          </p>
+        )}
       </div>
 
       {/* Type selector */}
@@ -450,7 +460,7 @@ export default function OrgMembershipsPage() {
         </div>
       )}
 
-      {/* Status filter pills */}
+      {/* Status filter pills — different depending on type selected */}
       {!isLoading && (
         <div className="flex flex-wrap gap-1.5">
           {selectedTypeId === '__all__' ? (
@@ -525,16 +535,16 @@ export default function OrgMembershipsPage() {
       <div className="rounded-md border overflow-hidden">
         {isLoading ? (
           <div className="p-4 space-y-3">
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+            {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center text-muted-foreground text-sm">{t('noContacts')}</div>
         ) : selectedTypeId === '__all__' ? (
+          /* All types — read-only chip overview from affiliation_summary */
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colName')}</th>
-                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colTeam')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colType')}</th>
               </tr>
             </thead>
@@ -545,7 +555,6 @@ export default function OrgMembershipsPage() {
                     <div className="font-medium text-sm">{contactName(c)}</div>
                     {c.email && <div className="text-xs text-muted-foreground truncate max-w-[200px]">{c.email}</div>}
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">{(c as ContactRow).teamName ?? '—'}</td>
                   <td className="px-4 py-3">
                     <AffiliationSummaryChip contact={c} affiliationTypes={affiliationTypes} />
                   </td>
@@ -554,25 +563,25 @@ export default function OrgMembershipsPage() {
             </tbody>
           </table>
         ) : (
+          /* Type-specific — editable status per contact */
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colName')}</th>
-                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colTeam')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colStatus')}</th>
-                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">{t('colExpires')}</th>
+                <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colExpires')}</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((c) => (
                 <ContactAffiliationRow
                   key={c.id}
-                  contact={c as ContactRow}
+                  contact={c}
                   affiliation={affiliationsByContact[c.id]}
                   defs={defs}
-                  isAdmin={isAdmin}
-                  orgId={orgId}
+                  canEdit={canEdit}
                   affiliationTypeId={selectedTypeId}
+                  teamId={currentTeamId!}
                   onUpdated={invalidate}
                 />
               ))}

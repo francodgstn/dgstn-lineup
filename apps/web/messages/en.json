@@ -157,7 +157,7 @@
     "greetingAfternoon": "Good afternoon",
     "greetingEvening": "Good evening",
     "sectionHighlights": "Highlights",
-    "statActiveMembers": "Memberships",
+    "statActiveMembers": "Affiliations",
     "statActiveMembersSub": "active subscription status",
     "statEngaged": "Engaged this week",
     "statEngagedSub": "attended ≥1 session this week",
@@ -303,7 +303,7 @@
     "tabBookings": "Bookings",
     "tabGamification": "Gamification",
     "tabSubscriptions": "Subscriptions",
-    "tabMembership": "Membership",
+    "tabAffiliation": "Affiliation",
     "tabPayments": "Payments",
     "tabArchived": "Archived",
     "tabDeleted": "Deleted",
@@ -576,8 +576,8 @@
     "tabReorder": "Reorder tabs",
     "tabReorderDone": "Done"
   },
-  "TeamMemberships": {
-    "title": "Membership",
+  "TeamAffiliations": {
+    "title": "Affiliations",
     "subtitle": "{total} contacts · {active} active",
     "searchPlaceholder": "Search by name…",
     "filterAll": "All",
@@ -588,7 +588,7 @@
     "noExpiration": "—",
     "statusChangeSuccess": "Status updated.",
     "expirationDialogTitle": "Set expiration date",
-    "expirationDialogDesc": "Optionally set when this membership expires. Leave empty for open-ended.",
+    "expirationDialogDesc": "Optionally set when this affiliation expires. Leave empty for open-ended.",
     "expirationLabel": "Valid until",
     "expirationSave": "Confirm",
     "cancel": "Cancel",
@@ -1587,7 +1587,7 @@
     "tabTeams": "Teams",
     "tabEvents": "Events",
     "tabRanking": "Ranking",
-    "tabMemberships": "Memberships",
+    "tabAffiliations": "Affiliations",
     "tabMembers": "Members",
     "tabBilling": "Billing",
     "tabSettings": "Settings",
@@ -1629,8 +1629,8 @@
     "sending": "Sending…",
     "processing": "Processing…"
   },
-  "OrgMemberships": {
-    "title": "Memberships",
+  "OrgAffiliations": {
+    "title": "Affiliations",
     "subtitle": "{total} contacts · {active} active",
     "searchPlaceholder": "Search by name…",
     "filterAll": "All",
@@ -1642,12 +1642,12 @@
     "noExpiration": "—",
     "statusChangeSuccess": "Status updated.",
     "expirationDialogTitle": "Set expiration date",
-    "expirationDialogDesc": "Optionally set when this membership expires. Leave empty for open-ended.",
+    "expirationDialogDesc": "Optionally set when this affiliation expires. Leave empty for open-ended.",
     "expirationLabel": "Valid until",
     "expirationSave": "Confirm",
     "cancel": "Cancel"
   },
-  "OrgMembershipStatuses": {
+  "OrgAffiliationStatuses": {
     "title": "Affiliation Statuses",
     "description": "Define the stages in your affiliation workflow. Built-in statuses can be renamed; custom ones can be deleted.",
     "addButton": "Add status",
@@ -1735,16 +1735,16 @@
     "saveError": "Failed to save. Please try again.",
     "terminologyTitle": "Terminology",
     "terminologyDescription": "Customize what the affiliation concept is called across the app.",
-    "membershipTermLabel": "Term for \"Membership\" (singular)",
-    "membershipTermHint": "Leave blank to keep the default",
+    "affiliationTermLabel": "Term for \"Affiliation\" (singular)",
+    "affiliationTermHint": "Leave blank to keep the default",
     "terminologySaveSuccess": "Terminology saved.",
     "terminologySaveError": "Failed to save. Please try again.",
-    "lockMembershipTitle": "Lock affiliation field",
-    "lockMembershipDescription": "When enabled, only org admins can change affiliation status, active flag, and expiration on contacts. Team managers see these fields as read-only.",
-    "lockMembershipEnabled": "Locked — only org admins can edit",
-    "lockMembershipDisabled": "Unlocked — team managers can edit",
-    "lockMembershipSaved": "Setting saved.",
-    "lockMembershipError": "Failed to save. Please try again.",
+    "lockAffiliationTitle": "Lock affiliation field",
+    "lockAffiliationDescription": "When enabled, only org admins can change affiliation status, active flag, and expiration on contacts. Team managers see these fields as read-only.",
+    "lockAffiliationEnabled": "Locked — only org admins can edit",
+    "lockAffiliationDisabled": "Unlocked — team managers can edit",
+    "lockAffiliationSaved": "Setting saved.",
+    "lockAffiliationError": "Failed to save. Please try again.",
     "terminologyTermLabel": "Term",
     "terminologyPresetDefault": "Default (Affiliation)",
     "terminologyPresetCustom": "Custom…",
@@ -2016,7 +2016,7 @@
         "title": "Contacts",
         "body": "Everyone connected to your team — members, leads and trial-goers — with their status and history.",
         "terms": [
-          "Membership status — active, almost-ready, expired…",
+          "Affiliation status — active, almost-ready, expired…",
           "Subscription — the plan a contact is on",
           "Trial — a prospect trying a class"
         ]

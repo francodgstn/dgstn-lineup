@@ -47,7 +47,7 @@ export const ORG_MEMBERS_SUBCOLLECTION = 'org_members'
 export const ORG_TEAMS_SUBCOLLECTION = 'org_teams'
 export const ORG_INVITATIONS_SUBCOLLECTION = 'org_invitations'
 export const ORG_ACCESS_REQUESTS_SUBCOLLECTION = 'org_access_requests'
-export const ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION = 'membership_statuses'
+export const ORG_AFFILIATION_STATUSES_SUBCOLLECTION = 'affiliation_statuses'
 export const ORG_PLACES_SUBCOLLECTION = 'org_places'
 // Affiliation type catalog — same subcollection name under organizations/{orgId}
 // (org-wide types) AND teams/{teamId} (team-local types). See AffiliationType.

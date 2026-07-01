@@ -816,7 +816,7 @@ async function executeActionsForContact(
       // contact's first affiliation matching the given type_key (or any affiliation
       // if no type_key is specified). Best-effort: silently skips when no match.
       if (action.type === 'set_affiliation_status') {
-        const { CONTACT_AFFILIATIONS_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES } =
+        const { CONTACT_AFFILIATIONS_SUBCOLLECTION, DEFAULT_ORG_AFFILIATION_STATUSES } =
           await import('@linyup/shared')
         const affiliationsSnap = await admin
           .firestore()
@@ -833,18 +833,18 @@ async function executeActionsForContact(
         if (target) {
           const affData = target.data() as { issuer?: string; org_id?: string }
           // Resolve active flag from status defs (org or default)
-          let statusDefs = DEFAULT_ORG_MEMBERSHIP_STATUSES
+          let statusDefs = DEFAULT_ORG_AFFILIATION_STATUSES
           if (affData.issuer === 'org' && affData.org_id) {
             try {
               const orgStatusSnap = await admin
                 .firestore()
                 .collection('organizations')
                 .doc(affData.org_id as string)
-                .collection('membership_statuses')
+                .collection('affiliation_statuses')
                 .get()
               if (!orgStatusSnap.empty) {
                 statusDefs = orgStatusSnap.docs.map(
-                  (d) => d.data() as (typeof DEFAULT_ORG_MEMBERSHIP_STATUSES)[number]
+                  (d) => d.data() as (typeof DEFAULT_ORG_AFFILIATION_STATUSES)[number]
                 )
               }
             } catch {

@@ -148,7 +148,7 @@ export const FirestoreService = {
       const orgSnap = await getDoc(doc(db, 'organizations', orgId));
       if (!orgSnap.exists()) return 'Membership';
 
-      const termObj = orgSnap.data().membership_term as Record<string, string> | undefined;
+      const termObj = orgSnap.data().affiliation_term as Record<string, string> | undefined;
       if (!termObj) return 'Membership';
 
       // Resolve using device language (first 2 chars of locale, e.g. "de" from "de-CH")

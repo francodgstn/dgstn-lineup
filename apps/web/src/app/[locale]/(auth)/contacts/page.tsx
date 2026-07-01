@@ -24,11 +24,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   CONTACTS_COLLECTION, TEAMS_COLLECTION, CONTACT_REQUESTS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION, ORGANIZATIONS_COLLECTION,
-  ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION, DEFAULT_ORG_MEMBERSHIP_STATUSES,
+  ORG_AFFILIATION_STATUSES_SUBCOLLECTION, DEFAULT_ORG_AFFILIATION_STATUSES,
   CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, contactOverageForPlan,
   planHasHardContactCap,
 } from '@linyup/shared'
-import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgMembershipStatusDef, SaasPlan, EngagementBand, EngagementThresholds } from '@linyup/shared'
+import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgAffiliationStatusDef, SaasPlan, EngagementBand, EngagementThresholds } from '@linyup/shared'
 import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS, computeEngagementBand } from '@linyup/shared'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups, expandGroupSelection, flattenGroupTree } from '@/plugins/contact-groups/hooks'
@@ -196,19 +196,19 @@ function useSubscriptionTypes(teamId: string | null) {
   })
 }
 
-function useOrgMembershipStatuses(orgId: string | null | undefined) {
-  return useQuery<OrgMembershipStatusDef[]>({
+function useOrgAffiliationStatuses(orgId: string | null | undefined) {
+  return useQuery<OrgAffiliationStatusDef[]>({
     queryKey: ['org-membership-statuses', orgId ?? null],
     enabled: !!orgId,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      if (!orgId) return DEFAULT_ORG_MEMBERSHIP_STATUSES
+      if (!orgId) return DEFAULT_ORG_AFFILIATION_STATUSES
       const snap = await getDocs(
-        collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION),
+        collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_AFFILIATION_STATUSES_SUBCOLLECTION),
       )
-      if (snap.empty) return DEFAULT_ORG_MEMBERSHIP_STATUSES
-      const defs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as OrgMembershipStatusDef))
-      const byId = Object.fromEntries(DEFAULT_ORG_MEMBERSHIP_STATUSES.map((s) => [s.id, s]))
+      if (snap.empty) return DEFAULT_ORG_AFFILIATION_STATUSES
+      const defs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as OrgAffiliationStatusDef))
+      const byId = Object.fromEntries(DEFAULT_ORG_AFFILIATION_STATUSES.map((s) => [s.id, s]))
       defs.forEach((d) => { byId[d.id] = d })
       return Object.values(byId).sort((a, b) => a.order - b.order)
     },

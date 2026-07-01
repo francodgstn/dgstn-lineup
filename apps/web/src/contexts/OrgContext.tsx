@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useLocale } from 'next-intl'
 import type { Organization, SaasSubscription, OrgRole } from '@linyup/shared'
 
-export function resolveOrgMembershipTerm(
+export function resolveAffiliationTerm(
   termObj: Partial<Record<string, string>> | undefined,
   locale: string,
 ): string {
@@ -25,7 +25,7 @@ interface OrgContextValue {
   userRole: OrgRole | null
   loading: boolean
   isAdmin: boolean
-  membershipTerm: string
+  affiliationTerm: string
 }
 
 const OrgContext = createContext<OrgContextValue>({
@@ -34,7 +34,7 @@ const OrgContext = createContext<OrgContextValue>({
   userRole: null,
   loading: true,
   isAdmin: false,
-  membershipTerm: 'Membership',
+  affiliationTerm: 'Affiliation',
 })
 
 export function OrgProvider({ orgId, children }: { orgId: string; children: ReactNode }) {
@@ -68,7 +68,7 @@ export function OrgProvider({ orgId, children }: { orgId: string; children: Reac
   })
 
   const loading = orgLoading || subLoading || roleLoading
-  const membershipTerm = resolveOrgMembershipTerm(org?.membership_term, locale)
+  const affiliationTerm = resolveAffiliationTerm(org?.affiliation_term, locale)
 
   return (
     <OrgContext.Provider value={{
@@ -77,7 +77,7 @@ export function OrgProvider({ orgId, children }: { orgId: string; children: Reac
       userRole: userRole ?? null,
       loading,
       isAdmin: userRole === 'org_admin',
-      membershipTerm,
+      affiliationTerm,
     }}>
       {children}
     </OrgContext.Provider>

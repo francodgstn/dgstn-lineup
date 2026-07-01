@@ -37,8 +37,8 @@ import admin from 'firebase-admin'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
-  ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION,
-  DEFAULT_ORG_MEMBERSHIP_STATUSES,
+  ORG_AFFILIATION_STATUSES_SUBCOLLECTION,
+  DEFAULT_ORG_AFFILIATION_STATUSES,
   orgAffiliationTypes,
   teamAffiliationTypes,
   buildAffiliationDoc,
@@ -2101,11 +2101,11 @@ async function seedOrg() {
     })
 
   // ── Org membership statuses (reused as affiliation statuses) ───────────────
-  for (const st of DEFAULT_ORG_MEMBERSHIP_STATUSES) {
+  for (const st of DEFAULT_ORG_AFFILIATION_STATUSES) {
     await db
       .collection('organizations')
       .doc(ORG_ID)
-      .collection(ORG_MEMBERSHIP_STATUSES_SUBCOLLECTION)
+      .collection(ORG_AFFILIATION_STATUSES_SUBCOLLECTION)
       .doc(st.id)
       .set(st)
   }

@@ -100,13 +100,13 @@ service cloud.firestore {
       return orgId != null && hasOrgRole(orgId, 'org_admin');
     }
 
-    // Returns true if writing org_membership_* fields is permitted for the current user.
-    // Short-circuits to true when the team has no org or the org has not enabled the lock.
-    // Triggered only when org_membership_* appear in the write diff — zero extra cost otherwise.
-    function orgMembershipWriteAllowed(teamId) {
+    // Returns true if the current user may write org-locked affiliation fields.
+    // Short-circuits to true when the team has no org or the org has not enabled the
+    // affiliation lock (Organization.lock_affiliation).
+    function orgAffiliationWriteAllowed(teamId) {
       let orgId = get(/databases/$(database)/documents/teams/$(teamId)).data.get('org_id', null);
       return orgId == null
-        || !get(/databases/$(database)/documents/organizations/$(orgId)).data.get('lock_org_membership', false)
+        || !get(/databases/$(database)/documents/organizations/$(orgId)).data.get('lock_affiliation', false)
         || get(/databases/$(database)/documents/organizations/$(orgId)/org_members/$(request.auth.uid)).data.get('role', '') == 'org_admin';
     }
 
@@ -1064,7 +1064,7 @@ service cloud.firestore {
         allow write: if false; // Cloud Functions only
       }
 
-      match /membership_statuses/{statusId} {
+      match /affiliation_statuses/{statusId} {
         allow read:   if isOrgMember(orgId);
         allow write:  if hasOrgRole(orgId, 'org_admin');
         allow delete: if hasOrgRole(orgId, 'org_admin');

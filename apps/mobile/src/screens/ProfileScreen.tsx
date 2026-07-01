@@ -125,7 +125,7 @@ export const ProfileScreen: React.FC = () => {
   const scrollRef = useRef<any>(null);
 
   const [teamProfile, setTeamProfile] = useState<TeamPublicProfile | null>(null);
-  const [membershipTerm, setMembershipTerm] = useState<string>('Membership');
+  const [affiliationTerm, setMembershipTerm] = useState<string>('Membership');
   const [subscriptionTypeName, setSubscriptionTypeName] = useState<string | null>(null);
   const [membershipCollapsed, setMembershipCollapsed] = useState(true);
   const [teamCardCollapsed, setTeamCardCollapsed] = useState(true);
@@ -418,7 +418,7 @@ export const ProfileScreen: React.FC = () => {
             onSaveWeight={handleUpdateWeight}
             onCancelWeightEdit={() => setIsEditingWeight(false)}
             isSavingWeight={isSavingWeight}
-            membershipTerm={membershipTerm}
+            affiliationTerm={affiliationTerm}
           />
           {teamProfile && (
             <TeamCard
@@ -1032,7 +1032,7 @@ export const ProfileScreen: React.FC = () => {
         matchedContacts={matchedContacts}
         onSelectContact={handleSelectContact}
         isSwitchingContact={isSwitchingContact}
-        membershipTerm={membershipTerm}
+        affiliationTerm={affiliationTerm}
       />
 
       <ProfileUpdateModal

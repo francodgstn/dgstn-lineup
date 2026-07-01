@@ -728,7 +728,7 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
 export default function DashboardPage() {
   const { currentTeamId, profile, team } = useAuth()
   const t = useTranslations('Dashboard')
-  const membershipTerm = useAffiliationTerm()
+  const affiliationTerm = useAffiliationTerm()
 
   const { data: contacts, isLoading: contactsLoading } = useContacts(currentTeamId)
   const { data: sessions, isLoading: sessionsLoading } = useUpcomingSessions(currentTeamId)
@@ -832,7 +832,7 @@ export default function DashboardPage() {
             }
           />
           <StatCard
-            title={membershipTerm}
+            title={affiliationTerm}
             value={activeMembers}
             subtitle={t('statActiveMembersSub')}
             icon={Users}

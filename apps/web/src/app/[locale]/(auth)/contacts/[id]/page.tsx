@@ -95,7 +95,7 @@ import type {
   PlanFeature,
   Affiliation,
   AffiliationType,
-  OrgMembershipStatusDef,
+  OrgAffiliationStatusDef,
   EngagementBand,
   EngagementThresholds,
 } from '@linyup/shared'
@@ -105,7 +105,7 @@ import {
   CONTACT_SOURCES,
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
-  DEFAULT_ORG_MEMBERSHIP_STATUSES,
+  DEFAULT_ORG_AFFILIATION_STATUSES,
   computeEngagementBand,
 } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
@@ -672,19 +672,19 @@ function useAffiliationTypes(teamId: string | null, orgId?: string | null) {
 }
 
 function useOrgAffiliationStatuses(orgId?: string | null) {
-  return useQuery<OrgMembershipStatusDef[]>({
+  return useQuery<OrgAffiliationStatusDef[]>({
     queryKey: ['org-affiliation-statuses', orgId ?? null],
     enabled: !!orgId,
     queryFn: async () => {
-      if (!orgId) return DEFAULT_ORG_MEMBERSHIP_STATUSES
+      if (!orgId) return DEFAULT_ORG_AFFILIATION_STATUSES
       const snap = await getDocs(
-        collection(db, ORGANIZATIONS_COLLECTION, orgId, 'membership_statuses')
+        collection(db, ORGANIZATIONS_COLLECTION, orgId, 'affiliation_statuses')
       )
-      if (snap.empty) return DEFAULT_ORG_MEMBERSHIP_STATUSES
+      if (snap.empty) return DEFAULT_ORG_AFFILIATION_STATUSES
       const docs = snap.docs
-        .map((d) => ({ ...d.data(), id: d.id }) as OrgMembershipStatusDef)
+        .map((d) => ({ ...d.data(), id: d.id }) as OrgAffiliationStatusDef)
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-      return docs.length > 0 ? docs : DEFAULT_ORG_MEMBERSHIP_STATUSES
+      return docs.length > 0 ? docs : DEFAULT_ORG_AFFILIATION_STATUSES
     },
   })
 }
@@ -3735,7 +3735,7 @@ function ContactHeaderStats({ contact }: { contact: Contact }) {
   )
 }
 
-// ─── affiliation status badge (reuses OrgMembershipStatusDef color system) ────
+// ─── affiliation status badge (reuses OrgAffiliationStatusDef color system) ────
 
 const AFFIL_COLOR_CLASSES: Record<string, { bg: string; text: string; border: string }> = {
   green: {
@@ -3770,7 +3770,7 @@ function AffilStatusBadge({
   statuses,
 }: {
   statusId: string
-  statuses: OrgMembershipStatusDef[]
+  statuses: OrgAffiliationStatusDef[]
 }) {
   const def = statuses.find((s) => s.id === statusId) ?? statuses[0]
   const color = AFFIL_COLOR_CLASSES[def?.color ?? 'gray'] ?? AFFIL_COLOR_CLASSES.gray
@@ -3801,7 +3801,7 @@ function AffiliationsTab({
 
   const { data: affiliations = [], isLoading } = useContactAffiliations(contact.id)
   const { data: affiliationTypes = [] } = useAffiliationTypes(teamId, orgId)
-  const { data: statuses = DEFAULT_ORG_MEMBERSHIP_STATUSES } = useOrgAffiliationStatuses(orgId)
+  const { data: statuses = DEFAULT_ORG_AFFILIATION_STATUSES } = useOrgAffiliationStatuses(orgId)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Affiliation | null>(null)
@@ -3968,7 +3968,7 @@ function UpsertAffiliationDialog({
   contact: Contact
   existing: Affiliation | null
   affiliationTypes: AffiliationType[]
-  statuses: OrgMembershipStatusDef[]
+  statuses: OrgAffiliationStatusDef[]
   orgId?: string | null
   onSaved: () => void
 }) {
@@ -4102,7 +4102,7 @@ type TabId =
   | 'stats'
   | 'activity'
   | 'bookings'
-  | 'membership'
+  | 'affiliation'
   | 'payments'
   | 'goals'
   | 'gamification'
@@ -4118,7 +4118,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const snap = await getDoc(doc(db, ORGANIZATIONS_COLLECTION, team!.org_id!))
-      return snap.data()?.lock_org_membership === true
+      return snap.data()?.lock_affiliation === true
     },
   })
   const membershipFieldLocked = orgMembershipLocked && !isOrgAdmin
@@ -4185,7 +4185,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'goals', label: t('tabGoals'), icon: Flag, feature: 'goals' },
     { id: 'stats', label: t('tabStats'), icon: BarChart2 },
     { id: 'bookings', label: t('tabBookings'), icon: CalendarDays },
-    { id: 'membership', label: t('tabMembership'), icon: IdCard },
+    { id: 'affiliation', label: t('tabAffiliation'), icon: IdCard },
     { id: 'payments', label: t('tabPayments'), icon: CreditCard },
     { id: 'activity', label: t('tabActivity'), icon: Activity },
     // Gamification is a plugin — the tab appears only when it's installed (filtered below).
@@ -4248,7 +4248,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         type="button"
                         onClick={() => {
                           setMembershipSeg('subscription')
-                          setTab('membership')
+                          setTab('affiliation')
                         }}
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
@@ -4271,7 +4271,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         type="button"
                         onClick={() => {
                           setMembershipSeg('affiliation')
-                          setTab('membership')
+                          setTab('affiliation')
                         }}
                         className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 transition-colors"
                       >
@@ -4477,7 +4477,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}
             {tab === 'bookings' && <BookingsTab contact={contact} teamId={currentTeamId} />}
-            {tab === 'membership' && (
+            {tab === 'affiliation' && (
               <MembershipTab
                 contact={contact}
                 teamId={currentTeamId}

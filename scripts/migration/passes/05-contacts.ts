@@ -37,7 +37,7 @@ export async function pass05Contacts(
 
     // Seed a team-local 'club' affiliation type for this team's team-issued
     // (membership_status) affiliations. The org-level 'club' type + org
-    // membership_statuses are seeded once in pass00Setup. Flag the team so the
+    // affiliation_statuses are seeded once in pass00Setup. Flag the team so the
     // affiliation axis is enabled. (org_id / organization_ids set in pass02.)
     bw.set(
       tgt.collection('teams').doc(teamId).collection(AFFILIATION_TYPES_SUBCOLLECTION).doc('club'),

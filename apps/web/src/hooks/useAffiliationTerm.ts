@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { useOrg, resolveOrgMembershipTerm } from '@/contexts/OrgContext'
+import { useOrg, resolveAffiliationTerm } from '@/contexts/OrgContext'
 import { useLocale } from 'next-intl'
 
 /**
@@ -14,10 +14,10 @@ import { useLocale } from 'next-intl'
  * Works in both org-admin pages (uses OrgContext) and team-admin pages (loads lazily
  * from the team's org_id via TanStack Query).
  *
- * Renamed from useMembershipTerm — reads the same Organization.membership_term field.
+ * Renamed from useMembershipTerm — reads the same Organization.affiliation_term field.
  */
 export function useAffiliationTerm(): string {
-  const { org, membershipTerm: orgContextTerm } = useOrg()
+  const { org, affiliationTerm: orgContextTerm } = useOrg()
   const { team } = useAuth()
   const locale = useLocale()
 
@@ -32,8 +32,8 @@ export function useAffiliationTerm(): string {
       if (!teamOrgId) return 'Affiliation'
       const snap = await getDoc(doc(db, 'organizations', teamOrgId))
       if (!snap.exists()) return 'Affiliation'
-      const data = snap.data() as { membership_term?: Partial<Record<string, string>> }
-      return resolveOrgMembershipTerm(data.membership_term, locale)
+      const data = snap.data() as { affiliation_term?: Partial<Record<string, string>> }
+      return resolveAffiliationTerm(data.affiliation_term, locale)
     },
   })
 
