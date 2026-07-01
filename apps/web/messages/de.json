@@ -62,6 +62,7 @@
     "gamification": "Gamification",
     "automations": "Automatisierungen",
     "managers": "Manager",
+    "roles": "Rollen",
     "bioLink": "Bio-Link",
     "publicPage": "Öffentliche Seite",
     "plugins": "Plugins",
@@ -833,6 +834,9 @@
     "role_owner": "Inhaber",
     "role_manager": "Manager",
     "role_coach": "Coach",
+    "roleHint_manager": "Voller Zugriff auf das Studio, ausser Abrechnung und Plan-Einstellungen.",
+    "roleHint_coach": "Verwaltet nur die eigenen zugewiesenen Kontakte und den eigenen Terminplan.",
+    "roleHint_viewer": "Nur-Lese-Zugriff auf das Studio.",
     "role_viewer": "Betrachter",
     "you": "Sie",
     "removeMember": "Mitglied entfernen",
@@ -882,6 +886,30 @@
     "confirmCancelInviteMessage": "Einladung an {email} abbrechen?",
     "inviteCancelledSuccess": "Einladung abgebrochen.",
     "inviteLockedFreeBody": "Der Free-Plan ist auf einen einzelnen Benutzer begrenzt. Upgrade auf Coach, um Teammitglieder einzuladen."
+  },
+  "Roles": {
+    "title": "Rollen & Berechtigungen",
+    "coachSubtitle": "Lege fest, was die Coach-Rolle darf. Inhaber, Manager und Betrachter sind fest.",
+    "coachRole": "Coach",
+    "ownScopeNote": "Nur eigene Kontakte & Termine",
+    "scopedHint": "Gilt nur für eigene Datensätze",
+    "save": "Änderungen speichern",
+    "saving": "Speichern…",
+    "saved": "Gespeichert"
+  },
+  "Capabilities": {
+    "contacts_view": "Kontakte ansehen",
+    "contacts_manage": "Kontakte anlegen & bearbeiten",
+    "contacts_delete": "Kontakte löschen",
+    "contacts_view_all": "Alle Kontakte ansehen",
+    "schedule_view": "Terminplan ansehen",
+    "schedule_manage": "Sitzungen erstellen & bearbeiten",
+    "schedule_view_all": "Ganzen Kalender ansehen",
+    "activities_manage": "Aktivitäten verwalten",
+    "events_manage": "Events verwalten",
+    "offerings_manage": "Angebote verwalten",
+    "outreach_manage": "Outreach verwalten",
+    "reports_view": "Berichte ansehen"
   },
   "Activities": {
     "title": "Aktivitäten",

@@ -61,6 +61,7 @@
     "coaching": "Coaching",
     "gamification": "Gamification",
     "managers": "Managers",
+    "roles": "Roles",
     "automations": "Automations",
     "bioLink": "Bio link",
     "publicPage": "Public page",
@@ -833,6 +834,9 @@
     "role_owner": "Owner",
     "role_manager": "Manager",
     "role_coach": "Coach",
+    "roleHint_manager": "Full access to run the studio, except billing and plan settings.",
+    "roleHint_coach": "Manages only their own assigned contacts and their own schedule.",
+    "roleHint_viewer": "Read-only access to the studio.",
     "role_viewer": "Viewer",
     "you": "you",
     "removeMember": "Remove member",
@@ -882,6 +886,30 @@
     "confirmCancelInviteMessage": "Cancel the invitation to {email}?",
     "inviteCancelledSuccess": "Invitation cancelled.",
     "inviteLockedFreeBody": "The Free plan is limited to a single user. Upgrade to Coach to invite team members."
+  },
+  "Roles": {
+    "title": "Roles & permissions",
+    "coachSubtitle": "Customize what the Coach role can do. Owner, Manager and Viewer are fixed.",
+    "coachRole": "Coach",
+    "ownScopeNote": "Own contacts & schedule only",
+    "scopedHint": "Applies only to their own records",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "saved": "Saved"
+  },
+  "Capabilities": {
+    "contacts_view": "View contacts",
+    "contacts_manage": "Add & edit contacts",
+    "contacts_delete": "Delete contacts",
+    "contacts_view_all": "View all contacts",
+    "schedule_view": "View schedule",
+    "schedule_manage": "Create & edit sessions",
+    "schedule_view_all": "View full calendar",
+    "activities_manage": "Manage activities",
+    "events_manage": "Manage events",
+    "offerings_manage": "Manage offerings",
+    "outreach_manage": "Manage outreach",
+    "reports_view": "View reports"
   },
   "Activities": {
     "title": "Activities",

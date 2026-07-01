@@ -8,6 +8,7 @@ import {
   MapPin,
   Puzzle,
   UserCog,
+  ShieldCheck,
   Settings,
   CreditCard,
   Bell,
@@ -58,6 +59,7 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   { id: 'plugins', href: '/settings/plugins', labelKey: 'plugins', icon: Puzzle, group: 'studio', exact: true },
   // Account — workspace admin.
   { id: 'managers', href: '/settings/members', labelKey: 'managers', icon: UserCog, group: 'account' },
+  { id: 'roles', href: '/settings/roles', labelKey: 'roles', icon: ShieldCheck, group: 'account' },
   { id: 'billing', href: '/settings/billing', labelKey: 'billing', icon: CreditCard, group: 'account' },
 ]
 

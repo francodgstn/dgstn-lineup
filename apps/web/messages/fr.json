@@ -62,6 +62,7 @@
     "gamification": "Gamification",
     "automations": "Automatisations",
     "managers": "Managers",
+    "roles": "Rôles",
     "bioLink": "Bio link",
     "publicPage": "Page publique",
     "plugins": "Plugins",
@@ -833,6 +834,9 @@
     "role_owner": "Propriétaire",
     "role_manager": "Gestionnaire",
     "role_coach": "Coach",
+    "roleHint_manager": "Accès complet à la gestion du studio, hors facturation et forfait.",
+    "roleHint_coach": "Ne gère que ses propres contacts assignés et son propre planning.",
+    "roleHint_viewer": "Accès en lecture seule au studio.",
     "role_viewer": "Observateur",
     "you": "vous",
     "removeMember": "Retirer le membre",
@@ -882,6 +886,30 @@
     "confirmCancelInviteMessage": "Annuler l'invitation à {email} ?",
     "inviteCancelledSuccess": "Invitation annulée.",
     "inviteLockedFreeBody": "L'offre Gratuite est limitée à un seul utilisateur. Passez à Coach pour inviter des membres de l'équipe."
+  },
+  "Roles": {
+    "title": "Rôles et autorisations",
+    "coachSubtitle": "Personnalisez ce que le rôle Coach peut faire. Propriétaire, Gestionnaire et Observateur sont fixes.",
+    "coachRole": "Coach",
+    "ownScopeNote": "Uniquement ses contacts et son planning",
+    "scopedHint": "S’applique uniquement à ses propres fiches",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré"
+  },
+  "Capabilities": {
+    "contacts_view": "Voir les contacts",
+    "contacts_manage": "Créer et modifier des contacts",
+    "contacts_delete": "Supprimer des contacts",
+    "contacts_view_all": "Voir tous les contacts",
+    "schedule_view": "Voir le planning",
+    "schedule_manage": "Créer et modifier des séances",
+    "schedule_view_all": "Voir tout le calendrier",
+    "activities_manage": "Gérer les activités",
+    "events_manage": "Gérer les événements",
+    "offerings_manage": "Gérer les offres",
+    "outreach_manage": "Gérer la prospection",
+    "reports_view": "Voir les rapports"
   },
   "Activities": {
     "title": "Activités",

@@ -12,6 +12,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
@@ -110,12 +111,32 @@ function entryToStage(entry: ContactEntry): {
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
-function useActiveContacts(teamId: string | null) {
+// `coachScopeUid` restricts the list to a coach's own book (assigned_coach_id ==
+// uid). Own-scoped members (coaches) may only read their assigned contacts per the
+// Firestore rules, so a broad query would be denied — we filter by assignee and do
+// the active/archived filtering + sort client-side (a coach's book is small).
+function useActiveContacts(teamId: string | null, coachScopeUid?: string | null) {
   return useQuery<Contact[]>({
-    queryKey: ['contacts', 'active', teamId],
+    queryKey: ['contacts', 'active', teamId, coachScopeUid ?? 'all'],
     enabled: !!teamId,
     queryFn: async () => {
       if (!teamId) return []
+      if (coachScopeUid) {
+        const snap = await getDocs(
+          query(
+            collection(db, CONTACTS_COLLECTION),
+            where('teamId', '==', teamId),
+            where('assigned_coach_id', '==', coachScopeUid),
+          ),
+        )
+        return snap.docs
+          .map((d) => ({ ...d.data(), id: d.id }) as Contact)
+          .filter((c) => !c.deleted_at && !c.archived_at)
+          .sort((a, b) =>
+            (a.lastname ?? '').localeCompare(b.lastname ?? '') ||
+            (a.firstname ?? '').localeCompare(b.firstname ?? ''),
+          )
+      }
       const q = query(
         collection(db, CONTACTS_COLLECTION),
         where('teamId', '==', teamId),
@@ -249,6 +270,9 @@ function CreateContactDialog({
     defaultValues: { entry: 'signup' },
   })
   const entry = watch('entry')
+  // A coach (own-scoped) creating a contact auto-assigns it to themselves so it
+  // lands in their own book and satisfies the own-scope Firestore rules.
+  const { ownScoped } = useCapabilities()
   // entry options: booking (trial), walk_in (trial attended), signup (member), import (member)
   const ENTRIES: ContactEntry[] = ['booking', 'walk_in', 'signup']
 
@@ -271,6 +295,7 @@ function CreateContactDialog({
       acquisition_stage_updated_at: serverTimestamp(),
       lead_acknowledged: false,
       createdBy: userId,
+      assigned_coach_id: ownScoped ? userId : null,
       created_at: serverTimestamp(),
       deleted_at: null,
       archived_at: null,
@@ -1658,13 +1683,17 @@ type TabId = 'active' | 'archived' | 'deleted' | 'requests'
 export default function ContactsPage() {
   const { currentTeamId, user, team } = useAuth()
   const { isAtLeast, plan } = usePlan()
+  const { ownScoped } = useCapabilities()
   const { openUpgradeModal } = useUpgradeModal()
   const qc = useQueryClient()
   const t = useTranslations('Contacts')
 
-  const { data: active = [], isLoading: loadingActive } = useActiveContacts(currentTeamId)
-  const { data: archived = [], isLoading: loadingArchived } = useArchivedContacts(currentTeamId)
-  const { data: deleted = [], isLoading: loadingDeleted } = useDeletedContacts(currentTeamId)
+  // Coaches (own-scoped) see only their assigned contacts and have no
+  // archived/deleted admin views (those queries would be denied by the rules).
+  const coachScopeUid = ownScoped ? (user?.uid ?? null) : null
+  const { data: active = [], isLoading: loadingActive } = useActiveContacts(currentTeamId, coachScopeUid)
+  const { data: archived = [], isLoading: loadingArchived } = useArchivedContacts(ownScoped ? null : currentTeamId)
+  const { data: deleted = [], isLoading: loadingDeleted } = useDeletedContacts(ownScoped ? null : currentTeamId)
   const { data: requests = [] } = useContactRequests(currentTeamId)
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
   const { isInstalled } = useInstalledPlugins()
@@ -1901,8 +1930,9 @@ export default function ContactsPage() {
 
   const TABS: { id: TabId; label: string; count: number }[] = [
     { id: 'active',   label: t('tabActive'),   count: active.length },
-    { id: 'archived', label: t('tabArchived'),  count: archived.length },
-    { id: 'deleted',  label: t('tabDeleted'),   count: deleted.length },
+    // Archived/deleted are studio-admin views — hidden for own-scoped coaches.
+    ...(ownScoped ? [] : [{ id: 'archived' as TabId, label: t('tabArchived'), count: archived.length }]),
+    ...(ownScoped ? [] : [{ id: 'deleted' as TabId, label: t('tabDeleted'), count: deleted.length }]),
     { id: 'requests', label: t('tabRequests'),  count: requests.filter((r) => (r.status ?? 'pending') === 'pending').length },
   ]
 

@@ -62,6 +62,7 @@
     "gamification": "Gamification",
     "automations": "Automazioni",
     "managers": "Manager",
+    "roles": "Ruoli",
     "bioLink": "Bio link",
     "publicPage": "Pagina pubblica",
     "plugins": "Plugin",
@@ -833,6 +834,9 @@
     "role_owner": "Proprietario",
     "role_manager": "Manager",
     "role_coach": "Coach",
+    "roleHint_manager": "Accesso completo alla gestione dello studio, tranne fatturazione e piano.",
+    "roleHint_coach": "Gestisce solo i propri contatti assegnati e il proprio calendario.",
+    "roleHint_viewer": "Accesso in sola lettura allo studio.",
     "role_viewer": "Osservatore",
     "you": "tu",
     "removeMember": "Rimuovi membro",
@@ -882,6 +886,30 @@
     "confirmCancelInviteMessage": "Annullare l'invito a {email}?",
     "inviteCancelledSuccess": "Invito annullato.",
     "inviteLockedFreeBody": "Il piano Free è limitato a un singolo utente. Passa al Coach per invitare membri del team."
+  },
+  "Roles": {
+    "title": "Ruoli e autorizzazioni",
+    "coachSubtitle": "Personalizza cosa può fare il ruolo Coach. Proprietario, Manager e Osservatore sono fissi.",
+    "coachRole": "Coach",
+    "ownScopeNote": "Solo contatti e calendario propri",
+    "scopedHint": "Vale solo per le proprie schede",
+    "save": "Salva modifiche",
+    "saving": "Salvataggio…",
+    "saved": "Salvato"
+  },
+  "Capabilities": {
+    "contacts_view": "Vedi contatti",
+    "contacts_manage": "Crea e modifica contatti",
+    "contacts_delete": "Elimina contatti",
+    "contacts_view_all": "Vedi tutti i contatti",
+    "schedule_view": "Vedi calendario",
+    "schedule_manage": "Crea e modifica sessioni",
+    "schedule_view_all": "Vedi intero calendario",
+    "activities_manage": "Gestisci attività",
+    "events_manage": "Gestisci eventi",
+    "offerings_manage": "Gestisci offerte",
+    "outreach_manage": "Gestisci outreach",
+    "reports_view": "Vedi report"
   },
   "Activities": {
     "title": "Attività",

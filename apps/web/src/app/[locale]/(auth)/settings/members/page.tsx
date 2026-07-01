@@ -14,6 +14,7 @@ import {
   Shield,
   Crown,
   Eye,
+  Dumbbell,
   Clock,
   CheckCircle2,
   X,
@@ -89,6 +90,7 @@ function formatDate(ts: string | { seconds: number } | Date | null | undefined):
 function roleIcon(role: TeamRole) {
   if (role === 'owner') return <Crown className="h-3.5 w-3.5" />
   if (role === 'manager') return <Shield className="h-3.5 w-3.5" />
+  if (role === 'coach') return <Dumbbell className="h-3.5 w-3.5" />
   return <Eye className="h-3.5 w-3.5" />
 }
 
@@ -162,9 +164,11 @@ function InviteDialog({ open, onClose, onSuccess }: InviteDialogProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="manager">{t('role_manager')}</SelectItem>
+                <SelectItem value="coach">{t('role_coach')}</SelectItem>
                 <SelectItem value="viewer">{t('role_viewer')}</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">{t(`roleHint_${role}`)}</p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
@@ -278,6 +282,7 @@ function ChangeRoleDialog({ open, member, onClose, onSuccess }: ChangeRoleDialog
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="manager">{t('role_manager')}</SelectItem>
+              <SelectItem value="coach">{t('role_coach')}</SelectItem>
               <SelectItem value="viewer">{t('role_viewer')}</SelectItem>
             </SelectContent>
           </Select>

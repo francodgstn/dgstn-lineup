@@ -116,6 +116,37 @@ service cloud.firestore {
              || isTeacher(res);
     }
 
+    // ── Coach own-data scope (capability model) ──────────────────────────────
+    // owner/manager/viewer are all-scoped (today's behaviour); a coach is own-scoped
+    // and may only manage contacts/sessions assigned to or created by them. Members
+    // without a stored `scope` are treated as all-scoped, so existing members and the
+    // three system roles are entirely unaffected by these gates.
+    function callerIsAllScoped(teamId) {
+      // No member doc (e.g. legacy teacher-based access) ⇒ treat as all-scoped so
+      // existing access is never tightened. Only a member doc with scope=='own'
+      // (a coach) is restricted.
+      return !exists(/databases/$(database)/documents/teams/$(teamId)/team_members/$(request.auth.uid))
+             || get(/databases/$(database)/documents/teams/$(teamId)/team_members/$(request.auth.uid)).data.get('scope', 'all') != 'own';
+    }
+
+    function callerOwnsContact(contactRes) {
+      return contactRes.data.get('assigned_coach_id', null) == request.auth.uid
+             || contactRes.data.get('createdBy', null) == request.auth.uid;
+    }
+
+    function callerOwnsSession(sessionRes) {
+      return sessionRes.data.get('coachId', null) == request.auth.uid
+             || sessionRes.data.get('instructorId', null) == request.auth.uid
+             || sessionRes.data.get('createdBy', null) == request.auth.uid;
+    }
+
+    // Team access to a specific contact, honouring coach own-scope. Equivalent to
+    // belongsToUserTeam for all-scoped members; adds the ownership filter for a coach.
+    function canAccessContact(contactRes) {
+      return belongsToUserTeam(contactRes)
+             && (callerIsAllScoped(contactRes.data.teamId) || callerOwnsContact(contactRes));
+    }
+
     function isSelfContact(contactId) {
       return request.auth != null
              && request.auth.token.contactId == contactId
@@ -301,6 +332,15 @@ service cloud.firestore {
                        (isAuthed() && memberId == request.auth.uid &&
                         request.resource.data.role == 'owner' &&
                         request.resource.data.userId == request.auth.uid);
+      }
+
+      // Customizable role config (currently only the Coach role). Team members read it
+      // (to know the Coach permission set); managers+ edit it. Owner-only capabilities
+      // stored here are stripped by resolveRoleCapabilities when member caps are
+      // recomputed, so a stray capability can never actually grant access.
+      match /role_config/{roleId} {
+        allow read: if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'manager');
       }
 
       // Activity log subcollection (moved from users/{userId}/activity_log)
@@ -565,13 +605,19 @@ service cloud.firestore {
 
     // Contacts
     match /contacts/{contactId} {
-      // Create: Must belong to user's current team (new) OR match user ID (old)
-      allow create: if (request.resource.data.teamId == getUserCurrentTeam() && isTeamMember(request.resource.data.teamId))
+      // Create: Must belong to user's current team (new) OR match user ID (old).
+      // Own-scoped members (coach) may only create a contact owned by themselves
+      // (assigned_coach_id / createdBy == uid) so it lands in their own book.
+      allow create: if (request.resource.data.teamId == getUserCurrentTeam()
+                          && isTeamMember(request.resource.data.teamId)
+                          && (callerIsAllScoped(request.resource.data.teamId)
+                              || callerOwnsContact(request.resource)))
                        || isTeacher(request.resource)
                        || hasRole('admin');
 
-      // Read/Update/Delete: Must be member of contact's team OR old teacher-based access
-      allow read: if belongsToUserTeam(resource)
+      // Read/Update/Delete: Must be member of contact's team (own-scope for a coach)
+      // OR old teacher-based access.
+      allow read: if canAccessContact(resource)
                    || hasRole('admin')
                    || isSelfContact(contactId)
                    || sharesContactEmail(resource)
@@ -579,18 +625,18 @@ service cloud.firestore {
       // Belonging now lives in the affiliations subcollection (governed by the
       // catch-all below + the upsertAffiliation callable's org-lock guard), so the
       // old org_membership_* field gate is gone.
-      allow update: if belongsToUserTeam(resource)
+      allow update: if canAccessContact(resource)
                        || hasRole('admin')
                        || (isSelfContact(contactId)
                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at']));
-      allow delete: if belongsToUserTeam(resource) || hasRole('admin');
+      allow delete: if canAccessContact(resource) || hasRole('admin');
 
       // Subscription history subcollection — full CRUD for team members
       match /subscription_history/{historyId} {
-        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin');
         allow create, update, delete:
-          if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+          if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
           || hasRole('admin');
       }
 
@@ -598,32 +644,32 @@ service cloud.firestore {
       // Coaches (team members) have full CRUD.
       // Students can create goals (created_by must be 'student') and update the status field only.
       match /goals/{goalId} {
-        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
                       || isSelfContact(contactId);
-        allow create: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow create: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && request.resource.data.created_by == 'student');
-        allow update: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow update: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && resource.data.created_by == 'student');
-        allow delete: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow delete: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && resource.data.created_by == 'student');
 
         // Goal evaluations subcollection
         // Coaches have full CRUD. Students can create and edit their own evaluations.
         match /evaluations/{evalId} {
-          allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+          allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                         || hasRole('admin')
                         || isSelfContact(contactId);
-          allow create: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+          allow create: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                            || hasRole('admin')
                            || (isSelfContact(contactId) && request.resource.data.evaluated_by == 'student');
-          allow update: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+          allow update: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                            || hasRole('admin')
                            || (isSelfContact(contactId) && resource.data.evaluated_by == 'student');
-          allow delete: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+          allow delete: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                            || hasRole('admin');
         }
       }
@@ -631,26 +677,26 @@ service cloud.firestore {
       // Performance check-ins subcollection
       // Coaches have full CRUD. Students can create and update their own check-ins (filled_by must be 'student').
       match /performance_checkins/{checkinId} {
-        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
                       || isSelfContact(contactId);
-        allow create: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow create: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && request.resource.data.filled_by == 'student');
-        allow update: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow update: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && resource.data.filled_by == 'student');
-        allow delete: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow delete: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin');
       }
 
       // Rules apply to all other child collections
       match /{allChildren=**} {
-        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
                       || isSelfContact(contactId)
                       || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
-        allow write: if belongsToUserTeam(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin');
+        allow write: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin');
       }
 
     }
@@ -719,23 +765,33 @@ service cloud.firestore {
 
     // Sessions
     match /sessions/{session} {
-      // Create: Must belong to user's team and cannot directly set location/tags
+      // Create: Must belong to user's team and cannot directly set location/tags.
+      // Own-scoped members (coach) may only create sessions they run (coachId /
+      // instructorId / createdBy == uid) — they manage their own schedule.
     	allow create: if (belongsToUserTeam(request.resource) || hasRole('admin'))
+                       && (hasRole('admin')
+                           || callerIsAllScoped(request.resource.data.teamId)
+                           || callerOwnsSession(request.resource))
                        && (!request.resource.data.keys().hasAny(['location', 'tags']));
 
-      // Update: Must be team member and cannot update location/tags directly
+      // Update: Must be team member (own-scope for a coach) and cannot update location/tags directly
       allow update: if (belongsToUserTeam(resource) || hasRole('admin'))
+                       && (hasRole('admin')
+                           || callerIsAllScoped(resource.data.teamId)
+                           || callerOwnsSession(resource))
                        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['location', 'tags']));
 
-      // Delete: Must be team member and session must not have location, tags, or participants
+      // Delete: Must be team member (own-scope for a coach) and session must not have location, tags, or participants
       allow delete: if (belongsToUserTeam(resource) || hasRole('admin')) &&
+      (hasRole('admin') || callerIsAllScoped(resource.data.teamId) || callerOwnsSession(resource)) &&
       (
         (!resource.data.keys().hasAll(['location']) || resource.data.location == null) &&
         (!resource.data.keys().hasAll(['tags']) || resource.data.tags == null) &&
         (!resource.data.keys().hasAll(['participants_count']) || resource.data.participants_count == 0)
       );
 
-      // Read: Must be team member
+      // Read: Must be team member. Coaches read the WHOLE calendar (schedule.view.all)
+      // to avoid clashes, so reads are intentionally not own-scoped.
       allow read: if belongsToUserTeam(resource) || hasRole('admin');
 
       // participants sub-collection
