@@ -3,7 +3,11 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import * as admin from 'firebase-admin'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
-import { unpublishSiteForTeam, deleteAllCoursePublicProfiles } from '../utils/plugins'
+import {
+  unpublishSiteForTeam,
+  deleteAllCoursePublicProfiles,
+  deleteAllDocumentPublicProfiles,
+} from '../utils/plugins'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 
 export const onInstalledPluginStatusChange = onDocumentWritten(
@@ -31,6 +35,9 @@ export const onInstalledPluginStatusChange = onDocumentWritten(
     } else if (pluginId === 'online-courses') {
       // Batch-delete all course/public_profile summaries for this team.
       await deleteAllCoursePublicProfiles(teamId)
+    } else if (pluginId === 'documents') {
+      // Batch-delete all document/public_profile summaries for this team.
+      await deleteAllDocumentPublicProfiles(teamId)
     }
 
     // Touch the team doc so syncTeamPublicProfile recomputes active_public_surfaces.

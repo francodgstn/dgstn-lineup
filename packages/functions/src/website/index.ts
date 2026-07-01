@@ -1,9 +1,9 @@
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import sanitizeHtml from 'sanitize-html'
 import { hasTeamRole } from '../utils/teams'
 import { unpublishSiteForTeam } from '../utils/plugins'
+import { sanitizeRichHtml } from '../utils/sanitizeHtml'
 import {
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
@@ -56,31 +56,10 @@ function clean<T extends Dict>(obj: T): T {
   return obj
 }
 
-// Allowlist matching the RichTextEditor's output (headings, lists, marks,
-// blockquote/code, tables, links, images incl. ResizableImage width, and Tiptap
-// task lists). Everything else — <script>, styles, event handlers, non-http(s)
+// Rich-text HTML sanitizer (RICH_TEXT_OPTIONS + sanitizeRichHtml) lives in
+// ../utils/sanitizeHtml so the documents plugin's public sync shares the exact
+// same allowlist. Everything else — <script>, styles, event handlers, non-http(s)
 // URLs — is stripped before the HTML reaches the fully-public site_published doc.
-const RICH_TEXT_OPTIONS: sanitizeHtml.IOptions = {
-  allowedTags: [
-    'p', 'br', 'hr', 'strong', 'em', 's', 'u', 'blockquote', 'code', 'pre',
-    'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'a', 'img',
-    'table', 'thead', 'tbody', 'tr', 'td', 'th', 'div', 'span', 'label', 'input',
-  ],
-  allowedAttributes: {
-    a: ['href', 'target', 'rel'],
-    img: ['src', 'alt', 'width', 'height'],
-    input: ['type', 'checked', 'disabled'],
-    ul: ['data-type'],
-    li: ['data-type', 'data-checked'],
-    '*': ['data-type', 'data-checked'],
-  },
-  allowedSchemes: ['http', 'https'],
-  allowedSchemesByTag: { img: ['http', 'https'] },
-}
-
-function sanitizeRichHtml(html: string): string {
-  return html ? sanitizeHtml(html, RICH_TEXT_OPTIONS) : ''
-}
 
 function sanitizeCta(v: unknown): Dict | undefined {
   const d = asDict(v)

@@ -1,4 +1,6 @@
 import type { Timestamp } from './common'
+// Type-only import — no runtime cycle (document.ts only imports Timestamp).
+import type { DocumentKind } from './document'
 // Type-only import — no runtime cycle (connect.ts imports SaasPlan from here).
 import type { ConnectOnboardingModel, ConnectAccountStatus } from './connect'
 import type { PublicMainAddress } from './place'
@@ -37,6 +39,10 @@ export interface ActivePublicSurfaces {
   // are reached via their own /public/{slug}/forms/{slug} URLs, not a default
   // surface, so this is a discovery signal (e.g. a bio-link entry), not a redirect target.
   forms?: boolean
+  // ≥1 published + public Document exists (documents plugin active). Same discovery-
+  // signal semantics as `forms` — reached via /public/{slug}/documents, never a
+  // default redirect target.
+  documents?: boolean
 }
 
 export interface RankLevel {
@@ -78,6 +84,7 @@ export interface CustomFieldDefinition {
 //  - shop-courses     → /shop?tab=courses         (sellable courses section)
 //  - space            → /space                   (member course library; online-courses plugin)
 //  - site             → /site                    (studio website; website plugin)
+//  - documents        → /documents               (studio's public documents; documents plugin)
 // `route` may carry a query (e.g. 'shop?tab=products') — the public link is a plain
 // <a href>, so the query rides through to deep-link the right shop tab.
 export type SystemLinkTarget =
@@ -89,6 +96,7 @@ export type SystemLinkTarget =
   | 'shop-courses'
   | 'space'
   | 'site'
+  | 'documents'
 
 export const SYSTEM_LINK_TARGETS: readonly SystemLinkTarget[] = [
   'booking',
@@ -99,6 +107,7 @@ export const SYSTEM_LINK_TARGETS: readonly SystemLinkTarget[] = [
   'shop-courses',
   'space',
   'site',
+  'documents',
 ]
 
 export interface SystemLinkMeta {
@@ -115,6 +124,7 @@ export const SYSTEM_LINK_META: Record<SystemLinkTarget, SystemLinkMeta> = {
   'shop-courses': { route: 'shop?tab=courses', defaultIcon: 'GraduationCap' },
   space: { route: 'space', defaultIcon: 'BookOpen' },
   site: { route: 'site', defaultIcon: 'Globe' },
+  documents: { route: 'documents', defaultIcon: 'FileText' },
 }
 
 // A bio-link entry: either a custom external link (`url`) or a "page link" to one
@@ -310,6 +320,12 @@ export interface TeamPublicProfile {
   // content). Computed by syncTeamPublicProfile; the public root reads this to
   // avoid redirecting to a dead surface and to fall back to the bio-link.
   active_public_surfaces?: ActivePublicSurfaces
+  // Documents the studio attached to the signup consent checkbox (documents
+  // plugin config). Denormalized by syncTeamPublicProfile from the published +
+  // public documents referenced in installed_plugins/documents.config so the
+  // ANONYMOUS signup form can render consent links from a single world-readable
+  // doc (never the private installed_plugins nor the root `documents` collection).
+  signup_documents?: Array<{ slug: string; title: string; kind: DocumentKind }>
 }
 
 export interface TeamInvitation {

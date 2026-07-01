@@ -32,6 +32,7 @@ import {
   Package,
   IdCard,
   LayoutTemplate,
+  FileText,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -57,6 +58,7 @@ const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
   Trophy,
   FolderTree,
   Globe,
+  FileText,
 }
 
 // ─── nav config ───────────────────────────────────────────────────────────────

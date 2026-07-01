@@ -37,6 +37,10 @@ export interface PublicSurfaceFlags {
   shopLive: boolean
   /** Booking is a base feature — always live. */
   bookingLive: boolean
+  /** `documents` plugin installed. */
+  documentsActive: boolean
+  /** ≥1 published + public Document exists (plugin + content) — the /documents surface is live. */
+  documentsLive: boolean
 }
 
 export interface UsePublicSurfacesResult {
@@ -89,6 +93,8 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
     spaceLive: activeSurfaces?.space ?? false,
     shopLive: activeSurfaces?.shop ?? false,
     bookingLive: activeSurfaces?.booking ?? true,
+    documentsActive: isInstalled('documents'),
+    documentsLive: activeSurfaces?.documents ?? false,
   }
 
   const defaultSurface: PublicSurface = team?.default_public_surface ?? 'bio-link'

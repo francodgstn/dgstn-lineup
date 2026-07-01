@@ -50,6 +50,11 @@ export default function SignupForm({ slug }: Props) {
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
   const showBranding = team.showBranding === true
+  // Documents the studio attached to signup consent (documents plugin config,
+  // denormalized onto TeamPublicProfile by syncTeamPublicProfile). Empty/absent
+  // falls back to the plain consent text below — no regression for teams without
+  // the plugin installed.
+  const signupDocs = team.signup_documents ?? []
 
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
@@ -146,6 +151,7 @@ export default function SignupForm({ slug }: Props) {
         {
           codeId: string
           contactDetails: Omit<DetailsValues, 'privacyConsent'> & { privacyConsent: boolean }
+          acceptedDocuments?: Array<{ slug?: string; kind?: string; version?: string }>
         },
         { success: boolean }
       >(functions, 'completeSignup')
@@ -160,6 +166,10 @@ export default function SignupForm({ slug }: Props) {
           notes: values.notes || undefined,
           privacyConsent: true,
         },
+        acceptedDocuments:
+          signupDocs.length > 0
+            ? signupDocs.map((d) => ({ slug: d.slug, kind: d.kind, version: '' }))
+            : undefined,
       })
       setStep('success')
     } catch (err: unknown) {
@@ -400,7 +410,26 @@ export default function SignupForm({ slug }: Props) {
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-primary"
               />
               <span className="text-sm text-muted-foreground">
-                I agree to the processing of my personal data by {teamName}.
+                I agree to the processing of my personal data by {teamName}
+                {signupDocs.length > 0 && (
+                  <>
+                    {' '}and accept the{' '}
+                    {signupDocs.map((d, i) => (
+                      <span key={d.slug}>
+                        {i > 0 && (i === signupDocs.length - 1 ? ' and ' : ', ')}
+                        <a
+                          href={`/public/${slug}/documents/${d.slug}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="underline hover:text-foreground"
+                        >
+                          {d.title}
+                        </a>
+                      </span>
+                    ))}
+                  </>
+                )}
+                .
               </span>
             </label>
             {detailsForm.formState.errors.privacyConsent && (

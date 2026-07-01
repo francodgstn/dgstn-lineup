@@ -329,8 +329,14 @@ export function pluginAccessForPlan(
   plan: SaasPlan | null
 ): PluginAccess {
   if (plan === 'studio' || plan === 'organization') return { kind: 'included' }
-  // Free: no add-ons (nothing to bill against) — everything is upgrade-locked.
-  if (plan === 'free') return { kind: 'upgrade', minPlan: 'coach' }
+  if (plan === 'free') {
+    // Plugins explicitly available from Free (minPlan 'free', no paid add-on)
+    // install client-side at no charge — e.g. Documents (core operational docs
+    // like terms/privacy that every studio needs). Everything else is upgrade-
+    // locked: Free has no billing relationship to charge add-ons against.
+    if (!manifest.addon && manifest.minPlan === 'free') return { kind: 'included' }
+    return { kind: 'upgrade', minPlan: 'coach' }
+  }
   // Coach (or unknown/trialing coach):
   //  • plugins standard from Coach (minPlan ≤ coach, no paid add-on) → included
   //    (e.g. Contact Groups, Custom Fields — de-pettified in the 2026-06 pricing

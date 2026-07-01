@@ -7,6 +7,7 @@ import {
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
   COURSES_COLLECTION,
+  DOCUMENTS_COLLECTION,
 } from '@linyup/shared'
 
 /**
@@ -47,6 +48,33 @@ export async function deleteAllCoursePublicProfiles(teamId: string): Promise<voi
     const batch = db.batch()
     for (const courseDoc of docs.slice(i, i + BATCH_SIZE)) {
       const profileRef = courseDoc.ref.collection('public_profile').doc(courseDoc.id)
+      batch.delete(profileRef)
+    }
+    await batch.commit()
+  }
+}
+
+/**
+ * Batch-deletes every documents/{documentId}/public_profile/{documentId} summary
+ * belonging to the team, effectively unpublishing all public documents. Mirrors
+ * what syncDocumentPublicProfile does for a single document on delete/unpublish,
+ * applied to all of the team's documents at once when the plugin is removed.
+ */
+export async function deleteAllDocumentPublicProfiles(teamId: string): Promise<void> {
+  const db = admin.firestore()
+  const docsSnap = await db
+    .collection(DOCUMENTS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .get()
+
+  if (docsSnap.empty) return
+
+  const BATCH_SIZE = 400
+  const docs = docsSnap.docs
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const batch = db.batch()
+    for (const docDoc of docs.slice(i, i + BATCH_SIZE)) {
+      const profileRef = docDoc.ref.collection('public_profile').doc(docDoc.id)
       batch.delete(profileRef)
     }
     await batch.commit()
