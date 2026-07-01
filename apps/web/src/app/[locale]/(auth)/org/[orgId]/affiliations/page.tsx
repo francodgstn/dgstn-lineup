@@ -27,6 +27,8 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import { Search } from 'lucide-react'
+import { renewAffiliationCall } from '@/components/affiliations/renew'
+import { AffiliationBulkBar, RenewConfirmDialog } from '@/components/affiliations/RenewUI'
 
 // ─── colour map ───────────────────────────────────────────────────────────────
 
@@ -147,6 +149,15 @@ function contactName(c: Contact) {
   return [c.firstname, c.lastname].filter(Boolean).join(' ') || '—'
 }
 
+// An affiliation is "expiring soon" if it's currently active and its validity ends
+// within the next 30 days — the target set for a renewal-season bulk renew.
+const EXPIRING_WINDOW_DAYS = 30
+function isExpiringSoon(aff: Affiliation | undefined): boolean {
+  if (!aff?.active || !aff.valid_until) return false
+  const until = (aff.valid_until as unknown as { toDate(): Date }).toDate().getTime()
+  return until <= Date.now() + EXPIRING_WINDOW_DAYS * 86_400_000
+}
+
 // ─── status badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ statusId, defs }: { statusId: string; defs: OrgAffiliationStatusDef[] }) {
@@ -236,6 +247,9 @@ function ContactAffiliationRow({
   orgId,
   affiliationTypeId,
   onUpdated,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   contact: ContactRow
   affiliation: Affiliation | undefined
@@ -244,6 +258,9 @@ function ContactAffiliationRow({
   orgId: string
   affiliationTypeId: string
   onUpdated: () => void
+  selectable: boolean
+  selected: boolean
+  onToggleSelect: (checked: boolean) => void
 }) {
   const t = useTranslations('OrgAffiliations')
   const currentStatusId = affiliation?.status_id ?? 'guest'
@@ -283,6 +300,16 @@ function ContactAffiliationRow({
   return (
     <>
       <tr className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+        <td className="px-2 py-3 w-8">
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={(e) => onToggleSelect(e.target.checked)}
+              className="h-4 w-4 rounded border-input accent-primary align-middle"
+            />
+          )}
+        </td>
         <td className="px-4 py-3">
           <div className="font-medium text-sm">{contactName(contact)}</div>
           {contact.email && (
@@ -345,6 +372,10 @@ export default function OrgAffiliationsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('__all__')
   const [selectedTypeId, setSelectedTypeId] = useState<string>('__all__')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [renewConfirm, setRenewConfirm] = useState(false)
+  const [renewBusy, setRenewBusy] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
   const { data: teams, isLoading: teamsLoading } = useOrgTeamIds(orgId)
   const { data: contacts, isLoading: contactsLoading } = useOrgContacts(teams)
@@ -392,8 +423,12 @@ export default function OrgAffiliationsPage() {
         if (statusFilter === 'not_affiliated' && c.affiliation_summary?.has_active) return false
       } else {
         const aff = affiliationsByContact[c.id]
-        const statusId = aff?.status_id ?? 'guest'
-        if (statusFilter !== '__all__' && statusId !== statusFilter) return false
+        if (statusFilter === '__expiring__') {
+          if (!isExpiringSoon(aff)) return false
+        } else if (statusFilter !== '__all__') {
+          const statusId = aff?.status_id ?? 'guest'
+          if (statusId !== statusFilter) return false
+        }
       }
       if (search) {
         const name = contactName(c).toLowerCase()
@@ -419,6 +454,65 @@ export default function OrgAffiliationsPage() {
     qc.invalidateQueries({ queryKey: ['org-affiliations-for-type', orgId, activeTypeId] })
   }
 
+  const expiringCount = useMemo(() => {
+    if (selectedTypeId === '__all__') return 0
+    let n = 0
+    contacts?.forEach((c) => { if (isExpiringSoon(affiliationsByContact[c.id])) n++ })
+    return n
+  }, [contacts, selectedTypeId, affiliationsByContact])
+
+  // Bulk selection (org admins only), over rows that hold an affiliation of this type.
+  const selectableIds = useMemo(
+    () => (isAdmin ? filtered.filter((c) => affiliationsByContact[c.id]).map((c) => c.id) : []),
+    [filtered, affiliationsByContact, isAdmin],
+  )
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id))
+
+  function toggleAll(checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (checked) selectableIds.forEach((id) => next.add(id))
+      else selectableIds.forEach((id) => next.delete(id))
+      return next
+    })
+  }
+  function toggleOne(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  async function renewSelected() {
+    setRenewBusy(true)
+    try {
+      const ids = [...selected].filter((cid) => affiliationsByContact[cid])
+      const results = await Promise.allSettled(
+        // Each affiliation carries its own teamId (the contact's team).
+        ids.map((cid) =>
+          renewAffiliationCall({
+            teamId: affiliationsByContact[cid]!.teamId,
+            contactId: cid,
+            affiliationId: affiliationsByContact[cid]!.id,
+          }),
+        ),
+      )
+      const ok = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.length - ok
+      // An org admin can select contacts across teams they don't manage — those
+      // calls 403; renew what succeeded and report the rest instead of silently hanging.
+      invalidate()
+      setSelected(new Set())
+      setRenewConfirm(false)
+      setToast(failed ? t('bulkRenewedPartial', { ok, failed }) : t('bulkRenewedToast', { count: ok }))
+      setTimeout(() => setToast(null), 4000)
+    } finally {
+      setRenewBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -436,7 +530,15 @@ export default function OrgAffiliationsPage() {
       {/* Type selector */}
       {affiliationTypes.length > 0 && (
         <div className="flex items-center gap-2">
-          <Select value={selectedTypeId} onValueChange={(v) => v && setSelectedTypeId(v)}>
+          <Select
+            value={selectedTypeId}
+            onValueChange={(v) => {
+              if (!v) return
+              setSelectedTypeId(v)
+              setSelected(new Set())
+              setStatusFilter('__all__')
+            }}
+          >
             <SelectTrigger className="w-[200px] h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
@@ -490,6 +592,16 @@ export default function OrgAffiliationsPage() {
               >
                 {t('filterAll')} {contacts ? `(${contacts.length})` : ''}
               </button>
+              {expiringCount > 0 && (
+                <button
+                  onClick={() => setStatusFilter('__expiring__')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    statusFilter === '__expiring__' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {t('filterExpiring')} ({expiringCount})
+                </button>
+              )}
               {defs.map((s) => {
                 const count = countsByStatus[s.id] ?? 0
                 if (count === 0) return null
@@ -557,6 +669,18 @@ export default function OrgAffiliationsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
+                <th className="px-2 py-3 w-8">
+                  {isAdmin && (
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={(e) => toggleAll(e.target.checked)}
+                      disabled={selectableIds.length === 0}
+                      className="h-4 w-4 rounded border-input accent-primary align-middle"
+                      aria-label={t('selectAll')}
+                    />
+                  )}
+                </th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colName')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">{t('colTeam')}</th>
                 <th className="text-left font-medium text-muted-foreground px-4 py-3">{t('colStatus')}</th>
@@ -574,12 +698,41 @@ export default function OrgAffiliationsPage() {
                   orgId={orgId}
                   affiliationTypeId={selectedTypeId}
                   onUpdated={invalidate}
+                  selectable={isAdmin && !!affiliationsByContact[c.id]}
+                  selected={selected.has(c.id)}
+                  onToggleSelect={(checked) => toggleOne(c.id, checked)}
                 />
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {selected.size > 0 && (
+        <AffiliationBulkBar
+          selectedLabel={t('bulkSelected', { count: selected.size })}
+          renewLabel={t('bulkRenew')}
+          clearLabel={t('clearSelection')}
+          onRenew={() => setRenewConfirm(true)}
+          onClear={() => setSelected(new Set())}
+          busy={renewBusy}
+        />
+      )}
+      <RenewConfirmDialog
+        open={renewConfirm}
+        onOpenChange={setRenewConfirm}
+        title={t('bulkRenewTitle')}
+        description={t('bulkRenewDesc', { count: selected.size })}
+        confirmLabel={t('bulkRenew')}
+        cancelLabel={t('cancel')}
+        onConfirm={renewSelected}
+        busy={renewBusy}
+      />
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-green-600 px-4 py-2.5 text-sm text-white shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   )
 }

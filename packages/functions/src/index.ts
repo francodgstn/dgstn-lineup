@@ -30,7 +30,7 @@ export { beforeSignup } from './auth/beforeSignup'
 export { onSignupInviteCreated } from './auth/onSignupInviteCreated'
 
 // Affiliations
-export { upsertAffiliation, removeAffiliation, approveAffiliation } from './affiliations'
+export { upsertAffiliation, removeAffiliation, approveAffiliation, renewAffiliation } from './affiliations'
 
 // Sync triggers
 export { syncTeamPublicProfile } from './sync/syncTeamPublicProfile'

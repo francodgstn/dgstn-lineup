@@ -46,6 +46,22 @@ async function resolveStatusDefs(
   return DEFAULT_ORG_AFFILIATION_STATUSES
 }
 
+/** Resolve the issuer's "active" status id (countsAsActive===true && isFinal===false),
+ * lowest order first. The mirror of resolveExpiredStatusId in the daily expiry task —
+ * renewing an affiliation reverses expiry by flipping it back to this status. */
+async function resolveActiveStatusId(
+  issuer: AffiliationIssuer,
+  orgId: string | undefined,
+): Promise<string> {
+  const pick = (defs: OrgAffiliationStatusDef[]): string | undefined =>
+    defs
+      .filter((s) => s.countsAsActive && !s.isFinal)
+      .sort((a, b) => a.order - b.order)[0]?.id
+
+  const fromIssuer = pick(await resolveStatusDefs(issuer, orgId))
+  return fromIssuer ?? pick(DEFAULT_ORG_AFFILIATION_STATUSES) ?? 'active'
+}
+
 async function resolveAffiliationType(
   teamId: string,
   affiliation_type_id: string,
@@ -354,4 +370,106 @@ export const approveAffiliation = onCall(async (request) => {
   })
 
   return { id: affiliationId, status_id, active }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// renewAffiliation — reverse expiry: set active + extend the validity window.
+// No payment is processed; the fee (if any) is paid directly to the issuer.
+// Bulk renew is the caller looping this per selected affiliation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Add `months` calendar months to a Date, clamping day overflow (e.g. Jan 31 + 1
+ * month lands on the last day of Feb, not Mar 3). */
+function addMonths(date: Date, months: number): Date {
+  const d = new Date(date.getTime())
+  const targetMonth = d.getMonth() + months
+  d.setMonth(targetMonth)
+  // If the day rolled over into the next month, clamp back to the last valid day.
+  if (d.getMonth() !== ((targetMonth % 12) + 12) % 12) {
+    d.setDate(0)
+  }
+  return d
+}
+
+export const renewAffiliation = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+
+  const data = request.data as {
+    teamId?: string
+    contactId?: string
+    affiliationId?: string
+    months?: number
+    fee_paid?: boolean
+  }
+
+  if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
+  if (!data?.contactId) throw new HttpsError('invalid-argument', 'contactId is required')
+  if (!data?.affiliationId) throw new HttpsError('invalid-argument', 'affiliationId is required')
+
+  const { teamId, contactId, affiliationId } = data
+
+  const db = admin.firestore()
+  const [, affSnap] = await to(
+    db
+      .collection(CONTACTS_COLLECTION)
+      .doc(contactId)
+      .collection(CONTACT_AFFILIATIONS_SUBCOLLECTION)
+      .doc(affiliationId)
+      .get(),
+  )
+  if (!affSnap?.exists) throw new HttpsError('not-found', 'Affiliation not found')
+
+  const affData = affSnap.data() as Affiliation
+  if (affData.teamId !== teamId) {
+    throw new HttpsError('permission-denied', 'Affiliation does not belong to this team')
+  }
+
+  await affiliationWriteAllowed(request.auth.uid, teamId, affData.issuer, affData.org_id)
+
+  const team = await getTeam(teamId)
+  if (!team) throw new HttpsError('not-found', 'Team not found')
+  if (!team.affiliations_enabled) {
+    throw new HttpsError('failed-precondition', 'Affiliations are not enabled for this team')
+  }
+  if (!planSupportsAffiliations(team.plan ?? null)) {
+    throw new HttpsError('failed-precondition', 'Affiliations require Studio or Organization plan')
+  }
+
+  // Validity window: extend from the later of now / current expiry so no time is lost.
+  const type = await resolveAffiliationType(teamId, affData.affiliation_type_id, affData.issuer, affData.org_id)
+  const months =
+    typeof data.months === 'number' && data.months > 0
+      ? Math.floor(data.months)
+      : (type?.default_validity_months ?? 12)
+
+  const now = admin.firestore.Timestamp.now()
+  const currentUntilMs = affData.valid_until
+    ? (affData.valid_until as unknown as admin.firestore.Timestamp).toMillis()
+    : 0
+  const base = new Date(Math.max(now.toMillis(), currentUntilMs))
+  const newValidUntil = admin.firestore.Timestamp.fromDate(addMonths(base, months))
+
+  // Flip back to the issuer's "active" status (reverses the daily expiry task).
+  const activeStatusId = await resolveActiveStatusId(affData.issuer, affData.org_id)
+
+  const updatePayload: Record<string, unknown> = {
+    status_id: activeStatusId,
+    active: true,
+    valid_until: newValidUntil,
+    updated_at: FieldValue.serverTimestamp(),
+  }
+  // Optional, display-only "fee received" flag — no payment is processed here.
+  if (typeof data.fee_paid === 'boolean') {
+    updatePayload.fee_paid = data.fee_paid
+    updatePayload.fee_paid_at = data.fee_paid ? now : FieldValue.delete()
+  }
+
+  await affSnap.ref.update(updatePayload)
+
+  return {
+    id: affiliationId,
+    status_id: activeStatusId,
+    active: true,
+    valid_until: newValidUntil.toMillis(),
+  }
 })
