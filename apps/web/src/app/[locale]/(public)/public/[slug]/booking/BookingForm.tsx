@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
+import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
 import {
   startOfMonth,
   endOfMonth,
@@ -48,6 +49,7 @@ interface ActivityProfile {
   color?: string
   level?: string
   isFreeTrial?: boolean
+  accessRule?: ActivityAccessRule
 }
 
 interface SessionProfile {
@@ -489,6 +491,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               color: data.color ?? undefined,
               level: data.level ?? undefined,
               isFreeTrial: data.isFreeTrial ?? false,
+              accessRule: data.accessRule ?? undefined,
             }
           })
           .sort((a, b) => a.name.localeCompare(b.name))
@@ -884,11 +887,26 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                 <div className="flex-1 p-4 min-w-0">
                   <div className="flex items-start gap-2 flex-wrap">
                     <p className="font-semibold text-sm leading-tight">{a.name}</p>
-                    {a.isFreeTrial && (
-                      <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
-                        Free Trial
-                      </span>
-                    )}
+                    {(() => {
+                      const rule = resolveActivityAccessRule(a)
+                      if (rule.type === 'subscription')
+                        return (
+                          <span className="rounded-full bg-amber-100 text-amber-700 text-xs px-2 py-0.5 font-medium">
+                            Membership required
+                          </span>
+                        )
+                      if (rule.type === 'members')
+                        return (
+                          <span className="rounded-full bg-blue-100 text-blue-700 text-xs px-2 py-0.5 font-medium">
+                            Members only
+                          </span>
+                        )
+                      return a.isFreeTrial ? (
+                        <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
+                          Free Trial
+                        </span>
+                      ) : null
+                    })()}
                     {a.level && (
                       <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
                         {a.level}
