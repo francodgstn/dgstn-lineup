@@ -154,6 +154,7 @@ import {
   User,
   Check,
   IdCard,
+  RefreshCw,
 } from 'lucide-react'
 import {
   Tooltip as UITooltip,
@@ -186,6 +187,8 @@ import {
   type TimelineSpan,
 } from '@/components/contacts/RelationshipTimeline'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
+import { RenewConfirmDialog } from '@/components/affiliations/RenewUI'
+import { renewAffiliationCall, previewRenewedUntil } from '@/components/affiliations/renew'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
 
@@ -3807,6 +3810,9 @@ function AffiliationsTab({
   const [editing, setEditing] = useState<Affiliation | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
   const [approving, setApproving] = useState<string | null>(null)
+  const [renewTarget, setRenewTarget] = useState<Affiliation | null>(null)
+  const [renewBusy, setRenewBusy] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: ['contact-affiliations', contact.id] })
@@ -3815,18 +3821,52 @@ function AffiliationsTab({
     setRemoving(affiliationId)
     try {
       const fn = httpsCallable(functions, 'removeAffiliation')
-      await fn({ contactId: contact.id, affiliationId })
+      await fn({ teamId: contact.teamId, contactId: contact.id, affiliationId })
       invalidate()
     } finally {
       setRemoving(null)
     }
   }
 
+  const handleRenew = async (feePaid: boolean) => {
+    if (!renewTarget || !contact.teamId) return
+    setRenewBusy(true)
+    try {
+      const res = await renewAffiliationCall({
+        teamId: contact.teamId,
+        contactId: contact.id,
+        affiliationId: renewTarget.id,
+        ...(feePaid ? { fee_paid: true } : {}),
+      })
+      invalidate()
+      setRenewTarget(null)
+      const until = new Date(res.valid_until).toLocaleDateString([], {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+      setToast(t('renewedToast', { date: until }))
+      setTimeout(() => setToast(null), 3000)
+    } finally {
+      setRenewBusy(false)
+    }
+  }
+
+  // The active status the "approve" action promotes a requested affiliation to.
+  const activeStatusId =
+    (statuses.find((s) => s.countsAsActive && !s.isFinal) ??
+      statuses.find((s) => s.id === 'active'))?.id ?? 'active'
+
   const handleApprove = async (affiliationId: string) => {
     setApproving(affiliationId)
     try {
       const fn = httpsCallable(functions, 'approveAffiliation')
-      await fn({ contactId: contact.id, affiliationId })
+      await fn({
+        teamId: contact.teamId,
+        contactId: contact.id,
+        affiliationId,
+        status_id: activeStatusId,
+      })
       invalidate()
     } finally {
       setApproving(null)
@@ -3878,6 +3918,11 @@ function AffiliationsTab({
             const isApproving = approving === aff.id
             const requestedStatus = statuses.find((s) => s.id === 'requested')
             const isRequested = requestedStatus && aff.status_id === requestedStatus.id
+            const statusDef = statuses.find((s) => s.id === aff.status_id)
+            const isExpiredStatus = !!statusDef?.isFinal && !statusDef?.countsAsActive
+            // Renew makes sense for an affiliation that has been activated at least once:
+            // extend an active one, or reactivate an expired one.
+            const canRenew = !membershipFieldLocked && (aff.active || isExpiredStatus)
 
             return (
               <div key={aff.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
@@ -3898,6 +3943,26 @@ function AffiliationsTab({
                   {aff.reference && (
                     <p className="text-xs text-muted-foreground">{t('colReference')}: {aff.reference}</p>
                   )}
+                  {typeDef?.fee_amount != null && (
+                    <p className="text-xs text-muted-foreground">
+                      {t('feeLabel')}: {typeDef.fee_amount}
+                      {aff.fee_paid && (
+                        <span className="ml-1.5 inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                          {t('feePaidBadge')}
+                        </span>
+                      )}
+                      {typeDef.issuer_url && (
+                        <a
+                          href={typeDef.issuer_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-1.5 underline hover:text-foreground"
+                        >
+                          {t('feePayLink')}
+                        </a>
+                      )}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {/* Approve action for pending/requested affiliations */}
@@ -3909,6 +3974,15 @@ function AffiliationsTab({
                       title={t('approveButton')}
                     >
                       <ShieldCheck className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {canRenew && (
+                    <button
+                      onClick={() => setRenewTarget(aff)}
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
+                      title={t('renewButton')}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
                     </button>
                   )}
                   {!membershipFieldLocked && (
@@ -3947,6 +4021,41 @@ function AffiliationsTab({
         orgId={orgId}
         onSaved={() => { invalidate(); setEditing(null) }}
       />
+
+      {renewTarget && (() => {
+        const typeDef = affiliationTypes.find((at) => at.id === renewTarget.affiliation_type_id)
+        const currentUntil = renewTarget.valid_until ? tsToDate(renewTarget.valid_until) : null
+        const newUntil = previewRenewedUntil(currentUntil, typeDef?.default_validity_months)
+        const newUntilStr = newUntil.toLocaleDateString([], {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        })
+        const label = typeDef?.label ?? renewTarget.label ?? renewTarget.type_key ?? ''
+        return (
+          <RenewConfirmDialog
+            open
+            onOpenChange={(v) => { if (!v) setRenewTarget(null) }}
+            title={t('renewTitle')}
+            description={t('renewDesc', { label, date: newUntilStr })}
+            confirmLabel={t('renewButton')}
+            cancelLabel={t('cancel')}
+            feeCheckboxLabel={
+              typeDef?.fee_amount != null
+                ? t('feeReceivedLabel', { amount: typeDef.fee_amount })
+                : null
+            }
+            onConfirm={handleRenew}
+            busy={renewBusy}
+          />
+        )
+      })()}
+
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-green-600 px-4 py-2.5 text-sm text-white shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   )
 }
@@ -4003,6 +4112,7 @@ function UpsertAffiliationDialog({
       const typeDef = affiliationTypes.find((at) => at.id === typeId)
       const fn = httpsCallable(functions, 'upsertAffiliation')
       await fn({
+        teamId: contact.teamId,
         contactId: contact.id,
         affiliationId: existing?.id ?? null,
         affiliation_type_id: typeId,

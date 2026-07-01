@@ -49,7 +49,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Users } from 'lucide-react'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 
 /**
  * Manage the team's affiliation TYPES (e.g. club membership, federation licence).
@@ -98,6 +100,8 @@ export function AffiliationTypesManager({ team, teamId }: { team: Team; teamId: 
     const [validityMonths, setValidityMonths] = useState(
       editing?.default_validity_months?.toString() ?? ''
     )
+    const [feeAmount, setFeeAmount] = useState(editing?.fee_amount?.toString() ?? '')
+    const [issuerUrl, setIssuerUrl] = useState(editing?.issuer_url ?? '')
     const [active, setActive] = useState(editing?.active ?? true)
     const [saving, setSaving] = useState(false)
 
@@ -117,6 +121,8 @@ export function AffiliationTypesManager({ team, teamId }: { team: Team; teamId: 
           label: label.trim(),
           default_issuer: defaultIssuer,
           ...(validityMonths ? { default_validity_months: Number(validityMonths) } : {}),
+          ...(feeAmount ? { fee_amount: Number(feeAmount) } : {}),
+          ...(issuerUrl.trim() ? { issuer_url: issuerUrl.trim() } : {}),
           active,
           order: editing?.order ?? types.length,
         }
@@ -194,6 +200,27 @@ export function AffiliationTypesManager({ team, teamId }: { team: Team; teamId: 
                 placeholder={t('defaultValidityPlaceholder')}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label>{t('feeAmountLabel')}</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={feeAmount}
+                onChange={(e) => setFeeAmount(e.target.value)}
+                placeholder={t('feeAmountPlaceholder')}
+              />
+              <p className="text-xs text-muted-foreground">{t('feeAmountHelp')}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('issuerUrlLabel')}</Label>
+              <Input
+                type="url"
+                value={issuerUrl}
+                onChange={(e) => setIssuerUrl(e.target.value)}
+                placeholder={t('issuerUrlPlaceholder')}
+              />
+            </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
                 type="checkbox"
@@ -265,16 +292,25 @@ export function AffiliationTypesManager({ team, teamId }: { team: Team; teamId: 
         <>
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">{t('description')}</p>
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditing(null)
-                setFormOpen(true)
-              }}
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              {t('addButton')}
-            </Button>
+            <div className="flex items-center gap-3 shrink-0">
+              <Link
+                href={'/affiliations' as Route}
+                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+              >
+                <Users className="h-4 w-4" />
+                {t('manageMembersLink')}
+              </Link>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditing(null)
+                  setFormOpen(true)
+                }}
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                {t('addButton')}
+              </Button>
+            </div>
           </div>
 
           {isLoading ? (

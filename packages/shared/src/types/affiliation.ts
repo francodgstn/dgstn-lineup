@@ -34,6 +34,10 @@ export interface Affiliation {
   reference?: string // licence / registration number
   valid_from?: Timestamp
   valid_until?: Timestamp
+  // Display-only bookkeeping: the fee is paid directly to the issuer (not via Linyup).
+  // `fee_paid` is a manual "fee received" flag a manager toggles for their own records.
+  fee_paid?: boolean
+  fee_paid_at?: Timestamp
   created_at?: Timestamp
   updated_at?: Timestamp
   created_by?: string
@@ -50,6 +54,11 @@ export interface AffiliationType {
   issuer_name?: string // governing body, for 'external' types
   org_id?: string // for 'org' types — which org this type belongs to
   default_validity_months?: number
+  // Display-only fee metadata. Linyup never charges this — the member pays the issuer
+  // directly. `fee_amount` is in major currency units (shown with the team's default_currency);
+  // `issuer_url` optionally points to where the member pays / renews with the issuer.
+  fee_amount?: number
+  issuer_url?: string
   active?: boolean
   order?: number
 }
