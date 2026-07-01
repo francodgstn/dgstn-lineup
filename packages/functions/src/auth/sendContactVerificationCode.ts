@@ -10,7 +10,7 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 const CODE_EXPIRY_MS = 15 * 60 * 1000 // 15 minutes
 const MAX_CODES_PER_HOUR = 5
 
-export const sendMembershipVerificationCode = onCall(async (request) => {
+export const sendContactVerificationCode = onCall(async (request) => {
   const data = request.data as { email?: string; teamId?: string }
   const { email, teamId } = data
 

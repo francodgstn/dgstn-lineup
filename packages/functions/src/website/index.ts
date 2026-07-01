@@ -86,7 +86,8 @@ function sanitizeCta(v: unknown): Dict | undefined {
   const d = asDict(v)
   const label = optStr(d.label, 120)
   if (!label) return undefined
-  const action = oneOf(d.action, ['booking', 'membership', 'url'] as const, 'url')
+  const action0 = oneOf(d.action, ['booking', 'signup', 'membership', 'url'] as const, 'url')
+  const action = action0 === 'membership' ? 'signup' : action0 // normalize legacy alias
   return clean({ label, action, url: action === 'url' ? safeUrl(d.url) : undefined })
 }
 
@@ -290,7 +291,8 @@ function sanitizeMeta(raw: unknown, fallbackTitle: string): SiteMeta {
   const header = asDict(d.header)
   const footer = asDict(d.footer)
   const seo = asDict(d.seo)
-  const headerCtaAction = oneOf(header.ctaAction, ['booking', 'membership', 'url'] as const, 'booking')
+  const headerCtaAction0 = oneOf(header.ctaAction, ['booking', 'signup', 'membership', 'url'] as const, 'booking')
+  const headerCtaAction = headerCtaAction0 === 'membership' ? 'signup' : headerCtaAction0 // normalize legacy
 
   return clean({
     title: optStr(d.title, 200) ?? fallbackTitle,

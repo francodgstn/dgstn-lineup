@@ -37,7 +37,7 @@ import { formatDateValue, formatResidence, formatGender } from '../utils/profile
 
 // Redesigned Components
 import { ProfileHeader } from '../components/profile/ProfileHeader';
-import { MembershipCard } from '../components/profile/MembershipCard';
+import { AffiliationCard } from '../components/profile/AffiliationCard';
 import { GamificationCard } from '../components/profile/GamificationCard';
 import { TrainingActivity } from '../components/TrainingActivity';
 import { ProfileModals } from '../components/profile/ProfileModals';
@@ -125,9 +125,9 @@ export const ProfileScreen: React.FC = () => {
   const scrollRef = useRef<any>(null);
 
   const [teamProfile, setTeamProfile] = useState<TeamPublicProfile | null>(null);
-  const [affiliationTerm, setMembershipTerm] = useState<string>('Membership');
+  const [affiliationTerm, setAffiliationTerm] = useState<string>('Affiliation');
   const [subscriptionTypeName, setSubscriptionTypeName] = useState<string | null>(null);
-  const [membershipCollapsed, setMembershipCollapsed] = useState(true);
+  const [affiliationCollapsed, setAffiliationCollapsed] = useState(true);
   const [teamCardCollapsed, setTeamCardCollapsed] = useState(true);
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
   const [lbSort, setLbSort] = useState<'points' | 'streak' | 'best_streak'>('points');
@@ -177,8 +177,8 @@ export const ProfileScreen: React.FC = () => {
       if (contact.teamId) {
         loadedProfile = await FirestoreService.getTeamPublicProfile(contact.teamId);
         setTeamProfile(loadedProfile);
-        const term = await FirestoreService.getOrgMembershipTerm(contact.teamId);
-        setMembershipTerm(term);
+        const term = await FirestoreService.getOrgAffiliationTerm(contact.teamId);
+        setAffiliationTerm(term);
         if (contact.subscription_type_id) {
           const name = await FirestoreService.getSubscriptionTypeName(contact.teamId, contact.subscription_type_id);
           setSubscriptionTypeName(name);
@@ -400,12 +400,12 @@ export const ProfileScreen: React.FC = () => {
         {checkInFeedback && <CheckInFeedbackCard feedback={checkInFeedback} onDismiss={() => setCheckInFeedback(null)} />}
 
         <View>
-          <MembershipCard
+          <AffiliationCard
             contact={contact}
             teamProfile={teamProfile}
             initials={initials}
-            collapsed={membershipCollapsed}
-            onToggleCollapse={() => setMembershipCollapsed(c => !c)}
+            collapsed={affiliationCollapsed}
+            onToggleCollapse={() => setAffiliationCollapsed(c => !c)}
             onShowStatusModal={() => setShowStatusModal(true)}
             onShowGenderInfo={() => setShowGenderInfo(true)}
             isEditingWeight={isEditingWeight}

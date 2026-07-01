@@ -21,7 +21,7 @@ export { listTeamMembers } from './teams/listTeamMembers'
 
 // Auth
 export { generateAuthToken } from './auth/generateAuthToken'
-export { sendMembershipVerificationCode } from './auth/sendMembershipVerificationCode'
+export { sendContactVerificationCode } from './auth/sendContactVerificationCode'
 export { validateAuthToken } from './auth/validateAuthToken'
 export { generateApiKey } from './auth/generateApiKey'
 
@@ -106,7 +106,7 @@ export { capturePlatformMetrics } from './analytics/platformMetrics'
 export { dailyTasks } from './dailyTasks'
 
 // Auth / Membership
-export { verifyMembershipCode, completeMembershipSignup } from './auth/completeMembershipSignup'
+export { verifyContactCode, completeSignup } from './auth/completeSignup'
 export { loginContactWithCode } from './auth/loginContactWithCode'
 
 // Coaching (1:1 slots) — booking/cancellation handled by bookSession/cancelBooking

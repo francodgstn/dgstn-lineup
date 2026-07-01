@@ -16,7 +16,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-interface MembershipCardProps {
+interface AffiliationCardProps {
   contact: Contact;
   teamProfile: TeamPublicProfile | null;
   initials: string;
@@ -45,7 +45,7 @@ const PillHandle: React.FC<{
   </TouchableRipple>
 );
 
-export const MembershipCard: React.FC<MembershipCardProps> = ({
+export const AffiliationCard: React.FC<AffiliationCardProps> = ({
   contact,
   collapsed,
   onToggleCollapse,
@@ -57,7 +57,7 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
   onEditWeight,
   onSaveWeight,
   onCancelWeightEdit,
-  affiliationTerm = 'Membership',
+  affiliationTerm = 'Affiliation',
 }) => {
   const theme = useTheme();
   const chevronAnim = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
@@ -95,7 +95,7 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
   // ── collapsed strip ──────────────────────────────────────────────────────────
   if (collapsed) {
     return (
-      <Card style={styles.membershipCard}>
+      <Card style={styles.affiliationCard}>
         <LinearGradient
           colors={['#0F172A', '#1E293B', '#0F172A']}
           start={{ x: 0, y: 0 }}
@@ -125,14 +125,14 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
 
   // ── expanded card ────────────────────────────────────────────────────────────
   return (
-    <Card style={styles.membershipCard}>
+    <Card style={styles.affiliationCard}>
       <LinearGradient
         colors={['#0F172A', '#1E293B', '#0F172A']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
       >
-        <Card.Content style={styles.membershipContent}>
+        <Card.Content style={styles.affiliationContent}>
           {/* Header Row */}
           <View style={styles.headerRow}>
             <View>
@@ -225,7 +225,7 @@ export const MembershipCard: React.FC<MembershipCardProps> = ({
 };
 
 const styles = StyleSheet.create({
-  membershipCard: {
+  affiliationCard: {
     borderRadius: 24,
     overflow: 'hidden',
     elevation: 3,
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     padding: 4,
     paddingBottom: 0,
   },
-  membershipContent: {
+  affiliationContent: {
     padding: 16,
     paddingBottom: 14,
   },

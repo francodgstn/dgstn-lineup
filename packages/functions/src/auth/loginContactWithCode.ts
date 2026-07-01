@@ -1,5 +1,5 @@
 // Logs an existing contact in using a previously-issued email verification code.
-// Unlike completeMembershipSignup (which creates a new contact), this function
+// Unlike completeSignup (which creates a new contact), this function
 // expects the contact to already exist in Firestore.
 import * as admin from 'firebase-admin'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'

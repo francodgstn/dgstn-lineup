@@ -116,7 +116,7 @@ function CtaEditor({ cta, onChange }: { cta?: SiteCta; onChange: (cta: SiteCta |
           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="booking">Open booking</SelectItem>
-            <SelectItem value="membership">Membership signup</SelectItem>
+            <SelectItem value="signup">Sign-up</SelectItem>
             <SelectItem value="url">External link</SelectItem>
           </SelectContent>
         </Select>

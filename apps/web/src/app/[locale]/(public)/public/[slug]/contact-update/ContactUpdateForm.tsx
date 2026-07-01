@@ -72,7 +72,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
     try {
       const fn = httpsCallable<{ email: string; teamId: string }, { codeId: string }>(
         functions,
-        'sendMembershipVerificationCode'
+        'sendContactVerificationCode'
       )
       const result = await fn({ email: values.email, teamId })
       setEmail(values.email)
@@ -94,7 +94,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
     try {
       const fn = httpsCallable<{ codeId: string; code: string }, { verified: boolean }>(
         functions,
-        'verifyMembershipCode'
+        'verifyContactCode'
       )
       await fn({ codeId, code: values.code })
       setStep('form')
@@ -110,7 +110,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
     try {
       const fn = httpsCallable<{ email: string; teamId: string }, { codeId: string }>(
         functions,
-        'sendMembershipVerificationCode'
+        'sendContactVerificationCode'
       )
       const result = await fn({ email, teamId })
       setCodeId(result.data.codeId)

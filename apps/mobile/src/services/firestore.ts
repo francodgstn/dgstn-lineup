@@ -24,9 +24,9 @@ export const FirestoreService = {
     teamSummaries?: { id: string; name: string }[] | null;
   }> {
     try {
-      const sendMembershipVerificationCode = httpsCallable(
+      const sendContactVerificationCode = httpsCallable(
         getFunctions(),
-        'sendMembershipVerificationCode'
+        'sendContactVerificationCode'
       );
 
       const payload: { email: string; teamId?: string } = {
@@ -37,7 +37,7 @@ export const FirestoreService = {
         payload.teamId = teamId;
       }
 
-      const result = await sendMembershipVerificationCode(payload);
+      const result = await sendContactVerificationCode(payload);
 
       return result.data as any;
     } catch (error) {
@@ -60,9 +60,9 @@ export const FirestoreService = {
     teamSummaries?: { id: string; name: string }[] | null;
   }> {
     try {
-      const verifyMembershipCode = httpsCallable(getFunctions(), 'verifyMembershipCode');
+      const verifyContactCode = httpsCallable(getFunctions(), 'verifyContactCode');
 
-      const result = await verifyMembershipCode({
+      const result = await verifyContactCode({
         codeId,
         code,
         selectedContactId
@@ -139,23 +139,23 @@ export const FirestoreService = {
     }
   },
 
-  async getOrgMembershipTerm(teamId: string): Promise<string> {
+  async getOrgAffiliationTerm(teamId: string): Promise<string> {
     try {
       const teamSnap = await getDoc(doc(db, 'teams', teamId));
       const orgId = teamSnap.exists() ? (teamSnap.data().org_id as string | undefined) : undefined;
-      if (!orgId) return 'Membership';
+      if (!orgId) return 'Affiliation';
 
       const orgSnap = await getDoc(doc(db, 'organizations', orgId));
-      if (!orgSnap.exists()) return 'Membership';
+      if (!orgSnap.exists()) return 'Affiliation';
 
       const termObj = orgSnap.data().affiliation_term as Record<string, string> | undefined;
-      if (!termObj) return 'Membership';
+      if (!termObj) return 'Affiliation';
 
       // Resolve using device language (first 2 chars of locale, e.g. "de" from "de-CH")
       const locale = (Intl.DateTimeFormat().resolvedOptions().locale ?? 'en').slice(0, 2);
-      return termObj[locale] ?? termObj['en'] ?? 'Membership';
+      return termObj[locale] ?? termObj['en'] ?? 'Affiliation';
     } catch {
-      return 'Membership';
+      return 'Affiliation';
     }
   },
 

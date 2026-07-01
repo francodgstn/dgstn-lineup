@@ -43,7 +43,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
   matchedContacts,
   onSelectContact,
   isSwitchingContact,
-  affiliationTerm = 'Membership',
+  affiliationTerm = 'Affiliation',
 }) => {
   const theme = useTheme();
 

@@ -141,7 +141,7 @@ export function SpaceAuthProvider({ slug, children }: Props) {
       try {
         const fn = httpsCallable<{ email: string; teamId: string }, { codeId: string }>(
           functions,
-          'sendMembershipVerificationCode'
+          'sendContactVerificationCode'
         )
         const result = await fn({ email, teamId })
         setCodeId(result.data.codeId)

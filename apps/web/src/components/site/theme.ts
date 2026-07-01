@@ -48,13 +48,15 @@ export const FONT_STACK: Record<SiteFont, string> = {
   rounded: '"ui-rounded", "SF Pro Rounded", "Nunito", "Quicksand", system-ui, sans-serif',
 }
 
-/** Resolve a CTA to an href. booking/membership → bio-link flows; url → external. */
+/** Resolve a CTA to an href. booking/signup → bio-link flows; url → external. */
 export function ctaHref(
   cta: Pick<SiteCta, 'action' | 'url'> | undefined,
   slug: string
 ): string | undefined {
   if (!cta) return undefined
   if (cta.action === 'booking') return `/public/${slug}/booking`
-  if (cta.action === 'membership') return `/public/${slug}/signup`
+  // 'signup' is current; 'membership' is the legacy stored alias.
+  if (cta.action === 'signup' || (cta.action as string) === 'membership')
+    return `/public/${slug}/signup`
   return cta.url || undefined
 }

@@ -18,10 +18,10 @@ import {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// verifyMembershipCode
+// verifyContactCode
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const verifyMembershipCode = onCall(async (request) => {
+export const verifyContactCode = onCall(async (request) => {
   const data = request.data as { codeId?: string; code?: string }
 
   if (!data?.codeId || !data?.code) {
@@ -39,10 +39,10 @@ export const verifyMembershipCode = onCall(async (request) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// completeMembershipSignup
+// completeSignup
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const completeMembershipSignup = onCall(async (request) => {
+export const completeSignup = onCall(async (request) => {
   const data = request.data as {
     codeId?: string
     contactDetails?: {
@@ -165,7 +165,7 @@ export const completeMembershipSignup = onCall(async (request) => {
         (a, b) => (b.data().created_at?.toMillis?.() ?? 0) - (a.data().created_at?.toMillis?.() ?? 0),
       )
       console.log(
-        `[completeMembershipSignup] ${activeMatches.length} contacts share ${normEmail} (team=${teamId}) — finalizing newest ${activeMatches[0].id}`,
+        `[completeSignup] ${activeMatches.length} contacts share ${normEmail} (team=${teamId}) — finalizing newest ${activeMatches[0].id}`,
       )
     }
     contactRef = activeMatches[0].ref
@@ -231,7 +231,7 @@ export const completeMembershipSignup = onCall(async (request) => {
         )
         if (existingAffSnap && !existingAffSnap.empty) {
           console.log(
-            `[completeMembershipSignup] affiliation of type ${affiliationTypeId} already present for contact ${contactId}, skipping`,
+            `[completeSignup] affiliation of type ${affiliationTypeId} already present for contact ${contactId}, skipping`,
           )
         } else {
           const affRef = contactRef.collection(CONTACT_AFFILIATIONS_SUBCOLLECTION).doc()
@@ -247,15 +247,15 @@ export const completeMembershipSignup = onCall(async (request) => {
             created_at: FieldValue.serverTimestamp(),
             updated_at: FieldValue.serverTimestamp(),
           })
-          console.log(`[completeMembershipSignup] created pending affiliation for contact ${contactId}`)
+          console.log(`[completeSignup] created pending affiliation for contact ${contactId}`)
         }
       } else {
-        console.log(`[completeMembershipSignup] no affiliation types found for team ${teamId}, skipping`)
+        console.log(`[completeSignup] no affiliation types found for team ${teamId}, skipping`)
       }
     }
   } catch (err) {
     // Non-fatal: contact is already created; affiliation is best-effort
-    console.error('[completeMembershipSignup] affiliation creation failed (non-fatal):', err)
+    console.error('[completeSignup] affiliation creation failed (non-fatal):', err)
   }
 
   // Mark code as used

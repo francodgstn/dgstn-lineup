@@ -89,7 +89,7 @@ export default function SignupForm({ slug }: Props) {
     try {
       const fn = httpsCallable<{ email: string; teamId: string }, { codeId: string }>(
         functions,
-        'sendMembershipVerificationCode'
+        'sendContactVerificationCode'
       )
       const result = await fn({ email: values.email, teamId })
       setEmail(values.email)
@@ -109,7 +109,7 @@ export default function SignupForm({ slug }: Props) {
     try {
       const fn = httpsCallable<{ codeId: string; code: string }, { verified: boolean }>(
         functions,
-        'verifyMembershipCode'
+        'verifyContactCode'
       )
       await fn({ codeId, code: values.code })
       setStep('details')
@@ -125,7 +125,7 @@ export default function SignupForm({ slug }: Props) {
     try {
       const fn = httpsCallable<{ email: string; teamId: string }, { codeId: string }>(
         functions,
-        'sendMembershipVerificationCode'
+        'sendContactVerificationCode'
       )
       const result = await fn({ email, teamId })
       setCodeId(result.data.codeId)
@@ -148,7 +148,7 @@ export default function SignupForm({ slug }: Props) {
           contactDetails: Omit<DetailsValues, 'privacyConsent'> & { privacyConsent: boolean }
         },
         { success: boolean }
-      >(functions, 'completeMembershipSignup')
+      >(functions, 'completeSignup')
 
       await fn({
         codeId,

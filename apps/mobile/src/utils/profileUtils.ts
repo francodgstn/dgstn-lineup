@@ -1,4 +1,4 @@
-import { AffiliationSummary, ContactResidence, MembershipStatus } from '../types';
+import { AffiliationSummary, ContactResidence, AffiliationStatus } from '../types';
 
 // Rank / belt configuration
 export const RANKS = [
@@ -34,17 +34,17 @@ export const contrastTextColor = (hex: string) => {
   return luminance > 0.5 ? '#000000' : '#FFFFFF';
 };
 
-// Membership status configuration
-export const MEMBERSHIP_STATUS_CONFIG: Record<string, { label: string; description: string; bgColor: string; textColor: string }> = {
+// Affiliation status configuration
+export const AFFILIATION_STATUS_CONFIG: Record<string, { label: string; description: string; bgColor: string; textColor: string }> = {
   guest: {
     label: 'GUEST',
-    description: 'You are registered as a guest. Contact your team to start the membership process.',
+    description: 'You are registered as a guest. Contact your team to start the affiliation process.',
     bgColor: '#FF9800', // Orange
     textColor: '#FFFFFF',
   },
   requested: {
     label: 'REQUESTED',
-    description: 'Your membership request has been submitted. Waiting for the Team Manager to forward it.',
+    description: 'Your affiliation request has been submitted. Waiting for the Team Manager to forward it.',
     bgColor: '#9E9E9E', // Grey
     textColor: '#FFFFFF',
   },
@@ -62,30 +62,30 @@ export const MEMBERSHIP_STATUS_CONFIG: Record<string, { label: string; descripti
   },
   active: {
     label: 'ACTIVE',
-    description: 'Your membership has been approved by the federation and is now valid.',
+    description: 'Your affiliation has been approved by the federation and is now valid.',
     bgColor: '#4CAF50', // Green
     textColor: '#FFFFFF',
   },
   expired: {
     label: 'EXPIRED',
-    description: 'Your membership has reached its end date or was manually expired. Contact your team to renew.',
+    description: 'Your affiliation has reached its end date or was manually expired. Contact your team to renew.',
     bgColor: '#F44336', // Red
     textColor: '#FFFFFF',
   },
 };
 
-// Map membership status to display label
-export const getStatusLabel = (status?: MembershipStatus): string => {
+// Map affiliation status to display label
+export const getStatusLabel = (status?: AffiliationStatus): string => {
   if (!status) return 'MEMBER';
-  return MEMBERSHIP_STATUS_CONFIG[status]?.label || 'MEMBER';
+  return AFFILIATION_STATUS_CONFIG[status]?.label || 'MEMBER';
 };
 
-// Map membership status to badge color
-export const getStatusColors = (status?: MembershipStatus, themeColors?: any): { bg: string; text: string } => {
+// Map affiliation status to badge color
+export const getStatusColors = (status?: AffiliationStatus, themeColors?: any): { bg: string; text: string } => {
   if (!status) {
     return { bg: themeColors?.secondaryContainer || '#E8DEF8', text: themeColors?.onSecondaryContainer || '#1D192B' };
   }
-  const config = MEMBERSHIP_STATUS_CONFIG[status];
+  const config = AFFILIATION_STATUS_CONFIG[status];
   if (config) {
     return { bg: config.bgColor, text: config.textColor };
   }
@@ -93,9 +93,9 @@ export const getStatusColors = (status?: MembershipStatus, themeColors?: any): {
 };
 
 // Get status description for the info modal
-export const getStatusDescription = (status?: MembershipStatus): string => {
-  if (!status) return 'Your membership status is not set.';
-  return MEMBERSHIP_STATUS_CONFIG[status]?.description || 'Your membership status is not set.';
+export const getStatusDescription = (status?: AffiliationStatus): string => {
+  if (!status) return 'Your affiliation status is not set.';
+  return AFFILIATION_STATUS_CONFIG[status]?.description || 'Your affiliation status is not set.';
 };
 
 export const formatDateValue = (value: unknown) => {

@@ -43,9 +43,9 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `manageTeamInvitation` (studio+)
 - ✅ `manageTeamMember` (studio+)
 - ✅ `generateAuthToken`
-- ✅ `sendMembershipVerificationCode`
-- ✅ `verifyMembershipCode`
-- ✅ `completeMembershipSignup`
+- ✅ `sendContactVerificationCode`
+- ✅ `verifyContactCode`
+- ✅ `completeSignup`
 - ✅ `validateAuthToken`
 - ✅ `generateApiKey`
 

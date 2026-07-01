@@ -185,7 +185,7 @@ indexed on `contactId, teamId`) to show unlock state. The success page lands the
 in their Space (`seg=space`) to watch.
 
 **Contact auth on the web** reuses the mobile contact-session mechanism: passwordless email
-code (`sendMembershipVerificationCode`) → `loginContactWithCode` (matches the existing
+code (`sendContactVerificationCode`) → `loginContactWithCode` (matches the existing
 contact, handles same-email selection, mints a session via `buildContactSession`) →
 `signInWithCustomToken`. The custom-token claims `{ contactId, teamId, sessionExpires }`
 are what Firestore + Storage rules check (`isContactOfTeam` / `canReadPublishedCourse` in

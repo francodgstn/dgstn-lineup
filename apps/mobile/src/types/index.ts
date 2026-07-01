@@ -9,7 +9,7 @@ export interface ContactResidence {
 }
 
 /** @deprecated use affiliation_summary instead */
-export type MembershipStatus = 'guest' | 'requested' | 'being_checked' | 'almost_ready' | 'active' | 'expired';
+export type AffiliationStatus = 'guest' | 'requested' | 'being_checked' | 'almost_ready' | 'active' | 'expired';
 
 /** Denormalized affiliation snapshot written by Cloud Functions to contacts/{id} */
 export interface AffiliationSummary {
@@ -53,7 +53,7 @@ export interface Contact {
   gender?: string;
   notes?: string;
   /** @deprecated synced from affiliation_summary.has_active */
-  membership_status?: MembershipStatus;
+  membership_status?: AffiliationStatus;
   affiliation_summary?: AffiliationSummary;
   rank?: number;
   weight?: number;

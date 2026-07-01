@@ -1,5 +1,5 @@
 // Shared helper for verifying a one-time email code stored in verification_codes/{codeId}.
-// Used by verifyMembershipCode, completeMembershipSignup, and loginContactWithCode.
+// Used by verifyContactCode, completeSignup, and loginContactWithCode.
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue, DocumentReference, DocumentData } from 'firebase-admin/firestore'
 import { HttpsError } from 'firebase-functions/v2/https'

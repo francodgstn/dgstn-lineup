@@ -20,10 +20,11 @@ import type { SocialLink } from './team'
 export type SiteTheme = 'light' | 'dark' | 'auto'
 export type SiteFont = 'sans' | 'serif' | 'rounded'
 export type SectionAlign = 'left' | 'center'
-export type SiteCtaAction = 'booking' | 'membership' | 'url'
+export type SiteCtaAction = 'booking' | 'signup' | 'url'
 
-/** A call-to-action button. `booking`/`membership` resolve to the team's bio-link
- *  flows; `url` opens an external link. */
+/** A call-to-action button. `booking`/`signup` resolve to the team's bio-link
+ *  flows; `url` opens an external link. ('membership' is a legacy alias for
+ *  'signup', still accepted on read/publish for older stored sites.) */
 export interface SiteCta {
   label: string
   action: SiteCtaAction
