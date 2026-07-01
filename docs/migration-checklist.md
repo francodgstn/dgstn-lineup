@@ -87,10 +87,10 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `moveContacts`
 - ✅ `generateContactQR`
 - ~~`sendContactQrCodes`~~ — deprecated; QR code lives in the student mobile app instead
-- ✅ `getMembershipQR`
+- ✅ `getContactQR`
 - ✅ `manageContactUpdateRequest`
 - ✅ `requestContactUpdate`
-- ✅ `switchMembershipContact`
+- ✅ `switchActiveContact`
 
 ### Events (studio+)
 - ✅ `sendEventInvitations`

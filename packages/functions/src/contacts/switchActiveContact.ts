@@ -1,11 +1,11 @@
-// Ported from hmd-lineup/functions/src/switchMembershipContact/index.js
+// Ported from hmd-lineup/functions/src/switchActiveContact/index.js
 // Allows a student with a valid membership session to switch to a different contact
 // that shares the same email address (e.g., a family member's account).
 import * as admin from 'firebase-admin'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { buildContactSession } from '../utils/contactSession'
 
-export const switchMembershipContact = onCall(async (request) => {
+export const switchActiveContact = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication is required to switch contacts')
 
   const rawContactId = typeof request.data?.contactId === 'string' ? request.data.contactId.trim() : ''

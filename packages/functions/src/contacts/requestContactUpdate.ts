@@ -52,8 +52,8 @@ export const requestContactUpdate = onCall(async (request) => {
     if (!tokenDoc.exists) throw new HttpsError('not-found', 'Invalid or expired token')
 
     const tokenData = tokenDoc.data()!
-    if (tokenData.type !== 'membership')
-      throw new HttpsError('permission-denied', 'Token is not a membership token')
+    if (tokenData.type !== 'signup')
+      throw new HttpsError('permission-denied', 'Token is not a signup token')
     if ((tokenData.expires_at as Timestamp).toMillis() < Timestamp.now().toMillis())
       throw new HttpsError('deadline-exceeded', 'Token has expired')
     if (tokenData.used) throw new HttpsError('failed-precondition', 'Token has already been used')

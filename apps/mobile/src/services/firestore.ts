@@ -194,12 +194,12 @@ export const FirestoreService = {
     contact: Contact;
   } | null> {
     try {
-      const switchMembershipContact = httpsCallable(
+      const switchActiveContact = httpsCallable(
         getFunctions(),
-        'switchMembershipContact'
+        'switchActiveContact'
       );
 
-      const result = await switchMembershipContact({ contactId });
+      const result = await switchActiveContact({ contactId });
 
       return result.data as any;
     } catch (error) {
@@ -243,8 +243,8 @@ export const FirestoreService = {
     }
   },
 
-  // Get QR code data for check-in (calls getMembershipQR cloud function)
-  async getMembershipQR(): Promise<{
+  // Get QR code data for check-in (calls getContactQR cloud function)
+  async getContactQR(): Promise<{
     success: boolean;
     contactId: string;
     hash: string;
@@ -256,8 +256,8 @@ export const FirestoreService = {
     };
   } | null> {
     try {
-      const getMembershipQRFn = httpsCallable(getFunctions(), 'getMembershipQR');
-      const result = await getMembershipQRFn({});
+      const getContactQRFn = httpsCallable(getFunctions(), 'getContactQR');
+      const result = await getContactQRFn({});
       return result.data as any;
     } catch (error) {
       console.error('Error getting membership QR:', error);
@@ -268,7 +268,7 @@ export const FirestoreService = {
   // Generate a scoped auth token for authenticated actions from the app
   async generateAuthToken(
     contactId: string,
-    type: 'booking' | 'membership' = 'booking'
+    type: 'booking' | 'signup' = 'booking'
   ): Promise<{
     success: boolean;
     token: string;

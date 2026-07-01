@@ -78,10 +78,10 @@ export { setSessionTags } from './sessions/setSessionTags'
 // Contacts
 export { deleteContact, restoreContact, checkInContact, moveContacts } from './contacts'
 export { generateContactQR } from './contacts/generateContactQR'
-export { getMembershipQR } from './contacts/getMembershipQR'
+export { getContactQR } from './contacts/getContactQR'
 export { requestContactUpdate } from './contacts/requestContactUpdate'
 export { manageContactUpdateRequest } from './contacts/manageContactUpdateRequest'
-export { switchMembershipContact } from './contacts/switchMembershipContact'
+export { switchActiveContact } from './contacts/switchActiveContact'
 
 // Events
 export {

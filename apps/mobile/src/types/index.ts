@@ -82,7 +82,7 @@ export type SystemLinkTarget =
   | 'booking'
   | 'signup'
   | 'shop'
-  | 'shop-memberships'
+  | 'shop-subscriptions'
   | 'shop-products'
   | 'shop-courses'
   | 'space'

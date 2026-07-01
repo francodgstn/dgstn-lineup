@@ -76,7 +76,7 @@ const linkSchema = z.object({
   iconName: z.string().optional(),
   // Set → this is a "page link" to one of the team's public surfaces.
   target: z
-    .enum(['booking', 'signup', 'shop', 'shop-memberships', 'shop-products', 'shop-courses', 'space', 'site'])
+    .enum(['booking', 'signup', 'shop', 'shop-subscriptions', 'shop-products', 'shop-courses', 'space', 'site'])
     .optional(),
 })
 
@@ -393,7 +393,7 @@ function useTargetLabel() {
     booking: 'bookingLink',
     signup: 'membershipLink',
     shop: 'shopLink',
-    'shop-memberships': 'membershipsLink',
+    'shop-subscriptions': 'subscriptionsLink',
     'shop-products': 'productsLink',
     'shop-courses': 'shopCoursesLink',
     space: 'coursesLink',
@@ -665,14 +665,14 @@ export default function TeamBioLinkEditorPage() {
   const offeredTargets: SystemLinkTarget[] = [
     'booking',
     'signup',
-    'shop-memberships',
+    'shop-subscriptions',
     'shop-products',
     'shop-courses',
     'space',
     'site',
   ]
   const availableTargets = offeredTargets.filter((tgt) => {
-    if (tgt === 'shop-memberships') return connectEnabled
+    if (tgt === 'shop-subscriptions') return connectEnabled
     if (tgt === 'shop-products') return productsActive
     if (tgt === 'shop-courses') return coursesActive
     if (tgt === 'space') return coursesActive

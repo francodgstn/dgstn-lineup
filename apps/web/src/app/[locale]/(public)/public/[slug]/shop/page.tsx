@@ -13,6 +13,6 @@ export default async function ShopPage({
 }) {
   const { type, tab, course } = await searchParams
   const initialTab =
-    tab === 'products' || tab === 'memberships' || tab === 'courses' ? tab : null
+    tab === 'products' || tab === 'subscriptions' || tab === 'courses' ? tab : null
   return <ShopHome focusTypeId={type ?? null} focusCourseId={course ?? null} initialTab={initialTab} />
 }

@@ -74,7 +74,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
 
     try {
       // 1. Generate membership auth token
-      const tokenResult = await FirestoreService.generateAuthToken(contact.id, 'membership');
+      const tokenResult = await FirestoreService.generateAuthToken(contact.id, 'signup');
       if (!tokenResult?.success || !tokenResult.token) {
         throw new Error('Failed to generate security token');
       }

@@ -1,4 +1,4 @@
-// Ported from hmd-lineup/functions/src/getMembershipQR/index.js
+// Ported from hmd-lineup/functions/src/getContactQR/index.js
 // Student callable (membership auth token with contactId claim) — returns the QR hash
 // for the student's own contact. Used by the student mobile app for check-in.
 import * as admin from 'firebase-admin'
@@ -6,7 +6,7 @@ import * as crypto from 'crypto'
 import { FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 
-export const getMembershipQR = onCall(async (request) => {
+export const getContactQR = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated.')
 
   const contactId = request.auth.token?.contactId as string | undefined

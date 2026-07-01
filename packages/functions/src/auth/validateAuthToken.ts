@@ -6,7 +6,7 @@ import * as admin from 'firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 
-const VALID_TOKEN_TYPES = ['booking', 'membership'] as const
+const VALID_TOKEN_TYPES = ['booking', 'signup'] as const
 const PREFILL_FIELDS = [
   'firstname',
   'lastname',

@@ -340,7 +340,7 @@ export const ProfileScreen: React.FC = () => {
     setIsLoadingQR(true);
     setShowQRModal(true);
     try {
-      const result = await FirestoreService.getMembershipQR();
+      const result = await FirestoreService.getContactQR();
       if (result?.success && result.qrData) {
         setQrData(result.qrData);
       } else {

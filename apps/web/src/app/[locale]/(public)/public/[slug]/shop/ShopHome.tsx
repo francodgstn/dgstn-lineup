@@ -66,7 +66,7 @@ interface RawCoursePublicProfile {
   order?: number
 }
 
-type Tab = 'memberships' | 'products' | 'courses'
+type Tab = 'subscriptions' | 'products' | 'courses'
 
 type Checkout =
   | { kind: 'membership'; typeId: string; typeName: string; price: PlanPrice; mode: CheckoutContactMode }
@@ -104,7 +104,7 @@ export default function ShopHome({
   const [currency, setCurrency] = useState('CHF')
   const [loading, setLoading] = useState(true)
   const [systemDark, setSystemDark] = useState(false)
-  const [tab, setTab] = useState<Tab>(initialTab ?? 'memberships')
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'subscriptions')
   const [tabTouched, setTabTouched] = useState(false)
   const [checkout, setCheckout] = useState<Checkout | null>(null)
   const [courseFocusHandled, setCourseFocusHandled] = useState(false)
@@ -177,30 +177,30 @@ export default function ShopHome({
     return () => mq.removeEventListener('change', handler)
   }, [team?.bioLinkTheme])
 
-  const hasMemberships = plans.length > 0
+  const hasSubscriptions = plans.length > 0
   const hasProducts = products.length > 0
   const hasCourses = courses.length > 0
   const availableTabs = useMemo<Tab[]>(() => {
     const out: Tab[] = []
-    if (hasMemberships) out.push('memberships')
+    if (hasSubscriptions) out.push('subscriptions')
     if (hasProducts) out.push('products')
     if (hasCourses) out.push('courses')
     return out
-  }, [hasMemberships, hasProducts, hasCourses])
+  }, [hasSubscriptions, hasProducts, hasCourses])
   const showTabs = availableTabs.length > 1
 
   // Default the active tab to whichever surface has items, unless the user (or the
   // ?tab= param) chose one. ?type= focusing always implies memberships.
   useEffect(() => {
     if (loading || tabTouched || initialTab) return
-    if (focusTypeId) setTab('memberships')
+    if (focusTypeId) setTab('subscriptions')
     else if (focusCourseId && hasCourses) setTab('courses')
-    else setTab(availableTabs[0] ?? 'memberships')
+    else setTab(availableTabs[0] ?? 'subscriptions')
   }, [loading, tabTouched, initialTab, focusTypeId, focusCourseId, hasCourses, availableTabs])
 
   // Pre-focus a subscription card from ?type=.
   useEffect(() => {
-    if (!focusTypeId || loading || tab !== 'memberships') return
+    if (!focusTypeId || loading || tab !== 'subscriptions') return
     const el = cardRefs.current[focusTypeId]
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [focusTypeId, loading, tab])
@@ -418,7 +418,7 @@ export default function ShopHome({
             {availableTabs.map((key) => {
               const active = tab === key
               const label =
-                key === 'memberships' ? t('tabMemberships') : key === 'products' ? t('tabProducts') : t('tabCourses')
+                key === 'subscriptions' ? t('tabSubscriptions') : key === 'products' ? t('tabProducts') : t('tabCourses')
               return (
                 <button
                   key={key}
@@ -444,11 +444,11 @@ export default function ShopHome({
           <div className="mt-10 flex justify-center">
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: textMuted }} />
           </div>
-        ) : !hasMemberships && !hasProducts && !hasCourses ? (
+        ) : !hasSubscriptions && !hasProducts && !hasCourses ? (
           <p className="mt-10 text-center text-sm" style={{ color: textMuted }}>
             {t('noItems')}
           </p>
-        ) : tab === 'memberships' ? (
+        ) : tab === 'subscriptions' ? (
           <section className="mt-6 space-y-4">
             {!showTabs && (
               <h2

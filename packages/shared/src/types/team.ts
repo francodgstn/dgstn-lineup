@@ -67,7 +67,7 @@ export interface CustomFieldDefinition {
 //  - booking          → /booking                (always available)
 //  - signup           → /signup                 (membership signup; always available)
 //  - shop             → /shop                    (whole self-checkout)
-//  - shop-memberships → /shop?tab=memberships    (subscriptions section)
+//  - shop-subscriptions → /shop?tab=subscriptions    (subscriptions section)
 //  - shop-products    → /shop?tab=products        (products section)
 //  - shop-courses     → /shop?tab=courses         (sellable courses section)
 //  - space            → /space                   (member course library; online-courses plugin)
@@ -78,7 +78,7 @@ export type SystemLinkTarget =
   | 'booking'
   | 'signup'
   | 'shop'
-  | 'shop-memberships'
+  | 'shop-subscriptions'
   | 'shop-products'
   | 'shop-courses'
   | 'space'
@@ -88,7 +88,7 @@ export const SYSTEM_LINK_TARGETS: readonly SystemLinkTarget[] = [
   'booking',
   'signup',
   'shop',
-  'shop-memberships',
+  'shop-subscriptions',
   'shop-products',
   'shop-courses',
   'space',
@@ -104,7 +104,7 @@ export const SYSTEM_LINK_META: Record<SystemLinkTarget, SystemLinkMeta> = {
   booking: { route: 'booking', defaultIcon: 'CalendarDays' },
   signup: { route: 'signup', defaultIcon: 'UserPlus' },
   shop: { route: 'shop', defaultIcon: 'ShoppingBag' },
-  'shop-memberships': { route: 'shop?tab=memberships', defaultIcon: 'Ticket' },
+  'shop-subscriptions': { route: 'shop?tab=subscriptions', defaultIcon: 'Ticket' },
   'shop-products': { route: 'shop?tab=products', defaultIcon: 'Tag' },
   'shop-courses': { route: 'shop?tab=courses', defaultIcon: 'GraduationCap' },
   space: { route: 'space', defaultIcon: 'BookOpen' },
