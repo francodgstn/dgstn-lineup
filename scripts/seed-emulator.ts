@@ -2363,6 +2363,91 @@ async function seedFreeTeam() {
   }
 }
 
+// ── studio coach (granular roles demo) ──────────────────────────────────────────
+// Adds a second team member to the Studio team with the own-scoped 'coach' role, a
+// handful of assigned contacts and a couple of their own sessions, so the Coach role
+// can be exercised end-to-end (sign in as coach2@linyup.com / linyup123).
+async function seedStudioCoach() {
+  const teamId = 'seed-team-studio'
+  const uid = 'seed-studio-coach'
+  const email = 'coach2@linyup.com'
+  const displayName = 'Marco Silva'
+
+  await auth
+    .createUser({ uid, email, password: 'linyup123', displayName, emailVerified: true })
+    .catch(() => {})
+
+  // Mirrors COACH_DEFAULT_CAPABILITIES (packages/shared/src/types/capabilities.ts) —
+  // scripts compile under tsconfig.scripts.json, which doesn't resolve @linyup/shared.
+  const coachCapabilities = [
+    'contacts.view',
+    'contacts.manage',
+    'schedule.view',
+    'schedule.view.all',
+    'schedule.manage',
+  ]
+
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(uid)
+    .set({
+      teamId,
+      userId: uid,
+      role: 'coach',
+      email,
+      capabilities: coachCapabilities,
+      scope: 'own',
+      joined: ts(daysFromNow(-60)),
+      addedBy: uid,
+    })
+
+  await db.collection('users').doc(uid).set({
+    email,
+    displayName,
+    firstname: 'Marco',
+    lastname: 'Silva',
+    currentTeam: teamId,
+    created_at: ts(daysFromNow(-60)),
+  })
+
+  // A stored (default) Coach override so Settings → Roles shows a saved config.
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('role_config')
+    .doc('coach')
+    .set({
+      role: 'coach',
+      capabilities: coachCapabilities,
+      updatedBy: uid,
+      updated_at: ts(daysFromNow(-60)),
+    })
+
+  // Assign the first few active studio contacts to the coach (their own book).
+  const contactsSnap = await db
+    .collection('contacts')
+    .where('teamId', '==', teamId)
+    .where('deleted_at', '==', null)
+    .where('archived_at', '==', null)
+    .limit(6)
+    .get()
+  for (const c of contactsSnap.docs) {
+    await c.ref.update({ assigned_coach_id: uid })
+  }
+
+  // Give the coach a couple of their own sessions to manage.
+  const sessionsSnap = await db.collection('sessions').where('teamId', '==', teamId).limit(3).get()
+  for (const s of sessionsSnap.docs) {
+    await s.ref.update({ coachId: uid, instructorId: uid, coachName: displayName })
+  }
+
+  console.log(
+    `   Coach: ${displayName} (${email}) — studio team, ${contactsSnap.size} contacts + ${sessionsSnap.size} sessions assigned`
+  )
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -2415,6 +2500,9 @@ async function main() {
 
   console.log('\n🏢  Seeding organization (Titan Martial Arts Association)…')
   await seedOrg()
+
+  console.log('\n🧑‍🏫  Seeding studio coach (granular roles demo)…')
+  await seedStudioCoach()
 
   console.log('\n✅ Emulator seeded successfully!\n')
   console.log('   ┌─────────────────────┬──────────────────────┬──────────────┬────────────┐')
