@@ -19,6 +19,7 @@ import {
   buildCoachingICalAttachment,
   buildCoachNotificationEmail,
 } from '../coaching/templates'
+import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 const VALID_LANGS: Lang[] = ['en', 'de', 'fr', 'it']
@@ -487,14 +488,17 @@ export const bookSession = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'Cannot book sessions in the past')
   }
 
-  // Get activity name and isFreeTrial flag
+  // Get activity name and access rule (the paid-access gate)
   const isCoachingSession = sessionData.activityType === 'coaching'
   let activityName = (sessionData.activityName as string) || 'Session'
-  let sessionIsFreeTrial = true // default open
+  let accessRule: ActivityAccessRule = { type: 'open' }
 
   if (isCoachingSession) {
-    // Coaching sessions carry isFreeTrial directly on the session doc
-    sessionIsFreeTrial = sessionData.isFreeTrial !== false
+    // Coaching carries the access gate directly on the session doc.
+    accessRule = resolveActivityAccessRule({
+      accessRule: sessionData.accessRule as ActivityAccessRule | undefined,
+      isFreeTrial: sessionData.isFreeTrial as boolean | undefined,
+    })
     // Check capacity
     const maxParticipants = (sessionData.max_participants as number) || 1
     const bookingsCount = (sessionData.bookings_count as number) || 0
@@ -509,16 +513,22 @@ export const bookSession = onCall(async (request) => {
         .doc(sessionData.activityId)
         .get()
       if (actDoc.exists) {
-        activityName = actDoc.data()!.name || activityName
-        sessionIsFreeTrial = actDoc.data()!.isFreeTrial !== false
+        const actData = actDoc.data()!
+        activityName = actData.name || activityName
+        accessRule = resolveActivityAccessRule({
+          accessRule: actData.accessRule as ActivityAccessRule | undefined,
+          isFreeTrial: actData.isFreeTrial as boolean | undefined,
+        })
       }
     } catch (_) {
       /* non-fatal */
     }
   }
 
-  // ── Members-only gate ──────────────────────────────────────────────────────
-  if (!sessionIsFreeTrial) {
+  // ── Access gate (paid-access axis) ─────────────────────────────────────────
+  // Set when a 'subscription' rule matched a live subscription — stored on the booking.
+  let matchedSubscriptionTypeId: string | null = null
+  if (accessRule.type !== 'open') {
     if (!authenticatedContact) {
       const msg = isCoachingSession
         ? 'This coaching series is for registered members only. Please verify your email.'
@@ -530,6 +540,27 @@ export const bookSession = onCall(async (request) => {
         ? 'This coaching series is for members only. Trial accounts cannot book.'
         : 'This session is for members only. Trial accounts cannot book this class.'
       throw new HttpsError('permission-denied', msg)
+    }
+    if (accessRule.type === 'subscription') {
+      const allowed = accessRule.subscriptionTypeIds ?? []
+      // Coverage = any LIVE subscription the contact holds (fallback: primary snapshot).
+      const held = new Set<string>()
+      const active =
+        (authenticatedContact.active_subscriptions as
+          | Array<{ subscription_type_id?: string }>
+          | undefined) ?? []
+      active.forEach((s) => {
+        if (s.subscription_type_id) held.add(s.subscription_type_id)
+      })
+      if (authenticatedContact.subscription_type_id)
+        held.add(authenticatedContact.subscription_type_id)
+      matchedSubscriptionTypeId = allowed.find((id) => held.has(id)) ?? null
+      if (!matchedSubscriptionTypeId) {
+        throw new HttpsError(
+          'permission-denied',
+          'This class requires an active membership you do not currently hold.'
+        )
+      }
     }
   }
 
@@ -627,9 +658,10 @@ export const bookSession = onCall(async (request) => {
     ? `${getHostingUrl()}/public/${teamSlug}/manage-booking?token=${bookingToken}`
     : null
   const subscriptionTypeId =
-    typeof data.subscription_type_id === 'string' && data.subscription_type_id
+    matchedSubscriptionTypeId ??
+    (typeof data.subscription_type_id === 'string' && data.subscription_type_id
       ? data.subscription_type_id
-      : null
+      : null)
 
   await admin
     .firestore()

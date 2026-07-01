@@ -1,5 +1,6 @@
 // Keeps activities/{activityId}/public_profile/{activityId} in sync
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
+import { resolveActivityAccessRule } from '@linyup/shared'
 
 
 export const syncActivityPublicProfile = onDocumentWritten('activities/{activityId}', async (event) => {
@@ -24,6 +25,8 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     image_url: data.image_url || null,
     isFreeTrial: data.isFreeTrial || false,
     level: data.level || null,
+    // Denormalised access gate so the public booking UI can render lock badges.
+    accessRule: resolveActivityAccessRule({ accessRule: data.accessRule, isFreeTrial: data.isFreeTrial }),
   }
 
   await afterRef.collection('public_profile').doc(activityId).set(publicProfile)

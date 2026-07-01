@@ -3,6 +3,7 @@
 // Coaching sessions (activityType === 'coaching'): always synced when status !== 'cancelled'.
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import type { Timestamp } from 'firebase-admin/firestore'
+import { resolveActivityAccessRule } from '@linyup/shared'
 
 
 export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}', async (event) => {
@@ -41,6 +42,8 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
       max_participants: data.max_participants || null,
       bookings_count: data.bookings_count || 0,
       isFreeTrial: data.isFreeTrial !== false,
+      // Coaching carries its own access gate on the session doc.
+      accessRule: resolveActivityAccessRule({ accessRule: data.accessRule, isFreeTrial: data.isFreeTrial }),
       status: data.status || 'open',
       allowBooking: true,
     }

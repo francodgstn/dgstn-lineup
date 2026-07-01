@@ -25,8 +25,9 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ACTIVITIES_COLLECTION } from '@linyup/shared'
+import { ACTIVITIES_COLLECTION, resolveActivityAccessRule } from '@linyup/shared'
 import type { Activity, ActivityLevel, ActivityType } from '@linyup/shared'
+import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Plus, Pencil, Archive, ImageIcon, X } from 'lucide-react'
@@ -85,7 +86,9 @@ const activitySchema = z.object({
   type: z.enum(['group_class', 'coaching'] as const).default('group_class'),
   level: z.enum(LEVELS),
   color: z.string().optional(),
-  isFreeTrial: z.boolean(),
+  // Paid-access gate (supersedes the legacy isFreeTrial toggle; 'open' === free trial).
+  accessTier: z.enum(['open', 'members', 'subscription'] as const),
+  subscriptionTypeIds: z.array(z.string()),
 })
 
 type ActivityFormData = z.infer<typeof activitySchema>
@@ -131,6 +134,11 @@ function ActivityDialog({
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(editing?.image_url ?? null)
 
+  const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
+  const initialRule = editing
+    ? resolveActivityAccessRule(editing)
+    : { type: 'open' as const, subscriptionTypeIds: [] as string[] }
+
   const {
     register,
     handleSubmit,
@@ -146,10 +154,15 @@ function ActivityDialog({
           type: (editing.type ?? 'group_class') as ActivityType,
           level: editing.level ?? 'all',
           color: editing.color ?? '',
-          isFreeTrial: editing.isFreeTrial ?? true,
+          accessTier: initialRule.type,
+          subscriptionTypeIds: initialRule.subscriptionTypeIds ?? [],
         }
-      : { name: '', description: '', type: 'group_class' as ActivityType, level: 'all', color: '#6366f1', isFreeTrial: true },
+      : {
+          name: '', description: '', type: 'group_class' as ActivityType, level: 'all',
+          color: '#6366f1', accessTier: 'open', subscriptionTypeIds: [],
+        },
   })
+  const accessTier = watch('accessTier')
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -180,7 +193,13 @@ function ActivityDialog({
         type: data.type,
         level: data.level,
         color: data.color ?? '',
-        isFreeTrial: data.isFreeTrial,
+        isFreeTrial: data.accessTier === 'open',
+        accessRule: {
+          type: data.accessTier,
+          ...(data.accessTier === 'subscription'
+            ? { subscriptionTypeIds: data.subscriptionTypeIds }
+            : {}),
+        },
       }
       if (imageFile) {
         const url = await uploadImage(editing.id)
@@ -196,7 +215,13 @@ function ActivityDialog({
         type: data.type,
         level: data.level,
         color: data.color ?? '',
-        isFreeTrial: data.isFreeTrial,
+        isFreeTrial: data.accessTier === 'open',
+        accessRule: {
+          type: data.accessTier,
+          ...(data.accessTier === 'subscription'
+            ? { subscriptionTypeIds: data.subscriptionTypeIds }
+            : {}),
+        },
         slug: slugify(data.name),
         teamId,
         createdBy: userId,
@@ -336,10 +361,64 @@ function ActivityDialog({
             </div>
           </div>
 
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" {...register('isFreeTrial')} className="accent-primary" />
-            <span className="text-sm">{t('fieldFreeTrial')}</span>
-          </label>
+          <div className="space-y-2">
+            <Label>{t('accessLabel')}</Label>
+            <Controller
+              control={control}
+              name="accessTier"
+              render={({ field }) => (
+                <div className="flex flex-col gap-1.5">
+                  {(['open', 'members', 'subscription'] as const).map((tier) => (
+                    <label key={tier} className="flex items-start gap-2 cursor-pointer text-sm">
+                      <input
+                        type="radio"
+                        className="mt-0.5 accent-primary"
+                        checked={field.value === tier}
+                        onChange={() => field.onChange(tier)}
+                      />
+                      <span>
+                        <span className="font-medium">{t(`access_${tier}`)}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {t(`access_${tier}_desc`)}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            />
+            {accessTier === 'subscription' && (
+              <Controller
+                control={control}
+                name="subscriptionTypeIds"
+                render={({ field }) => (
+                  <div className="ml-6 space-y-1.5 rounded-md border p-3">
+                    {subscriptionTypes.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
+                    ) : (
+                      subscriptionTypes.map((s) => (
+                        <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                          <input
+                            type="checkbox"
+                            className="accent-primary"
+                            checked={field.value.includes(s.id)}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.checked
+                                  ? [...field.value, s.id]
+                                  : field.value.filter((id: string) => id !== s.id),
+                              )
+                            }
+                          />
+                          {s.name}
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              />
+            )}
+          </div>
 
           <DialogFooter>
             <Button type="submit" disabled={isSubmitting}>
@@ -398,9 +477,16 @@ function ActivityCard({
               </Badge>
             ) : null
           })()}
-          {activity.isFreeTrial && (
-            <Badge variant="outline" className="text-xs">{t('freeTrialBadge')}</Badge>
-          )}
+          {(() => {
+            const rule = resolveActivityAccessRule(activity)
+            if (rule.type === 'subscription')
+              return <Badge variant="outline" className="text-xs">{t('accessBadgeSubscription')}</Badge>
+            if (rule.type === 'members')
+              return <Badge variant="outline" className="text-xs">{t('access_members')}</Badge>
+            return activity.isFreeTrial ? (
+              <Badge variant="outline" className="text-xs">{t('freeTrialBadge')}</Badge>
+            ) : null
+          })()}
         </div>
         {activity.description && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{activity.description}</p>
