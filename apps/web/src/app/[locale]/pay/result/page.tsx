@@ -21,6 +21,8 @@ export default async function PayResultPage({
   // registration (consent + the studio's required fields). Both only on success.
   const toSpace = success && seg === 'space'
   const toSignup = success && seg === 'signup'
+  // Drop-in bookings land with seg=booking — point the buyer back to the booking page.
+  const toBooking = success && seg === 'booking'
 
   // Primary CTA target + label.
   let ctaHref = `/public/${slug}/shop`
@@ -31,6 +33,9 @@ export default async function PayResultPage({
   } else if (toSignup) {
     ctaHref = `/public/${slug}/signup?from=checkout${email ? `&email=${encodeURIComponent(email)}` : ''}`
     ctaLabel = t('completeRegistration')
+  } else if (toBooking) {
+    ctaHref = `/public/${slug}/booking`
+    ctaLabel = t('backToBooking')
   }
 
   const body = success
@@ -38,7 +43,9 @@ export default async function PayResultPage({
       ? t('successBodyCourse')
       : toSignup
         ? t('successBodySignup')
-        : t('successBody')
+        : toBooking
+          ? t('successBodyBooking')
+          : t('successBody')
     : t('cancelledBody')
 
   return (

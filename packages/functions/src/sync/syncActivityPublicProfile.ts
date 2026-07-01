@@ -27,6 +27,10 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     level: data.level || null,
     // Denormalised access gate so the public booking UI can render lock badges.
     accessRule: resolveActivityAccessRule({ accessRule: data.accessRule, isFreeTrial: data.isFreeTrial }),
+    // Drop-in config so the booking UI can offer pay-per-class (only when enabled + priced).
+    ...(data.dropIn?.enabled && typeof data.dropIn.priceAmount === 'number'
+      ? { dropIn: { enabled: true, priceAmount: data.dropIn.priceAmount } }
+      : {}),
   }
 
   await afterRef.collection('public_profile').doc(activityId).set(publicProfile)

@@ -325,7 +325,7 @@ const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
  * counter doc, incremented in a transaction. Avoids composite indexes (and the
  * emulator-hides-missing-index trap). 'unknown' IPs share one bucket.
  */
-async function checkoutRateLimit(ipRaw: string | undefined): Promise<void> {
+export async function checkoutRateLimit(ipRaw: string | undefined): Promise<void> {
   const ip = (ipRaw ?? 'unknown').replace(/[^\w.:-]/g, '_').slice(0, 60)
   const bucket = Math.floor(Date.now() / 3_600_000)
   const ref = admin.firestore().collection('connect_checkout_attempts').doc(`${ip}:${bucket}`)

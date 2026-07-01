@@ -918,7 +918,11 @@
     "access_subscription": "Abonnements spécifiques",
     "access_subscription_desc": "Seuls les membres possédant l'un des abonnements sélectionnés peuvent réserver.",
     "accessNoSubs": "Aucun type d’abonnement — créez-les sous Abonnements et affiliations.",
-    "accessBadgeSubscription": "Abonnement"
+    "accessBadgeSubscription": "Abonnement",
+    "dropInLabel": "Proposer le drop-in (paiement à la séance)",
+    "dropInPriceLabel": "Prix du drop-in",
+    "dropInPricePlaceholder": "p. ex. 25",
+    "dropInHelp": "Les contacts non couverts peuvent payer ce montant pour réserver une séance. Facturé via votre compte de paiement ; aucun abonnement n'est créé."
   },
   "TeamSettings": {
     "title": "Paramètres de l'équipe",
@@ -2408,7 +2412,9 @@
     "successBodySignup": "Paiement reçu — une dernière étape : finalisez la création de votre compte.",
     "completeRegistration": "Finaliser l'inscription",
     "openSpace": "Ouvrir votre Space",
-    "close": "Vous pouvez fermer cette fenêtre."
+    "close": "Vous pouvez fermer cette fenêtre.",
+    "backToBooking": "Retour à la réservation",
+    "successBodyBooking": "Paiement reçu — votre cours est réservé. À bientôt !"
   },
   "Notifications": {
     "dismiss": "Fermer"

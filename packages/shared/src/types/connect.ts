@@ -183,6 +183,8 @@ export interface MemberPayment {
   contactId?: string | null
   /** Free-form purpose tag, e.g. 'drop_in' | 'belt_test' | 'shop'. */
   purpose: string
+  /** Set for drop-in (pay-per-class) charges — the booked session. */
+  sessionId?: string | null
   description?: string
   /**
    * Generic "what was paid" note, aligned with ExternalPayment.comment so the

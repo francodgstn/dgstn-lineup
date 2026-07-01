@@ -918,7 +918,11 @@
     "access_subscription": "Specific subscriptions",
     "access_subscription_desc": "Only members holding one of the selected subscriptions can book.",
     "accessNoSubs": "No subscription types yet — create them under Plans & Affiliations.",
-    "accessBadgeSubscription": "Membership"
+    "accessBadgeSubscription": "Membership",
+    "dropInLabel": "Offer drop-in (pay per class)",
+    "dropInPriceLabel": "Drop-in price",
+    "dropInPricePlaceholder": "e.g. 25",
+    "dropInHelp": "Uncovered contacts can pay this to book a single class. Charged via your payment account; no membership is created."
   },
   "TeamSettings": {
     "title": "Team settings",
@@ -2408,7 +2412,9 @@
     "successBodySignup": "Payment received — one last step: finish setting up your account.",
     "completeRegistration": "Complete registration",
     "openSpace": "Open your Space",
-    "close": "You can close this window."
+    "close": "You can close this window.",
+    "backToBooking": "Back to booking",
+    "successBodyBooking": "Payment received — your class is booked. See you there!"
   },
   "Notifications": {
     "dismiss": "Dismiss"

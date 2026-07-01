@@ -50,6 +50,10 @@ export interface Activity {
   isFreeTrial?: boolean
   /** Paid-access gate. When unset, derived from `isFreeTrial` (see resolveActivityAccessRule). */
   accessRule?: ActivityAccessRule
+  /** Drop-in / pay-per-class: a contact not covered by the access rule may pay this
+   *  one-off price to book a single session. Charged via Stripe Connect; no membership
+   *  is created. Group-class only for now. Price is major units (team default_currency). */
+  dropIn?: { enabled: boolean; priceAmount?: number }
   isActive?: boolean
   image_url?: string
   created_at?: Timestamp
@@ -66,4 +70,6 @@ export interface ActivityPublicProfile {
   image_url?: string
   /** Denormalised access gate so booking UIs can render lock state and rules can gate. */
   accessRule?: ActivityAccessRule
+  /** Denormalised drop-in config so the booking UI can offer pay-per-class. */
+  dropIn?: { enabled: boolean; priceAmount?: number }
 }

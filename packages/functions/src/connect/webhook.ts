@@ -312,6 +312,14 @@ async function handlePaymentIntent(
             courseName: md.courseTitle ?? null,
           }
         : {}),
+      // Drop-in (pay-per-class) charges carry the booked session so the payments
+      // dashboard can show what the charge was for.
+      ...(md.kind === 'drop_in'
+        ? {
+            kind: 'drop_in',
+            sessionId: md.sessionId ?? null,
+          }
+        : {}),
       amount: pi.amount ?? 0,
       currency: pi.currency ?? 'chf',
       application_fee_amount: pi.application_fee_amount ?? 0,
@@ -466,6 +474,10 @@ async function handleCheckoutCompleted(
   }
   if (md.kind === 'course') {
     await handleCourseCheckout(team, session, md)
+    return
+  }
+  if (md.kind === 'drop_in') {
+    await handleDropInCheckout(team, session, accountId, md)
     return
   }
   if (md.kind !== 'membership' || !md.subscriptionTypeId) return
@@ -687,6 +699,109 @@ async function handleCourseCheckout(
       type: 'course_purchased',
       source: 'stripe_connect',
       message: `Course purchased · ${md.courseTitle ?? 'Course'}`,
+      timestamp: FieldValue.serverTimestamp(),
+    })
+}
+
+/**
+ * Drop-in booking (kind === 'drop_in') — a pay-per-class charge that confirms a
+ * PENDING booking hold created by createDropInCheckout. The payment_intent handler
+ * already recorded the member_payments doc (with sessionId). Here we flip the pending
+ * booking to confirmed/paid, count it toward the session, stamp contactId on the
+ * payment, and log it. The contact was resolved at checkout time and passed via
+ * metadata.contactId (re-verified to belong to the team). Idempotent on redelivery.
+ */
+async function handleDropInCheckout(
+  team: TeamRef,
+  session: any,
+  accountId: string | undefined,
+  md: Record<string, string>
+): Promise<void> {
+  const { sessionId, contactId } = md
+  if (!sessionId || !contactId) return
+  const db = admin.firestore()
+
+  const cSnap = await db.collection(CONTACTS_COLLECTION).doc(contactId).get()
+  if (!cSnap.exists || cSnap.data()?.teamId !== team.teamId) return
+  const contact = cSnap.data()!
+
+  const bookingRef = db.collection('sessions').doc(sessionId).collection('bookings').doc(contactId)
+  const bSnap = await bookingRef.get()
+  const piId =
+    typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id
+
+  // Already confirmed: an idempotent redelivery of the SAME charge, OR a second
+  // (duplicate) charge for a booking that's already paid — refund the duplicate so
+  // the buyer is never charged twice for one seat.
+  if (bSnap.exists && bSnap.data()?.status === 'confirmed') {
+    const existingPi = (bSnap.data()?.payment_intent_id as string | undefined) ?? null
+    if (piId && existingPi && existingPi !== piId && accountId) {
+      try {
+        await refundDirectCharge({
+          accountId,
+          paymentIntentId: piId,
+          reason: 'duplicate',
+          idempotencyKey: `dropin-dup:${piId}`,
+        })
+        await memberPaymentRef(team.teamId, piId).set(
+          { contactId, status: 'refunded', updated_at: FieldValue.serverTimestamp() },
+          { merge: true }
+        )
+        console.log(`[connect] drop-in duplicate charge ${piId} refunded (booking already confirmed)`)
+      } catch (err) {
+        console.error('[connect] drop-in duplicate refund failed:', err)
+      }
+    }
+    return
+  }
+
+  // Confirm the pending hold — or recreate the booking from metadata if the hold was
+  // already swept before payment landed (a paid charge must never be lost).
+  const isNew = !bSnap.exists
+  await bookingRef.set(
+    {
+      firstname: (contact.firstname as string) ?? '',
+      lastname: (contact.lastname as string) ?? '',
+      email: (contact.email as string) ?? '',
+      phone: (contact.phone as string) ?? null,
+      contact: contactId,
+      session: sessionId,
+      teamId: team.teamId,
+      status: 'confirmed',
+      payment_status: 'paid',
+      payment_intent_id: piId ?? null,
+      expires_at: FieldValue.delete(),
+      updated_at: FieldValue.serverTimestamp(),
+      ...(isNew
+        ? { joinedAt: FieldValue.serverTimestamp(), fromBioLink: true, is_new_contact: false }
+        : {}),
+    },
+    { merge: true }
+  )
+
+  // Now that it's paid, count it toward the session's bookings.
+  await db
+    .collection('sessions')
+    .doc(sessionId)
+    .set(
+      {
+        has_bookings: true,
+        bio_link_bookings_count: FieldValue.increment(1),
+        last_booking_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+  if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+
+  await db
+    .collection(CONTACTS_COLLECTION)
+    .doc(contactId)
+    .collection('activity_log')
+    .add({
+      type: 'drop_in_booked',
+      source: 'stripe_connect',
+      message: `Drop-in booking · ${md.activityName ?? 'Class'}`,
       timestamp: FieldValue.serverTimestamp(),
     })
 }

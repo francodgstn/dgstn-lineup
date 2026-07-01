@@ -16,6 +16,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
+import { useLocale } from 'next-intl'
 import {
   startOfMonth,
   endOfMonth,
@@ -50,6 +51,7 @@ interface ActivityProfile {
   level?: string
   isFreeTrial?: boolean
   accessRule?: ActivityAccessRule
+  dropIn?: { enabled: boolean; priceAmount?: number }
 }
 
 interface SessionProfile {
@@ -417,6 +419,7 @@ function StickyBar({
 export default function BookingForm({ slug, preSelectedActivitySlug, initialDate }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
+  const locale = useLocale()
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
   const bookingSettings = team.bookingSettings
@@ -492,6 +495,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               level: data.level ?? undefined,
               isFreeTrial: data.isFreeTrial ?? false,
               accessRule: data.accessRule ?? undefined,
+              dropIn: data.dropIn ?? undefined,
             }
           })
           .sort((a, b) => a.name.localeCompare(b.name))
@@ -578,6 +582,17 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     [selectedDate, activitySessions]
   )
 
+  // Drop-in (pay-per-class): a gated class where the studio lets uncovered contacts
+  // pay a per-class fee to book. Members who are covered still book free via sign-in.
+  const selectedDropInPrice =
+    selectedActivity &&
+    selectedActivity.isFreeTrial === false &&
+    selectedActivity.dropIn?.enabled &&
+    typeof selectedActivity.dropIn.priceAmount === 'number'
+      ? selectedActivity.dropIn.priceAmount
+      : null
+  const dropInAvailable = selectedDropInPrice != null
+
   // ── Guest booking ─────────────────────────────────────────────────────────
 
   const onSubmitGuest = async (values: NewGuestValues) => {
@@ -585,6 +600,34 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     setIsSubmitting(true)
     setBookingError(null)
     try {
+      // Gated class with drop-in enabled → pay-per-class; the webhook confirms the
+      // booking on payment success. Redirect to Stripe Checkout.
+      if (dropInAvailable) {
+        const fn = httpsCallable<Record<string, unknown>, { url?: string }>(
+          functions,
+          'createDropInCheckout'
+        )
+        const res = await fn({
+          teamId,
+          sessionId: selectedSession.id,
+          contactDetails: {
+            firstname: values.firstname,
+            lastname: values.lastname,
+            email: values.email,
+            phone: showPhone ? values.phone || null : null,
+          },
+          slug,
+          locale,
+          origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+        })
+        const url = res.data?.url
+        if (url) {
+          window.location.href = url
+          return
+        }
+        throw new Error('Failed to start checkout')
+      }
+
       const bookSessionFn = httpsCallable(functions, 'bookSession')
       await bookSessionFn({
         teamId,
@@ -993,9 +1036,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                       key={s.id}
                       onClick={() => {
                         setSelectedSession(s)
-                        // If members-only activity, skip new-visitor option
-                        const nextStep =
-                          selectedActivity?.isFreeTrial === false ? 'ret-email' : 'who'
+                        // Members-only → sign in. But if drop-in is available, go to the
+                        // chooser ('who') so a non-member can pay to book.
+                        const gated = selectedActivity?.isFreeTrial === false
+                        const nextStep = gated && !dropInAvailable ? 'ret-email' : 'who'
                         setStep(nextStep)
                       }}
                       className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group"
@@ -1068,6 +1112,28 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               <div className="flex-1">
                 <p className="font-semibold text-sm">First time here</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Fill in your details to book</p>
+              </div>
+              <svg
+                className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
+          {isMembersOnly && dropInAvailable && (
+            <button
+              onClick={() => setStep('details')}
+              className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
+            >
+              <div className="flex-1">
+                <p className="font-semibold text-sm">Drop-in — pay to book</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Not a member? Pay {selectedDropInPrice} to attend this class
+                </p>
               </div>
               <svg
                 className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors"
