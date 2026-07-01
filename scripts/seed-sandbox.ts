@@ -47,6 +47,7 @@ import {
   seedStoreProducts,
   seedStoreCourses,
 } from './lib/storefront'
+import { memberCapsFor } from './lib/roles'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // On the emulator, write into the namespace the web app + emulator use
@@ -1620,6 +1621,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       userId: uid,
       role: 'owner',
       email,
+      ...memberCapsFor('owner'),
       joined: ts(daysFromNow(-220)),
     })
   const [ownerFirst, ownerLast] = ownerName.split(' ')

@@ -53,6 +53,7 @@ import {
   seedStoreWebsite,
   seedStoreCourses,
 } from './lib/storefront'
+import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
 
@@ -554,6 +555,7 @@ async function seedTeam(opts: {
       userId: uid,
       role: 'owner',
       email,
+      ...memberCapsFor('owner'),
       joined: ts(daysFromNow(-120)),
     })
 
@@ -2279,6 +2281,7 @@ async function seedFreeTeam() {
       userId: uid,
       role: 'owner',
       email: 'free@linyup.com',
+      ...memberCapsFor('owner'),
       joined: ts(daysFromNow(-60)),
     })
 
@@ -2377,15 +2380,7 @@ async function seedStudioCoach() {
     .createUser({ uid, email, password: 'linyup123', displayName, emailVerified: true })
     .catch(() => {})
 
-  // Mirrors COACH_DEFAULT_CAPABILITIES (packages/shared/src/types/capabilities.ts) —
-  // scripts compile under tsconfig.scripts.json, which doesn't resolve @linyup/shared.
-  const coachCapabilities = [
-    'contacts.view',
-    'contacts.manage',
-    'schedule.view',
-    'schedule.view.all',
-    'schedule.manage',
-  ]
+  const coachCapabilities = COACH_DEFAULT_CAPABILITIES
 
   await db
     .collection('teams')

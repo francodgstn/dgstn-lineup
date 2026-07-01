@@ -65,6 +65,7 @@ import {
   seedStoreWebsite,
   seedStoreCourses,
 } from './lib/storefront'
+import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
 
 const PROJECT_ID = 'linyup-staging'
 
@@ -854,6 +855,7 @@ async function seedTeam(opts: TeamSeed) {
       userId: uid,
       role: 'owner',
       email,
+      ...memberCapsFor('owner'),
       joined: ts(daysFromNow(-220)),
     })
   const [ownerFirst, ownerLast] = displayName.split(' ')
@@ -881,8 +883,11 @@ async function seedTeam(opts: TeamSeed) {
       .set({
         teamId,
         userId: c.uid,
-        role: 'manager',
+        // Extra staff are seeded as the own-scoped Coach role (they manage their own
+        // contacts + schedule) so staging demonstrates the granular-roles feature.
+        role: 'coach',
         email: c.email,
+        ...memberCapsFor('coach'),
         joined: ts(daysFromNow(-150)),
         addedBy: uid,
       })
@@ -1950,6 +1955,28 @@ async function seedTeam(opts: TeamSeed) {
     await seedStoreCourses(storefront, { includeFree: true })
   }
 
+  // ── coach role demo: give the first extra coach an own book (assigned contacts +
+  // sessions) + a default role_config, so staging exercises the Coach role. ──
+  if (extraCoaches.length) {
+    const coachUid = extraCoaches[0].uid
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('role_config')
+      .doc('coach')
+      .set({
+        role: 'coach',
+        capabilities: COACH_DEFAULT_CAPABILITIES,
+        updatedBy: uid,
+        updated_at: ts(daysFromNow(-150)),
+      })
+    const coachContacts = await db.collection('contacts').where('teamId', '==', teamId).limit(6).get()
+    for (const c of coachContacts.docs) await c.ref.update({ assigned_coach_id: coachUid })
+    const coachSessions = await db.collection('sessions').where('teamId', '==', teamId).limit(3).get()
+    for (const s of coachSessions.docs)
+      await s.ref.update({ coachId: coachUid, instructorId: coachUid, coachName: extraCoaches[0].displayName })
+  }
+
   console.log(
     `   ✓ ${teamName} (${plan}) — ${contactCount} contacts, ${sessionDefs.length} sessions`
   )
@@ -2211,6 +2238,7 @@ async function seedOrg(opts: {
         userId: adminUid,
         teamId,
         role: 'manager',
+        ...memberCapsFor('manager'),
         joined: nowTs,
         addedBy: 'seed',
       })

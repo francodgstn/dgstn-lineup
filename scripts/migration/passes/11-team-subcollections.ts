@@ -4,6 +4,7 @@ import { sourceDb, targetDb } from '../config'
 import { BatchWriter } from '../batch-writer'
 import { CANONICAL_SUBSCRIPTION_TYPES } from '../transforms/subscriptions'
 import { transformTeamWeeklyReport } from '../transforms/team-weekly-reports'
+import { memberCapsFor, type MemberRole } from '../../lib/roles'
 
 const TEAM_SUBCOLLECTIONS = [
   'team_members',          // must come first — rules depend on this for read access
@@ -65,10 +66,17 @@ export async function pass11TeamSubcollections(
         // Apply per-subcollection transforms before writing.
         // team_weekly_reports: remap to the new field contract (drop deprecated fields,
         // derive new affiliation/subscription counts, remap or omit HMD-specific keys).
+        // team_members: denormalize the capability-model fields (capabilities/scope)
+        // from the migrated role so the granular-role rules gate consistently.
         const data =
           sub === 'team_weekly_reports'
             ? transformTeamWeeklyReport(d.data() as Record<string, unknown>)
-            : d.data()
+            : sub === 'team_members'
+              ? {
+                  ...d.data(),
+                  ...memberCapsFor((((d.data() as { role?: string }).role ?? 'viewer') as MemberRole)),
+                }
+              : d.data()
         bw.set(tgtRef, data)
 
         if (sub === 'team_members' && adminUid && d.id === adminUid) {
@@ -93,6 +101,7 @@ export async function pass11TeamSubcollections(
             userId:  adminUid,
             teamId,
             role:    'manager',
+            ...memberCapsFor('manager'),
             joined:  FieldValue.serverTimestamp(),
             addedBy: 'migration',
           })
@@ -103,6 +112,7 @@ export async function pass11TeamSubcollections(
           userId:  adminUid,
           teamId,
           role:    'manager',
+          ...memberCapsFor('manager'),
           joined:  FieldValue.serverTimestamp(),
           addedBy: 'migration',
         })
