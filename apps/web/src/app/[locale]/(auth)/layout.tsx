@@ -29,7 +29,6 @@ import {
   X,
   Workflow,
   Zap,
-  Tag,
   Package,
   IdCard,
   LayoutTemplate,
@@ -106,7 +105,10 @@ const NAV_SECTIONS: NavSection[] = [
     labelKey: 'sectionOffer',
     items: [
       { href: '/offer/activities', labelKey: 'activities', icon: Zap },
-      { href: '/offer/subscriptions', labelKey: 'subscriptions', icon: Tag },
+      // "Plans & affiliations" is an umbrella grouping Subscriptions + Affiliations as tabs.
+      // Subscriptions is on every plan, so the item is always shown; the Affiliations
+      // tab self-gates to Studio+ with an upsell.
+      { href: '/offer/plans', labelKey: 'plans', icon: IdCard },
       {
         href: '/offer/online-courses',
         labelKey: 'onlineCourses',
@@ -114,8 +116,6 @@ const NAV_SECTIONS: NavSection[] = [
         requiresPlugin: 'online-courses',
       },
       { href: '/offer/products', labelKey: 'products', icon: Package, requiresPlugin: 'products' },
-      // Affiliations (club membership / federation licence). Studio tier and up.
-      { href: '/offer/affiliations', labelKey: 'affiliations', icon: IdCard, requiresPlan: 'studio' },
     ],
   },
   {
