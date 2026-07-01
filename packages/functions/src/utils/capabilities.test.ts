@@ -26,15 +26,17 @@ describe('capabilities — system role sets', () => {
     assert.equal(roleHasCapability('manager', 'team.settings'), false)
   })
 
-  it('viewer keeps todays permissive contacts/schedule access but not manager+ surfaces', () => {
-    // Faithful to current behaviour: any team member (viewer included) can edit
-    // contacts + sessions today.
+  it('viewer is read-only: can view contacts + schedule, cannot edit anything', () => {
     assert.equal(roleHasCapability('viewer', 'contacts.view'), true)
-    assert.equal(roleHasCapability('viewer', 'contacts.manage'), true)
-    assert.equal(roleHasCapability('viewer', 'schedule.manage'), true)
+    assert.equal(roleHasCapability('viewer', 'contacts.view.all'), true)
+    assert.equal(roleHasCapability('viewer', 'schedule.view'), true)
+    assert.equal(roleHasCapability('viewer', 'contacts.manage'), false)
+    assert.equal(roleHasCapability('viewer', 'contacts.delete'), false)
+    assert.equal(roleHasCapability('viewer', 'schedule.manage'), false)
+    assert.equal(roleHasCapability('viewer', 'activities.manage'), false)
+    assert.equal(roleHasCapability('viewer', 'events.manage'), false)
     assert.equal(roleHasCapability('viewer', 'offerings.manage'), false)
     assert.equal(roleHasCapability('viewer', 'members.manage'), false)
-    assert.equal(roleHasCapability('viewer', 'reports.view'), false)
   })
 })
 

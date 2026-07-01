@@ -147,6 +147,25 @@ service cloud.firestore {
              && (callerIsAllScoped(contactRes.data.teamId) || callerOwnsContact(contactRes));
     }
 
+    // Does the caller hold capability `cap` in teamId? Reads the capabilities
+    // denormalized on the member doc (owner is always all-capable). Members written
+    // before denormalization have no capabilities field: they fall back to their
+    // historical access — every role could write EXCEPT viewer (now read-only) —
+    // so unmigrated viewers are correctly denied writes while others are unaffected.
+    function hasTeamCapability(teamId, cap) {
+      let m = get(/databases/$(database)/documents/teams/$(teamId)/team_members/$(request.auth.uid)).data;
+      return m.role == 'owner'
+             || cap in m.get('capabilities', [])
+             || (!('capabilities' in m) && m.role != 'viewer');
+    }
+
+    // Write access to a contact = read access (team + own-scope) AND the manage
+    // capability. A viewer can read but not write.
+    function canWriteContact(contactRes) {
+      return canAccessContact(contactRes)
+             && hasTeamCapability(contactRes.data.teamId, 'contacts.manage');
+    }
+
     function isSelfContact(contactId) {
       return request.auth != null
              && request.auth.token.contactId == contactId
@@ -606,10 +625,12 @@ service cloud.firestore {
     // Contacts
     match /contacts/{contactId} {
       // Create: Must belong to user's current team (new) OR match user ID (old).
-      // Own-scoped members (coach) may only create a contact owned by themselves
+      // Requires the contacts.manage capability (viewers are read-only). Own-scoped
+      // members (coach) may only create a contact owned by themselves
       // (assigned_coach_id / createdBy == uid) so it lands in their own book.
       allow create: if (request.resource.data.teamId == getUserCurrentTeam()
                           && isTeamMember(request.resource.data.teamId)
+                          && hasTeamCapability(request.resource.data.teamId, 'contacts.manage')
                           && (callerIsAllScoped(request.resource.data.teamId)
                               || callerOwnsContact(request.resource)))
                        || isTeacher(request.resource)
@@ -625,18 +646,20 @@ service cloud.firestore {
       // Belonging now lives in the affiliations subcollection (governed by the
       // catch-all below + the upsertAffiliation callable's org-lock guard), so the
       // old org_membership_* field gate is gone.
-      allow update: if canAccessContact(resource)
+      allow update: if canWriteContact(resource)
                        || hasRole('admin')
                        || (isSelfContact(contactId)
                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at']));
-      allow delete: if canAccessContact(resource) || hasRole('admin');
+      allow delete: if (canAccessContact(resource)
+                          && hasTeamCapability(resource.data.teamId, 'contacts.delete'))
+                       || hasRole('admin');
 
       // Subscription history subcollection — full CRUD for team members
       match /subscription_history/{historyId} {
         allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin');
         allow create, update, delete:
-          if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+          if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
           || hasRole('admin');
       }
 
@@ -647,13 +670,13 @@ service cloud.firestore {
         allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
                       || isSelfContact(contactId);
-        allow create: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow create: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && request.resource.data.created_by == 'student');
-        allow update: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow update: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && resource.data.created_by == 'student');
-        allow delete: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow delete: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && resource.data.created_by == 'student');
 
@@ -663,13 +686,13 @@ service cloud.firestore {
           allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                         || hasRole('admin')
                         || isSelfContact(contactId);
-          allow create: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+          allow create: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                            || hasRole('admin')
                            || (isSelfContact(contactId) && request.resource.data.evaluated_by == 'student');
-          allow update: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+          allow update: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                            || hasRole('admin')
                            || (isSelfContact(contactId) && resource.data.evaluated_by == 'student');
-          allow delete: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+          allow delete: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                            || hasRole('admin');
         }
       }
@@ -680,13 +703,13 @@ service cloud.firestore {
         allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
                       || isSelfContact(contactId);
-        allow create: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow create: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && request.resource.data.filled_by == 'student');
-        allow update: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow update: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && resource.data.filled_by == 'student');
-        allow delete: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow delete: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin');
       }
 
@@ -696,7 +719,7 @@ service cloud.firestore {
                       || hasRole('admin')
                       || isSelfContact(contactId)
                       || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
-        allow write: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin');
+        allow write: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin');
       }
 
     }
@@ -718,7 +741,8 @@ service cloud.firestore {
     // Events — team-scoped or org-scoped
     // Org events (scope=='org') are visible to all teams in that org.
     match /events/{event} {
-      allow create: if belongsToUserTeam(request.resource)
+      allow create: if (belongsToUserTeam(request.resource)
+                          && hasTeamCapability(request.resource.data.teamId, 'events.manage'))
                     || (isAuthed() && request.resource.data.scope == 'org'
                         && request.resource.data.orgId != null
                         && hasOrgRole(request.resource.data.orgId, 'org_admin'))
@@ -731,7 +755,8 @@ service cloud.firestore {
                         && resource.data.orgId != null
                         && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == resource.data.orgId)
                     || hasRole('admin');
-      allow update: if belongsToUserTeam(resource)
+      allow update: if (belongsToUserTeam(resource)
+                          && hasTeamCapability(resource.data.teamId, 'events.manage'))
                     || (isAuthed() && resource.data.scope == 'org'
                         && resource.data.orgId != null
                         && hasOrgRole(resource.data.orgId, 'org_admin'))
@@ -766,24 +791,27 @@ service cloud.firestore {
     // Sessions
     match /sessions/{session} {
       // Create: Must belong to user's team and cannot directly set location/tags.
-      // Own-scoped members (coach) may only create sessions they run (coachId /
-      // instructorId / createdBy == uid) — they manage their own schedule.
+      // Requires the schedule.manage capability (viewers are read-only). Own-scoped
+      // members (coach) may only create sessions they run (coachId / instructorId /
+      // createdBy == uid) — they manage their own schedule.
     	allow create: if (belongsToUserTeam(request.resource) || hasRole('admin'))
                        && (hasRole('admin')
-                           || callerIsAllScoped(request.resource.data.teamId)
-                           || callerOwnsSession(request.resource))
+                           || (hasTeamCapability(request.resource.data.teamId, 'schedule.manage')
+                               && (callerIsAllScoped(request.resource.data.teamId)
+                                   || callerOwnsSession(request.resource))))
                        && (!request.resource.data.keys().hasAny(['location', 'tags']));
 
-      // Update: Must be team member (own-scope for a coach) and cannot update location/tags directly
+      // Update: Requires schedule.manage (own-scope for a coach); cannot update location/tags directly
       allow update: if (belongsToUserTeam(resource) || hasRole('admin'))
                        && (hasRole('admin')
-                           || callerIsAllScoped(resource.data.teamId)
-                           || callerOwnsSession(resource))
+                           || (hasTeamCapability(resource.data.teamId, 'schedule.manage')
+                               && (callerIsAllScoped(resource.data.teamId)
+                                   || callerOwnsSession(resource))))
                        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['location', 'tags']));
 
-      // Delete: Must be team member (own-scope for a coach) and session must not have location, tags, or participants
+      // Delete: Requires schedule.manage (own-scope for a coach); session must not have location, tags, or participants
       allow delete: if (belongsToUserTeam(resource) || hasRole('admin')) &&
-      (hasRole('admin') || callerIsAllScoped(resource.data.teamId) || callerOwnsSession(resource)) &&
+      (hasRole('admin') || (hasTeamCapability(resource.data.teamId, 'schedule.manage') && (callerIsAllScoped(resource.data.teamId) || callerOwnsSession(resource)))) &&
       (
         (!resource.data.keys().hasAll(['location']) || resource.data.location == null) &&
         (!resource.data.keys().hasAll(['tags']) || resource.data.tags == null) &&
@@ -796,14 +824,20 @@ service cloud.firestore {
 
       // participants sub-collection
       match /participants/{participantId} {
-        allow read, write: if belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session))) || hasRole('admin');
+        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session))) || hasRole('admin');
+        allow write: if (belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session)))
+                          && hasTeamCapability(get(/databases/$(database)/documents/sessions/$(session)).data.teamId, 'schedule.manage'))
+                       || hasRole('admin');
         // Allow contacts to read their own participant doc (student app)
         allow read: if isSelfContact(participantId);
       }
 
       // bookings sub-collection (bio-link reservations, separate from confirmed attendance)
       match /bookings/{bookingId} {
-        allow read, write: if belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session))) || hasRole('admin');
+        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session))) || hasRole('admin');
+        allow write: if (belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session)))
+                          && hasTeamCapability(get(/databases/$(database)/documents/sessions/$(session)).data.teamId, 'schedule.manage'))
+                       || hasRole('admin');
         // Allow contacts to read their own booking doc (student app)
         allow read: if isSelfContact(bookingId);
       }
@@ -839,10 +873,17 @@ service cloud.firestore {
 
     // Activities (class types)
     match /activities/{activityId} {
-      allow create: if belongsToUserTeam(request.resource) || hasRole('admin');
+      // Writes require the activities.manage capability (viewers are read-only).
+      allow create: if (belongsToUserTeam(request.resource)
+                          && hasTeamCapability(request.resource.data.teamId, 'activities.manage'))
+                       || hasRole('admin');
       allow read: if belongsToUserTeam(resource) || hasRole('admin');
-      allow update: if belongsToUserTeam(resource) || hasRole('admin');
-      allow delete: if belongsToUserTeam(resource) || hasRole('admin');
+      allow update: if (belongsToUserTeam(resource)
+                          && hasTeamCapability(resource.data.teamId, 'activities.manage'))
+                       || hasRole('admin');
+      allow delete: if (belongsToUserTeam(resource)
+                          && hasTeamCapability(resource.data.teamId, 'activities.manage'))
+                       || hasRole('admin');
 
       // public_profile sub-collection (for trial booking)
       match /public_profile/{publicProfileId} {

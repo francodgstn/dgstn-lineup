@@ -114,12 +114,9 @@ export function capabilityIsScoped(cap: Capability): boolean {
 //   • owner   → everything.
 //   • manager → everything except the owner-only surfaces
 //     (members / team settings / billing / integrations / plugins).
-//   • viewer  → the "any team member" set. NOTE: today any member — viewer included —
-//     can create/edit/delete contacts, sessions, activities and events (the
-//     Firestore rules gate those on team membership, not role). So `viewer` keeps
-//     contacts.manage/delete + schedule.manage here to avoid a regression. Tightening
-//     viewer to read-only is now a one-line change to this set (a deliberate future
-//     decision, not made here).
+//   • viewer  → READ-ONLY: view contacts + the schedule, nothing more. (Historically
+//     any team member could edit contacts/sessions; viewer is now genuinely
+//     view-only, enforced by the capability gates in firestore.rules.)
 
 // Surfaces only an owner may touch today (team-doc settings, billing, integrations,
 // plugin install). NOTE: members.manage is NOT here — managers manage members below
@@ -139,13 +136,8 @@ const MANAGER_CAPABILITIES: Capability[] = ALL_CAPABILITIES.filter(
 const VIEWER_CAPABILITIES: Capability[] = [
   'contacts.view',
   'contacts.view.all',
-  'contacts.manage',
-  'contacts.delete',
   'schedule.view',
   'schedule.view.all',
-  'schedule.manage',
-  'activities.manage',
-  'events.manage',
 ]
 
 export const SYSTEM_ROLE_CAPABILITIES: Record<'owner' | 'manager' | 'viewer', Capability[]> = {
