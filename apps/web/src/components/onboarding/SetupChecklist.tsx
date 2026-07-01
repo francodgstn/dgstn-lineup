@@ -9,6 +9,7 @@ import { TEAMS_COLLECTION } from '@linyup/shared'
 import type { Route } from 'next'
 import { Check, ChevronRight, X, Rocket } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useSetupChecklist, type SetupStepKey } from '@/hooks/useSetupChecklist'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -21,7 +22,8 @@ import { Card, CardContent } from '@/components/ui/card'
 export function SetupChecklist() {
   const t = useTranslations('Onboarding')
   const router = useRouter()
-  const { currentTeamId, team, teamRole } = useAuth()
+  const { currentTeamId, team } = useAuth()
+  const { can } = useCapabilities()
   const { steps, requiredDone, requiredTotal, allRequiredDone, loading } = useSetupChecklist(
     currentTeamId,
     team
@@ -37,7 +39,7 @@ export function SetupChecklist() {
   async function handleDismiss() {
     setLocalDismissed(true)
     // Only owners may update the team doc (Firestore rules); persist for them.
-    if (currentTeamId && teamRole === 'owner') {
+    if (currentTeamId && can('team.settings')) {
       try {
         await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), { setup_dismissed: true })
       } catch {

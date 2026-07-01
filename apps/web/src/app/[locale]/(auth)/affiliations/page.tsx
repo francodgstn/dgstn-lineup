@@ -10,6 +10,7 @@ import { db, functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import {
   CONTACTS_COLLECTION, ORGANIZATIONS_COLLECTION, ORG_AFFILIATION_STATUSES_SUBCOLLECTION,
   DEFAULT_ORG_AFFILIATION_STATUSES, AFFILIATION_TYPES_SUBCOLLECTION, CONTACT_AFFILIATIONS_SUBCOLLECTION,
@@ -362,12 +363,14 @@ function ContactAffiliationRow({
 
 export default function TeamAffiliationsPage() {
   const t = useTranslations('TeamAffiliations')
-  const { currentTeamId, team, teamRole } = useAuth()
+  const { currentTeamId, team } = useAuth()
+  const { can } = useCapabilities()
   const affiliationTerm = useAffiliationTerm()
   const qc = useQueryClient()
 
   const orgId = team?.org_id
-  const canEdit = teamRole === 'owner' || teamRole === 'manager'
+  // Affiliation types are studio "offerings" — manager+ may edit them.
+  const canEdit = can('offerings.manage')
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('__all__')

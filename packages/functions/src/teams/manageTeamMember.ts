@@ -9,7 +9,10 @@ import {
 } from '../utils/teams'
 import type { TeamRole } from '@linyup/shared'
 
-const VALID_ROLES: TeamRole[] = ['owner', 'manager', 'viewer']
+// coach sits below manager: the existing precedence checks (only owner may touch
+// owner/manager) already treat it like viewer — a manager may add/remove/retitle
+// coaches and viewers, only an owner may manage managers/owners.
+const VALID_ROLES: TeamRole[] = ['owner', 'manager', 'coach', 'viewer']
 const VALID_ACTIONS = ['add', 'remove', 'updateRole'] as const
 type Action = (typeof VALID_ACTIONS)[number]
 

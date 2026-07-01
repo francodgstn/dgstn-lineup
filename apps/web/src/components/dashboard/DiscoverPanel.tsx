@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/react-query'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { toast } from 'sonner'
@@ -37,13 +38,15 @@ const ONBOARDING_DISMISS_KEY = 'linyup_onboarding_tab_dismissed'
 function SuggestionRow({ manifest }: { manifest: PluginManifest }) {
   const tDiscover = useTranslations('Discover')
   const tPlugins = useTranslations('Plugins')
-  const { user, currentTeamId, teamRole } = useAuth()
+  const { user, currentTeamId } = useAuth()
+  const { can } = useCapabilities()
   const { plan } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
   const [installing, setInstalling] = useState(false)
 
   const access = pluginAccessForPlan(manifest, plan)
-  const isOwner = teamRole === 'owner'
+  // Installing/managing plugins is an owner-only capability.
+  const isOwner = can('plugins.manage')
   const available = manifest.status === 'available'
 
   const installMutation = useMutation({

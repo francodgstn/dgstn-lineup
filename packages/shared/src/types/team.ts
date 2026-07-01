@@ -3,8 +3,14 @@ import type { Timestamp } from './common'
 import type { ConnectOnboardingModel, ConnectAccountStatus } from './connect'
 import type { PublicMainAddress } from './place'
 import type { EngagementThresholds } from './engagement'
+// Type-only — capabilities.ts imports TeamRole from here; erased at compile (no cycle).
+import type { Capability, DataScope } from './capabilities'
 
-export type TeamRole = 'owner' | 'manager' | 'viewer'
+// Team roles. owner/manager/viewer are the fixed SYSTEM roles (capability sets in
+// code, never customizable). 'coach' is a predefined-but-team-customizable role
+// (its capability set lives at teams/{teamId}/role_config/coach) whose data access
+// is own-scoped (see capabilities.ts). Custom roles are a later phase.
+export type TeamRole = 'owner' | 'manager' | 'coach' | 'viewer'
 
 export type SaasPlan = 'free' | 'coach' | 'studio' | 'organization'
 // 'expired' is LEGACY: lapsed trials used to be walled then purged; they now
@@ -253,6 +259,14 @@ export interface TeamMember {
   joined: Timestamp
   addedBy: string
   roleUpdatedAt?: Timestamp
+  // Effective capabilities + data scope, DENORMALIZED here by the Admin SDK
+  // (on member create / role change, and by syncMemberCapabilities when a team's
+  // role_config changes). Firestore rules read these off this doc — which they
+  // already fetch for role checks — so capability enforcement adds no extra read.
+  // Never client-written (team_members writes are owner/SDK-only). Optional for
+  // back-compat: absent ⇒ rules fall back to the role → capability defaults.
+  capabilities?: Capability[]
+  scope?: DataScope
 }
 
 export interface BookingSettings {

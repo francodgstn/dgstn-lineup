@@ -832,6 +832,7 @@
     "colJoined": "Beigetreten",
     "role_owner": "Inhaber",
     "role_manager": "Manager",
+    "role_coach": "Coach",
     "role_viewer": "Betrachter",
     "you": "Sie",
     "removeMember": "Mitglied entfernen",

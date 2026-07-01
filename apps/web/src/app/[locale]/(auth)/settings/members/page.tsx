@@ -20,6 +20,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -308,6 +309,7 @@ interface Toast {
 export default function TeamMembersPage() {
   const t = useTranslations('TeamMembers')
   const { currentTeamId: teamId, user } = useAuth()
+  const { can } = useCapabilities()
   const { plan } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
   const qc = useQueryClient()
@@ -375,12 +377,15 @@ export default function TeamMembersPage() {
   // current user's role
   const myRole = members?.find((m) => m.userId === user?.uid)?.role
   const isOwner = myRole === 'owner'
-  const canManage = myRole === 'owner' || myRole === 'manager'
+  // Capability-gated (owner + manager hold members.manage); rank still decides WHO
+  // each of them may act on (see the per-row guards below).
+  const canManage = can('members.manage')
 
   // role labels lookup (avoids dynamic key that TypeScript can't type-check)
   const roleLabel: Record<TeamRole, string> = {
     owner: t('role_owner'),
     manager: t('role_manager'),
+    coach: t('role_coach'),
     viewer: t('role_viewer'),
   }
 
@@ -426,7 +431,7 @@ export default function TeamMembersPage() {
   const isLoading = membersLoading || invitesLoading
 
   // sort: owner first, then managers, then viewers
-  const roleOrder: Record<TeamRole, number> = { owner: 0, manager: 1, viewer: 2 }
+  const roleOrder: Record<TeamRole, number> = { owner: 0, manager: 1, coach: 2, viewer: 3 }
   const sortedMembers = [...(members ?? [])].sort(
     (a, b) => roleOrder[a.role] - roleOrder[b.role]
   )

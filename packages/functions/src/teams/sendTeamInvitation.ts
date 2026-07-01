@@ -8,7 +8,7 @@ import { isTeamMember, hasTeamRole, getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
 export const sendTeamInvitation = regionalFunctions.https.onCall(
-  async (data: { teamId: string; email: string; role: 'manager' | 'viewer' }, context) => {
+  async (data: { teamId: string; email: string; role: 'manager' | 'coach' | 'viewer' }, context) => {
     if (!context.auth)
       throw new (await import('firebase-functions')).https.HttpsError(
         'unauthenticated',
@@ -23,7 +23,7 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
         'invalid-argument',
         'teamId, email, and role are required'
       )
-    if (!['manager', 'viewer'].includes(role))
+    if (!['manager', 'coach', 'viewer'].includes(role))
       throw new (await import('firebase-functions')).https.HttpsError(
         'invalid-argument',
         'Invalid role'

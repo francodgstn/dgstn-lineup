@@ -13,6 +13,9 @@ export const TEAM_INVITATIONS_SUBCOLLECTION = 'team_invitations'
 export const CONTACT_REQUESTS_SUBCOLLECTION = 'contact_requests'
 export const TEAM_ALERTS_SUBCOLLECTION = 'team_alerts'
 export const ALERT_PRESETS_SUBCOLLECTION = 'alert_presets'
+// Per-team overrides for customizable roles (currently only the Coach role).
+// Doc id = the role id, e.g. teams/{teamId}/role_config/coach.
+export const ROLE_CONFIG_SUBCOLLECTION = 'role_config'
 export const SUBSCRIPTION_TYPES_SUBCOLLECTION = 'subscription_types'
 export const PRODUCTS_SUBCOLLECTION = 'products'
 export const CONTACT_FILTERS_SUBCOLLECTION = 'contact_filters'

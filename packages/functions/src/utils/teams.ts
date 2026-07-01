@@ -1,8 +1,15 @@
 // Ported from hmd-lineup/functions/src/utils/teams.js — converted to TypeScript
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
-import type { Team, TeamMember, TeamRole } from '@linyup/shared'
-import { isReservedSlug } from '@linyup/shared'
+import { HttpsError } from 'firebase-functions/v2/https'
+import type { Team, TeamMember, TeamRole, Capability, DataScope } from '@linyup/shared'
+import {
+  isReservedSlug,
+  ROLE_CONFIG_SUBCOLLECTION,
+  ROLE_RANK,
+  resolveRoleCapabilities,
+  dataScopeForRole,
+} from '@linyup/shared'
 
 export async function isAdmin(userId: string): Promise<boolean> {
   const userDoc = await admin.firestore().collection('users').doc(userId).get()
@@ -76,8 +83,75 @@ export async function hasTeamRole(
 ): Promise<boolean> {
   const role = await getTeamRole(userId, teamId)
   if (!role) return false
-  const hierarchy: Record<TeamRole, number> = { owner: 3, manager: 2, viewer: 1 }
-  return hierarchy[role] >= hierarchy[requiredRole]
+  // ROLE_RANK is the single source of member-management precedence (owner > manager
+  // > coach > viewer). NOTE: this compares RANK, not capabilities — a coach outranks
+  // a viewer here even though its capability set is different. Prefer requireCapability
+  // for feature gating; hasTeamRole remains for precedence + legacy call sites.
+  return ROLE_RANK[role] >= ROLE_RANK[requiredRole]
+}
+
+// ─── Capability resolution + guards ─────────────────────────────────────────────
+
+/** Read a team's Coach role override (teams/{id}/role_config/coach.capabilities). */
+async function coachCapabilityOverride(teamId: string): Promise<Capability[] | null> {
+  const doc = await admin
+    .firestore()
+    .collection('teams')
+    .doc(teamId)
+    .collection(ROLE_CONFIG_SUBCOLLECTION)
+    .doc('coach')
+    .get()
+  const caps = doc.exists ? doc.data()?.capabilities : null
+  return Array.isArray(caps) ? (caps as Capability[]) : null
+}
+
+/** Effective capabilities + data scope for a role in a team (honours coach override). */
+export async function resolveMemberCapabilities(
+  teamId: string,
+  role: TeamRole
+): Promise<{ capabilities: Capability[]; scope: DataScope }> {
+  const override = role === 'coach' ? await coachCapabilityOverride(teamId) : null
+  return {
+    capabilities: resolveRoleCapabilities(role, override),
+    scope: dataScopeForRole(role),
+  }
+}
+
+/**
+ * Does the caller hold `cap` in the team? Prefers the capabilities denormalized on
+ * the member doc; falls back to resolving from the role (+ coach override) for
+ * members written before the denormalization existed. Owner is always all-capable.
+ */
+export async function hasCapability(
+  userId: string,
+  teamId: string,
+  cap: Capability
+): Promise<boolean> {
+  const doc = await admin
+    .firestore()
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(userId)
+    .get()
+  if (!doc.exists) return false
+  const data = doc.data() as TeamMember
+  if (data.role === 'owner') return true
+  const caps = Array.isArray(data.capabilities)
+    ? data.capabilities
+    : (await resolveMemberCapabilities(teamId, data.role)).capabilities
+  return caps.includes(cap)
+}
+
+/** Throw permission-denied unless the caller holds `cap` in the team. */
+export async function requireCapability(
+  userId: string,
+  teamId: string,
+  cap: Capability
+): Promise<void> {
+  if (!(await hasCapability(userId, teamId, cap))) {
+    throw new HttpsError('permission-denied', `Missing capability: ${cap}`)
+  }
 }
 
 export async function getUserCurrentTeam(userId: string): Promise<string | null> {
@@ -104,6 +178,7 @@ export async function addTeamMember(
   const userDoc = await admin.firestore().collection('users').doc(userId).get()
   if (!userDoc.exists) throw new Error(`User ${userId} not found`)
 
+  const { capabilities, scope } = await resolveMemberCapabilities(teamId, role)
   await admin
     .firestore()
     .collection('teams')
@@ -114,6 +189,8 @@ export async function addTeamMember(
       userId,
       teamId,
       role,
+      capabilities,
+      scope,
       joined: FieldValue.serverTimestamp(),
       addedBy,
     })
@@ -134,13 +211,19 @@ export async function updateTeamMemberRole(
   userId: string,
   newRole: TeamRole
 ): Promise<void> {
+  const { capabilities, scope } = await resolveMemberCapabilities(teamId, newRole)
   await admin
     .firestore()
     .collection('teams')
     .doc(teamId)
     .collection('team_members')
     .doc(userId)
-    .update({ role: newRole, roleUpdatedAt: FieldValue.serverTimestamp() })
+    .update({
+      role: newRole,
+      capabilities,
+      scope,
+      roleUpdatedAt: FieldValue.serverTimestamp(),
+    })
 }
 
 export async function createTeamRecord(

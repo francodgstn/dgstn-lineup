@@ -10,6 +10,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { usePlaces } from '@/hooks/usePlaces'
 import { useTranslations } from 'next-intl'
 import { Link, useRouter } from '@/i18n/navigation'
@@ -391,7 +392,8 @@ type DetailTab = 'overview' | 'checkins' | 'categories' | 'attendees' | 'invitat
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { currentTeamId, team, teamRole, isOrgAdmin } = useAuth()
+  const { currentTeamId, team, isOrgAdmin } = useAuth()
+  const { can } = useCapabilities()
   const { org } = useOrg()
   const t = useTranslations('Events')
   const router = useRouter()
@@ -515,8 +517,9 @@ export default function EventDetailPage() {
   const eventPlugin = PLUGIN_REGISTRY.find((p) => p.eventType?.id === event.type)
   const showCategoriesTab = !!eventPlugin?.eventType?.hasCategories
 
-  // Attendees tab: visible to org admins (cross-team events) and team owners/managers
-  const canSeeAttendees = isOrgAdmin || teamRole === 'owner' || teamRole === 'manager'
+  // Attendees tab: visible to org admins (cross-team events) and to members who can
+  // view reports (owner/manager) — a coach/viewer sees the event but not the roster.
+  const canSeeAttendees = isOrgAdmin || can('reports.view')
 
   const checkinLabel = (() => {
     const total = event.participants_count ?? 0

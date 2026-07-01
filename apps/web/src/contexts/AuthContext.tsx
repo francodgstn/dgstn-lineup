@@ -5,13 +5,18 @@ import { onAuthStateChanged, type User } from 'firebase/auth'
 import { doc, getDoc, onSnapshot } from 'firebase/firestore'
 import { auth } from '@/lib/firebase-auth'
 import { db } from '@/lib/firebase'
-import type { UserProfile, Team, TeamRole } from '@linyup/shared'
+import type { UserProfile, Team, TeamRole, Capability, DataScope } from '@linyup/shared'
 
 interface AuthContextValue {
   user: User | null
   profile: UserProfile | null
   team: Team | null
   teamRole: TeamRole | null
+  // Effective capabilities + data scope denormalized on the member doc. Null until
+  // resolved / for members written before denormalization existed — useCapabilities
+  // falls back to the role-derived defaults in that case.
+  teamCapabilities: Capability[] | null
+  teamScope: DataScope | null
   loading: boolean
   currentTeamId: string | null
   isOrgAdmin: boolean
@@ -22,6 +27,8 @@ const AuthContext = createContext<AuthContextValue>({
   profile: null,
   team: null,
   teamRole: null,
+  teamCapabilities: null,
+  teamScope: null,
   loading: true,
   currentTeamId: null,
   isOrgAdmin: false,
@@ -34,6 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [isOrgAdmin, setIsOrgAdmin] = useState(false)
   const [teamRole, setTeamRole] = useState<TeamRole | null>(null)
+  const [teamCapabilities, setTeamCapabilities] = useState<Capability[] | null>(null)
+  const [teamScope, setTeamScope] = useState<DataScope | null>(null)
 
   useEffect(() => {
     let profileUnsub: (() => void) | null = null
@@ -48,6 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null)
         setTeam(null)
         setTeamRole(null)
+        setTeamCapabilities(null)
+        setTeamScope(null)
         setLoading(false)
         return
       }
@@ -72,6 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!currentTeamId) {
       setTeam(null)
       setTeamRole(null)
+      setTeamCapabilities(null)
+      setTeamScope(null)
       return
     }
     const unsub = onSnapshot(doc(db, 'teams', currentTeamId), (snap) => {
@@ -82,8 +95,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const uid = user?.uid
         if (uid) {
           getDoc(doc(db, 'teams', currentTeamId, 'team_members', uid))
-            .then((m) => setTeamRole(m.exists() ? (m.data()?.role as TeamRole) : null))
-            .catch(() => setTeamRole(null))
+            .then((m) => {
+              const data = m.exists() ? m.data() : null
+              setTeamRole((data?.role as TeamRole) ?? null)
+              setTeamCapabilities((data?.capabilities as Capability[] | undefined) ?? null)
+              setTeamScope((data?.scope as DataScope | undefined) ?? null)
+            })
+            .catch(() => {
+              setTeamRole(null)
+              setTeamCapabilities(null)
+              setTeamScope(null)
+            })
           if (orgId) {
             getDoc(doc(db, 'organizations', orgId, 'org_members', uid))
               .then((m) => setIsOrgAdmin(m.exists() && m.data()?.role === 'org_admin'))
@@ -95,6 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setTeam(null)
         setTeamRole(null)
+        setTeamCapabilities(null)
+        setTeamScope(null)
         setIsOrgAdmin(false)
       }
     })
@@ -102,7 +126,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [currentTeamId])
 
   return (
-    <AuthContext.Provider value={{ user, profile, team, teamRole, loading, currentTeamId, isOrgAdmin }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        team,
+        teamRole,
+        teamCapabilities,
+        teamScope,
+        loading,
+        currentTeamId,
+        isOrgAdmin,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
