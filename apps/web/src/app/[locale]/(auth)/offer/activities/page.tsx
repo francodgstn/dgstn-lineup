@@ -89,7 +89,13 @@ const activitySchema = z.object({
   // Paid-access gate (supersedes the legacy isFreeTrial toggle; 'open' === free trial).
   accessTier: z.enum(['open', 'members', 'subscription'] as const),
   subscriptionTypeIds: z.array(z.string()),
-})
+  // Drop-in / pay-per-class: an uncovered contact may pay this to book a single session.
+  dropInEnabled: z.boolean(),
+  dropInPrice: z.string(),
+}).refine(
+  (d) => !d.dropInEnabled || (d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5),
+  { message: 'Enter a drop-in price of at least 0.50', path: ['dropInPrice'] }
+)
 
 type ActivityFormData = z.infer<typeof activitySchema>
 
@@ -156,13 +162,17 @@ function ActivityDialog({
           color: editing.color ?? '',
           accessTier: initialRule.type,
           subscriptionTypeIds: initialRule.subscriptionTypeIds ?? [],
+          dropInEnabled: editing.dropIn?.enabled ?? false,
+          dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
         }
       : {
           name: '', description: '', type: 'group_class' as ActivityType, level: 'all',
           color: '#6366f1', accessTier: 'open', subscriptionTypeIds: [],
+          dropInEnabled: false, dropInPrice: '',
         },
   })
   const accessTier = watch('accessTier')
+  const dropInEnabled = watch('dropInEnabled')
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -200,6 +210,10 @@ function ActivityDialog({
             ? { subscriptionTypeIds: data.subscriptionTypeIds }
             : {}),
         },
+        dropIn: {
+          enabled: data.dropInEnabled,
+          ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
+        },
       }
       if (imageFile) {
         const url = await uploadImage(editing.id)
@@ -221,6 +235,10 @@ function ActivityDialog({
           ...(data.accessTier === 'subscription'
             ? { subscriptionTypeIds: data.subscriptionTypeIds }
             : {}),
+        },
+        dropIn: {
+          enabled: data.dropInEnabled,
+          ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
         },
         slug: slugify(data.name),
         teamId,
@@ -417,6 +435,28 @@ function ActivityDialog({
                   </div>
                 )}
               />
+            )}
+            {accessTier !== 'open' && (
+              <div className="ml-6 space-y-2 rounded-md border p-3">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" {...register('dropInEnabled')} className="accent-primary" />
+                  {t('dropInLabel')}
+                </label>
+                {dropInEnabled && (
+                  <div className="space-y-1">
+                    <Label>{t('dropInPriceLabel')}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      {...register('dropInPrice')}
+                      placeholder={t('dropInPricePlaceholder')}
+                      className="w-32"
+                    />
+                    <p className="text-xs text-muted-foreground">{t('dropInHelp')}</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

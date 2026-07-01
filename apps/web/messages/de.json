@@ -918,7 +918,11 @@
     "access_subscription": "Bestimmte Abos",
     "access_subscription_desc": "Nur Mitglieder mit einem der ausgewählten Abos können buchen.",
     "accessNoSubs": "Noch keine Abo-Typen — erstelle sie unter Abos & Affiliationen.",
-    "accessBadgeSubscription": "Mitgliedschaft"
+    "accessBadgeSubscription": "Mitgliedschaft",
+    "dropInLabel": "Drop-in anbieten (pro Kurs zahlen)",
+    "dropInPriceLabel": "Drop-in-Preis",
+    "dropInPricePlaceholder": "z. B. 25",
+    "dropInHelp": "Kontakte ohne Berechtigung können dies für die Buchung eines einzelnen Kurses zahlen. Abrechnung über dein Zahlungskonto; es wird keine Mitgliedschaft erstellt."
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",
@@ -2408,7 +2412,9 @@
     "successBodySignup": "Zahlung erhalten — ein letzter Schritt: Schliesse die Einrichtung deines Kontos ab.",
     "completeRegistration": "Registrierung abschliessen",
     "openSpace": "Space öffnen",
-    "close": "Du kannst dieses Fenster schliessen."
+    "close": "Du kannst dieses Fenster schliessen.",
+    "backToBooking": "Zurück zur Buchung",
+    "successBodyBooking": "Zahlung erhalten — dein Kurs ist gebucht. Bis bald!"
   },
   "Notifications": {
     "dismiss": "Verwerfen"

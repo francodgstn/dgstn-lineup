@@ -97,6 +97,12 @@ export interface Booking {
   status?: 'pending' | 'confirmed' | 'cancelled' | 'no_show' | 'rebooked'
   rebooked_from?: string
   rebooked_to?: string
+  // Drop-in payment (pay-per-class). A pending booking awaiting payment carries
+  // payment_status 'required' + an expires_at hold; the Connect webhook flips it to
+  // 'paid' + status 'confirmed'. Free bookings leave these unset.
+  payment_status?: 'not_required' | 'required' | 'paid'
+  payment_intent_id?: string
+  expires_at?: Timestamp
 }
 
 export interface SessionSeries {

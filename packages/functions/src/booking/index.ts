@@ -587,7 +587,12 @@ export const bookSession = onCall(async (request) => {
         .doc(contactId)
         .get(),
     ])
-    if (existingBooking.exists || existingParticipant.exists) {
+    // A pending (unpaid drop-in) hold does not block a free booking — the buyer may
+    // have abandoned checkout; only a confirmed booking / attendance blocks re-booking.
+    if (
+      existingParticipant.exists ||
+      (existingBooking.exists && existingBooking.data()?.status !== 'pending')
+    ) {
       throw new HttpsError('already-exists', 'You are already registered for this session')
     }
   } else {

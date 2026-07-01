@@ -918,7 +918,11 @@
     "access_subscription": "Abbonamenti specifici",
     "access_subscription_desc": "Solo i membri con uno degli abbonamenti selezionati possono prenotare.",
     "accessNoSubs": "Nessun tipo di abbonamento — creali in Abbonamenti e affiliazioni.",
-    "accessBadgeSubscription": "Abbonamento"
+    "accessBadgeSubscription": "Abbonamento",
+    "dropInLabel": "Offri drop-in (paga a lezione)",
+    "dropInPriceLabel": "Prezzo drop-in",
+    "dropInPricePlaceholder": "es. 25",
+    "dropInHelp": "I contatti non coperti possono pagare questo importo per prenotare una singola lezione. Addebitato tramite il tuo account di pagamento; nessun abbonamento viene creato."
   },
   "TeamSettings": {
     "title": "Impostazioni del team",
@@ -2408,7 +2412,9 @@
     "successBodySignup": "Pagamento ricevuto — un ultimo passo: completa la creazione del tuo account.",
     "completeRegistration": "Completa la registrazione",
     "openSpace": "Apri il tuo Space",
-    "close": "Puoi chiudere questa finestra."
+    "close": "Puoi chiudere questa finestra.",
+    "backToBooking": "Torna alla prenotazione",
+    "successBodyBooking": "Pagamento ricevuto — la tua lezione è prenotata. Ci vediamo!"
   },
   "Notifications": {
     "dismiss": "Chiudi"

@@ -58,6 +58,7 @@ export {
   getBookingDetails,
   rebookSession,
 } from './booking'
+export { createDropInCheckout } from './booking/dropIn'
 
 // Gamification
 export { recalculateScores, resetScores } from './gamification'
