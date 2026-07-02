@@ -606,7 +606,7 @@ async function executeActionsForContact(
 
         await to(
           logActivity(teamId, {
-            date: FieldValue.serverTimestamp(),
+            created_at: FieldValue.serverTimestamp(),
             event: 'outreach_email_sent',
             parameters: {
               description: `Outreach email "${resolved.template.name as string}" sent automatically to ${contact.firstname || ''} ${contact.lastname || ''}.`,

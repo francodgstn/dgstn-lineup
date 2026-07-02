@@ -36,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -1474,47 +1475,6 @@ function NotesPanelButton({ contact }: { contact: Contact }) {
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-4 pb-6">
             <NotesTab contact={contact} />
-          </div>
-        </SheetContent>
-      </Sheet>
-    </>
-  )
-}
-
-// ─── alerts side panel ────────────────────────────────────────────────────────
-// Same pattern as notes: a header bell button with an active-count badge opens a
-// right-side sheet hosting the alerts manager, keeping the tab strip lean.
-
-function AlertsPanelButton({ contact, teamId }: { contact: Contact; teamId: string | null }) {
-  const t = useTranslations('Contacts')
-  const [open, setOpen] = useState(false)
-  const { data: alerts = [] } = useContactAlerts(contact.id)
-  const count = alerts.filter((a) => !a.archived_at).length
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={t('tabAlerts')}
-        title={t('tabAlerts')}
-        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-      >
-        <Bell className="h-4 w-4" />
-        {count > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-            {count}
-          </span>
-        )}
-      </button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="sm:max-w-md!">
-          <SheetHeader>
-            <SheetTitle>{t('tabAlerts')}</SheetTitle>
-            <SheetDescription className="sr-only">{t('alertsPanelDesc')}</SheetDescription>
-          </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-4 pb-6">
-            <AlertsTab contact={contact} teamId={teamId} />
           </div>
         </SheetContent>
       </Sheet>
@@ -3441,6 +3401,181 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
   )
 }
 
+// ─── follow-ups tab (alerts + outreach) ─────────────────────────────────────────
+// Groups the two "staying in touch" surfaces: the alerts manager (scheduled
+// reminders about the contact) and outreach (email history + send). Replaces the
+// former alerts side-panel bell.
+
+function fmtEntryDate(v: unknown): string {
+  const d = v && typeof v === 'object' && 'toDate' in (v as object)
+    ? (v as { toDate(): Date }).toDate()
+    : null
+  return d ? d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) : ''
+}
+
+function SendOutreachDialog({
+  open,
+  onOpenChange,
+  contact,
+  teamId,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  contact: Contact
+  teamId: string | null
+}) {
+  const t = useTranslations('Contacts')
+  const qc = useQueryClient()
+  const [templateId, setTemplateId] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const { data: templates = [] } = useQuery({
+    queryKey: ['outreach-templates', teamId],
+    enabled: open && !!teamId,
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(collection(db, TEAMS_COLLECTION, teamId!, 'outreach_templates'), orderBy('name', 'asc')),
+      )
+      return snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as { name?: string; active?: boolean }) }))
+        .filter((tpl) => tpl.active !== false)
+    },
+  })
+
+  async function send() {
+    if (!templateId || !teamId) return
+    setSending(true)
+    setError(null)
+    try {
+      const fn = httpsCallable(functions, 'sendOutreachEmail')
+      await fn({ contactIds: [contact.id], templateId, teamId })
+      await qc.invalidateQueries({ queryKey: ['contact-activity-log', contact.id] })
+      onOpenChange(false)
+      setTemplateId('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('outreachSendTitle')}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {t('outreachSendDesc', { name: `${contact.firstname} ${contact.lastname}` })}
+          </p>
+          {templates.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('outreachNoTemplates')}</p>
+          ) : (
+            <Select value={templateId} onValueChange={(v) => setTemplateId(v ?? '')}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('outreachPickTemplate')} />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.map((tpl) => (
+                  <SelectItem key={tpl.id} value={tpl.id}>
+                    {tpl.name || tpl.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('cancel')}
+          </Button>
+          <Button onClick={send} disabled={!templateId || sending}>
+            {sending ? t('outreachSending') : t('outreachSend')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function FollowUpsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
+  const t = useTranslations('Contacts')
+  const { can } = useCapabilities()
+  const [composeOpen, setComposeOpen] = useState(false)
+  const { data: activity = [] } = useContactActivityLog(contact.id, teamId)
+  const outreach = activity.filter((e) => e.event === 'outreach_email_sent')
+  const canSend = can('contacts.manage')
+
+  return (
+    <div className="space-y-8 pb-24">
+      {/* Alerts / reminders */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Bell className="h-4 w-4 text-amber-500" />
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('tabAlerts')}
+          </h3>
+        </div>
+        <AlertsTab contact={contact} teamId={teamId} />
+      </section>
+
+      {/* Outreach */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-blue-500" />
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('outreachTitle')}
+            </h3>
+          </div>
+          {canSend && (
+            <Button size="sm" onClick={() => setComposeOpen(true)} disabled={!contact.email}>
+              <Mail className="mr-1.5 h-4 w-4" /> {t('outreachSend')}
+            </Button>
+          )}
+        </div>
+        {canSend && !contact.email && (
+          <p className="text-xs text-muted-foreground">{t('outreachNoEmail')}</p>
+        )}
+        {outreach.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('outreachEmpty')}</p>
+        ) : (
+          <div className="space-y-2">
+            {outreach.map((e) => {
+              const p = (e.parameters ?? {}) as { subject?: string; template_name?: string }
+              return (
+                <div key={e.id} className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">
+                      {p.subject || p.template_name || t('outreachEmail')}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {fmtEntryDate((e as { created_at?: unknown; date?: unknown }).created_at ?? (e as { date?: unknown }).date)}
+                    </span>
+                  </div>
+                  {p.template_name && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{p.template_name}</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      <SendOutreachDialog
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+        contact={contact}
+        teamId={teamId}
+      />
+    </div>
+  )
+}
+
 // ─── archived / deleted read-only view ───────────────────────────────────────
 
 function ArchivedContactView({
@@ -4212,6 +4347,7 @@ type TabId =
   | 'profile'
   | 'stats'
   | 'activity'
+  | 'followups'
   | 'bookings'
   | 'affiliation'
   | 'payments'
@@ -4299,6 +4435,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'affiliation', label: t('tabAffiliation'), icon: IdCard },
     { id: 'payments', label: t('tabPayments'), icon: CreditCard },
     { id: 'activity', label: t('tabActivity'), icon: Activity },
+    { id: 'followups', label: t('tabFollowups'), icon: Bell },
     // Gamification is a plugin — the tab appears only when it's installed (filtered below).
     { id: 'gamification', label: t('tabGamification'), icon: Star },
   ]
@@ -4460,7 +4597,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {/* Header action cluster — alerts + notes side panels (replace old tabs) */}
             {!contact.archived_at && !contact.deleted_at && (
               <div className="flex items-center gap-3 shrink-0">
-                <AlertsPanelButton contact={contact} teamId={currentTeamId} />
                 <NotesPanelButton contact={contact} />
               </div>
             )}
@@ -4587,6 +4723,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             )}
             {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}
+            {tab === 'followups' && <FollowUpsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'bookings' && <BookingsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'affiliation' && (
               <MembershipTab

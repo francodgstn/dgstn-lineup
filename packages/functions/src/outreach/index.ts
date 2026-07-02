@@ -4,7 +4,7 @@ import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
-import { isTeamMember } from '../utils/teams'
+import { isTeamMember, requireCapability } from '../utils/teams'
 import { sendEmail } from '../utils/email'
 import { logActivity } from '../utils/users'
 import { substituteVariables, renderBody, buildOutreachEmail } from '../utils/outreachEmail'
@@ -35,6 +35,8 @@ export const sendOutreachEmail = onCall(async (request) => {
 
   const [memberErr, isMember] = await to(isTeamMember(callerId, teamId))
   if (memberErr || !isMember) throw new HttpsError('permission-denied', 'You are not a member of this team.')
+  // Sending outreach is a write action — viewers (read-only) may not send.
+  await requireCapability(callerId, teamId, 'contacts.manage')
 
   const [templateErr, templateDoc] = await to(
     db.collection(TEAMS_COLLECTION).doc(teamId).collection(OUTREACH_TEMPLATES_SUBCOLLECTION).doc(templateId).get()
@@ -71,7 +73,7 @@ export const sendOutreachEmail = onCall(async (request) => {
 
         await to(
           logActivity(teamId, {
-            date: FieldValue.serverTimestamp(),
+            created_at: FieldValue.serverTimestamp(),
             event: 'outreach_email_sent',
             parameters: {
               description: `Outreach email "${template.name as string}" sent to ${contact.firstname as string} ${contact.lastname as string}.`,
