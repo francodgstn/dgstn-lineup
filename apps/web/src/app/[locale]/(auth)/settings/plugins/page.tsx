@@ -32,7 +32,7 @@ import { toast } from 'sonner'
 import {
   Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift,
   GraduationCap, Trophy, FolderTree, Search, Tag, ListPlus, ClipboardList,
-  ImageIcon, FileText, CheckCircle2, Coins, Lock, Clock, FlaskConical,
+  ImageIcon, FileText, CheckCircle2, Coins, Lock, Clock, FlaskConical, Star,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -104,22 +104,24 @@ function PluginBadgeIcons({
 }) {
   const t = useTranslations('Plugins')
 
-  const items: { key: string; icon: LucideIcon; label: string; className: string }[] = []
+  // Icons are monochrome (muted) at rest and reveal their semantic colour only on
+  // hover — keeps the grid calm while still signalling on interaction.
+  const items: { key: string; icon: LucideIcon; label: string; hoverClassName: string }[] = []
 
   if (manifest.recommended) {
-    items.push({ key: 'recommended', icon: Sparkles, label: t('recommended'), className: 'text-amber-500' })
+    items.push({ key: 'recommended', icon: Star, label: t('recommended'), hoverClassName: 'hover:text-amber-500' })
   }
   if (access.kind === 'included') {
-    items.push({ key: 'included', icon: CheckCircle2, label: t('accessIncluded'), className: 'text-green-600' })
+    items.push({ key: 'included', icon: CheckCircle2, label: t('accessIncluded'), hoverClassName: 'hover:text-green-600' })
   } else if (access.kind === 'addon') {
-    items.push({ key: 'addon', icon: Coins, label: t('addonPrice', { price: access.priceMonthly }), className: 'text-primary' })
+    items.push({ key: 'addon', icon: Coins, label: t('addonPrice', { price: access.priceMonthly }), hoverClassName: 'hover:text-primary' })
   } else if (access.kind === 'upgrade') {
-    items.push({ key: 'upgrade', icon: Lock, label: t('badgeUpgrade', { plan: access.minPlan }), className: 'text-muted-foreground' })
+    items.push({ key: 'upgrade', icon: Lock, label: t('badgeUpgrade', { plan: access.minPlan }), hoverClassName: 'hover:text-foreground' })
   }
   if (manifest.status === 'coming_soon') {
-    items.push({ key: 'coming_soon', icon: Clock, label: t('statusComingSoon'), className: 'text-muted-foreground' })
+    items.push({ key: 'coming_soon', icon: Clock, label: t('statusComingSoon'), hoverClassName: 'hover:text-foreground' })
   } else if (manifest.status === 'beta') {
-    items.push({ key: 'beta', icon: FlaskConical, label: t('statusBeta'), className: 'text-blue-600' })
+    items.push({ key: 'beta', icon: FlaskConical, label: t('statusBeta'), hoverClassName: 'hover:text-blue-600' })
   }
 
   if (items.length === 0) return null
@@ -127,9 +129,12 @@ function PluginBadgeIcons({
   return (
     <TooltipProvider delay={200}>
       <div className="flex items-center gap-2.5">
-        {items.map(({ key, icon: Icon, label, className }) => (
+        {items.map(({ key, icon: Icon, label, hoverClassName }) => (
           <UITooltip key={key}>
-            <TooltipTrigger className={cn('inline-flex cursor-help', className)} aria-label={label}>
+            <TooltipTrigger
+              className={cn('inline-flex cursor-help text-muted-foreground/60 transition-colors', hoverClassName)}
+              aria-label={label}
+            >
               <Icon className="h-3.5 w-3.5" />
             </TooltipTrigger>
             <TooltipContent>{label}</TooltipContent>
@@ -546,41 +551,6 @@ function PluginConfigDialog({
   )
 }
 
-// ─── Badge legend ─────────────────────────────────────────────────────────────
-
-function BadgeLegend() {
-  const t = useTranslations('Plugins')
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
-      <span className="font-medium text-foreground">{t('legendTitle')}</span>
-      <span className="flex items-center gap-1.5">
-        <Badge variant="outline" className="text-xs text-muted-foreground pointer-events-none">
-          {t('legendCategory')}
-        </Badge>
-        {t('legendCategoryDesc')}
-      </span>
-      <span className="flex items-center gap-1.5">
-        <Badge variant="secondary" className="text-xs bg-amber-50 text-amber-700 border-amber-200 pointer-events-none">
-          {t('recommended')}
-        </Badge>
-        {t('legendRecommendedDesc')}
-      </span>
-      <span className="flex items-center gap-1.5">
-        <Badge variant="outline" className="text-xs border-green-500/50 text-green-600 pointer-events-none">
-          {t('accessIncluded')}
-        </Badge>
-        {t('legendIncludedDesc')}
-      </span>
-      <span className="flex items-center gap-1.5">
-        <Badge variant="secondary" className="text-xs border-primary/30 bg-primary/10 text-primary pointer-events-none">
-          + CHF X/mo
-        </Badge>
-        {t('legendAddonDesc')}
-      </span>
-    </div>
-  )
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PluginsPage() {
@@ -773,9 +743,6 @@ export default function PluginsPage() {
           </Button>
         ))}
       </div>
-
-      {/* Badge legend */}
-      <BadgeLegend />
 
       {/* Grid */}
       <div className="grid gap-4 sm:grid-cols-2">
