@@ -24,7 +24,7 @@
  *       • "BJJ Fundamentals"  → published, free (anonymous Space access)
  *       • "Competition Game Plan" → published, registered (sign-in required)
  *       • "Inside the Black Belt Curriculum" → published, subscription
- *         (Monthly Membership only — e.g. Luca Ferrari, contact 0)
+ *         (Premium/Elite only — e.g. contact 2, Premium annual)
  *       • "Strength & Conditioning for Fighters" → draft
  *     Published courses also get a courses/{id}/public_profile/{id} summary.
  */
@@ -198,8 +198,20 @@ async function seedTeam(opts: {
 
   // ── plan-tier config ─────────────────────────────────────────────────────────
 
-  // Subscription types — vary by plan
-  const subscriptionTypeDefs =
+  // Subscription types — vary by plan. Studio/Org use named tiers (Starter /
+  // Premium / Elite) where each tier carries multiple prices (monthly + annual).
+  // Coach keeps a simpler single-price structure.
+  type SeedRecurrence = 'per_class' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual'
+  type SeedPrice = { id: string; amount: number; recurrence: SeedRecurrence }
+  type SeedSubType = {
+    id: string
+    name: string
+    description: string
+    source: string
+    prices: SeedPrice[]
+    active: boolean
+  }
+  const subscriptionTypeDefs: SeedSubType[] =
     plan === 'coach'
       ? [
           {
@@ -207,7 +219,7 @@ async function seedTeam(opts: {
             name: 'Monthly Membership',
             description: 'Unlimited classes, billed monthly.',
             source: 'internal',
-            price: 95,
+            prices: [{ id: `${teamId}-sub-monthly-price`, amount: 95, recurrence: 'monthly' }],
             active: true,
           },
           {
@@ -215,7 +227,7 @@ async function seedTeam(opts: {
             name: '10-Class Pack',
             description: 'Pre-paid block of 10 sessions.',
             source: 'internal',
-            price: 180,
+            prices: [{ id: `${teamId}-sub-10class-price`, amount: 180, recurrence: 'per_class' }],
             active: true,
           },
           {
@@ -223,34 +235,43 @@ async function seedTeam(opts: {
             name: 'Drop-in',
             description: 'Pay per session, no commitment.',
             source: 'internal',
-            price: 25,
+            prices: [{ id: `${teamId}-sub-dropin-price`, amount: 25, recurrence: 'per_class' }],
             active: true,
           },
         ]
       : plan === 'studio'
         ? [
             {
-              id: `${teamId}-sub-monthly`,
-              name: 'Monthly Membership',
-              description: 'Unlimited classes, billed monthly.',
+              id: `${teamId}-sub-starter`,
+              name: 'Starter',
+              description: 'Essential access — up to 3 group classes per week.',
               source: 'internal',
-              price: 110,
+              prices: [
+                { id: `${teamId}-sub-starter-monthly`, amount: 89, recurrence: 'monthly' },
+                { id: `${teamId}-sub-starter-annual`, amount: 890, recurrence: 'annual' },
+              ],
               active: true,
             },
             {
-              id: `${teamId}-sub-quarterly`,
-              name: 'Quarterly Plan',
-              description: '3-month commitment, 10% discount.',
+              id: `${teamId}-sub-premium`,
+              name: 'Premium',
+              description: 'Unlimited group classes and open-mat access.',
               source: 'internal',
-              price: 300,
+              prices: [
+                { id: `${teamId}-sub-premium-monthly`, amount: 139, recurrence: 'monthly' },
+                { id: `${teamId}-sub-premium-annual`, amount: 1390, recurrence: 'annual' },
+              ],
               active: true,
             },
             {
-              id: `${teamId}-sub-annual`,
-              name: 'Annual Membership',
-              description: 'Best value — 2 months free.',
+              id: `${teamId}-sub-elite`,
+              name: 'Elite',
+              description: 'All-inclusive — unlimited classes, coaching sessions, and priority booking.',
               source: 'internal',
-              price: 990,
+              prices: [
+                { id: `${teamId}-sub-elite-monthly`, amount: 189, recurrence: 'monthly' },
+                { id: `${teamId}-sub-elite-annual`, amount: 1890, recurrence: 'annual' },
+              ],
               active: true,
             },
             {
@@ -258,7 +279,7 @@ async function seedTeam(opts: {
               name: 'Drop-in',
               description: 'Pay per session, no commitment.',
               source: 'internal',
-              price: 30,
+              prices: [{ id: `${teamId}-sub-dropin-price`, amount: 30, recurrence: 'per_class' }],
               active: true,
             },
             {
@@ -266,7 +287,7 @@ async function seedTeam(opts: {
               name: 'FitPass Partner',
               description: 'Access via FitPass aggregator network.',
               source: 'aggregator',
-              price: null,
+              prices: [],
               active: true,
             },
             {
@@ -274,41 +295,42 @@ async function seedTeam(opts: {
               name: 'SportPass',
               description: 'Access via SportPass membership card.',
               source: 'aggregator',
-              price: null,
+              prices: [],
               active: true,
             },
           ]
         : [
             {
-              id: `${teamId}-sub-monthly`,
-              name: 'Monthly Membership',
-              description: 'Unlimited classes, billed monthly.',
+              id: `${teamId}-sub-starter`,
+              name: 'Starter',
+              description: 'Essential access — up to 3 group classes per week.',
               source: 'internal',
-              price: 120,
+              prices: [
+                { id: `${teamId}-sub-starter-monthly`, amount: 99, recurrence: 'monthly' },
+                { id: `${teamId}-sub-starter-annual`, amount: 990, recurrence: 'annual' },
+              ],
               active: true,
             },
             {
-              id: `${teamId}-sub-quarterly`,
-              name: 'Quarterly Plan',
-              description: '3-month commitment, 10% discount.',
+              id: `${teamId}-sub-premium`,
+              name: 'Premium',
+              description: 'Unlimited group classes and open-mat access.',
               source: 'internal',
-              price: 330,
+              prices: [
+                { id: `${teamId}-sub-premium-monthly`, amount: 149, recurrence: 'monthly' },
+                { id: `${teamId}-sub-premium-annual`, amount: 1490, recurrence: 'annual' },
+              ],
               active: true,
             },
             {
-              id: `${teamId}-sub-annual`,
-              name: 'Annual Membership',
-              description: 'Best value — 2 months free.',
+              id: `${teamId}-sub-elite`,
+              name: 'Elite',
+              description: 'All-inclusive — unlimited classes, coaching sessions, and priority booking.',
               source: 'internal',
-              price: 1100,
-              active: true,
-            },
-            {
-              id: `${teamId}-sub-youth`,
-              name: 'Youth Plan (U18)',
-              description: 'Under-18 discounted monthly rate.',
-              source: 'internal',
-              price: 80,
+              prices: [
+                { id: `${teamId}-sub-elite-monthly`, amount: 199, recurrence: 'monthly' },
+                { id: `${teamId}-sub-elite-annual`, amount: 1990, recurrence: 'annual' },
+              ],
               active: true,
             },
             {
@@ -316,37 +338,17 @@ async function seedTeam(opts: {
               name: 'Drop-in',
               description: 'Pay per session, no commitment.',
               source: 'internal',
-              price: 35,
+              prices: [{ id: `${teamId}-sub-dropin-price`, amount: 35, recurrence: 'per_class' }],
               active: true,
             },
           ]
 
-  // Pricing helpers shared by the subscription_types write, the public_profile
-  // mirror, and the per-contact subscription snapshots below.
-  type SeedRecurrence = 'per_class' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual'
-  // Canonical recurrence per plan id (drives the single seeded price each priced
-  // type carries). Aggregator types stay price-less.
-  const recurrenceForSub = (id: string): SeedRecurrence | null => {
-    if (id.endsWith('-sub-monthly') || id.endsWith('-sub-youth')) return 'monthly'
-    if (id.endsWith('-sub-quarterly')) return 'quarterly'
-    if (id.endsWith('-sub-annual')) return 'annual'
-    if (id.endsWith('-sub-dropin') || id.endsWith('-sub-10class')) return 'per_class'
-    return null
-  }
-  // subId → seeded price snapshot, for contact + history denormalization.
-  const priceBySubId: Record<string, { priceId: string; amount: number; recurrence: SeedRecurrence }> = {}
-  for (const st of subscriptionTypeDefs) {
-    const recurrence = recurrenceForSub(st.id)
-    if (st.price != null && recurrence) {
-      priceBySubId[st.id] = { priceId: `${st.id}-price`, amount: st.price, recurrence }
-    }
-  }
   // Mirror written to public_profile (what syncSubscriptionTypesToPublicProfile
   // would produce) so the bio-link / website pricing table works deterministically.
   const publicSubTypes = subscriptionTypeDefs
     .filter((st) => st.active !== false)
     .map((st) => {
-      const recurrence = recurrenceForSub(st.id)
+      const hasRecurring = st.prices.some((p) => p.recurrence !== 'per_class')
       const entry: {
         id: string
         name: string
@@ -356,15 +358,11 @@ async function seedTeam(opts: {
       } = {
         id: st.id,
         name: st.name,
-        // Recurring memberships create a full member (then finish signup); the per-class
-        // drop-in just captures name + email. Demos both checkout-contact modes.
-        checkout_contact_mode: recurrence && recurrence !== 'per_class' ? 'full' : 'minimal',
+        checkout_contact_mode: hasRecurring ? 'full' : 'minimal',
       }
       if (st.description) entry.description = st.description
-      // The public shop's Buy button is gated on price.id (a stable client id, not a
-      // Stripe id) — mirror it here so checkout can resolve the chosen price.
-      if (st.price != null && recurrence)
-        entry.prices = [{ id: `${st.id}-price`, amount: st.price, recurrence }]
+      if (st.prices.length > 0)
+        entry.prices = st.prices.map((p) => ({ id: p.id, amount: p.amount, recurrence: p.recurrence }))
       return entry
     })
 
@@ -437,34 +435,58 @@ async function seedTeam(opts: {
             ],
           }
 
-  // Per-contact subscription assignment (index → config)
-  // Active students get a subscription type linked to them
-  const subMonthly = `${teamId}-sub-monthly`
-  const subAnnual = `${teamId}-sub-annual`
+  // Per-contact subscription assignment (index → config).
+  // Studio/Org use tier-based IDs (starter/premium/elite); coach keeps flat IDs.
+  type SubAssign = {
+    subId: string
+    subName: string
+    priceId: string | null
+    amount: number | null
+    recurrence: string | null
+  }
+  const subStarter = plan === 'coach' ? `${teamId}-sub-monthly` : `${teamId}-sub-starter`
+  const subPremium = plan === 'coach' ? `${teamId}-sub-monthly` : `${teamId}-sub-premium`
+  const subElite = plan === 'coach' ? `${teamId}-sub-monthly` : `${teamId}-sub-elite`
   const subDropin = `${teamId}-sub-dropin`
   const subFitpass = `${teamId}-sub-fitpass`
   const subSportpass = `${teamId}-sub-sportpass`
-  type SubAssign = { subId: string; subName: string; recurrence: string | null }
+  // Helpers to build SubAssign entries for a tier + chosen recurrence.
+  const starterMonthly: SubAssign = plan === 'coach'
+    ? { subId: subStarter, subName: 'Monthly Membership', priceId: `${subStarter}-price`, amount: 95, recurrence: 'monthly' }
+    : { subId: subStarter, subName: 'Starter', priceId: `${subStarter}-monthly`, amount: plan === 'studio' ? 89 : 99, recurrence: 'monthly' }
+  const starterAnnual: SubAssign = plan === 'coach'
+    ? starterMonthly
+    : { subId: subStarter, subName: 'Starter', priceId: `${subStarter}-annual`, amount: plan === 'studio' ? 890 : 990, recurrence: 'annual' }
+  const premiumMonthly: SubAssign = plan === 'coach'
+    ? starterMonthly
+    : { subId: subPremium, subName: 'Premium', priceId: `${subPremium}-monthly`, amount: plan === 'studio' ? 139 : 149, recurrence: 'monthly' }
+  const premiumAnnual: SubAssign = plan === 'coach'
+    ? starterMonthly
+    : { subId: subPremium, subName: 'Premium', priceId: `${subPremium}-annual`, amount: plan === 'studio' ? 1390 : 1490, recurrence: 'annual' }
+  const eliteMonthly: SubAssign = plan === 'coach'
+    ? starterMonthly
+    : { subId: subElite, subName: 'Elite', priceId: `${subElite}-monthly`, amount: plan === 'studio' ? 189 : 199, recurrence: 'monthly' }
+  const dropinAssign: SubAssign = {
+    subId: subDropin, subName: 'Drop-in',
+    priceId: `${subDropin}-price`, amount: plan === 'coach' ? 25 : plan === 'studio' ? 30 : 35,
+    recurrence: null,
+  }
   const contactSubRank: Record<number, SubAssign> = {
-    0: { subId: subMonthly, subName: 'Monthly Membership', recurrence: 'monthly' },
-    1: { subId: subMonthly, subName: 'Monthly Membership', recurrence: 'monthly' },
-    2: { subId: subAnnual, subName: 'Annual Membership', recurrence: 'annual' },
-    3: { subId: subMonthly, subName: 'Monthly Membership', recurrence: 'monthly' },
-    4: { subId: subMonthly, subName: 'Monthly Membership', recurrence: 'monthly' },
-    5: { subId: subDropin, subName: 'Drop-in', recurrence: null },
-    6: {
-      subId: plan !== 'coach' ? subFitpass : subMonthly,
-      subName: plan !== 'coach' ? 'FitPass Partner' : 'Monthly Membership',
-      recurrence: plan !== 'coach' ? null : 'monthly',
-    },
-    10: { subId: subMonthly, subName: 'Monthly Membership', recurrence: 'monthly' },
-    11: { subId: subAnnual, subName: 'Annual Membership', recurrence: 'annual' },
-    16: { subId: subAnnual, subName: 'Annual Membership', recurrence: 'annual' },
-    17: {
-      subId: plan !== 'coach' ? subSportpass : subMonthly,
-      subName: plan !== 'coach' ? 'SportPass' : 'Monthly Membership',
-      recurrence: null,
-    },
+    0: starterMonthly,
+    1: starterMonthly,
+    2: premiumAnnual,
+    3: starterMonthly,
+    4: premiumMonthly,
+    5: dropinAssign,
+    6: plan !== 'coach'
+      ? { subId: subFitpass, subName: 'FitPass Partner', priceId: null, amount: null, recurrence: null }
+      : starterMonthly,
+    10: eliteMonthly,
+    11: premiumAnnual,
+    16: starterAnnual,
+    17: plan !== 'coach'
+      ? { subId: subSportpass, subName: 'SportPass', priceId: null, amount: null, recurrence: null }
+      : starterMonthly,
   }
 
   // Per-contact rank assignment — keyed by contact index.
@@ -804,11 +826,7 @@ async function seedTeam(opts: {
 
   // ── subscription types ──────────────────────────────────────────────────────
   for (const st of subscriptionTypeDefs) {
-    const recurrence = recurrenceForSub(st.id)
-    const prices =
-      st.price != null && recurrence
-        ? [{ id: `${st.id}-price`, amount: st.price, recurrence, active: true }]
-        : []
+    const hasRecurring = st.prices.some((p) => p.recurrence !== 'per_class')
     await db
       .collection('teams')
       .doc(teamId)
@@ -819,10 +837,9 @@ async function seedTeam(opts: {
         description: st.description,
         source: st.source,
         active: st.active,
-        // Surface every active plan on the bio-link / website pricing table.
         public: st.active !== false,
-        checkout_contact_mode: recurrence && recurrence !== 'per_class' ? 'full' : 'minimal',
-        prices,
+        checkout_contact_mode: hasRecurring ? 'full' : 'minimal',
+        prices: st.prices.map((p) => ({ ...p, active: true })),
         teamId,
         created_at: ts(daysFromNow(-60)),
       })
@@ -1216,12 +1233,11 @@ async function seedTeam(opts: {
           ? {
               subscription_type_id: subAssign.subId,
               subscription_type_name: subAssign.subName,
-              subscription_recurrence:
-                priceBySubId[subAssign.subId]?.recurrence ?? subAssign.recurrence,
-              ...(priceBySubId[subAssign.subId]
+              subscription_recurrence: subAssign.recurrence,
+              ...(subAssign.priceId
                 ? {
-                    subscription_price_id: priceBySubId[subAssign.subId].priceId,
-                    subscription_amount: priceBySubId[subAssign.subId].amount,
+                    subscription_price_id: subAssign.priceId,
+                    subscription_amount: subAssign.amount,
                   }
                 : {}),
             }
@@ -1257,12 +1273,9 @@ async function seedTeam(opts: {
         .set({
           subscription_type_id: subAssign.subId,
           subscription_type_name: subAssign.subName,
-          recurrence: priceBySubId[subAssign.subId]?.recurrence ?? subAssign.recurrence,
-          ...(priceBySubId[subAssign.subId]
-            ? {
-                subscription_price_id: priceBySubId[subAssign.subId].priceId,
-                amount: priceBySubId[subAssign.subId].amount,
-              }
+          recurrence: subAssign.recurrence,
+          ...(subAssign.priceId
+            ? { subscription_price_id: subAssign.priceId, amount: subAssign.amount }
             : {}),
           start_date: ts(prevStartedAt),
           end_date: ts(prevEndedAt),
@@ -1278,15 +1291,12 @@ async function seedTeam(opts: {
       .set({
         subscription_type_id: subAssign.subId,
         subscription_type_name: subAssign.subName,
-        recurrence: priceBySubId[subAssign.subId]?.recurrence ?? subAssign.recurrence,
-        ...(priceBySubId[subAssign.subId]
-          ? {
-              subscription_price_id: priceBySubId[subAssign.subId].priceId,
-              amount: priceBySubId[subAssign.subId].amount,
-            }
+        recurrence: subAssign.recurrence,
+        ...(subAssign.priceId
+          ? { subscription_price_id: subAssign.priceId, amount: subAssign.amount }
           : {}),
         start_date: ts(startedAt),
-        end_date: null, // open — currently active
+        end_date: null,
         created_at: ts(startedAt),
       })
   }
@@ -1717,6 +1727,9 @@ async function seedTeam(opts: {
       await seedStoreCourses(storefront, { includeFree: true })
     }
   }
+
+  // ── documents plugin (free & up — all plans) ──────────────────────────────────
+  await seedDocuments(teamId, teamSlug, teamName, uid)
 }
 
 // ── online courses seed ─────────────────────────────────────────────────────────
@@ -1891,14 +1904,14 @@ async function seedCourses(teamId: string, uid: string) {
       ],
     },
     {
-      // Published, subscription-gated: only contacts holding the Monthly Membership
-      // subscription type may view. Luca Ferrari (contact 0, active, monthly) can.
+      // Published, subscription-gated: only contacts holding a Premium or Elite
+      // subscription may view. Contact 2 (Premium annual) and contact 10 (Elite) can.
       title: 'Inside the Black Belt Curriculum',
       summary:
         'A members-only deep dive into the advanced systems we drill in our competition classes.',
       status: 'published',
       accessType: 'subscription',
-      subscriptionTypeIds: [`${teamId}-sub-monthly`],
+      subscriptionTypeIds: [`${teamId}-sub-premium`, `${teamId}-sub-elite`],
       modules: [
         {
           title: 'Advanced Guard Systems',
@@ -2186,6 +2199,143 @@ async function seedOrg() {
   })
 }
 
+// ── documents seed ──────────────────────────────────────────────────────────────
+
+async function seedDocuments(
+  teamId: string,
+  teamSlug: string,
+  teamName: string,
+  uid: string,
+) {
+  // Install the Documents plugin (minPlan 'free' — available to every plan).
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('installed_plugins')
+    .doc('documents')
+    .set({
+      pluginId: 'documents',
+      teamId,
+      installedAt: ts(daysFromNow(-30)),
+      installedBy: uid,
+      status: 'active',
+      config: {
+        signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
+      },
+    })
+
+  const docSeeds = [
+    {
+      id: `${teamId}-doc-terms`,
+      title: 'General Terms & Conditions',
+      slug: `terms-${teamSlug.slice(0, 4)}`,
+      kind: 'terms' as const,
+      source: 'rich_text' as const,
+      summary: `The general terms and conditions governing use of ${teamName}'s services.`,
+      body: `<h2>General Terms &amp; Conditions</h2>
+<p>These terms govern the relationship between ${teamName} ("the Studio") and its members. By registering, you agree to the following:</p>
+<h3>1. Membership</h3>
+<p>Your membership is personal and non-transferable. Access to classes requires a valid subscription or a valid drop-in pass.</p>
+<h3>2. Cancellation</h3>
+<p>Monthly subscriptions can be cancelled at any time with 30 days' notice. Annual plans are non-refundable once the commitment period begins.</p>
+<h3>3. Conduct</h3>
+<p>All members are expected to maintain respectful conduct during classes and open-mat sessions. The Studio reserves the right to revoke access for repeated violations.</p>
+<h3>4. Liability</h3>
+<p>Training is undertaken at your own risk. The Studio is not liable for injuries sustained during classes unless caused by gross negligence.</p>
+<h3>5. Changes</h3>
+<p>The Studio reserves the right to update these terms. Members will be notified of material changes via email.</p>`,
+      order: 0,
+    },
+    {
+      id: `${teamId}-doc-privacy`,
+      title: 'Privacy Policy',
+      slug: `privacy-${teamSlug.slice(0, 4)}`,
+      kind: 'privacy' as const,
+      source: 'rich_text' as const,
+      summary: `How ${teamName} collects, uses, and protects your personal data.`,
+      body: `<h2>Privacy Policy</h2>
+<p>${teamName} ("we", "us") is committed to protecting your personal data. This policy explains what we collect and how we use it.</p>
+<h3>Data we collect</h3>
+<ul>
+<li><strong>Account data:</strong> name, email, phone number, date of birth</li>
+<li><strong>Attendance data:</strong> session check-ins and booking history</li>
+<li><strong>Payment data:</strong> processed by our payment provider (we do not store card details)</li>
+</ul>
+<h3>How we use your data</h3>
+<p>We use your data to manage your membership, communicate about classes and events, and improve our services. We never sell your data to third parties.</p>
+<h3>Your rights</h3>
+<p>You may request access, correction, or deletion of your data at any time by contacting us.</p>
+<h3>Data retention</h3>
+<p>We retain your data for the duration of your membership plus 2 years for legal compliance.</p>`,
+      order: 1,
+    },
+    {
+      id: `${teamId}-doc-rules`,
+      title: 'House Rules & Regulations',
+      slug: `house-rules-${teamSlug.slice(0, 4)}`,
+      kind: 'regulation' as const,
+      source: 'rich_text' as const,
+      summary: 'Facility rules, hygiene standards, and training etiquette.',
+      body: `<h2>House Rules &amp; Regulations</h2>
+<p>To keep our training environment safe and respectful for everyone, please observe the following rules at all times.</p>
+<h3>Hygiene</h3>
+<ul>
+<li>Trim your nails before every session</li>
+<li>Wear a clean gi or rash guard — no street clothes on the mats</li>
+<li>Use flip-flops off the mats to keep the training area clean</li>
+</ul>
+<h3>Training etiquette</h3>
+<ul>
+<li>Bow when stepping on and off the mats</li>
+<li>Tap early and often — protect yourself and your partner</li>
+<li>Respect the coach's instructions and the class structure</li>
+</ul>
+<h3>Facility</h3>
+<ul>
+<li>No shoes on the mats</li>
+<li>No food or drink (except water) in the training area</li>
+<li>Personal belongings must be stored in the lockers provided</li>
+</ul>`,
+      order: 2,
+    },
+  ]
+
+  const now = ts(new Date())
+  for (const doc of docSeeds) {
+    const docRef = db.collection('documents').doc(doc.id)
+    await docRef.set({
+      id: doc.id,
+      teamId,
+      title: doc.title,
+      slug: doc.slug,
+      kind: doc.kind,
+      source: doc.source,
+      body: doc.body,
+      summary: doc.summary,
+      status: 'published',
+      isPublic: true,
+      order: doc.order,
+      created_at: ts(daysFromNow(-25)),
+      updated_at: now,
+      createdBy: uid,
+      archived_at: null,
+    })
+
+    // World-readable public_profile summary (what syncDocumentPublicProfile writes)
+    await docRef.collection('public_profile').doc(doc.id).set({
+      type: 'document',
+      teamId,
+      slug: doc.slug,
+      title: doc.title,
+      kind: doc.kind,
+      source: doc.source,
+      summary: doc.summary,
+      bodyHtml: doc.body,
+      updated_at: now,
+    })
+  }
+}
+
 // ── free-plan team ────────────────────────────────────────────────────────────
 // Minimal tenant pinned EXACTLY at the Free plan's 10-contact hard cap, to
 // exercise: blocked manual adds, portal "Powered by Linyup" badge, locked
@@ -2364,6 +2514,9 @@ async function seedFreeTeam() {
         ...acquisition,
       })
   }
+
+  // Documents plugin — available on free plan too
+  await seedDocuments(teamId, teamSlug, teamName, uid)
 }
 
 // ── studio coach (granular roles demo) ──────────────────────────────────────────
@@ -2511,7 +2664,10 @@ async function main() {
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com is org admin)')
   console.log('   Teams in org: Iron Circle Gym + Titan Combat Sports\n')
   console.log(
-    '   Online Courses: 2 courses seeded for studio@linyup.com → /plugins/online-courses\n'
+    '   Online Courses: 2 courses seeded for studio@linyup.com → /plugins/online-courses'
+  )
+  console.log(
+    '   Documents: 3 documents seeded per team (terms, privacy, house rules) → /plugins/documents\n'
   )
   console.log('   Portals:')
   for (const a of accounts) {

@@ -2730,6 +2730,12 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
     { id: 'gamification' }, // seed already writes scores/badges/settings
     { id: 'website' },
     { id: 'online-courses' },
+    {
+      id: 'documents',
+      config: {
+        signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
+      },
+    },
   ]
   for (const p of plugins) {
     await db
@@ -3026,6 +3032,113 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
   }
   await seedStoreProducts(storefront)
   await seedStoreCourses(storefront, { includeFree: false })
+
+  // ── documents plugin: 3 published documents (terms, privacy, house rules) ──
+  const docSeeds = [
+    {
+      id: `${teamId}-doc-terms`,
+      title: 'General Terms & Conditions',
+      slug: `terms-${teamSlug.slice(0, 4)}`,
+      kind: 'terms' as const,
+      summary: `The general terms and conditions governing use of ${teamName}'s services.`,
+      body: `<h2>General Terms &amp; Conditions</h2>
+<p>These terms govern the relationship between ${teamName} ("the Studio") and its members. By registering, you agree to the following:</p>
+<h3>1. Membership</h3>
+<p>Your membership is personal and non-transferable. Access to classes requires a valid subscription or a valid drop-in pass.</p>
+<h3>2. Cancellation</h3>
+<p>Monthly subscriptions can be cancelled at any time with 30 days' notice. Annual plans are non-refundable once the commitment period begins.</p>
+<h3>3. Conduct</h3>
+<p>All members are expected to maintain respectful conduct during classes. The Studio reserves the right to revoke access for repeated violations.</p>
+<h3>4. Liability</h3>
+<p>Training is undertaken at your own risk. The Studio is not liable for injuries sustained during classes unless caused by gross negligence.</p>
+<h3>5. Changes</h3>
+<p>The Studio reserves the right to update these terms. Members will be notified of material changes via email.</p>`,
+      order: 0,
+    },
+    {
+      id: `${teamId}-doc-privacy`,
+      title: 'Privacy Policy',
+      slug: `privacy-${teamSlug.slice(0, 4)}`,
+      kind: 'privacy' as const,
+      summary: `How ${teamName} collects, uses, and protects your personal data.`,
+      body: `<h2>Privacy Policy</h2>
+<p>${teamName} ("we", "us") is committed to protecting your personal data. This policy explains what we collect and how we use it.</p>
+<h3>Data we collect</h3>
+<ul>
+<li><strong>Account data:</strong> name, email, phone number, date of birth</li>
+<li><strong>Attendance data:</strong> session check-ins and booking history</li>
+<li><strong>Payment data:</strong> processed by our payment provider (we do not store card details)</li>
+</ul>
+<h3>How we use your data</h3>
+<p>We use your data to manage your membership, communicate about classes and events, and improve our services. We never sell your data to third parties.</p>
+<h3>Your rights</h3>
+<p>You may request access, correction, or deletion of your data at any time by contacting us.</p>
+<h3>Data retention</h3>
+<p>We retain your data for the duration of your membership plus 2 years for legal compliance.</p>`,
+      order: 1,
+    },
+    {
+      id: `${teamId}-doc-rules`,
+      title: 'House Rules & Regulations',
+      slug: `house-rules-${teamSlug.slice(0, 4)}`,
+      kind: 'regulation' as const,
+      summary: 'Facility rules, hygiene standards, and training etiquette.',
+      body: `<h2>House Rules &amp; Regulations</h2>
+<p>To keep our training environment safe and respectful for everyone, please observe the following rules at all times.</p>
+<h3>Hygiene</h3>
+<ul>
+<li>Trim your nails before every session</li>
+<li>Wear clean training attire — no street clothes on the training floor</li>
+<li>Use flip-flops off the mats to keep the training area clean</li>
+</ul>
+<h3>Training etiquette</h3>
+<ul>
+<li>Arrive on time — late arrivals may not be admitted to class</li>
+<li>Respect your training partners and the coach's instructions</li>
+<li>Report any injuries to the coach immediately</li>
+</ul>
+<h3>Facility</h3>
+<ul>
+<li>No outdoor shoes on the training floor</li>
+<li>No food or drink (except water) in the training area</li>
+<li>Personal belongings must be stored in the lockers provided</li>
+</ul>`,
+      order: 2,
+    },
+  ]
+
+  const docNow = ts(new Date())
+  for (const doc of docSeeds) {
+    const docRef = db.collection('documents').doc(doc.id)
+    await docRef.set({
+      id: doc.id,
+      teamId,
+      title: doc.title,
+      slug: doc.slug,
+      kind: doc.kind,
+      source: 'rich_text',
+      body: doc.body,
+      summary: doc.summary,
+      status: 'published',
+      isPublic: true,
+      order: doc.order,
+      created_at: ts(daysFromNow(-180)),
+      updated_at: docNow,
+      createdBy: uid,
+      archived_at: null,
+    })
+    await docRef.collection('public_profile').doc(doc.id).set({
+      type: 'document',
+      teamId,
+      slug: doc.slug,
+      title: doc.title,
+      kind: doc.kind,
+      source: 'rich_text',
+      summary: doc.summary,
+      bodyHtml: doc.body,
+      updated_at: docNow,
+    })
+  }
 }
 
 // ── team weekly reports — a year of history so the dashboard trend charts
