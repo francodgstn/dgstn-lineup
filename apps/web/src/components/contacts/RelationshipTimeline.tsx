@@ -1,6 +1,12 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
 
 // ─── Relationship timeline (lifeline ribbon) ────────────────────────────────────
 // A compact, read-only overview of a contact's whole business relationship:
@@ -62,6 +68,7 @@ function SpanRow({
   domainMax,
   nowMs,
   ongoingLabel,
+  typeLabel,
 }: {
   spans: TimelineSpan[]
   colorClass: string
@@ -69,6 +76,7 @@ function SpanRow({
   domainMax: number
   nowMs: number
   ongoingLabel: string
+  typeLabel: string
 }) {
   const pct = (ms: number) => ((ms - domainMin) / (domainMax - domainMin)) * 100
   return (
@@ -78,16 +86,29 @@ function SpanRow({
         const right = pct((s.end ?? new Date(nowMs)).getTime())
         const width = Math.max(right - left, 1.2)
         return (
-          <div
-            key={s.id}
-            title={`${s.label} · ${fmt(s.start)} – ${s.end ? fmt(s.end) : ongoingLabel}`}
-            className={`absolute top-0.5 flex h-4 items-center overflow-hidden rounded-[3px] px-1 ${colorClass} ${
-              s.end ? '' : 'rounded-r-none'
-            }`}
-            style={{ left: `${left}%`, width: `${width}%` }}
-          >
-            <span className="truncate text-[10px] font-medium text-white">{s.label}</span>
-          </div>
+          <Tooltip key={s.id}>
+            <TooltipTrigger
+              render={
+                <div
+                  className={`absolute top-0.5 flex h-4 cursor-help items-center overflow-hidden rounded-[3px] px-1 ${colorClass} ${
+                    s.end ? '' : 'rounded-r-none'
+                  }`}
+                  style={{ left: `${left}%`, width: `${width}%` }}
+                >
+                  <span className="truncate text-[10px] font-medium text-white">{s.label}</span>
+                </div>
+              }
+            />
+            <TooltipContent>
+              <div className="space-y-0.5">
+                <div className="font-semibold">{typeLabel}</div>
+                <div>{s.label}</div>
+                <div className="opacity-70">
+                  {fmt(s.start)} – {s.end ? fmt(s.end) : ongoingLabel}
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
         )
       })}
     </div>
@@ -152,6 +173,7 @@ export function RelationshipTimeline({
   )
 
   return (
+    <TooltipProvider delay={200}>
     <div className="space-y-3 rounded-xl border bg-card p-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {t('relationshipTimeline')}
@@ -177,16 +199,27 @@ export function RelationshipTimeline({
         {/* Acquisition milestones */}
         <div className="relative h-5">
           {milestones.map((m) => (
-            <div
-              key={m.id}
-              className="absolute top-1 -translate-x-1/2"
-              style={{ left: `${pct(m.date.getTime())}%` }}
-              title={`${m.label} · ${fmt(m.date)}`}
-            >
-              <span
-                className={`block h-2.5 w-2.5 rounded-full ring-2 ring-card ${MILESTONE_DOT[m.tone ?? 'neutral']}`}
+            <Tooltip key={m.id}>
+              <TooltipTrigger
+                render={
+                  <div
+                    className="absolute top-1 -translate-x-1/2 cursor-help"
+                    style={{ left: `${pct(m.date.getTime())}%` }}
+                  >
+                    <span
+                      className={`block h-2.5 w-2.5 rounded-full ring-2 ring-card ${MILESTONE_DOT[m.tone ?? 'neutral']}`}
+                    />
+                  </div>
+                }
               />
-            </div>
+              <TooltipContent>
+                <div className="space-y-0.5">
+                  <div className="font-semibold">{t('timelineMilestone')}</div>
+                  <div>{m.label}</div>
+                  <div className="opacity-70">{fmt(m.date)}</div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
           ))}
         </div>
 
@@ -203,6 +236,7 @@ export function RelationshipTimeline({
                 domainMax={max}
                 nowMs={nowMs}
                 ongoingLabel={t('subscriptionEndNone')}
+                typeLabel={t('timelineSubscription')}
               />
             ))}
           </div>
@@ -221,6 +255,7 @@ export function RelationshipTimeline({
                 domainMax={max}
                 nowMs={nowMs}
                 ongoingLabel={t('subscriptionEndNone')}
+                typeLabel={t('timelineAffiliation')}
               />
             ))}
           </div>
@@ -240,5 +275,6 @@ export function RelationshipTimeline({
         </div>
       </div>
     </div>
+    </TooltipProvider>
   )
 }

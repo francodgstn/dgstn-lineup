@@ -229,6 +229,26 @@ export interface RoleConfig {
   role: TeamRole
   capabilities: Capability[]
   scope?: DataScope
+  // Which roles are "coaches" — assignable to a contact + shown in the coach picker.
+  // The Coach role is always a coach; owner/manager are opt-out (default on). This is
+  // an eligibility/relationship flag only: owner/manager stay all-scoped. Stored on the
+  // role_config/coach doc; absent ⇒ DEFAULT_COACH_ROLES. See coachRolesFrom().
+  coachRoles?: TeamRole[]
   updatedBy?: string
   updated_at?: Timestamp
+}
+
+// Roles eligible to be selected as a contact's coach when a team hasn't customized it.
+// Coach is always included; owner/manager default on (removable in Settings → Roles).
+export const DEFAULT_COACH_ROLES: TeamRole[] = ['owner', 'manager', 'coach']
+
+// The optional 'owner'/'manager' toggles the roles UI exposes ('coach' is implicit).
+export const TOGGLEABLE_COACH_ROLES: TeamRole[] = ['owner', 'manager']
+
+/** Resolve a team's coach-eligible roles from its stored config (coach always included). */
+export function coachRolesFrom(stored: TeamRole[] | null | undefined): TeamRole[] {
+  if (!stored) return DEFAULT_COACH_ROLES
+  const set = new Set<TeamRole>(stored)
+  set.add('coach')
+  return [...set]
 }

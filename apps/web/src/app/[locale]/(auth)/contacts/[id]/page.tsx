@@ -1522,77 +1522,6 @@ function AlertsPanelButton({ contact, teamId }: { contact: Contact; teamId: stri
   )
 }
 
-// ─── assigned coach (granular roles) ────────────────────────────────────────────
-// Lets owners/managers assign this contact to a coach (whose own-data scope then
-// includes it). Writes assigned_coach_id directly — independent of the profile
-// form's save. Hidden for own-scoped members (coaches don't reassign).
-function AssignedCoachField({ contact, teamId }: { contact: Contact; teamId: string | null }) {
-  const t = useTranslations('Contacts')
-  const { can, ownScoped } = useCapabilities()
-  const qc = useQueryClient()
-  const visible = !!teamId && !ownScoped && can('members.manage')
-  const [value, setValue] = useState<string>(contact.assigned_coach_id ?? '')
-  const [saving, setSaving] = useState(false)
-
-  const { data: coaches = [] } = useQuery({
-    queryKey: ['team-coaches', teamId],
-    enabled: visible,
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, TEAMS_COLLECTION, teamId!, 'team_members'),
-          where('role', '==', 'coach'),
-        ),
-      )
-      return Promise.all(
-        snap.docs.map(async (d) => {
-          const u = await getDoc(doc(db, 'users', d.id))
-          const name = u.exists()
-            ? (u.data()?.displayName as string) || (u.data()?.email as string)
-            : (d.data()?.email as string) || d.id
-          return { uid: d.id, name }
-        }),
-      )
-    },
-  })
-
-  if (!visible) return null
-
-  async function onChange(v: string | null) {
-    setValue(v ?? '')
-    setSaving(true)
-    try {
-      await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
-        assigned_coach_id: v || null,
-      })
-      qc.invalidateQueries({ queryKey: ['contacts'] })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <FormBlock title={t('assignedCoach')}>
-      <div className="space-y-1.5">
-        <Select value={value} onValueChange={onChange} disabled={saving}>
-          <SelectTrigger className="w-full max-w-sm">
-            <SelectValue placeholder={t('assignedCoachNone')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">{t('assignedCoachNone')}</SelectItem>
-            {coaches.map((c) => (
-              <SelectItem key={c.uid} value={c.uid}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">{t('assignedCoachHint')}</p>
-      </div>
-    </FormBlock>
-  )
-}
-
 // ─── profile tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({
@@ -1690,8 +1619,6 @@ function ProfileTab({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24 lg:w-8/12">
       {/* Single-column section blocks; fields flow into rows within each block on wider screens */}
       <div className="space-y-6">
-        {/* Assigned coach (owners/managers only) */}
-        <AssignedCoachField contact={contact} teamId={teamId} />
         {/* Personal information */}
         <FormBlock title={t('sectionPersonalInfo')}>
           <div className="flex flex-wrap gap-4">
@@ -4586,7 +4513,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
             return (
               <div className="flex items-stretch gap-1 border-b">
-                <div className="flex flex-1 gap-1 overflow-x-auto">
+                <div className="flex flex-1 gap-1 overflow-x-auto overflow-y-hidden">
                   {editingTabs ? (
                     <SortableList
                       horizontal

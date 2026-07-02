@@ -1971,7 +1971,7 @@ async function seedTeam(opts: TeamSeed) {
         updated_at: ts(daysFromNow(-150)),
       })
     const coachContacts = await db.collection('contacts').where('teamId', '==', teamId).limit(6).get()
-    for (const c of coachContacts.docs) await c.ref.update({ assigned_coach_id: coachUid })
+    for (const c of coachContacts.docs) await c.ref.update({ assigned_coach_ids: [coachUid] })
     const coachSessions = await db.collection('sessions').where('teamId', '==', teamId).limit(3).get()
     for (const s of coachSessions.docs)
       await s.ref.update({ coachId: coachUid, instructorId: coachUid, coachName: extraCoaches[0].displayName })

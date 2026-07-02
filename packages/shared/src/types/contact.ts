@@ -64,12 +64,12 @@ export interface Contact {
   id: string
   teamId: string
   createdBy?: string
-  // Assigned coach (a team_member uid) — the staff member who "owns" this contact.
-  // Backs the Coach role's own-data scope: a coach may see/manage only contacts
-  // assigned to them (or that they created). null/absent = unassigned (full team
-  // access, as today). Set manually (assignContactCoach) or auto on coach creation
-  // / a coaching booking. Irrelevant to owner/manager/viewer (they are all-scoped).
-  assigned_coach_id?: string | null
+  // Assigned coaches (team_member uids) — the staff who coach this contact. A contact
+  // may have several. Backs the Coach role's own-data scope: a coach-role member may
+  // see/manage only contacts they are assigned to (or created). Empty/absent =
+  // unassigned. Owner/manager may also appear here (they can be coaches), but stay
+  // all-scoped regardless — for them it's a relationship record, not a restriction.
+  assigned_coach_ids?: string[]
 
   // Identity
   firstname: string

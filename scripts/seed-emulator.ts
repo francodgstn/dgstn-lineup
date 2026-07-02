@@ -2429,7 +2429,7 @@ async function seedStudioCoach() {
     .limit(6)
     .get()
   for (const c of contactsSnap.docs) {
-    await c.ref.update({ assigned_coach_id: uid })
+    await c.ref.update({ assigned_coach_ids: admin.firestore.FieldValue.arrayUnion(uid) })
   }
 
   // Give the coach a couple of their own sessions to manage.

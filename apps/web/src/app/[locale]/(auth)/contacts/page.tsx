@@ -111,10 +111,10 @@ function entryToStage(entry: ContactEntry): {
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
-// `coachScopeUid` restricts the list to a coach's own book (assigned_coach_id ==
-// uid). Own-scoped members (coaches) may only read their assigned contacts per the
-// Firestore rules, so a broad query would be denied — we filter by assignee and do
-// the active/archived filtering + sort client-side (a coach's book is small).
+// `coachScopeUid` restricts the list to a coach's own book (uid in
+// assigned_coach_ids). Own-scoped members (coaches) may only read their assigned
+// contacts per the Firestore rules, so a broad query would be denied — we filter by
+// assignee and do the active/archived filtering + sort client-side (a coach's book is small).
 function useActiveContacts(teamId: string | null, coachScopeUid?: string | null) {
   return useQuery<Contact[]>({
     queryKey: ['contacts', 'active', teamId, coachScopeUid ?? 'all'],
@@ -126,7 +126,7 @@ function useActiveContacts(teamId: string | null, coachScopeUid?: string | null)
           query(
             collection(db, CONTACTS_COLLECTION),
             where('teamId', '==', teamId),
-            where('assigned_coach_id', '==', coachScopeUid),
+            where('assigned_coach_ids', 'array-contains', coachScopeUid),
           ),
         )
         return snap.docs
@@ -295,7 +295,7 @@ function CreateContactDialog({
       acquisition_stage_updated_at: serverTimestamp(),
       lead_acknowledged: false,
       createdBy: userId,
-      assigned_coach_id: ownScoped ? userId : null,
+      assigned_coach_ids: ownScoped ? [userId] : [],
       created_at: serverTimestamp(),
       deleted_at: null,
       archived_at: null,

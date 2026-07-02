@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION } from '@linyup/shared'
-import type { Goal, GoalEvaluation, GoalStatus, GoalType, PerformanceIndicator } from '@linyup/shared'
+import type { Contact, Goal, GoalEvaluation, GoalStatus, GoalType, PerformanceIndicator } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,7 @@ import {
   Flag, CheckSquare, Circle, ChevronDown, ChevronUp, Plus, Trash2,
   Star, Info, CheckCircle2,
 } from 'lucide-react'
+import { CoachAssignment } from './CoachAssignment'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -626,7 +627,7 @@ function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
 // ─── GoalsTab ─────────────────────────────────────────────────────────────────
 
 interface Props {
-  contact: { id: string; teamId?: string | null }
+  contact: Contact
   teamId: string | null
 }
 
@@ -680,7 +681,8 @@ export function GoalsTab({ contact, teamId }: Props) {
   }
 
   return (
-    <div className="pb-24">
+    <div className="space-y-6 pb-24">
+      <CoachAssignment contact={contact} teamId={teamId} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Goals column */}
         <div className="space-y-3">

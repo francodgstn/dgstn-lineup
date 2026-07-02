@@ -13,8 +13,11 @@ import {
   CAPABILITY_CATALOG,
   COACH_ASSIGNABLE_CAPABILITIES,
   COACH_DEFAULT_CAPABILITIES,
+  TOGGLEABLE_COACH_ROLES,
+  coachRolesFrom,
   capabilityIsScoped,
   type Capability,
+  type TeamRole,
 } from '@linyup/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
@@ -44,17 +47,27 @@ export default function RolePermissionsPage() {
       const snap = await getDoc(
         doc(db, TEAMS_COLLECTION, currentTeamId!, ROLE_CONFIG_SUBCOLLECTION, 'coach'),
       )
-      return (snap.exists() ? (snap.data()?.capabilities as Capability[]) : null) ?? null
+      const d = snap.exists() ? snap.data() : null
+      return {
+        capabilities: (d?.capabilities as Capability[] | undefined) ?? null,
+        coachRoles: (d?.coachRoles as TeamRole[] | undefined) ?? null,
+      }
     },
   })
 
   const initial = useMemo<Set<Capability>>(
-    () => new Set(stored ?? COACH_DEFAULT_CAPABILITIES),
+    () => new Set(stored?.capabilities ?? COACH_DEFAULT_CAPABILITIES),
+    [stored],
+  )
+  const initialCoachRoles = useMemo<Set<TeamRole>>(
+    () => new Set(coachRolesFrom(stored?.coachRoles)),
     [stored],
   )
   const [draft, setDraft] = useState<Set<Capability> | null>(null)
+  const [coachRolesDraft, setCoachRolesDraft] = useState<Set<TeamRole> | null>(null)
   const selected = draft ?? initial
-  const dirty = draft !== null
+  const selectedCoachRoles = coachRolesDraft ?? initialCoachRoles
+  const dirty = draft !== null || coachRolesDraft !== null
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -63,6 +76,15 @@ export default function RolePermissionsPage() {
     if (on) next.add(cap)
     else next.delete(cap)
     setDraft(next)
+    setSaved(false)
+  }
+
+  function toggleCoachRole(role: TeamRole, on: boolean) {
+    const next = new Set(coachRolesDraft ?? initialCoachRoles)
+    if (on) next.add(role)
+    else next.delete(role)
+    next.add('coach') // the Coach role is always a coach
+    setCoachRolesDraft(next)
     setSaved(false)
   }
 
@@ -75,13 +97,16 @@ export default function RolePermissionsPage() {
         {
           role: 'coach',
           capabilities: [...selected],
+          coachRoles: [...selectedCoachRoles],
           updatedBy: user?.uid ?? null,
           updated_at: serverTimestamp(),
         },
         { merge: true },
       )
       await qc.invalidateQueries({ queryKey: ['role-config', currentTeamId, 'coach'] })
+      await qc.invalidateQueries({ queryKey: ['team-coaches', currentTeamId] })
       setDraft(null)
+      setCoachRolesDraft(null)
       setSaved(true)
     } finally {
       setSaving(false)
@@ -105,6 +130,32 @@ export default function RolePermissionsPage() {
         <h1 className="text-xl font-semibold">{t('title')}</h1>
         <p className="text-sm text-muted-foreground">{t('coachSubtitle')}</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('coachEligibleTitle')}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">{t('coachEligibleHint')}</p>
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-normal">{t('coachEligible_coach')}</Label>
+            <Switch checked disabled />
+          </div>
+          {TOGGLEABLE_COACH_ROLES.map((r) => (
+            <div key={r} className="flex items-center justify-between">
+              <Label htmlFor={`iscoach-${r}`} className="text-sm font-normal">
+                {t(`coachEligible_${r}` as 'coachEligible_owner' | 'coachEligible_manager')}
+              </Label>
+              <Switch
+                id={`iscoach-${r}`}
+                checked={selectedCoachRoles.has(r)}
+                onCheckedChange={(v) => toggleCoachRole(r, v)}
+                disabled={!canEdit}
+              />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

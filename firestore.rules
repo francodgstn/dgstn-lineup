@@ -130,7 +130,7 @@ service cloud.firestore {
     }
 
     function callerOwnsContact(contactRes) {
-      return contactRes.data.get('assigned_coach_id', null) == request.auth.uid
+      return request.auth.uid in contactRes.data.get('assigned_coach_ids', [])
              || contactRes.data.get('createdBy', null) == request.auth.uid;
     }
 
@@ -627,7 +627,7 @@ service cloud.firestore {
       // Create: Must belong to user's current team (new) OR match user ID (old).
       // Requires the contacts.manage capability (viewers are read-only). Own-scoped
       // members (coach) may only create a contact owned by themselves
-      // (assigned_coach_id / createdBy == uid) so it lands in their own book.
+      // (uid in assigned_coach_ids, or createdBy == uid) so it lands in their own book.
       allow create: if (request.resource.data.teamId == getUserCurrentTeam()
                           && isTeamMember(request.resource.data.teamId)
                           && hasTeamCapability(request.resource.data.teamId, 'contacts.manage')
