@@ -12,12 +12,6 @@ export const documentsManifest: PluginManifest = {
   status: 'available',
   recommended: true,
   iconName: 'FileText',
-  navContributions: [
-    {
-      href: '/plugins/documents',
-      labelKey: 'documentsNavLabel',
-      icon: 'FileText',
-      section: 'configure',
-    },
-  ],
+  // Nav entry lives in the "Offer" section as a static, plugin-gated NavItem in
+  // (auth)/layout.tsx (like Online Courses / Products) — not via navContributions.
 }

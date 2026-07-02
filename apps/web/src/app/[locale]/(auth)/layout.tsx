@@ -118,6 +118,12 @@ const NAV_SECTIONS: NavSection[] = [
         requiresPlugin: 'online-courses',
       },
       { href: '/offer/products', labelKey: 'products', icon: Package, requiresPlugin: 'products' },
+      {
+        href: '/plugins/documents',
+        labelKey: 'documents',
+        icon: FileText,
+        requiresPlugin: 'documents',
+      },
     ],
   },
   {
