@@ -15,6 +15,12 @@ variable "firestore_location" {
   default     = "europe-west6"
 }
 
+variable "storage_location" {
+  type        = string
+  description = "Firebase Storage bucket location (immutable after first apply)."
+  default     = "europe-west6"
+}
+
 # ── Project creation ──────────────────────────────────────────────────────────
 variable "create_project" {
   type        = bool
