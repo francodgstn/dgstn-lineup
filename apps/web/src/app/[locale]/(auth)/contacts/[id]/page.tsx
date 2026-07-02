@@ -325,6 +325,40 @@ function EngagementBadge({
   )
 }
 
+function EngagementIndicator({
+  contact,
+  thresholds,
+}: {
+  contact: Contact
+  thresholds?: EngagementThresholds
+}) {
+  const t = useTranslations('Contacts')
+  const lastMs = tsToDate(contact.last_session_at)?.getTime() ?? null
+  const refMs = lastMs ?? tsToDate(contact.created_at)?.getTime() ?? null
+  const band = computeEngagementBand(refMs, thresholds)
+  const daysAgo = lastMs != null ? Math.floor((Date.now() - lastMs) / 86_400_000) : null
+  const tip = `${t('engagementLabel')} · ${
+    daysAgo == null ? t('engagementNoSessions') : t('engagementLastSession', { days: daysAgo })
+  }`
+  const fill: Record<EngagementBand, string> = { active: '100%', low: '75%', at_risk: '50%', inactive: '25%' }
+  return (
+    <div
+      title={tip}
+      className="flex flex-col items-center justify-end gap-1.5 px-3 py-3 shrink-0 cursor-default"
+    >
+      <div className="relative w-2 flex-1 min-h-[40px] rounded-full bg-muted overflow-hidden">
+        <div
+          className={`absolute bottom-0 left-0 right-0 rounded-full transition-all ${ENGAGEMENT_BAR[band]}`}
+          style={{ height: fill[band] }}
+        />
+      </div>
+      <span className={`hidden sm:block text-[10px] font-medium whitespace-nowrap ${ENGAGEMENT_TEXT[band]}`}>
+        {t(`engagement_${band}` as Parameters<typeof t>[0])}
+      </span>
+    </div>
+  )
+}
+
 // ─── schema ───────────────────────────────────────────────────────────────────
 
 const profileSchema = z.object({
@@ -3910,12 +3944,13 @@ function ContactHeaderStats({ contact }: { contact: Contact }) {
     padding: '4px 8px',
     borderRadius: 6,
     border: '1px solid hsl(var(--border))',
-    backgroundColor: 'hsl(var(--card))',
+    backgroundColor: 'hsl(var(--card) / 0.85)',
+    backdropFilter: 'blur(4px)',
     color: 'hsl(var(--card-foreground))',
   }
 
   return (
-    <div className="border-t">
+    <div className="flex-1 min-w-0">
       {/* 3 key stats */}
       <div className="grid grid-cols-3 divide-x">
         <div className="text-center px-4 py-3">
@@ -4696,8 +4731,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     </span>
                   </span>
                 )}
-                {/* Read-only engagement band — derived from attendance recency. */}
-                <EngagementBadge contact={contact} thresholds={team?.engagement_thresholds} />
               </div>
               {/* Contact Groups plugin — membership chips */}
               {isInstalled('contact-groups') && !contact.archived_at && !contact.deleted_at && (
@@ -4737,7 +4770,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* Stats bar + sparkline — full-width, docked to bottom of header card */}
-        <ContactHeaderStats contact={contact} />
+        <div className="flex border-t">
+          <ContactHeaderStats contact={contact} />
+          <EngagementIndicator contact={contact} thresholds={team?.engagement_thresholds} />
+        </div>
       </div>
 
       {/* Archived / deleted → read-only summary; active → full tabbed view */}

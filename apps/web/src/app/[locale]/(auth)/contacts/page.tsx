@@ -41,7 +41,7 @@ import {
   Search, UserPlus, X,
   AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
   MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
-  Check, Bookmark, BookmarkPlus, BarChart2, Pin, FolderTree,
+  Check, Bookmark, BookmarkPlus, BarChart2, Pin, FolderTree, ShieldCheck,
 } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
@@ -1071,7 +1071,7 @@ function ContactRow({
           </p>
           {/* Line 3: stage + affiliation + subscription chips */}
           <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-            {contact.acquisition_stage && (
+            {contact.acquisition_stage && contact.acquisition_stage !== 'joined' && (
               <Badge variant="outline" className="text-xs">{t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])}</Badge>
             )}
             {contact.pending_signup && (
@@ -1080,8 +1080,11 @@ function ContactRow({
               </span>
             )}
             {contact.affiliation_summary?.has_active && (
-              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${MEMBERSHIP_COLOR_CLASSES.green}`}>
-                {t('affiliationChip')}
+              <span
+                title={`${t('affiliationChip')}${contact.affiliation_summary.types.length ? `: ${contact.affiliation_summary.types.join(', ')}` : ''}`}
+                className="inline-flex items-center text-emerald-600 dark:text-emerald-400"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
               </span>
             )}
             {(contact.active_subscriptions?.length ?? 0) > 0 ? (
