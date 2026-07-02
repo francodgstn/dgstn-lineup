@@ -65,7 +65,7 @@
     "managers": "Manager",
     "roles": "Ruoli",
     "bioLink": "Bio link",
-    "publicPage": "Pagine pubbliche",
+    "publicPage": "Tutte le pagine pubbliche",
     "plugins": "Plugin",
     "settings": "Impostazioni",
     "billing": "Fatturazione",
@@ -74,7 +74,7 @@
     "affiliations": "Affiliazioni"
   },
   "PublicHub": {
-    "title": "Pagine pubbliche",
+    "title": "Tutte le pagine pubbliche",
     "subtitle": "Tutto ciò che i tuoi visitatori e contatti possono vedere — il tuo link, il tuo shop e dove si configura ogni area.",
     "yourPublicUrl": "Il tuo link pubblico",
     "copy": "Copia link",
@@ -113,7 +113,7 @@
   "ShopSettings": {
     "title": "Shop",
     "subtitle": "La tua vetrina — canali di vendita, pagamenti e valuta.",
-    "back": "Pagine pubbliche",
+    "back": "Tutte le pagine pubbliche",
     "preview": "Anteprima",
     "channelsTitle": "Canali di vendita",
     "subscriptions": "Abbonamenti",
@@ -122,12 +122,14 @@
     "setUp": "Configura",
     "paymentsTitle": "Pagamenti",
     "currency": "Valuta",
-    "currencyHint": "Usata nella vetrina e al checkout."
+    "currencyHint": "Usata nella vetrina e al checkout.",
+    "paymentsDesc": "Stripe Connect e valuta del negozio.",
+    "openSettings": "Apri impostazioni"
   },
   "SpaceSettings": {
     "title": "Space",
     "subtitle": "Il tuo portale membri — dove i contatti accedono ai contenuti pubblicati.",
-    "back": "Pagine pubbliche",
+    "back": "Tutte le pagine pubbliche",
     "preview": "Anteprima",
     "statusTitle": "Stato",
     "statusLiveHint": "Il tuo portale è online — i contatti possono sfogliare i corsi pubblicati.",

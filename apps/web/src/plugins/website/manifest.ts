@@ -12,7 +12,7 @@ export const websiteManifest: PluginManifest = {
   addon: PLUGIN_ADDONS['website'],
   iconName: 'Globe',
   hasOwnerConfig: true,
-  // No sidebar nav entry — the Website surface is reached from the Public pages
-  // hub (its card links to /plugins/website). Discovery still happens via the
-  // hub's Website card + the plugins marketplace.
+  navContributions: [
+    { href: '/plugins/website', labelKey: 'websiteNavLabel', icon: 'Globe', section: 'engage' },
+  ],
 }

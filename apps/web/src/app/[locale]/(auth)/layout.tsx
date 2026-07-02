@@ -127,13 +127,13 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    // Customer-facing + engagement surfaces. The Public pages hub is the home for
-    // everything public (the bio-link + website editors live under it, so they
-    // have no separate nav entry); Forms and Gamification join it here as
-    // engagement plugins (nav contribution section: 'engage').
+    // Customer-facing + engagement surfaces. "All public pages" is the overview
+    // hub of every public surface; bio-link + website keep their own shortcuts
+    // here, and Forms + Gamification join as engagement plugins (section: 'engage').
     labelKey: 'sectionGrow',
     items: [
       { href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate },
+      { href: '/team/bio-link', labelKey: 'bioLink', icon: Globe },
     ],
   },
 ]

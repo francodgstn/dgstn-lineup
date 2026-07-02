@@ -17,8 +17,7 @@ import type { Route } from 'next'
 import { TEAMS_COLLECTION, PRODUCTS_SUBCOLLECTION, COURSES_COLLECTION } from '@linyup/shared'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/card'
-import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
-import { Tag, Package, GraduationCap, ExternalLink, ChevronRight, Plus, Settings2 } from 'lucide-react'
+import { Tag, Package, GraduationCap, ExternalLink, ChevronRight, Plus, CreditCard, ArrowUpRight } from 'lucide-react'
 
 function pluginSetupHref(pluginId: string): Route {
   return `/settings/plugins?plugin=${pluginId}` as Route
@@ -133,23 +132,29 @@ export default function ShopSettingsPage() {
         </div>
       </section>
 
-      {/* Payments */}
+      {/* Payments — configured in payment settings; this is just a shortcut. */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           {t('paymentsTitle')}
         </h2>
-        {currentTeamId && <ConnectPaymentsCard teamId={currentTeamId} />}
         <Card className="flex items-center justify-between gap-4 p-4">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">{t('currency')}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t('currencyHint')}</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+              <CreditCard className="h-[18px] w-[18px]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{t('paymentsDesc')}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t('currency')}: <span className="font-mono tabular-nums">{currency}</span>
+              </p>
+            </div>
           </div>
           <Link
             href={'/settings/team?tab=payments' as Route}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
           >
-            <span className="font-mono tabular-nums">{currency}</span>
-            <Settings2 className="h-3.5 w-3.5" />
+            {t('openSettings')}
+            <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
         </Card>
       </section>

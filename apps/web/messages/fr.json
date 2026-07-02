@@ -65,7 +65,7 @@
     "managers": "Managers",
     "roles": "Rôles",
     "bioLink": "Bio link",
-    "publicPage": "Pages publiques",
+    "publicPage": "Toutes les pages publiques",
     "plugins": "Plugins",
     "settings": "Paramètres",
     "billing": "Facturation",
@@ -74,7 +74,7 @@
     "affiliations": "Affiliations"
   },
   "PublicHub": {
-    "title": "Pages publiques",
+    "title": "Toutes les pages publiques",
     "subtitle": "Tout ce que vos visiteurs et contacts peuvent voir — votre lien, votre boutique et où se configure chaque surface.",
     "yourPublicUrl": "Votre lien public",
     "copy": "Copier le lien",
@@ -113,7 +113,7 @@
   "ShopSettings": {
     "title": "Boutique",
     "subtitle": "Votre vitrine — canaux de vente, paiements et devise.",
-    "back": "Pages publiques",
+    "back": "Toutes les pages publiques",
     "preview": "Aperçu",
     "channelsTitle": "Canaux de vente",
     "subscriptions": "Abonnements",
@@ -122,12 +122,14 @@
     "setUp": "Configurer",
     "paymentsTitle": "Paiements",
     "currency": "Devise",
-    "currencyHint": "Utilisée dans votre vitrine et au paiement."
+    "currencyHint": "Utilisée dans votre vitrine et au paiement.",
+    "paymentsDesc": "Stripe Connect et devise de la boutique.",
+    "openSettings": "Ouvrir les réglages"
   },
   "SpaceSettings": {
     "title": "Space",
     "subtitle": "Votre portail membres — où vos contacts accèdent à votre contenu publié.",
-    "back": "Pages publiques",
+    "back": "Toutes les pages publiques",
     "preview": "Aperçu",
     "statusTitle": "Statut",
     "statusLiveHint": "Votre portail est en ligne — les contacts peuvent parcourir vos cours publiés.",

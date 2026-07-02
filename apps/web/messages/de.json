@@ -65,7 +65,7 @@
     "managers": "Manager",
     "roles": "Rollen",
     "bioLink": "Bio-Link",
-    "publicPage": "Öffentliche Seiten",
+    "publicPage": "Alle öffentlichen Seiten",
     "plugins": "Plugins",
     "settings": "Einstellungen",
     "billing": "Abrechnung",
@@ -74,7 +74,7 @@
     "affiliations": "Affiliationen"
   },
   "PublicHub": {
-    "title": "Öffentliche Seiten",
+    "title": "Alle öffentlichen Seiten",
     "subtitle": "Alles, was deine Besucher und Kontakte sehen — dein Link, dein Shop und wo du jeden Bereich einrichtest.",
     "yourPublicUrl": "Dein öffentlicher Link",
     "copy": "Link kopieren",
@@ -113,7 +113,7 @@
   "ShopSettings": {
     "title": "Shop",
     "subtitle": "Dein Schaufenster — Verkaufskanäle, Zahlungen und Währung.",
-    "back": "Öffentliche Seiten",
+    "back": "Alle öffentlichen Seiten",
     "preview": "Vorschau",
     "channelsTitle": "Verkaufskanäle",
     "subscriptions": "Abonnements",
@@ -122,12 +122,14 @@
     "setUp": "Einrichten",
     "paymentsTitle": "Zahlungen",
     "currency": "Währung",
-    "currencyHint": "Gilt für dein Schaufenster und den Checkout."
+    "currencyHint": "Gilt für dein Schaufenster und den Checkout.",
+    "paymentsDesc": "Stripe Connect und Shop-Währung.",
+    "openSettings": "Einstellungen öffnen"
   },
   "SpaceSettings": {
     "title": "Space",
     "subtitle": "Dein Mitglieder-Portal — wo Kontakte auf deine veröffentlichten Inhalte zugreifen.",
-    "back": "Öffentliche Seiten",
+    "back": "Alle öffentlichen Seiten",
     "preview": "Vorschau",
     "statusTitle": "Status",
     "statusLiveHint": "Dein Portal ist live — Kontakte können deine veröffentlichten Kurse durchsuchen.",

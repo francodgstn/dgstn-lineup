@@ -65,7 +65,7 @@
     "roles": "Roles",
     "automations": "Automations",
     "bioLink": "Bio link",
-    "publicPage": "Public pages",
+    "publicPage": "All public pages",
     "plugins": "Plugins",
     "settings": "Settings",
     "billing": "Billing",
@@ -74,7 +74,7 @@
     "affiliations": "Affiliations"
   },
   "PublicHub": {
-    "title": "Public pages",
+    "title": "All public pages",
     "subtitle": "Everything your visitors and contacts can see — your link, your shop, and where each surface lives.",
     "yourPublicUrl": "Your public link",
     "copy": "Copy link",
@@ -113,7 +113,7 @@
   "ShopSettings": {
     "title": "Shop",
     "subtitle": "Your storefront — sellable channels, payments and currency.",
-    "back": "Public pages",
+    "back": "All public pages",
     "preview": "Preview",
     "channelsTitle": "Sellable channels",
     "subscriptions": "Subscriptions",
@@ -122,12 +122,14 @@
     "setUp": "Set up",
     "paymentsTitle": "Payments",
     "currency": "Currency",
-    "currencyHint": "Used across your storefront and checkout."
+    "currencyHint": "Used across your storefront and checkout.",
+    "paymentsDesc": "Stripe Connect and storefront currency.",
+    "openSettings": "Open settings"
   },
   "SpaceSettings": {
     "title": "Space",
     "subtitle": "Your members' portal — where contacts access your published content.",
-    "back": "Public pages",
+    "back": "All public pages",
     "preview": "Preview",
     "statusTitle": "Status",
     "statusLiveHint": "Your portal is live — contacts can browse your published courses.",
