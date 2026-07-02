@@ -47,7 +47,7 @@ import {
   seedStoreProducts,
   seedStoreCourses,
 } from './lib/storefront'
-import { memberCapsFor } from './lib/roles'
+import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // On the emulator, write into the namespace the web app + emulator use
@@ -1639,6 +1639,59 @@ async function seedDemoTeam(profile: SectorProfile) {
       },
       { merge: true }
     )
+
+  // ── manager member (second instructor as manager role) ──────────────────────
+  // Each demo team gets a manager so the coach picker shows all three coach-
+  // eligible roles (owner, manager, coach). Uses the second instructor name.
+  const managerUid = `${teamId}-manager`
+  const managerName = instructors[1] ?? `${ownerName.split(' ')[0]} Assistant`
+  const managerEmail = `${key}-manager@linyup.com`
+  await upsertAuthUser({
+    uid: managerUid,
+    email: managerEmail,
+    displayName: managerName,
+    password: DEMO_PASSWORD,
+  })
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(managerUid)
+    .set({
+      teamId,
+      userId: managerUid,
+      role: 'manager',
+      email: managerEmail,
+      ...memberCapsFor('manager'),
+      joined: ts(daysFromNow(-180)),
+      addedBy: uid,
+    })
+  const [mgrFirst, mgrLast] = managerName.split(' ')
+  await db
+    .collection('users')
+    .doc(managerUid)
+    .set({
+      email: managerEmail,
+      displayName: managerName,
+      firstname: mgrFirst,
+      lastname: mgrLast ?? '',
+      currentTeam: teamId,
+      created_at: ts(daysFromNow(-180)),
+    })
+
+  // ── coach role config (owner + manager + coach eligible) ───────────────────
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('role_config')
+    .doc('coach')
+    .set({
+      role: 'coach',
+      capabilities: COACH_DEFAULT_CAPABILITIES,
+      coachRoles: ['owner', 'manager', 'coach'],
+      updatedBy: uid,
+      updated_at: ts(daysFromNow(-180)),
+    })
 
   // ── affiliation type catalog (team-local 'club') ──────────────────────────
   const affiliationTypeDefs = teamAffiliationTypes()
