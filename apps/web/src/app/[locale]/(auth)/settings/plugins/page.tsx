@@ -32,7 +32,7 @@ import { toast } from 'sonner'
 import {
   Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift,
   GraduationCap, Trophy, FolderTree, Search, Tag, ListPlus, ClipboardList,
-  ImageIcon,
+  ImageIcon, FileText,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
@@ -55,6 +55,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Tag,
   ListPlus,
   ClipboardList,
+  FileText,
 }
 
 function PluginIcon({ name, className }: { name: string; className?: string }) {

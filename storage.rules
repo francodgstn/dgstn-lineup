@@ -53,6 +53,18 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // Images embedded in a document's rich-text body live under
+    // teams/{teamId}/documents/{documentId}/... A published + public document is
+    // shown on the PUBLIC document page, so reads are open; writes stay staff-only
+    // and image-only. (Storage grants if ANY matching rule allows; the broad
+    // teams/{teamId} match below still covers staff reads/writes.)
+    match /teams/{teamId}/documents/{allPaths=**} {
+      allow read: if true;
+      allow write: if isTeamMemberStorage(teamId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     match /teams/{teamId}/{allPaths=**} {
       // Only members of this specific team may access its files
       allow read: if isTeamMemberStorage(teamId);

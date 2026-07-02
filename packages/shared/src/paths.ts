@@ -118,6 +118,12 @@ export const COURSE_PURCHASES_SUBCOLLECTION = 'purchases'
 export const FORMS_COLLECTION = 'forms'
 export const FORM_SUBMISSIONS_SUBCOLLECTION = 'submissions'
 
+// Documents plugin (core operational documents: terms, privacy, regulations)
+// documents/{documentId}: team-scoped, authored rich text OR an external link.
+// The world-readable summary lives in the generic `public_profile` subcollection
+// (written by syncDocumentPublicProfile) — no dedicated subcollection constant.
+export const DOCUMENTS_COLLECTION = 'documents'
+
 // Website plugin (studio site builder)
 // site_drafts: PRIVATE working copy (manager+). site_published: PUBLIC snapshot
 // (public read, written only by the publishWebsite Cloud Function). Both keyed by teamId.

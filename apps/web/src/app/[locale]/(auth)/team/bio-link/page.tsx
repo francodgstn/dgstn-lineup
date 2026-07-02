@@ -76,7 +76,7 @@ const linkSchema = z.object({
   iconName: z.string().optional(),
   // Set → this is a "page link" to one of the team's public surfaces.
   target: z
-    .enum(['booking', 'signup', 'shop', 'shop-subscriptions', 'shop-products', 'shop-courses', 'space', 'site'])
+    .enum(['booking', 'signup', 'shop', 'shop-subscriptions', 'shop-products', 'shop-courses', 'space', 'site', 'documents'])
     .optional(),
 })
 
@@ -398,6 +398,7 @@ function useTargetLabel() {
     'shop-courses': 'shopCoursesLink',
     space: 'coursesLink',
     site: 'siteLink',
+    documents: 'documentsLink',
   }
   return (target: SystemLinkTarget): string => t(KEYS[target])
 }
@@ -656,7 +657,7 @@ export default function TeamBioLinkEditorPage() {
   // Public-surface availability comes from the shared usePublicSurfaces hook so the
   // page-link picker and the "Public page" hub read identical state (no drift).
   const { flags } = usePublicSurfaces()
-  const { coursesActive, connectEnabled, productsActive, websiteActive } = flags
+  const { coursesActive, connectEnabled, productsActive, websiteActive, documentsLive } = flags
 
   // Page-link surfaces this team can offer (before subtracting already-added). The
   // generic `shop` target stays valid for back-compat but isn't suggested — the three
@@ -670,6 +671,7 @@ export default function TeamBioLinkEditorPage() {
     'shop-courses',
     'space',
     'site',
+    'documents',
   ]
   const availableTargets = offeredTargets.filter((tgt) => {
     if (tgt === 'shop-subscriptions') return connectEnabled
@@ -677,6 +679,10 @@ export default function TeamBioLinkEditorPage() {
     if (tgt === 'shop-courses') return coursesActive
     if (tgt === 'space') return coursesActive
     if (tgt === 'site') return websiteActive
+    // documents surface goes live once the plugin is installed AND ≥1 published +
+    // public document exists — same "published content, not just plugin" gating
+    // as site/space (activeSurfaces computed server-side by syncTeamPublicProfile).
+    if (tgt === 'documents') return documentsLive
     return true // booking, signup
   })
   const qc = useQueryClient()

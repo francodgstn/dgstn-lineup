@@ -53,6 +53,11 @@ export const completeSignup = onCall(async (request) => {
       notes?: string
       privacyConsent: boolean
     }
+    // Documents plugin: the terms/privacy documents the studio linked in the
+    // consent checkbox, as shown to (and accepted by) this contact. Advisory
+    // audit metadata only — the server still hard-requires privacyConsent below;
+    // it does NOT trust these titles/versions for any authorization decision.
+    acceptedDocuments?: Array<{ slug?: string; kind?: string; version?: string }>
   }
 
   if (!data?.codeId || !data?.contactDetails) {
@@ -109,6 +114,24 @@ export const completeSignup = onCall(async (request) => {
     notes: contactDetails.notes?.trim() || null,
   }
 
+  // Consent audit trail — records that privacy consent was given and which
+  // documents (if any) were presented at signup. Legal record only; strings are
+  // clamped and never used for authorization.
+  const acceptedDocuments = Array.isArray(data.acceptedDocuments)
+    ? data.acceptedDocuments
+        .filter((d) => d && typeof d.slug === 'string')
+        .slice(0, 10)
+        .map((d) => ({
+          slug: String(d.slug).slice(0, 200),
+          kind: typeof d.kind === 'string' ? d.kind.slice(0, 40) : null,
+          version: typeof d.version === 'string' ? d.version.slice(0, 60) : null,
+        }))
+    : []
+  const consent = {
+    privacyAcceptedAt: FieldValue.serverTimestamp(),
+    documents: acceptedDocuments,
+  }
+
   // Resolve-or-create. A 'full'-mode shop purchase already created a pending-signup
   // contact (the Connect webhook); finalizing must UPDATE that contact, not fork a
   // duplicate. Email is NOT unique in Linyup (a parent address may control several
@@ -137,6 +160,7 @@ export const completeSignup = onCall(async (request) => {
     notes: sanitized.notes,
     pending_signup: false,
     signup_completed_at: FieldValue.serverTimestamp(),
+    consent,
   }
 
   let contactRef: admin.firestore.DocumentReference

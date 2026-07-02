@@ -14,6 +14,7 @@ import { gamificationManifest } from './gamification/manifest'
 import { contactGroupsManifest } from './contact-groups/manifest'
 import { customFieldsManifest } from './custom-fields/manifest'
 import { customFormsManifest } from './custom-forms/manifest'
+import { documentsManifest } from './documents/manifest'
 
 export const PLUGIN_REGISTRY: PluginManifest[] = [
   aiInsightsManifest,
@@ -27,6 +28,7 @@ export const PLUGIN_REGISTRY: PluginManifest[] = [
   contactGroupsManifest,
   customFieldsManifest,
   customFormsManifest,
+  documentsManifest,
 ]
 
 /** All plugin-contributed event type IDs (built-in type IDs from installed plugins). */

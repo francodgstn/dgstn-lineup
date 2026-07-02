@@ -7,9 +7,10 @@ import {
   SITE_PUBLISHED_COLLECTION,
   COURSES_COLLECTION,
   FORMS_COLLECTION,
+  DOCUMENTS_COLLECTION,
   resolveSystemLinkTarget,
 } from '@linyup/shared'
-import type { PublicSurface, ActivePublicSurfaces } from '@linyup/shared'
+import type { PublicSurface, ActivePublicSurfaces, DocumentKind } from '@linyup/shared'
 
 export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (event) => {
   const { teamId } = event.params
@@ -81,6 +82,55 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     formsActive = !publishedFormSnap.empty
   }
 
+  // documents: documents plugin active AND ≥1 published, public, non-archived
+  // document. Reached via /public/{slug}/documents (discovery signal, not a
+  // default redirect target) — same shape as the forms check above.
+  const documentsPluginSnap = await db
+    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/documents`)
+    .get()
+  const documentsPluginActive =
+    documentsPluginSnap.exists && documentsPluginSnap.data()?.status === 'active'
+  let documentsActive = false
+  if (documentsPluginActive) {
+    const publishedDocSnap = await db
+      .collection(DOCUMENTS_COLLECTION)
+      .where('teamId', '==', teamId)
+      .where('status', '==', 'published')
+      .where('isPublic', '==', true)
+      .where('archived_at', '==', null)
+      .limit(1)
+      .get()
+    documentsActive = !publishedDocSnap.empty
+  }
+
+  // signup_documents: the published + public documents the studio attached to the
+  // signup consent checkbox (installed_plugins/documents.config.signupDocumentIds).
+  // Denormalized here so the anonymous signup form reads consent links from one
+  // world-readable doc. Read each referenced document's public_profile summary —
+  // an id whose summary is missing (unpublished/unshared) is silently skipped.
+  let signupDocuments: Array<{ slug: string; title: string; kind: DocumentKind }> = []
+  if (documentsPluginActive) {
+    const ids = (documentsPluginSnap.data()?.config?.signupDocumentIds as unknown)
+    const idList = Array.isArray(ids) ? (ids as string[]).filter((v) => typeof v === 'string') : []
+    if (idList.length > 0) {
+      const summaries = await Promise.all(
+        idList.map((id) =>
+          db.doc(`${DOCUMENTS_COLLECTION}/${id}/public_profile/${id}`).get()
+        )
+      )
+      signupDocuments = summaries
+        .filter((s) => s.exists)
+        .map((s) => {
+          const d = s.data()!
+          return {
+            slug: d.slug as string,
+            title: (d.title as string) || '',
+            kind: (d.kind as DocumentKind) || 'other',
+          }
+        })
+    }
+  }
+
   // booking: base feature — available whenever booking settings have been configured
   // (bookingSettings lands on the public_profile via syncBookingSettings; here we
   // mirror the same signal used elsewhere: the settings sub-doc existence / field).
@@ -106,6 +156,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     booking: bookingActive,
     shop: shopActive,
     forms: formsActive,
+    documents: documentsActive,
   }
 
   // ── default_public_surface ───────────────────────────────────────────────────
@@ -146,6 +197,8 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     // Billing currency for the website pricing table (bio-link/website never read teams/).
     default_currency: (data.default_currency as string | undefined) || null,
     active_public_surfaces,
+    // Recomputed every run (may be empty) so stale consent links never linger.
+    signup_documents: signupDocuments,
     updated_at: event.data!.after.updateTime,
   }
 

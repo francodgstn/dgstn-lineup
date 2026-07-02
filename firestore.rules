@@ -1068,6 +1068,25 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------
+    // Documents plugin — core operational documents (terms, privacy, regulations)
+    // Authoring (admin web): team members read, managers+ write. The public
+    // document page renders from the world-readable documents/{id}/public_profile/{id}
+    // summary (collection group), never this collection.
+    // ----------------------------------------------
+    match /documents/{documentId} {
+      allow get: if isAuthed() && isTeamMember(resource.data.teamId);
+      // Collection LIST: resource.data is NOT available for query rules. Staff only;
+      // the public document page reads via public_profile (collection group).
+      allow list: if isAuthed();
+      allow create: if hasTeamRole(request.resource.data.teamId, 'manager');
+      allow update, delete: if hasTeamRole(resource.data.teamId, 'manager');
+
+      // documents/{id}/public_profile/{id} is world-readable via the global
+      // /{path=**}/public_profile rule (drives the public document page + signup
+      // consent links + website links) and written only by the sync — no block here.
+    }
+
+    // ----------------------------------------------
     // Website plugin — studio site builder
     // ----------------------------------------------
 
