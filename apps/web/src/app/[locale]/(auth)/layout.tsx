@@ -50,6 +50,7 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import { Logo } from '@/components/Logo'
 import { ProductTour } from '@/components/onboarding/ProductTour'
 import { FreeDowngradeBanner } from '@/components/onboarding/FreeDowngradeBanner'
+import AssistantLauncher from '@/plugins/ai-assistant/AssistantPanel'
 
 // Icons referenced by string name in plugin manifest navContributions
 const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
@@ -809,6 +810,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </div>
           </main>
         </div>
+        {/* AI assistant — self-gates on the (locked) plugin being installed. */}
+        <AssistantLauncher />
       </div>
       </UpgradeModalProvider>
     </SettingsPinsProvider>

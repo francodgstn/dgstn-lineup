@@ -133,6 +133,10 @@ export {
   handleTrialLifecycle,
 } from './saas-billing'
 
+// Locked plugins (key-gated) + the in-app AI assistant
+export { unlockPlugin } from './plugins/unlockPlugin'
+export { assistantChat } from './assistant'
+
 // Organizations (multi-team tier)
 export {
   createOrganization,

@@ -77,6 +77,11 @@ export interface PluginManifest {
   addon?: { coachPriceMonthly: number; stripeLookupKey: string }
 
   iconName: string // lucide icon name resolved at runtime
+  /** When true, the plugin is visible in the marketplace but can only be installed
+   *  via the `unlockPlugin` callable after a strong secret key check — never a direct
+   *  client write (see firestore.rules installed_plugins + unlockPlugin). Used for
+   *  experimental/gated plugins the operator unlocks privately. */
+  locked?: boolean
   /** Optional URL (or public path) to a screenshot shown in the plugin detail modal. */
   screenshot?: string
   automationTriggers?: PluginAutomationTrigger[]

@@ -259,6 +259,7 @@ function PluginCard({
   onRemove,
   onConfigure,
   onUpgrade,
+  onUnlock,
   onDetails,
   installing,
 }: {
@@ -271,6 +272,7 @@ function PluginCard({
   onRemove: () => void
   onConfigure: () => void
   onUpgrade: () => void
+  onUnlock: () => void
   onDetails: () => void
   installing: boolean
 }) {
@@ -295,6 +297,12 @@ function PluginCard({
             <span className="font-medium text-sm leading-tight truncate">
               {t(manifest.nameKey as Parameters<typeof t>[0])}
             </span>
+            {manifest.locked && !isInstalled && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shrink-0">
+                <Lock className="h-2.5 w-2.5" />
+                {t('lockedBadge')}
+              </span>
+            )}
             {isInstalled && (
               <span
                 className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0"
@@ -339,6 +347,11 @@ function PluginCard({
                 </Button>
               </>
             )
+          ) : manifest.locked ? (
+            <Button size="sm" variant="outline" onClick={onUnlock}>
+              <Lock className="h-3.5 w-3.5" />
+              {t('unlock')}
+            </Button>
           ) : access.kind === 'upgrade' ? (
             <Button size="sm" variant="outline" onClick={onUpgrade}>
               {t('upgradeCta')}
@@ -386,6 +399,7 @@ function PluginDetailModal({
   onRemove,
   onConfigure,
   onUpgrade,
+  onUnlock,
   installing,
   categoryLabel,
   open,
@@ -400,6 +414,7 @@ function PluginDetailModal({
   onRemove: () => void
   onConfigure: () => void
   onUpgrade: () => void
+  onUnlock: () => void
   installing: boolean
   categoryLabel: string
   open: boolean
@@ -483,6 +498,11 @@ function PluginDetailModal({
                   </Button>
                 </div>
               )
+            ) : manifest.locked ? (
+              <Button onClick={() => { onClose(); onUnlock() }}>
+                <Lock className="h-4 w-4" />
+                {t('unlock')}
+              </Button>
             ) : access.kind === 'upgrade' ? (
               <Button onClick={() => { onClose(); onUpgrade() }}>
                 {t('upgradeCta')}
@@ -551,6 +571,77 @@ function PluginConfigDialog({
   )
 }
 
+// ─── Unlock dialog (locked plugins) ───────────────────────────────────────────
+// Locked plugins install only via the unlockPlugin callable after a strong-key
+// check. The real-time useInstalledPlugins snapshot picks up the new install doc,
+// so there's nothing to refetch on success.
+
+function PluginUnlockDialog({
+  manifest,
+  teamId,
+  open,
+  onClose,
+}: {
+  manifest: PluginManifest | null
+  teamId: string | null
+  open: boolean
+  onClose: () => void
+}) {
+  const t = useTranslations('Plugins')
+  const [key, setKey] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const reset = () => { setKey(''); setError(null); setSubmitting(false) }
+
+  async function submit() {
+    if (!manifest || !teamId || !key.trim() || submitting) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      await httpsCallable(functions, 'unlockPlugin')({ teamId, pluginId: manifest.id, key: key.trim() })
+      toast.success(`${t(manifest.nameKey as Parameters<typeof t>[0])} · ${t('unlockSuccess')}`)
+      reset()
+      onClose()
+    } catch {
+      setError(t('unlockError'))
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose() } }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="h-4 w-4" />
+            {manifest ? t(manifest.nameKey as Parameters<typeof t>[0]) : t('unlockTitle')}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">{t('unlockDesc')}</p>
+          <Input
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder={t('unlockPlaceholder')}
+            autoComplete="off"
+            autoFocus
+            onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
+          />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onClose() }}>{t('cancel')}</Button>
+          <Button onClick={submit} disabled={!key.trim() || submitting}>
+            {submitting ? t('installing') : t('unlock')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PluginsPage() {
@@ -568,6 +659,7 @@ export default function PluginsPage() {
   const [configPlugin, setConfigPlugin] = useState<PluginManifest | null>(null)
   const [detailPlugin, setDetailPlugin] = useState<PluginManifest | null>(null)
   const [confirmAddon, setConfirmAddon] = useState<PluginManifest | null>(null)
+  const [unlockTarget, setUnlockTarget] = useState<PluginManifest | null>(null)
 
   // ── Deep-link: ?plugin=<id> auto-opens the detail modal once per distinct value ──
   // Track the last param value we acted on so that closing the modal does not
@@ -761,6 +853,7 @@ export default function PluginsPage() {
               onRemove={() => handleRemove(manifest)}
               onConfigure={() => setConfigPlugin(manifest)}
               onUpgrade={() => openUpgradeModal({ minPlan: manifest.minPlan })}
+              onUnlock={() => setUnlockTarget(manifest)}
               onDetails={() => setDetailPlugin(manifest)}
             />
           )
@@ -786,6 +879,7 @@ export default function PluginsPage() {
         onRemove={() => { if (detailPlugin) handleRemove(detailPlugin) }}
         onConfigure={() => { if (detailPlugin) setConfigPlugin(detailPlugin) }}
         onUpgrade={() => { if (detailPlugin) openUpgradeModal({ minPlan: detailPlugin.minPlan }) }}
+        onUnlock={() => { if (detailPlugin) setUnlockTarget(detailPlugin) }}
         open={!!detailPlugin}
         onClose={() => setDetailPlugin(null)}
       />
@@ -795,6 +889,14 @@ export default function PluginsPage() {
         manifest={configPlugin}
         open={!!configPlugin}
         onClose={() => setConfigPlugin(null)}
+      />
+
+      {/* Unlock dialog (locked plugins) */}
+      <PluginUnlockDialog
+        manifest={unlockTarget}
+        teamId={currentTeamId}
+        open={!!unlockTarget}
+        onClose={() => setUnlockTarget(null)}
       />
 
       {/* Add-on price confirmation (paid coach) */}

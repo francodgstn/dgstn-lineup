@@ -155,8 +155,9 @@ function PluginsTab() {
   const { isInstalled } = useInstalledPlugins()
 
   // Recommended plugins first (all of them), then fill with other available
-  // plugins up to a small cap.
-  const notInstalled = PLUGIN_REGISTRY.filter((m) => !isInstalled(m.id))
+  // plugins up to a small cap. Locked plugins are excluded — they can't be
+  // installed without a key, so they're never a discovery nudge.
+  const notInstalled = PLUGIN_REGISTRY.filter((m) => !isInstalled(m.id) && !m.locked)
   const recommended = notInstalled.filter((m) => m.recommended)
   const others = notInstalled.filter((m) => !m.recommended && m.status === 'available')
   const suggestions = [...recommended, ...others].slice(0, 4)
