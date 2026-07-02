@@ -32,9 +32,13 @@ import { toast } from 'sonner'
 import {
   Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift,
   GraduationCap, Trophy, FolderTree, Search, Tag, ListPlus, ClipboardList,
-  ImageIcon, FileText,
+  ImageIcon, FileText, CheckCircle2, Coins, Lock, Clock, FlaskConical,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import {
+  Tooltip as UITooltip, TooltipTrigger, TooltipContent, TooltipProvider,
+} from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
 import { ConfigPanel as WhatsappConfigPanel } from '@/plugins/whatsapp/ConfigPanel'
 import { ConfigPanel as WebsiteConfigPanel } from '@/plugins/website/ConfigPanel'
@@ -84,7 +88,60 @@ type CategoryFilter = 'all' | PluginCategory
 // ─── Badge helpers ────────────────────────────────────────────────────────────
 
 /**
- * Returns the compact badge set for a plugin card or detail modal.
+ * Compact, icon-only signal row for the plugin GRID card — declutters the dense
+ * text-badge stack down to a few small icons, each explained on hover. Category
+ * is intentionally omitted here (it's filterable via the tabs and shown in the
+ * detail modal). Plan/price + upgrade are already conveyed by the action button,
+ * so they appear here only as a supplementary hint (useful for non-owners who see
+ * no action button). Renders nothing when there's no signal to show.
+ */
+function PluginBadgeIcons({
+  manifest,
+  access,
+}: {
+  manifest: PluginManifest
+  access: PluginAccess
+}) {
+  const t = useTranslations('Plugins')
+
+  const items: { key: string; icon: LucideIcon; label: string; className: string }[] = []
+
+  if (manifest.recommended) {
+    items.push({ key: 'recommended', icon: Sparkles, label: t('recommended'), className: 'text-amber-500' })
+  }
+  if (access.kind === 'included') {
+    items.push({ key: 'included', icon: CheckCircle2, label: t('accessIncluded'), className: 'text-green-600' })
+  } else if (access.kind === 'addon') {
+    items.push({ key: 'addon', icon: Coins, label: t('addonPrice', { price: access.priceMonthly }), className: 'text-primary' })
+  } else if (access.kind === 'upgrade') {
+    items.push({ key: 'upgrade', icon: Lock, label: t('badgeUpgrade', { plan: access.minPlan }), className: 'text-muted-foreground' })
+  }
+  if (manifest.status === 'coming_soon') {
+    items.push({ key: 'coming_soon', icon: Clock, label: t('statusComingSoon'), className: 'text-muted-foreground' })
+  } else if (manifest.status === 'beta') {
+    items.push({ key: 'beta', icon: FlaskConical, label: t('statusBeta'), className: 'text-blue-600' })
+  }
+
+  if (items.length === 0) return null
+
+  return (
+    <TooltipProvider delay={200}>
+      <div className="flex items-center gap-2.5">
+        {items.map(({ key, icon: Icon, label, className }) => (
+          <UITooltip key={key}>
+            <TooltipTrigger className={cn('inline-flex cursor-help', className)} aria-label={label}>
+              <Icon className="h-3.5 w-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>{label}</TooltipContent>
+          </UITooltip>
+        ))}
+      </div>
+    </TooltipProvider>
+  )
+}
+
+/**
+ * Returns the full text-badge set for the plugin DETAIL MODAL (more room there).
  *
  * Badges rendered (in order, only when relevant):
  *   1. Category — always shown (muted, outline style).
@@ -199,7 +256,6 @@ function PluginCard({
   onUpgrade,
   onDetails,
   installing,
-  categoryLabel,
 }: {
   manifest: PluginManifest
   access: PluginAccess
@@ -212,7 +268,6 @@ function PluginCard({
   onUpgrade: () => void
   onDetails: () => void
   installing: boolean
-  categoryLabel: string
 }) {
   const t = useTranslations('Plugins')
 
@@ -249,12 +304,8 @@ function PluginCard({
         </div>
       </div>
 
-      {/* Badges row */}
-      <PluginBadges
-        manifest={manifest}
-        access={access}
-        categoryLabel={categoryLabel}
-      />
+      {/* Compact signal icons (recommended / plan / status) with hover tooltips */}
+      <PluginBadgeIcons manifest={manifest} access={access} />
 
       {/* Action row — stop propagation so card-click (→ details) is separate */}
       {isOwner && (
@@ -739,7 +790,6 @@ export default function PluginsPage() {
               installedByOrg={entry?.source === 'org'}
               isOwner={!!isOwner}
               installing={installingId === manifest.id}
-              categoryLabel={categoryLabelMap[manifest.category]}
               onInstall={() => handleInstall(manifest)}
               onRemove={() => handleRemove(manifest)}
               onConfigure={() => setConfigPlugin(manifest)}
