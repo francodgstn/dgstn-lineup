@@ -41,8 +41,8 @@ export default function SpaceSettingsPage() {
       <PageHeader
         title={t('title')}
         subtitle={t('subtitle')}
-        backHref={'/public-page' as Route}
-        backLabel={t('back')}
+        upHref={'/public-page' as Route}
+        upLabel={t('back')}
         action={
           previewUrl ? (
             <a

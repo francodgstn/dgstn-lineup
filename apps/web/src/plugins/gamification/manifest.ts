@@ -16,6 +16,8 @@ export const gamificationManifest: PluginManifest = {
       href: '/gamification',
       labelKey: 'gamificationNavLabel',
       icon: 'Trophy',
+      // Grouped with the other growth/engagement surfaces under "Grow".
+      section: 'engage',
     },
   ],
 }
