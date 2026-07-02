@@ -65,7 +65,7 @@
     "managers": "Managers",
     "roles": "Rôles",
     "bioLink": "Bio link",
-    "publicPage": "Page publique",
+    "publicPage": "Pages publiques",
     "plugins": "Plugins",
     "settings": "Paramètres",
     "billing": "Facturation",
@@ -74,7 +74,7 @@
     "affiliations": "Affiliations"
   },
   "PublicHub": {
-    "title": "Page publique",
+    "title": "Pages publiques",
     "subtitle": "Tout ce que vos visiteurs et contacts peuvent voir — votre lien, votre boutique et où se configure chaque surface.",
     "yourPublicUrl": "Votre lien public",
     "copy": "Copier le lien",
@@ -102,7 +102,42 @@
     "signupDesc": "Captez de nouveaux membres avec un formulaire d'abonnement.",
     "shopSubscriptions": "Abonnements",
     "shopProducts": "Produits",
-    "shopCourses": "Cours"
+    "shopCourses": "Cours",
+    "groupLanding": "Pages d'accueil",
+    "groupAdditional": "Pages supplémentaires",
+    "surfaceForms": "Formulaires",
+    "formsDesc": "Formulaires d'inscription et de contact personnalisés.",
+    "surfaceDocuments": "Documents",
+    "documentsDesc": "Documents publics : décharges, conditions et politiques."
+  },
+  "ShopSettings": {
+    "title": "Boutique",
+    "subtitle": "Votre vitrine — canaux de vente, paiements et devise.",
+    "back": "Pages publiques",
+    "preview": "Aperçu",
+    "channelsTitle": "Canaux de vente",
+    "subscriptions": "Abonnements",
+    "products": "Produits",
+    "courses": "Cours",
+    "setUp": "Configurer",
+    "paymentsTitle": "Paiements",
+    "currency": "Devise",
+    "currencyHint": "Utilisée dans votre vitrine et au paiement."
+  },
+  "SpaceSettings": {
+    "title": "Space",
+    "subtitle": "Votre portail membres — où vos contacts accèdent à votre contenu publié.",
+    "back": "Pages publiques",
+    "preview": "Aperçu",
+    "statusTitle": "Statut",
+    "statusLiveHint": "Votre portail est en ligne — les contacts peuvent parcourir vos cours publiés.",
+    "statusSetupHint": "Votre portail sera en ligne dès que vous publiez un cours.",
+    "themeTitle": "Apparence",
+    "themeHint": "Le portail hérite des couleurs et de l’arrière-plan de votre bio-link.",
+    "editTheme": "Modifier le thème bio-link",
+    "contentTitle": "Contenu",
+    "coursesPublished": "{count, plural, =0 {Aucun cours publié} one {# cours publié} other {# cours publiés}}",
+    "manageContent": "Gérer dans Cours en ligne"
   },
   "Login": {
     "subtitle": "Connectez-vous à votre compte",

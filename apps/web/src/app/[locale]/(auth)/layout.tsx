@@ -84,6 +84,10 @@ type NavItem = {
 type NavSection = { labelKey: string; items: NavItem[] }
 
 const DASHBOARD_ITEM: NavItem = { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard }
+// Standalone hub for everything customer-facing. Its detail pages (Shop/Space
+// settings) and the bio-link + website editors all live under it, so those no
+// longer need their own top-level nav entries.
+const PUBLIC_PAGES_ITEM: NavItem = { href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate }
 
 // Two action-oriented sidebar sections for high-frequency destinations. All
 // lower-frequency configuration lives behind the Settings group (pinned shortcuts
@@ -124,15 +128,6 @@ const NAV_SECTIONS: NavSection[] = [
         icon: FileText,
         requiresPlugin: 'documents',
       },
-    ],
-  },
-  {
-    labelKey: 'sectionGrow',
-    items: [
-      // Orientation hub for everything customer-facing; bio-link stays as its own
-      // deep editor (the hub links into it).
-      { href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate },
-      { href: '/team/bio-link', labelKey: 'bioLink', icon: Globe },
     ],
   },
 ]
@@ -261,12 +256,11 @@ type PluginNavEntry = {
 }
 
 // Maps PluginNavContribution.section values to built-in NAV_SECTIONS labelKeys.
-// 'configure'/'team' no longer have a sidebar section — those plugin entries fall
-// through to the bottom "Plugins" group (unsectioned). Feature-surface plugins
-// (engagement category → 'engage') render under Grow.
+// Sections not listed here (e.g. 'engage', 'configure', 'team') have no dedicated
+// sidebar section — those plugin entries fall through to the bottom "Plugins"
+// group (unsectioned).
 const PLUGIN_SECTION_TO_LABEL_KEY: Record<string, string> = {
   operations: 'sectionRun',
-  engage: 'sectionGrow',
 }
 
 // Suggestion (muted nudge) dismissals, persisted in the browser only. Affects
@@ -621,9 +615,10 @@ function SidebarContent({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
-        {/* Dashboard — standalone, no section header */}
+        {/* Dashboard + Public pages — standalone, no section header */}
         <div className="mb-1 space-y-0.5">
           <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
+          <NavLink item={PUBLIC_PAGES_ITEM} collapsed={collapsed} onClick={onLinkClick} />
         </div>
         {NAV_SECTIONS.map((section) => {
           // Section collapse only applies in the expanded sidebar; icon-only

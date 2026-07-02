@@ -41,6 +41,10 @@ export interface PublicSurfaceFlags {
   documentsActive: boolean
   /** ≥1 published + public Document exists (plugin + content) — the /documents surface is live. */
   documentsLive: boolean
+  /** `custom-forms` plugin installed. */
+  formsActive: boolean
+  /** ≥1 published form exists (plugin + content) — the /forms surface is live. */
+  formsLive: boolean
 }
 
 export interface UsePublicSurfacesResult {
@@ -95,6 +99,8 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
     bookingLive: activeSurfaces?.booking ?? true,
     documentsActive: isInstalled('documents'),
     documentsLive: activeSurfaces?.documents ?? false,
+    formsActive: isInstalled('custom-forms'),
+    formsLive: activeSurfaces?.forms ?? false,
   }
 
   const defaultSurface: PublicSurface = team?.default_public_surface ?? 'bio-link'

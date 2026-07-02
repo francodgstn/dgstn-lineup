@@ -65,7 +65,7 @@
     "managers": "Manager",
     "roles": "Ruoli",
     "bioLink": "Bio link",
-    "publicPage": "Pagina pubblica",
+    "publicPage": "Pagine pubbliche",
     "plugins": "Plugin",
     "settings": "Impostazioni",
     "billing": "Fatturazione",
@@ -74,7 +74,7 @@
     "affiliations": "Affiliazioni"
   },
   "PublicHub": {
-    "title": "Pagina pubblica",
+    "title": "Pagine pubbliche",
     "subtitle": "Tutto ciò che i tuoi visitatori e contatti possono vedere — il tuo link, il tuo shop e dove si configura ogni area.",
     "yourPublicUrl": "Il tuo link pubblico",
     "copy": "Copia link",
@@ -102,7 +102,42 @@
     "signupDesc": "Acquisisci nuovi membri con un modulo di abbonamento.",
     "shopSubscriptions": "Abbonamenti",
     "shopProducts": "Prodotti",
-    "shopCourses": "Corsi"
+    "shopCourses": "Corsi",
+    "groupLanding": "Pagine di destinazione",
+    "groupAdditional": "Pagine aggiuntive",
+    "surfaceForms": "Moduli",
+    "formsDesc": "Moduli di iscrizione e contatto personalizzati.",
+    "surfaceDocuments": "Documenti",
+    "documentsDesc": "Documenti pubblici come liberatorie, termini e informative."
+  },
+  "ShopSettings": {
+    "title": "Shop",
+    "subtitle": "La tua vetrina — canali di vendita, pagamenti e valuta.",
+    "back": "Pagine pubbliche",
+    "preview": "Anteprima",
+    "channelsTitle": "Canali di vendita",
+    "subscriptions": "Abbonamenti",
+    "products": "Prodotti",
+    "courses": "Corsi",
+    "setUp": "Configura",
+    "paymentsTitle": "Pagamenti",
+    "currency": "Valuta",
+    "currencyHint": "Usata nella vetrina e al checkout."
+  },
+  "SpaceSettings": {
+    "title": "Space",
+    "subtitle": "Il tuo portale membri — dove i contatti accedono ai contenuti pubblicati.",
+    "back": "Pagine pubbliche",
+    "preview": "Anteprima",
+    "statusTitle": "Stato",
+    "statusLiveHint": "Il tuo portale è online — i contatti possono sfogliare i corsi pubblicati.",
+    "statusSetupHint": "Il tuo portale sarà online una volta pubblicato un corso.",
+    "themeTitle": "Aspetto",
+    "themeHint": "Il portale eredita i colori e lo sfondo del tuo bio-link.",
+    "editTheme": "Modifica tema bio-link",
+    "contentTitle": "Contenuto",
+    "coursesPublished": "{count, plural, =0 {Nessun corso pubblicato} one {# corso pubblicato} other {# corsi pubblicati}}",
+    "manageContent": "Gestisci in Corsi online"
   },
   "Login": {
     "subtitle": "Accedi al tuo account",

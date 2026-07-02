@@ -65,7 +65,7 @@
     "managers": "Manager",
     "roles": "Rollen",
     "bioLink": "Bio-Link",
-    "publicPage": "Öffentliche Seite",
+    "publicPage": "Öffentliche Seiten",
     "plugins": "Plugins",
     "settings": "Einstellungen",
     "billing": "Abrechnung",
@@ -74,7 +74,7 @@
     "affiliations": "Affiliationen"
   },
   "PublicHub": {
-    "title": "Öffentliche Seite",
+    "title": "Öffentliche Seiten",
     "subtitle": "Alles, was deine Besucher und Kontakte sehen — dein Link, dein Shop und wo du jeden Bereich einrichtest.",
     "yourPublicUrl": "Dein öffentlicher Link",
     "copy": "Link kopieren",
@@ -102,7 +102,42 @@
     "signupDesc": "Gewinne neue Mitglieder mit einem Abo-Anmeldeformular.",
     "shopSubscriptions": "Abos",
     "shopProducts": "Produkte",
-    "shopCourses": "Kurse"
+    "shopCourses": "Kurse",
+    "groupLanding": "Landeseiten",
+    "groupAdditional": "Weitere Seiten",
+    "surfaceForms": "Formulare",
+    "formsDesc": "Individuelle Aufnahme- und Kontaktformulare zum Ausfüllen.",
+    "surfaceDocuments": "Dokumente",
+    "documentsDesc": "Öffentliche Dokumente wie Verzichtserklärungen, AGB und Richtlinien."
+  },
+  "ShopSettings": {
+    "title": "Shop",
+    "subtitle": "Dein Schaufenster — Verkaufskanäle, Zahlungen und Währung.",
+    "back": "Öffentliche Seiten",
+    "preview": "Vorschau",
+    "channelsTitle": "Verkaufskanäle",
+    "subscriptions": "Abonnements",
+    "products": "Produkte",
+    "courses": "Kurse",
+    "setUp": "Einrichten",
+    "paymentsTitle": "Zahlungen",
+    "currency": "Währung",
+    "currencyHint": "Gilt für dein Schaufenster und den Checkout."
+  },
+  "SpaceSettings": {
+    "title": "Space",
+    "subtitle": "Dein Mitglieder-Portal — wo Kontakte auf deine veröffentlichten Inhalte zugreifen.",
+    "back": "Öffentliche Seiten",
+    "preview": "Vorschau",
+    "statusTitle": "Status",
+    "statusLiveHint": "Dein Portal ist live — Kontakte können deine veröffentlichten Kurse durchsuchen.",
+    "statusSetupHint": "Dein Portal geht live, sobald du einen Kurs veröffentlichst.",
+    "themeTitle": "Darstellung",
+    "themeHint": "Das Portal übernimmt die Farben und den Hintergrund deines Bio-Links.",
+    "editTheme": "Bio-Link-Design bearbeiten",
+    "contentTitle": "Inhalt",
+    "coursesPublished": "{count, plural, =0 {Keine veröffentlichten Kurse} one {# veröffentlichter Kurs} other {# veröffentlichte Kurse}}",
+    "manageContent": "In Online-Kursen verwalten"
   },
   "Login": {
     "subtitle": "Bei Ihrem Konto anmelden",

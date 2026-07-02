@@ -65,7 +65,7 @@
     "roles": "Roles",
     "automations": "Automations",
     "bioLink": "Bio link",
-    "publicPage": "Public page",
+    "publicPage": "Public pages",
     "plugins": "Plugins",
     "settings": "Settings",
     "billing": "Billing",
@@ -74,7 +74,7 @@
     "affiliations": "Affiliations"
   },
   "PublicHub": {
-    "title": "Public page",
+    "title": "Public pages",
     "subtitle": "Everything your visitors and contacts can see — your link, your shop, and where each surface lives.",
     "yourPublicUrl": "Your public link",
     "copy": "Copy link",
@@ -102,7 +102,42 @@
     "signupDesc": "Capture new members with a subscription sign-up form.",
     "shopSubscriptions": "Subscriptions",
     "shopProducts": "Products",
-    "shopCourses": "Courses"
+    "shopCourses": "Courses",
+    "groupLanding": "Landing surfaces",
+    "groupAdditional": "Additional pages",
+    "surfaceForms": "Forms",
+    "formsDesc": "Custom intake and contact forms visitors can fill in.",
+    "surfaceDocuments": "Documents",
+    "documentsDesc": "Public documents like waivers, terms and policies."
+  },
+  "ShopSettings": {
+    "title": "Shop",
+    "subtitle": "Your storefront — sellable channels, payments and currency.",
+    "back": "Public pages",
+    "preview": "Preview",
+    "channelsTitle": "Sellable channels",
+    "subscriptions": "Subscriptions",
+    "products": "Products",
+    "courses": "Courses",
+    "setUp": "Set up",
+    "paymentsTitle": "Payments",
+    "currency": "Currency",
+    "currencyHint": "Used across your storefront and checkout."
+  },
+  "SpaceSettings": {
+    "title": "Space",
+    "subtitle": "Your members' portal — where contacts access your published content.",
+    "back": "Public pages",
+    "preview": "Preview",
+    "statusTitle": "Status",
+    "statusLiveHint": "Your portal is live — contacts can browse your published courses.",
+    "statusSetupHint": "Your portal goes live once you publish a course.",
+    "themeTitle": "Appearance",
+    "themeHint": "The portal inherits your bio-link colours and background.",
+    "editTheme": "Edit bio-link theme",
+    "contentTitle": "Content",
+    "coursesPublished": "{count, plural, =0 {No published courses} one {# published course} other {# published courses}}",
+    "manageContent": "Manage in Online courses"
   },
   "Login": {
     "subtitle": "Sign in to your account",
