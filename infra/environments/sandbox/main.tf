@@ -90,6 +90,15 @@ module "firestore" {
   depends_on = [module.services]
 }
 
+# ── Firebase Storage default bucket ───────────────────────────────────────────
+module "storage" {
+  source           = "../../modules/storage"
+  project_id       = var.project_id
+  storage_location = var.storage_location
+
+  depends_on = [module.services]
+}
+
 # ── IAM: runtime SA + deploy SA roles ─────────────────────────────────────────
 module "iam" {
   source          = "../../modules/iam"

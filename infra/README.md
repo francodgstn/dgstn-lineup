@@ -25,6 +25,7 @@ CLI fills it.**
 | Firestore **database instance** (not rules/indexes) | Realtime DB **rules** (deny-all, unused) |
 | Firebase project init + Web App + Hosting **sites** | **Cloud Tasks queue** `executeDelayedRule` (auto-created on deploy) |
 | App Hosting API + deploy SA role (`roles/firebaseapphosting.admin`) | App Hosting **backend** creation (CLI, once) + GitHub repo connection (Console, once) |
+| Firebase Storage **default bucket** (not rules) | |
 | WIF pool/provider + CI deploy SA | |
 | Budgets/alerts + TF state bucket | |
 
@@ -43,6 +44,7 @@ infra/
 │   ├── project-services/ # API enablement
 │   ├── firebase-project/ # firebase project + web app + hosting sites (google-beta)
 │   ├── firestore/        # database instance only (location LOCKED to europe-west6)
+│   ├── storage/          # default Firebase Storage bucket (location LOCKED to europe-west6)
 │   ├── secrets/          # secret containers + accessor IAM (no values)
 │   ├── iam/              # functions runtime SA + deploy SA project roles
 │   └── budget/           # billing budget + alerts
@@ -312,16 +314,10 @@ cd infra/environments/sandbox
 terraform init
 terraform apply        # re-run if Firebase resources fail once (async API enablement)
 
-# 1b. Provision the default Storage bucket (one-time; Terraform enables the API
-#     but the bucket itself is the Console "Get started" step — without it,
-#     `deploy --only storage` fails with "Firebase Storage has not been set up").
-#     Console: Storage → Get Started, or via API:
-curl -X POST "https://firebasestorage.googleapis.com/v1beta/projects/linyup-sandbox/defaultBucket" \
-  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-  -H "Content-Type: application/json" -H "X-Goog-User-Project: linyup-sandbox" \
-  -d '{"location":"europe-west6"}'
+# Step 1 also creates the default Firebase Storage bucket (europe-west6) via the
+# storage module — no manual Console/curl step needed.
 
-# 1c. Deploy backend rules/indexes/functions (first time — afterwards this is
+# 1b. Deploy backend rules/indexes/functions (first time — afterwards this is
 #     automated by .github/workflows/deploy-sandbox.yml on push to main). A fresh
 #     Firestore DB ships locked (deny-all), so the client sees nothing until the
 #     repo rules are deployed:
@@ -388,6 +384,12 @@ Demo logins (all `linyup123`, plan `studio`/`active`): `grappling@`, `crossfit@`
 - **App Hosting vs Hosting**: apps/landing uses Firebase Hosting (static, deployed by CI); apps/web uses App Hosting (SSR, auto-deployed via GitHub integration on push to main).
 - Firestore **location is immutable** — `europe-west6` is locked on first apply
   (`prevent_destroy` + `deletion_policy = ABANDON`). Choose deliberately.
+- Storage **bucket location is immutable** — same `europe-west6` lock + `prevent_destroy`.
+- If the default Storage bucket already exists (created manually via Console or
+  the REST API), **import** it before applying:
+  `terraform import module.storage.google_storage_bucket.default <project_id>.firebasestorage.app`
+  and
+  `terraform import module.storage.google_firebase_storage_bucket.default projects/<project_id>/buckets/<project_id>.firebasestorage.app`.
 - API enablement is **async** — re-run apply if Firebase resources fail once.
 - Hosting `site_id`s must equal `.firebaserc` exactly (`linyup-staging`,
   `linyup-staging-landing`, `linyup-prod`, `linyup-prod-landing`).
@@ -402,7 +404,7 @@ Demo logins (all `linyup123`, plan `studio`/`active`): `grappling@`, `crossfit@`
 
 - The state bucket has **object versioning** enabled; a corrupted/lost state can
   be restored from a prior generation.
-- `prevent_destroy` guards the project, Firestore DB, and state bucket against
-  accidental `terraform destroy`.
+- `prevent_destroy` guards the project, Firestore DB, Storage bucket, and state
+  bucket against accidental `terraform destroy`.
 - Re-creating an environment from scratch = re-run the per-environment apply
   against a fresh project ID, then re-populate secrets and re-deploy via CI.
