@@ -180,7 +180,7 @@ function acquisitionFieldsFor(opts: {
 // 32 entries, ordered so any prefix (15 / 18 / 20 / 30) yields a realistic mix
 // of active students, trials, almost-ready leads, expired and external contacts.
 
-type SubKind = 'monthly' | 'quarterly' | 'annual' | 'dropin' | 'aggregator' | null
+type SubKind = 'starter_monthly' | 'starter_annual' | 'premium_monthly' | 'premium_annual' | 'elite_monthly' | 'dropin' | 'aggregator' | null
 
 interface PoolEntry {
   firstname: string
@@ -204,7 +204,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 142,
-    sub: 'monthly',
+    sub: 'premium_monthly',
   },
   {
     firstname: 'Sofia',
@@ -215,7 +215,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 88,
-    sub: 'annual',
+    sub: 'premium_annual',
   },
   {
     firstname: 'Alex',
@@ -226,7 +226,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 210,
-    sub: 'monthly',
+    sub: 'elite_monthly',
   },
   {
     firstname: 'Chiara',
@@ -237,7 +237,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 34,
-    sub: 'monthly',
+    sub: 'starter_monthly',
   },
   {
     firstname: 'Matteo',
@@ -248,7 +248,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 121,
-    sub: 'annual',
+    sub: 'starter_monthly',
   },
   {
     firstname: 'Julia',
@@ -314,7 +314,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 29,
-    sub: 'monthly',
+    sub: 'starter_monthly',
   },
   {
     firstname: 'Radu',
@@ -325,7 +325,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 175,
-    sub: 'annual',
+    sub: 'starter_annual',
   },
   {
     firstname: 'Nina',
@@ -336,7 +336,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 96,
-    sub: 'monthly',
+    sub: 'premium_monthly',
   },
   {
     firstname: 'Kevin',
@@ -358,7 +358,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 48,
-    sub: 'monthly',
+    sub: 'starter_monthly',
   },
   {
     firstname: 'Valentina',
@@ -369,7 +369,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 63,
-    sub: 'quarterly',
+    sub: 'premium_monthly',
   },
   {
     firstname: 'Marco',
@@ -402,7 +402,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 134,
-    sub: 'annual',
+    sub: 'elite_monthly',
   },
   {
     firstname: 'Léa',
@@ -413,7 +413,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 72,
-    sub: 'monthly',
+    sub: 'starter_monthly',
   },
   {
     firstname: 'Andrei',
@@ -435,7 +435,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 24,
-    sub: 'monthly',
+    sub: 'starter_monthly',
   },
   {
     firstname: 'Felix',
@@ -468,7 +468,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 81,
-    sub: 'monthly',
+    sub: 'premium_monthly',
   },
   {
     firstname: 'Aisha',
@@ -479,7 +479,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 52,
-    sub: 'quarterly',
+    sub: 'premium_monthly',
   },
   {
     firstname: 'Paolo',
@@ -501,7 +501,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 110,
-    sub: 'annual',
+    sub: 'premium_annual',
   },
   {
     firstname: 'Dragan',
@@ -512,7 +512,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 67,
-    sub: 'monthly',
+    sub: 'starter_monthly',
   },
   {
     firstname: 'Yuki',
@@ -523,7 +523,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 45,
-    sub: 'monthly',
+    sub: 'starter_monthly',
   },
   {
     firstname: 'Thomas',
@@ -545,7 +545,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'active',
     totalSessions: 19,
-    sub: 'monthly',
+    sub: 'starter_monthly',
   },
 ]
 
@@ -622,7 +622,7 @@ async function seedTeam(opts: TeamSeed) {
             name: 'Monthly Membership',
             description: 'Unlimited classes, billed monthly.',
             source: 'internal',
-            price: 95,
+            prices: [{ id: `${teamId}-sub-monthly-price`, amount: 95, recurrence: 'monthly' }],
             active: true,
           },
           {
@@ -630,7 +630,7 @@ async function seedTeam(opts: TeamSeed) {
             name: '10-Class Pack',
             description: 'Pre-paid block of 10 sessions.',
             source: 'internal',
-            price: 180,
+            prices: [{ id: `${teamId}-sub-10class-price`, amount: 180, recurrence: 'per_class' }],
             active: true,
           },
           {
@@ -638,33 +638,42 @@ async function seedTeam(opts: TeamSeed) {
             name: 'Drop-in',
             description: 'Pay per session, no commitment.',
             source: 'internal',
-            price: 25,
+            prices: [{ id: `${teamId}-sub-dropin-price`, amount: 25, recurrence: 'per_class' }],
             active: true,
           },
         ]
       : [
           {
-            id: `${teamId}-sub-monthly`,
-            name: 'Monthly Membership',
-            description: 'Unlimited classes, billed monthly.',
+            id: `${teamId}-sub-starter`,
+            name: 'Starter',
+            description: 'Essential access — up to 3 group classes per week.',
             source: 'internal',
-            price: 110,
+            prices: [
+              { id: `${teamId}-sub-starter-monthly`, amount: 89, recurrence: 'monthly' },
+              { id: `${teamId}-sub-starter-annual`, amount: 890, recurrence: 'annual' },
+            ],
             active: true,
           },
           {
-            id: `${teamId}-sub-quarterly`,
-            name: 'Quarterly Plan',
-            description: '3-month commitment, 10% discount.',
+            id: `${teamId}-sub-premium`,
+            name: 'Premium',
+            description: 'Unlimited group classes and open-mat access.',
             source: 'internal',
-            price: 300,
+            prices: [
+              { id: `${teamId}-sub-premium-monthly`, amount: 139, recurrence: 'monthly' },
+              { id: `${teamId}-sub-premium-annual`, amount: 1390, recurrence: 'annual' },
+            ],
             active: true,
           },
           {
-            id: `${teamId}-sub-annual`,
-            name: 'Annual Membership',
-            description: 'Best value — 2 months free.',
+            id: `${teamId}-sub-elite`,
+            name: 'Elite',
+            description: 'All-inclusive — unlimited classes, coaching sessions, and priority booking.',
             source: 'internal',
-            price: 990,
+            prices: [
+              { id: `${teamId}-sub-elite-monthly`, amount: 189, recurrence: 'monthly' },
+              { id: `${teamId}-sub-elite-annual`, amount: 1890, recurrence: 'annual' },
+            ],
             active: true,
           },
           {
@@ -672,7 +681,7 @@ async function seedTeam(opts: TeamSeed) {
             name: 'Drop-in',
             description: 'Pay per session, no commitment.',
             source: 'internal',
-            price: 30,
+            prices: [{ id: `${teamId}-sub-dropin-price`, amount: 30, recurrence: 'per_class' }],
             active: true,
           },
           {
@@ -680,32 +689,40 @@ async function seedTeam(opts: TeamSeed) {
             name: 'FitPass Partner',
             description: 'Access via FitPass aggregator network.',
             source: 'aggregator',
-            price: null,
+            prices: [],
             active: true,
           },
         ]
-  const availableSubIds = new Set(subscriptionTypeDefs.map((s) => s.id))
+  // Map a pool SubKind → concrete subscription type + price for this team.
+  type SubResolve = { id: string; name: string; priceId: string | null; amount: number | null; recurrence: string | null }
 
-  // Map a pool SubKind → concrete subscription type for this team.
-  function resolveSub(
-    kind: SubKind
-  ): { id: string; name: string; recurrence: string | null } | null {
+  function resolveSub(kind: SubKind): SubResolve | null {
     if (!kind) return null
-    const pick = (id: string, name: string, recurrence: string | null) =>
-      availableSubIds.has(id)
-        ? { id, name, recurrence }
-        : { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', recurrence: 'monthly' }
     switch (kind) {
-      case 'monthly':
-        return pick(`${teamId}-sub-monthly`, 'Monthly Membership', 'monthly')
-      case 'quarterly':
-        return pick(`${teamId}-sub-quarterly`, 'Quarterly Plan', 'quarterly')
-      case 'annual':
-        return pick(`${teamId}-sub-annual`, 'Annual Membership', 'annual')
+      case 'starter_monthly':
+        return plan === 'coach'
+          ? { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', priceId: `${teamId}-sub-monthly-price`, amount: 95, recurrence: 'monthly' }
+          : { id: `${teamId}-sub-starter`, name: 'Starter', priceId: `${teamId}-sub-starter-monthly`, amount: 89, recurrence: 'monthly' }
+      case 'starter_annual':
+        return plan === 'coach'
+          ? { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', priceId: `${teamId}-sub-monthly-price`, amount: 95, recurrence: 'monthly' }
+          : { id: `${teamId}-sub-starter`, name: 'Starter', priceId: `${teamId}-sub-starter-annual`, amount: 890, recurrence: 'annual' }
+      case 'premium_monthly':
+        return plan === 'coach'
+          ? { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', priceId: `${teamId}-sub-monthly-price`, amount: 95, recurrence: 'monthly' }
+          : { id: `${teamId}-sub-premium`, name: 'Premium', priceId: `${teamId}-sub-premium-monthly`, amount: 139, recurrence: 'monthly' }
+      case 'premium_annual':
+        return plan === 'coach'
+          ? { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', priceId: `${teamId}-sub-monthly-price`, amount: 95, recurrence: 'monthly' }
+          : { id: `${teamId}-sub-premium`, name: 'Premium', priceId: `${teamId}-sub-premium-annual`, amount: 1390, recurrence: 'annual' }
+      case 'elite_monthly':
+        return plan === 'coach'
+          ? { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', priceId: `${teamId}-sub-monthly-price`, amount: 95, recurrence: 'monthly' }
+          : { id: `${teamId}-sub-elite`, name: 'Elite', priceId: `${teamId}-sub-elite-monthly`, amount: 189, recurrence: 'monthly' }
       case 'dropin':
-        return pick(`${teamId}-sub-dropin`, 'Drop-in', null)
+        return { id: `${teamId}-sub-dropin`, name: 'Drop-in', priceId: `${teamId}-sub-dropin-price`, amount: plan === 'coach' ? 25 : 30, recurrence: null }
       case 'aggregator':
-        return pick(`${teamId}-sub-fitpass`, 'FitPass Partner', null)
+        return { id: `${teamId}-sub-fitpass`, name: 'FitPass Partner', priceId: null, amount: null, recurrence: null }
     }
   }
 
@@ -1138,6 +1155,7 @@ async function seedTeam(opts: TeamSeed) {
 
   // ── subscription types ────────────────────────────────────────────────────────
   for (const st of subscriptionTypeDefs) {
+    const hasRecurring = st.prices.some((p: { recurrence: string }) => p.recurrence !== 'per_class')
     await db
       .collection('teams')
       .doc(teamId)
@@ -1148,7 +1166,9 @@ async function seedTeam(opts: TeamSeed) {
         description: st.description,
         source: st.source,
         active: st.active,
-        ...(st.price != null ? { price: st.price } : {}),
+        public: st.active !== false,
+        checkout_contact_mode: hasRecurring ? 'full' : 'minimal',
+        prices: st.prices.map((p: { id: string; amount: number; recurrence: string }) => ({ ...p, active: true })),
         teamId,
         created_at: ts(daysFromNow(-120)),
       })
@@ -1377,6 +1397,9 @@ async function seedTeam(opts: TeamSeed) {
               subscription_type_id: sub.id,
               subscription_type_name: sub.name,
               subscription_recurrence: sub.recurrence,
+              ...(sub.priceId
+                ? { subscription_price_id: sub.priceId, subscription_amount: sub.amount }
+                : {}),
               subscription_type_updated_at: ts(daysFromNow(-30)),
             }
           : {}),
@@ -1407,6 +1430,7 @@ async function seedTeam(opts: TeamSeed) {
             subscription_type_id: sub.id,
             subscription_type_name: sub.name,
             recurrence: sub.recurrence,
+            ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
             start_date: ts(prevStartedAt),
             end_date: ts(new Date(startedAt.getTime() - 1)),
             created_at: ts(prevStartedAt),
@@ -1421,6 +1445,7 @@ async function seedTeam(opts: TeamSeed) {
           subscription_type_id: sub.id,
           subscription_type_name: sub.name,
           recurrence: sub.recurrence,
+          ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
           start_date: ts(startedAt),
           end_date: null,
           created_at: ts(startedAt),
@@ -1934,6 +1959,9 @@ async function seedTeam(opts: TeamSeed) {
       created_at: ts(now()),
     })
 
+  // ── documents (all plans — minPlan 'free') ──────────────────────────────────
+  await seedDocuments(teamId, teamSlug, teamName, uid)
+
   // ── storefront (studio+ only — products/website/online-courses are minPlan studio) ──
   // Gives studio/organization teams a complete public storefront: a Products shop
   // tab, a published website, free + sellable courses, and the full bio-link set.
@@ -1980,6 +2008,143 @@ async function seedTeam(opts: TeamSeed) {
   console.log(
     `   ✓ ${teamName} (${plan}) — ${contactCount} contacts, ${sessionDefs.length} sessions`
   )
+}
+
+// ── documents seed ───────────────────────────────────────────────────────────
+
+async function seedDocuments(
+  teamId: string,
+  teamSlug: string,
+  teamName: string,
+  uid: string,
+) {
+  // Install the Documents plugin (minPlan 'free' — available to every plan).
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('installed_plugins')
+    .doc('documents')
+    .set({
+      pluginId: 'documents',
+      teamId,
+      installedAt: ts(daysFromNow(-30)),
+      installedBy: uid,
+      status: 'active',
+      config: {
+        signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
+      },
+    })
+
+  const docSeeds = [
+    {
+      id: `${teamId}-doc-terms`,
+      title: 'General Terms & Conditions',
+      slug: `terms-${teamSlug.slice(0, 4)}`,
+      kind: 'terms' as const,
+      source: 'rich_text' as const,
+      summary: `The general terms and conditions governing use of ${teamName}'s services.`,
+      body: `<h2>General Terms &amp; Conditions</h2>
+<p>These terms govern the relationship between ${teamName} ("the Studio") and its members. By registering, you agree to the following:</p>
+<h3>1. Membership</h3>
+<p>Your membership is personal and non-transferable. Access to classes requires a valid subscription or a valid drop-in pass.</p>
+<h3>2. Cancellation</h3>
+<p>Monthly subscriptions can be cancelled at any time with 30 days' notice. Annual plans are non-refundable once the commitment period begins.</p>
+<h3>3. Conduct</h3>
+<p>All members are expected to maintain respectful conduct during classes and open-mat sessions. The Studio reserves the right to revoke access for repeated violations.</p>
+<h3>4. Liability</h3>
+<p>Training is undertaken at your own risk. The Studio is not liable for injuries sustained during classes unless caused by gross negligence.</p>
+<h3>5. Changes</h3>
+<p>The Studio reserves the right to update these terms. Members will be notified of material changes via email.</p>`,
+      order: 0,
+    },
+    {
+      id: `${teamId}-doc-privacy`,
+      title: 'Privacy Policy',
+      slug: `privacy-${teamSlug.slice(0, 4)}`,
+      kind: 'privacy' as const,
+      source: 'rich_text' as const,
+      summary: `How ${teamName} collects, uses, and protects your personal data.`,
+      body: `<h2>Privacy Policy</h2>
+<p>${teamName} ("we", "us") is committed to protecting your personal data. This policy explains what we collect and how we use it.</p>
+<h3>Data we collect</h3>
+<ul>
+<li><strong>Account data:</strong> name, email, phone number, date of birth</li>
+<li><strong>Attendance data:</strong> session check-ins and booking history</li>
+<li><strong>Payment data:</strong> processed by our payment provider (we do not store card details)</li>
+</ul>
+<h3>How we use your data</h3>
+<p>We use your data to manage your membership, communicate about classes and events, and improve our services. We never sell your data to third parties.</p>
+<h3>Your rights</h3>
+<p>You may request access, correction, or deletion of your data at any time by contacting us.</p>
+<h3>Data retention</h3>
+<p>We retain your data for the duration of your membership plus 2 years for legal compliance.</p>`,
+      order: 1,
+    },
+    {
+      id: `${teamId}-doc-rules`,
+      title: 'House Rules & Regulations',
+      slug: `house-rules-${teamSlug.slice(0, 4)}`,
+      kind: 'regulation' as const,
+      source: 'rich_text' as const,
+      summary: 'Facility rules, hygiene standards, and training etiquette.',
+      body: `<h2>House Rules &amp; Regulations</h2>
+<p>To keep our training environment safe and respectful for everyone, please observe the following rules at all times.</p>
+<h3>Hygiene</h3>
+<ul>
+<li>Trim your nails before every session</li>
+<li>Wear a clean gi or rash guard — no street clothes on the mats</li>
+<li>Use flip-flops off the mats to keep the training area clean</li>
+</ul>
+<h3>Training etiquette</h3>
+<ul>
+<li>Bow when stepping on and off the mats</li>
+<li>Tap early and often — protect yourself and your partner</li>
+<li>Respect the coach's instructions and the class structure</li>
+</ul>
+<h3>Facility</h3>
+<ul>
+<li>No shoes on the mats</li>
+<li>No food or drink (except water) in the training area</li>
+<li>Personal belongings must be stored in the lockers provided</li>
+</ul>`,
+      order: 2,
+    },
+  ]
+
+  const nowTs = ts(now())
+  for (const doc of docSeeds) {
+    const docRef = db.collection('documents').doc(doc.id)
+    await docRef.set({
+      id: doc.id,
+      teamId,
+      title: doc.title,
+      slug: doc.slug,
+      kind: doc.kind,
+      source: doc.source,
+      body: doc.body,
+      summary: doc.summary,
+      status: 'published',
+      isPublic: true,
+      order: doc.order,
+      created_at: ts(daysFromNow(-25)),
+      updated_at: nowTs,
+      createdBy: uid,
+      archived_at: null,
+    })
+
+    // World-readable public_profile summary (what syncDocumentPublicProfile writes)
+    await docRef.collection('public_profile').doc(doc.id).set({
+      type: 'document',
+      teamId,
+      slug: doc.slug,
+      title: doc.title,
+      kind: doc.kind,
+      source: doc.source,
+      summary: doc.summary,
+      bodyHtml: doc.body,
+      updated_at: nowTs,
+    })
+  }
 }
 
 // ── automations seed (templates + presets + rules + logs) ─────────────────────
