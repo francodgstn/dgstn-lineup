@@ -297,6 +297,7 @@
     "notFound": "Contatto non trovato.",
     "noNotes": "Nessuna nota ancora.",
     "notesAddNote": "Aggiungi nota",
+    "notesViewAll": "Vedi tutte le {count} note",
     "notesPanelDesc": "Visualizza e gestisci le note di questo contatto.",
     "alertsPanelDesc": "Visualizza e gestisci avvisi e promemoria di questo contatto.",
     "tabProfile": "Profilo",

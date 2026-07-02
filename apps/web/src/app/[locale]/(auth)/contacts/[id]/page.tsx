@@ -180,7 +180,7 @@ import {
   Legend,
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
-import { NotesTab, useContactNotesCount } from './NotesTab'
+import { NotesTab, useContactNotesCount, useContactNotes, type ContactNote } from './NotesTab'
 import { PaymentsTab, MemberSubscriptionsSection, useContactMemberSubscriptions } from './PaymentsTab'
 import { PlanGate } from '@/components/plan/PlanGate'
 import {
@@ -1446,39 +1446,146 @@ function AcquisitionTimeline({
 // the header opens a right-side sheet hosting the full notes editor. Keeps the
 // tab strip lean and notes one click away from whatever tab you're on.
 
-function NotesPanelButton({ contact }: { contact: Contact }) {
+// Round icon button for the header action cluster (notes + alerts), with an
+// optional count badge. Kept generic so both surfaces share one look.
+function HeaderActionButton({
+  icon: Icon,
+  label,
+  count = 0,
+  onClick,
+}: {
+  icon: React.ElementType
+  label: string
+  count?: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+    >
+      <Icon className="h-4 w-4" />
+      {count > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
+// The notes editor lives in a single right-side sheet, opened from the header
+// icon and from the profile-column glance cards — one canonical add/edit/delete
+// surface on every screen size (see the profile-column glance below).
+function NotesSheet({
+  contact,
+  open,
+  onOpenChange,
+}: {
+  contact: Contact
+  open: boolean
+  onOpenChange: (v: boolean) => void
+}) {
   const t = useTranslations('Contacts')
-  const [open, setOpen] = useState(false)
-  const { data: count = 0 } = useContactNotesCount(contact.id)
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="sm:max-w-md!">
+        <SheetHeader>
+          <SheetTitle>{t('tabNotes')}</SheetTitle>
+          <SheetDescription className="sr-only">{t('notesPanelDesc')}</SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto px-4 pb-6">
+          <NotesTab contact={contact} />
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+// Read-only preview of the most recent notes, shown in the profile tab's empty
+// right column on large screens. Each card is truncated with a fade into the
+// card background; tapping anything opens the shared notes sheet to read/edit.
+function NotesGlance({ contact, onOpen }: { contact: Contact; onOpen: () => void }) {
+  const t = useTranslations('Contacts')
+  const { data: notes = [], isLoading } = useContactNotes(contact.id)
+  const GLANCE_LIMIT = 4
+  const shown = notes.slice(0, GLANCE_LIMIT)
+  const extra = notes.length - shown.length
+
+  const fmt = (n: ContactNote) =>
+    n.updated_at?.toDate().toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) ?? ''
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={t('tabNotes')}
-        title={t('tabNotes')}
-        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-      >
-        <StickyNote className="h-4 w-4" />
-        {count > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-            {count}
-          </span>
-        )}
-      </button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="sm:max-w-md!">
-          <SheetHeader>
-            <SheetTitle>{t('tabNotes')}</SheetTitle>
-            <SheetDescription className="sr-only">{t('notesPanelDesc')}</SheetDescription>
-          </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-4 pb-6">
-            <NotesTab contact={contact} />
-          </div>
-        </SheetContent>
-      </Sheet>
-    </>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <StickyNote className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('tabNotes')}
+          </h3>
+          {notes.length > 0 && (
+            <span className="text-xs text-muted-foreground">({notes.length})</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={t('notesAddNote')}
+          title={t('notesAddNote')}
+          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-20 rounded-lg bg-muted animate-pulse" />
+          ))}
+        </div>
+      ) : notes.length === 0 ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground hover:border-border hover:text-foreground transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          {t('notesAddNote')}
+        </button>
+      ) : (
+        <div className="space-y-2">
+          {shown.map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              onClick={onOpen}
+              className="group relative block w-full overflow-hidden rounded-lg border bg-card p-3 text-left transition-colors hover:border-border"
+            >
+              <div className="mb-1 text-[11px] text-muted-foreground">{fmt(n)}</div>
+              <div
+                className="prose-notes max-h-24 overflow-hidden text-sm"
+                dangerouslySetInnerHTML={{ __html: n.content }}
+              />
+              {/* Fade the truncated content into the card background. */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card to-transparent" />
+            </button>
+          ))}
+          {extra > 0 && (
+            <button
+              type="button"
+              onClick={onOpen}
+              className="w-full rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground hover:border-border hover:text-foreground transition-colors"
+            >
+              {t('notesViewAll', { count: notes.length })}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1489,11 +1596,13 @@ function ProfileTab({
   teamId,
   orgId,
   onSaved,
+  onOpenNotes,
 }: {
   contact: Contact
   teamId: string | null
   orgId?: string | null
   onSaved: () => void
+  onOpenNotes: () => void
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
@@ -1576,7 +1685,8 @@ function ProfileTab({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24 lg:w-8/12">
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24 lg:w-8/12 lg:shrink-0">
       {/* Single-column section blocks; fields flow into rows within each block on wider screens */}
       <div className="space-y-6">
         {/* Personal information */}
@@ -1965,6 +2075,13 @@ function ProfileTab({
         </div>
       )}
     </form>
+
+    {/* Notes glance — fills the empty right column on large screens; on smaller
+        screens notes live in the header sheet (this column is hidden). */}
+    <aside className="hidden lg:sticky lg:top-4 lg:block lg:flex-1 lg:min-w-0">
+      <NotesGlance contact={contact} onOpen={onOpenNotes} />
+    </aside>
+    </div>
   )
 }
 
@@ -3510,7 +3627,7 @@ function FollowUpsTab({ contact, teamId }: { contact: Contact; teamId: string | 
   const canSend = can('contacts.manage')
 
   return (
-    <div className="space-y-8 pb-24">
+    <div className="grid gap-8 pb-24 md:grid-cols-2 md:items-start">
       {/* Alerts / reminders */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
@@ -4384,6 +4501,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   const [linkCopied, setLinkCopied] = useState(false)
   const [emailCopied, setEmailCopied] = useState(false)
+  // Notes editor sheet — opened from the header icon and the profile-column glance.
+  const [notesOpen, setNotesOpen] = useState(false)
+  const { data: notesCount = 0 } = useContactNotesCount(id)
+  const { data: contactAlerts = [] } = useContactAlerts(id)
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['contact', id] })
@@ -4594,10 +4715,22 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 </button>
               )}
             </div>
-            {/* Header action cluster — alerts + notes side panels (replace old tabs) */}
+            {/* Header action cluster — alerts jump to the Follow-ups tab; notes
+                open the editor sheet (also glanced in the profile column). */}
             {!contact.archived_at && !contact.deleted_at && (
-              <div className="flex items-center gap-3 shrink-0">
-                <NotesPanelButton contact={contact} />
+              <div className="flex items-center gap-2 shrink-0">
+                <HeaderActionButton
+                  icon={Bell}
+                  label={t('tabFollowups')}
+                  count={contactAlerts.length}
+                  onClick={() => setTab('followups')}
+                />
+                <HeaderActionButton
+                  icon={StickyNote}
+                  label={t('tabNotes')}
+                  count={notesCount}
+                  onClick={() => setNotesOpen(true)}
+                />
               </div>
             )}
           </div>
@@ -4719,6 +4852,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 teamId={currentTeamId}
                 orgId={team?.org_id}
                 onSaved={invalidate}
+                onOpenNotes={() => setNotesOpen(true)}
               />
             )}
             {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
@@ -4739,6 +4873,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {tab === 'goals' && <GoalsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'gamification' && <GamificationTab contact={contact} teamId={currentTeamId} />}
           </div>
+
+          {/* Single notes editor sheet — shared by the header icon + profile glance. */}
+          <NotesSheet contact={contact} open={notesOpen} onOpenChange={setNotesOpen} />
         </>
       )}
     </div>

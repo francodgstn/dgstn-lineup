@@ -19,7 +19,7 @@ import {
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
-interface ContactNote {
+export interface ContactNote {
   id: string
   content: string
   created_at: Timestamp
@@ -45,6 +45,15 @@ export function useContactNotesCount(contactId: string) {
     queryKey: ['contact-notes', contactId],
     queryFn: () => fetchContactNotes(contactId),
     select: (notes) => notes.length,
+  })
+}
+
+// Shared list hook — the header sheet and the profile-column glance read the same
+// cache entry, so add/edit/delete in the panel keeps the glance cards live.
+export function useContactNotes(contactId: string) {
+  return useQuery<ContactNote[]>({
+    queryKey: ['contact-notes', contactId],
+    queryFn: () => fetchContactNotes(contactId),
   })
 }
 

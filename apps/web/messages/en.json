@@ -297,6 +297,7 @@
     "notFound": "Contact not found.",
     "noNotes": "No notes yet.",
     "notesAddNote": "Add note",
+    "notesViewAll": "View all {count} notes",
     "notesPanelDesc": "View and manage notes for this contact.",
     "alertsPanelDesc": "View and manage alerts and reminders for this contact.",
     "tabProfile": "Profile",
