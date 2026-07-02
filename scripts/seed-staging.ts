@@ -577,7 +577,7 @@ interface TeamSeed {
   portalGradient: string // BIO_LINK_GRADIENTS key (apps/web/src/lib/bioLink.ts)
   contactCount: number
   orgId?: string // set when the team is an org member team
-  extraCoaches?: { uid: string; displayName: string; email: string }[]
+  extraStaff?: { uid: string; displayName: string; email: string; role: 'manager' | 'coach' }[]
 }
 
 async function seedTeam(opts: TeamSeed) {
@@ -595,7 +595,7 @@ async function seedTeam(opts: TeamSeed) {
     portalGradient,
     contactCount,
     orgId,
-    extraCoaches = [],
+    extraStaff = [],
   } = opts
 
   const automationsEnabled = plan !== 'coach'
@@ -786,9 +786,9 @@ async function seedTeam(opts: TeamSeed) {
         time_multipliers: [],
       }
 
-  // ── auth users (owner + extra coaches) ────────────────────────────────────────
+  // ── auth users (owner + extra staff) ──────────────────────────────────────────
   await upsertAuthUser({ uid, email, displayName, password: 'linyup123' })
-  for (const c of extraCoaches) {
+  for (const c of extraStaff) {
     await upsertAuthUser({
       uid: c.uid,
       email: c.email,
@@ -861,7 +861,7 @@ async function seedTeam(opts: TeamSeed) {
       updated_at: ts(now()),
     })
 
-  // ── team members (owner + extra coaches) ──────────────────────────────────────
+  // ── team members (owner + extra staff) ────────────────────────────────────────
   await db
     .collection('teams')
     .doc(teamId)
@@ -891,7 +891,7 @@ async function seedTeam(opts: TeamSeed) {
       { merge: true }
     )
 
-  for (const c of extraCoaches) {
+  for (const c of extraStaff) {
     await db
       .collection('teams')
       .doc(teamId)
@@ -900,11 +900,9 @@ async function seedTeam(opts: TeamSeed) {
       .set({
         teamId,
         userId: c.uid,
-        // Extra staff are seeded as the own-scoped Coach role (they manage their own
-        // contacts + schedule) so staging demonstrates the granular-roles feature.
-        role: 'coach',
+        role: c.role,
         email: c.email,
-        ...memberCapsFor('coach'),
+        ...memberCapsFor(c.role),
         joined: ts(daysFromNow(-150)),
         addedBy: uid,
       })
@@ -1186,8 +1184,8 @@ async function seedTeam(opts: TeamSeed) {
     instructor?: string
   }
   const sessionDefs: SessionDef[] = []
-  const instructors = extraCoaches.length
-    ? [displayName, extraCoaches[0].displayName]
+  const instructors = extraStaff.length
+    ? [displayName, extraStaff[0].displayName]
     : [displayName, 'Elena Rossi']
 
   for (let week = -4; week <= -1; week++) {
@@ -1983,10 +1981,11 @@ async function seedTeam(opts: TeamSeed) {
     await seedStoreCourses(storefront, { includeFree: true })
   }
 
-  // ── coach role demo: give the first extra coach an own book (assigned contacts +
-  // sessions) + a default role_config, so staging exercises the Coach role. ──
-  if (extraCoaches.length) {
-    const coachUid = extraCoaches[0].uid
+  // ── coach role demo: give the first coach-role staff an own book (assigned
+  // contacts + sessions) + a default role_config, so staging exercises the Coach
+  // role. Owner + manager are also coach-eligible (coachRoles). ──
+  const coaches = extraStaff.filter((s) => s.role === 'coach')
+  if (extraStaff.length) {
     await db
       .collection('teams')
       .doc(teamId)
@@ -1995,14 +1994,18 @@ async function seedTeam(opts: TeamSeed) {
       .set({
         role: 'coach',
         capabilities: COACH_DEFAULT_CAPABILITIES,
+        coachRoles: ['owner', 'manager', 'coach'],
         updatedBy: uid,
         updated_at: ts(daysFromNow(-150)),
       })
-    const coachContacts = await db.collection('contacts').where('teamId', '==', teamId).limit(6).get()
-    for (const c of coachContacts.docs) await c.ref.update({ assigned_coach_ids: [coachUid] })
-    const coachSessions = await db.collection('sessions').where('teamId', '==', teamId).limit(3).get()
-    for (const s of coachSessions.docs)
-      await s.ref.update({ coachId: coachUid, instructorId: coachUid, coachName: extraCoaches[0].displayName })
+    if (coaches.length) {
+      const coachUid = coaches[0].uid
+      const coachContacts = await db.collection('contacts').where('teamId', '==', teamId).limit(6).get()
+      for (const c of coachContacts.docs) await c.ref.update({ assigned_coach_ids: [coachUid] })
+      const coachSessions = await db.collection('sessions').where('teamId', '==', teamId).limit(3).get()
+      for (const s of coachSessions.docs)
+        await s.ref.update({ coachId: coachUid, instructorId: coachUid, coachName: coaches[0].displayName })
+    }
   }
 
   console.log(
@@ -2540,7 +2543,7 @@ async function main() {
     portalGradient: 'night',
   })
 
-  // 2. Studio plan — team with 2 coaches
+  // 2. Studio plan — owner + manager + coach
   await seedTeam({
     uid: 'seed-studio-uid',
     email: 'studio@linyup.com',
@@ -2554,16 +2557,23 @@ async function main() {
     contactCount: 30,
     tagline: 'Forge your fight game — BJJ, MMA and kickboxing under one roof, all levels welcome.',
     portalGradient: 'warm',
-    extraCoaches: [
+    extraStaff: [
+      {
+        uid: 'seed-studio-manager-uid',
+        displayName: 'Elena Rossi',
+        email: 'elena.rossi@ironcircle.example.com',
+        role: 'manager',
+      },
       {
         uid: 'seed-studio-coach2-uid',
         displayName: 'Marco Silva',
         email: 'marco.silva@ironcircle.example.com',
+        role: 'coach',
       },
     ],
   })
 
-  // 3. Organisation — org admin + 2 member teams
+  // 3. Organisation — org admin + 2 member teams (each with manager + coach)
   await seedTeam({
     uid: 'seed-org-uid',
     email: 'org@linyup.com',
@@ -2578,6 +2588,20 @@ async function main() {
     tagline: 'The Titan flagship — competition-grade grappling and MMA coaching for every level.',
     portalGradient: 'royal',
     orgId: 'seed-org',
+    extraStaff: [
+      {
+        uid: 'seed-org-a-manager-uid',
+        displayName: 'Sofia Müller',
+        email: 'sofia.mueller@titan.example.com',
+        role: 'manager',
+      },
+      {
+        uid: 'seed-org-a-coach-uid',
+        displayName: 'Liam Chen',
+        email: 'liam.chen@titan.example.com',
+        role: 'coach',
+      },
+    ],
   })
   await seedTeam({
     uid: 'seed-org-coachb-uid',
@@ -2593,6 +2617,14 @@ async function main() {
     tagline: 'Precision striking — kickboxing technique, pad work and fight-camp conditioning.',
     portalGradient: 'ocean',
     orgId: 'seed-org',
+    extraStaff: [
+      {
+        uid: 'seed-org-b-coach-uid',
+        displayName: 'Mia Tanaka',
+        email: 'mia.tanaka@titan.example.com',
+        role: 'coach',
+      },
+    ],
   })
   await seedOrg({
     orgId: 'seed-org',
@@ -2607,7 +2639,7 @@ async function main() {
   console.log('   │ Plan                 │ Email                │ Password   │ Status   │')
   console.log('   ├──────────────────────┼──────────────────────┼────────────┼──────────┤')
   console.log('   │ coach                │ coach@linyup.com     │ linyup123  │ trial    │')
-  console.log('   │ studio (2 coaches)   │ studio@linyup.com    │ linyup123  │ active   │')
+  console.log('   │ studio (mgr+coach)   │ studio@linyup.com    │ linyup123  │ active   │')
   console.log('   │ org admin            │ org@linyup.com       │ linyup123  │ active   │')
   console.log('   └──────────────────────┴──────────────────────┴────────────┴──────────┘\n')
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com)')

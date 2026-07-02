@@ -2560,7 +2560,8 @@ async function seedStudioCoach() {
     created_at: ts(daysFromNow(-60)),
   })
 
-  // A stored (default) Coach override so Settings → Roles shows a saved config.
+  // A stored Coach override so Settings → Roles shows a saved config.
+  // coachRoles includes owner + manager so they appear in the coach picker.
   await db
     .collection('teams')
     .doc(teamId)
@@ -2569,6 +2570,7 @@ async function seedStudioCoach() {
     .set({
       role: 'coach',
       capabilities: coachCapabilities,
+      coachRoles: ['owner', 'manager', 'coach'],
       updatedBy: uid,
       updated_at: ts(daysFromNow(-60)),
     })
@@ -2594,6 +2596,46 @@ async function seedStudioCoach() {
   console.log(
     `   Coach: ${displayName} (${email}) — studio team, ${contactsSnap.size} contacts + ${sessionsSnap.size} sessions assigned`
   )
+}
+
+// ── studio manager (multi-role demo) ──────────────────────────────────────────
+// Adds a manager to the Studio team so the coach picker shows all three eligible
+// roles (owner, manager, coach). Sign in as manager@linyup.com / linyup123.
+async function seedStudioManager() {
+  const teamId = 'seed-team-studio'
+  const uid = 'seed-studio-manager'
+  const email = 'manager@linyup.com'
+  const displayName = 'Elena Rossi'
+
+  await auth
+    .createUser({ uid, email, password: 'linyup123', displayName, emailVerified: true })
+    .catch(() => {})
+
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(uid)
+    .set({
+      teamId,
+      userId: uid,
+      role: 'manager',
+      email,
+      ...memberCapsFor('manager'),
+      joined: ts(daysFromNow(-90)),
+      addedBy: 'seed-studio-uid',
+    })
+
+  await db.collection('users').doc(uid).set({
+    email,
+    displayName,
+    firstname: 'Elena',
+    lastname: 'Rossi',
+    currentTeam: teamId,
+    created_at: ts(daysFromNow(-90)),
+  })
+
+  console.log(`   Manager: ${displayName} (${email}) — studio team`)
 }
 
 // ── main ──────────────────────────────────────────────────────────────────────
@@ -2649,7 +2691,8 @@ async function main() {
   console.log('\n🏢  Seeding organization (Titan Martial Arts Association)…')
   await seedOrg()
 
-  console.log('\n🧑‍🏫  Seeding studio coach (granular roles demo)…')
+  console.log('\n🧑‍🏫  Seeding studio staff (granular roles demo)…')
+  await seedStudioManager()
   await seedStudioCoach()
 
   console.log('\n✅ Emulator seeded successfully!\n')
@@ -2658,11 +2701,12 @@ async function main() {
   console.log('   ├─────────────────────┼──────────────────────┼──────────────┼────────────┤')
   console.log('   │ free (at cap 10/10) │ free@linyup.com      │ linyup123    │ active     │')
   console.log('   │ coach               │ coach@linyup.com     │ linyup123    │ trial      │')
-  console.log('   │ studio (in org)     │ studio@linyup.com      │ linyup123    │ active     │')
+  console.log('   │ studio (mgr+coach)  │ studio@linyup.com      │ linyup123    │ active     │')
   console.log('   │ org admin           │ org@linyup.com       │ linyup123    │ active     │')
   console.log('   └─────────────────────┴──────────────────────┴──────────────┴────────────┘\n')
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com is org admin)')
-  console.log('   Teams in org: Iron Circle Gym + Titan Combat Sports\n')
+  console.log('   Teams in org: Iron Circle Gym + Titan Combat Sports')
+  console.log('   Studio staff: manager@linyup.com (manager) + coach2@linyup.com (coach)\n')
   console.log(
     '   Online Courses: 2 courses seeded for studio@linyup.com → /plugins/online-courses'
   )
