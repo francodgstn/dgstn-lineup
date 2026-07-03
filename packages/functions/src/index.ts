@@ -85,6 +85,7 @@ export { getContactQR } from './contacts/getContactQR'
 export { requestContactUpdate } from './contacts/requestContactUpdate'
 export { manageContactUpdateRequest } from './contacts/manageContactUpdateRequest'
 export { switchActiveContact } from './contacts/switchActiveContact'
+export { listMyContactPayments, createContactBillingPortalSession } from './contacts/contactPayments'
 
 // Events
 export {

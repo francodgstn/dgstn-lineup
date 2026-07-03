@@ -16,6 +16,7 @@ import {
   Wallet,
   Send,
   ListChecks,
+  LayoutTemplate,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -56,6 +57,12 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio' },
   // Affiliations moved to the main nav's "Offer" section (/offer/affiliations).
   { id: 'teamCustomFields', href: '/settings/team?tab=custom-fields', labelKey: 'teamCustomFields', icon: ListChecks, group: 'studio', gate: 'customFields' },
+  // The public-surface overview hub — the map of everything the world can see
+  // (public URL, default landing, per-surface live status). Individual surfaces
+  // are reachable from their own sections (Shop → Offer, Space → Grow, …); this is
+  // the settings/overview that ties them together. Lives outside the /settings/*
+  // shell at /public-page, so the layout injects a "back to settings" link.
+  { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'studio', exact: true },
   { id: 'plugins', href: '/settings/plugins', labelKey: 'plugins', icon: Puzzle, group: 'studio', exact: true },
   // Account — workspace admin.
   { id: 'managers', href: '/settings/members', labelKey: 'managers', icon: UserCog, group: 'account' },
@@ -73,4 +80,4 @@ export const SETTINGS_GROUPS: { key: SettingsGroupKey; labelKey: string }[] = [
 
 // Pinned to the sidebar by default — the settings that matter most while setting up a
 // new studio. Users add/remove pins from the rail; the choice is per-browser.
-export const DEFAULT_PINNED_IDS = ['bookingPage', 'plugins']
+export const DEFAULT_PINNED_IDS = ['publicPages', 'bookingPage', 'plugins']

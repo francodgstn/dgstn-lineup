@@ -5,7 +5,6 @@ import {
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   SITE_PUBLISHED_COLLECTION,
-  COURSES_COLLECTION,
   FORMS_COLLECTION,
   DOCUMENTS_COLLECTION,
   resolveSystemLinkTarget,
@@ -41,30 +40,18 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     websitePluginSnap.data()?.status === 'active' &&
     sitePublishedSnap.exists
 
-  // Portal (stored under the stable `space` key): the contact portal. Today the
-  // published-course library is its ONLY module, so the portal is live when the
-  // online-courses plugin is active AND ≥1 published, non-archived course exists.
-  // Seam: as the portal grows (bookings, subscriptions, profile), OR each new
-  // module's liveness into `spaceActive` below — `space` stays the portal's
-  // on/off signal, no longer hard-tied to "has a course".
+  // online-courses plugin snapshot — used by the shop capability check below.
   const onlineCoursesPluginSnap = await db
     .doc(
       `${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/online-courses`
     )
     .get()
-  let portalCoursesLive = false
-  if (onlineCoursesPluginSnap.exists && onlineCoursesPluginSnap.data()?.status === 'active') {
-    const publishedCourseSnap = await db
-      .collection(COURSES_COLLECTION)
-      .where('teamId', '==', teamId)
-      .where('status', '==', 'published')
-      .where('archived_at', '==', null)
-      .limit(1)
-      .get()
-    portalCoursesLive = !publishedCourseSnap.empty
-  }
-  // OR additional portal-module signals into this as the portal grows.
-  const spaceActive = portalCoursesLive
+
+  // Portal (stored under the stable `space` key): the contact's PERSONAL member
+  // portal — membership, bookings, profile, and the courses they can open. Decoupled
+  // from the course catalogue (that lives in the shop), so it's a BASE surface,
+  // available to every team's contacts → always live, plugin-free.
+  const spaceActive = true
 
   // forms: custom-forms plugin active AND ≥1 published, non-archived form
   const formsPluginSnap = await db
@@ -150,10 +137,16 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     (data.payments as { connectStatus?: string } | undefined)?.connectStatus === 'enabled'
   const shopActive = productsPluginActive || onlineCoursesActive || connectEnabled
 
+  // signup is a base surface (the subscription sign-up form) — available on every
+  // plan, so always live. Denormalized here so the public root can redirect to it
+  // when it's chosen as the default landing.
+  const signupActive = true
+
   const active_public_surfaces: ActivePublicSurfaces = {
     site: siteActive,
     space: spaceActive,
     booking: bookingActive,
+    signup: signupActive,
     shop: shopActive,
     forms: formsActive,
     documents: documentsActive,

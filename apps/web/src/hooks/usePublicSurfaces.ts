@@ -31,7 +31,8 @@ export interface PublicSurfaceFlags {
   websiteActive: boolean
   /** A published website exists (plugin + content) — the /site surface is live. */
   siteLive: boolean
-  /** A published course exists (plugin + content) — the /space portal is live. */
+  /** The contacts' personal portal (membership, bookings, profile, their courses).
+   *  A base surface, decoupled from the course catalogue — effectively always live. */
   spaceLive: boolean
   /** A sellable channel is enabled — the /shop surface is live. */
   shopLive: boolean

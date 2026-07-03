@@ -4,11 +4,33 @@
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import {
+  TEAMS_COLLECTION,
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
   COURSES_COLLECTION,
   DOCUMENTS_COLLECTION,
 } from '@linyup/shared'
+
+/**
+ * Nudges the team document so `syncTeamPublicProfile` re-runs and recomputes
+ * `active_public_surfaces`.
+ *
+ * The signals that decide surface liveness (a published site, a published
+ * course/form/document) live OUTSIDE the team doc — in `site_published`, the
+ * `courses`/`forms`/`documents` collections — so publishing or unpublishing that
+ * content does NOT re-trigger the `onDocumentWritten('teams/{teamId}')` sync.
+ * A tiny server-timestamp write on a dedicated field fires that trigger without
+ * rewriting the team document. Nothing reads `surfaces_updated_at`; it exists
+ * solely to re-run the recompute. Call it from any flow that flips a surface's
+ * published state (see website callables + the content public_profile syncs).
+ */
+export async function touchTeamForSurfaceRecompute(teamId: string): Promise<void> {
+  await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .set({ surfaces_updated_at: FieldValue.serverTimestamp() }, { merge: true })
+}
 
 /**
  * Removes the public site snapshot and flags the site draft as disabled.

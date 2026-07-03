@@ -2,13 +2,18 @@
 
 // "Public pages" hub — the orientation layer for everything customer-facing. It
 // keeps the deep management pages where they are and just makes the system
-// legible: one screen showing your public URL, default landing, and every public
-// surface with live/set-up status, a preview link, and a Manage/Set-up CTA that
-// routes to the right place. Surface availability comes from usePublicSurfaces.
+// legible. Layout is hero + list:
 //
-// Cards are deliberately uniform (icon · title · status · one-line desc · preview
-// · single CTA) so the grid stays balanced; richer per-surface content (Shop
-// channels, Space content) lives on the surface's own detail page.
+//  • Hero — the one thing every studio owner comes here for: their public link
+//    (copy/open) and which surface visitors land on. This is the page's anchor.
+//  • Surface list — every public surface as a compact row (icon · title · desc ·
+//    preview · single CTA). Live surfaces read full-strength with a "Live" marker
+//    and sort first; not-yet-set-up ones are dimmed and sink below. Rows beat a
+//    card grid here because the page is a directory: hierarchy (link first, live
+//    channels next, untapped ones quietly available) matters more than symmetry.
+//
+// Surface availability comes from usePublicSurfaces. Richer per-surface content
+// (Shop channels, Space content) lives on the surface's own detail page.
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -29,21 +34,6 @@ function pluginSetupHref(pluginId: string): Route {
   return `/settings/plugins?plugin=${pluginId}` as Route
 }
 
-function StatusChip({ live, t }: { live: boolean; t: (k: string) => string }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-        live
-          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-          : 'bg-muted text-muted-foreground'
-      }`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
-      {live ? t('statusLive') : t('statusSetup')}
-    </span>
-  )
-}
-
 function ManageLink({ href, label }: { href: Route; label: string }) {
   return (
     <Link
@@ -51,7 +41,7 @@ function ManageLink({ href, label }: { href: Route; label: string }) {
       className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
     >
       <Settings2 className="h-3.5 w-3.5" />
-      {label}
+      <span className="hidden sm:inline">{label}</span>
     </Link>
   )
 }
@@ -63,13 +53,14 @@ function SetupLink({ href, label }: { href: Route; label: string }) {
       className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
     >
       <Plus className="h-3.5 w-3.5" />
-      {label}
+      <span className="hidden sm:inline">{label}</span>
     </Link>
   )
 }
 
-// One public surface = a uniform card: status, a preview link, and a single CTA.
-function SurfaceCard({
+// One public surface = one compact row. Live rows read full-strength with a
+// "Live" marker; not-live rows dim so the eye lands on what's actually public.
+function SurfaceRow({
   icon: Icon, title, desc, live, previewUrl, action, t,
 }: {
   icon: React.ElementType
@@ -81,32 +72,37 @@ function SurfaceCard({
   t: (k: string) => string
 }) {
   return (
-    <Card className="flex flex-col gap-3 p-4">
-      <div className="flex items-start gap-3">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="h-[18px] w-[18px]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="font-medium leading-tight">{title}</p>
-            <StatusChip live={live} t={t} />
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{desc}</p>
-        </div>
-        {previewUrl && (
-          <a
-            href={previewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={t('preview')}
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        )}
+    <div className={`flex items-center gap-3 px-3 py-3 transition-colors hover:bg-muted/40 sm:px-4 ${live ? '' : 'opacity-65'}`}>
+      <div
+        className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+          live ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+        }`}
+      >
+        <Icon className="h-[18px] w-[18px]" />
       </div>
-      <div className="mt-auto">{action}</div>
-    </Card>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium leading-tight">{title}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground leading-snug">{desc}</p>
+      </div>
+      {live && (
+        <span className="hidden shrink-0 items-center gap-1.5 text-[11px] font-medium text-emerald-600 sm:inline-flex dark:text-emerald-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          {t('statusLive')}
+        </span>
+      )}
+      {previewUrl && (
+        <a
+          href={previewUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={t('preview')}
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      )}
+      <div className="shrink-0">{action}</div>
+    </div>
   )
 }
 
@@ -129,14 +125,19 @@ export default function PublicPageHub() {
 
   const homeUrl = publicUrl('')
 
-  // Surfaces eligible to be the default landing (PublicSurface enum), gated to
-  // live ones so we never set a dead default.
+  // Surfaces eligible to be the default landing: every available page that has a
+  // single landing URL. Base surfaces (bio-link, booking, signup) are always
+  // offered; plugin/content surfaces appear once live. Forms are excluded — they
+  // have no index page to land on (only per-form URLs). Mirrors the surface list
+  // order below.
   const defaultOptions: { value: PublicSurface; label: string }[] = [
     { value: 'bio-link', label: t('surfaceBioLink') },
-    ...(flags.spaceLive ? [{ value: 'space' as const, label: t('surfaceSpace') }] : []),
     ...(flags.siteLive ? [{ value: 'site' as const, label: t('surfaceWebsite') }] : []),
     ...(flags.shopLive ? [{ value: 'shop' as const, label: t('surfaceShop') }] : []),
+    ...(flags.spaceLive ? [{ value: 'space' as const, label: t('surfaceSpace') }] : []),
     { value: 'booking', label: t('surfaceBooking') },
+    { value: 'signup', label: t('surfaceSignup') },
+    ...(flags.documentsLive ? [{ value: 'documents' as const, label: t('surfaceDocuments') }] : []),
   ]
   const currentDefault = pendingDefault ?? defaultSurface
 
@@ -156,10 +157,11 @@ export default function PublicPageHub() {
     await setDefaultSurface(surface)
   }
 
-  // Landing surfaces = those a visitor can be dropped on at /public/{slug}
-  // (the PublicSurface enum / default-landing options). Shop and Space route to
-  // their own detail pages; the rest link straight to their existing editors.
-  const landing: SurfaceDef[] = [
+  // Every public surface, in one list. Landing surfaces first (they're what a
+  // visitor can be dropped on at /public/{slug}), then the standalone pages.
+  // Shop and Space route to their own detail pages; the rest link straight to
+  // their existing editors. The list is re-sorted live-first at render.
+  const surfaces: SurfaceDef[] = [
     {
       key: 'bio-link', icon: Globe, title: t('surfaceBioLink'), desc: t('bioLinkDesc'),
       live: true, previewUrl: homeUrl,
@@ -187,10 +189,6 @@ export default function PublicPageHub() {
       live: flags.bookingLive, previewUrl: publicUrl('booking'),
       action: <ManageLink href={'/settings/booking' as Route} label={t('manage')} />,
     },
-  ]
-
-  // Additional pages = standalone public pages that aren't landing targets.
-  const additional: SurfaceDef[] = [
     {
       key: 'signup', icon: UserPlus, title: t('surfaceSignup'), desc: t('signupDesc'),
       live: true, previewUrl: publicUrl('signup'),
@@ -212,10 +210,9 @@ export default function PublicPageHub() {
     },
   ]
 
-  const groups: { title: string; items: SurfaceDef[] }[] = [
-    { title: t('groupLanding'), items: landing },
-    { title: t('groupAdditional'), items: additional },
-  ]
+  // Live-first, preserving the defined order within each group. Stable sort keeps
+  // landing surfaces ahead of standalone pages inside each half.
+  const orderedSurfaces = [...surfaces].sort((a, b) => Number(b.live) - Number(a.live))
 
   return (
     <div className="space-y-6">
@@ -224,15 +221,18 @@ export default function PublicPageHub() {
         <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
       </div>
 
-      {/* Public URL + default landing */}
-      <Card className="p-4">
+      {/* Hero — public link + default landing */}
+      <Card className="p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('yourPublicUrl')}</p>
-            <div className="mt-1 flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+              <Globe className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('yourPublicUrl')}</p>
               {homeUrl ? (
-                <>
-                  <code className="truncate rounded bg-muted px-2 py-1 text-sm">{`/public/${slug}`}</code>
+                <div className="mt-1 flex items-center gap-2">
+                  <code className="truncate rounded bg-muted px-2 py-1 text-sm font-medium">{`/public/${slug}`}</code>
                   <button
                     type="button"
                     onClick={copyUrl}
@@ -250,13 +250,13 @@ export default function PublicPageHub() {
                   >
                     <ExternalLink className="h-4 w-4" />
                   </a>
-                </>
+                </div>
               ) : (
-                <p className="text-sm text-muted-foreground">{t('noSlug')}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t('noSlug')}</p>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 md:border-l md:pl-5">
             <span className="text-xs font-medium text-muted-foreground">{t('defaultLanding')}</span>
             <Select value={currentDefault} onValueChange={(v) => { if (v) onDefaultChange(v) }}>
               <SelectTrigger className="w-[150px] text-sm">
@@ -270,29 +270,26 @@ export default function PublicPageHub() {
             </Select>
           </div>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">{t('defaultLandingHint')}</p>
+        <p className="mt-3 text-xs text-muted-foreground">{t('defaultLandingHint')}</p>
       </Card>
 
-      {/* Surface cards, grouped */}
-      {groups.map((group) => (
-        <section key={group.title} className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {group.items.map((s) => (
-              <SurfaceCard
-                key={s.key}
-                icon={s.icon}
-                title={s.title}
-                desc={s.desc}
-                live={s.live}
-                previewUrl={s.previewUrl}
-                action={s.action}
-                t={t}
-              />
-            ))}
-          </div>
-        </section>
-      ))}
+      {/* Surface list — one row per public surface, live-first */}
+      <Card className="gap-0 py-0">
+        <div className="divide-y divide-border">
+          {orderedSurfaces.map((s) => (
+            <SurfaceRow
+              key={s.key}
+              icon={s.icon}
+              title={s.title}
+              desc={s.desc}
+              live={s.live}
+              previewUrl={s.previewUrl}
+              action={s.action}
+              t={t}
+            />
+          ))}
+        </div>
+      </Card>
     </div>
   )
 }

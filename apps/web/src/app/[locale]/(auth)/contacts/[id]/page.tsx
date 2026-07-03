@@ -109,6 +109,7 @@ import {
   AFFILIATION_TYPES_SUBCOLLECTION,
   DEFAULT_ORG_AFFILIATION_STATUSES,
   computeEngagementBand,
+  MAX_CONTACT_LOGIN_EMAILS,
 } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -366,6 +367,12 @@ const profileSchema = z.object({
   lastname: z.string().min(1).max(60),
   email: z.string().email().or(z.literal('')).optional(),
   phone: z.string().max(30).optional(),
+  // Passwordless-login allow-list (extra emails on top of the primary). Held as
+  // { value } objects for react-hook-form's useFieldArray; flattened on submit.
+  login_emails: z
+    .array(z.object({ value: z.string().email() }))
+    .max(MAX_CONTACT_LOGIN_EMAILS)
+    .optional(),
   gender: z.enum(['M', 'F', 'other']).optional(),
   birthdate: z.date().optional(),
   birthplace: z.string().max(100).optional(),
@@ -1658,6 +1665,7 @@ function ProfileTab({
       lastname: contact.lastname,
       email: contact.email ?? '',
       phone: contact.phone ?? '',
+      login_emails: (contact.login_emails ?? []).map((e) => ({ value: e })),
       gender: contact.gender,
       birthdate: tsToDate(contact.birthdate),
       birthplace: contact.birthplace ?? '',
@@ -1683,12 +1691,25 @@ function ProfileTab({
     name: 'emergency_contacts',
   })
 
+  const { fields: leFields, append: leAppend, remove: leRemove } = useFieldArray({
+    control,
+    name: 'login_emails',
+  })
+
   const onSubmit = async (values: ProfileValues) => {
     await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
       firstname: values.firstname,
       lastname: values.lastname,
       email: values.email || null,
       phone: values.phone || null,
+      // Allow-list: normalize (lowercase, dedupe, drop the primary + blanks), cap 5.
+      login_emails: Array.from(
+        new Set(
+          (values.login_emails ?? [])
+            .map((e) => e.value.toLowerCase().trim())
+            .filter((e) => e && e !== (values.email || '').toLowerCase().trim())
+        )
+      ).slice(0, MAX_CONTACT_LOGIN_EMAILS),
       gender: values.gender || null,
       birthdate: values.birthdate ? Timestamp.fromDate(values.birthdate) : null,
       birthplace: values.birthplace || null,
@@ -1822,6 +1843,48 @@ function ProfileTab({
             <Field className="flex-[2] min-w-[180px]" label={t('fieldLocality')}>
               <Input {...register('address_locality')} />
             </Field>
+          </div>
+        </FormBlock>
+
+        {/* Passwordless-login allow-list — extra emails that may sign in as this contact */}
+        <FormBlock title={t('sectionLoginEmails')}>
+          <p className="-mt-1 mb-1 text-xs text-muted-foreground">{t('loginEmailsDesc')}</p>
+          <div className="space-y-2">
+            {leFields.map((field, index) => (
+              <div key={field.id} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Input
+                      type="email"
+                      inputMode="email"
+                      placeholder={t('loginEmailPlaceholder')}
+                      {...register(`login_emails.${index}.value`)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => leRemove(index)}
+                    className="p-2 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                    aria-label={t('loginEmailRemove')}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {errors.login_emails?.[index]?.value?.message && (
+                  <p className="text-xs text-destructive">{t('loginEmailInvalid')}</p>
+                )}
+              </div>
+            ))}
+            {leFields.length < MAX_CONTACT_LOGIN_EMAILS && (
+              <button
+                type="button"
+                onClick={() => leAppend({ value: '' })}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                {t('loginEmailAdd')}
+              </button>
+            )}
           </div>
         </FormBlock>
 

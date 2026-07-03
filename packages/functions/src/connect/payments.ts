@@ -12,7 +12,7 @@
 
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
-import { HttpsError, onCall } from 'firebase-functions/v2/https'
+import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https'
 import {
   computePlatformFee,
   takeRatePercent,
@@ -320,6 +320,21 @@ export const createMembershipPayment = onCall(async (request) => {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
 
+// A signed-in contact of the team → attach the purchase to that EXACT contact
+// (deterministic). Email resolution alone is now ambiguous: with the login-email
+// allow-list + shared emails, one address can map to several contacts. Optional —
+// guests carry no session and fall through to the webhook's email-based linking.
+function optionalContactSession(
+  request: CallableRequest<unknown>
+): { contactId: string; teamId: string } | null {
+  const contactId = request.auth?.token?.contactId as string | undefined
+  const teamId = request.auth?.token?.teamId as string | undefined
+  const sessionExpires = request.auth?.token?.sessionExpires as number | undefined
+  if (!contactId || !teamId) return null
+  if (typeof sessionExpires === 'number' && sessionExpires < Date.now()) return null
+  return { contactId, teamId }
+}
+
 /**
  * Index-free hourly rate limit for the public checkout: an `{ip}:{hourBucket}`
  * counter doc, incremented in a transaction. Avoids composite indexes (and the
@@ -394,7 +409,10 @@ export const createMembershipCheckout = onCall(async (request) => {
   const contactMode = subType.checkout_contact_mode ?? 'minimal'
   const firstName = (data.firstName ?? '').trim().slice(0, 500)
   const lastName = (data.lastName ?? '').trim().slice(0, 500)
-  if (contactMode !== 'off' && (!firstName || !lastName)) {
+  // A signed-in member's contact is already known — attach to it and skip re-collecting a name.
+  const session = optionalContactSession(request)
+  const isMember = session?.teamId === teamId
+  if (contactMode !== 'off' && !isMember && (!firstName || !lastName)) {
     throw new HttpsError('invalid-argument', 'First and last name are required')
   }
   const price = (subType.prices ?? []).find((p) => p.id === priceId && p.active !== false)
@@ -413,7 +431,9 @@ export const createMembershipCheckout = onCall(async (request) => {
   // by contactId only (single-field index, like onMemberSubscriptionWrite) and filter
   // type/status in memory — a contact has few subscriptions.
   if (isRecurringRecurrence(price.recurrence)) {
-    const { contactId: existingContactId } = await resolveSingleContact(teamId, email)
+    const existingContactId = isMember
+      ? session!.contactId
+      : (await resolveSingleContact(teamId, email)).contactId
     if (existingContactId) {
       const subsSnap = await admin
         .firestore()
@@ -460,6 +480,8 @@ export const createMembershipCheckout = onCall(async (request) => {
   metadata.contactMode = contactMode
   if (firstName) metadata.firstname = firstName
   if (lastName) metadata.lastname = lastName
+  // Signed-in member → link to their exact contact (webhook prefers metadata.contactId).
+  if (isMember) metadata.contactId = session!.contactId
 
   const interval = recurrenceToStripeInterval(price.recurrence)
   const idempotencyKey =
@@ -581,6 +603,9 @@ export const createProductCheckout = onCall(async (request) => {
   }
   if (variantId) metadata.variantId = variantId
   if (variantLabel) metadata.variantLabel = variantLabel
+  // Signed-in member → link the sale to their exact contact.
+  const productSession = optionalContactSession(request)
+  if (productSession?.teamId === teamId) metadata.contactId = productSession.contactId
 
   const idempotencyKey =
     data.idempotencyKey ??
@@ -667,6 +692,9 @@ export const createCourseCheckout = onCall(async (request) => {
     courseId,
     courseTitle: course.title,
   }
+  // Signed-in member → grant the entitlement to their exact contact.
+  const courseSession = optionalContactSession(request)
+  if (courseSession?.teamId === teamId) metadata.contactId = courseSession.contactId
 
   const idempotencyKey =
     data.idempotencyKey ??

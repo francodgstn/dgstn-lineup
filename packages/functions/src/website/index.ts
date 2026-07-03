@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { hasTeamRole } from '../utils/teams'
-import { unpublishSiteForTeam } from '../utils/plugins'
+import { unpublishSiteForTeam, touchTeamForSurfaceRecompute } from '../utils/plugins'
 import { sanitizeRichHtml } from '../utils/sanitizeHtml'
 import {
   SITE_PUBLISHED_COLLECTION,
@@ -374,6 +374,10 @@ export const publishWebsite = onCall(async (request) => {
     { merge: true },
   )
 
+  // The published site now exists but lives outside the team doc — nudge it so
+  // syncTeamPublicProfile recomputes active_public_surfaces.site → live.
+  await touchTeamForSurfaceRecompute(teamId)
+
   return { ok: true, slug }
 })
 
@@ -399,6 +403,9 @@ export const unpublishWebsite = onCall(async (request) => {
     { updatedBy: uid },
     { merge: true },
   )
+
+  // Site snapshot is gone — recompute so active_public_surfaces.site → not live.
+  await touchTeamForSurfaceRecompute(teamId)
 
   return { ok: true }
 })

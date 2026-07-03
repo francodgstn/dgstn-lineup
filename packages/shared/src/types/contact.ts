@@ -60,6 +60,10 @@ export interface EmergencyContact {
   email?: string
 }
 
+// Max passwordless-login allow-list emails per contact (on top of the primary
+// `email`). Shared by the admin editor + the login callable.
+export const MAX_CONTACT_LOGIN_EMAILS = 5
+
 export interface Contact {
   id: string
   teamId: string
@@ -76,6 +80,12 @@ export interface Contact {
   lastname: string
   email?: string
   phone?: string
+  // Passwordless-login allow-list: extra emails permitted to sign in AS this
+  // contact via the OTP flow (on top of `email`), e.g. a parent logging in to
+  // their child's profile. Normalized lowercase, deduped, capped at 5. Each entry
+  // is a deliberate access grant — anyone who controls one of these inboxes can
+  // authenticate as this contact. See loginContactWithCode / buildContactSession.
+  login_emails?: string[]
   gender?: ContactGender
   birthdate?: Timestamp
   birthplace?: string

@@ -59,9 +59,10 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - Bio-link routes tagged `force-dynamic`; `apps/web/.env.local` created with placeholders
 - Self-service signup wizard (`app/signup/page.tsx`) — 2-step: account → team → dashboard
 - Firebase emulator wired up for local dev (`demo-linyup` project, no real Firebase project needed)
-- Public **Space** area (`/public/{slug}/space`) — contacts browse/consume published Online
-  Courses on the web (interim surface until the mobile app ships). Free courses are anonymous;
-  gated courses use the passwordless contact-session login. See "Public Space" under Key patterns.
+- Public **Space** area (`/public/{slug}/space`) — the contacts' personal member portal
+  (membership, bookings, profile, and the courses they can open), interim web surface until the
+  mobile app ships. Sign-in via the passwordless contact-session login; course discovery + buying
+  lives in the Shop, not here. See "Public Space" under Key patterns.
 
 ---
 
@@ -146,15 +147,18 @@ to avoid redirecting to a dead surface. Sub-routes are siblings: `/public/{slug}
 `/public/{slug}/manage-booking`, `/public/{slug}/contact-update`, `/public/{slug}/coaching`.
 Token-only routes stay standalone: `/public/event-invitation` and `/public/team-invitation/{token}`.
 
-### Public Space — web access to Online Courses
+### Public Space — the contacts' personal portal
 
 `/public/{slug}/space` is a minimal, team-branded public area (sibling to `/public/{slug}`
-bio-link root and `/public/{slug}/site`) where a team's **contacts** browse and consume
-**published** courses without the mobile app. It resolves the team by slug with the same
-`public_profile` collection-group query as the other public routes, and lists courses from
-world-readable
-`courses/{courseId}/public_profile/{courseId}` summaries written by `syncCoursePublicProfile`
-(`packages/functions/src/sync/`). Never list the root `courses` collection publicly.
+bio-link root and `/public/{slug}/site`) — the signed-in **contact's** personal portal:
+membership (subscriptions + affiliation), bookings, editable profile, and **My courses** (the
+courses they can open). It's a **base surface** (always live, not gated on the online-courses
+plugin) and sign-in-gated — anonymous visitors get a sign-in wall. The course **catalogue**
+(browse + buy, incl. locked/priced cards) lives in the **Shop**, NOT here; Space only ever shows
+a contact's own entitlements, filtered from the world-readable
+`courses/{courseId}/public_profile/{courseId}` summaries (written by `syncCoursePublicProfile`,
+`packages/functions/src/sync/`). It resolves the team by slug with the same `public_profile`
+collection-group query as the other public routes. Never list the root `courses` collection publicly.
 
 **Course access tiers** (`Course.accessRule.type` in `packages/shared/src/types/course.ts`):
 

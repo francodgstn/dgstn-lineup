@@ -34,7 +34,7 @@ export function substituteVariables(
 
   const urlMap: Record<string, string> = {
     bookingUrl: slug ? `${baseUrl}/public/${slug}/booking` : '',
-    membershipUrl: slug ? `${baseUrl}/public/${slug}/membership-signup` : '',
+    membershipUrl: slug ? `${baseUrl}/public/${slug}/signup` : '',
     bioLinkUrl: slug ? `${baseUrl}/public/${slug}` : '',
     websiteUrl,
     reviewUrl,

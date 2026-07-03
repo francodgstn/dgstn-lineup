@@ -34,7 +34,12 @@ export async function buildContactSession(
 
   if (options.allowedEmail) {
     const allowedEmail = options.allowedEmail.toLowerCase().trim()
-    if (contactEmail !== allowedEmail) {
+    // The authenticated email must be the contact's PRIMARY email or one of its
+    // login-email allow-list entries (e.g. a parent signing in to a child's profile).
+    const loginEmails = Array.isArray(contactData.login_emails)
+      ? (contactData.login_emails as unknown[]).map((e) => String(e).toLowerCase().trim())
+      : []
+    if (contactEmail !== allowedEmail && !loginEmails.includes(allowedEmail)) {
       throw new HttpsError('permission-denied', 'Contact email does not match the authenticated session email')
     }
   }

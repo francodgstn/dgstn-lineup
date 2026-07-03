@@ -7,7 +7,7 @@
 // contact (and grants a course entitlement). The three surfaces are separated behind
 // a tab toggle so they never visually mix.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { collectionGroup, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { useTranslations, useLocale } from 'next-intl'
@@ -17,6 +17,7 @@ import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { formatCurrency } from '@/lib/format'
 import { resolveProductPrice, type CheckoutContactMode } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
+import { usePublicContactAuth } from '../PublicContactAuthProvider'
 
 interface PlanPrice {
   id?: string
@@ -97,8 +98,11 @@ export default function ShopHome({
   const t = useTranslations('Shop')
   const locale = useLocale()
   const { slug, teamId, team } = usePublicTeam()
+  const { isAuthenticated, contact, openSignIn, closeSignIn, requiresSignup, signupEmail } =
+    usePublicContactAuth()
 
   const [plans, setPlans] = useState<PlanEntry[]>([])
+  const [pendingCheckout, setPendingCheckout] = useState<Checkout | null>(null)
   const [products, setProducts] = useState<ProductEntry[]>([])
   const [courses, setCourses] = useState<CourseEntry[]>([])
   const [currency, setCurrency] = useState('CHF')
@@ -205,17 +209,32 @@ export default function ShopHome({
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [focusTypeId, loading, tab])
 
+  // Every purchase tries login first: signed-in members go straight to the modal
+  // (the purchase attaches to their contact via the session); everyone else opens
+  // the sign-in dialog and the checkout resumes once auth resolves (effect below).
+  const startCheckout = useCallback(
+    (c: Checkout) => {
+      if (isAuthenticated) {
+        setCheckout(c)
+        setEmail(prefillEmail())
+        setFirstName('')
+        setLastName('')
+        setError(null)
+      } else {
+        setPendingCheckout(c)
+        openSignIn()
+      }
+    },
+    [isAuthenticated, openSignIn]
+  )
+
   // Deep-link from the Space "Buy" CTA (?course=): open that course's checkout once.
   useEffect(() => {
     if (!focusCourseId || loading || courseFocusHandled) return
     const c = courses.find((x) => x.id === focusCourseId)
-    if (c) {
-      setCheckout({ kind: 'course', course: c })
-      setEmail(prefillEmail())
-      setError(null)
-    }
+    if (c) startCheckout({ kind: 'course', course: c })
     setCourseFocusHandled(true)
-  }, [focusCourseId, loading, courseFocusHandled, courses])
+  }, [focusCourseId, loading, courseFocusHandled, courses, startCheckout])
 
   const isDark = team?.bioLinkTheme === 'dark' || (team?.bioLinkTheme === 'auto' && systemDark)
   const bg = team?.bioLinkBackground
@@ -237,30 +256,42 @@ export default function ShopHome({
     [t]
   )
 
+  // Resume a pending checkout once sign-in resolves: authenticated → buy as that
+  // contact; email not recognized (requiresSignup) → fall through to guest checkout.
+  useEffect(() => {
+    if (!pendingCheckout) return
+    if (isAuthenticated) {
+      setCheckout(pendingCheckout)
+      setEmail(prefillEmail())
+      setFirstName('')
+      setLastName('')
+      setError(null)
+      setPendingCheckout(null)
+    } else if (requiresSignup) {
+      closeSignIn()
+      setCheckout(pendingCheckout)
+      setEmail(signupEmail || '')
+      setError(null)
+      setPendingCheckout(null)
+    }
+  }, [isAuthenticated, requiresSignup, pendingCheckout, signupEmail, closeSignIn])
+
   function openMembership(
     typeId: string,
     typeName: string,
     price: PlanPrice,
     mode: CheckoutContactMode
   ) {
-    setCheckout({ kind: 'membership', typeId, typeName, price, mode })
-    setEmail(prefillEmail())
-    setFirstName('')
-    setLastName('')
-    setError(null)
+    startCheckout({ kind: 'membership', typeId, typeName, price, mode })
   }
 
   function openProduct(product: ProductEntry) {
     const firstVariant = product.variants && product.variants.length > 0 ? product.variants[0].id : null
-    setCheckout({ kind: 'product', product, variantId: firstVariant })
-    setEmail(prefillEmail())
-    setError(null)
+    startCheckout({ kind: 'product', product, variantId: firstVariant })
   }
 
   function openCourse(course: CourseEntry) {
-    setCheckout({ kind: 'course', course })
-    setEmail(prefillEmail())
-    setError(null)
+    startCheckout({ kind: 'course', course })
   }
 
   // The amount shown in the checkout modal.
@@ -281,6 +312,7 @@ export default function ShopHome({
     if (
       checkout.kind === 'membership' &&
       checkout.mode !== 'off' &&
+      !isAuthenticated &&
       (!firstName.trim() || !lastName.trim())
     ) {
       setError(t('nameRequired'))
@@ -697,7 +729,7 @@ export default function ShopHome({
               </p>
             )}
 
-            {checkout.kind === 'membership' && checkout.mode !== 'off' && (
+            {checkout.kind === 'membership' && checkout.mode !== 'off' && !isAuthenticated && (
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium">{t('firstNameLabel')}</label>
@@ -723,19 +755,32 @@ export default function ShopHome({
                 </div>
               </div>
             )}
-            <label className="mt-4 block text-xs font-medium">{t('emailLabel')}</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t('emailPlaceholder')}
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              style={{
-                borderColor: cardBorder,
-                background: onDark ? 'rgba(0,0,0,0.2)' : '#fff',
-                color: textMain,
-              }}
-            />
+            {isAuthenticated && contact ? (
+              // Signed-in member: the purchase attaches to their contact via the
+              // session (no email entry needed).
+              <div
+                className="mt-4 rounded-lg px-3 py-2 text-sm"
+                style={{ background: onDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', color: textMain }}
+              >
+                {t('buyingAs', { name: `${contact.firstname} ${contact.lastname}` })}
+              </div>
+            ) : (
+              <>
+                <label className="mt-4 block text-xs font-medium">{t('emailLabel')}</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t('emailPlaceholder')}
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                  style={{
+                    borderColor: cardBorder,
+                    background: onDark ? 'rgba(0,0,0,0.2)' : '#fff',
+                    color: textMain,
+                  }}
+                />
+              </>
+            )}
             {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
             <button
               type="button"

@@ -17,7 +17,7 @@ import {
 import { CheckCircle2 } from 'lucide-react'
 import type { FormField, FormPublicProfile, FormAccess } from '@linyup/shared'
 import { usePublicTeam } from '../../PublicTeamProvider'
-import { SpaceAuthProvider, useSpaceAuth } from '../../space/SpaceAuthProvider'
+import { useSpaceAuth } from '../../space/SpaceAuthProvider'
 
 // ─── Form loader ────────────────────────────────────────────────────────────
 
@@ -290,12 +290,8 @@ function FormView({ formSlug }: { formSlug: string }) {
 
 export default function PublicFormPage() {
   const params = useParams()
-  const slug = String(params.slug)
   const formSlug = String(params.formSlug)
-  // SpaceAuthProvider layers the contact-session auth used by 'contacts' forms.
-  return (
-    <SpaceAuthProvider slug={slug}>
-      <FormView formSlug={formSlug} />
-    </SpaceAuthProvider>
-  )
+  // Contact-session auth is now provided at the team root (PublicContactAuthProvider),
+  // so this page just renders the form — no local provider needed.
+  return <FormView formSlug={formSlug} />
 }

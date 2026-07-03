@@ -3,24 +3,32 @@
 import { useTranslations } from 'next-intl'
 import { Link, usePathname } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { GraduationCap, CalendarClock, User } from 'lucide-react'
+import { Home, CalendarClock, User, Receipt } from 'lucide-react'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
+import { useSpacePayments } from './useSpacePayments'
 
-// Portal module tabs — only meaningful once signed in (the course library at the
-// home route is partly public, but the member modules require a session).
+// Portal module tabs — the whole portal is a signed-in, personal area (home is the
+// member dashboard, not a public course library), so the tabs only render once
+// there's a session. Payments is conditional: shown only when the contact has any
+// payment history OR a Stripe billing account (hidden for cash / other payers).
 export default function SpacePortalNav() {
   const t = useTranslations('Space')
   const { slug, isAuthenticated } = useSpaceAuth()
   const { accent, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const pathname = usePathname()
+  const { data: paymentsData } = useSpacePayments()
 
   if (!isAuthenticated) return null
 
+  const hasPayments =
+    (paymentsData?.payments.length ?? 0) > 0 || paymentsData?.billingAvailable === true
+
   const base = `/public/${slug}/space`
   const items = [
-    { href: base, label: t('navHome'), icon: GraduationCap, exact: true },
+    { href: base, label: t('navHome'), icon: Home, exact: true },
     { href: `${base}/bookings`, label: t('navBookings'), icon: CalendarClock },
+    ...(hasPayments ? [{ href: `${base}/payments`, label: t('navPayments'), icon: Receipt }] : []),
     { href: `${base}/account`, label: t('navAccount'), icon: User },
   ]
 

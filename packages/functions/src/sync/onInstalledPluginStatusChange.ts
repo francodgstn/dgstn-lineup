@@ -1,14 +1,12 @@
 // Tears down plugin-specific public artefacts when a plugin is deactivated.
 // Triggered on every write to teams/{teamId}/installed_plugins/{pluginId}.
-import { FieldValue } from 'firebase-admin/firestore'
-import * as admin from 'firebase-admin'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import {
   unpublishSiteForTeam,
   deleteAllCoursePublicProfiles,
   deleteAllDocumentPublicProfiles,
+  touchTeamForSurfaceRecompute,
 } from '../utils/plugins'
-import { TEAMS_COLLECTION } from '@linyup/shared'
 
 export const onInstalledPluginStatusChange = onDocumentWritten(
   'teams/{teamId}/installed_plugins/{pluginId}',
@@ -40,13 +38,8 @@ export const onInstalledPluginStatusChange = onDocumentWritten(
       await deleteAllDocumentPublicProfiles(teamId)
     }
 
-    // Touch the team doc so syncTeamPublicProfile recomputes active_public_surfaces.
-    // A lightweight server-timestamp update on a dedicated field avoids a full
-    // team-document rewrite while still firing the onDocumentWritten trigger.
-    await admin
-      .firestore()
-      .collection(TEAMS_COLLECTION)
-      .doc(teamId)
-      .set({ plugins_updated_at: FieldValue.serverTimestamp() }, { merge: true })
+    // Deactivating a plugin can flip several surfaces (site/space/documents) —
+    // nudge the team doc so syncTeamPublicProfile recomputes active_public_surfaces.
+    await touchTeamForSurfaceRecompute(teamId)
   }
 )

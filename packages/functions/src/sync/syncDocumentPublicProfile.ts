@@ -9,6 +9,7 @@
 // consumer reads sanitized `bodyHtml` and never the raw root doc.
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { sanitizeRichHtml } from '../utils/sanitizeHtml'
+import { touchTeamForSurfaceRecompute } from '../utils/plugins'
 
 const MAX_BODY_CHARS = 50000
 
@@ -17,11 +18,17 @@ function safeExternalUrl(v: unknown): string | undefined {
   return typeof v === 'string' && /^https?:\/\/.+/.test(v) ? v.slice(0, 2000) : undefined
 }
 
+// A document counts toward the team's Documents surface when it's published,
+// shared publicly, and not archived — mirror the write/delete gate below.
+const isLiveDocument = (d?: Record<string, unknown>): boolean =>
+  !!d && d.status === 'published' && d.isPublic === true && d.archived_at == null
+
 export const syncDocumentPublicProfile = onDocumentWritten(
   'documents/{documentId}',
   async (event) => {
     const { documentId } = event.params
     const afterRef = event.data!.after.ref
+    const beforeData = event.data!.before.data()
     const data = event.data!.after.data()
 
     // Remove the public profile when the document is deleted, not published, not
@@ -33,31 +40,37 @@ export const syncDocumentPublicProfile = onDocumentWritten(
       data?.archived_at != null
     ) {
       await afterRef.collection('public_profile').doc(documentId).delete()
-      return
-    }
-
-    const isRich = data.source === 'rich_text'
-
-    const publicProfile: Record<string, unknown> = {
-      type: 'document',
-      teamId: data.teamId,
-      slug: data.slug,
-      title: data.title || '',
-      kind: data.kind || 'other',
-      source: data.source,
-      summary: data.summary || '',
-      updated_at: data.updated_at ?? event.data!.after.updateTime,
-    }
-
-    if (isRich) {
-      publicProfile.bodyHtml = sanitizeRichHtml(
-        typeof data.body === 'string' ? data.body.slice(0, MAX_BODY_CHARS) : ''
-      )
     } else {
-      const url = safeExternalUrl(data.externalUrl)
-      if (url) publicProfile.externalUrl = url
+      const isRich = data.source === 'rich_text'
+
+      const publicProfile: Record<string, unknown> = {
+        type: 'document',
+        teamId: data.teamId,
+        slug: data.slug,
+        title: data.title || '',
+        kind: data.kind || 'other',
+        source: data.source,
+        summary: data.summary || '',
+        updated_at: data.updated_at ?? event.data!.after.updateTime,
+      }
+
+      if (isRich) {
+        publicProfile.bodyHtml = sanitizeRichHtml(
+          typeof data.body === 'string' ? data.body.slice(0, MAX_BODY_CHARS) : ''
+        )
+      } else {
+        const url = safeExternalUrl(data.externalUrl)
+        if (url) publicProfile.externalUrl = url
+      }
+
+      await afterRef.collection('public_profile').doc(documentId).set(publicProfile)
     }
 
-    await afterRef.collection('public_profile').doc(documentId).set(publicProfile)
+    // A document crossing the published/public/archived boundary may flip whether
+    // the team's Documents surface is live — nudge the team doc to recompute.
+    if (isLiveDocument(beforeData) !== isLiveDocument(data)) {
+      const teamId = (data?.teamId ?? beforeData?.teamId) as string | undefined
+      if (teamId) await touchTeamForSurfaceRecompute(teamId)
+    }
   }
 )

@@ -28,19 +28,34 @@ export const loginContactWithCode = onCall(async (request) => {
   const email: string = (codeData.email as string).toLowerCase().trim()
   const teamId: string = codeData.team_id as string
 
-  // Find active contacts for this email + team
-  const contactsSnap = await admin
-    .firestore()
-    .collection('contacts')
-    .where('email', '==', email)
-    .where('teamId', '==', teamId)
-    .get()
+  // Match contacts whose PRIMARY email is this address, OR whose login-email
+  // allow-list contains it (e.g. a parent signing in to a child's profile). Two
+  // queries merged by id: the primary lookup (email + teamId), and an
+  // array-contains on `login_emails` (single-field index — filter teamId in
+  // memory to avoid a composite index, per the index gotcha).
+  const [primarySnap, allowSnap] = await Promise.all([
+    admin
+      .firestore()
+      .collection('contacts')
+      .where('email', '==', email)
+      .where('teamId', '==', teamId)
+      .get(),
+    admin
+      .firestore()
+      .collection('contacts')
+      .where('login_emails', 'array-contains', email)
+      .get(),
+  ])
 
-  // Exclude archived or deleted contacts
-  const activeContacts = contactsSnap.docs.filter((doc) => {
+  // Dedupe by doc id; keep only this team's active (non-archived, non-deleted) contacts.
+  const byId = new Map<string, admin.firestore.QueryDocumentSnapshot>()
+  for (const doc of [...primarySnap.docs, ...allowSnap.docs]) {
     const d = doc.data()
-    return d.archived_at == null && d.deleted_at == null
-  })
+    if (d.teamId !== teamId) continue
+    if (d.archived_at != null || d.deleted_at != null) continue
+    byId.set(doc.id, doc)
+  }
+  const activeContacts = [...byId.values()]
 
   if (activeContacts.length === 0) {
     return { requiresSignup: true, email }

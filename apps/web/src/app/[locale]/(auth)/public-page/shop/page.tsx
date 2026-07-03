@@ -83,8 +83,6 @@ export default function ShopSettingsPage() {
       <PageHeader
         title={t('title')}
         subtitle={t('subtitle')}
-        upHref={'/public-page' as Route}
-        upLabel={t('back')}
         action={
           previewUrl ? (
             <a

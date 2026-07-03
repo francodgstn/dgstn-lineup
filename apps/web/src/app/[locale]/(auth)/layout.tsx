@@ -31,8 +31,9 @@ import {
   Zap,
   Package,
   IdCard,
-  LayoutTemplate,
   FileText,
+  ShoppingBag,
+  DoorOpen,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -59,6 +60,7 @@ const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
   FolderTree,
   Globe,
   FileText,
+  ClipboardList,
 }
 
 // ─── nav config ───────────────────────────────────────────────────────────────
@@ -71,6 +73,9 @@ type NavItem = {
   requiresOrg?: boolean
   // Only shown when the team has the Stripe Connect feature flag enabled.
   requiresConnect?: boolean
+  // Only shown when the team has any sellable channel (products/online-courses
+  // plugin, or Stripe Connect) — i.e. a public shop makes sense.
+  requiresShop?: boolean
   // Only shown when the named plugin is installed (e.g. online-courses, products).
   requiresPlugin?: string
   // Hidden entirely unless the team's plan is at least this tier. Distinct from
@@ -124,16 +129,24 @@ const NAV_SECTIONS: NavSection[] = [
         icon: FileText,
         requiresPlugin: 'documents',
       },
+      // The public storefront that aggregates subscriptions, products and courses.
+      // Managed at its /public-page/shop detail page; shown once a sellable channel
+      // exists. Also surfaced on the Public pages hub (as a public URL + status).
+      { href: '/public-page/shop', labelKey: 'shop', icon: ShoppingBag, requiresShop: true },
     ],
   },
   {
-    // Customer-facing + engagement surfaces. "All public pages" is the overview
-    // hub of every public surface; bio-link + website keep their own shortcuts
-    // here, and Forms + Gamification join as engagement plugins (section: 'engage').
+    // Audience + engagement surfaces. Bio-link is the acquisition funnel; Space is
+    // the members' area where contacts stay engaged (needs the online-courses
+    // plugin); Website + Forms + Gamification join as engagement plugins
+    // (section: 'engage'). The public-surface overview hub now lives under Settings
+    // ("Public pages"), so individual surfaces live in their natural sections.
     labelKey: 'sectionGrow',
     items: [
-      { href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate },
       { href: '/team/bio-link', labelKey: 'bioLink', icon: Globe },
+      // Space is the contacts' personal portal (membership, bookings, profile, their
+      // courses) — a base surface, not tied to the online-courses plugin.
+      { href: '/public-page/space', labelKey: 'space', icon: DoorOpen },
     ],
   },
 ]
@@ -587,6 +600,9 @@ function SidebarContent({
   const connectOn =
     (!!team?.payments?.connectAccountId && team?.payments?.connectEnabled !== false) ||
     hasByoGateway
+  // A public shop makes sense once there's something to sell OR a way to charge:
+  // the products/online-courses plugin, or a payment channel (Connect/BYO).
+  const shopAvailable = isInstalled('products') || isInstalled('online-courses') || connectOn
 
   // Plugin nav entries: those targeting a built-in section render inside it;
   // the rest fall back to the default "Plugins" group below.
@@ -653,6 +669,7 @@ function SidebarContent({
                       (item) =>
                         (!item.requiresOrg || inOrg) &&
                         (!item.requiresConnect || connectOn) &&
+                        (!item.requiresShop || shopAvailable) &&
                         (!item.requiresPlugin || isInstalled(item.requiresPlugin)) &&
                         (!item.requiresPlan || isAtLeast(item.requiresPlan)),
                     )

@@ -22,8 +22,18 @@ export type SaasStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'expire
 
 // Public surfaces a team can expose at `/public/{slug}/…`. 'bio-link' is the
 // team root (renders inline at `/public/{slug}`); the others are sibling routes
-// that the root redirects to when chosen as the default.
-export type PublicSurface = 'bio-link' | 'site' | 'space' | 'booking' | 'shop'
+// that the root redirects to when chosen as the default. Every member here has a
+// single landing URL. Forms are deliberately absent: they're reached only via
+// per-form `/public/{slug}/forms/{slug}` URLs (no `/forms` index), so there's
+// nothing to land on.
+export type PublicSurface =
+  | 'bio-link'
+  | 'site'
+  | 'space'
+  | 'booking'
+  | 'shop'
+  | 'signup'
+  | 'documents'
 
 // Denormalized onto TeamPublicProfile so the public root page (which may only
 // read world-readable public_profile, never the private installed_plugins) can
@@ -32,16 +42,19 @@ export interface ActivePublicSurfaces {
   site: boolean
   space: boolean
   booking: boolean
+  // signup is a base surface (the subscription sign-up form at /public/{slug}/signup) —
+  // available on every plan, so effectively always true. Present so the root can
+  // redirect to it when chosen as the default landing.
+  signup?: boolean
   // shop is live when a sellable channel is enabled (products / online-courses
   // plugin or Stripe Connect); the public shop aggregates whatever exists.
   shop?: boolean
   // ≥1 published Custom Form exists (custom-forms plugin active). Optional — forms
   // are reached via their own /public/{slug}/forms/{slug} URLs, not a default
-  // surface, so this is a discovery signal (e.g. a bio-link entry), not a redirect target.
+  // surface, so this is a discovery signal (e.g. a bio-link entry), NOT a landing.
   forms?: boolean
-  // ≥1 published + public Document exists (documents plugin active). Same discovery-
-  // signal semantics as `forms` — reached via /public/{slug}/documents, never a
-  // default redirect target.
+  // ≥1 published + public Document exists (documents plugin active). Reached via the
+  // /public/{slug}/documents index, so — unlike forms — it CAN be a default landing.
   documents?: boolean
 }
 
