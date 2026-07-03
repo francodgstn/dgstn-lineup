@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, query, where, orderBy, getDocs, addDoc,
@@ -13,6 +13,7 @@ import { useOrg } from '@/contexts/OrgContext'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslations } from 'next-intl'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -41,21 +42,27 @@ import type { Route } from 'next'
 
 const EVENT_TYPES: EventType[] = ['competition', 'camp', 'exam', 'seminar', 'workshop']
 
-const eventSchema = z
-  .object({
-    title: z.string().min(1, 'Required').max(120),
-    type: z.enum(['competition', 'camp', 'exam', 'seminar', 'workshop']),
-    start: z.date({ required_error: 'Required' }),
-    end: z.date({ required_error: 'Required' }),
-    location: z.string().max(120).optional(),
-    description: z.string().max(1000).optional(),
-  })
-  .refine((d) => !d.start || !d.end || d.end > d.start, {
-    message: 'End must be after start',
-    path: ['end'],
-  })
+function createEventSchema(t: ReturnType<typeof useTranslations>) {
+  return z
+    .object({
+      title: z.string().min(1, t('errorRequired')).max(120),
+      type: z.enum(['competition', 'camp', 'exam', 'seminar', 'workshop']),
+      start: z.date({ required_error: t('errorRequired') }),
+      end: z.date({ required_error: t('errorRequired') }),
+      location: z.string().max(120).optional(),
+      description: z.string().max(1000).optional(),
+    })
+    .refine((d) => !d.start || !d.end || d.end > d.start, {
+      message: t('errorEndAfterStart'),
+      path: ['end'],
+    })
+}
 
-type EventFormData = z.infer<typeof eventSchema>
+type EventFormData = z.infer<ReturnType<typeof createEventSchema>>
+
+function eventTypeLabel(t: ReturnType<typeof useTranslations>, type: string): string {
+  return (EVENT_TYPES as string[]).includes(type) ? t(`type_${type}` as Parameters<typeof t>[0]) : type
+}
 
 function formatDate(ts: { toDate(): Date } | null | undefined) {
   if (!ts) return '—'
@@ -98,7 +105,9 @@ function OrgEventDialog({
   userId: string
   editing: Event | null
 }) {
+  const t = useTranslations('OrgEvents')
   const qc = useQueryClient()
+  const eventSchema = useMemo(() => createEventSchema(t), [t])
   const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
     defaultValues: editing
@@ -143,16 +152,16 @@ function OrgEventDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Edit event' : 'New organization event'}</DialogTitle>
+          <DialogTitle>{editing ? t('dialogEditTitle') : t('dialogNewTitle')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-1">
           <div className="space-y-1.5">
-            <Label>Title</Label>
-            <Input {...register('title')} placeholder="Championship 2026" />
+            <Label>{t('fieldTitle')}</Label>
+            <Input {...register('title')} placeholder={t('fieldTitlePlaceholder')} />
             {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>Type</Label>
+            <Label>{t('fieldType')}</Label>
             <Controller
               name="type"
               control={control}
@@ -160,8 +169,8 @@ function OrgEventDialog({
                 <Select value={field.value} onValueChange={(v) => { if (v) field.onChange(v) }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {EVENT_TYPES.map((t) => (
-                      <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+                    {EVENT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type} className="capitalize">{eventTypeLabel(t, type)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -170,7 +179,7 @@ function OrgEventDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Start</Label>
+              <Label>{t('fieldStart')}</Label>
               <Controller
                 name="start"
                 control={control}
@@ -179,7 +188,7 @@ function OrgEventDialog({
               {errors.start && <p className="text-xs text-destructive">{errors.start.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label>End</Label>
+              <Label>{t('fieldEnd')}</Label>
               <Controller
                 name="end"
                 control={control}
@@ -189,16 +198,16 @@ function OrgEventDialog({
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Location <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Input {...register('location')} placeholder="Sports Hall, Geneva" />
+            <Label>{t('fieldLocation')} <span className="text-muted-foreground text-xs">{t('fieldOptional')}</span></Label>
+            <Input {...register('location')} placeholder={t('fieldLocationPlaceholder')} />
           </div>
           <div className="space-y-1.5">
-            <Label>Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Input {...register('description')} placeholder="Visible to all clubs" />
+            <Label>{t('fieldDescription')} <span className="text-muted-foreground text-xs">{t('fieldOptional')}</span></Label>
+            <Input {...register('description')} placeholder={t('fieldDescriptionPlaceholder')} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-            <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '…' : editing ? 'Save' : 'Create'}</Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>{t('cancel')}</Button>
+            <Button type="submit" disabled={isSubmitting}>{isSubmitting ? t('saving') : editing ? t('save') : t('create')}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -209,6 +218,7 @@ function OrgEventDialog({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function OrgEventsPage() {
+  const t = useTranslations('OrgEvents')
   const { orgId } = useParams<{ orgId: string }>()
   const { user } = useAuth()
   const { isAdmin } = useOrg()
@@ -241,29 +251,29 @@ export default function OrgEventsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Organization events</h2>
+          <h2 className="text-lg font-semibold">{t('title')}</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Visible to all clubs in this organization.
+            {t('subtitle')}
           </p>
         </div>
         {isAdmin && (
           <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true) }}>
-            <Plus className="h-4 w-4 mr-1.5" />New event
+            <Plus className="h-4 w-4 mr-1.5" />{t('newEvent')}
           </Button>
         )}
       </div>
 
       {/* Tab */}
       <div className="flex gap-1 border-b text-sm">
-        {(['upcoming', 'past'] as const).map((t) => (
+        {(['upcoming', 'past'] as const).map((tabKey) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tabKey}
+            onClick={() => setTab(tabKey)}
             className={`px-4 py-2 border-b-2 -mb-px font-medium capitalize transition-colors ${
-              tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t}
+            {tabKey === 'upcoming' ? t('tabUpcoming') : t('tabPast')}
           </button>
         ))}
       </div>
@@ -275,10 +285,10 @@ export default function OrgEventsPage() {
       ) : !current.data || current.data.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
           <CalendarRange className="h-10 w-10 text-muted-foreground/40" />
-          <p className="text-muted-foreground text-sm">No {tab} events.</p>
+          <p className="text-muted-foreground text-sm">{tab === 'upcoming' ? t('emptyUpcoming') : t('emptyPast')}</p>
           {isAdmin && tab === 'upcoming' && (
             <Button variant="outline" size="sm" onClick={() => { setEditing(null); setDialogOpen(true) }}>
-              <Plus className="h-4 w-4 mr-1.5" />New event
+              <Plus className="h-4 w-4 mr-1.5" />{t('newEvent')}
             </Button>
           )}
         </div>
@@ -295,7 +305,7 @@ export default function OrgEventsPage() {
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-sm">{event.title}</span>
-                  <Badge variant="secondary" className="text-xs capitalize shrink-0">{event.type}</Badge>
+                  <Badge variant="secondary" className="text-xs capitalize shrink-0">{eventTypeLabel(t, event.type)}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {formatDate(event.start as { toDate(): Date })}
@@ -337,18 +347,18 @@ export default function OrgEventsPage() {
       <AlertDialog open={!!deleting} onOpenChange={(v) => !v && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete event?</AlertDialogTitle>
+            <AlertDialogTitle>{t('deleteEventTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleting?.title} will be removed from all clubs&apos; event lists.
+              {t('deleteConfirmDescription', { title: deleting?.title ?? '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleSoftDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t('delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

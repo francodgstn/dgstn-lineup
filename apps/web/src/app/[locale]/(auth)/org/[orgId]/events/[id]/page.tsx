@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useOrg } from '@/contexts/OrgContext'
+import { useTranslations } from 'next-intl'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -15,10 +16,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, CalendarDays, MapPin, Users, Check, X } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { EVENTS_COLLECTION, CHECKINS_COLLECTION } from '@linyup/shared'
-import type { Event, EventCheckin } from '@linyup/shared'
+import type { Event, EventCheckin, EventType } from '@linyup/shared'
 import type { Route } from 'next'
 
 interface Team { id: string; name: string }
+
+const EVENT_TYPES: EventType[] = ['competition', 'camp', 'exam', 'seminar', 'workshop']
+
+function eventTypeLabel(t: ReturnType<typeof useTranslations>, type: string): string {
+  return (EVENT_TYPES as string[]).includes(type) ? t(`type_${type}` as Parameters<typeof t>[0]) : type
+}
 
 function formatDate(ts: { toDate(): Date } | null | undefined) {
   if (!ts) return '—'
@@ -67,6 +74,7 @@ function initials(c: { contact: { firstname: string; lastname: string } }) {
 }
 
 export default function OrgEventDetailPage() {
+  const t = useTranslations('OrgEventDetail')
   const { orgId, id: eventId } = useParams<{ orgId: string; id: string }>()
   const { isAdmin } = useOrg()
   const qc = useQueryClient()
@@ -80,7 +88,7 @@ export default function OrgEventDetailPage() {
 
   const teamMap = useMemo(() => {
     const m = new Map<string, string>()
-    for (const t of teamsQ.data ?? []) m.set(t.id, t.name)
+    for (const team of teamsQ.data ?? []) m.set(team.id, team.name)
     return m
   }, [teamsQ.data])
 
@@ -114,14 +122,14 @@ export default function OrgEventDetailPage() {
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
-        Organization events
+        {t('backToEvents')}
       </Link>
 
       {/* Event header */}
       {eventQ.isLoading ? (
         <Skeleton className="h-20 w-full" />
       ) : !event ? (
-        <p className="text-muted-foreground text-sm">Event not found.</p>
+        <p className="text-muted-foreground text-sm">{t('eventNotFound')}</p>
       ) : (
         <div className="rounded-lg border p-4 space-y-1">
           <div className="flex items-start justify-between gap-3">
@@ -141,7 +149,7 @@ export default function OrgEventDetailPage() {
                 )}
               </div>
             </div>
-            <Badge variant="secondary" className="capitalize shrink-0">{event.type}</Badge>
+            <Badge variant="secondary" className="capitalize shrink-0">{eventTypeLabel(t, event.type)}</Badge>
           </div>
           {event.description && (
             <p className="text-sm text-muted-foreground pt-1">{event.description}</p>
@@ -155,10 +163,10 @@ export default function OrgEventDetailPage() {
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">
-              Check-ins
+              {t('checkinsTitle')}
               {checkinsQ.data && (
                 <span className="ml-1.5 text-muted-foreground font-normal">
-                  {confirmedCount} confirmed / {visibleCheckins.length} total
+                  {t('checkinsSummary', { confirmed: confirmedCount, total: visibleCheckins.length })}
                 </span>
               )}
             </span>
@@ -168,12 +176,12 @@ export default function OrgEventDetailPage() {
           {teamsQ.data && teamsQ.data.length > 1 && (
             <Select value={teamFilter} onValueChange={(v) => setTeamFilter(v ?? 'all')}>
               <SelectTrigger className="w-48 h-8 text-sm">
-                <SelectValue placeholder="All teams" />
+                <SelectValue placeholder={t('allTeams')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All teams</SelectItem>
-                {teamsQ.data.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                <SelectItem value="all">{t('allTeams')}</SelectItem>
+                {teamsQ.data.map((team) => (
+                  <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -188,16 +196,16 @@ export default function OrgEventDetailPage() {
           ) : visibleCheckins.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center gap-2">
               <Users className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No check-ins yet.</p>
+              <p className="text-sm text-muted-foreground">{t('emptyCheckins')}</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40">
-                  <th className="text-left font-medium text-muted-foreground px-4 py-2.5">Participant</th>
-                  <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">Team</th>
-                  <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden md:table-cell">Checked in</th>
-                  <th className="text-right font-medium text-muted-foreground px-4 py-2.5">Status</th>
+                  <th className="text-left font-medium text-muted-foreground px-4 py-2.5">{t('colParticipant')}</th>
+                  <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">{t('colTeam')}</th>
+                  <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden md:table-cell">{t('colCheckedIn')}</th>
+                  <th className="text-right font-medium text-muted-foreground px-4 py-2.5">{t('colStatus')}</th>
                   {isAdmin && <th className="px-4 py-2.5 w-12" />}
                 </tr>
               </thead>
@@ -224,7 +232,7 @@ export default function OrgEventDetailPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Badge variant={checkin.is_completed ? 'default' : 'secondary'}>
-                        {checkin.is_completed ? 'Confirmed' : 'Pending'}
+                        {checkin.is_completed ? t('statusConfirmed') : t('statusPending')}
                       </Badge>
                     </td>
                     {isAdmin && (
@@ -235,7 +243,7 @@ export default function OrgEventDetailPage() {
                           className="h-7 w-7"
                           disabled={toggling === checkin.id}
                           onClick={() => toggleConfirm(checkin)}
-                          title={checkin.is_completed ? 'Unconfirm' : 'Confirm'}
+                          title={checkin.is_completed ? t('titleUnconfirm') : t('titleConfirm')}
                         >
                           {checkin.is_completed
                             ? <X className="h-3.5 w-3.5 text-muted-foreground" />
