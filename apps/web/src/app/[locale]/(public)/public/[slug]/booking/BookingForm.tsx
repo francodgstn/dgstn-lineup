@@ -16,7 +16,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
-import { useLocale } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import {
   startOfMonth,
   endOfMonth,
@@ -125,12 +125,16 @@ function formatTime(ts: Timestamp): string {
   return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function sessionDuration(start: Timestamp, end: Timestamp): string {
+function sessionDuration(
+  start: Timestamp,
+  end: Timestamp,
+  t: ReturnType<typeof useTranslations>
+): string {
   const mins = Math.round((end.toDate().getTime() - start.toDate().getTime()) / 60000)
-  if (mins < 60) return `${mins}m`
+  if (mins < 60) return t('durationMinutes', { mins })
   const h = Math.floor(mins / 60)
   const m = mins % 60
-  return m ? `${h}h ${m}m` : `${h}h`
+  return m ? t('durationHoursMinutes', { h, m }) : t('durationHours', { h })
 }
 
 function activityGradient(name: string): string {
@@ -152,25 +156,31 @@ const FITNESS_APPS = ['Fitpass', 'ClassPass', 'Urban Sports Club', 'Gymlib', 'We
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
-const newGuestSchema = z.object({
-  firstname: z.string().min(1, 'Required').max(60),
-  lastname: z.string().min(1, 'Required').max(60),
-  email: z.string().email('Invalid email'),
-  phone: z.string().max(30).optional(),
-  aggregatorApp: z.string().optional(),
-})
+function createNewGuestSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    firstname: z.string().min(1, t('errorRequired')).max(60),
+    lastname: z.string().min(1, t('errorRequired')).max(60),
+    email: z.string().email(t('errorInvalidEmail')),
+    phone: z.string().max(30).optional(),
+    aggregatorApp: z.string().optional(),
+  })
+}
 
-const emailSchema = z.object({
-  email: z.string().email('Invalid email address'),
-})
+function createEmailSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    email: z.string().email(t('errorInvalidEmailAddress')),
+  })
+}
 
-const codeSchema = z.object({
-  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
-})
+function createCodeSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    code: z.string().regex(/^\d{6}$/, t('errorEnterCode')),
+  })
+}
 
-type NewGuestValues = z.infer<typeof newGuestSchema>
-type EmailValues = z.infer<typeof emailSchema>
-type CodeValues = z.infer<typeof codeSchema>
+type NewGuestValues = z.infer<ReturnType<typeof createNewGuestSchema>>
+type EmailValues = z.infer<ReturnType<typeof createEmailSchema>>
+type CodeValues = z.infer<ReturnType<typeof createCodeSchema>>
 
 // ─── props ────────────────────────────────────────────────────────────────────
 
@@ -190,6 +200,7 @@ interface MiniCalendarProps {
 }
 
 function MiniCalendar({ availableDates, selectedDate, onSelect, maxDateKey }: MiniCalendarProps) {
+  const t = useTranslations('PublicBooking')
   const initialMonth = useMemo(() => {
     if (availableDates.length > 0) return dateKeyToDate(availableDates[0])
     return new Date()
@@ -212,7 +223,15 @@ function MiniCalendar({ availableDates, selectedDate, onSelect, maxDateKey }: Mi
   const isAtStart = !isAfter(currentMonth, today)
 
   const availableSet = new Set(availableDates)
-  const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const WEEKDAYS = [
+    t('weekdayMon'),
+    t('weekdayTue'),
+    t('weekdayWed'),
+    t('weekdayThu'),
+    t('weekdayFri'),
+    t('weekdaySat'),
+    t('weekdaySun'),
+  ]
 
   return (
     <div className="select-none">
@@ -253,7 +272,7 @@ function MiniCalendar({ availableDates, selectedDate, onSelect, maxDateKey }: Mi
 
       {isAtMax && (
         <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-2 py-1 mb-2 text-center">
-          Showing bookable window only
+          {t('showingBookableWindowOnly')}
         </p>
       )}
 
@@ -319,6 +338,7 @@ function StickyBar({
   submitting,
   onConfirm,
 }: StickyBarProps) {
+  const t = useTranslations('PublicBooking')
   const bg = activity.image ? `url("${activity.image}")` : activityGradient(activity.name)
 
   return (
@@ -350,7 +370,9 @@ function StickyBar({
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-sm truncate">{activity.name}</p>
         {session?.instructorName && (
-          <p className="text-xs text-muted-foreground italic">with {session.instructorName}</p>
+          <p className="text-xs text-muted-foreground italic">
+            {t('withInstructor', { name: session.instructorName })}
+          </p>
         )}
         {session && (
           <div className="flex flex-col gap-0.5 mt-0.5">
@@ -406,7 +428,7 @@ function StickyBar({
           style={accentColor ? { backgroundColor: accentColor } : undefined}
           className="shrink-0 rounded-xl bg-primary text-primary-foreground font-semibold px-5 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
         >
-          {submitting ? 'Booking…' : 'Confirm'}
+          {submitting ? t('ctaBooking') : t('ctaConfirm')}
         </button>
       )}
     </div>
@@ -419,6 +441,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
   const locale = useLocale()
+  const t = useTranslations('PublicBooking')
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
   const bookingSettings = team.bookingSettings
@@ -454,6 +477,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const newGuestSchema = useMemo(() => createNewGuestSchema(t), [t])
+  const emailSchema = useMemo(() => createEmailSchema(t), [t])
+  const codeSchema = useMemo(() => createCodeSchema(t), [t])
+
   const guestForm = useForm<NewGuestValues>({ resolver: zodResolver(newGuestSchema) })
   const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
   const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
@@ -464,8 +491,8 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   // Countdown timer
   useEffect(() => {
     if (countdown <= 0) return
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
-    return () => clearTimeout(t)
+    const timeoutId = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    return () => clearTimeout(timeoutId)
   }, [countdown])
 
   // Load activities + sessions for the resolved team
@@ -624,7 +651,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           window.location.href = url
           return
         }
-        throw new Error('Failed to start checkout')
+        throw new Error(t('errorCheckoutFailed'))
       }
 
       const bookSessionFn = httpsCallable(functions, 'bookSession')
@@ -644,9 +671,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string }
       if (e.code === 'already-exists') {
-        setBookingError('You are already registered for this session.')
+        setBookingError(t('errorAlreadyRegistered'))
       } else {
-        setBookingError(e.message || 'An error occurred. Please try again.')
+        setBookingError(e.message || t('errorGeneric'))
       }
     } finally {
       setIsSubmitting(false)
@@ -673,8 +700,8 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         const isMembersOnly = selectedActivity?.isFreeTrial === false
         setReturningError(
           isMembersOnly
-            ? 'No registered account found for this email. Please contact your coach to join.'
-            : "We couldn't find a profile for this email. Please use the new guest form."
+            ? t('errorNoAccountMembersOnly')
+            : t('errorNoAccountGeneral')
         )
         return
       }
@@ -684,7 +711,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       setStep('ret-code')
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setReturningError(e.message || 'Failed to send code. Please try again.')
+      setReturningError(e.message || t('errorSendCodeFailed'))
     }
   }
 
@@ -717,9 +744,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string }
       if (e.code === 'already-exists') {
-        setReturningError('You are already registered for this session.')
+        setReturningError(t('errorAlreadyRegistered'))
       } else {
-        setReturningError(e.message || 'Incorrect code. Please try again.')
+        setReturningError(e.message || t('errorIncorrectCode'))
       }
     }
   }
@@ -740,9 +767,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string }
       if (e.code === 'already-exists') {
-        setReturningError('You are already registered for this session.')
+        setReturningError(t('errorAlreadyRegistered'))
       } else {
-        setReturningError(e.message || 'Failed to select contact. Please try again.')
+        setReturningError(e.message || t('errorSelectContactFailed'))
       }
     }
   }
@@ -777,7 +804,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       codeForm.reset()
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setReturningError(e.message || 'Failed to resend code.')
+      setReturningError(e.message || t('errorResendCodeFailed'))
     }
   }
 
@@ -811,6 +838,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   // ─── Common back button ───────────────────────────────────────────────────
 
   function BackButton({ onClick }: { onClick: () => void }) {
+    const t = useTranslations('PublicBooking')
     return (
       <button
         onClick={onClick}
@@ -825,7 +853,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
         </svg>
-        Back
+        {t('back')}
       </button>
     )
   }
@@ -885,13 +913,13 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         showBranding={showBranding}
       >
         <div>
-          <h1 className="text-2xl font-bold">Book a Session</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Choose an activity to get started.</p>
+          <h1 className="text-2xl font-bold">{t('titleBookSession')}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">{t('chooseActivitySubtitle')}</p>
         </div>
 
         {activities.length === 0 && (
           <div className="rounded-xl border bg-muted/30 p-8 text-center">
-            <p className="text-muted-foreground text-sm">No activities available for booking.</p>
+            <p className="text-muted-foreground text-sm">{t('noActivitiesAvailable')}</p>
           </div>
         )}
 
@@ -934,18 +962,18 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                       if (rule.type === 'subscription')
                         return (
                           <span className="rounded-full bg-amber-100 text-amber-700 text-xs px-2 py-0.5 font-medium">
-                            Membership required
+                            {t('badgeMembershipRequired')}
                           </span>
                         )
                       if (rule.type === 'members')
                         return (
                           <span className="rounded-full bg-blue-100 text-blue-700 text-xs px-2 py-0.5 font-medium">
-                            Members only
+                            {t('badgeMembersOnly')}
                           </span>
                         )
                       return a.isFreeTrial ? (
                         <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
-                          Free Trial
+                          {t('badgeFreeTrial')}
                         </span>
                       ) : null
                     })()}
@@ -956,7 +984,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                     )}
                     {!hasSessions && (
                       <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
-                        No open sessions
+                        {t('badgeNoOpenSessions')}
                       </span>
                     )}
                   </div>
@@ -995,15 +1023,15 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         <div>
           <BackButton onClick={backFromSessions} />
           <h1 className="text-2xl font-bold">
-            {selectedActivity ? selectedActivity.name : 'Sessions'}
+            {selectedActivity ? selectedActivity.name : t('titleSessionsFallback')}
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm">Pick a date and time slot.</p>
+          <p className="text-muted-foreground mt-1 text-sm">{t('pickDateTimeSubtitle')}</p>
         </div>
 
         {availableDates.length === 0 ? (
           <div className="rounded-xl border bg-muted/30 p-8 text-center">
             <p className="text-muted-foreground text-sm">
-              No sessions available for booking right now.
+              {t('noSessionsAvailable')}
             </p>
           </div>
         ) : (
@@ -1027,7 +1055,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               )}
 
               {filteredSessions.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">No sessions on this date.</p>
+                <p className="text-sm text-muted-foreground py-4">{t('noSessionsOnDate')}</p>
               ) : (
                 <div className="space-y-2">
                   {filteredSessions.map((s) => (
@@ -1067,7 +1095,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs bg-muted rounded-full px-2 py-0.5 text-muted-foreground">
-                          {sessionDuration(s.start, s.end)}
+                          {sessionDuration(s.start, s.end, t)}
                         </span>
                         <svg
                           className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1099,7 +1127,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       <>
         <div>
           <BackButton onClick={() => setStep('sessions')} />
-          <h1 className="text-2xl font-bold">Who&apos;s booking?</h1>
+          <h1 className="text-2xl font-bold">{t('titleWhosBooking')}</h1>
         </div>
 
         <div className="space-y-3">
@@ -1109,8 +1137,8 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
             >
               <div className="flex-1">
-                <p className="font-semibold text-sm">First time here</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Fill in your details to book</p>
+                <p className="font-semibold text-sm">{t('firstTimeTitle')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('firstTimeSubtitle')}</p>
               </div>
               <svg
                 className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors"
@@ -1129,9 +1157,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
             >
               <div className="flex-1">
-                <p className="font-semibold text-sm">Drop-in — pay to book</p>
+                <p className="font-semibold text-sm">{t('dropInTitle')}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Not a member? Pay {selectedDropInPrice} to attend this class
+                  {t('dropInSubtitle', { price: selectedDropInPrice ?? 0 })}
                 </p>
               </div>
               <svg
@@ -1150,9 +1178,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
           >
             <div className="flex-1">
-              <p className="font-semibold text-sm">I&apos;ve been here before</p>
+              <p className="font-semibold text-sm">{t('returningTitle')}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Verify with email and book instantly
+                {t('returningSubtitle')}
               </p>
             </div>
             <svg
@@ -1184,20 +1212,20 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               emailForm.reset()
             }}
           />
-          <h1 className="text-2xl font-bold">Welcome back</h1>
+          <h1 className="text-2xl font-bold">{t('welcomeBackTitle')}</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Enter your email and we&apos;ll send a quick verification code.
+            {t('welcomeBackSubtitle')}
           </p>
         </div>
 
         <form onSubmit={emailForm.handleSubmit(onSendCode)} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-medium">Email address</label>
+            <label className="text-sm font-medium">{t('labelEmailAddress')}</label>
             <input
               type="email"
               {...emailForm.register('email')}
               autoComplete="email"
-              placeholder="your@email.com"
+              placeholder={t('placeholderEmailExample')}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
             {emailForm.formState.errors.email && (
@@ -1214,7 +1242,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             disabled={emailForm.formState.isSubmitting}
             accentColor={accentColor}
           >
-            {emailForm.formState.isSubmitting ? 'Sending…' : 'Send verification code'}
+            {emailForm.formState.isSubmitting ? t('sendingEllipsis') : t('sendVerificationCode')}
           </BioLinkButton>
         </form>
       </>
@@ -1234,15 +1262,15 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               codeForm.reset()
             }}
           />
-          <h1 className="text-2xl font-bold">Check your email</h1>
+          <h1 className="text-2xl font-bold">{t('checkEmailTitle')}</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            We sent a 6-digit code to <strong>{returningEmail}</strong>
+            {t('sentCodeTo')} <strong>{returningEmail}</strong>
           </p>
         </div>
 
         <form onSubmit={codeForm.handleSubmit(onVerifyCode)} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-medium">Verification code</label>
+            <label className="text-sm font-medium">{t('labelVerificationCode')}</label>
             <input
               type="text"
               inputMode="numeric"
@@ -1253,7 +1281,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                   e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6)
                 },
               })}
-              placeholder="000000"
+              placeholder={t('placeholderCode')}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-center tracking-widest text-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary"
             />
             {codeForm.formState.errors.code && (
@@ -1270,7 +1298,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             disabled={codeForm.formState.isSubmitting}
             accentColor={accentColor}
           >
-            {codeForm.formState.isSubmitting ? 'Verifying…' : 'Confirm booking'}
+            {codeForm.formState.isSubmitting ? t('verifyingEllipsis') : t('confirmBookingCta')}
           </BioLinkButton>
         </form>
 
@@ -1280,7 +1308,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             disabled={countdown > 0}
             className="text-sm text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
           >
-            {countdown > 0 ? `Resend in ${countdown}s` : "Didn't receive it? Resend"}
+            {countdown > 0 ? t('resendIn', { countdown }) : t('resendPrompt')}
           </button>
         </div>
       </>
@@ -1294,9 +1322,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       <>
         <div>
           <BackButton onClick={() => setStep('ret-code')} />
-          <h1 className="text-2xl font-bold">Who&apos;s booking?</h1>
+          <h1 className="text-2xl font-bold">{t('titleWhosBooking')}</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            We found multiple profiles. Select yours.
+            {t('multipleProfilesFound')}
           </p>
         </div>
         {returningError && (
@@ -1330,9 +1358,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       <>
         <div>
           <BackButton onClick={() => setStep('who')} />
-          <h1 className="text-2xl font-bold">Your details</h1>
+          <h1 className="text-2xl font-bold">{t('yourDetailsTitle')}</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Just a few details and you&apos;re booked.
+            {t('detailsSubtitle')}
           </p>
         </div>
 
@@ -1344,7 +1372,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                First name <span className="text-destructive">*</span>
+                {t('labelFirstName')} <span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
@@ -1360,7 +1388,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                Last name <span className="text-destructive">*</span>
+                {t('labelLastName')} <span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
@@ -1378,7 +1406,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Email <span className="text-destructive">*</span>
+              {t('labelEmail')} <span className="text-destructive">*</span>
             </label>
             <input
               type="email"
@@ -1394,7 +1422,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           {showPhone && (
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                Phone <span className="text-muted-foreground font-normal">(optional)</span>
+                {t('labelPhone')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
               </label>
               <input
                 type="tel"
@@ -1408,7 +1436,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           {showFitnessApp && (
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                Fitness app <span className="text-muted-foreground font-normal">(optional)</span>
+                {t('labelFitnessApp')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
               </label>
               <Controller
                 name="aggregatorApp"
@@ -1422,7 +1450,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">Not using a fitness app</SelectItem>
+                      <SelectItem value="__none__">{t('notUsingFitnessApp')}</SelectItem>
                       {FITNESS_APPS.map((app) => (
                         <SelectItem key={app} value={app}>
                           {app}
@@ -1443,12 +1471,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
           {/* Hidden submit — triggered by sticky bar Confirm button */}
           <button type="submit" className="sr-only" aria-hidden="true">
-            Submit
+            {t('srOnlySubmit')}
           </button>
         </form>
 
         <p className="text-xs text-muted-foreground">
-          By booking, you consent to the use of your details to communicate about this booking.
+          {t('consentText')}
         </p>
       </>
     )
@@ -1458,7 +1486,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   if (step === 'confirmed' && confirmedSession) {
     const ctaUrl = bookingSettings?.ctaUrl
-    const ctaLabel = bookingSettings?.ctaLabel ?? 'Contact Us'
+    const ctaLabel = bookingSettings?.ctaLabel ?? t('ctaContactUsDefault')
 
     return (
       <BioLinkShell
@@ -1485,9 +1513,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               </svg>
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Booking Confirmed!</h1>
+              <h1 className="text-2xl font-bold">{t('bookingConfirmedTitle')}</h1>
               <p className="text-muted-foreground mt-1 text-sm">
-                Check your email for a confirmation.
+                {t('bookingConfirmedSubtitle')}
               </p>
             </div>
           </div>
@@ -1500,26 +1528,26 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                   style={{ background: confirmedSession.activityColor }}
                 />
               )}
-              <span className="font-semibold">{confirmedSession.activityName || 'Session'}</span>
+              <span className="font-semibold">{confirmedSession.activityName || t('sessionFallback')}</span>
             </div>
             <div className="text-sm space-y-1.5 text-muted-foreground">
               <p>
-                <span className="font-medium text-foreground">Date: </span>
+                <span className="font-medium text-foreground">{t('labelDate')}</span>
                 {formatDate(confirmedSession.start)}
               </p>
               <p>
-                <span className="font-medium text-foreground">Time: </span>
+                <span className="font-medium text-foreground">{t('labelTime')}</span>
                 {formatTime(confirmedSession.start)} – {formatTime(confirmedSession.end)}
               </p>
               {confirmedSession.instructorName && (
                 <p>
-                  <span className="font-medium text-foreground">Instructor: </span>
+                  <span className="font-medium text-foreground">{t('labelInstructor')}</span>
                   {confirmedSession.instructorName}
                 </p>
               )}
               {confirmedSession.location && (
                 <p>
-                  <span className="font-medium text-foreground">Location: </span>
+                  <span className="font-medium text-foreground">{t('labelLocation')}</span>
                   {confirmedSession.location}
                 </p>
               )}
@@ -1536,7 +1564,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             onClick={resetToStart}
             className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
           >
-            Book another session →
+            {t('bookAnotherSession')}
           </button>
         </div>
       </BioLinkShell>
