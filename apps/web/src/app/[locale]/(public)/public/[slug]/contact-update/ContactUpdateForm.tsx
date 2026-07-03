@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
+import { useTranslations } from 'next-intl'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
 
@@ -15,25 +16,31 @@ type Step = 'loading' | 'not-found' | 'email' | 'code' | 'form' | 'success'
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
-const emailSchema = z.object({
-  email: z.string().email('Invalid email address'),
-})
+function createEmailSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    email: z.string().email(t('errorInvalidEmailAddress')),
+  })
+}
 
-const codeSchema = z.object({
-  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
-})
+function createCodeSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    code: z.string().regex(/^\d{6}$/, t('errorEnterCode')),
+  })
+}
 
-const detailsSchema = z.object({
-  firstname: z.string().min(1, 'Required').max(60),
-  lastname: z.string().min(1, 'Required').max(60),
-  phone: z.string().max(30).optional(),
-  birthdate: z.string().optional(),
-  note: z.string().max(500).optional(),
-})
+function createDetailsSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    firstname: z.string().min(1, t('errorRequired')).max(60),
+    lastname: z.string().min(1, t('errorRequired')).max(60),
+    phone: z.string().max(30).optional(),
+    birthdate: z.string().optional(),
+    note: z.string().max(500).optional(),
+  })
+}
 
-type EmailValues = z.infer<typeof emailSchema>
-type CodeValues = z.infer<typeof codeSchema>
-type DetailsValues = z.infer<typeof detailsSchema>
+type EmailValues = z.infer<ReturnType<typeof createEmailSchema>>
+type CodeValues = z.infer<ReturnType<typeof createCodeSchema>>
+type DetailsValues = z.infer<ReturnType<typeof createDetailsSchema>>
 
 // ─── component ───────────────────────────────────────────────────────────────
 
@@ -45,6 +52,7 @@ interface Props {
 export default function ContactUpdateForm({ slug, contactId }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
+  const t = useTranslations('PublicContactUpdate')
   const teamName = team.name || slug
   const accentColor = team.bioLinkAccentColor ?? null
   const showBranding = team.showBranding === true
@@ -58,9 +66,13 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
   // Countdown timer for resend button
   useEffect(() => {
     if (countdown <= 0) return
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
-    return () => clearTimeout(t)
+    const timeoutId = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    return () => clearTimeout(timeoutId)
   }, [countdown])
+
+  const emailSchema = useMemo(() => createEmailSchema(t), [t])
+  const codeSchema = useMemo(() => createCodeSchema(t), [t])
+  const detailsSchema = useMemo(() => createDetailsSchema(t), [t])
 
   // ── Email step ──────────────────────────────────────────────────────────────
 
@@ -81,7 +93,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
       setStep('code')
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to send code. Please try again.')
+      setError(e.message || t('errorSendCodeFailed'))
     }
   }
 
@@ -100,7 +112,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
       setStep('form')
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Incorrect code. Please try again.')
+      setError(e.message || t('errorIncorrectCode'))
     }
   }
 
@@ -118,7 +130,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
       codeForm.reset()
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to resend code.')
+      setError(e.message || t('errorResendCodeFailed'))
     }
   }
 
@@ -156,7 +168,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
       setStep('success')
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to submit update. Please try again.')
+      setError(e.message || t('errorSubmitUpdateFailed'))
     }
   }
 
@@ -179,8 +191,8 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="text-center space-y-2">
-          <p className="text-lg font-semibold">Team not found</p>
-          <p className="text-muted-foreground text-sm">This link may be invalid or expired.</p>
+          <p className="text-lg font-semibold">{t('teamNotFoundTitle')}</p>
+          <p className="text-muted-foreground text-sm">{t('teamNotFoundBody')}</p>
         </div>
       </div>
     )
@@ -197,20 +209,20 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
         showBranding={showBranding}
       >
         <div>
-          <h1 className="text-2xl font-bold">Update your details</h1>
+          <h1 className="text-2xl font-bold">{t('titleUpdateYourDetails')}</h1>
           <p className="text-muted-foreground mt-1">
-            Verify your email to update your personal information with <strong>{teamName}</strong>.
+            {t.rich('verifyEmailSubtitle', { teamName, strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
         </div>
 
         <form onSubmit={emailForm.handleSubmit(onSendCode)} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-medium">Email address</label>
+            <label className="text-sm font-medium">{t('labelEmailAddress')}</label>
             <input
               type="email"
               {...emailForm.register('email')}
               autoComplete="email"
-              placeholder="your@email.com"
+              placeholder={t('placeholderEmailExample')}
               className={inputClass}
             />
             {emailForm.formState.errors.email && (
@@ -229,7 +241,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
             disabled={emailForm.formState.isSubmitting}
             accentColor={accentColor}
           >
-            {emailForm.formState.isSubmitting ? 'Sending…' : 'Send verification code'}
+            {emailForm.formState.isSubmitting ? t('sendingEllipsis') : t('sendVerificationCode')}
           </BioLinkButton>
         </form>
       </BioLinkShell>
@@ -254,17 +266,17 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
             }}
             className="text-sm text-muted-foreground hover:text-foreground mb-4 flex items-center gap-1"
           >
-            ← Back
+            {t('backArrow')}
           </button>
-          <h1 className="text-2xl font-bold">Check your email</h1>
+          <h1 className="text-2xl font-bold">{t('checkEmailTitle')}</h1>
           <p className="text-muted-foreground mt-1">
-            We sent a 6-digit code to <strong>{email}</strong>
+            {t.rich('sentCodeTo', { email, strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
         </div>
 
         <form onSubmit={codeForm.handleSubmit(onVerifyCode)} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-medium">Verification code</label>
+            <label className="text-sm font-medium">{t('labelVerificationCode')}</label>
             <input
               type="text"
               inputMode="numeric"
@@ -275,7 +287,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
                   e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6)
                 },
               })}
-              placeholder="000000"
+              placeholder={t('placeholderCode')}
               className={`${inputClass} text-center tracking-widest text-lg font-mono`}
             />
             {codeForm.formState.errors.code && (
@@ -294,7 +306,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
             disabled={codeForm.formState.isSubmitting}
             accentColor={accentColor}
           >
-            {codeForm.formState.isSubmitting ? 'Verifying…' : 'Verify code'}
+            {codeForm.formState.isSubmitting ? t('verifyingEllipsis') : t('verifyCode')}
           </BioLinkButton>
         </form>
 
@@ -304,7 +316,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
             disabled={countdown > 0}
             className="text-sm text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
           >
-            {countdown > 0 ? `Resend in ${countdown}s` : "Didn't receive the code? Resend"}
+            {countdown > 0 ? t('resendIn', { countdown }) : t('resendPrompt')}
           </button>
         </div>
       </BioLinkShell>
@@ -322,22 +334,19 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
         showBranding={showBranding}
       >
         <div>
-          <h1 className="text-2xl font-bold">Your details</h1>
-          <p className="text-muted-foreground mt-1">
-            Submit your updated information. Your manager will review and apply the changes.
-          </p>
+          <h1 className="text-2xl font-bold">{t('yourDetailsTitle')}</h1>
+          <p className="text-muted-foreground mt-1">{t('detailsSubtitle')}</p>
         </div>
 
         {/* Info banner */}
         <div className="rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-800 px-4 py-3 text-sm text-blue-800 dark:text-blue-300">
-          Your manager will compare the submitted data with what&apos;s currently on file before
-          approving the update.
+          {t('infoBannerText')}
         </div>
 
         <form onSubmit={detailsForm.handleSubmit(onSubmitDetails)} className="space-y-4">
           {/* Email read-only */}
           <div className="space-y-1">
-            <label className="text-sm font-medium">Email</label>
+            <label className="text-sm font-medium">{t('labelEmail')}</label>
             <input
               type="email"
               value={email}
@@ -349,7 +358,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                First name <span className="text-destructive">*</span>
+                {t('labelFirstName')} <span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
@@ -365,7 +374,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                Last name <span className="text-destructive">*</span>
+                {t('labelLastName')} <span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
@@ -383,7 +392,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Phone <span className="text-muted-foreground font-normal">(optional)</span>
+              {t('labelPhone')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
             </label>
             <input
               type="tel"
@@ -395,20 +404,20 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Date of birth <span className="text-muted-foreground font-normal">(optional)</span>
+              {t('labelDateOfBirth')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
             </label>
             <input type="date" {...detailsForm.register('birthdate')} className={inputClass} />
           </div>
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Note for your manager{' '}
-              <span className="text-muted-foreground font-normal">(optional)</span>
+              {t('labelNoteForManager')}{' '}
+              <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
             </label>
             <textarea
               {...detailsForm.register('note')}
               rows={3}
-              placeholder="e.g. I changed my address, updated phone number…"
+              placeholder={t('placeholderNoteExample')}
               className={`${inputClass} resize-none`}
             />
           </div>
@@ -424,7 +433,7 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
             disabled={detailsForm.formState.isSubmitting}
             accentColor={accentColor}
           >
-            {detailsForm.formState.isSubmitting ? 'Submitting…' : 'Submit update request'}
+            {detailsForm.formState.isSubmitting ? t('submittingEllipsis') : t('submitUpdateRequest')}
           </BioLinkButton>
         </form>
       </BioLinkShell>
@@ -452,17 +461,19 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
           </svg>
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Request submitted!</h1>
+          <h1 className="text-2xl font-bold">{t('requestSubmittedTitle')}</h1>
           <p className="text-muted-foreground mt-2">
-            Your manager at <strong>{teamName}</strong> will review your details and apply the
-            update. You&apos;ll receive an email once it&apos;s been processed.
+            {t.rich('requestSubmittedBody', {
+              teamName,
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
         </div>
         <a
           href={`/public/${slug}`}
           className="inline-block text-sm text-primary hover:underline"
         >
-          ← Back to bio link
+          {t('backToBioLink')}
         </a>
       </div>
     </BioLinkShell>
