@@ -2948,5 +2948,32 @@
     "durationMinutes": "{mins}m",
     "durationHoursMinutes": "{h}h {m}m",
     "durationHours": "{h}h"
+  },
+  "PublicTrialBooking": {
+    "titleBookTrialClass": "Book a Trial Class",
+    "chooseSessionSubtitle": "Choose an available session at {teamName}.",
+    "noSessionsAvailable": "No sessions currently available for booking.",
+    "sessionFallback": "Session",
+    "selectArrow": "Select →",
+    "backArrow": "← Back",
+    "yourDetailsTitle": "Your details",
+    "bookingSubtitle": "Booking: <strong>{activity}</strong> on {date}",
+    "labelFirstName": "First name",
+    "labelLastName": "Last name",
+    "labelEmail": "Email",
+    "labelPhone": "Phone",
+    "optionalSuffix": "(optional)",
+    "bookingEllipsis": "Booking…",
+    "confirmBookingCta": "Confirm Booking",
+    "errorAlreadyRegistered": "You are already registered for this session.",
+    "errorGeneric": "An error occurred. Please try again.",
+    "errorRequired": "Required",
+    "errorInvalidEmail": "Invalid email",
+    "bookingConfirmedTitle": "Booking Confirmed!",
+    "bookingConfirmedBody": "Your trial <strong>{activity}</strong> class at <strong>{teamName}</strong> has been booked. Check your email for a confirmation.",
+    "bookAnotherClass": "Book another class",
+    "durationMinutes": "{mins}m",
+    "durationHoursMinutes": "{h}h {m}m",
+    "durationHours": "{h}h"
   }
 }

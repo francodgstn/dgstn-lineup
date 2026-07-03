@@ -2948,5 +2948,32 @@
     "durationMinutes": "{mins} min",
     "durationHoursMinutes": "{h} h {m} min",
     "durationHours": "{h} h"
+  },
+  "PublicTrialBooking": {
+    "titleBookTrialClass": "Prenota una lezione di prova",
+    "chooseSessionSubtitle": "Scegli una sessione disponibile presso {teamName}.",
+    "noSessionsAvailable": "Al momento non ci sono sessioni disponibili per la prenotazione.",
+    "sessionFallback": "Sessione",
+    "selectArrow": "Seleziona →",
+    "backArrow": "← Indietro",
+    "yourDetailsTitle": "I tuoi dati",
+    "bookingSubtitle": "Prenotazione: <strong>{activity}</strong> il {date}",
+    "labelFirstName": "Nome",
+    "labelLastName": "Cognome",
+    "labelEmail": "E-mail",
+    "labelPhone": "Telefono",
+    "optionalSuffix": "(facoltativo)",
+    "bookingEllipsis": "Prenotazione in corso…",
+    "confirmBookingCta": "Conferma prenotazione",
+    "errorAlreadyRegistered": "Sei già iscritto/a a questa sessione.",
+    "errorGeneric": "Si è verificato un errore. Riprova.",
+    "errorRequired": "Obbligatorio",
+    "errorInvalidEmail": "E-mail non valida",
+    "bookingConfirmedTitle": "Prenotazione confermata!",
+    "bookingConfirmedBody": "La tua lezione di prova <strong>{activity}</strong> presso <strong>{teamName}</strong> è stata prenotata. Controlla la tua e-mail per la conferma.",
+    "bookAnotherClass": "Prenota un'altra lezione",
+    "durationMinutes": "{mins} min",
+    "durationHoursMinutes": "{h} h {m} min",
+    "durationHours": "{h} h"
   }
 }

@@ -2948,5 +2948,32 @@
     "durationMinutes": "{mins} Min.",
     "durationHoursMinutes": "{h} Std. {m} Min.",
     "durationHours": "{h} Std."
+  },
+  "PublicTrialBooking": {
+    "titleBookTrialClass": "Probetraining buchen",
+    "chooseSessionSubtitle": "Wähle eine verfügbare Einheit bei {teamName}.",
+    "noSessionsAvailable": "Derzeit sind keine Einheiten zur Buchung verfügbar.",
+    "sessionFallback": "Einheit",
+    "selectArrow": "Auswählen →",
+    "backArrow": "← Zurück",
+    "yourDetailsTitle": "Deine Angaben",
+    "bookingSubtitle": "Buchung: <strong>{activity}</strong> am {date}",
+    "labelFirstName": "Vorname",
+    "labelLastName": "Nachname",
+    "labelEmail": "E-Mail",
+    "labelPhone": "Telefon",
+    "optionalSuffix": "(optional)",
+    "bookingEllipsis": "Wird gebucht…",
+    "confirmBookingCta": "Buchung bestätigen",
+    "errorAlreadyRegistered": "Du bist für diese Einheit bereits angemeldet.",
+    "errorGeneric": "Ein Fehler ist aufgetreten. Bitte versuche es erneut.",
+    "errorRequired": "Erforderlich",
+    "errorInvalidEmail": "Ungültige E-Mail-Adresse",
+    "bookingConfirmedTitle": "Buchung bestätigt!",
+    "bookingConfirmedBody": "Dein Probetraining <strong>{activity}</strong> bei <strong>{teamName}</strong> wurde gebucht. Prüfe deine E-Mails für die Bestätigung.",
+    "bookAnotherClass": "Weitere Klasse buchen",
+    "durationMinutes": "{mins} Min.",
+    "durationHoursMinutes": "{h} Std. {m} Min.",
+    "durationHours": "{h} Std."
   }
 }

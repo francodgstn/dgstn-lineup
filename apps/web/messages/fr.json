@@ -2948,5 +2948,32 @@
     "durationMinutes": "{mins} min",
     "durationHoursMinutes": "{h} h {m} min",
     "durationHours": "{h} h"
+  },
+  "PublicTrialBooking": {
+    "titleBookTrialClass": "Réserver un cours d'essai",
+    "chooseSessionSubtitle": "Choisissez une séance disponible chez {teamName}.",
+    "noSessionsAvailable": "Aucune séance disponible à la réservation pour le moment.",
+    "sessionFallback": "Séance",
+    "selectArrow": "Sélectionner →",
+    "backArrow": "← Retour",
+    "yourDetailsTitle": "Vos coordonnées",
+    "bookingSubtitle": "Réservation : <strong>{activity}</strong> le {date}",
+    "labelFirstName": "Prénom",
+    "labelLastName": "Nom",
+    "labelEmail": "E-mail",
+    "labelPhone": "Téléphone",
+    "optionalSuffix": "(facultatif)",
+    "bookingEllipsis": "Réservation…",
+    "confirmBookingCta": "Confirmer la réservation",
+    "errorAlreadyRegistered": "Vous êtes déjà inscrit(e) à cette séance.",
+    "errorGeneric": "Une erreur s'est produite. Veuillez réessayer.",
+    "errorRequired": "Obligatoire",
+    "errorInvalidEmail": "E-mail invalide",
+    "bookingConfirmedTitle": "Réservation confirmée !",
+    "bookingConfirmedBody": "Votre cours d'essai <strong>{activity}</strong> chez <strong>{teamName}</strong> a été réservé. Vérifiez vos e-mails pour la confirmation.",
+    "bookAnotherClass": "Réserver un autre cours",
+    "durationMinutes": "{mins} min",
+    "durationHoursMinutes": "{h} h {m} min",
+    "durationHours": "{h} h"
   }
 }

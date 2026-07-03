@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
+import { useTranslations } from 'next-intl'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -40,24 +41,30 @@ function formatDateTime(start: Timestamp): string {
   })
 }
 
-function sessionDuration(start: Timestamp, end: Timestamp): string {
+function sessionDuration(
+  start: Timestamp,
+  end: Timestamp,
+  t: ReturnType<typeof useTranslations>
+): string {
   const mins = Math.round((end.toDate().getTime() - start.toDate().getTime()) / 60000)
-  if (mins < 60) return `${mins}m`
+  if (mins < 60) return t('durationMinutes', { mins })
   const h = Math.floor(mins / 60)
   const m = mins % 60
-  return m ? `${h}h ${m}m` : `${h}h`
+  return m ? t('durationHoursMinutes', { h, m }) : t('durationHours', { h })
 }
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
-const formSchema = z.object({
-  firstname: z.string().min(1, 'Required').max(60),
-  lastname: z.string().min(1, 'Required').max(60),
-  email: z.string().email('Invalid email'),
-  phone: z.string().max(30).optional(),
-})
+function createFormSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    firstname: z.string().min(1, t('errorRequired')).max(60),
+    lastname: z.string().min(1, t('errorRequired')).max(60),
+    email: z.string().email(t('errorInvalidEmail')),
+    phone: z.string().max(30).optional(),
+  })
+}
 
-type FormValues = z.infer<typeof formSchema>
+type FormValues = z.infer<ReturnType<typeof createFormSchema>>
 
 // ─── component ───────────────────────────────────────────────────────────────
 
@@ -69,12 +76,15 @@ interface Props {
 type Step = 'select' | 'details' | 'confirmed'
 
 export default function TrialBookingForm({ teamId, teamName }: Props) {
+  const t = useTranslations('PublicTrialBooking')
   const [sessions, setSessions] = useState<SessionPublicProfile[]>([])
   const [loadingSessions, setLoadingSessions] = useState(true)
   const [selectedSession, setSelectedSession] = useState<SessionPublicProfile | null>(null)
   const [step, setStep] = useState<Step>('select')
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [confirmedActivity, setConfirmedActivity] = useState<string>('')
+
+  const formSchema = useMemo(() => createFormSchema(t), [t])
 
   const {
     register,
@@ -123,14 +133,14 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
           phone: values.phone || null,
         },
       })
-      setConfirmedActivity(selectedSession.activityName || 'Session')
+      setConfirmedActivity(selectedSession.activityName || t('sessionFallback'))
       setStep('confirmed')
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string }
       if (e.code === 'already-exists') {
-        setBookingError('You are already registered for this session.')
+        setBookingError(t('errorAlreadyRegistered'))
       } else {
-        setBookingError(e.message || 'An error occurred. Please try again.')
+        setBookingError(e.message || t('errorGeneric'))
       }
     }
   }
@@ -140,8 +150,10 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Book a Trial Class</h1>
-          <p className="text-muted-foreground mt-1">Choose an available session at {teamName}.</p>
+          <h1 className="text-2xl font-bold">{t('titleBookTrialClass')}</h1>
+          <p className="text-muted-foreground mt-1">
+            {t('chooseSessionSubtitle', { teamName })}
+          </p>
         </div>
 
         {loadingSessions && (
@@ -154,7 +166,7 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
 
         {!loadingSessions && sessions.length === 0 && (
           <div className="rounded-xl border bg-muted/30 p-8 text-center">
-            <p className="text-muted-foreground">No sessions currently available for booking.</p>
+            <p className="text-muted-foreground">{t('noSessionsAvailable')}</p>
           </div>
         )}
 
@@ -170,13 +182,13 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
                 className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors flex items-center justify-between gap-4 group"
               >
                 <div>
-                  <p className="font-semibold">{s.activityName || 'Session'}</p>
+                  <p className="font-semibold">{s.activityName || t('sessionFallback')}</p>
                   <p className="text-sm text-muted-foreground">{formatDateTime(s.start)}</p>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                  <span>{sessionDuration(s.start, s.end)}</span>
+                  <span>{sessionDuration(s.start, s.end, t)}</span>
                   <span className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                    Select →
+                    {t('selectArrow')}
                   </span>
                 </div>
               </button>
@@ -196,19 +208,22 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
             onClick={() => setStep('select')}
             className="text-sm text-muted-foreground hover:text-foreground mb-4 flex items-center gap-1"
           >
-            ← Back
+            {t('backArrow')}
           </button>
-          <h1 className="text-2xl font-bold">Your details</h1>
+          <h1 className="text-2xl font-bold">{t('yourDetailsTitle')}</h1>
           <p className="text-muted-foreground mt-1">
-            Booking: <strong>{selectedSession.activityName || 'Session'}</strong> on{' '}
-            {formatDateTime(selectedSession.start)}
+            {t.rich('bookingSubtitle', {
+              activity: selectedSession.activityName || t('sessionFallback'),
+              date: formatDateTime(selectedSession.start),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-sm font-medium">First name</label>
+              <label className="text-sm font-medium">{t('labelFirstName')}</label>
               <input
                 type="text"
                 {...register('firstname')}
@@ -220,7 +235,7 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
               )}
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium">Last name</label>
+              <label className="text-sm font-medium">{t('labelLastName')}</label>
               <input
                 type="text"
                 {...register('lastname')}
@@ -234,7 +249,7 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Email</label>
+            <label className="text-sm font-medium">{t('labelEmail')}</label>
             <input
               type="email"
               {...register('email')}
@@ -246,7 +261,8 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Phone <span className="text-muted-foreground font-normal">(optional)</span>
+              {t('labelPhone')}{' '}
+              <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
             </label>
             <input
               type="tel"
@@ -267,7 +283,7 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
             disabled={isSubmitting}
             className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            {isSubmitting ? 'Booking…' : 'Confirm Booking'}
+            {isSubmitting ? t('bookingEllipsis') : t('confirmBookingCta')}
           </button>
         </form>
       </div>
@@ -289,10 +305,13 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
           </svg>
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Booking Confirmed!</h1>
+          <h1 className="text-2xl font-bold">{t('bookingConfirmedTitle')}</h1>
           <p className="text-muted-foreground mt-2">
-            Your trial <strong>{confirmedActivity}</strong> class at <strong>{teamName}</strong> has
-            been booked. Check your email for a confirmation.
+            {t.rich('bookingConfirmedBody', {
+              activity: confirmedActivity,
+              teamName,
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
         </div>
         <button
@@ -302,7 +321,7 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
           }}
           className="text-sm text-primary hover:underline"
         >
-          Book another class
+          {t('bookAnotherClass')}
         </button>
       </div>
     )
