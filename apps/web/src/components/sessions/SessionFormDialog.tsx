@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { usePlaces } from '@/hooks/usePlaces'
+import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { useAuth } from '@/contexts/AuthContext'
 import { SESSIONS_COLLECTION } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
@@ -95,16 +96,20 @@ function getPreviewDates(pattern: RecurrencePattern, startDate: Date, count = 5)
 const SESSION_TYPES = ['group_class', 'coaching'] as const
 
 const sessionSchema = z.object({
-  activityId:     z.string().optional(),
-  activityType:   z.enum(SESSION_TYPES).default('group_class'),
-  start:          z.date({ required_error: 'Required' }),
-  duration:       z.number().min(15).max(480),
-  location:       z.string().max(120).optional(),
-  placeId:        z.string().optional(),
-  roomId:         z.string().optional(),
-  instructorName: z.string().max(120).optional(),
-  notes:          z.string().max(2000).optional(),
-  allowBooking:   z.boolean().optional(),
+  activityId:      z.string().optional(),
+  activityType:    z.enum(SESSION_TYPES).default('group_class'),
+  start:           z.date({ required_error: 'Required' }),
+  duration:        z.number().min(15).max(480),
+  location:        z.string().max(120).optional(),
+  placeId:         z.string().optional(),
+  roomId:          z.string().optional(),
+  instructorId:    z.string().optional(),
+  instructorName:  z.string().max(120).optional(),
+  // Optional cap; kept as text and coerced to a number on save (empty ⇒ no cap).
+  maxParticipants: z.string().max(6).optional(),
+  notes:           z.string().max(2000).optional(),
+  allowBooking:    z.boolean().optional(),
+  bookingMandatory: z.boolean().optional(),
 })
 type SessionFormValues = z.infer<typeof sessionSchema>
 
@@ -281,27 +286,40 @@ export function SessionFormDialog({
     useForm<SessionFormValues>({
       resolver: zodResolver(sessionSchema),
       defaultValues: {
-        activityId:     editing?.activityId ?? '',
-        activityType:   (editing?.activityType as typeof SESSION_TYPES[number]) ?? 'group_class',
-        start:          editing?.start?.toDate() ?? defaultStart(),
-        duration:       deriveDefaultDuration(editing),
-        location:       editing?.location ?? '',
-        placeId:        editing?.placeId ?? '',
-        roomId:         editing?.roomId ?? '',
-        instructorName: editing?.instructorName ?? '',
-        notes:          editing?.notes ?? '',
-        allowBooking:   editing?.allowBooking ?? false,
+        activityId:      editing?.activityId ?? '',
+        activityType:    (editing?.activityType as typeof SESSION_TYPES[number]) ?? 'group_class',
+        start:           editing?.start?.toDate() ?? defaultStart(),
+        duration:        deriveDefaultDuration(editing),
+        location:        editing?.location ?? '',
+        placeId:         editing?.placeId ?? '',
+        roomId:          editing?.roomId ?? '',
+        instructorId:    editing?.instructorId ?? '',
+        instructorName:  editing?.instructorName ?? '',
+        maxParticipants: editing?.max_participants != null ? String(editing.max_participants) : '',
+        notes:           editing?.notes ?? '',
+        allowBooking:    editing?.allowBooking ?? false,
+        bookingMandatory: editing?.bookingMandatory ?? false,
       },
     })
 
-  const watchedActivityId = watch('activityId')
-  const watchedStart      = watch('start')
-  const watchedPlaceId    = watch('placeId')
+  const watchedActivityId  = watch('activityId')
+  const watchedStart       = watch('start')
+  const watchedPlaceId     = watch('placeId')
+  const watchedInstructorId = watch('instructorId')
+  const watchedAllowBooking = watch('allowBooking')
 
   const { team } = useAuth()
   const { data: places = [] } = usePlaces(teamId, team?.org_id ?? null)
   const placeRooms = places.find((p) => p.id === watchedPlaceId)?.rooms ?? []
+  const { pickable: coaches } = useCoaches(teamId)
   const watchedDuration   = watch('duration')
+
+  // Trigger label for the instructor picker: matched coach → legacy typed name → placeholder.
+  const instructorLabel = (() => {
+    const c = coaches.find((m) => m.userId === watchedInstructorId)
+    if (c) return coachLabel(c)
+    return watch('instructorName') || null
+  })()
 
   useEffect(() => {
     const act = activities.find(a => a.id === watchedActivityId)
@@ -334,9 +352,12 @@ export function SessionFormDialog({
       location:       values.location || null,
       placeId:        values.placeId || null,
       roomId:         values.roomId || null,
+      instructorId:   values.instructorId || null,
       instructorName: values.instructorName || null,
+      max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
       notes:          values.notes || null,
       allowBooking:   values.allowBooking ?? false,
+      bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
       duration_minutes: values.duration,
     }
   }
@@ -361,8 +382,10 @@ export function SessionFormDialog({
           tags: [], notes: values.notes || '',
           duration: values.duration,
           allowBooking: values.allowBooking ?? false,
+          bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
           instructorName: values.instructorName || null,
-          instructorId: null,
+          instructorId: values.instructorId || null,
+          max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
         },
         recurrence: {
           frequency:      recurrence.frequency,
@@ -432,9 +455,12 @@ export function SessionFormDialog({
         end:            endDate.toISOString(),
         duration:       values.duration,
         location:       values.location || null,
+        instructorId:   values.instructorId || null,
         instructorName: values.instructorName || null,
+        max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
         notes:          values.notes || null,
         allowBooking:   values.allowBooking ?? false,
+        bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
       },
     })
     setBusyMsg(t('seriesUpdated', { count: res.data.updatedCount || 1 }))
@@ -546,8 +572,33 @@ export function SessionFormDialog({
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">{t('fieldInstructor')}</label>
-                <input type="text" {...register('instructorName')} placeholder={t('instructorPlaceholder')}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                <Controller name="instructorId" control={control} render={({ field }) => (
+                  <Select
+                    value={field.value || '__none__'}
+                    onValueChange={(v) => {
+                      if (v === '__none__') {
+                        field.onChange('')
+                        setValue('instructorName', '')
+                      } else {
+                        field.onChange(v)
+                        const c = coaches.find((m) => m.userId === v)
+                        setValue('instructorName', c ? coachLabel(c) : '')
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {instructorLabel ?? <span className="text-muted-foreground">{t('instructorPlaceholder')}</span>}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{t('instructorNone')}</SelectItem>
+                      {coaches.map((m) => (
+                        <SelectItem key={m.userId} value={m.userId}>{coachLabel(m)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )} />
               </div>
             </div>
 
@@ -621,10 +672,21 @@ export function SessionFormDialog({
               </div>
             )}
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium">{t('fieldLocation')}</label>
-              <input type="text" {...register('location')} placeholder={t('locationPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">{t('fieldLocation')}</label>
+                <input type="text" {...register('location')} placeholder={t('locationPlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  {t('fieldMaxParticipants')}
+                  <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
+                </label>
+                <input type="number" min={1} step={1} inputMode="numeric"
+                  {...register('maxParticipants')} placeholder={t('maxParticipantsPlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -640,6 +702,21 @@ export function SessionFormDialog({
               )} />
               <label htmlFor="sess-allowBooking" className="text-sm">{t('fieldAllowBooking')}</label>
             </div>
+
+            {/* Booking-required — a refinement of allowBooking; only relevant once
+                booking is offered. Drives the "Booking required" chip in the public flow. */}
+            {watchedAllowBooking && (
+              <div className="flex items-start gap-3 pl-7">
+                <Controller name="bookingMandatory" control={control} render={({ field }) => (
+                  <input type="checkbox" id="sess-bookingMandatory" checked={field.value ?? false}
+                    onChange={field.onChange} className="mt-0.5 h-4 w-4 rounded border-input accent-primary" />
+                )} />
+                <label htmlFor="sess-bookingMandatory" className="text-sm">
+                  {t('fieldBookingMandatory')}
+                  <span className="block text-xs text-muted-foreground">{t('bookingMandatoryHint')}</span>
+                </label>
+              </div>
+            )}
 
             {/* Recurrence — new sessions only */}
             {!editing && (

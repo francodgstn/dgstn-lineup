@@ -71,6 +71,9 @@ interface SessionProfile {
   locationAddress?: string
   locationMapsUrl?: string
   allowBooking: boolean
+  bookingMandatory?: boolean
+  max_participants?: number
+  bookings_count?: number
 }
 
 interface MatchedContact {
@@ -1094,6 +1097,11 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {s.bookingMandatory && (
+                          <span className="text-xs rounded-full px-2 py-0.5 bg-primary/10 text-primary font-medium">
+                            {t('bookingRequired')}
+                          </span>
+                        )}
                         <span className="text-xs bg-muted rounded-full px-2 py-0.5 text-muted-foreground">
                           {sessionDuration(s.start, s.end, t)}
                         </span>

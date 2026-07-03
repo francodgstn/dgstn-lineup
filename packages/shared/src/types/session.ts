@@ -27,7 +27,11 @@ export interface Session {
   isException?: boolean
   exceptionType?: 'modified' | 'cancelled' | null
   instructorName?: string
+  /** UID of the assigned instructor/coach (picked from the team's coach roster). */
   instructorId?: string
+  /** When booking is allowed, mark it as required (no drop-ins) — surfaces a
+   *  "Booking required" chip in the public booking flow. Group-class only in UI. */
+  bookingMandatory?: boolean
   // ── Coaching-specific fields (only populated when activityType === 'coaching') ──
   /** Back-link to the coach_availability template that generated this session. */
   templateId?: string
@@ -55,9 +59,13 @@ export interface SessionPublicProfile {
   start: Timestamp
   end: Timestamp
   allowBooking: boolean
+  /** Booking is required for this session (no drop-ins) — drives the public chip. */
+  bookingMandatory?: boolean
   location?: string
   onlineUrl?: string
   instructorName?: string
+  /** Denormalised instructor/coach uid (group-class sessions). */
+  instructorId?: string
   locationAddress?: string
   locationMapsUrl?: string
   activitySlug?: string

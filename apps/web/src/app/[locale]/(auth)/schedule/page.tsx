@@ -70,6 +70,7 @@ import {
   Trash2,
   User,
   Repeat2,
+  ArrowUpRight,
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
@@ -632,15 +633,23 @@ function ListItemRow({
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-sm">
+                <Link
+                  href={`/sessions/${s.id}`}
+                  className="font-medium text-sm hover:underline hover:text-primary transition-colors"
+                >
                   {s.activityName ?? (
                     <span className="text-muted-foreground italic">{tC('noActivity')}</span>
                   )}
-                </span>
+                </Link>
                 <Badge variant="secondary" className="text-xs shrink-0">
                   {tS(`type_${s.activityType ?? 'group_class'}` as Parameters<typeof tS>[0])}
                 </Badge>
                 {s.seriesId && <Repeat2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                {s.bookingMandatory && (
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {tS('bookingRequiredChip')}
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {formatDate(s.start)} · {formatTime(s.start)}
@@ -648,6 +657,14 @@ function ListItemRow({
               </p>
             </div>
             <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Link
+                href={`/sessions/${s.id}`}
+                aria-label={tC('openDetail')}
+                title={tC('openDetail')}
+                className="p-1.5 rounded text-muted-foreground hover:text-primary transition-colors"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
               <button
                 onClick={onEdit}
                 className="p-1.5 rounded text-muted-foreground hover:text-foreground transition-colors"
@@ -669,9 +686,17 @@ function ListItemRow({
                 {s.location}
               </span>
             )}
+            {s.instructorName && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <User className="h-3 w-3 shrink-0" />
+                {s.instructorName}
+              </span>
+            )}
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Users className="h-3 w-3 shrink-0" />
-              {s.participants_count ?? 0}
+              {s.max_participants
+                ? `${s.participants_count ?? 0}/${s.max_participants}`
+                : (s.participants_count ?? 0)}
             </span>
           </div>
         </div>

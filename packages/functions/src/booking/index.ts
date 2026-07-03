@@ -525,6 +525,17 @@ export const bookSession = onCall(async (request) => {
     }
   }
 
+  if (!isCoachingSession) {
+    // Group-class booking cap (optional; enforced against the live reserved count).
+    const maxGroup = sessionData.max_participants as number | undefined
+    if (maxGroup && maxGroup > 0) {
+      const reserved = (sessionData.bio_link_bookings_count as number) || 0
+      if (reserved >= maxGroup) {
+        throw new HttpsError('resource-exhausted', 'This session is fully booked.')
+      }
+    }
+  }
+
   // ── Access gate (paid-access axis) ─────────────────────────────────────────
   // Set when a 'subscription' rule matched a live subscription — stored on the booking.
   let matchedSubscriptionTypeId: string | null = null

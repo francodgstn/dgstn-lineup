@@ -46,6 +46,7 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
       accessRule: resolveActivityAccessRule({ accessRule: data.accessRule, isFreeTrial: data.isFreeTrial }),
       status: data.status || 'open',
       allowBooking: true,
+      bookingMandatory: data.bookingMandatory === true,
     }
     await afterRef.collection('public_profile').doc(sessionId).set(publicProfile)
   } else {
@@ -64,6 +65,11 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
       participants_count: data.participants_count || 0,
       allowBooking: true,
       slug: data.slug || null,
+      instructorName: data.instructorName || null,
+      instructorId: data.instructorId || null,
+      max_participants: data.max_participants || null,
+      bookings_count: data.bio_link_bookings_count || 0,
+      bookingMandatory: data.bookingMandatory === true,
     }
     await afterRef.collection('public_profile').doc(sessionId).set(publicProfile)
   }

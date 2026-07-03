@@ -90,6 +90,8 @@ export const generateRecurringSessions = onCall(async (request) => {
         allowBooking: seriesData.template?.allowBooking ?? false,
         instructorName: seriesData.template?.instructorName ?? null,
         instructorId: seriesData.template?.instructorId ?? null,
+        max_participants: seriesData.template?.max_participants ?? null,
+        bookingMandatory: seriesData.template?.bookingMandatory ?? false,
         teamId,
         teacher: seriesData.teacher,
         createdBy: seriesData.createdBy || seriesData.teacher,
@@ -383,6 +385,8 @@ export const updateRecurringSession = onCall(async (request) => {
     'instructorName',
     'instructorId',
     'allowBooking',
+    'max_participants',
+    'bookingMandatory',
   ])
   const safeUpdates = Object.fromEntries(
     Object.entries(updates).filter(([k]) => ALLOWED_UPDATE_FIELDS.has(k))
@@ -506,6 +510,10 @@ export const updateRecurringSession = onCall(async (request) => {
     seriesUpdates['template.instructorName'] = updates.instructorName
   if (updates.instructorId !== undefined)
     seriesUpdates['template.instructorId'] = updates.instructorId
+  if (updates.max_participants !== undefined)
+    seriesUpdates['template.max_participants'] = updates.max_participants
+  if (updates.bookingMandatory !== undefined)
+    seriesUpdates['template.bookingMandatory'] = updates.bookingMandatory
 
   if (start !== undefined && newTimeHours !== null && newTimeMinutes !== null) {
     const seriesData = seriesDoc.data()!
@@ -645,6 +653,12 @@ export const updateRecurringSession = onCall(async (request) => {
           ((seriesUpdates['template.instructorId'] ?? seriesData.template?.instructorId) as
             | string
             | null) ?? null,
+        max_participants:
+          ((seriesUpdates['template.max_participants'] ??
+            seriesData.template?.max_participants) as number) ?? null,
+        bookingMandatory:
+          ((seriesUpdates['template.bookingMandatory'] ??
+            seriesData.template?.bookingMandatory) as boolean) ?? false,
       }
       const createBatch = db.batch()
       for (const occ of toCreate) {
