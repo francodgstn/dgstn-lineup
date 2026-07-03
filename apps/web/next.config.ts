@@ -50,14 +50,10 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   typedRoutes: true,
   rewrites: emulatorRewrites,
-  async redirects() {
-    // The app has no marketing root (the landing site is separate), so a bare
-    // root would 404. Send it to the login entry — on the demo (demo.linyup.com)
-    // this lands visitors in the sandbox sign-in instead of a dead page; on the
-    // real app the login page forwards already-authenticated users on to their
-    // dashboard. Config redirects run before the next-intl middleware.
-    return [{ source: '/', destination: '/login', permanent: false }]
-  },
+  // NOTE: the bare-root → /login redirect is intentionally NOT a config redirect.
+  // Config redirects run outside the middleware, so their Location keeps the
+  // leaked Cloud Run :8080 port and can't be corrected — a bare demo.linyup.com/
+  // then breaks. It lives in src/proxy.ts instead, where the port-fix applies.
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]
   },
