@@ -3249,5 +3249,43 @@
         ]
       }
     }
+  },
+  "SessionDetail": {
+    "backToSessions": "Sessions",
+    "previousSession": "Previous session",
+    "nextSession": "Next session",
+    "checkInsStat": "check-ins",
+    "pendingBookingsStat": "pending bookings",
+    "bookingOpenBadge": "Booking open",
+    "editTitle": "Edit",
+    "deleteTitle": "Delete",
+    "checkInScannerButton": "Check-in scanner",
+    "comingSoonBadge": "Coming soon",
+    "addContact": "Add contact",
+    "bookingPortalLink": "Booking portal",
+    "portalBookingsSection": "Portal bookings",
+    "pendingBadge": "Pending",
+    "confirmAttendanceTitle": "Confirm attendance",
+    "markNoShowTitle": "Mark no-show",
+    "removeBookingTitle": "Remove booking",
+    "noShowsSection": "No-shows",
+    "noShowBadge": "No-show",
+    "overrideConfirmAttendanceTitle": "Override: confirm attendance",
+    "removeTitle": "Remove",
+    "checkInsSection": "Check-ins",
+    "noCheckInsYet": "No check-ins yet",
+    "addContactManually": "Add a contact manually",
+    "confirmedFromBooking": "Confirmed from booking",
+    "removeCheckInTitle": "Remove check-in",
+    "sessionNotFound": "Session not found",
+    "goBack": "← Go back",
+    "addContactToSession": "Add contact to session",
+    "searchContactsPlaceholder": "Search contacts…",
+    "noContactsFound": "No contacts found",
+    "qrScanningUnsupported": "QR scanning requires Chrome or Edge.",
+    "cameraAccessDenied": "Camera access denied. Allow camera and try again.",
+    "invalidQrCode": "Invalid QR code",
+    "contactAlreadyCheckedIn": "{name} already checked in",
+    "contactCheckedIn": "✓ {name} checked in"
   }
 }

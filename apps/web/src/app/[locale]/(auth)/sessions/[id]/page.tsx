@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, use } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
@@ -77,6 +78,7 @@ interface ParticipantDoc {
 // ─── QR scanner hook ──────────────────────────────────────────────────────────
 
 function useQrScanner(onScan: (text: string) => void) {
+  const t = useTranslations('SessionDetail')
   const videoRef = useRef<HTMLVideoElement>(null)
   const [active, setActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,7 +90,7 @@ function useQrScanner(onScan: (text: string) => void) {
     setError(null)
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (!('BarcodeDetector' in window)) { setError('QR scanning requires Chrome or Edge.'); return }
+      if (!('BarcodeDetector' in window)) { setError(t('qrScanningUnsupported')); return }
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
       streamRef.current = stream
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
@@ -96,13 +98,14 @@ function useQrScanner(onScan: (text: string) => void) {
       detectorRef.current = new (window as any).BarcodeDetector({ formats: ['qr_code'] })
       setActive(true)
     } catch {
-      setError('Camera access denied. Allow camera and try again.')
+      setError(t('cameraAccessDenied'))
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const stop = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
-    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
     setActive(false)
@@ -144,6 +147,7 @@ function AddParticipantsDialog({
   existingIds: Set<string>
   onAdded: () => void
 }) {
+  const t = useTranslations('SessionDetail')
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
 
@@ -204,14 +208,14 @@ function AddParticipantsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-4 pt-4 pb-3 border-b">
-          <DialogTitle className="text-base">Add contact to session</DialogTitle>
+          <DialogTitle className="text-base">{t('addContactToSession')}</DialogTitle>
         </DialogHeader>
         <div className="px-3 pt-3 pb-2">
           <input
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search contacts…"
+            placeholder={t('searchContactsPlaceholder')}
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
@@ -222,7 +226,7 @@ function AddParticipantsDialog({
             </div>
           )}
           {!isLoading && filtered.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">No contacts found</p>
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t('noContactsFound')}</p>
           )}
           {!isLoading && filtered.map((c) => (
             <button
@@ -266,6 +270,7 @@ function SectionHeader({ icon, label, count, color }: { icon: React.ReactNode; l
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function SessionDetailPage() {
+  const t = useTranslations('SessionDetail')
   const params = useParams()
   const sessionId = params.id as string
   const router = useRouter()
@@ -409,13 +414,13 @@ export default function SessionDetailPage() {
       const result = await fn({ sessionId, contactId, hash, scope: 'sessions' }) as { data: { success: boolean; alreadyCheckedIn?: boolean; contactName?: string } }
       setScanMsg({
         text: result.data.alreadyCheckedIn
-          ? `${result.data.contactName} already checked in`
-          : `✓ ${result.data.contactName} checked in`,
+          ? t('contactAlreadyCheckedIn', { name: result.data.contactName ?? '' })
+          : t('contactCheckedIn', { name: result.data.contactName ?? '' }),
         ok: true,
       })
       invalidate()
     } catch (err: unknown) {
-      setScanMsg({ text: (err as Error).message || 'Invalid QR code', ok: false })
+      setScanMsg({ text: (err as Error).message || t('invalidQrCode'), ok: false })
     }
     setTimeout(() => setScanMsg(null), 4000)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -454,8 +459,8 @@ export default function SessionDetailPage() {
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
-        <p className="text-lg font-semibold">Session not found</p>
-        <button onClick={() => router.back()} className="text-sm text-primary hover:underline">← Go back</button>
+        <p className="text-lg font-semibold">{t('sessionNotFound')}</p>
+        <button onClick={() => router.back()} className="text-sm text-primary hover:underline">{t('goBack')}</button>
       </div>
     )
   }
@@ -471,14 +476,14 @@ export default function SessionDetailPage() {
           onClick={() => router.back()}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ArrowLeft className="h-4 w-4" /> Sessions
+          <ArrowLeft className="h-4 w-4" /> {t('backToSessions')}
         </button>
         <div className="flex items-center gap-1">
           <button
             onClick={() => prevQ.data && i18nRouter.push(`/sessions/${prevQ.data.id}` as Parameters<typeof i18nRouter.push>[0])}
             disabled={!prevQ.data}
             className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-            title="Previous session"
+            title={t('previousSession')}
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -486,7 +491,7 @@ export default function SessionDetailPage() {
             onClick={() => nextQ.data && i18nRouter.push(`/sessions/${nextQ.data.id}` as Parameters<typeof i18nRouter.push>[0])}
             disabled={!nextQ.data}
             className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-            title="Next session"
+            title={t('nextSession')}
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -518,17 +523,17 @@ export default function SessionDetailPage() {
                   <div className="flex items-center gap-1.5">
                     <Users className="h-3.5 w-3.5" />
                     <span className="font-medium text-foreground">{participants.length}</span>
-                    <span>check-ins</span>
+                    <span>{t('checkInsStat')}</span>
                   </div>
                   {pendingBookings.length > 0 && (
                     <div className="flex items-center gap-1.5 text-amber-600">
                       <BookOpen className="h-3.5 w-3.5" />
                       <span className="font-medium">{pendingBookings.length}</span>
-                      <span>pending bookings</span>
+                      <span>{t('pendingBookingsStat')}</span>
                     </div>
                   )}
                   {session.allowBooking && (
-                    <Badge variant="secondary" className="text-xs">Booking open</Badge>
+                    <Badge variant="secondary" className="text-xs">{t('bookingOpenBadge')}</Badge>
                   )}
                 </div>
               </div>
@@ -537,10 +542,10 @@ export default function SessionDetailPage() {
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <button onClick={() => setEditOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title="Edit">
+              <button onClick={() => setEditOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title={t('editTitle')}>
                 <Pencil className="h-4 w-4" />
               </button>
-              <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" title="Delete">
+              <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" title={t('deleteTitle')}>
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -556,17 +561,17 @@ export default function SessionDetailPage() {
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
             >
               <QrCode className="h-4 w-4" />
-              Check-in scanner
+              {t('checkInScannerButton')}
             </button>
             <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 select-none">
-              Coming soon
+              {t('comingSoonBadge')}
             </span>
           </div>
           <button
             onClick={() => setAddOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
           >
-            <UserPlus className="h-4 w-4" /> Add contact
+            <UserPlus className="h-4 w-4" /> {t('addContact')}
           </button>
           {session.allowBooking && (
             <a
@@ -574,7 +579,7 @@ export default function SessionDetailPage() {
               target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors text-muted-foreground"
             >
-              <ExternalLink className="h-3.5 w-3.5" /> Booking portal
+              <ExternalLink className="h-3.5 w-3.5" /> {t('bookingPortalLink')}
             </a>
           )}
         </div>
@@ -586,7 +591,7 @@ export default function SessionDetailPage() {
       {/* Portal bookings */}
       {hasBookings && (
         <div className="rounded-xl border bg-card p-4 shadow-sm">
-          <SectionHeader icon={<BookOpen className="h-3.5 w-3.5" />} label="Portal bookings" count={pendingBookings.length + noShowBookings.length} color="#D97706" />
+          <SectionHeader icon={<BookOpen className="h-3.5 w-3.5" />} label={t('portalBookingsSection')} count={pendingBookings.length + noShowBookings.length} color="#D97706" />
 
           {/* Pending */}
           {pendingBookings.map((b) => (
@@ -598,15 +603,15 @@ export default function SessionDetailPage() {
                 <p className="text-sm font-medium">{b.lastname} {b.firstname}</p>
                 {b.email && <p className="text-xs text-muted-foreground">{b.email}</p>}
               </div>
-              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Pending</Badge>
+              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">{t('pendingBadge')}</Badge>
               <div className="flex items-center gap-1">
-                <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title="Confirm attendance">
+                <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title={t('confirmAttendanceTitle')}>
                   <Check className="h-4 w-4" />
                 </button>
-                <button onClick={() => markNoShow(b.id)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title="Mark no-show">
+                <button onClick={() => markNoShow(b.id)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title={t('markNoShowTitle')}>
                   <UserX className="h-4 w-4" />
                 </button>
-                <button onClick={() => removeBooking(b.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Remove booking">
+                <button onClick={() => removeBooking(b.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeBookingTitle')}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -618,7 +623,7 @@ export default function SessionDetailPage() {
             <>
               {pendingBookings.length > 0 && (
                 <div className="px-1 pt-3 pb-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">No-shows</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('noShowsSection')}</p>
                 </div>
               )}
               {noShowBookings.map((b) => (
@@ -629,12 +634,12 @@ export default function SessionDetailPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium line-through">{b.lastname} {b.firstname}</p>
                   </div>
-                  <Badge variant="outline" className="text-xs text-destructive border-destructive/30">No-show</Badge>
+                  <Badge variant="outline" className="text-xs text-destructive border-destructive/30">{t('noShowBadge')}</Badge>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title="Override: confirm attendance">
+                    <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title={t('overrideConfirmAttendanceTitle')}>
                       <Check className="h-4 w-4" />
                     </button>
-                    <button onClick={() => removeBooking(b.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Remove">
+                    <button onClick={() => removeBooking(b.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeTitle')}>
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -647,7 +652,7 @@ export default function SessionDetailPage() {
 
       {/* Participants / check-ins */}
       <div className="rounded-xl border bg-card p-4 shadow-sm">
-        <SectionHeader icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Check-ins" count={participants.length} color="#059669" />
+        <SectionHeader icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={t('checkInsSection')} count={participants.length} color="#059669" />
 
         {participantsQ.isLoading && (
           <div className="space-y-2">
@@ -658,8 +663,8 @@ export default function SessionDetailPage() {
         {!participantsQ.isLoading && participants.length === 0 && (
           <div className="py-8 text-center">
             <Users className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
-            <p className="text-sm text-muted-foreground">No check-ins yet</p>
-            <button onClick={() => setAddOpen(true)} className="mt-2 text-xs text-primary hover:underline">Add a contact manually</button>
+            <p className="text-sm text-muted-foreground">{t('noCheckInsYet')}</p>
+            <button onClick={() => setAddOpen(true)} className="mt-2 text-xs text-primary hover:underline">{t('addContactManually')}</button>
           </div>
         )}
 
@@ -671,10 +676,10 @@ export default function SessionDetailPage() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{p.lastname} {p.firstname}</p>
               {p.confirmedFromBooking && (
-                <p className="text-xs text-muted-foreground">Confirmed from booking</p>
+                <p className="text-xs text-muted-foreground">{t('confirmedFromBooking')}</p>
               )}
             </div>
-            <button onClick={() => removeParticipant(p.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Remove check-in">
+            <button onClick={() => removeParticipant(p.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeCheckInTitle')}>
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -685,7 +690,7 @@ export default function SessionDetailPage() {
       <button
         onClick={() => setAddOpen(true)}
         className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-40"
-        aria-label="Add contact"
+        aria-label={t('addContact')}
       >
         <UserPlus className="h-6 w-6" />
       </button>

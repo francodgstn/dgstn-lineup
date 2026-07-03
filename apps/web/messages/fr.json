@@ -3249,5 +3249,43 @@
         ]
       }
     }
+  },
+  "SessionDetail": {
+    "backToSessions": "Séances",
+    "previousSession": "Séance précédente",
+    "nextSession": "Séance suivante",
+    "checkInsStat": "check-ins",
+    "pendingBookingsStat": "réservations en attente",
+    "bookingOpenBadge": "Réservation ouverte",
+    "editTitle": "Modifier",
+    "deleteTitle": "Supprimer",
+    "checkInScannerButton": "Scanner de check-in",
+    "comingSoonBadge": "Bientôt disponible",
+    "addContact": "Ajouter un contact",
+    "bookingPortalLink": "Portail de réservation",
+    "portalBookingsSection": "Réservations du portail",
+    "pendingBadge": "En attente",
+    "confirmAttendanceTitle": "Confirmer la présence",
+    "markNoShowTitle": "Marquer comme absent",
+    "removeBookingTitle": "Supprimer la réservation",
+    "noShowsSection": "Absences",
+    "noShowBadge": "Absent",
+    "overrideConfirmAttendanceTitle": "Forcer : confirmer la présence",
+    "removeTitle": "Supprimer",
+    "checkInsSection": "Check-ins",
+    "noCheckInsYet": "Aucun check-in pour l'instant",
+    "addContactManually": "Ajouter un contact manuellement",
+    "confirmedFromBooking": "Confirmé depuis une réservation",
+    "removeCheckInTitle": "Supprimer le check-in",
+    "sessionNotFound": "Séance introuvable",
+    "goBack": "← Retour",
+    "addContactToSession": "Ajouter un contact à la séance",
+    "searchContactsPlaceholder": "Rechercher des contacts…",
+    "noContactsFound": "Aucun contact trouvé",
+    "qrScanningUnsupported": "Le scan QR nécessite Chrome ou Edge.",
+    "cameraAccessDenied": "Accès à la caméra refusé. Autorisez l'accès et réessayez.",
+    "invalidQrCode": "Code QR invalide",
+    "contactAlreadyCheckedIn": "{name} est déjà enregistré",
+    "contactCheckedIn": "✓ {name} enregistré"
   }
 }

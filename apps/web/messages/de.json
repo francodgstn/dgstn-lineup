@@ -3245,5 +3245,43 @@
         ]
       }
     }
+  },
+  "SessionDetail": {
+    "backToSessions": "Einheiten",
+    "previousSession": "Vorherige Einheit",
+    "nextSession": "Nächste Einheit",
+    "checkInsStat": "Check-ins",
+    "pendingBookingsStat": "ausstehende Buchungen",
+    "bookingOpenBadge": "Buchung offen",
+    "editTitle": "Bearbeiten",
+    "deleteTitle": "Löschen",
+    "checkInScannerButton": "Check-in-Scanner",
+    "comingSoonBadge": "Demnächst",
+    "addContact": "Kontakt hinzufügen",
+    "bookingPortalLink": "Buchungsportal",
+    "portalBookingsSection": "Portalbuchungen",
+    "pendingBadge": "Ausstehend",
+    "confirmAttendanceTitle": "Anwesenheit bestätigen",
+    "markNoShowTitle": "Als Nichterscheinen markieren",
+    "removeBookingTitle": "Buchung entfernen",
+    "noShowsSection": "Nichterscheinen",
+    "noShowBadge": "Nicht erschienen",
+    "overrideConfirmAttendanceTitle": "Überschreiben: Anwesenheit bestätigen",
+    "removeTitle": "Entfernen",
+    "checkInsSection": "Check-ins",
+    "noCheckInsYet": "Noch keine Check-ins",
+    "addContactManually": "Kontakt manuell hinzufügen",
+    "confirmedFromBooking": "Aus Buchung bestätigt",
+    "removeCheckInTitle": "Check-in entfernen",
+    "sessionNotFound": "Einheit nicht gefunden",
+    "goBack": "← Zurück",
+    "addContactToSession": "Kontakt zur Einheit hinzufügen",
+    "searchContactsPlaceholder": "Kontakte suchen…",
+    "noContactsFound": "Keine Kontakte gefunden",
+    "qrScanningUnsupported": "Für das QR-Scannen ist Chrome oder Edge erforderlich.",
+    "cameraAccessDenied": "Kamerazugriff verweigert. Bitte erlauben Sie den Zugriff und versuchen Sie es erneut.",
+    "invalidQrCode": "Ungültiger QR-Code",
+    "contactAlreadyCheckedIn": "{name} ist bereits eingecheckt",
+    "contactCheckedIn": "✓ {name} eingecheckt"
   }
 }
