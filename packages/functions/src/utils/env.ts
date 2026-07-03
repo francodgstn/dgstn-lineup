@@ -9,6 +9,18 @@ export function getHostingUrl(): string {
   return HOSTING_URL.value()
 }
 
+// Vertex AI serving location for the assistant. Gemini supports the 'global'
+// endpoint (no per-region availability concerns); set a specific region in
+// .env.{sandbox,staging,production} only if a region-locked model is chosen.
+export const VERTEX_LOCATION = defineString('VERTEX_LOCATION', {
+  description: 'Vertex AI location (e.g. "global", "europe-west1")',
+  default: 'global',
+})
+
+export function getVertexLocation(): string {
+  return VERTEX_LOCATION.value() || 'global'
+}
+
 // Origins we trust to receive a SAME-SESSION return redirect: any linyup.com
 // (sub)domain + localhost. Anything else falls back to the env-configured
 // HOSTING_URL, so deploys (incl. *.web.app previews) are unaffected.

@@ -6,7 +6,9 @@
     "yesterday": "Hier",
     "tomorrow": "Demain",
     "all": "Tous",
-    "comingSoon": "Bientôt disponible"
+    "comingSoon": "Bientôt disponible",
+    "demoBanner": "Vous explorez une démo en direct de Linyup.",
+    "demoBannerCta": "Visiter linyup.com →"
   },
   "Plans": {
     "free": "Free",
@@ -1669,7 +1671,26 @@
     "legendAddonDesc": "Disponible en supplément payant",
     "screenshotAlt": "Capture d'écran de {name}",
     "screenshotPlaceholder": "Aucun aperçu disponible",
-    "emptySearch": "Aucun plugin ne correspond à votre recherche."
+    "emptySearch": "Aucun plugin ne correspond à votre recherche.",
+    "aiAssistantName": "Assistant IA",
+    "aiAssistantDescription": "Un assistant intégré qui répond aux questions pratiques et vous oriente au bon endroit.",
+    "lockedBadge": "Verrouillé",
+    "unlock": "Déverrouiller",
+    "unlockTitle": "Déverrouiller le plugin",
+    "unlockDesc": "Ce plugin est expérimental. Saisissez la clé d'accès pour l'activer pour votre équipe.",
+    "unlockPlaceholder": "Clé d'accès",
+    "unlockError": "Clé invalide ou échec du déverrouillage.",
+    "unlockSuccess": "déverrouillé"
+  },
+  "AiAssistant": {
+    "launcherLabel": "Assistant IA",
+    "title": "Assistant IA",
+    "disclaimer": "Expérimental · vous aide à trouver des fonctionnalités. N'accède pas encore à vos données.",
+    "greeting": "Demandez-moi comment faire quelque chose dans Linyup — je vous indiquerai où aller.",
+    "thinking": "Réflexion…",
+    "inputPlaceholder": "Posez une question…",
+    "send": "Envoyer",
+    "error": "Une erreur s'est produite. Veuillez réessayer."
   },
   "ContactGroups": {
     "title": "Groupes de contacts",

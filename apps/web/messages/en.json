@@ -6,7 +6,9 @@
     "yesterday": "Yesterday",
     "tomorrow": "Tomorrow",
     "all": "All",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "demoBanner": "You're exploring a live demo of Linyup.",
+    "demoBannerCta": "Visit linyup.com →"
   },
   "Plans": {
     "free": "Free",
@@ -1669,7 +1671,26 @@
     "legendAddonDesc": "Available as a paid add-on",
     "screenshotAlt": "{name} screenshot",
     "screenshotPlaceholder": "No preview available",
-    "emptySearch": "No plugins match your search."
+    "emptySearch": "No plugins match your search.",
+    "aiAssistantName": "AI assistant",
+    "aiAssistantDescription": "An in-app helper that answers how-to questions and points you to the right place.",
+    "lockedBadge": "Locked",
+    "unlock": "Unlock",
+    "unlockTitle": "Unlock plugin",
+    "unlockDesc": "This plugin is experimental. Enter the access key to enable it for your team.",
+    "unlockPlaceholder": "Access key",
+    "unlockError": "Invalid key, or unlocking failed.",
+    "unlockSuccess": "unlocked"
+  },
+  "AiAssistant": {
+    "launcherLabel": "AI assistant",
+    "title": "AI assistant",
+    "disclaimer": "Experimental · helps you find features. Doesn't access your data yet.",
+    "greeting": "Ask me how to do something in Linyup — I'll point you to the right place.",
+    "thinking": "Thinking…",
+    "inputPlaceholder": "Ask a question…",
+    "send": "Send",
+    "error": "Something went wrong. Please try again."
   },
   "ContactGroups": {
     "title": "Contact Groups",

@@ -14,6 +14,14 @@ resource "google_service_account" "functions_runtime" {
   description  = "Runtime identity for Cloud Functions v2 (gen2). Reads Secret Manager secrets."
 }
 
+# Vertex AI (in-app AI assistant): the functions runtime SA authenticates to
+# Vertex via ADC — no API key. This is the only IAM the assistant needs.
+resource "google_project_iam_member" "functions_runtime_vertex" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.functions_runtime.email}"
+}
+
 # ── Deploy SA: project-level roles for firebase deploy ────────────────────────
 resource "google_project_iam_member" "deploy_roles" {
   for_each = toset(var.deploy_sa_roles)

@@ -6,7 +6,9 @@
     "yesterday": "Gestern",
     "tomorrow": "Morgen",
     "all": "Alle",
-    "comingSoon": "Demnächst"
+    "comingSoon": "Demnächst",
+    "demoBanner": "Du erkundest eine Live-Demo von Linyup.",
+    "demoBannerCta": "linyup.com besuchen →"
   },
   "Plans": {
     "free": "Free",
@@ -1669,7 +1671,26 @@
     "legendAddonDesc": "Als kostenpflichtiges Add-on verfügbar",
     "screenshotAlt": "{name} Screenshot",
     "screenshotPlaceholder": "Keine Vorschau verfügbar",
-    "emptySearch": "Keine Plugins entsprechen deiner Suche."
+    "emptySearch": "Keine Plugins entsprechen deiner Suche.",
+    "aiAssistantName": "KI-Assistent",
+    "aiAssistantDescription": "Ein In-App-Helfer, der How-to-Fragen beantwortet und dich zur richtigen Stelle führt.",
+    "lockedBadge": "Gesperrt",
+    "unlock": "Entsperren",
+    "unlockTitle": "Plugin entsperren",
+    "unlockDesc": "Dieses Plugin ist experimentell. Gib den Zugangsschlüssel ein, um es für dein Team zu aktivieren.",
+    "unlockPlaceholder": "Zugangsschlüssel",
+    "unlockError": "Ungültiger Schlüssel oder Entsperren fehlgeschlagen.",
+    "unlockSuccess": "entsperrt"
+  },
+  "AiAssistant": {
+    "launcherLabel": "KI-Assistent",
+    "title": "KI-Assistent",
+    "disclaimer": "Experimentell · hilft dir, Funktionen zu finden. Greift noch nicht auf deine Daten zu.",
+    "greeting": "Frag mich, wie du etwas in Linyup machst — ich zeige dir, wo es geht.",
+    "thinking": "Denke nach…",
+    "inputPlaceholder": "Stelle eine Frage…",
+    "send": "Senden",
+    "error": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
   },
   "ContactGroups": {
     "title": "Kontaktgruppen",

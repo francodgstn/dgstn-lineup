@@ -2779,6 +2779,9 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
     profile
 
   // ── installed_plugins (the install = the feature gate) ──────────────────────
+  // NOTE: never add a LOCKED plugin here (e.g. 'ai-assistant'). Locked plugins are
+  // key-gated and must stay out of all seed/sandbox/demo data — they install only
+  // via the unlockPlugin callable.
   const plugins: { id: string; config?: Record<string, unknown> }[] = [
     { id: 'gamification' }, // seed already writes scores/badges/settings
     { id: 'website' },

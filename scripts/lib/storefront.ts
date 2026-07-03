@@ -123,6 +123,8 @@ export function buildBasicPageLinks(): PageLink[] {
 }
 
 // ── installed_plugins ──────────────────────────────────────────────────────────
+// Never call this for a LOCKED plugin (e.g. 'ai-assistant'): those are key-gated
+// and must stay out of all seed/sandbox/demo data (install only via unlockPlugin).
 async function installPlugin(
   teamId: string,
   pluginId: string,

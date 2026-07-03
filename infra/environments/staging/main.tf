@@ -29,6 +29,7 @@ locals {
     "serviceusage.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "billingbudgets.googleapis.com",
+    "aiplatform.googleapis.com", # Vertex AI — in-app assistant
   ]
 }
 

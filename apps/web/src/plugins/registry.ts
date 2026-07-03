@@ -3,6 +3,7 @@
 // To add a new plugin: create a manifest file and add it here.
 
 import type { PluginManifest } from '@linyup/shared'
+import { aiAssistantManifest } from './ai-assistant/manifest'
 import { aiInsightsManifest } from './ai-insights/manifest'
 import { whatsappManifest } from './whatsapp/manifest'
 import { websiteManifest } from './website/manifest'
@@ -17,6 +18,7 @@ import { customFormsManifest } from './custom-forms/manifest'
 import { documentsManifest } from './documents/manifest'
 
 export const PLUGIN_REGISTRY: PluginManifest[] = [
+  aiAssistantManifest,
   aiInsightsManifest,
   whatsappManifest,
   websiteManifest,

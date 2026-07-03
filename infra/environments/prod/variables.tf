@@ -75,6 +75,7 @@ variable "secret_ids" {
     "smtp-password",
     "smtp-encryption-key",
     "posthog-api-key",
+    "ai-assistant-unlock-key", # strong key to unlock the locked AI assistant plugin
   ]
 }
 
