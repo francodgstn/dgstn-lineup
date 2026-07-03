@@ -323,9 +323,8 @@ function StickyBar({
 
   return (
     <div
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-2xl z-[100] flex items-center gap-3 p-3 sm:p-4 rounded-t-2xl border border-b-0 backdrop-blur-md"
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-2xl z-[100] flex items-center gap-3 p-3 sm:p-4 rounded-t-2xl border border-b-0 bg-background/95 backdrop-blur-md"
       style={{
-        backgroundColor: 'rgba(var(--background-rgb, 255 255 255) / 0.97)',
         boxShadow: '0 -8px 32px rgba(0,0,0,0.10), 0 -2px 8px rgba(0,0,0,0.06)',
         animation: 'slideUpBar 0.35s cubic-bezier(0.34,1.56,0.64,1)',
       }}
@@ -915,11 +914,11 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                   setStep('sessions')
                 }}
                 disabled={!hasSessions}
-                className="w-full text-left rounded-xl border bg-card hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full text-left rounded-xl border bg-card hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch overflow-hidden min-h-24 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {/* Thumbnail */}
+                {/* Thumbnail — square (1:1) for typical items via w-24 + item min-h-24 */}
                 <div
-                  className="w-20 shrink-0 bg-muted"
+                  className="w-24 shrink-0 bg-muted"
                   style={{
                     background: bg,
                     backgroundSize: a.image ? 'cover' : '100% 100%',

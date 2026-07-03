@@ -6,7 +6,9 @@
     "yesterday": "Yesterday",
     "tomorrow": "Tomorrow",
     "all": "All",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "demoBanner": "You're exploring a live demo of Linyup.",
+    "demoBannerCta": "Visit linyup.com →"
   },
   "Plans": {
     "free": "Free",
