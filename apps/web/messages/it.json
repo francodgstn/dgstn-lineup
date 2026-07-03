@@ -75,7 +75,8 @@
     "billing": "Fatturazione",
     "payments": "Pagamenti",
     "signOut": "Esci",
-    "affiliations": "Affiliazioni"
+    "affiliations": "Affiliazioni",
+    "coaches": "Coach"
   },
   "PublicHub": {
     "title": "Pagine pubbliche",
@@ -980,7 +981,32 @@
     "events_manage": "Gestisci eventi",
     "offerings_manage": "Gestisci offerte",
     "outreach_manage": "Gestisci outreach",
-    "reports_view": "Vedi report"
+    "reports_view": "Vedi report",
+    "coaches_manage": "Gestire i coach"
+  },
+  "Coaches": {
+    "title": "Coach",
+    "subtitle": "I coach del tuo team. Invita nuovi coach e gestisci l'elenco.",
+    "planGate": "I coach sono disponibili nei piani Studio e Organizzazione.",
+    "invite": "Invita coach",
+    "inviteTitle": "Invita un coach",
+    "inviteDesc": "Invia un invito via email a unirsi al team come coach.",
+    "invitePlaceholder": "coach@example.com",
+    "inviteSending": "Invio…",
+    "inviteSent": "Invito inviato",
+    "inviteError": "Impossibile inviare l'invito.",
+    "empty": "Nessun coach ancora.",
+    "roleCoach": "Coach",
+    "remove": "Rimuovi",
+    "removeTitle": "Rimuovi coach",
+    "removeConfirm": "Rimuovere {name} dal team? Perderà l’accesso immediatamente.",
+    "removing": "Rimozione…",
+    "removed": "Coach rimosso",
+    "pendingTitle": "Inviti in sospeso",
+    "pending": "Invito in sospeso",
+    "cancelInvite": "Annulla invito",
+    "cancel": "Annulla",
+    "errorGeneric": "Qualcosa è andato storto."
   },
   "Activities": {
     "title": "Attività",

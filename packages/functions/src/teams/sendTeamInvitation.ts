@@ -4,7 +4,7 @@ import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { regionalFunctions } from '../utils/functions'
-import { isTeamMember, hasTeamRole, getTeam } from '../utils/teams'
+import { isTeamMember, hasTeamRole, hasCapability, getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
 export const sendTeamInvitation = regionalFunctions.https.onCall(
@@ -30,11 +30,22 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
       )
 
     const isOwner = await hasTeamRole(userId, teamId, 'owner')
-    if (!isOwner)
+    if (role === 'coach') {
+      // Coach invitations are gated by the coaches.manage capability — owner and
+      // manager hold it by default; a coach only if the studio granted it. This
+      // lets studios delegate coach onboarding without full member management.
+      const canManageCoaches = isOwner || (await hasCapability(userId, teamId, 'coaches.manage'))
+      if (!canManageCoaches)
+        throw new (await import('firebase-functions')).https.HttpsError(
+          'permission-denied',
+          'You do not have permission to manage coaches'
+        )
+    } else if (!isOwner) {
       throw new (await import('firebase-functions')).https.HttpsError(
         'permission-denied',
         'Only team owners can send invitations'
       )
+    }
 
     const team = await getTeam(teamId)
     if (!team)
@@ -62,6 +73,9 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
         email: email.toLowerCase().trim(),
         role,
         token,
+        // Pending until accepted/cancelled — the members + coaches lists filter on
+        // this, and manageTeamInvitation('cancel') requires it.
+        status: 'pending',
         invitedBy: userId,
         created: FieldValue.serverTimestamp(),
         expires_at: expiresAt,
