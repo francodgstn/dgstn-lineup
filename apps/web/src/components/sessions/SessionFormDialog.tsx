@@ -588,7 +588,7 @@ export function SessionFormDialog({
                   >
                     <SelectTrigger className="w-full">
                       <span className="flex flex-1 text-left text-sm truncate">
-                        {instructorLabel ?? <span className="text-muted-foreground">{t('instructorPlaceholder')}</span>}
+                        {instructorLabel ?? <span className="text-muted-foreground">{t('instructorNone')}</span>}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
