@@ -75,7 +75,8 @@
     "billing": "Abrechnung",
     "payments": "Zahlungen",
     "signOut": "Abmelden",
-    "affiliations": "Affiliationen"
+    "affiliations": "Affiliationen",
+    "coaches": "Coaches"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -980,7 +981,32 @@
     "events_manage": "Events verwalten",
     "offerings_manage": "Angebote verwalten",
     "outreach_manage": "Outreach verwalten",
-    "reports_view": "Berichte ansehen"
+    "reports_view": "Berichte ansehen",
+    "coaches_manage": "Coaches verwalten"
+  },
+  "Coaches": {
+    "title": "Coaches",
+    "subtitle": "Die Coaches deines Teams. Lade neue ein und verwalte das Team.",
+    "planGate": "Coaches sind in den Studio- und Organisations-Tarifen verfügbar.",
+    "invite": "Coach einladen",
+    "inviteTitle": "Coach einladen",
+    "inviteDesc": "Sende eine E-Mail-Einladung, um deinem Team als Coach beizutreten.",
+    "invitePlaceholder": "coach@example.com",
+    "inviteSending": "Senden…",
+    "inviteSent": "Einladung gesendet",
+    "inviteError": "Einladung konnte nicht gesendet werden.",
+    "empty": "Noch keine Coaches.",
+    "roleCoach": "Coach",
+    "remove": "Entfernen",
+    "removeTitle": "Coach entfernen",
+    "removeConfirm": "{name} aus dem Team entfernen? Der Zugriff wird sofort entzogen.",
+    "removing": "Entfernen…",
+    "removed": "Coach entfernt",
+    "pendingTitle": "Ausstehende Einladungen",
+    "pending": "Einladung ausstehend",
+    "cancelInvite": "Einladung stornieren",
+    "cancel": "Abbrechen",
+    "errorGeneric": "Etwas ist schiefgelaufen."
   },
   "Activities": {
     "title": "Aktivitäten",

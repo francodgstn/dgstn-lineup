@@ -47,6 +47,9 @@ export type Capability =
   | 'outreach.manage'
   // Advanced reports + activity log (unscoped; manager+ today)
   | 'reports.view'
+  // Manage coaches — invite/remove the team's coaches (unscoped; owner+manager by
+  // default, assignable to the coach role but OFF by default)
+  | 'coaches.manage'
   // Owner-only surfaces (unscoped)
   | 'members.manage'
   | 'team.settings'
@@ -62,6 +65,7 @@ export type CapabilityDomain =
   | 'offerings'
   | 'outreach'
   | 'reports'
+  | 'coaches'
   | 'members'
   | 'team'
   | 'billing'
@@ -91,6 +95,7 @@ export const CAPABILITY_CATALOG: CapabilityMeta[] = [
   { id: 'offerings.manage', domain: 'offerings', scoped: false, labelKey: 'offerings_manage' },
   { id: 'outreach.manage', domain: 'outreach', scoped: false, labelKey: 'outreach_manage' },
   { id: 'reports.view', domain: 'reports', scoped: false, labelKey: 'reports_view' },
+  { id: 'coaches.manage', domain: 'coaches', scoped: false, labelKey: 'coaches_manage' },
   { id: 'members.manage', domain: 'members', scoped: false, labelKey: 'members_manage' },
   { id: 'team.settings', domain: 'team', scoped: false, labelKey: 'team_settings' },
   { id: 'billing.manage', domain: 'billing', scoped: false, labelKey: 'billing_manage' },

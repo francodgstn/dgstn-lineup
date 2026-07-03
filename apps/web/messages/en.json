@@ -75,7 +75,8 @@
     "billing": "Billing",
     "payments": "Payments",
     "signOut": "Sign out",
-    "affiliations": "Affiliations"
+    "affiliations": "Affiliations",
+    "coaches": "Coaches"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -980,7 +981,32 @@
     "events_manage": "Manage events",
     "offerings_manage": "Manage offerings",
     "outreach_manage": "Manage outreach",
-    "reports_view": "View reports"
+    "reports_view": "View reports",
+    "coaches_manage": "Manage coaches"
+  },
+  "Coaches": {
+    "title": "Coaches",
+    "subtitle": "Your team's coaches. Invite new ones and manage the roster.",
+    "planGate": "Coaches are available on the Studio and Organization plans.",
+    "invite": "Invite coach",
+    "inviteTitle": "Invite a coach",
+    "inviteDesc": "Send an email invitation to join your team as a coach.",
+    "invitePlaceholder": "coach@example.com",
+    "inviteSending": "Sending…",
+    "inviteSent": "Invitation sent",
+    "inviteError": "Couldn't send the invitation.",
+    "empty": "No coaches yet.",
+    "roleCoach": "Coach",
+    "remove": "Remove",
+    "removeTitle": "Remove coach",
+    "removeConfirm": "Remove {name} from the team? They'll lose access immediately.",
+    "removing": "Removing…",
+    "removed": "Coach removed",
+    "pendingTitle": "Pending invitations",
+    "pending": "Invitation pending",
+    "cancelInvite": "Cancel invitation",
+    "cancel": "Cancel",
+    "errorGeneric": "Something went wrong."
   },
   "Activities": {
     "title": "Activities",

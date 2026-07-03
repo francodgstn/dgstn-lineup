@@ -75,7 +75,8 @@
     "billing": "Facturation",
     "payments": "Paiements",
     "signOut": "Se déconnecter",
-    "affiliations": "Affiliations"
+    "affiliations": "Affiliations",
+    "coaches": "Coachs"
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -980,7 +981,32 @@
     "events_manage": "Gérer les événements",
     "offerings_manage": "Gérer les offres",
     "outreach_manage": "Gérer la prospection",
-    "reports_view": "Voir les rapports"
+    "reports_view": "Voir les rapports",
+    "coaches_manage": "Gérer les coachs"
+  },
+  "Coaches": {
+    "title": "Coachs",
+    "subtitle": "Les coachs de votre équipe. Invitez-en de nouveaux et gérez la liste.",
+    "planGate": "Les coachs sont disponibles dans les forfaits Studio et Organisation.",
+    "invite": "Inviter un coach",
+    "inviteTitle": "Inviter un coach",
+    "inviteDesc": "Envoyez une invitation par e-mail à rejoindre votre équipe en tant que coach.",
+    "invitePlaceholder": "coach@example.com",
+    "inviteSending": "Envoi…",
+    "inviteSent": "Invitation envoyée",
+    "inviteError": "Impossible d'envoyer l'invitation.",
+    "empty": "Aucun coach pour l'instant.",
+    "roleCoach": "Coach",
+    "remove": "Retirer",
+    "removeTitle": "Retirer le coach",
+    "removeConfirm": "Retirer {name} de l'équipe ? L'accès sera révoqué immédiatement.",
+    "removing": "Retrait…",
+    "removed": "Coach retiré",
+    "pendingTitle": "Invitations en attente",
+    "pending": "Invitation en attente",
+    "cancelInvite": "Annuler l'invitation",
+    "cancel": "Annuler",
+    "errorGeneric": "Une erreur s'est produite."
   },
   "Activities": {
     "title": "Activités",

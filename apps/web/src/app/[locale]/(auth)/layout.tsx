@@ -34,6 +34,7 @@ import {
   FileText,
   ShoppingBag,
   DoorOpen,
+  UserCog,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -101,6 +102,8 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/schedule', labelKey: 'calendar', icon: Calendar },
       { href: '/bookings', labelKey: 'bookings', icon: ClipboardList },
       { href: '/contacts', labelKey: 'contacts', icon: Users },
+      // Coaches (team staff) — studio/org only; the coach plan is single-person.
+      { href: '/coaches', labelKey: 'coaches', icon: UserCog, requiresPlan: 'studio' },
       { href: '/payments', labelKey: 'payments', icon: Wallet, requiresConnect: true },
       // Automations is operational (workflows acting on contacts/bookings), so it
       // lives in Run rather than Grow.
