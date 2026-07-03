@@ -5,7 +5,7 @@
 // BookingSettings to public_profile.bookingSettings (source of truth, team-member
 // writable) + mirrors to team.settings.booking (owner-only; re-hydrates this form).
 
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -14,6 +14,7 @@ import { useSaveShortcut } from '@/hooks/useSaveShortcut'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslations } from 'next-intl'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
@@ -24,24 +25,31 @@ import type { Team, BookingSettings } from '@linyup/shared'
 
 // ─── schema ──────────────────────────────────────────────────────────────────
 
-const safeUrl = z
-  .string()
-  .refine((v) => v === '' || /^https?:\/\/.+/.test(v), 'Must be a valid https:// URL')
-  .optional()
+function createSafeUrlSchema(t: ReturnType<typeof useTranslations>) {
+  return z
+    .string()
+    .refine((v) => v === '' || /^https?:\/\/.+/.test(v), t('errorInvalidUrl'))
+    .optional()
+}
 
-const bookingSchema = z.object({
-  flowType: z.enum(['activity-first', 'date-first']),
-  windowMonths: z.number().int().min(1).max(6),
-  showPhone: z.boolean(),
-  showActivityDescription: z.boolean(),
-  showFitnessAppField: z.boolean(),
-  ctaUrl: safeUrl,
-  ctaLabel: z.string().optional(),
-  coachingEnabled: z.boolean().optional(),
-})
+function createBookingSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    flowType: z.enum(['activity-first', 'date-first']),
+    windowMonths: z.number().int().min(1).max(6),
+    showPhone: z.boolean(),
+    showActivityDescription: z.boolean(),
+    showFitnessAppField: z.boolean(),
+    ctaUrl: createSafeUrlSchema(t),
+    ctaLabel: z.string().optional(),
+    coachingEnabled: z.boolean().optional(),
+  })
+}
 
-const schema = z.object({ booking: bookingSchema })
-type FormData = z.infer<typeof schema>
+function createSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({ booking: createBookingSchema(t) })
+}
+
+type FormData = z.infer<ReturnType<typeof createSchema>>
 
 // ─── data hook ────────────────────────────────────────────────────────────────
 
@@ -142,12 +150,13 @@ function BookingForm({
   control: ReturnType<typeof useForm<FormData>>['control']
   register: ReturnType<typeof useForm<FormData>>['register']
 }) {
+  const t = useTranslations('SettingsBooking')
   return (
     <div className="space-y-6">
       {/* Flow type */}
       <div className="space-y-2">
-        <p className="text-sm font-medium">Booking flow</p>
-        <p className="text-xs text-muted-foreground">Choose how visitors browse sessions.</p>
+        <p className="text-sm font-medium">{t('flowTitle')}</p>
+        <p className="text-xs text-muted-foreground">{t('flowSubtitle')}</p>
         <Controller
           control={control}
           name="booking.flowType"
@@ -157,13 +166,13 @@ function BookingForm({
                 [
                   {
                     value: 'activity-first',
-                    label: 'Activity-first',
-                    desc: 'Visitors pick an activity, then a time slot.',
+                    label: t('flowActivityFirstLabel'),
+                    desc: t('flowActivityFirstDesc'),
                   },
                   {
                     value: 'date-first',
-                    label: 'Date-first',
-                    desc: 'Visitors pick a date, then an activity.',
+                    label: t('flowDateFirstLabel'),
+                    desc: t('flowDateFirstDesc'),
                   },
                 ] as const
               ).map((opt) => {
@@ -201,8 +210,8 @@ function BookingForm({
 
       {/* Booking window */}
       <div className="space-y-2">
-        <p className="text-sm font-medium">Booking window</p>
-        <p className="text-xs text-muted-foreground">How far ahead visitors can book sessions.</p>
+        <p className="text-sm font-medium">{t('windowTitle')}</p>
+        <p className="text-xs text-muted-foreground">{t('windowSubtitle')}</p>
         <Controller
           control={control}
           name="booking.windowMonths"
@@ -210,19 +219,14 @@ function BookingForm({
             <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
               <SelectTrigger className="h-9 w-36">
                 <span className="flex flex-1 text-left text-sm truncate">
-                  {(
-                    { 1: '1 month', 2: '2 months', 3: '3 months', 6: '6 months' } as Record<
-                      number,
-                      string
-                    >
-                  )[field.value] ?? `${field.value} months`}
+                  {t('windowMonths', { count: field.value })}
                 </span>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">1 month</SelectItem>
-                <SelectItem value="2">2 months</SelectItem>
-                <SelectItem value="3">3 months</SelectItem>
-                <SelectItem value="6">6 months</SelectItem>
+                <SelectItem value="1">{t('windowMonths', { count: 1 })}</SelectItem>
+                <SelectItem value="2">{t('windowMonths', { count: 2 })}</SelectItem>
+                <SelectItem value="3">{t('windowMonths', { count: 3 })}</SelectItem>
+                <SelectItem value="6">{t('windowMonths', { count: 6 })}</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -234,23 +238,23 @@ function BookingForm({
         [
           {
             name: 'booking.showPhone' as const,
-            label: 'Show phone field',
-            desc: 'Include an optional phone field in the new guest form.',
+            label: t('toggleShowPhoneLabel'),
+            desc: t('toggleShowPhoneDesc'),
           },
           {
             name: 'booking.showActivityDescription' as const,
-            label: 'Show activity description',
-            desc: 'Show the activity description text on the activity selection screen.',
+            label: t('toggleShowActivityDescriptionLabel'),
+            desc: t('toggleShowActivityDescriptionDesc'),
           },
           {
             name: 'booking.showFitnessAppField' as const,
-            label: 'Show fitness app field',
-            desc: "Ask new guests which fitness app they're coming from (e.g. Fitpass, ClassPass).",
+            label: t('toggleShowFitnessAppLabel'),
+            desc: t('toggleShowFitnessAppDesc'),
           },
           {
             name: 'booking.coachingEnabled' as const,
-            label: 'Show coaching slots',
-            desc: 'Show coaching slots in the public booking flow.',
+            label: t('toggleCoachingEnabledLabel'),
+            desc: t('toggleCoachingEnabledDesc'),
           },
         ] as const
       ).map(({ name, label, desc }) => (
@@ -286,26 +290,24 @@ function BookingForm({
       {/* CTA button */}
       <div className="space-y-3">
         <div>
-          <p className="text-sm font-medium">CTA button (optional)</p>
-          <p className="text-xs text-muted-foreground">
-            Shown on the confirmation screen after a successful booking.
-          </p>
+          <p className="text-sm font-medium">{t('ctaTitle')}</p>
+          <p className="text-xs text-muted-foreground">{t('ctaSubtitle')}</p>
         </div>
         <div className="space-y-2">
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Button URL</label>
+            <label className="text-xs text-muted-foreground">{t('ctaUrlLabel')}</label>
             <Input
               {...register('booking.ctaUrl')}
               type="url"
-              placeholder="https://example.com"
+              placeholder={t('ctaUrlPlaceholder')}
               className="h-9 text-sm font-mono"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Button label</label>
+            <label className="text-xs text-muted-foreground">{t('ctaLabelLabel')}</label>
             <Input
               {...register('booking.ctaLabel')}
-              placeholder="e.g. Contact Us"
+              placeholder={t('ctaLabelPlaceholder')}
               className="h-9 text-sm"
             />
           </div>
@@ -321,6 +323,8 @@ export default function BookingSettingsPage() {
   const { currentTeamId } = useAuth()
   const { data: team, isLoading } = useTeam(currentTeamId)
   const qc = useQueryClient()
+  const t = useTranslations('SettingsBooking')
+  const schema = useMemo(() => createSchema(t), [t])
 
   const {
     register,
@@ -368,10 +372,10 @@ export default function BookingSettingsPage() {
         console.warn('[booking save] team doc update failed (non-fatal):', err)
       })
       await qc.invalidateQueries({ queryKey: ['team', currentTeamId] })
-      toast.success('Booking settings saved')
+      toast.success(t('toastSaved'))
     } catch (err) {
       console.error('[booking save] failed:', err)
-      toast.error(err instanceof Error ? err.message : 'Failed to save. Please try again.')
+      toast.error(err instanceof Error ? err.message : t('toastSaveFailed'))
     }
   }
 
@@ -388,16 +392,14 @@ export default function BookingSettingsPage() {
     <div className="max-w-5xl space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Booking</h1>
-          <p className="text-sm text-muted-foreground">
-            How your public booking page works for visitors.
-          </p>
+          <h1 className="text-2xl font-semibold">{t('pageTitle')}</h1>
+          <p className="text-sm text-muted-foreground">{t('pageSubtitle')}</p>
         </div>
         <Button
           onClick={handleSubmit(onSubmit)}
           disabled={!isDirty || isSubmitting}
         >
-          {isSubmitting ? 'Saving…' : 'Save'}
+          {isSubmitting ? t('saving') : t('save')}
         </Button>
       </div>
 

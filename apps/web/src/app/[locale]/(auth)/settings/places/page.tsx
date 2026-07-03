@@ -1,6 +1,7 @@
 'use client'
 
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslations } from 'next-intl'
 import { useAuth } from '@/contexts/AuthContext'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PlacesManager, type PlaceFormValues } from '@/components/places/PlacesManager'
@@ -14,6 +15,7 @@ import {
 import { MAX_PLACES } from '@linyup/shared'
 
 export default function TeamPlacesPage() {
+  const t = useTranslations('SettingsPlaces')
   const { currentTeamId, team, user } = useAuth()
   const orgId = team?.org_id ?? null
   const qc = useQueryClient()
@@ -58,8 +60,8 @@ export default function TeamPlacesPage() {
 
   return (
     <PlacesManager
-      title="Places"
-      subtitle="Your studio locations and rooms. The main address is shown with a map on your public pages."
+      title={t('pageTitle')}
+      subtitle={t('pageSubtitle')}
       places={own}
       inherited={inherited}
       allowPrimary

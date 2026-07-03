@@ -6,6 +6,7 @@
 // card list, the create/edit dialog (incl. the rooms editor) and delete confirm.
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   Dialog,
   DialogContent,
@@ -74,6 +75,7 @@ export function PlacesManager({
   onDelete,
   onSetPrimary,
 }: PlacesManagerProps) {
+  const t = useTranslations('SettingsPlaces')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<PlaceFormValues>(EMPTY)
@@ -101,7 +103,7 @@ export function PlacesManager({
 
   async function save() {
     if (!form.name.trim()) {
-      toast.error('Name is required')
+      toast.error(t('toastNameRequired'))
       return
     }
     setSaving(true)
@@ -114,9 +116,9 @@ export function PlacesManager({
       if (editingId) await onUpdate(editingId, data)
       else await onCreate(data)
       setOpen(false)
-      toast.success('Saved')
+      toast.success(t('toastSaved'))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save')
+      toast.error(err instanceof Error ? err.message : t('toastSaveFailed'))
     } finally {
       setSaving(false)
     }
@@ -132,21 +134,19 @@ export function PlacesManager({
         {canManage && (
           <Button onClick={openCreate} disabled={atCap}>
             <Plus className="mr-1.5 h-4 w-4" />
-            Add place
+            {t('addPlace')}
           </Button>
         )}
       </div>
       {canManage && atCap && (
-        <p className="text-xs text-muted-foreground">
-          You&apos;ve reached the limit of {cap} places.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('limitReached', { cap })}</p>
       )}
 
       {/* Own places */}
       <div className="space-y-2">
         {places.length === 0 && inherited.length === 0 ? (
           <p className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
-            No places yet. Add your first location.
+            {t('emptyState')}
           </p>
         ) : (
           places.map((p) => (
@@ -157,7 +157,11 @@ export function PlacesManager({
               readOnly={!canManage}
               onEdit={() => openEdit(p)}
               onDelete={() => setConfirmDelete(p)}
-              onSetPrimary={onSetPrimary ? () => onSetPrimary(p.id).catch(() => toast.error('Failed')) : undefined}
+              onSetPrimary={
+                onSetPrimary
+                  ? () => onSetPrimary(p.id).catch(() => toast.error(t('toastSetPrimaryFailed')))
+                  : undefined
+              }
             />
           ))
         )}
@@ -167,7 +171,7 @@ export function PlacesManager({
       {inherited.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            From your organization
+            {t('fromYourOrganization')}
           </p>
           {inherited.map((p) => (
             <PlaceCard key={p.id} place={p} readOnly />
@@ -179,34 +183,34 @@ export function PlacesManager({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingId ? 'Edit place' : 'Add place'}</DialogTitle>
+            <DialogTitle>{editingId ? t('dialogTitleEdit') : t('addPlace')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="place-name">Name</Label>
+              <Label htmlFor="place-name">{t('labelName')}</Label>
               <Input
                 id="place-name"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Main studio"
+                placeholder={t('placeholderMainStudio')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="place-address">Address</Label>
+              <Label htmlFor="place-address">{t('labelAddress')}</Label>
               <Input
                 id="place-address"
                 value={form.address}
                 onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-                placeholder="Bahnhofstrasse 1, 8001 Zürich"
+                placeholder={t('placeholderAddressExample')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="place-maps">Maps link</Label>
+              <Label htmlFor="place-maps">{t('labelMapsLink')}</Label>
               <Input
                 id="place-maps"
                 value={form.mapsLink}
                 onChange={(e) => setForm((f) => ({ ...f, mapsLink: e.target.value }))}
-                placeholder="https://maps.google.com/…"
+                placeholder={t('placeholderMapsLink')}
                 className="font-mono text-sm"
               />
             </div>
@@ -214,7 +218,7 @@ export function PlacesManager({
             {allowPrimary && (
               <label className="flex cursor-pointer items-center justify-between rounded-lg border p-3">
                 <span className="flex items-center gap-2 text-sm font-medium">
-                  <Star className="h-4 w-4" /> Main address
+                  <Star className="h-4 w-4" /> {t('mainAddress')}
                 </span>
                 <input
                   type="checkbox"
@@ -228,7 +232,7 @@ export function PlacesManager({
             {/* Rooms editor */}
             <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium">Rooms (optional)</span>
+                <span className="text-xs font-medium">{t('roomsOptional')}</span>
                 <Button
                   type="button"
                   variant="ghost"
@@ -236,13 +240,11 @@ export function PlacesManager({
                   className="h-7"
                   onClick={() => setForm((f) => ({ ...f, rooms: [...f.rooms, newRoom()] }))}
                 >
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Add room
+                  <Plus className="mr-1 h-3.5 w-3.5" /> {t('addRoom')}
                 </Button>
               </div>
               {form.rooms.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Add rooms to pin sessions/events to a specific space.
-                </p>
+                <p className="text-xs text-muted-foreground">{t('roomsEmptyState')}</p>
               ) : (
                 form.rooms.map((r, i) => (
                   <div key={r.id} className="flex items-center gap-2">
@@ -255,7 +257,7 @@ export function PlacesManager({
                           return { ...f, rooms }
                         })
                       }
-                      placeholder={`Room ${i + 1}`}
+                      placeholder={t('roomPlaceholder', { number: i + 1 })}
                       className="h-8 text-sm"
                     />
                     <button
@@ -272,10 +274,10 @@ export function PlacesManager({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
-              Cancel
+              {t('cancel')}
             </Button>
             <Button onClick={save} disabled={saving || !form.name.trim()}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('saving') : t('save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -284,22 +286,22 @@ export function PlacesManager({
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete place?</AlertDialogTitle>
+            <AlertDialogTitle>{t('deletePlaceTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              &quot;{confirmDelete?.name}&quot; will be removed. Sessions/events linked to it keep their text location.
+              {t('deletePlaceDescription', { name: confirmDelete?.name ?? '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={async () => {
                 if (confirmDelete) {
-                  await onDelete(confirmDelete.id).catch(() => toast.error('Failed to delete'))
+                  await onDelete(confirmDelete.id).catch(() => toast.error(t('toastDeleteFailed')))
                   setConfirmDelete(null)
                 }
               }}
             >
-              Delete
+              {t('delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -323,6 +325,7 @@ function PlaceCard({
   onDelete?: () => void
   onSetPrimary?: () => void
 }) {
+  const t = useTranslations('SettingsPlaces')
   const roomCount = place.rooms?.length ?? 0
   return (
     <div className="flex items-start gap-3 rounded-lg border bg-card p-4">
@@ -334,12 +337,12 @@ function PlaceCard({
           <span className="text-sm font-semibold">{place.name}</span>
           {place.isPrimary && (
             <Badge variant="secondary" className="gap-1 text-xs">
-              <Star className="h-3 w-3" /> Main address
+              <Star className="h-3 w-3" /> {t('mainAddress')}
             </Badge>
           )}
           {readOnly && (
             <Badge variant="outline" className="gap-1 text-xs">
-              <Building2 className="h-3 w-3" /> Org
+              <Building2 className="h-3 w-3" /> {t('orgBadge')}
             </Badge>
           )}
         </div>
@@ -347,7 +350,7 @@ function PlaceCard({
         <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           {roomCount > 0 && (
             <span className="inline-flex items-center gap-1">
-              <DoorOpen className="h-3.5 w-3.5" /> {roomCount} room{roomCount === 1 ? '' : 's'}
+              <DoorOpen className="h-3.5 w-3.5" /> {t('roomCount', { count: roomCount })}
             </span>
           )}
           {place.mapsLink && (
@@ -357,7 +360,7 @@ function PlaceCard({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-primary hover:underline"
             >
-              <ExternalLink className="h-3.5 w-3.5" /> Open in maps
+              <ExternalLink className="h-3.5 w-3.5" /> {t('openInMaps')}
             </a>
           )}
         </div>
@@ -368,7 +371,7 @@ function PlaceCard({
             <button
               type="button"
               onClick={onSetPrimary}
-              title="Set as main address"
+              title={t('setAsMainAddress')}
               className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <Star className="h-4 w-4" />
