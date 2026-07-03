@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
+import { useTranslations } from 'next-intl'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
 
@@ -15,28 +16,34 @@ type Step = 'email' | 'code' | 'details' | 'success'
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
-const emailSchema = z.object({
-  email: z.string().email('Invalid email address'),
-})
+function createEmailSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    email: z.string().email(t('errorInvalidEmailAddress')),
+  })
+}
 
-const codeSchema = z.object({
-  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
-})
+function createCodeSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    code: z.string().regex(/^\d{6}$/, t('errorEnterCode')),
+  })
+}
 
-const detailsSchema = z.object({
-  firstname: z.string().min(1, 'Required').max(60),
-  lastname: z.string().min(1, 'Required').max(60),
-  phone: z.string().max(30).optional(),
-  birthdate: z.string().optional(),
-  notes: z.string().max(500).optional(),
-  privacyConsent: z.literal(true, {
-    errorMap: () => ({ message: 'You must accept the privacy policy' }),
-  }),
-})
+function createDetailsSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    firstname: z.string().min(1, t('errorRequired')).max(60),
+    lastname: z.string().min(1, t('errorRequired')).max(60),
+    phone: z.string().max(30).optional(),
+    birthdate: z.string().optional(),
+    notes: z.string().max(500).optional(),
+    privacyConsent: z.literal(true, {
+      errorMap: () => ({ message: t('errorPrivacyPolicyRequired') }),
+    }),
+  })
+}
 
-type EmailValues = z.infer<typeof emailSchema>
-type CodeValues = z.infer<typeof codeSchema>
-type DetailsValues = z.infer<typeof detailsSchema>
+type EmailValues = z.infer<ReturnType<typeof createEmailSchema>>
+type CodeValues = z.infer<ReturnType<typeof createCodeSchema>>
+type DetailsValues = z.infer<ReturnType<typeof createDetailsSchema>>
 
 // ─── component ───────────────────────────────────────────────────────────────
 
@@ -47,6 +54,7 @@ interface Props {
 export default function SignupForm({ slug }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
+  const t = useTranslations('PublicSignup')
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
   const showBranding = team.showBranding === true
@@ -70,6 +78,10 @@ export default function SignupForm({ slug }: Props) {
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
     return () => clearTimeout(t)
   }, [countdown])
+
+  const emailSchema = useMemo(() => createEmailSchema(t), [t])
+  const codeSchema = useMemo(() => createCodeSchema(t), [t])
+  const detailsSchema = useMemo(() => createDetailsSchema(t), [t])
 
   const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
 
@@ -103,7 +115,7 @@ export default function SignupForm({ slug }: Props) {
       setStep('code')
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to send code. Please try again.')
+      setError(e.message || t('errorSendCodeFailed'))
     }
   }
 
@@ -120,7 +132,7 @@ export default function SignupForm({ slug }: Props) {
       setStep('details')
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Incorrect code. Please try again.')
+      setError(e.message || t('errorIncorrectCode'))
     }
   }
 
@@ -138,7 +150,7 @@ export default function SignupForm({ slug }: Props) {
       codeForm.reset()
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to resend code.')
+      setError(e.message || t('errorResendCodeFailed'))
     }
   }
 
@@ -174,7 +186,7 @@ export default function SignupForm({ slug }: Props) {
       setStep('success')
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to complete signup. Please try again.')
+      setError(e.message || t('errorCompleteSignupFailed'))
     }
   }
 
@@ -190,23 +202,23 @@ export default function SignupForm({ slug }: Props) {
       >
         <div>
           <h1 className="text-2xl font-bold">
-            {fromCheckout ? 'Finish your registration' : `Register at ${teamName}`}
+            {fromCheckout ? t('finishRegistrationTitle') : t('registerAtTeamTitle', { teamName })}
           </h1>
           <p className="text-muted-foreground mt-1">
             {fromCheckout
-              ? `Payment received. Confirm your email to finish setting up your account at ${teamName}.`
-              : "Enter your email to get started. We'll send a quick verification code."}
+              ? t('paymentReceivedSubtitle', { teamName })
+              : t('enterEmailSubtitle')}
           </p>
         </div>
 
         <form onSubmit={emailForm.handleSubmit(onSendCode)} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-medium">Email address</label>
+            <label className="text-sm font-medium">{t('labelEmailAddress')}</label>
             <input
               type="email"
               {...emailForm.register('email')}
               autoComplete="email"
-              placeholder="your@email.com"
+              placeholder={t('placeholderEmailExample')}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
             {emailForm.formState.errors.email && (
@@ -225,7 +237,7 @@ export default function SignupForm({ slug }: Props) {
             disabled={emailForm.formState.isSubmitting}
             accentColor={accentColor}
           >
-            {emailForm.formState.isSubmitting ? 'Sending…' : 'Send verification code'}
+            {emailForm.formState.isSubmitting ? t('sendingEllipsis') : t('sendVerificationCode')}
           </BioLinkButton>
         </form>
       </BioLinkShell>
@@ -248,17 +260,17 @@ export default function SignupForm({ slug }: Props) {
             }}
             className="text-sm text-muted-foreground hover:text-foreground mb-4 flex items-center gap-1"
           >
-            ← Back
+            {t('backArrow')}
           </button>
-          <h1 className="text-2xl font-bold">Check your email</h1>
+          <h1 className="text-2xl font-bold">{t('checkYourEmailTitle')}</h1>
           <p className="text-muted-foreground mt-1">
-            We sent a 6-digit code to <strong>{email}</strong>
+            {t.rich('codeSentTo', { email, strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
         </div>
 
         <form onSubmit={codeForm.handleSubmit(onVerifyCode)} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-medium">Verification code</label>
+            <label className="text-sm font-medium">{t('labelVerificationCode')}</label>
             <input
               type="text"
               inputMode="numeric"
@@ -269,7 +281,7 @@ export default function SignupForm({ slug }: Props) {
                   e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6)
                 },
               })}
-              placeholder="000000"
+              placeholder={t('placeholderCode')}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-center tracking-widest text-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary"
             />
             {codeForm.formState.errors.code && (
@@ -288,7 +300,7 @@ export default function SignupForm({ slug }: Props) {
             disabled={codeForm.formState.isSubmitting}
             accentColor={accentColor}
           >
-            {codeForm.formState.isSubmitting ? 'Verifying…' : 'Verify code'}
+            {codeForm.formState.isSubmitting ? t('verifyingEllipsis') : t('verifyCode')}
           </BioLinkButton>
         </form>
 
@@ -298,7 +310,7 @@ export default function SignupForm({ slug }: Props) {
             disabled={countdown > 0}
             className="text-sm text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
           >
-            {countdown > 0 ? `Resend in ${countdown}s` : "Didn't receive the code? Resend"}
+            {countdown > 0 ? t('resendIn', { countdown }) : t('resendPrompt')}
           </button>
         </div>
       </BioLinkShell>
@@ -314,16 +326,16 @@ export default function SignupForm({ slug }: Props) {
         showBranding={showBranding}
       >
         <div>
-          <h1 className="text-2xl font-bold">Your details</h1>
+          <h1 className="text-2xl font-bold">{t('yourDetailsTitle')}</h1>
           <p className="text-muted-foreground mt-1">
-            Just a few things and you&apos;re all set at <strong>{teamName}</strong>.
+            {t.rich('detailsSubtitle', { teamName, strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
         </div>
 
         <form onSubmit={detailsForm.handleSubmit(onSubmitDetails)} className="space-y-4">
           {/* Email read-only */}
           <div className="space-y-1">
-            <label className="text-sm font-medium">Email</label>
+            <label className="text-sm font-medium">{t('labelEmail')}</label>
             <input
               type="email"
               value={email}
@@ -335,7 +347,7 @@ export default function SignupForm({ slug }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                First name <span className="text-destructive">*</span>
+                {t('labelFirstName')} <span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
@@ -351,7 +363,7 @@ export default function SignupForm({ slug }: Props) {
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                Last name <span className="text-destructive">*</span>
+                {t('labelLastName')} <span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
@@ -369,7 +381,7 @@ export default function SignupForm({ slug }: Props) {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Phone <span className="text-muted-foreground font-normal">(optional)</span>
+              {t('labelPhone')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
             </label>
             <input
               type="tel"
@@ -381,7 +393,7 @@ export default function SignupForm({ slug }: Props) {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Date of birth <span className="text-muted-foreground font-normal">(optional)</span>
+              {t('labelDateOfBirth')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
             </label>
             <input
               type="date"
@@ -392,12 +404,12 @@ export default function SignupForm({ slug }: Props) {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Anything else? <span className="text-muted-foreground font-normal">(optional)</span>
+              {t('labelAnythingElse')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
             </label>
             <textarea
               {...detailsForm.register('notes')}
               rows={3}
-              placeholder="Health notes, questions for the coach…"
+              placeholder={t('placeholderNotes')}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
             />
           </div>
@@ -410,13 +422,15 @@ export default function SignupForm({ slug }: Props) {
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-primary"
               />
               <span className="text-sm text-muted-foreground">
-                I agree to the processing of my personal data by {teamName}
+                {t('consentBase', { teamName })}
                 {signupDocs.length > 0 && (
                   <>
-                    {' '}and accept the{' '}
+                    {' '}
+                    {t('andAcceptThe')}
+                    {' '}
                     {signupDocs.map((d, i) => (
                       <span key={d.slug}>
-                        {i > 0 && (i === signupDocs.length - 1 ? ' and ' : ', ')}
+                        {i > 0 && (i === signupDocs.length - 1 ? t('listAndSeparator') : ', ')}
                         <a
                           href={`/public/${slug}/documents/${d.slug}`}
                           target="_blank"
@@ -450,7 +464,7 @@ export default function SignupForm({ slug }: Props) {
             disabled={detailsForm.formState.isSubmitting}
             accentColor={accentColor}
           >
-            {detailsForm.formState.isSubmitting ? 'Saving…' : 'Complete registration'}
+            {detailsForm.formState.isSubmitting ? t('savingEllipsis') : t('completeRegistration')}
           </BioLinkButton>
         </form>
       </BioLinkShell>
@@ -478,17 +492,16 @@ export default function SignupForm({ slug }: Props) {
           </svg>
         </div>
         <div>
-          <h1 className="text-2xl font-bold">You&apos;re registered!</h1>
+          <h1 className="text-2xl font-bold">{t('registeredTitle')}</h1>
           <p className="text-muted-foreground mt-2">
-            Welcome to <strong>{teamName}</strong>. Your details have been saved. The team will be
-            in touch soon.
+            {t.rich('successBody', { teamName, strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
         </div>
         <a
           href={`/public/${slug}`}
           className="inline-block text-sm text-primary hover:underline"
         >
-          ← Back to bio link
+          {t('backToBioLink')}
         </a>
       </div>
     </BioLinkShell>
