@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
@@ -10,6 +11,7 @@ import { useOrgPlaces, createOrgPlace, updateOrgPlace, deleteOrgPlace } from '@/
 import { MAX_PLACES } from '@linyup/shared'
 
 export default function OrgPlacesPage() {
+  const t = useTranslations('OrgPlaces')
   const { orgId } = useParams<{ orgId: string }>()
   const { isAdmin } = useOrg()
   const { user } = useAuth()
@@ -42,8 +44,8 @@ export default function OrgPlacesPage() {
 
   return (
     <PlacesManager
-      title="Org places"
-      subtitle="Locations shared with every studio in this organization."
+      title={t('title')}
+      subtitle={t('subtitle')}
       places={places}
       canManage={isAdmin}
       cap={MAX_PLACES}

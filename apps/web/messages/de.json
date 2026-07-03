@@ -3339,5 +3339,36 @@
     "titleUnconfirm": "Bestätigung aufheben",
     "titleConfirm": "Bestätigen",
     "emptyCheckins": "Noch keine Check-ins."
+  },
+  "OrgRanking": {
+    "title": "Rangsysteme",
+    "subtitle": "Wird von allen Vereinen dieser Organisation gemeinsam genutzt. Diese Einstellungen überschreiben die individuellen Rangeinstellungen der Vereine.",
+    "addSystem": "System hinzufügen",
+    "emptyState": "Noch keine Rangsysteme definiert.",
+    "primaryBadge": "Primär",
+    "levelsCount": "{count, plural, one {# Stufe} other {# Stufen}}",
+    "setPrimary": "Als primär festlegen",
+    "dialogTitleEdit": "Rangsystem bearbeiten",
+    "dialogTitleAdd": "Rangsystem hinzufügen",
+    "labelLoadPreset": "Vorlage laden",
+    "placeholderChoosePreset": "Vorlage auswählen…",
+    "labelName": "Name",
+    "labelId": "ID (Slug)",
+    "idAlreadyExists": "ID existiert bereits",
+    "labelLevels": "Stufen",
+    "addLevel": "Stufe hinzufügen",
+    "levelPlaceholder": "Stufe {number}",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "saving": "…",
+    "deleteDialogTitle": "Rangsystem löschen?",
+    "deleteDialogBody": "Kontakte in allen Vereinen, denen in diesem System Ränge zugewiesen sind, verlieren diese Ränge.",
+    "delete": "Löschen",
+    "toastSaved": "Gespeichert."
+  },
+  "OrgHome": {},
+  "OrgPlaces": {
+    "title": "Standorte der Organisation",
+    "subtitle": "Standorte, die mit jedem Studio dieser Organisation geteilt werden."
   }
 }

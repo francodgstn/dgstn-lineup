@@ -3343,5 +3343,36 @@
     "titleUnconfirm": "Unconfirm",
     "titleConfirm": "Confirm",
     "emptyCheckins": "No check-ins yet."
+  },
+  "OrgRanking": {
+    "title": "Ranking systems",
+    "subtitle": "Shared across all teams in this organization. These override individual team ranking settings.",
+    "addSystem": "Add system",
+    "emptyState": "No ranking systems defined yet.",
+    "primaryBadge": "Primary",
+    "levelsCount": "{count, plural, one {# level} other {# levels}}",
+    "setPrimary": "Set primary",
+    "dialogTitleEdit": "Edit ranking system",
+    "dialogTitleAdd": "Add ranking system",
+    "labelLoadPreset": "Load preset",
+    "placeholderChoosePreset": "Choose a preset…",
+    "labelName": "Name",
+    "labelId": "ID (slug)",
+    "idAlreadyExists": "ID already exists",
+    "labelLevels": "Levels",
+    "addLevel": "Add level",
+    "levelPlaceholder": "Level {number}",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "…",
+    "deleteDialogTitle": "Delete ranking system?",
+    "deleteDialogBody": "Contacts in all teams who have ranks assigned to this system will lose those ranks.",
+    "delete": "Delete",
+    "toastSaved": "Saved."
+  },
+  "OrgHome": {},
+  "OrgPlaces": {
+    "title": "Org places",
+    "subtitle": "Locations shared with every studio in this organization."
   }
 }

@@ -3343,5 +3343,36 @@
     "titleUnconfirm": "Annuler la confirmation",
     "titleConfirm": "Confirmer",
     "emptyCheckins": "Aucun check-in pour l'instant."
+  },
+  "OrgRanking": {
+    "title": "Systèmes de classement",
+    "subtitle": "Partagé entre tous les clubs de cette organisation. Ces réglages remplacent les paramètres de classement propres à chaque club.",
+    "addSystem": "Ajouter un système",
+    "emptyState": "Aucun système de classement défini pour le moment.",
+    "primaryBadge": "Principal",
+    "levelsCount": "{count, plural, one {# niveau} other {# niveaux}}",
+    "setPrimary": "Définir comme principal",
+    "dialogTitleEdit": "Modifier le système de classement",
+    "dialogTitleAdd": "Ajouter un système de classement",
+    "labelLoadPreset": "Charger un modèle",
+    "placeholderChoosePreset": "Choisir un modèle…",
+    "labelName": "Nom",
+    "labelId": "ID (slug)",
+    "idAlreadyExists": "Cet ID existe déjà",
+    "labelLevels": "Niveaux",
+    "addLevel": "Ajouter un niveau",
+    "levelPlaceholder": "Niveau {number}",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "saving": "…",
+    "deleteDialogTitle": "Supprimer le système de classement ?",
+    "deleteDialogBody": "Les contacts de tous les clubs ayant des grades attribués dans ce système perdront ces grades.",
+    "delete": "Supprimer",
+    "toastSaved": "Enregistré."
+  },
+  "OrgHome": {},
+  "OrgPlaces": {
+    "title": "Lieux de l'organisation",
+    "subtitle": "Emplacements partagés avec chaque studio de cette organisation."
   }
 }

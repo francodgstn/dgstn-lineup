@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
 import { doc, updateDoc } from 'firebase/firestore'
@@ -51,6 +52,7 @@ function RankSystemDialog({
   existingIds: string[]
   onSave: (form: RankSystemFormState) => Promise<void>
 }) {
+  const t = useTranslations('OrgRanking')
   const [form, setForm] = useState<RankSystemFormState>(initial ?? emptyForm())
   const [saving, setSaving] = useState(false)
   const [idError, setIdError] = useState('')
@@ -87,7 +89,7 @@ function RankSystemDialog({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!isEdit && existingIds.includes(form.id)) {
-      setIdError('ID already exists')
+      setIdError(t('idAlreadyExists'))
       return
     }
     setSaving(true)
@@ -100,14 +102,14 @@ function RankSystemDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit ranking system' : 'Add ranking system'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('dialogTitleEdit') : t('dialogTitleAdd')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           {!isEdit && (
             <div className="space-y-1.5">
-              <Label>Load preset</Label>
+              <Label>{t('labelLoadPreset')}</Label>
               <Select onValueChange={(v) => applyPreset(String(v))}>
-                <SelectTrigger><SelectValue placeholder="Choose a preset…" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('placeholderChoosePreset')} /></SelectTrigger>
                 <SelectContent>
                   {RANK_PRESETS.map((p) => (
                     <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
@@ -118,11 +120,11 @@ function RankSystemDialog({
           )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Name</Label>
+              <Label>{t('labelName')}</Label>
               <Input value={form.name} onChange={(e) => setField('name', e.target.value)} required />
             </div>
             <div className="space-y-1.5">
-              <Label>ID (slug)</Label>
+              <Label>{t('labelId')}</Label>
               <Input
                 value={form.id}
                 onChange={(e) => { setField('id', e.target.value.replace(/[^a-z0-9-]/g, '')); setIdError('') }}
@@ -134,9 +136,9 @@ function RankSystemDialog({
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Levels</Label>
+              <Label>{t('labelLevels')}</Label>
               <Button type="button" size="sm" variant="outline" onClick={addLevel} disabled={form.levels.length >= 10}>
-                <Plus className="h-3.5 w-3.5 mr-1" />Add level
+                <Plus className="h-3.5 w-3.5 mr-1" />{t('addLevel')}
               </Button>
             </div>
             {form.levels.map((l, i) => (
@@ -150,7 +152,7 @@ function RankSystemDialog({
                 <Input
                   value={l.label}
                   onChange={(e) => setLevel(i, 'label', e.target.value)}
-                  placeholder={`Level ${i}`}
+                  placeholder={t('levelPlaceholder', { number: i })}
                   className="flex-1"
                   required
                 />
@@ -163,9 +165,9 @@ function RankSystemDialog({
             ))}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{t('cancel')}</Button>
             <Button type="submit" disabled={saving || !form.name || !form.id || form.levels.length === 0}>
-              {saving ? '…' : 'Save'}
+              {saving ? t('saving') : t('save')}
             </Button>
           </DialogFooter>
         </form>
@@ -177,6 +179,7 @@ function RankSystemDialog({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function OrgRankingPage() {
+  const t = useTranslations('OrgRanking')
   const { orgId } = useParams<{ orgId: string }>()
   const { org, loading, isAdmin } = useOrg()
   const qc = useQueryClient()
@@ -200,7 +203,7 @@ export default function OrgRankingPage() {
       await updateDoc(doc(db, 'organizations', orgId), { ranking_systems: next })
       qc.invalidateQueries({ queryKey: ['org', orgId] })
       qc.invalidateQueries({ queryKey: ['org-ranking-systems', orgId] })
-      showToast('Saved.')
+      showToast(t('toastSaved'))
     } finally {
       setSaving(false)
     }
@@ -234,14 +237,14 @@ export default function OrgRankingPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Ranking systems</h2>
+          <h2 className="text-lg font-semibold">{t('title')}</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Shared across all teams in this organization. These override individual team ranking settings.
+            {t('subtitle')}
           </p>
         </div>
         {isAdmin && (
           <Button size="sm" onClick={openAdd} disabled={saving}>
-            <Plus className="h-4 w-4 mr-1.5" />Add system
+            <Plus className="h-4 w-4 mr-1.5" />{t('addSystem')}
           </Button>
         )}
       </div>
@@ -253,10 +256,10 @@ export default function OrgRankingPage() {
       ) : systems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
           <Shield className="h-10 w-10 text-muted-foreground/40" />
-          <p className="text-muted-foreground text-sm">No ranking systems defined yet.</p>
+          <p className="text-muted-foreground text-sm">{t('emptyState')}</p>
           {isAdmin && (
             <Button variant="outline" size="sm" onClick={openAdd}>
-              <Plus className="h-4 w-4 mr-1.5" />Add system
+              <Plus className="h-4 w-4 mr-1.5" />{t('addSystem')}
             </Button>
           )}
         </div>
@@ -268,10 +271,10 @@ export default function OrgRankingPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium">{s.name}</p>
-                    {s.is_primary && <Badge variant="default" className="text-xs">Primary</Badge>}
+                    {s.is_primary && <Badge variant="default" className="text-xs">{t('primaryBadge')}</Badge>}
                     <span className="text-xs text-muted-foreground font-mono">{s.id}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{s.levels.length} levels</p>
+                  <p className="text-xs text-muted-foreground">{t('levelsCount', { count: s.levels.length })}</p>
                 </div>
                 {isAdmin && !s.is_primary && (
                   <button
@@ -279,7 +282,7 @@ export default function OrgRankingPage() {
                     disabled={saving}
                     className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted disabled:opacity-50"
                   >
-                    Set primary
+                    {t('setPrimary')}
                   </button>
                 )}
                 {isAdmin && (
@@ -316,14 +319,14 @@ export default function OrgRankingPage() {
 
       <Dialog open={!!deleting} onOpenChange={() => setDeleting(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Delete ranking system?</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('deleteDialogTitle')}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground py-1">
-            Contacts in all teams who have ranks assigned to this system will lose those ranks.
+            {t('deleteDialogBody')}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleting(null)}>{t('cancel')}</Button>
             <Button variant="destructive" disabled={saving} onClick={() => deleting && handleDelete(deleting)}>
-              Delete
+              {t('delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

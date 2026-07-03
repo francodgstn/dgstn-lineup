@@ -3343,5 +3343,36 @@
     "titleUnconfirm": "Annulla conferma",
     "titleConfirm": "Conferma",
     "emptyCheckins": "Ancora nessun check-in."
+  },
+  "OrgRanking": {
+    "title": "Sistemi di graduazione",
+    "subtitle": "Condiviso tra tutti i club di questa organizzazione. Queste impostazioni sostituiscono le impostazioni di graduazione dei singoli club.",
+    "addSystem": "Aggiungi sistema",
+    "emptyState": "Nessun sistema di graduazione ancora definito.",
+    "primaryBadge": "Principale",
+    "levelsCount": "{count, plural, one {# livello} other {# livelli}}",
+    "setPrimary": "Imposta come principale",
+    "dialogTitleEdit": "Modifica sistema di graduazione",
+    "dialogTitleAdd": "Aggiungi sistema di graduazione",
+    "labelLoadPreset": "Carica modello",
+    "placeholderChoosePreset": "Scegli un modello…",
+    "labelName": "Nome",
+    "labelId": "ID (slug)",
+    "idAlreadyExists": "L'ID esiste già",
+    "labelLevels": "Livelli",
+    "addLevel": "Aggiungi livello",
+    "levelPlaceholder": "Livello {number}",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "saving": "…",
+    "deleteDialogTitle": "Eliminare il sistema di graduazione?",
+    "deleteDialogBody": "I contatti di tutti i club con gradi assegnati in questo sistema perderanno tali gradi.",
+    "delete": "Elimina",
+    "toastSaved": "Salvato."
+  },
+  "OrgHome": {},
+  "OrgPlaces": {
+    "title": "Sedi dell'organizzazione",
+    "subtitle": "Sedi condivise con ogni studio di questa organizzazione."
   }
 }
