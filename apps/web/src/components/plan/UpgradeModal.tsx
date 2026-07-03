@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { Lock, Check } from 'lucide-react'
 import {
   Dialog,
@@ -39,45 +40,18 @@ const PLAN_COLOR: Record<SaasPlan, { icon: string; badge: string; check: string 
   },
 }
 
-const PLAN_CONTENT: Record<SaasPlan, { tagline: string; features: string[] }> = {
-  // The modal never asks anyone to "upgrade" to Free — entry exists only to
-  // keep the Record exhaustive.
-  free: {
-    tagline: 'Get started for free with up to 15 contacts.',
-    features: ['Up to 15 active contacts', 'Public bio link', 'Sessions, subscriptions & goals'],
-  },
-  coach: {
-    tagline: 'Everything a solo coach needs to run a professional practice.',
-    features: [
-      'Member app + 1:1 coaching slots',
-      'Contact Groups & Custom Fields included',
-      'À-la-carte add-ons + 50 contacts',
-    ],
-  },
-  studio: {
-    tagline: 'Scale with engagement tools, automation, and the member app.',
-    features: [
-      'Every add-on included + 250 contacts',
-      'Gamification — streaks, leaderboards, badges',
-      'Full automation suite & multiple managers',
-    ],
-  },
-  organization: {
-    tagline: 'Manage multiple locations from a single console.',
-    features: [
-      'Multi-team management & cross-team events',
-      'Unified analytics & reporting',
-      'API access & advanced permissions',
-    ],
-  },
-}
+// Taglines/features are translated (UpgradeModal.planContent.{plan}.*); the
+// modal never asks anyone to "upgrade" to Free, but every plan is looked up
+// dynamically so all four keys must exist in the message files.
 
 export function UpgradeModal({ open, onClose, feature, minPlan }: UpgradeModalProps) {
+  const t = useTranslations('UpgradeModal')
   const { minimumPlanFor } = usePlan()
   const planName = usePlanName()
   const required: SaasPlan = minPlan ?? (feature ? minimumPlanFor(feature) : 'coach')
   const colors = PLAN_COLOR[required]
-  const content = PLAN_CONTENT[required]
+  const tagline = t(`planContent.${required}.tagline`)
+  const features = t.raw(`planContent.${required}.features`) as string[]
   const label = planName(required)
 
   return (
@@ -94,13 +68,13 @@ export function UpgradeModal({ open, onClose, feature, minPlan }: UpgradeModalPr
           >
             <Lock className={`h-5 w-5 ${colors.icon}`} />
           </div>
-          <DialogTitle className="text-lg">Upgrade to {label}</DialogTitle>
+          <DialogTitle className="text-lg">{t('titleUpgradeTo', { label })}</DialogTitle>
         </DialogHeader>
 
-        <p className="text-sm text-muted-foreground -mt-1">{content.tagline}</p>
+        <p className="text-sm text-muted-foreground -mt-1">{tagline}</p>
 
         <ul className="space-y-2 mt-1">
-          {content.features.map((f) => (
+          {features.map((f) => (
             <li key={f} className="flex items-start gap-2 text-sm">
               <Check className={`h-4 w-4 mt-0.5 shrink-0 ${colors.check}`} />
               <span>{f}</span>
@@ -114,21 +88,21 @@ export function UpgradeModal({ open, onClose, feature, minPlan }: UpgradeModalPr
             onClick={onClose}
             className="w-full text-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            Upgrade to {label}
+            {t('titleUpgradeTo', { label })}
           </Link>
           <div className="flex items-center justify-between w-full pt-1">
             <button
               onClick={onClose}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              Maybe later
+              {t('maybeLater')}
             </button>
             <Link
               href="/settings/billing"
               onClick={onClose}
               className="text-xs text-primary hover:underline"
             >
-              Compare all plans →
+              {t('compareAllPlans')}
             </Link>
           </div>
         </DialogFooter>

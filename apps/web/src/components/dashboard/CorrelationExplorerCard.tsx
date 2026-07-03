@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Line, ReferenceLine,
@@ -13,23 +14,27 @@ import { buildWeekKeys, dateToIsoWeek, formatTooltipWeek } from '@/lib/isoWeek'
 import type { WeeklyReport, SessionDoc, BookingDoc } from '@/hooks/useDashboardData'
 
 // ─── metrics ──────────────────────────────────────────────────────────────────
+// Labels are translated (CorrelationExplorer.metric*); this only maps a metric
+// key to its message key.
 
 const METRICS = [
-  { value: 'checkins',        label: 'Check-ins' },
-  { value: 'all_bookings',    label: 'All bookings' },
-  { value: 'new_bookings',    label: 'New bookings' },
-  { value: 'active_contacts', label: 'Active contacts' },
-  { value: 'total_contacts',  label: 'Total contacts' },
-  { value: 'trials',          label: 'Trials' },
-  { value: 'students',        label: 'Joined' },
-  { value: 'engagement_rate', label: 'Engagement %' },
-  { value: 'sessions_held',   label: 'Sessions held' },
+  { value: 'checkins',        key: 'metricCheckins' },
+  { value: 'all_bookings',    key: 'metricAllBookings' },
+  { value: 'new_bookings',    key: 'metricNewBookings' },
+  { value: 'active_contacts', key: 'metricActiveContacts' },
+  { value: 'total_contacts',  key: 'metricTotalContacts' },
+  { value: 'trials',          key: 'metricTrials' },
+  { value: 'students',        key: 'metricStudents' },
+  { value: 'engagement_rate', key: 'metricEngagementRate' },
+  { value: 'sessions_held',   key: 'metricSessionsHeld' },
 ] as const
 
 type MetricKey = typeof METRICS[number]['value']
+type Translator = ReturnType<typeof useTranslations>
 
-function metricLabel(key: MetricKey): string {
-  return METRICS.find((m) => m.value === key)?.label ?? key
+function metricLabel(t: Translator, key: MetricKey): string {
+  const metric = METRICS.find((m) => m.value === key)
+  return metric ? t(metric.key) : key
 }
 
 // ─── linear regression ────────────────────────────────────────────────────────
@@ -54,11 +59,11 @@ function linearRegression(points: { x: number; y: number }[]): {
   return { slope, intercept, r }
 }
 
-function rLabel(r: number): string {
+function rLabel(t: Translator, r: number): string {
   const abs = Math.abs(r)
-  const dir = r >= 0 ? 'positive' : 'negative'
-  const strength = abs >= 0.7 ? 'Strong' : abs >= 0.4 ? 'Moderate' : abs >= 0.2 ? 'Weak' : 'No'
-  return `${strength} ${dir} correlation (r=${r.toFixed(2)})`
+  const directionKey = r >= 0 ? 'directionPositive' : 'directionNegative'
+  const strengthKey = abs >= 0.7 ? 'strengthStrong' : abs >= 0.4 ? 'strengthModerate' : abs >= 0.2 ? 'strengthWeak' : 'strengthNone'
+  return t('correlationLabel', { strength: t(strengthKey), direction: t(directionKey), r: r.toFixed(2) })
 }
 
 // ─── tooltip ─────────────────────────────────────────────────────────────────
@@ -68,13 +73,18 @@ function CorrelationTooltip({ active, payload, metricX, metricY }: {
   payload?: { payload: { week: string; x: number; y: number } }[]
   metricX: MetricKey; metricY: MetricKey
 }) {
+  const t = useTranslations('CorrelationExplorer')
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
     <div className="bg-background border rounded-lg shadow-lg p-3 text-xs">
       <p className="font-bold mb-1">{formatTooltipWeek(d.week)}</p>
-      <p className="text-muted-foreground">{metricLabel(metricX)}: <strong>{d.x}</strong></p>
-      <p className="text-muted-foreground">{metricLabel(metricY)}: <strong>{d.y}</strong></p>
+      <p className="text-muted-foreground">
+        {t.rich('tooltipMetric', { metric: metricLabel(t, metricX), value: d.x, strong: (chunks) => <strong>{chunks}</strong> })}
+      </p>
+      <p className="text-muted-foreground">
+        {t.rich('tooltipMetric', { metric: metricLabel(t, metricY), value: d.y, strong: (chunks) => <strong>{chunks}</strong> })}
+      </p>
     </div>
   )
 }
@@ -94,6 +104,7 @@ export function CorrelationExplorerCard({
   newContactBookings: BookingDoc[]
   trendsWeeks: number
 }) {
+  const t = useTranslations('CorrelationExplorer')
   const [metricX, setMetricX] = useState<MetricKey>('active_contacts')
   const [metricY, setMetricY] = useState<MetricKey>('checkins')
 
@@ -131,8 +142,8 @@ export function CorrelationExplorerCard({
         case 'new_bookings':    return newByWeek[week] ?? 0
         case 'active_contacts': return r?.active_contacts_count ?? null
         case 'total_contacts': {
-          const t = r?.contacts_count_by_stage
-          return t ? Object.values(t).reduce((s, v) => s + v, 0) : null
+          const stageCounts = r?.contacts_count_by_stage
+          return stageCounts ? Object.values(stageCounts).reduce((s, v) => s + v, 0) : null
         }
         case 'trials':          return r?.contacts_count_by_stage
           ? (r.contacts_count_by_stage.trial_booked ?? 0) + (r.contacts_count_by_stage.trial_attended ?? 0)
@@ -178,29 +189,29 @@ export function CorrelationExplorerCard({
       <CardHeader>
         <div className="flex items-center gap-2 flex-wrap">
 
-          <CardTitle className="flex-1">Correlation explorer</CardTitle>
+          <CardTitle className="flex-1">{t('cardTitle')}</CardTitle>
           <Select value={metricX} onValueChange={(v) => setMetricX(v as MetricKey)}>
             <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {METRICS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+              {METRICS.map((m) => <SelectItem key={m.value} value={m.value}>{t(m.key)}</SelectItem>)}
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground">vs</span>
+          <span className="text-xs text-muted-foreground">{t('vsLabel')}</span>
           <Select value={metricY} onValueChange={(v) => setMetricY(v as MetricKey)}>
             <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {METRICS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+              {METRICS.map((m) => <SelectItem key={m.value} value={m.value}>{t(m.key)}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         {regression && (
-          <p className="text-[11px] text-muted-foreground">{rLabel(regression.r)}</p>
+          <p className="text-[11px] text-muted-foreground">{rLabel(t, regression.r)}</p>
         )}
       </CardHeader>
       <CardContent>
         {chartData.length < 3 ? (
           <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">
-            Not enough data for this period
+            {t('notEnoughData')}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -209,21 +220,21 @@ export function CorrelationExplorerCard({
               <XAxis
                 type="number"
                 dataKey="x"
-                name={metricLabel(metricX)}
+                name={metricLabel(t, metricX)}
                 tick={{ fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
-                label={{ value: metricLabel(metricX), position: 'insideBottom', offset: -12, fontSize: 10 }}
+                label={{ value: metricLabel(t, metricX), position: 'insideBottom', offset: -12, fontSize: 10 }}
               />
               <YAxis
                 type="number"
                 dataKey="y"
-                name={metricLabel(metricY)}
+                name={metricLabel(t, metricY)}
                 tick={{ fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
                 width={38}
-                label={{ value: metricLabel(metricY), angle: -90, position: 'insideLeft', fontSize: 10 }}
+                label={{ value: metricLabel(t, metricY), angle: -90, position: 'insideLeft', fontSize: 10 }}
               />
               <Tooltip
                 content={<CorrelationTooltip metricX={metricX} metricY={metricY} />}

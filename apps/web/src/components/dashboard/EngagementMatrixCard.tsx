@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceArea, ReferenceLine,
@@ -12,15 +13,17 @@ import { formatTooltipWeek } from '@/lib/isoWeek'
 import type { WeeklyReport } from '@/hooks/useDashboardData'
 
 // ─── quadrant config ──────────────────────────────────────────────────────────
+// Labels/hints/actions are translated (EngagementMatrix.quadrants.*); only the
+// color is a static lookup here.
 
-const QUADRANTS = {
-  top_right:    { label: 'Team growth',      color: '#16a34a', hint: 'Work on the team',          actions: ['Team events', 'Special sessions'] },
-  top_left:     { label: 'Lead acquisition', color: '#b45309', hint: 'Work on lead acquisition',  actions: ['Social ads', 'Website', 'Word of mouth'] },
-  bottom_right: { label: 'Boost engagement', color: '#c2410c', hint: 'Work on engagement',         actions: ['More sessions', 'Feedback', 'Re-contact members'] },
-  bottom_left:  { label: 'Getting started',  color: '#dc2626', hint: 'Work on getting started',    actions: ['Flexible schedule', 'Focus energy'] },
+const QUADRANT_COLORS = {
+  top_right: '#16a34a',
+  top_left: '#b45309',
+  bottom_right: '#c2410c',
+  bottom_left: '#dc2626',
 } as const
 
-type Quadrant = keyof typeof QUADRANTS
+type Quadrant = keyof typeof QUADRANT_COLORS
 
 function getQuadrant(x: number, y: number, midX: number, midY: number): Quadrant {
   if (x >= midX && y >= midY) return 'top_right'
@@ -42,13 +45,18 @@ function MatrixTooltip({ active, payload }: {
   active?: boolean
   payload?: { payload: { week: string; x: number; y: number } }[]
 }) {
+  const t = useTranslations('EngagementMatrix')
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
     <div className="bg-background border rounded-lg shadow-lg p-3 text-xs">
       <p className="font-bold mb-1">{formatTooltipWeek(d.week)}</p>
-      <p className="text-muted-foreground">Active contacts: <strong>{d.x}</strong></p>
-      <p className="text-muted-foreground">Engagement: <strong>{d.y}%</strong></p>
+      <p className="text-muted-foreground">
+        {t.rich('tooltipActiveContacts', { value: d.x, strong: (chunks) => <strong>{chunks}</strong> })}
+      </p>
+      <p className="text-muted-foreground">
+        {t.rich('tooltipEngagement', { value: d.y, strong: (chunks) => <strong>{chunks}</strong> })}
+      </p>
     </div>
   )
 }
@@ -62,6 +70,7 @@ export function EngagementMatrixCard({
   weeklyReports: WeeklyReport[]
   trendsWeeks: number
 }) {
+  const t = useTranslations('EngagementMatrix')
   const [showTrajectory, setShowTrajectory] = useState(false)
 
   const { dataPoints, midX, midY, domainMaxX, currentQuadrant, isDecline } = useMemo(() => {
@@ -99,17 +108,24 @@ export function EngagementMatrixCard({
 
   const pastPoints    = dataPoints.slice(0, -1)
   const currentPoint  = dataPoints.length > 0 ? [dataPoints[dataPoints.length - 1]] : []
-  const qInfo = currentQuadrant ? QUADRANTS[currentQuadrant] : null
+  const qInfo = currentQuadrant
+    ? {
+        color: QUADRANT_COLORS[currentQuadrant],
+        label: t(`quadrants.${currentQuadrant}.label`),
+        hint: t(`quadrants.${currentQuadrant}.hint`),
+        actions: t.raw(`quadrants.${currentQuadrant}.actions`) as string[],
+      }
+    : null
 
   if (dataPoints.length === 0) {
     return (
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle>Engagement matrix</CardTitle>
+          <CardTitle>{t('cardTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-            Not enough data for this period
+            {t('notEnoughData')}
           </div>
         </CardContent>
       </Card>
@@ -120,14 +136,14 @@ export function EngagementMatrixCard({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle>Engagement matrix</CardTitle>
+          <CardTitle>{t('cardTitle')}</CardTitle>
           <button
             onClick={() => setShowTrajectory((v) => !v)}
             className={`text-xs px-2 py-1 rounded-md border transition-colors ${
               showTrajectory ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'
             }`}
           >
-            Trajectory
+            {t('trajectoryButton')}
           </button>
         </div>
       </CardHeader>
@@ -135,7 +151,7 @@ export function EngagementMatrixCard({
         {isDecline && (
           <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            Engagement has dropped more than 3 points since the start of the period.
+            {t('declineWarning')}
           </div>
         )}
 
@@ -158,7 +174,7 @@ export function EngagementMatrixCard({
               tick={{ fontSize: 10 }}
               tickLine={false}
               axisLine={false}
-              label={{ value: 'Active contacts →', position: 'insideBottom', offset: -12, fontSize: 10 }}
+              label={{ value: t('axisActiveContacts'), position: 'insideBottom', offset: -12, fontSize: 10 }}
             />
             <YAxis
               type="number"
@@ -169,7 +185,7 @@ export function EngagementMatrixCard({
               axisLine={false}
               tickFormatter={(v) => `${v}%`}
               width={36}
-              label={{ value: 'Engagement →', angle: -90, position: 'insideLeft', fontSize: 10 }}
+              label={{ value: t('axisEngagement'), angle: -90, position: 'insideLeft', fontSize: 10 }}
             />
 
             <Tooltip content={<MatrixTooltip />} cursor={{ strokeDasharray: '3 3' }} />
@@ -216,7 +232,7 @@ export function EngagementMatrixCard({
         )}
 
         <p className="text-[10px] text-muted-foreground">
-          Midpoint: {midX} contacts · {midY}% engagement
+          {t('midpoint', { midX, midY })}
         </p>
       </CardContent>
     </Card>

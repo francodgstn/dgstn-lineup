@@ -3129,5 +3129,125 @@
     "roomCount": "{count, plural, one {# salle} other {# salles}}",
     "openInMaps": "Ouvrir dans Maps",
     "setAsMainAddress": "Définir comme adresse principale"
+  },
+  "EngagementMatrix": {
+    "cardTitle": "Matrice d'engagement",
+    "trajectoryButton": "Trajectoire",
+    "notEnoughData": "Pas assez de données pour cette période",
+    "declineWarning": "L'engagement a baissé de plus de 3 points depuis le début de la période.",
+    "axisActiveContacts": "Contacts actifs →",
+    "axisEngagement": "Engagement →",
+    "tooltipActiveContacts": "Contacts actifs : <strong>{value}</strong>",
+    "tooltipEngagement": "Engagement : <strong>{value}%</strong>",
+    "midpoint": "Point médian : {midX} contacts · {midY}% d'engagement",
+    "quadrants": {
+      "top_right": {
+        "label": "Croissance de l'équipe",
+        "hint": "Travaillez sur l'équipe",
+        "actions": ["Événements d'équipe", "Séances spéciales"]
+      },
+      "top_left": {
+        "label": "Acquisition de prospects",
+        "hint": "Travaillez sur l'acquisition de prospects",
+        "actions": ["Publicités sociales", "Site web", "Bouche-à-oreille"]
+      },
+      "bottom_right": {
+        "label": "Renforcer l'engagement",
+        "hint": "Travaillez sur l'engagement",
+        "actions": ["Plus de séances", "Retours", "Recontacter les membres"]
+      },
+      "bottom_left": {
+        "label": "Démarrage",
+        "hint": "Travaillez sur le démarrage",
+        "actions": ["Horaires flexibles", "Concentrer l'énergie"]
+      }
+    }
+  },
+  "CorrelationExplorer": {
+    "cardTitle": "Explorateur de corrélation",
+    "vsLabel": "vs",
+    "notEnoughData": "Pas assez de données pour cette période",
+    "metricCheckins": "Présences",
+    "metricAllBookings": "Toutes les réservations",
+    "metricNewBookings": "Nouvelles réservations",
+    "metricActiveContacts": "Contacts actifs",
+    "metricTotalContacts": "Total des contacts",
+    "metricTrials": "Essais",
+    "metricStudents": "Inscrits",
+    "metricEngagementRate": "Taux d'engagement %",
+    "metricSessionsHeld": "Séances organisées",
+    "correlationLabel": "Corrélation {direction} {strength} (r={r})",
+    "strengthStrong": "forte",
+    "strengthModerate": "modérée",
+    "strengthWeak": "faible",
+    "strengthNone": "nulle",
+    "directionPositive": "positive",
+    "directionNegative": "négative",
+    "tooltipMetric": "{metric} : <strong>{value}</strong>"
+  },
+  "CheckinPanel": {
+    "csvHeaderFirstName": "Prénom",
+    "csvHeaderLastName": "Nom",
+    "csvHeaderStatus": "Statut",
+    "csvHeaderCheckedInAt": "Enregistré le",
+    "statusConfirmed": "Confirmé",
+    "statusPending": "En attente",
+    "addCheckinDialogTitle": "Ajouter un check-in",
+    "searchContactsPlaceholder": "Rechercher des contacts…",
+    "noContactsMatch": "Aucun contact ne correspond",
+    "allContactsCheckedIn": "Tous les contacts sont déjà enregistrés",
+    "checkinsCount": "{count, plural, one {<strong>#</strong> check-in} other {<strong>#</strong> check-ins}}",
+    "confirmedCount": "{count, plural, one {<strong>#</strong> confirmé} other {<strong>#</strong> confirmés}}",
+    "pendingCount": "{count, plural, one {<strong>#</strong> en attente} other {<strong>#</strong> en attente}}",
+    "exportCsvButton": "Exporter en CSV",
+    "addCheckinButton": "Ajouter un check-in",
+    "showingTeamLabel": "Équipe affichée :",
+    "searchCheckinsPlaceholder": "Rechercher des check-ins…",
+    "noCheckinsYet": "Aucun check-in pour l'instant",
+    "addFirstCheckinButton": "Ajouter le premier check-in",
+    "noCheckinsMatchSearch": "Aucun check-in ne correspond à la recherche",
+    "markPending": "Marquer comme en attente",
+    "markConfirmed": "Marquer comme confirmé",
+    "sheetTitleAdd": "Ajouter un check-in",
+    "sheetTitleUpdate": "Mettre à jour le check-in"
+  },
+  "UpgradeModal": {
+    "titleUpgradeTo": "Passer à l'offre {label}",
+    "maybeLater": "Plus tard",
+    "compareAllPlans": "Comparer toutes les offres →",
+    "planContent": {
+      "free": {
+        "tagline": "Démarrez gratuitement avec jusqu'à 15 contacts.",
+        "features": [
+          "Jusqu'à 15 contacts actifs",
+          "Bio link public",
+          "Séances, abonnements et objectifs"
+        ]
+      },
+      "coach": {
+        "tagline": "Tout ce dont un coach indépendant a besoin pour gérer une activité professionnelle.",
+        "features": [
+          "App membre + créneaux de coaching 1:1",
+          "Groupes de contacts et champs personnalisés inclus",
+          "Options à la carte + 50 contacts"
+        ]
+      },
+      "studio": {
+        "tagline": "Développez-vous avec des outils d'engagement, l'automatisation et l'app membre.",
+        "features": [
+          "Toutes les options incluses + 250 contacts",
+          "Gamification – séries, classements, badges",
+          "Suite d'automatisation complète et plusieurs gestionnaires"
+        ]
+      },
+      "organization": {
+        "tagline": "Gérez plusieurs sites depuis une seule console.",
+        "features": [
+          "Gestion multi-équipes et événements inter-équipes",
+          "Analyses et rapports unifiés",
+          "Accès API et permissions avancées"
+        ]
+      }
+    }
   }
 }

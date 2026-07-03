@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, query, where, getDocs, updateDoc, doc, serverTimestamp, orderBy,
@@ -48,8 +49,10 @@ function initials(c: MinContact) {
   return `${c.firstname?.[0] ?? ''}${c.lastname?.[0] ?? ''}`.toUpperCase() || '?'
 }
 
-function exportCsv(checkins: EventCheckin[], eventTitle: string) {
-  const rows: string[][] = [['First name', 'Last name', 'Status', 'Checked in at']]
+function exportCsv(t: ReturnType<typeof useTranslations>, checkins: EventCheckin[], eventTitle: string) {
+  const rows: string[][] = [[
+    t('csvHeaderFirstName'), t('csvHeaderLastName'), t('csvHeaderStatus'), t('csvHeaderCheckedInAt'),
+  ]]
   for (const c of checkins) {
     const at = c.created_at
       ? new Date((c.created_at as { toDate(): Date }).toDate()).toLocaleString()
@@ -57,7 +60,7 @@ function exportCsv(checkins: EventCheckin[], eventTitle: string) {
     rows.push([
       c.contact.firstname,
       c.contact.lastname,
-      c.is_completed ? 'Confirmed' : 'Pending',
+      c.is_completed ? t('statusConfirmed') : t('statusPending'),
       at,
     ])
   }
@@ -128,6 +131,7 @@ function AddCheckinDialog({
   onSelect: (contact: Contact) => void
   onClose: () => void
 }) {
+  const t = useTranslations('CheckinPanel')
   const [search, setSearch] = useState('')
 
   const contactsQ = useQuery<Contact[]>({
@@ -162,14 +166,14 @@ function AddCheckinDialog({
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add checkin</DialogTitle>
+          <DialogTitle>{t('addCheckinDialogTitle')}</DialogTitle>
         </DialogHeader>
 
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             className="pl-9"
-            placeholder="Search contacts…"
+            placeholder={t('searchContactsPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             autoFocus
@@ -187,7 +191,7 @@ function AddCheckinDialog({
           )}
           {!contactsQ.isLoading && visible.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              {search ? 'No contacts match' : 'All contacts are already checked in'}
+              {search ? t('noContactsMatch') : t('allContactsCheckedIn')}
             </p>
           )}
           {!contactsQ.isLoading && visible.map((c) => (
@@ -228,6 +232,7 @@ export function CheckinPanel({
   rankingSystems?: RankingSystem[]
   orgId?: string
 }) {
+  const t = useTranslations('CheckinPanel')
   const { currentTeamId, isOrgAdmin } = useAuth()
   const qc = useQueryClient()
 
@@ -341,17 +346,17 @@ export function CheckinPanel({
       {/* Summary bar — sticky so "Add checkin" stays visible while list scrolls */}
       <div className="sticky top-0 z-10 bg-background py-2 flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <span><strong className="text-foreground">{checkins.length}</strong> checkins</span>
+          <span>{t.rich('checkinsCount', { count: checkins.length, strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}</span>
           {confirmedCount > 0 && (
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
-              <strong className="text-foreground">{confirmedCount}</strong> confirmed
+              {t.rich('confirmedCount', { count: confirmedCount, strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}
             </span>
           )}
           {pendingCount > 0 && (
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
-              <strong className="text-foreground">{pendingCount}</strong> pending
+              {t.rich('pendingCount', { count: pendingCount, strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}
             </span>
           )}
         </div>
@@ -367,16 +372,16 @@ export function CheckinPanel({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => exportCsv(checkins, eventTitle)}
+              onClick={() => exportCsv(t, checkins, eventTitle)}
               disabled={checkins.length === 0}
             >
               <Download className="h-3.5 w-3.5 mr-1.5" />
-              Export CSV
+              {t('exportCsvButton')}
             </Button>
           )}
           <Button size="sm" onClick={() => setAddDialogOpen(true)}>
             <UserPlus className="h-3.5 w-3.5 mr-1.5" />
-            Add checkin
+            {t('addCheckinButton')}
           </Button>
         </div>
       </div>
@@ -384,16 +389,16 @@ export function CheckinPanel({
       {/* Org team selector — visible to org admins when event has multiple teams */}
       {showTeamSelector && (
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground shrink-0">Showing team:</span>
+          <span className="text-xs text-muted-foreground shrink-0">{t('showingTeamLabel')}</span>
           <Select value={selectedAddTeamId} onValueChange={(v) => { if (v) setSelectedAddTeamId(v) }}>
             <SelectTrigger className="h-8 text-xs w-48">
-              <SelectValue placeholder={orgTeamsQ.data?.find((t) => t.id === selectedAddTeamId)?.name ?? selectedAddTeamId}>
-                {orgTeamsQ.data?.find((t) => t.id === selectedAddTeamId)?.name ?? selectedAddTeamId}
+              <SelectValue placeholder={orgTeamsQ.data?.find((team) => team.id === selectedAddTeamId)?.name ?? selectedAddTeamId}>
+                {orgTeamsQ.data?.find((team) => team.id === selectedAddTeamId)?.name ?? selectedAddTeamId}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {orgTeamsQ.data?.map((t) => (
-                <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+              {orgTeamsQ.data?.map((team) => (
+                <SelectItem key={team.id} value={team.id} className="text-xs">{team.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -406,7 +411,7 @@ export function CheckinPanel({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             className="pl-9"
-            placeholder="Search checkins…"
+            placeholder={t('searchCheckinsPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -431,10 +436,10 @@ export function CheckinPanel({
       {!isLoading && checkins.length === 0 && (
         <div className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
           <ClipboardList className="h-8 w-8 opacity-30" />
-          <p className="text-sm">No checkins yet</p>
+          <p className="text-sm">{t('noCheckinsYet')}</p>
           <Button size="sm" variant="outline" onClick={() => setAddDialogOpen(true)}>
             <UserPlus className="h-3.5 w-3.5 mr-1.5" />
-            Add first checkin
+            {t('addFirstCheckinButton')}
           </Button>
         </div>
       )}
@@ -465,7 +470,7 @@ export function CheckinPanel({
                 </p>
                 {checkin.teamId && checkin.teamId !== currentTeamId && (
                   <p className="text-xs text-muted-foreground truncate">
-                    {orgTeamsQ.data?.find((t) => t.id === checkin.teamId)?.name ?? checkin.teamId}
+                    {orgTeamsQ.data?.find((team) => team.id === checkin.teamId)?.name ?? checkin.teamId}
                   </p>
                 )}
               </div>
@@ -473,9 +478,9 @@ export function CheckinPanel({
               {/* Status + confirm toggle */}
               <div className="shrink-0 flex items-center gap-2">
                 {checkin.is_completed ? (
-                  <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-600">Confirmed</Badge>
+                  <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-600">{t('statusConfirmed')}</Badge>
                 ) : (
-                  <Badge variant="secondary" className="text-xs text-amber-600 border-amber-200 bg-amber-50">Pending</Badge>
+                  <Badge variant="secondary" className="text-xs text-amber-600 border-amber-200 bg-amber-50">{t('statusPending')}</Badge>
                 )}
                 <button
                   onClick={(e) => toggleComplete(checkin, e)}
@@ -484,7 +489,7 @@ export function CheckinPanel({
                       ? 'bg-green-600 text-white border-green-600'
                       : 'border-border hover:bg-muted'
                   }`}
-                  title={checkin.is_completed ? 'Mark pending' : 'Mark confirmed'}
+                  title={checkin.is_completed ? t('markPending') : t('markConfirmed')}
                 >
                   <Check className="h-3 w-3" />
                 </button>
@@ -495,7 +500,7 @@ export function CheckinPanel({
       )}
 
       {!isLoading && filteredCheckins.length === 0 && checkins.length > 0 && (
-        <p className="text-sm text-muted-foreground text-center py-6">No checkins match the search</p>
+        <p className="text-sm text-muted-foreground text-center py-6">{t('noCheckinsMatchSearch')}</p>
       )}
 
       {/* Add checkin dialog */}
@@ -518,7 +523,7 @@ export function CheckinPanel({
       <Sheet open={!!sheetTarget} onOpenChange={(o) => { if (!o) setSheetTarget(null) }}>
         <SheetContent side="right" className="w-full sm:max-w-md px-6">
           <SheetHeader className="mb-4">
-            <SheetTitle>{sheetTarget?.existing ? 'Update checkin' : 'Add checkin'}</SheetTitle>
+            <SheetTitle>{sheetTarget?.existing ? t('sheetTitleUpdate') : t('sheetTitleAdd')}</SheetTitle>
             {sheetTarget && (
               <p className="text-sm text-muted-foreground">
                 {sheetTarget.contact.firstname} {sheetTarget.contact.lastname}

@@ -3129,5 +3129,125 @@
     "roomCount": "{count, plural, one {# room} other {# rooms}}",
     "openInMaps": "Open in maps",
     "setAsMainAddress": "Set as main address"
+  },
+  "EngagementMatrix": {
+    "cardTitle": "Engagement matrix",
+    "trajectoryButton": "Trajectory",
+    "notEnoughData": "Not enough data for this period",
+    "declineWarning": "Engagement has dropped more than 3 points since the start of the period.",
+    "axisActiveContacts": "Active contacts →",
+    "axisEngagement": "Engagement →",
+    "tooltipActiveContacts": "Active contacts: <strong>{value}</strong>",
+    "tooltipEngagement": "Engagement: <strong>{value}%</strong>",
+    "midpoint": "Midpoint: {midX} contacts · {midY}% engagement",
+    "quadrants": {
+      "top_right": {
+        "label": "Team growth",
+        "hint": "Work on the team",
+        "actions": ["Team events", "Special sessions"]
+      },
+      "top_left": {
+        "label": "Lead acquisition",
+        "hint": "Work on lead acquisition",
+        "actions": ["Social ads", "Website", "Word of mouth"]
+      },
+      "bottom_right": {
+        "label": "Boost engagement",
+        "hint": "Work on engagement",
+        "actions": ["More sessions", "Feedback", "Re-contact members"]
+      },
+      "bottom_left": {
+        "label": "Getting started",
+        "hint": "Work on getting started",
+        "actions": ["Flexible schedule", "Focus energy"]
+      }
+    }
+  },
+  "CorrelationExplorer": {
+    "cardTitle": "Correlation explorer",
+    "vsLabel": "vs",
+    "notEnoughData": "Not enough data for this period",
+    "metricCheckins": "Check-ins",
+    "metricAllBookings": "All bookings",
+    "metricNewBookings": "New bookings",
+    "metricActiveContacts": "Active contacts",
+    "metricTotalContacts": "Total contacts",
+    "metricTrials": "Trials",
+    "metricStudents": "Joined",
+    "metricEngagementRate": "Engagement %",
+    "metricSessionsHeld": "Sessions held",
+    "correlationLabel": "{strength} {direction} correlation (r={r})",
+    "strengthStrong": "Strong",
+    "strengthModerate": "Moderate",
+    "strengthWeak": "Weak",
+    "strengthNone": "No",
+    "directionPositive": "positive",
+    "directionNegative": "negative",
+    "tooltipMetric": "{metric}: <strong>{value}</strong>"
+  },
+  "CheckinPanel": {
+    "csvHeaderFirstName": "First name",
+    "csvHeaderLastName": "Last name",
+    "csvHeaderStatus": "Status",
+    "csvHeaderCheckedInAt": "Checked in at",
+    "statusConfirmed": "Confirmed",
+    "statusPending": "Pending",
+    "addCheckinDialogTitle": "Add checkin",
+    "searchContactsPlaceholder": "Search contacts…",
+    "noContactsMatch": "No contacts match",
+    "allContactsCheckedIn": "All contacts are already checked in",
+    "checkinsCount": "{count, plural, one {<strong>#</strong> checkin} other {<strong>#</strong> checkins}}",
+    "confirmedCount": "{count, plural, one {<strong>#</strong> confirmed} other {<strong>#</strong> confirmed}}",
+    "pendingCount": "{count, plural, one {<strong>#</strong> pending} other {<strong>#</strong> pending}}",
+    "exportCsvButton": "Export CSV",
+    "addCheckinButton": "Add checkin",
+    "showingTeamLabel": "Showing team:",
+    "searchCheckinsPlaceholder": "Search checkins…",
+    "noCheckinsYet": "No checkins yet",
+    "addFirstCheckinButton": "Add first checkin",
+    "noCheckinsMatchSearch": "No checkins match the search",
+    "markPending": "Mark pending",
+    "markConfirmed": "Mark confirmed",
+    "sheetTitleAdd": "Add checkin",
+    "sheetTitleUpdate": "Update checkin"
+  },
+  "UpgradeModal": {
+    "titleUpgradeTo": "Upgrade to {label}",
+    "maybeLater": "Maybe later",
+    "compareAllPlans": "Compare all plans →",
+    "planContent": {
+      "free": {
+        "tagline": "Get started for free with up to 15 contacts.",
+        "features": [
+          "Up to 15 active contacts",
+          "Public bio link",
+          "Sessions, subscriptions & goals"
+        ]
+      },
+      "coach": {
+        "tagline": "Everything a solo coach needs to run a professional practice.",
+        "features": [
+          "Member app + 1:1 coaching slots",
+          "Contact Groups & Custom Fields included",
+          "À-la-carte add-ons + 50 contacts"
+        ]
+      },
+      "studio": {
+        "tagline": "Scale with engagement tools, automation, and the member app.",
+        "features": [
+          "Every add-on included + 250 contacts",
+          "Gamification — streaks, leaderboards, badges",
+          "Full automation suite & multiple managers"
+        ]
+      },
+      "organization": {
+        "tagline": "Manage multiple locations from a single console.",
+        "features": [
+          "Multi-team management & cross-team events",
+          "Unified analytics & reporting",
+          "API access & advanced permissions"
+        ]
+      }
+    }
   }
 }
