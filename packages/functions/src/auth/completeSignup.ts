@@ -4,6 +4,8 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { escapeHtml } from '../utils/html'
+import { timingSafeEqualStr } from '../utils/secureCompare'
 import { assertVerifiableCode } from './verificationCode'
 import { to } from '../utils/async'
 import {
@@ -45,6 +47,7 @@ export const verifyContactCode = onCall(async (request) => {
 export const completeSignup = onCall(async (request) => {
   const data = request.data as {
     codeId?: string
+    code?: string
     contactDetails?: {
       firstname: string
       lastname: string
@@ -62,6 +65,9 @@ export const completeSignup = onCall(async (request) => {
 
   if (!data?.codeId || !data?.contactDetails) {
     throw new HttpsError('invalid-argument', 'codeId and contactDetails are required')
+  }
+  if (!data.code || !/^\d{6}$/.test(data.code)) {
+    throw new HttpsError('invalid-argument', 'A valid 6-digit code is required')
   }
 
   const { contactDetails } = data
@@ -85,6 +91,13 @@ export const completeSignup = onCall(async (request) => {
   }
   if (codeData.used) {
     throw new HttpsError('already-exists', 'This verification code has already been used')
+  }
+  // Defence in depth: bind completion to knowledge of the code itself, not just
+  // the (client-held) codeId. The 15-min expiry is intentionally NOT re-checked
+  // here — verifyContactCode already enforced it; signup completion may legitimately
+  // happen later. Constant-time compare to avoid a timing oracle on the code.
+  if (!timingSafeEqualStr(String(codeData.code), data.code)) {
+    throw new HttpsError('permission-denied', 'Verification code does not match')
   }
 
   const email: string = codeData.email
@@ -289,7 +302,7 @@ export const completeSignup = onCall(async (request) => {
   try {
     const { html, text } = buildEmailTemplate({
       title: `Welcome to ${teamName}!`,
-      body: `<p>Hi ${sanitized.firstname},</p><p>Thanks for signing up with <strong>${teamName}</strong>. Your membership request has been received and is under review.</p><p>We'll be in touch soon.</p>`,
+      body: `<p>Hi ${escapeHtml(sanitized.firstname)},</p><p>Thanks for signing up with <strong>${escapeHtml(teamName)}</strong>. Your membership request has been received and is under review.</p><p>We'll be in touch soon.</p>`,
     })
     await sendEmail({ to: email, subject: `Welcome to ${teamName}!`, html, text, teamId })
     console.log(`Welcome email sent to ${email}`)
@@ -302,7 +315,7 @@ export const completeSignup = onCall(async (request) => {
     try {
       const { html, text } = buildEmailTemplate({
         title: `New Member Signup: ${sanitized.firstname} ${sanitized.lastname}`,
-        body: `<p>A new membership request has been submitted.</p><p><strong>Name:</strong> ${sanitized.firstname} ${sanitized.lastname}</p><p><strong>Email:</strong> ${email}</p>${sanitized.phone ? `<p><strong>Phone:</strong> ${sanitized.phone}</p>` : ''}`,
+        body: `<p>A new membership request has been submitted.</p><p><strong>Name:</strong> ${escapeHtml(sanitized.firstname)} ${escapeHtml(sanitized.lastname)}</p><p><strong>Email:</strong> ${escapeHtml(email)}</p>${sanitized.phone ? `<p><strong>Phone:</strong> ${escapeHtml(sanitized.phone)}</p>` : ''}`,
       })
       await sendEmail({ to: ownerEmail, subject: `New Member Signup: ${sanitized.firstname} ${sanitized.lastname}`, html, text, teamId })
     } catch (err) {

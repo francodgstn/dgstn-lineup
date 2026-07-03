@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { adminAuth } from '@/lib/firebase-admin'
-import { isOperatorEmail } from '@/lib/operators'
+import { isOperatorToken } from '@/lib/operators'
 import { SESSION_COOKIE, SESSION_MAX_AGE_MS } from '@/lib/session'
 
 // Exchange a Firebase ID token (from client Google sign-in) for an httpOnly
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   if (!decoded.email || !decoded.email_verified) {
     return NextResponse.json({ error: 'email not verified' }, { status: 403 })
   }
-  if (!isOperatorEmail(decoded.email)) {
+  if (!isOperatorToken(decoded)) {
     return NextResponse.json({ error: 'not an operator' }, { status: 403 })
   }
 

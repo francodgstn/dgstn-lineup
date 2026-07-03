@@ -1,12 +1,16 @@
 import 'server-only'
 
-// Built-in operator allowlist. Override / extend via the OPERATOR_EMAILS env
-// var (comma-separated). This is the single authorization gate for cycle 1 —
-// any authenticated Firebase user whose verified email is on this list is an
-// operator; everyone else is rejected server-side.
-const DEFAULT_OPERATORS = ['franco.dgstn@gmail.com']
-
-// Seeded emulator owners — convenient sign-in when running against demo data.
+// Operator authorization.
+//
+// An authenticated Firebase user is an operator if EITHER:
+//   1. their token carries the `saas_operator` custom claim (the durable
+//      mechanism — provisioned out of band on the user record), OR
+//   2. their verified email is on the OPERATOR_EMAILS allowlist (bootstrap /
+//      break-glass, set via app-hosting config).
+//
+// No operator identity is hardcoded in source (it would otherwise sit in git
+// history forever). Deployed environments set OPERATOR_EMAILS; the emulator adds
+// the seeded demo owners below for convenient local sign-in.
 const DEMO_OPERATORS = ['coach@linyup.com', 'studio@linyup.com', 'org@linyup.com']
 
 const isDemo =
@@ -18,12 +22,21 @@ function allowlist(): Set<string> {
     .split(',')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean)
-  const base = fromEnv.length ? fromEnv : DEFAULT_OPERATORS
-  const all = isDemo ? [...base, ...DEMO_OPERATORS] : base
-  return new Set(all.map((e) => e.toLowerCase()))
+  const all = isDemo ? [...fromEnv, ...DEMO_OPERATORS] : fromEnv
+  return new Set(all)
 }
 
 export function isOperatorEmail(email: string | undefined | null): boolean {
   if (!email) return false
   return allowlist().has(email.toLowerCase())
+}
+
+// Preferred check against a decoded Firebase token: the custom claim wins;
+// otherwise fall back to the verified-email allowlist.
+export function isOperatorToken(decoded: {
+  saas_operator?: unknown
+  email?: string | null
+}): boolean {
+  if (decoded.saas_operator === true) return true
+  return isOperatorEmail(decoded.email ?? null)
 }

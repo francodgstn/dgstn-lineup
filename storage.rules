@@ -14,6 +14,18 @@ service firebase.storage {
         && request.auth.token.sessionExpires != null
         && request.auth.token.sessionExpires >= request.time.toMillis();
     }
+    // The contact's own live session (custom token whose contactId matches the path).
+    function isContactSelf(contactId) {
+      return request.auth != null
+        && request.auth.token.contactId == contactId
+        && request.auth.token.sessionExpires != null
+        && request.auth.token.sessionExpires >= request.time.toMillis();
+    }
+    // The team that owns a contact (resolved from the contact doc, since the Storage
+    // path carries no teamId).
+    function contactTeamId(contactId) {
+      return firestore.get(/databases/(default)/documents/contacts/$(contactId)).data.teamId;
+    }
     // True when the course doc (root collection, id == path courseId) is published & free.
     function isPublishedFreeCourse(courseId) {
       return firestore.get(/databases/(default)/documents/courses/$(courseId)).data.status == 'published'
@@ -76,10 +88,13 @@ service firebase.storage {
     }
 
     match /contacts/{contactId}/{allPaths=**} {
-      // Contacts don't carry a teamId in their Storage path; restrict to authenticated
-      // users until a team-mapping approach is implemented in storage paths.
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
+      // The Storage path carries no teamId, so resolve the owning team from the
+      // contact doc and scope access to the contact themselves or that team's staff
+      // — no longer any-authenticated-user.
+      allow read: if isContactSelf(contactId)
+        || isTeamMemberStorage(contactTeamId(contactId));
+      allow write: if (isContactSelf(contactId)
+          || isTeamMemberStorage(contactTeamId(contactId)))
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|application/pdf');
     }

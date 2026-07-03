@@ -2,7 +2,7 @@ import 'server-only'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { adminAuth } from '@/lib/firebase-admin'
-import { isOperatorEmail } from '@/lib/operators'
+import { isOperatorToken } from '@/lib/operators'
 import { SESSION_COOKIE } from '@/lib/session'
 
 export interface Operator {
@@ -20,7 +20,7 @@ export async function requireOperator(): Promise<Operator> {
 
   try {
     const decoded = await adminAuth.verifySessionCookie(cookie, true)
-    if (!decoded.email || !isOperatorEmail(decoded.email)) redirect('/login')
+    if (!decoded.email || !isOperatorToken(decoded)) redirect('/login')
     return { uid: decoded.uid, email: decoded.email }
   } catch {
     redirect('/login')
