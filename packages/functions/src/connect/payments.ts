@@ -36,6 +36,8 @@ import {
 } from '../utils/connect/client'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
 import { resolveSingleContact } from '../utils/contacts'
+import { optionalContactSessionFromRequest } from '../utils/contactSession'
+import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
 // Stripe's minimum charge for CHF is ~0.50 CHF.
 const MIN_AMOUNT_RAPPEN = 50
@@ -320,21 +322,6 @@ export const createMembershipPayment = onCall(async (request) => {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
 
-// A signed-in contact of the team → attach the purchase to that EXACT contact
-// (deterministic). Email resolution alone is now ambiguous: with the login-email
-// allow-list + shared emails, one address can map to several contacts. Optional —
-// guests carry no session and fall through to the webhook's email-based linking.
-function optionalContactSession(
-  request: CallableRequest<unknown>
-): { contactId: string; teamId: string } | null {
-  const contactId = request.auth?.token?.contactId as string | undefined
-  const teamId = request.auth?.token?.teamId as string | undefined
-  const sessionExpires = request.auth?.token?.sessionExpires as number | undefined
-  if (!contactId || !teamId) return null
-  if (typeof sessionExpires === 'number' && sessionExpires < Date.now()) return null
-  return { contactId, teamId }
-}
-
 /**
  * Index-free hourly rate limit for the public checkout: an `{ip}:{hourBucket}`
  * counter doc, incremented in a transaction. Avoids composite indexes (and the
@@ -362,7 +349,8 @@ export async function checkoutRateLimit(ipRaw: string | undefined): Promise<void
 // account. No contactId is carried — the webhook links/creates the contact by
 // email. Guarded by the Connect kill-switch + a chargeable account + rate limit.
 // ─────────────────────────────────────────────────────────────────────────────
-export const createMembershipCheckout = onCall(async (request) => {
+export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
+  monitorAppCheck(request, 'createMembershipCheckout')
   const data = request.data as {
     teamId?: string
     subscriptionTypeId?: string
@@ -410,7 +398,7 @@ export const createMembershipCheckout = onCall(async (request) => {
   const firstName = (data.firstName ?? '').trim().slice(0, 500)
   const lastName = (data.lastName ?? '').trim().slice(0, 500)
   // A signed-in member's contact is already known — attach to it and skip re-collecting a name.
-  const session = optionalContactSession(request)
+  const session = optionalContactSessionFromRequest(request)
   const isMember = session?.teamId === teamId
   if (contactMode !== 'off' && !isMember && (!firstName || !lastName)) {
     throw new HttpsError('invalid-argument', 'First and last name are required')
@@ -532,7 +520,8 @@ export const createMembershipCheckout = onCall(async (request) => {
 // the variant override or the product's base price. The webhook links/creates the
 // buyer's contact by email and records the sale (kind === 'product').
 // ─────────────────────────────────────────────────────────────────────────────
-export const createProductCheckout = onCall(async (request) => {
+export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
+  monitorAppCheck(request, 'createProductCheckout')
   const data = request.data as {
     teamId?: string
     productId?: string
@@ -604,7 +593,7 @@ export const createProductCheckout = onCall(async (request) => {
   if (variantId) metadata.variantId = variantId
   if (variantLabel) metadata.variantLabel = variantLabel
   // Signed-in member → link the sale to their exact contact.
-  const productSession = optionalContactSession(request)
+  const productSession = optionalContactSessionFromRequest(request)
   if (productSession?.teamId === teamId) metadata.contactId = productSession.contactId
 
   const idempotencyKey =
@@ -637,7 +626,8 @@ export const createProductCheckout = onCall(async (request) => {
 // (courses/{id}/purchases/{contactId}) + links/creates the buyer's contact by email.
 // Mirrors createProductCheckout; the success page lands in the Space (seg=space).
 // ─────────────────────────────────────────────────────────────────────────────
-export const createCourseCheckout = onCall(async (request) => {
+export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
+  monitorAppCheck(request, 'createCourseCheckout')
   const data = request.data as {
     teamId?: string
     courseId?: string
@@ -693,7 +683,7 @@ export const createCourseCheckout = onCall(async (request) => {
     courseTitle: course.title,
   }
   // Signed-in member → grant the entitlement to their exact contact.
-  const courseSession = optionalContactSession(request)
+  const courseSession = optionalContactSessionFromRequest(request)
   if (courseSession?.teamId === teamId) metadata.contactId = courseSession.contactId
 
   const idempotencyKey =

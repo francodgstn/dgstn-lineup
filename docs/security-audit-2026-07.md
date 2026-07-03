@@ -27,8 +27,8 @@ or hardening gap · **L** = low-risk / defense-in-depth.
 | # | Sev | Finding | Status |
 |---|-----|---------|--------|
 | 1 | H | Cross-tenant LIST on `courses`/`forms`/`documents` | ✅ Fixed |
-| 2 | H | `createDropInCheckout` trusts client `authenticatedContactId` | ⏸ Proposed (payments — awaiting sign-off) |
-| 3 | M | App Check absent on all callables | ⏸ Proposed (payments callables); ▶ recommended for non-payment |
+| 2 | H | `createDropInCheckout` trusts client `authenticatedContactId` | ✅ Fixed |
+| 3 | M | App Check absent on all callables | ✅ Implemented (web provider + staged monitor→enforce on web-only callables) |
 | 4 | M | Event-invitation tokens never expire + leak PII | ✅ Fixed |
 | 5 | M | Unescaped user content in email HTML | ✅ Fixed |
 | 6 | M | Brevo/inbound webhooks: non-constant-time token / secret in logs | ✅ Fixed |
@@ -58,22 +58,32 @@ which references `resource.data.teamId`; Firestore therefore only permits a list
 is scoped `where('teamId','==', <team>)` and rejects any unscoped or cross-tenant list. The
 admin authoring queries already carry that filter, so the change is transparent to the app.
 
-### 2 — `createDropInCheckout` trusts client `authenticatedContactId` (H, proposed)
-`booking/dropIn.ts` accepts a contact id from the request body and only checks the contact
+### 2 — `createDropInCheckout` trusts client `authenticatedContactId` (H, fixed)
+`booking/dropIn.ts` accepted a contact id from the request body and only checked the contact
 exists and matches `teamId` — not that the caller *is* that contact (contrast the other
-checkout callables, which derive the contact from the verified session via
-`optionalContactSession`). This is a contact-id enumeration + "already covered" oracle and
-booking-on-behalf-of. Payment is still required, so the impact is data exposure/abuse, not
-free goods. **Proposed fix (payments — awaiting sign-off):** derive the contact from the
-verified contact session; fall back to the `contactDetails` email/name path only when there
-is no session.
+checkout callables, which derive the contact from the verified session). This was a
+contact-id enumeration + "already covered" oracle and booking-on-behalf-of. **Fix:** the
+callable now derives the contact solely from the verified contact-session token (shared
+`optionalContactSessionFromRequest`, `utils/contactSession.ts`, unit-tested), falling back to
+the `contactDetails` email/name path only when there is no session. The client-supplied
+`authenticatedContactId` field was removed. The `optionalContactSession` duplicate in
+`connect/payments.ts` was folded into the same shared helper. The web guest flow (which
+already sent `contactDetails`) is unaffected.
 
-### 3 — App Check absent (M, split)
-No `enforceAppCheck` anywhere in `packages/functions`; unauthenticated Firestore-writing
-callables are defended only by per-IP hourly rate limits. **Plan:** enable App Check
-(staged log-only → enforce) on the non-payment public callables (`submitForm`,
-`sendContactVerificationCode`) first; the payment checkouts are proposed under the payments
-sign-off gate. Requires wiring the App Check provider in web + mobile.
+### 3 — App Check (M, implemented — staged)
+No `enforceAppCheck` existed anywhere; unauthenticated Firestore-writing callables were
+defended only by per-IP hourly rate limits. **Implemented:** a reCAPTCHA v3 App Check
+provider on the web client (`apps/web/src/lib/app-check.ts` + `AppCheckProvider`, mounted in
+the locale layout; no-ops under the emulator or when the key is unset), and App Check on the
+**web-only** public callables — `createDropInCheckout`, `createMembershipCheckout`,
+`createProductCheckout`, `createCourseCheckout`, and `submitForm` — via
+`enforceAppCheck: process.env.APP_CHECK_ENFORCE === 'true'` with a `monitorAppCheck()` log in
+each (`utils/appCheck.ts`). **Ships in monitor mode** (`APP_CHECK_ENFORCE=false` in all
+`.env.*`): missing tokens are logged, not rejected. Rollout: provision the reCAPTCHA key →
+confirm `[appcheck-monitor]` logs show tokens → set `APP_CHECK_ENFORCE=true` (staging first).
+`sendContactVerificationCode` is deliberately **excluded** because the Expo mobile app calls
+it and cannot produce attestation tokens; mobile enforcement needs native App Check
+(`@react-native-firebase/app-check` + an EAS dev build) as a separate phase.
 
 ### 4 — Event-invitation tokens never expired + PII leak (M, fixed)
 `events/index.ts` minted `crypto.randomBytes(32)` tokens with no expiry, and

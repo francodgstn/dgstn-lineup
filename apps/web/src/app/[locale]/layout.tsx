@@ -6,6 +6,7 @@ import QueryProvider from '@/contexts/QueryProvider'
 import { Toaster } from '@/components/ui/sonner'
 import { routing } from '@/i18n/routing'
 import { PostHogProvider } from '@/components/providers/PostHogProvider'
+import { AppCheckInit } from '@/components/providers/AppCheckProvider'
 
 export default async function LocaleLayout({
   children,
@@ -22,6 +23,7 @@ export default async function LocaleLayout({
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
       <PostHogProvider>
+        <AppCheckInit />
         <QueryProvider>
           <AuthProvider>{children}</AuthProvider>
         </QueryProvider>

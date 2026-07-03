@@ -19,6 +19,7 @@ import {
 import type { Form, FormField } from '@linyup/shared'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { escapeHtml } from '../utils/html'
+import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
 const SUBMIT_RATE_LIMIT_MAX = 10 // per form, per IP, per hour
 const RATE_WINDOW_MS = 60 * 60 * 1000
@@ -117,7 +118,8 @@ function renderAnswersHtml(fields: FormField[], answers: Record<string, unknown>
   return `<table style="width:100%;border-collapse:collapse;">${rows}</table>`
 }
 
-export const submitForm = onCall(async (request) => {
+export const submitForm = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
+  monitorAppCheck(request, 'submitForm')
   const data = request.data as {
     teamId?: string
     formId?: string

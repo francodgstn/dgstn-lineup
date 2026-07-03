@@ -1,6 +1,27 @@
 // Ported from hmd-lineup/functions/src/utils/contactSession.js
 import * as admin from 'firebase-admin'
-import { HttpsError } from 'firebase-functions/v2/https'
+import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https'
+
+/**
+ * Resolve the caller's contact identity from their verified contact-session
+ * custom token (the token minted by buildContactSession). Returns the claimed
+ * { contactId, teamId } only when the session is present and not expired, else
+ * null (anonymous/guest callers fall through to email-based linking).
+ *
+ * SECURITY: this is the ONLY trustworthy source of a caller's contactId on a
+ * public callable — never accept a contactId from the request body, which lets
+ * a caller act as (and enumerate) arbitrary contacts.
+ */
+export function optionalContactSessionFromRequest(
+  request: CallableRequest<unknown>
+): { contactId: string; teamId: string } | null {
+  const contactId = request.auth?.token?.contactId as string | undefined
+  const teamId = request.auth?.token?.teamId as string | undefined
+  const sessionExpires = request.auth?.token?.sessionExpires as number | undefined
+  if (!contactId || !teamId) return null
+  if (typeof sessionExpires === 'number' && sessionExpires < Date.now()) return null
+  return { contactId, teamId }
+}
 
 interface ContactSessionOptions {
   allowedEmail?: string

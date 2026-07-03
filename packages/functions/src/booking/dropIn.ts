@@ -19,6 +19,8 @@ import { checkoutRateLimit } from '../connect/payments'
 import { createOneOffCheckoutSession } from '../utils/connect/client'
 import { resolveBaseUrl } from '../utils/env'
 import { generateSecureToken } from '../utils/crypto'
+import { optionalContactSessionFromRequest } from '../utils/contactSession'
+import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
 const MIN_AMOUNT_RAPPEN = 50
 const HOLD_MINUTES = 30
@@ -44,11 +46,11 @@ function isContactCovered(rule: ActivityAccessRule, contact: CoverageContact): b
   return (rule.subscriptionTypeIds ?? []).some((id) => held.has(id))
 }
 
-export const createDropInCheckout = onCall(async (request) => {
+export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
+  monitorAppCheck(request, 'createDropInCheckout')
   const data = request.data as {
     teamId?: string
     sessionId?: string
-    authenticatedContactId?: string
     contactDetails?: { firstname?: string; lastname?: string; email?: string; phone?: string }
     slug?: string
     locale?: string
@@ -118,8 +120,13 @@ export const createDropInCheckout = onCall(async (request) => {
   let phone: string | null = null
   let isNewContact = false
 
-  if (data.authenticatedContactId) {
-    const cSnap = await db.collection('contacts').doc(data.authenticatedContactId).get()
+  // Trust ONLY the verified contact-session token for the caller's identity —
+  // never a contactId from the request body (which would let anyone act as, and
+  // enumerate, arbitrary contacts of the team). Guests carry no session and fall
+  // through to the email/name path below.
+  const contactSession = optionalContactSessionFromRequest(request)
+  if (contactSession && contactSession.teamId === teamId) {
+    const cSnap = await db.collection('contacts').doc(contactSession.contactId).get()
     if (!cSnap.exists || cSnap.data()?.teamId !== teamId) {
       throw new HttpsError('not-found', 'Contact not found')
     }
@@ -205,7 +212,7 @@ export const createDropInCheckout = onCall(async (request) => {
     fromBioLink: true,
     is_new_contact: isNewContact,
     booking_token: bookingToken,
-    authenticated_booking: !!data.authenticatedContactId,
+    authenticated_booking: !!contactSession,
     status: 'pending',
     payment_status: 'required',
     expires_at: expiresAt,
