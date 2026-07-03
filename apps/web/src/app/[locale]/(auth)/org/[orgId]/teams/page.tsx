@@ -134,6 +134,7 @@ function RequestAccessDialog({
   onClose: () => void
   onSuccess: () => void
 }) {
+  const t = useTranslations('OrgTeams')
   const [accessType, setAccessType] = useState<TeamAccessType>('view')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -158,30 +159,32 @@ function RequestAccessDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Request access</DialogTitle>
+          <DialogTitle>{t('requestAccessTitle')}</DialogTitle>
           <DialogDescription>
-            Request direct access to <strong>{team?.teamName ?? team?.teamId}</strong>.
-            The team owner will be notified and can approve your request.
+            {t.rich('requestAccessDescription', {
+              teamName: team?.teamName ?? team?.teamId ?? '',
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <Label>Access level</Label>
+            <Label>{t('accessLevelLabel')}</Label>
             <Select value={accessType} onValueChange={(v) => setAccessType(v as TeamAccessType)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="view">View — read contacts, sessions, events</SelectItem>
-                <SelectItem value="manage">Manage — full admin access</SelectItem>
+                <SelectItem value="view">{t('accessLevelView')}</SelectItem>
+                <SelectItem value="manage">{t('accessLevelManage')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>{t('cancel')}</Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Sending…' : 'Request access'}
+              {loading ? t('sending') : t('requestAccessSubmit')}
             </Button>
           </DialogFooter>
         </form>

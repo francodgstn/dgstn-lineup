@@ -3338,7 +3338,7 @@ function AlertDialog({
               onClick={() => onOpenChange(false)}
               className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
             >
-              Cancel
+              {t('cancel')}
             </button>
             <button
               type="submit"
@@ -3365,6 +3365,7 @@ function AlertPresetPicker({
   presets: AlertPresetRecord[]
   onSelect: (p: AlertPresetRecord, date?: Date) => void
 }) {
+  const t = useTranslations('Contacts')
   const [dateStep, setDateStep] = useState<AlertPresetRecord | null>(null)
   const [pickedDate, setPickedDate] = useState<Date | undefined>()
 
@@ -3382,7 +3383,7 @@ function AlertPresetPicker({
       <Dialog open={open && !dateStep} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Apply preset</DialogTitle>
+            <DialogTitle>{t('applyPresetTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-1">
             {presets.map((p) => (
@@ -3404,7 +3405,7 @@ function AlertPresetPicker({
                 </div>
                 {p.schedule_type === 'sessions_countdown' && (
                   <Badge variant="outline" className="text-xs shrink-0">
-                    {p.schedule_value} sessions
+                    {t('presetSessionsCount', { count: p.schedule_value as number })}
                   </Badge>
                 )}
               </button>
@@ -3423,7 +3424,7 @@ function AlertPresetPicker({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Select date for &quot;{dateStep?.name}&quot;</DialogTitle>
+            <DialogTitle>{t('selectDateForPreset', { name: dateStep?.name ?? '' })}</DialogTitle>
           </DialogHeader>
           <div className="py-2">
             <DatePicker value={pickedDate} onChange={setPickedDate} />
@@ -3436,7 +3437,7 @@ function AlertPresetPicker({
               }}
               className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
             >
-              Cancel
+              {t('cancel')}
             </button>
             <button
               disabled={!pickedDate}
@@ -3450,7 +3451,7 @@ function AlertPresetPicker({
               }}
               className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
-              Apply
+              {t('applyDateButton')}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -3524,7 +3525,7 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors"
           >
             <BookOpen className="h-4 w-4" />
-            From preset
+            {t('fromPresetButton')}
           </button>
         )}
         <button

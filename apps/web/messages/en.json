@@ -493,6 +493,11 @@
     "alertPending": "Pending",
     "alertSessionCount": "Session count",
     "alertScheduleType": "Trigger",
+    "fromPresetButton": "From preset",
+    "applyPresetTitle": "Apply preset",
+    "presetSessionsCount": "{count, plural, one {# session} other {# sessions}}",
+    "selectDateForPreset": "Select date for \"{name}\"",
+    "applyDateButton": "Apply",
     "sectionRanks": "Ranks",
     "rankUnranked": "Unranked",
     "rankNoSystemsPrompt": "No ranking system configured. Set one up in settings to track ranks.",
@@ -772,7 +777,14 @@
     "delete": "Delete",
     "updatingSeries": "Updating sessions…",
     "seriesUpdated": "{count, plural, one {# session updated} other {# sessions updated}}",
-    "deleting": "Deleting…"
+    "deleting": "Deleting…",
+    "instructorNone": "No instructor",
+    "fieldMaxParticipants": "Max participants",
+    "maxParticipantsPlaceholder": "No limit",
+    "optional": "optional",
+    "fieldBookingMandatory": "Booking required",
+    "bookingMandatoryHint": "Attendees must book in advance — no drop-ins.",
+    "bookingRequiredChip": "Booking required"
   },
   "Calendar": {
     "title": "Schedule",
@@ -810,7 +822,8 @@
     "monthSummary": "Month overview",
     "monthGroupClasses": "Group classes",
     "monthCoaching": "Coaching sessions",
-    "monthEvents": "Events"
+    "monthEvents": "Events",
+    "openDetail": "Open details"
   },
   "Events": {
     "title": "Events",
@@ -1188,6 +1201,15 @@
     "paymentsCurrency": "Default currency",
     "paymentsEnabled": "Enabled",
     "paymentsDisabled": "Disabled",
+    "paymentsInstanceName": "Instance name",
+    "paymentsWebhookSecretLabel": "Webhook signing secret",
+    "paymentsWebhookSecretPlaceholderPayrexx": "Paste from Payrexx dashboard → Webhooks",
+    "paymentsWebhookSecretHelpStripe": "Point a Stripe webhook at <code>/handleTeamStripeWebhook?teamId={teamId}</code> and paste its signing secret here to record payments against contacts. Leave blank to disable (no payments recorded).",
+    "paymentsWebhookSecretHelpPayrexx": "Used to verify <code>X-Webhook-Signature</code> on incoming payment webhooks. Leave blank to disable signature verification (not recommended).",
+    "paymentsDefaultSubscriptionType": "Default subscription type",
+    "paymentsNoneOption": "None",
+    "paymentsDefaultSubscriptionTypeHelpStripe": "Applied when a payment carries no <code>subscriptionTypeId</code> metadata.",
+    "paymentsDefaultSubscriptionTypeHelpPayrexx": "Applied when the Payrexx payment link has no <code>referenceId</code>. Set <code>referenceId</code> to the subscription type ID on each Payrexx link for per-plan control.",
     "tabAffiliations": "Affiliations",
     "affiliationsEnabledLabel": "Enable affiliations",
     "affiliationsEnabledHelp": "Track affiliation records (e.g. club membership, federation licence) for contacts.",
@@ -1805,7 +1827,13 @@
     "inviteSentSuccess": "Invitation sent.",
     "cancel": "Cancel",
     "sending": "Sending…",
-    "processing": "Processing…"
+    "processing": "Processing…",
+    "requestAccessTitle": "Request access",
+    "requestAccessDescription": "Request direct access to <strong>{teamName}</strong>. The team owner will be notified and can approve your request.",
+    "accessLevelLabel": "Access level",
+    "accessLevelView": "View — read contacts, sessions, events",
+    "accessLevelManage": "Manage — full admin access",
+    "requestAccessSubmit": "Request access"
   },
   "OrgAffiliations": {
     "title": "Affiliations",
@@ -2396,7 +2424,15 @@
     "sendTestSuccess": "Test email sent to {email}",
     "sendTestSkipped": "Test skipped — this address is suppressed.",
     "sendTestTestMode": "Sent in test mode — no real email was delivered.",
-    "sendTestError": "Could not send the test email. Please try again."
+    "sendTestError": "Could not send the test email. Please try again.",
+    "customVariablesTitle": "Custom variables",
+    "customVariablesDescription": "Define key→value pairs you can use in email templates as <code>'{{key}}'</code>. For example, <code>discountCode</code> → <code>WELCOME20</code>.",
+    "customVariablesValuePlaceholder": "Substitution value",
+    "customVariablesAddButton": "Add variable",
+    "customVariablesSaveButton": "Save",
+    "customVariablesSaving": "Saving…",
+    "customVariablesSaved": "✓ Saved",
+    "customVariablesInvalidKeys": "Invalid key names: {keys}. Use letters, numbers and underscores only."
   },
   "ConnectPayments": {
     "title": "Accept payments with Linyup",
@@ -2947,7 +2983,8 @@
     "back": "Back",
     "durationMinutes": "{mins}m",
     "durationHoursMinutes": "{h}h {m}m",
-    "durationHours": "{h}h"
+    "durationHours": "{h}h",
+    "bookingRequired": "Booking required"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Book a Trial Class",

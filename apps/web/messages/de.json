@@ -493,6 +493,11 @@
     "alertPending": "Ausstehend",
     "alertSessionCount": "Einheitenanzahl",
     "alertScheduleType": "Auslöser",
+    "fromPresetButton": "Aus Vorlage",
+    "applyPresetTitle": "Vorlage anwenden",
+    "presetSessionsCount": "{count, plural, one {# Einheit} other {# Einheiten}}",
+    "selectDateForPreset": "Datum für \"{name}\" auswählen",
+    "applyDateButton": "Anwenden",
     "sectionRanks": "Ränge",
     "rankUnranked": "Ohne Rang",
     "rankNoSystemsPrompt": "Kein Rangsystem konfiguriert. Richte eines in den Einstellungen ein.",
@@ -772,7 +777,14 @@
     "delete": "Löschen",
     "updatingSeries": "Sitzungen werden aktualisiert…",
     "seriesUpdated": "{count, plural, one {# Sitzung aktualisiert} other {# Sitzungen aktualisiert}}",
-    "deleting": "Wird gelöscht…"
+    "deleting": "Wird gelöscht…",
+    "instructorNone": "Kein/e Trainer/in",
+    "fieldMaxParticipants": "Max. Teilnehmer",
+    "maxParticipantsPlaceholder": "Kein Limit",
+    "optional": "optional",
+    "fieldBookingMandatory": "Buchung erforderlich",
+    "bookingMandatoryHint": "Teilnehmende müssen im Voraus buchen – kein spontaner Einstieg.",
+    "bookingRequiredChip": "Buchung erforderlich"
   },
   "Calendar": {
     "title": "Zeitplan",
@@ -810,7 +822,8 @@
     "monthSummary": "Monatsübersicht",
     "monthGroupClasses": "Gruppentrainings",
     "monthCoaching": "Coachings",
-    "monthEvents": "Veranstaltungen"
+    "monthEvents": "Veranstaltungen",
+    "openDetail": "Details öffnen"
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -1188,6 +1201,15 @@
     "paymentsCurrency": "Standardwährung",
     "paymentsEnabled": "Aktiv",
     "paymentsDisabled": "Inaktiv",
+    "paymentsInstanceName": "Instanzname",
+    "paymentsWebhookSecretLabel": "Webhook-Signaturschlüssel",
+    "paymentsWebhookSecretPlaceholderPayrexx": "Aus dem Payrexx-Dashboard → Webhooks einfügen",
+    "paymentsWebhookSecretHelpStripe": "Richte einen Stripe-Webhook auf <code>/handleTeamStripeWebhook?teamId={teamId}</code> ein und füge hier den Signaturschlüssel ein, um Zahlungen den Kontakten zuzuordnen. Leer lassen, um dies zu deaktivieren (keine Zahlungen werden erfasst).",
+    "paymentsWebhookSecretHelpPayrexx": "Wird verwendet, um <code>X-Webhook-Signature</code> bei eingehenden Zahlungs-Webhooks zu prüfen. Leer lassen, um die Signaturprüfung zu deaktivieren (nicht empfohlen).",
+    "paymentsDefaultSubscriptionType": "Standard-Abo-Typ",
+    "paymentsNoneOption": "Keines",
+    "paymentsDefaultSubscriptionTypeHelpStripe": "Wird angewendet, wenn eine Zahlung keine <code>subscriptionTypeId</code>-Metadaten enthält.",
+    "paymentsDefaultSubscriptionTypeHelpPayrexx": "Wird angewendet, wenn der Payrexx-Zahlungslink keine <code>referenceId</code> hat. Setze <code>referenceId</code> auf jedem Payrexx-Link auf die Abo-Typ-ID, um die Steuerung pro Plan zu ermöglichen.",
     "tabAffiliations": "Affiliationen",
     "affiliationsEnabledLabel": "Mitgliedschaften aktivieren",
     "affiliationsEnabledHelp": "Mitgliedschaftsnachweise (z. B. Vereinsmitgliedschaft, Verbandslizenz) für Kontakte verwalten.",
@@ -1805,7 +1827,13 @@
     "inviteSentSuccess": "Einladung gesendet.",
     "cancel": "Abbrechen",
     "sending": "Wird gesendet…",
-    "processing": "Wird verarbeitet…"
+    "processing": "Wird verarbeitet…",
+    "requestAccessTitle": "Zugriff anfordern",
+    "requestAccessDescription": "Fordere direkten Zugriff auf <strong>{teamName}</strong> an. Der Team-Inhaber wird benachrichtigt und kann deine Anfrage genehmigen.",
+    "accessLevelLabel": "Zugriffsstufe",
+    "accessLevelView": "Ansehen — Kontakte, Einheiten und Veranstaltungen lesen",
+    "accessLevelManage": "Verwalten — vollständiger Admin-Zugriff",
+    "requestAccessSubmit": "Zugriff anfordern"
   },
   "OrgAffiliations": {
     "title": "Affiliationen",
@@ -2396,7 +2424,15 @@
     "sendTestSuccess": "Test-E-Mail wurde an {email} gesendet",
     "sendTestSkipped": "Test übersprungen – diese Adresse ist gesperrt.",
     "sendTestTestMode": "Im Testmodus gesendet – keine echte E-Mail wurde zugestellt.",
-    "sendTestError": "Test-E-Mail konnte nicht gesendet werden. Bitte erneut versuchen."
+    "sendTestError": "Test-E-Mail konnte nicht gesendet werden. Bitte erneut versuchen.",
+    "customVariablesTitle": "Benutzerdefinierte Variablen",
+    "customVariablesDescription": "Definiere Schlüssel-Wert-Paare, die du in E-Mail-Vorlagen als <code>'{{key}}'</code> verwenden kannst. Zum Beispiel: <code>discountCode</code> → <code>WELCOME20</code>.",
+    "customVariablesValuePlaceholder": "Ersatzwert",
+    "customVariablesAddButton": "Variable hinzufügen",
+    "customVariablesSaveButton": "Speichern",
+    "customVariablesSaving": "Wird gespeichert…",
+    "customVariablesSaved": "✓ Gespeichert",
+    "customVariablesInvalidKeys": "Ungültige Schlüsselnamen: {keys}. Nur Buchstaben, Zahlen und Unterstriche verwenden."
   },
   "ConnectPayments": {
     "title": "Zahlungen mit Linyup annehmen",
@@ -2947,7 +2983,8 @@
     "back": "Zurück",
     "durationMinutes": "{mins} Min.",
     "durationHoursMinutes": "{h} Std. {m} Min.",
-    "durationHours": "{h} Std."
+    "durationHours": "{h} Std.",
+    "bookingRequired": "Buchung erforderlich"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Probetraining buchen",

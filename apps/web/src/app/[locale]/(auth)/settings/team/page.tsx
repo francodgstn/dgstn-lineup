@@ -1375,7 +1375,7 @@ function PaymentsTab({ teamId }: { teamId: string }) {
             </div>
             <div className="space-y-1.5">
               <Label>
-                {selectedType === 'stripe' ? t('paymentsPublishableKey') : 'Instance name'}
+                {selectedType === 'stripe' ? t('paymentsPublishableKey') : t('paymentsInstanceName')}
               </Label>
               <Input
                 {...register('identifier')}
@@ -1398,37 +1398,30 @@ function PaymentsTab({ teamId }: { teamId: string }) {
             {/* BYO record-only wiring (Stripe + Payrexx): verify the webhook
                 signature + a default subscription type for unlabelled payments. */}
             <div className="space-y-1.5">
-              <Label>Webhook signing secret</Label>
+              <Label>{t('paymentsWebhookSecretLabel')}</Label>
               <Input
                 {...register('webhookSigningSecret')}
                 type="password"
                 placeholder={
-                  selectedType === 'stripe' ? 'whsec_…' : 'Paste from Payrexx dashboard → Webhooks'
+                  selectedType === 'stripe' ? 'whsec_…' : t('paymentsWebhookSecretPlaceholderPayrexx')
                 }
                 autoComplete="off"
               />
               <p className="text-[11px] text-muted-foreground">
                 {selectedType === 'stripe' ? (
-                  <>
-                    Point a Stripe webhook at{' '}
-                    <code className="bg-muted px-1 rounded">
-                      /handleTeamStripeWebhook?teamId={teamId}
-                    </code>{' '}
-                    and paste its signing secret here to record payments against contacts.
-                    Leave blank to disable (no payments recorded).
-                  </>
+                  t.rich('paymentsWebhookSecretHelpStripe', {
+                    teamId,
+                    code: (chunks) => <code className="bg-muted px-1 rounded">{chunks}</code>,
+                  })
                 ) : (
-                  <>
-                    Used to verify{' '}
-                    <code className="bg-muted px-1 rounded">X-Webhook-Signature</code> on incoming
-                    payment webhooks. Leave blank to disable signature verification (not
-                    recommended).
-                  </>
+                  t.rich('paymentsWebhookSecretHelpPayrexx', {
+                    code: (chunks) => <code className="bg-muted px-1 rounded">{chunks}</code>,
+                  })
                 )}
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label>Default subscription type</Label>
+              <Label>{t('paymentsDefaultSubscriptionType')}</Label>
               <Controller
                 name="defaultSubscriptionTypeId"
                 control={control}
@@ -1437,12 +1430,12 @@ function PaymentsTab({ teamId }: { teamId: string }) {
                     <SelectTrigger>
                       <span className="flex flex-1 text-left text-sm truncate">
                         {subscriptionTypes.find((s) => s.id === field.value)?.name ?? (
-                          <span className="text-muted-foreground">None</span>
+                          <span className="text-muted-foreground">{t('paymentsNoneOption')}</span>
                         )}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="">{t('paymentsNoneOption')}</SelectItem>
                       {subscriptionTypes.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.name}
@@ -1454,17 +1447,13 @@ function PaymentsTab({ teamId }: { teamId: string }) {
               />
               <p className="text-[11px] text-muted-foreground">
                 {selectedType === 'stripe' ? (
-                  <>
-                    Applied when a payment carries no{' '}
-                    <code className="bg-muted px-1 rounded">subscriptionTypeId</code> metadata.
-                  </>
+                  t.rich('paymentsDefaultSubscriptionTypeHelpStripe', {
+                    code: (chunks) => <code className="bg-muted px-1 rounded">{chunks}</code>,
+                  })
                 ) : (
-                  <>
-                    Applied when the Payrexx payment link has no{' '}
-                    <code className="bg-muted px-1 rounded">referenceId</code>. Set{' '}
-                    <code className="bg-muted px-1 rounded">referenceId</code> to the subscription
-                    type ID on each Payrexx link for per-plan control.
-                  </>
+                  t.rich('paymentsDefaultSubscriptionTypeHelpPayrexx', {
+                    code: (chunks) => <code className="bg-muted px-1 rounded">{chunks}</code>,
+                  })
                 )}
               </p>
             </div>
@@ -1834,6 +1823,7 @@ function EmailSenderForm({
 }
 
 function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
+  const t = useTranslations('EmailSettings')
   const qc = useQueryClient()
 
   type VarRow = { key: string; value: string }
@@ -1865,7 +1855,7 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
     const invalid = vars.filter((v) => v.key && !KEY_REGEX.test(v.key))
     if (invalid.length > 0) {
       setSaveError(
-        `Invalid key names: ${invalid.map((v) => v.key).join(', ')}. Use letters, numbers and underscores only.`
+        t('customVariablesInvalidKeys', { keys: invalid.map((v) => v.key).join(', ') })
       )
       return
     }
@@ -1896,12 +1886,13 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
       <Card>
         <CardContent className="pt-6 space-y-5">
         <div>
-          <h3 className="font-semibold text-sm">Custom variables</h3>
+          <h3 className="font-semibold text-sm">{t('customVariablesTitle')}</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Define key→value pairs you can use in email templates as{' '}
-            <code className="font-mono text-xs bg-muted px-1 rounded">{'{{key}}'}</code>. For
-            example, <code className="font-mono text-xs bg-muted px-1 rounded">discountCode</code> →{' '}
-            <code className="font-mono text-xs bg-muted px-1 rounded">WELCOME20</code>.
+            {t.rich('customVariablesDescription', {
+              code: (chunks) => (
+                <code className="font-mono text-xs bg-muted px-1 rounded">{chunks}</code>
+              ),
+            })}
           </p>
         </div>
 
@@ -1925,7 +1916,7 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
               <input
                 value={row.value}
                 onChange={(e) => updateRow(idx, 'value', e.target.value)}
-                placeholder="Substitution value"
+                placeholder={t('customVariablesValuePlaceholder')}
                 className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
               />
               <Button
@@ -1942,14 +1933,14 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
 
         <Button variant="outline" size="sm" onClick={addRow}>
           <Plus className="h-4 w-4 mr-1.5" />
-          Add variable
+          {t('customVariablesAddButton')}
         </Button>
 
         {saveError && <p className="text-xs text-destructive">{saveError}</p>}
 
         <div className="flex justify-end">
           <Button size="sm" onClick={onSave} disabled={saving}>
-            {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
+            {saving ? t('customVariablesSaving') : saved ? t('customVariablesSaved') : t('customVariablesSaveButton')}
           </Button>
         </div>
         </CardContent>
