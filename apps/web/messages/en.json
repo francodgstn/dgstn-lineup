@@ -8,7 +8,8 @@
     "all": "All",
     "comingSoon": "Coming soon",
     "demoBanner": "You're exploring a live demo of Linyup.",
-    "demoBannerCta": "Visit linyup.com →"
+    "demoBannerCta": "Visit linyup.com →",
+    "language": "Language"
   },
   "Plans": {
     "free": "Free",
