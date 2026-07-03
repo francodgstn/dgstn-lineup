@@ -50,26 +50,22 @@ interface Contact {
   lastname: string
 }
 
-const STATUS_FILTERS: { label: string; value: ReferralStatus | null }[] = [
-  { label: 'All', value: null },
-  { label: 'Friend Booked', value: 'friend_booked' },
-  { label: 'Friend Signed Up', value: 'friend_signed_up' },
-  { label: 'Pending Reward', value: 'pending_reward' },
-  { label: 'Rewarded', value: 'rewarded' },
-]
+const STATUS_VALUES: ReferralStatus[] = ['friend_booked', 'friend_signed_up', 'pending_reward', 'rewarded']
 
-const STATUS_CONFIG: Record<ReferralStatus, { label: string; className: string }> = {
-  friend_booked:    { label: 'Friend Booked',    className: 'bg-muted text-muted-foreground' },
-  friend_signed_up: { label: 'Friend Signed Up', className: 'bg-blue-100 text-blue-700' },
-  pending_reward:   { label: 'Pending Reward',   className: 'bg-amber-100 text-amber-700' },
-  rewarded:         { label: 'Rewarded',         className: 'bg-green-100 text-green-700' },
+const STATUS_CLASSNAMES: Record<ReferralStatus, string> = {
+  friend_booked:    'bg-muted text-muted-foreground',
+  friend_signed_up: 'bg-blue-100 text-blue-700',
+  pending_reward:   'bg-amber-100 text-amber-700',
+  rewarded:         'bg-green-100 text-green-700',
 }
 
 function StatusBadge({ status }: { status: ReferralStatus }) {
-  const cfg = STATUS_CONFIG[status] ?? { label: status, className: 'bg-muted text-muted-foreground' }
+  const t = useTranslations('Referrals')
+  const className = STATUS_CLASSNAMES[status] ?? 'bg-muted text-muted-foreground'
+  const label = t(`statuses.${status}` as Parameters<typeof t>[0])
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.className}`}>
-      {cfg.label}
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
+      {label}
     </span>
   )
 }
@@ -108,6 +104,7 @@ function ActionDialog({
   }) => Promise<void>
   onClose: () => void
 }) {
+  const t = useTranslations('Referrals')
   const [rewardType, setRewardType] = useState('')
   const [rewardAmount, setRewardAmount] = useState('')
   const [rewardNotes, setRewardNotes] = useState('')
@@ -141,40 +138,40 @@ function ActionDialog({
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isMarkRewarded ? 'Mark as Rewarded' : 'Confirm Membership'}</DialogTitle>
+          <DialogTitle>{isMarkRewarded ? t('actionDialog.titleMarkRewarded') : t('actions.confirmMembership')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="text-sm text-muted-foreground">
-            <span>Referrer: </span><strong className="text-foreground">{referrerName}</strong>
+            <span>{t('actionDialog.referrerLabel')} </span><strong className="text-foreground">{referrerName}</strong>
             <br />
-            <span>Referred: </span><strong className="text-foreground">{referredName}</strong>
+            <span>{t('actionDialog.referredLabel')} </span><strong className="text-foreground">{referredName}</strong>
           </div>
           {isMarkRewarded ? (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Enter the reward details for the referrer.</p>
+              <p className="text-sm text-muted-foreground">{t('actionDialog.rewardIntro')}</p>
               <div className="space-y-1">
-                <Label htmlFor="reward-type">Reward Type</Label>
+                <Label htmlFor="reward-type">{t('actionDialog.rewardTypeLabel')}</Label>
                 <Input
                   id="reward-type"
-                  placeholder="e.g. Free Month, Discount, Gift Card"
+                  placeholder={t('actionDialog.rewardTypePlaceholder')}
                   value={rewardType}
                   onChange={(e) => setRewardType(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="reward-amount">Reward Amount</Label>
+                <Label htmlFor="reward-amount">{t('actionDialog.rewardAmountLabel')}</Label>
                 <Input
                   id="reward-amount"
                   type="number"
                   min={0}
                   step={0.01}
-                  placeholder="e.g. 1, 50, 100"
+                  placeholder={t('actionDialog.rewardAmountPlaceholder')}
                   value={rewardAmount}
                   onChange={(e) => setRewardAmount(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="reward-notes">Notes (optional)</Label>
+                <Label htmlFor="reward-notes">{t('actionDialog.notesLabel')}</Label>
                 <Textarea
                   id="reward-notes"
                   rows={2}
@@ -185,16 +182,20 @@ function ActionDialog({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Confirm that <strong className="text-foreground">{referredName}</strong> has completed
-              membership. This will mark the referral as pending reward for{' '}
-              <strong className="text-foreground">{referrerName}</strong>.
+              {t.rich('actionDialog.confirmMembershipText', {
+                referredName,
+                referrerName,
+                strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+              })}
             </p>
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={loading}>{t('actionDialog.cancel')}</Button>
           <Button onClick={handleConfirm} disabled={confirmDisabled}>
-            {loading ? (isMarkRewarded ? 'Saving…' : 'Confirming…') : (isMarkRewarded ? 'Mark Rewarded' : 'Confirm Membership')}
+            {loading
+              ? (isMarkRewarded ? t('actionDialog.saving') : t('actionDialog.confirming'))
+              : (isMarkRewarded ? t('actions.markRewarded') : t('actions.confirmMembership'))}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -213,6 +214,7 @@ function SettingsTab({
   teamId: string
   onToggle: (v: boolean) => Promise<void>
 }) {
+  const t = useTranslations('Referrals')
   const [localEnabled, setLocalEnabled] = useState(enabled)
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -222,9 +224,9 @@ function SettingsTab({
     setSaving(true)
     try {
       await onToggle(localEnabled)
-      toast.success('Referral settings saved')
+      toast.success(t('settings.saveSuccess'))
     } catch {
-      toast.error('Could not save settings')
+      toast.error(t('settings.saveError'))
     } finally {
       setSaving(false)
     }
@@ -235,9 +237,9 @@ function SettingsTab({
     try {
       const fn = httpsCallable<{ teamId: string }, { generated: number }>(functions, 'generateReferralCodes')
       const result = await fn({ teamId })
-      toast.success(`Generated ${result.data.generated} new referral codes`)
+      toast.success(t('settings.generateSuccess', { count: result.data.generated }))
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Could not generate referral codes'
+      const msg = err instanceof Error ? err.message : t('settings.generateError')
       toast.error(msg)
     } finally {
       setGenerating(false)
@@ -247,10 +249,9 @@ function SettingsTab({
   return (
     <div className="max-w-lg space-y-6">
       <div>
-        <h2 className="text-base font-semibold">Referral Program Settings</h2>
+        <h2 className="text-base font-semibold">{t('settings.heading')}</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          When enabled, students can share a personal referral link with friends.
-          The referral is tracked through the full lifecycle until you manually reward the referrer.
+          {t('settings.description')}
         </p>
       </div>
 
@@ -260,21 +261,21 @@ function SettingsTab({
           checked={localEnabled}
           onCheckedChange={setLocalEnabled}
         />
-        <Label htmlFor="referral-enabled">Enable Referral Program</Label>
+        <Label htmlFor="referral-enabled">{t('settings.enableLabel')}</Label>
       </div>
 
       <div className="flex gap-2">
         <Button onClick={handleSave} disabled={!isDirty || saving}>
-          {saving ? 'Saving…' : 'Save Settings'}
+          {saving ? t('settings.saving') : t('settings.saveButton')}
         </Button>
         <Button
           variant="outline"
           onClick={handleGenerateCodes}
           disabled={generating || !localEnabled}
-          title="Generate referral codes for contacts that don't have one yet"
+          title={t('settings.generateButtonTitle')}
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-          {generating ? 'Generating…' : 'Generate Codes'}
+          {generating ? t('settings.generating') : t('settings.generateButton')}
         </Button>
       </div>
     </div>
@@ -290,6 +291,7 @@ function ReferralsTab({
   teamId: string
   referralEnabled: boolean
 }) {
+  const t = useTranslations('Referrals')
   const queryClient = useQueryClient()
   const [statusFilter, setStatusFilter] = useState<ReferralStatus | null>(null)
   const [selectedReferral, setSelectedReferral] = useState<Referral | null>(null)
@@ -338,36 +340,38 @@ function ReferralsTab({
       { success: boolean; newStatus: string }
     >(functions, 'confirmReferral')
     await fn({ referralId: selectedReferral.id, ...payload })
-    toast.success('Referral updated successfully')
+    toast.success(t('toasts.updateSuccess'))
     queryClient.invalidateQueries({ queryKey: ['referrals', teamId] })
   }
 
   const referrerName = selectedReferral ? (contactNames[selectedReferral.referrer_contact_id] ?? selectedReferral.referrer_contact_id) : ''
   const referredName = selectedReferral ? (contactNames[selectedReferral.referred_contact_id] ?? selectedReferral.referred_contact_id) : ''
 
+  const filterOptions: (ReferralStatus | null)[] = [null, ...STATUS_VALUES]
+
   return (
     <div className="space-y-4">
       {!referralEnabled && (
         <div className="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">
-          The referral program is currently disabled. Enable it in the Settings tab to allow students to share referral links.
+          {t('disabledBanner')}
         </div>
       )}
 
       {/* Status filters + info */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex gap-1.5 flex-wrap flex-1">
-          {STATUS_FILTERS.map((f) => (
+          {filterOptions.map((value) => (
             <Button
-              key={String(f.value)}
+              key={String(value)}
               size="sm"
-              variant={statusFilter === f.value ? 'secondary' : 'ghost'}
-              onClick={() => setStatusFilter(f.value)}
+              variant={statusFilter === value ? 'secondary' : 'ghost'}
+              onClick={() => setStatusFilter(value)}
             >
-              {f.label}
+              {value === null ? t('filters.all') : t(`statuses.${value}` as Parameters<typeof t>[0])}
             </Button>
           ))}
         </div>
-        <Button size="sm" variant="ghost" onClick={() => setInfoOpen(true)} title="Status guide">
+        <Button size="sm" variant="ghost" onClick={() => setInfoOpen(true)} title={t('table.statusGuide')}>
           <Info className="h-4 w-4" />
         </Button>
       </div>
@@ -378,18 +382,18 @@ function ReferralsTab({
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded" />)}
         </div>
       ) : visible.length === 0 ? (
-        <p className="text-center text-sm text-muted-foreground py-12">No referrals found.</p>
+        <p className="text-center text-sm text-muted-foreground py-12">{t('table.empty')}</p>
       ) : (
         <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Referrer</TableHead>
-                <TableHead>Friend (Referred)</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Reward</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead>{t('table.referrer')}</TableHead>
+                <TableHead>{t('table.referred')}</TableHead>
+                <TableHead>{t('table.status')}</TableHead>
+                <TableHead>{t('table.date')}</TableHead>
+                <TableHead>{t('table.reward')}</TableHead>
+                <TableHead className="text-right">{t('table.action')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -403,8 +407,8 @@ function ReferralsTab({
                     <TableCell>{formatDate(r.created_at)}</TableCell>
                     <TableCell>
                       {r.reward
-                        ? <span className="text-sm">{r.reward.reward_type} × {r.reward.reward_amount}</span>
-                        : <span className="text-muted-foreground">—</span>}
+                        ? <span className="text-sm">{t('table.rewardFormat', { type: r.reward.reward_type, amount: r.reward.reward_amount })}</span>
+                        : <span className="text-muted-foreground">{t('table.noValue')}</span>}
                     </TableCell>
                     <TableCell className="text-right">
                       {action && (
@@ -413,7 +417,7 @@ function ReferralsTab({
                           variant="outline"
                           onClick={() => { setSelectedReferral(r); setSelectedAction(action) }}
                         >
-                          {action === 'confirm_membership' ? 'Confirm Membership' : 'Mark Rewarded'}
+                          {action === 'confirm_membership' ? t('actions.confirmMembership') : t('actions.markRewarded')}
                         </Button>
                       )}
                     </TableCell>
@@ -439,27 +443,28 @@ function ReferralsTab({
       <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Referral Statuses</DialogTitle>
+            <DialogTitle>{t('statusInfo.dialogTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 text-sm">
-            <p className="text-muted-foreground">Referrals progress through the following statuses as you take action on them.</p>
-            {([
-              { status: 'friend_booked' as ReferralStatus, description: "A referred friend has booked a trial session using the referrer's personal link. No action needed yet." },
-              { status: 'friend_signed_up' as ReferralStatus, description: 'The friend attended and expressed interest in signing up. Confirm their membership to advance the referral.' },
-              { status: 'pending_reward' as ReferralStatus, description: 'Membership is confirmed. The referrer is owed a reward — mark it as rewarded once delivered.' },
-              { status: 'rewarded' as ReferralStatus, description: 'The referrer has received their reward. This referral is complete.' },
-            ]).map(({ status, description }) => (
+            <p className="text-muted-foreground">{t('statusInfo.intro')}</p>
+            {STATUS_VALUES.map((status) => (
               <div key={status} className="space-y-1">
                 <StatusBadge status={status} />
-                <p className="text-muted-foreground text-xs">{description}</p>
+                <p className="text-muted-foreground text-xs">{t(`statusInfo.description.${status}` as Parameters<typeof t>[0])}</p>
               </div>
             ))}
             <p className="text-muted-foreground text-xs pt-1">
-              <strong>Flow:</strong> Friend Booked → Friend Signed Up → Pending Reward → Rewarded
+              <strong>{t('statusInfo.flowLabel')}</strong>{' '}
+              {t('statusInfo.flow', {
+                friendBooked: t('statuses.friend_booked'),
+                friendSignedUp: t('statuses.friend_signed_up'),
+                pendingReward: t('statuses.pending_reward'),
+                rewarded: t('statuses.rewarded'),
+              })}
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setInfoOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setInfoOpen(false)}>{t('statusInfo.close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -472,6 +477,7 @@ function ReferralsTab({
 export default function ReferralsPluginPage() {
   const { currentTeamId } = useAuth()
   const queryClient = useQueryClient()
+  const t = useTranslations('Referrals')
   const [activeTab, setActiveTab] = useState<'settings' | 'referrals'>('referrals')
 
   const { data: team, isLoading } = useQuery({
@@ -495,7 +501,7 @@ export default function ReferralsPluginPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team-referral-settings', currentTeamId] })
     },
-    onError: () => toast.error('Could not save referral settings'),
+    onError: () => toast.error(t('toasts.settingsSaveError')),
   })
 
   if (isLoading || !currentTeamId) {
@@ -514,9 +520,9 @@ export default function ReferralsPluginPage() {
       <div className="flex items-center gap-2">
         <Gift className="h-5 w-5 text-muted-foreground" />
         <div>
-          <h1 className="text-2xl font-semibold">Referral Program</h1>
+          <h1 className="text-2xl font-semibold">{t('title')}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Track member referrals and manage rewards.
+            {t('subtitle')}
           </p>
         </div>
       </div>
@@ -534,7 +540,7 @@ export default function ReferralsPluginPage() {
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {tab === 'referrals' ? 'Referrals' : 'Settings'}
+            {tab === 'referrals' ? t('tabs.referrals') : t('tabs.settings')}
           </button>
         ))}
       </div>

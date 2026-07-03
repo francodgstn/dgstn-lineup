@@ -3144,22 +3144,36 @@
       "top_right": {
         "label": "Croissance de l'équipe",
         "hint": "Travaillez sur l'équipe",
-        "actions": ["Événements d'équipe", "Séances spéciales"]
+        "actions": [
+          "Événements d'équipe",
+          "Séances spéciales"
+        ]
       },
       "top_left": {
         "label": "Acquisition de prospects",
         "hint": "Travaillez sur l'acquisition de prospects",
-        "actions": ["Publicités sociales", "Site web", "Bouche-à-oreille"]
+        "actions": [
+          "Publicités sociales",
+          "Site web",
+          "Bouche-à-oreille"
+        ]
       },
       "bottom_right": {
         "label": "Renforcer l'engagement",
         "hint": "Travaillez sur l'engagement",
-        "actions": ["Plus de séances", "Retours", "Recontacter les membres"]
+        "actions": [
+          "Plus de séances",
+          "Retours",
+          "Recontacter les membres"
+        ]
       },
       "bottom_left": {
         "label": "Démarrage",
         "hint": "Travaillez sur le démarrage",
-        "actions": ["Horaires flexibles", "Concentrer l'énergie"]
+        "actions": [
+          "Horaires flexibles",
+          "Concentrer l'énergie"
+        ]
       }
     }
   },
@@ -3374,5 +3388,147 @@
   "OrgPlaces": {
     "title": "Lieux de l'organisation",
     "subtitle": "Emplacements partagés avec chaque studio de cette organisation."
+  },
+  "EventTypesSettings": {
+    "title": "Types d'événements",
+    "subtitle": "Configurez les types d'événements que votre équipe peut organiser. Les types prédéfinis ont des formulaires de check-in fixes ; les types personnalisés vous permettent de définir vos propres champs de check-in.",
+    "newType": "Nouveau type",
+    "builtin": {
+      "heading": "Prédéfinis",
+      "badge": "Prédéfini"
+    },
+    "fromPlugins": {
+      "heading": "Depuis les plugins",
+      "badge": "Plugin",
+      "providedBy": "Fourni par le plugin : {pluginId}"
+    },
+    "custom": {
+      "heading": "Personnalisés",
+      "empty": "Aucun type d'événement personnalisé pour l'instant. Créez-en un pour ajouter vos propres champs de check-in.",
+      "checkinFieldCount": "{count, plural, one {# champ de check-in} other {# champs de check-in}}",
+      "noCheckinFields": "Aucun champ de check-in"
+    },
+    "fieldTypes": {
+      "text": "Texte",
+      "number": "Nombre",
+      "select": "Choix unique",
+      "multiselect": "Choix multiple",
+      "boolean": "Oui / Non"
+    },
+    "builtinLabels": {
+      "competition": "Compétition",
+      "camp": "Camp",
+      "exam": "Examen",
+      "seminar": "Séminaire",
+      "workshop": "Atelier"
+    },
+    "fieldBuilder": {
+      "label": "Libellé",
+      "labelPlaceholder": "Libellé du champ",
+      "type": "Type",
+      "options": "Options (une par ligne)",
+      "optionsPlaceholder": "Option 1\nOption 2\nOption 3",
+      "required": "Obligatoire",
+      "addField": "Ajouter un champ de check-in"
+    },
+    "form": {
+      "editTitle": "Modifier le type d'événement",
+      "newTitle": "Nouveau type d'événement",
+      "name": "Nom *",
+      "namePlaceholder": "p. ex. Passage de grade",
+      "icon": "Icône (nom Lucide)",
+      "iconPlaceholder": "Star",
+      "color": "Couleur",
+      "checkinFields": "Champs de check-in",
+      "checkinFieldsHint": "Ces champs apparaissent dans le formulaire de check-in lorsqu'une personne est enregistrée pour ce type d'événement.",
+      "cancel": "Annuler",
+      "save": "Enregistrer",
+      "saving": "Enregistrement…"
+    },
+    "deleteConfirm": "Supprimer le type d'événement « {name} » ? Les événements de ce type ne seront pas affectés."
+  },
+  "Referrals": {
+    "title": "Programme de parrainage",
+    "subtitle": "Suivez les parrainages des membres et gérez les récompenses.",
+    "tabs": {
+      "referrals": "Parrainages",
+      "settings": "Paramètres"
+    },
+    "filters": {
+      "all": "Tous"
+    },
+    "statuses": {
+      "friend_booked": "Ami réservé",
+      "friend_signed_up": "Ami inscrit",
+      "pending_reward": "Récompense en attente",
+      "rewarded": "Récompensé"
+    },
+    "table": {
+      "referrer": "Parrain",
+      "referred": "Filleul",
+      "status": "Statut",
+      "date": "Date",
+      "reward": "Récompense",
+      "action": "Action",
+      "rewardFormat": "{type} × {amount}",
+      "noValue": "—",
+      "empty": "Aucun parrainage trouvé.",
+      "statusGuide": "Guide des statuts"
+    },
+    "actions": {
+      "confirmMembership": "Confirmer l'adhésion",
+      "markRewarded": "Marquer comme récompensé"
+    },
+    "actionDialog": {
+      "titleMarkRewarded": "Marquer comme récompensé",
+      "referrerLabel": "Parrain :",
+      "referredLabel": "Filleul :",
+      "rewardIntro": "Saisissez les détails de la récompense pour le parrain.",
+      "rewardTypeLabel": "Type de récompense",
+      "rewardTypePlaceholder": "p. ex. Mois gratuit, Réduction, Carte cadeau",
+      "rewardAmountLabel": "Montant de la récompense",
+      "rewardAmountPlaceholder": "p. ex. 1, 50, 100",
+      "notesLabel": "Notes (facultatif)",
+      "confirmMembershipText": "Confirmez que <strong>{referredName}</strong> a terminé son adhésion. Cela marquera le parrainage comme récompense en attente pour <strong>{referrerName}</strong>.",
+      "cancel": "Annuler",
+      "saving": "Enregistrement…",
+      "confirming": "Confirmation…"
+    },
+    "statusInfo": {
+      "dialogTitle": "Statuts de parrainage",
+      "intro": "Les parrainages passent par les statuts suivants au fur et à mesure de vos actions.",
+      "description": {
+        "friend_booked": "Un ami parrainé a réservé une séance d'essai via le lien personnel du parrain. Aucune action requise pour l'instant.",
+        "friend_signed_up": "L'ami a participé et s'est montré intéressé à devenir membre. Confirmez son adhésion pour faire progresser le parrainage.",
+        "pending_reward": "L'adhésion est confirmée. Le parrain a droit à une récompense — marquez-la comme récompensée une fois remise.",
+        "rewarded": "Le parrain a reçu sa récompense. Ce parrainage est terminé."
+      },
+      "flowLabel": "Déroulement :",
+      "flow": "{friendBooked} → {friendSignedUp} → {pendingReward} → {rewarded}",
+      "close": "Fermer"
+    },
+    "disabledBanner": "Le programme de parrainage est actuellement désactivé. Activez-le dans l'onglet Paramètres pour permettre aux membres de partager des liens de parrainage.",
+    "settings": {
+      "heading": "Paramètres du programme de parrainage",
+      "description": "Une fois activé, les membres peuvent partager un lien de parrainage personnel avec leurs amis. Le parrainage est suivi tout au long de son cycle de vie jusqu'à ce que vous récompensiez manuellement le parrain.",
+      "enableLabel": "Activer le programme de parrainage",
+      "saveButton": "Enregistrer les paramètres",
+      "saving": "Enregistrement…",
+      "generateButtonTitle": "Générer des codes de parrainage pour les contacts qui n'en ont pas encore",
+      "generateButton": "Générer des codes",
+      "generating": "Génération…",
+      "saveSuccess": "Paramètres de parrainage enregistrés",
+      "saveError": "Impossible d'enregistrer les paramètres",
+      "generateSuccess": "{count, plural, one {# nouveau code de parrainage généré} other {# nouveaux codes de parrainage générés}}",
+      "generateError": "Impossible de générer les codes de parrainage"
+    },
+    "toasts": {
+      "updateSuccess": "Parrainage mis à jour avec succès",
+      "settingsSaveError": "Impossible d'enregistrer les paramètres de parrainage"
+    }
+  },
+  "PlanGate": {
+    "requiresHigherPlan": "Cette fonctionnalité nécessite une offre supérieure",
+    "seeUpgradeOptions": "Voir les options de mise à niveau"
   }
 }

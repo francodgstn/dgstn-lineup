@@ -3144,22 +3144,36 @@
       "top_right": {
         "label": "Crescita del team",
         "hint": "Lavora sul team",
-        "actions": ["Eventi di team", "Sessioni speciali"]
+        "actions": [
+          "Eventi di team",
+          "Sessioni speciali"
+        ]
       },
       "top_left": {
         "label": "Acquisizione contatti",
         "hint": "Lavora sull'acquisizione di contatti",
-        "actions": ["Annunci social", "Sito web", "Passaparola"]
+        "actions": [
+          "Annunci social",
+          "Sito web",
+          "Passaparola"
+        ]
       },
       "bottom_right": {
         "label": "Aumenta il coinvolgimento",
         "hint": "Lavora sul coinvolgimento",
-        "actions": ["Più sessioni", "Feedback", "Ricontatta i membri"]
+        "actions": [
+          "Più sessioni",
+          "Feedback",
+          "Ricontatta i membri"
+        ]
       },
       "bottom_left": {
         "label": "Per iniziare",
         "hint": "Lavora sull'avvio",
-        "actions": ["Orario flessibile", "Concentra le energie"]
+        "actions": [
+          "Orario flessibile",
+          "Concentra le energie"
+        ]
       }
     }
   },
@@ -3374,5 +3388,147 @@
   "OrgPlaces": {
     "title": "Sedi dell'organizzazione",
     "subtitle": "Sedi condivise con ogni studio di questa organizzazione."
+  },
+  "EventTypesSettings": {
+    "title": "Tipi di evento",
+    "subtitle": "Configura i tipi di evento che il tuo team può organizzare. I tipi predefiniti hanno moduli di check-in fissi; i tipi personalizzati ti permettono di definire i tuoi campi di check-in.",
+    "newType": "Nuovo tipo",
+    "builtin": {
+      "heading": "Predefiniti",
+      "badge": "Predefinito"
+    },
+    "fromPlugins": {
+      "heading": "Dai plugin",
+      "badge": "Plugin",
+      "providedBy": "Fornito dal plugin: {pluginId}"
+    },
+    "custom": {
+      "heading": "Personalizzati",
+      "empty": "Nessun tipo di evento personalizzato ancora. Creane uno per aggiungere campi di check-in personalizzati.",
+      "checkinFieldCount": "{count, plural, one {# campo di check-in} other {# campi di check-in}}",
+      "noCheckinFields": "Nessun campo di check-in"
+    },
+    "fieldTypes": {
+      "text": "Testo",
+      "number": "Numero",
+      "select": "Selezione singola",
+      "multiselect": "Selezione multipla",
+      "boolean": "Sì / No"
+    },
+    "builtinLabels": {
+      "competition": "Competizione",
+      "camp": "Camp",
+      "exam": "Esame",
+      "seminar": "Seminario",
+      "workshop": "Workshop"
+    },
+    "fieldBuilder": {
+      "label": "Etichetta",
+      "labelPlaceholder": "Etichetta del campo",
+      "type": "Tipo",
+      "options": "Opzioni (una per riga)",
+      "optionsPlaceholder": "Opzione 1\nOpzione 2\nOpzione 3",
+      "required": "Obbligatorio",
+      "addField": "Aggiungi campo di check-in"
+    },
+    "form": {
+      "editTitle": "Modifica tipo di evento",
+      "newTitle": "Nuovo tipo di evento",
+      "name": "Nome *",
+      "namePlaceholder": "es. Esame di grado",
+      "icon": "Icona (nome Lucide)",
+      "iconPlaceholder": "Star",
+      "color": "Colore",
+      "checkinFields": "Campi di check-in",
+      "checkinFieldsHint": "Questi campi appaiono nel modulo di check-in quando qualcuno viene registrato per questo tipo di evento.",
+      "cancel": "Annulla",
+      "save": "Salva",
+      "saving": "Salvataggio…"
+    },
+    "deleteConfirm": "Eliminare il tipo di evento «{name}»? Gli eventi di questo tipo non saranno interessati."
+  },
+  "Referrals": {
+    "title": "Programma di referral",
+    "subtitle": "Monitora i referral dei membri e gestisci i premi.",
+    "tabs": {
+      "referrals": "Referral",
+      "settings": "Impostazioni"
+    },
+    "filters": {
+      "all": "Tutti"
+    },
+    "statuses": {
+      "friend_booked": "Amico prenotato",
+      "friend_signed_up": "Amico iscritto",
+      "pending_reward": "Premio in sospeso",
+      "rewarded": "Premiato"
+    },
+    "table": {
+      "referrer": "Segnalatore",
+      "referred": "Amico (segnalato)",
+      "status": "Stato",
+      "date": "Data",
+      "reward": "Premio",
+      "action": "Azione",
+      "rewardFormat": "{type} × {amount}",
+      "noValue": "—",
+      "empty": "Nessun referral trovato.",
+      "statusGuide": "Guida agli stati"
+    },
+    "actions": {
+      "confirmMembership": "Conferma iscrizione",
+      "markRewarded": "Segna come premiato"
+    },
+    "actionDialog": {
+      "titleMarkRewarded": "Segna come premiato",
+      "referrerLabel": "Segnalatore:",
+      "referredLabel": "Segnalato:",
+      "rewardIntro": "Inserisci i dettagli del premio per il segnalatore.",
+      "rewardTypeLabel": "Tipo di premio",
+      "rewardTypePlaceholder": "es. Mese gratuito, Sconto, Buono regalo",
+      "rewardAmountLabel": "Importo del premio",
+      "rewardAmountPlaceholder": "es. 1, 50, 100",
+      "notesLabel": "Note (facoltativo)",
+      "confirmMembershipText": "Conferma che <strong>{referredName}</strong> ha completato l'iscrizione. Questo segnerà il referral come premio in sospeso per <strong>{referrerName}</strong>.",
+      "cancel": "Annulla",
+      "saving": "Salvataggio…",
+      "confirming": "Conferma in corso…"
+    },
+    "statusInfo": {
+      "dialogTitle": "Stati dei referral",
+      "intro": "I referral passano attraverso i seguenti stati man mano che agisci su di essi.",
+      "description": {
+        "friend_booked": "Un amico segnalato ha prenotato una lezione di prova tramite il link personale del segnalatore. Nessuna azione richiesta per ora.",
+        "friend_signed_up": "L'amico ha partecipato e ha mostrato interesse a iscriversi. Conferma la sua iscrizione per far avanzare il referral.",
+        "pending_reward": "L'iscrizione è confermata. Il segnalatore ha diritto a un premio — marcalo come premiato una volta consegnato.",
+        "rewarded": "Il segnalatore ha ricevuto il premio. Questo referral è completo."
+      },
+      "flowLabel": "Percorso:",
+      "flow": "{friendBooked} → {friendSignedUp} → {pendingReward} → {rewarded}",
+      "close": "Chiudi"
+    },
+    "disabledBanner": "Il programma di referral è attualmente disattivato. Attivalo nella scheda Impostazioni per permettere ai membri di condividere link di referral.",
+    "settings": {
+      "heading": "Impostazioni del programma di referral",
+      "description": "Se attivato, i membri possono condividere un link di referral personale con gli amici. Il referral viene monitorato durante l'intero ciclo di vita finché non premi manualmente il segnalatore.",
+      "enableLabel": "Attiva programma di referral",
+      "saveButton": "Salva impostazioni",
+      "saving": "Salvataggio…",
+      "generateButtonTitle": "Genera codici di referral per i contatti che non ne hanno ancora uno",
+      "generateButton": "Genera codici",
+      "generating": "Generazione…",
+      "saveSuccess": "Impostazioni di referral salvate",
+      "saveError": "Impossibile salvare le impostazioni",
+      "generateSuccess": "{count, plural, one {Generato # nuovo codice di referral} other {Generati # nuovi codici di referral}}",
+      "generateError": "Impossibile generare i codici di referral"
+    },
+    "toasts": {
+      "updateSuccess": "Referral aggiornato con successo",
+      "settingsSaveError": "Impossibile salvare le impostazioni di referral"
+    }
+  },
+  "PlanGate": {
+    "requiresHigherPlan": "Questa funzionalità richiede un piano superiore",
+    "seeUpgradeOptions": "Vedi le opzioni di upgrade"
   }
 }

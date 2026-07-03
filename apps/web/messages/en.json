@@ -3144,22 +3144,36 @@
       "top_right": {
         "label": "Team growth",
         "hint": "Work on the team",
-        "actions": ["Team events", "Special sessions"]
+        "actions": [
+          "Team events",
+          "Special sessions"
+        ]
       },
       "top_left": {
         "label": "Lead acquisition",
         "hint": "Work on lead acquisition",
-        "actions": ["Social ads", "Website", "Word of mouth"]
+        "actions": [
+          "Social ads",
+          "Website",
+          "Word of mouth"
+        ]
       },
       "bottom_right": {
         "label": "Boost engagement",
         "hint": "Work on engagement",
-        "actions": ["More sessions", "Feedback", "Re-contact members"]
+        "actions": [
+          "More sessions",
+          "Feedback",
+          "Re-contact members"
+        ]
       },
       "bottom_left": {
         "label": "Getting started",
         "hint": "Work on getting started",
-        "actions": ["Flexible schedule", "Focus energy"]
+        "actions": [
+          "Flexible schedule",
+          "Focus energy"
+        ]
       }
     }
   },
@@ -3374,5 +3388,147 @@
   "OrgPlaces": {
     "title": "Org places",
     "subtitle": "Locations shared with every studio in this organization."
+  },
+  "EventTypesSettings": {
+    "title": "Event types",
+    "subtitle": "Configure the types of events your team can run. Built-in types have hardcoded check-in forms; custom types let you define your own check-in fields.",
+    "newType": "New type",
+    "builtin": {
+      "heading": "Built-in",
+      "badge": "Built-in"
+    },
+    "fromPlugins": {
+      "heading": "From plugins",
+      "badge": "Plugin",
+      "providedBy": "Provided by plugin: {pluginId}"
+    },
+    "custom": {
+      "heading": "Custom",
+      "empty": "No custom event types yet. Create one to add custom check-in fields.",
+      "checkinFieldCount": "{count, plural, one {# check-in field} other {# check-in fields}}",
+      "noCheckinFields": "No check-in fields"
+    },
+    "fieldTypes": {
+      "text": "Text",
+      "number": "Number",
+      "select": "Single select",
+      "multiselect": "Multi select",
+      "boolean": "Yes / No"
+    },
+    "builtinLabels": {
+      "competition": "Competition",
+      "camp": "Camp",
+      "exam": "Exam",
+      "seminar": "Seminar",
+      "workshop": "Workshop"
+    },
+    "fieldBuilder": {
+      "label": "Label",
+      "labelPlaceholder": "Field label",
+      "type": "Type",
+      "options": "Options (one per line)",
+      "optionsPlaceholder": "Option 1\nOption 2\nOption 3",
+      "required": "Required",
+      "addField": "Add check-in field"
+    },
+    "form": {
+      "editTitle": "Edit event type",
+      "newTitle": "New event type",
+      "name": "Name *",
+      "namePlaceholder": "e.g. Grading",
+      "icon": "Icon (lucide name)",
+      "iconPlaceholder": "Star",
+      "color": "Color",
+      "checkinFields": "Check-in fields",
+      "checkinFieldsHint": "These fields appear in the check-in form when someone is checked into this event type.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…"
+    },
+    "deleteConfirm": "Delete event type \"{name}\"? Events of this type won't be affected."
+  },
+  "Referrals": {
+    "title": "Referral Program",
+    "subtitle": "Track member referrals and manage rewards.",
+    "tabs": {
+      "referrals": "Referrals",
+      "settings": "Settings"
+    },
+    "filters": {
+      "all": "All"
+    },
+    "statuses": {
+      "friend_booked": "Friend Booked",
+      "friend_signed_up": "Friend Signed Up",
+      "pending_reward": "Pending Reward",
+      "rewarded": "Rewarded"
+    },
+    "table": {
+      "referrer": "Referrer",
+      "referred": "Friend (Referred)",
+      "status": "Status",
+      "date": "Date",
+      "reward": "Reward",
+      "action": "Action",
+      "rewardFormat": "{type} × {amount}",
+      "noValue": "—",
+      "empty": "No referrals found.",
+      "statusGuide": "Status guide"
+    },
+    "actions": {
+      "confirmMembership": "Confirm Membership",
+      "markRewarded": "Mark Rewarded"
+    },
+    "actionDialog": {
+      "titleMarkRewarded": "Mark as Rewarded",
+      "referrerLabel": "Referrer:",
+      "referredLabel": "Referred:",
+      "rewardIntro": "Enter the reward details for the referrer.",
+      "rewardTypeLabel": "Reward Type",
+      "rewardTypePlaceholder": "e.g. Free Month, Discount, Gift Card",
+      "rewardAmountLabel": "Reward Amount",
+      "rewardAmountPlaceholder": "e.g. 1, 50, 100",
+      "notesLabel": "Notes (optional)",
+      "confirmMembershipText": "Confirm that <strong>{referredName}</strong> has completed membership. This will mark the referral as pending reward for <strong>{referrerName}</strong>.",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "confirming": "Confirming…"
+    },
+    "statusInfo": {
+      "dialogTitle": "Referral Statuses",
+      "intro": "Referrals progress through the following statuses as you take action on them.",
+      "description": {
+        "friend_booked": "A referred friend has booked a trial session using the referrer's personal link. No action needed yet.",
+        "friend_signed_up": "The friend attended and expressed interest in signing up. Confirm their membership to advance the referral.",
+        "pending_reward": "Membership is confirmed. The referrer is owed a reward — mark it as rewarded once delivered.",
+        "rewarded": "The referrer has received their reward. This referral is complete."
+      },
+      "flowLabel": "Flow:",
+      "flow": "{friendBooked} → {friendSignedUp} → {pendingReward} → {rewarded}",
+      "close": "Close"
+    },
+    "disabledBanner": "The referral program is currently disabled. Enable it in the Settings tab to allow students to share referral links.",
+    "settings": {
+      "heading": "Referral Program Settings",
+      "description": "When enabled, students can share a personal referral link with friends. The referral is tracked through the full lifecycle until you manually reward the referrer.",
+      "enableLabel": "Enable Referral Program",
+      "saveButton": "Save Settings",
+      "saving": "Saving…",
+      "generateButtonTitle": "Generate referral codes for contacts that don't have one yet",
+      "generateButton": "Generate Codes",
+      "generating": "Generating…",
+      "saveSuccess": "Referral settings saved",
+      "saveError": "Could not save settings",
+      "generateSuccess": "{count, plural, one {Generated # new referral code} other {Generated # new referral codes}}",
+      "generateError": "Could not generate referral codes"
+    },
+    "toasts": {
+      "updateSuccess": "Referral updated successfully",
+      "settingsSaveError": "Could not save referral settings"
+    }
+  },
+  "PlanGate": {
+    "requiresHigherPlan": "This feature requires a higher plan",
+    "seeUpgradeOptions": "See upgrade options"
   }
 }

@@ -31,20 +31,14 @@ import { useTranslations } from 'next-intl'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const FIELD_TYPES: { value: EventTypeFieldType; label: string }[] = [
-  { value: 'text',        label: 'Text' },
-  { value: 'number',      label: 'Number' },
-  { value: 'select',      label: 'Single select' },
-  { value: 'multiselect', label: 'Multi select' },
-  { value: 'boolean',     label: 'Yes / No' },
-]
+const FIELD_TYPE_VALUES: EventTypeFieldType[] = ['text', 'number', 'select', 'multiselect', 'boolean']
 
-const BUILTIN_LABELS: Record<string, string> = {
-  competition: 'Competition',
-  camp: 'Camp',
-  exam: 'Exam',
-  seminar: 'Seminar',
-  workshop: 'Workshop',
+const BUILTIN_LABEL_KEYS: Record<string, string> = {
+  competition: 'builtinLabels.competition',
+  camp: 'builtinLabels.camp',
+  exam: 'builtinLabels.exam',
+  seminar: 'builtinLabels.seminar',
+  workshop: 'builtinLabels.workshop',
 }
 
 // ─── field builder ────────────────────────────────────────────────────────────
@@ -56,6 +50,8 @@ function FieldBuilder({
   fields: EventTypeField[]
   onChange: (fields: EventTypeField[]) => void
 }) {
+  const t = useTranslations('EventTypesSettings')
+
   function addField() {
     onChange([...fields, { key: `field_${fields.length + 1}`, label: '', type: 'text' }])
   }
@@ -73,21 +69,21 @@ function FieldBuilder({
           <div className="flex items-center gap-2">
             <div className="flex-1 grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label className="text-xs">Label</Label>
+                <Label className="text-xs">{t('fieldBuilder.label')}</Label>
                 <Input
                   value={f.label}
                   onChange={(e) => updateField(i, { label: e.target.value })}
-                  placeholder="Field label"
+                  placeholder={t('fieldBuilder.labelPlaceholder')}
                   className="h-7 text-sm"
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Type</Label>
+                <Label className="text-xs">{t('fieldBuilder.type')}</Label>
                 <Select value={f.type} onValueChange={(v) => updateField(i, { type: v as EventTypeFieldType })}>
                   <SelectTrigger className="h-7 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {FIELD_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    {FIELD_TYPE_VALUES.map((ft) => (
+                      <SelectItem key={ft} value={ft}>{t(`fieldTypes.${ft}` as Parameters<typeof t>[0])}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -102,12 +98,12 @@ function FieldBuilder({
           </div>
           {(f.type === 'select' || f.type === 'multiselect') && (
             <div className="space-y-1">
-              <Label className="text-xs">Options (one per line)</Label>
+              <Label className="text-xs">{t('fieldBuilder.options')}</Label>
               <textarea
                 className="w-full rounded-md border px-2 py-1 text-sm h-16 resize-none"
                 value={(f.options ?? []).join('\n')}
                 onChange={(e) => updateField(i, { options: e.target.value.split('\n').filter(Boolean) })}
-                placeholder="Option 1&#10;Option 2&#10;Option 3"
+                placeholder={t('fieldBuilder.optionsPlaceholder')}
               />
             </div>
           )}
@@ -117,13 +113,13 @@ function FieldBuilder({
               checked={!!f.required}
               onChange={(e) => updateField(i, { required: e.target.checked })}
             />
-            Required
+            {t('fieldBuilder.required')}
           </label>
         </div>
       ))}
       <Button variant="outline" size="sm" onClick={addField}>
         <Plus className="h-3.5 w-3.5 mr-1.5" />
-        Add check-in field
+        {t('fieldBuilder.addField')}
       </Button>
     </div>
   )
@@ -140,6 +136,7 @@ function EventTypeFormDialog({
   onSave: (data: Omit<EventTypeConfig, 'id' | 'source' | 'created_at' | 'created_by'>) => Promise<void>
   onClose: () => void
 }) {
+  const t = useTranslations('EventTypesSettings')
   const [name, setName] = useState(initial?.name ?? '')
   const [icon, setIcon] = useState(initial?.icon ?? 'Calendar')
   const [color, setColor] = useState(initial?.color ?? '#6366F1')
@@ -158,38 +155,38 @@ function EventTypeFormDialog({
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit event type' : 'New event type'}</DialogTitle>
+          <DialogTitle>{initial ? t('form.editTitle') : t('form.newTitle')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Name *</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Grading" />
+              <Label>{t('form.name')}</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('form.namePlaceholder')} />
             </div>
             <div className="space-y-1.5">
-              <Label>Icon (lucide name)</Label>
-              <Input value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="Star" />
+              <Label>{t('form.icon')}</Label>
+              <Input value={icon} onChange={(e) => setIcon(e.target.value)} placeholder={t('form.iconPlaceholder')} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Color</Label>
+            <Label>{t('form.color')}</Label>
             <div className="flex items-center gap-2">
               <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
               <span className="text-sm text-muted-foreground">{color}</span>
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Check-in fields</Label>
+            <Label>{t('form.checkinFields')}</Label>
             <p className="text-xs text-muted-foreground">
-              These fields appear in the check-in form when someone is checked into this event type.
+              {t('form.checkinFieldsHint')}
             </p>
             <FieldBuilder fields={fields} onChange={setFields} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('form.cancel')}</Button>
           <Button onClick={handleSave} disabled={busy || !name.trim()}>
-            {busy ? 'Saving…' : 'Save'}
+            {busy ? t('form.saving') : t('form.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -200,6 +197,7 @@ function EventTypeFormDialog({
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function EventTypesPage() {
+  const t = useTranslations('EventTypesSettings')
   const { currentTeamId } = useAuth()
   const qc = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
@@ -238,7 +236,7 @@ export default function EventTypesPage() {
 
   async function handleDelete(type: EventTypeConfig) {
     if (!currentTeamId) return
-    if (!window.confirm(`Delete event type "${type.name}"? Events of this type won't be affected.`)) return
+    if (!window.confirm(t('deleteConfirm', { name: type.name }))) return
     await deleteDoc(doc(db, TEAMS_COLLECTION, currentTeamId, EVENT_TYPES_SUBCOLLECTION, type.id))
     invalidate()
   }
@@ -248,27 +246,29 @@ export default function EventTypesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Event types"
-        subtitle="Configure the types of events your team can run. Built-in types have hardcoded check-in forms; custom types let you define your own check-in fields."
+        title={t('title')}
+        subtitle={t('subtitle')}
         action={
           <Button onClick={() => { setEditing(null); setFormOpen(true) }}>
             <Plus className="h-4 w-4 mr-1.5" />
-            New type
+            {t('newType')}
           </Button>
         }
       />
 
       {/* Built-in types */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Built-in</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('builtin.heading')}</h2>
         <div className="space-y-2">
           {BUILTIN_EVENT_TYPES.map((type) => (
             <div key={type} className="flex items-center gap-3 rounded-lg border p-3">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{BUILTIN_LABELS[type] ?? type}</p>
+                <p className="text-sm font-medium">
+                  {BUILTIN_LABEL_KEYS[type] ? t(BUILTIN_LABEL_KEYS[type] as Parameters<typeof t>[0]) : type}
+                </p>
                 <p className="text-xs text-muted-foreground capitalize">{type}</p>
               </div>
-              <Badge variant="secondary" className="text-xs shrink-0">Built-in</Badge>
+              <Badge variant="secondary" className="text-xs shrink-0">{t('builtin.badge')}</Badge>
               <Lock className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
             </div>
           ))}
@@ -278,16 +278,16 @@ export default function EventTypesPage() {
       {/* Plugin-provided types */}
       {pluginTypes.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">From plugins</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('fromPlugins.heading')}</h2>
           <div className="space-y-2">
             {pluginTypes.map((plugin) => (
               <div key={plugin.id} className="flex items-center gap-3 rounded-lg border p-3">
                 <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{plugin.eventType!.id}</p>
-                  <p className="text-xs text-muted-foreground">Provided by plugin: {plugin.id}</p>
+                  <p className="text-xs text-muted-foreground">{t('fromPlugins.providedBy', { pluginId: plugin.id })}</p>
                 </div>
-                <Badge variant="outline" className="text-xs shrink-0">Plugin</Badge>
+                <Badge variant="outline" className="text-xs shrink-0">{t('fromPlugins.badge')}</Badge>
               </div>
             ))}
           </div>
@@ -296,7 +296,7 @@ export default function EventTypesPage() {
 
       {/* Custom types */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Custom</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('custom.heading')}</h2>
 
         {isLoading && (
           <div className="space-y-2">
@@ -306,7 +306,7 @@ export default function EventTypesPage() {
 
         {!isLoading && customTypes.length === 0 && (
           <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            No custom event types yet. Create one to add custom check-in fields.
+            {t('custom.empty')}
           </div>
         )}
 
@@ -321,8 +321,8 @@ export default function EventTypesPage() {
                   <p className="text-sm font-medium">{type.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {(type.checkin_fields?.length ?? 0) > 0
-                      ? `${type.checkin_fields!.length} check-in field${type.checkin_fields!.length > 1 ? 's' : ''}`
-                      : 'No check-in fields'}
+                      ? t('custom.checkinFieldCount', { count: type.checkin_fields!.length })
+                      : t('custom.noCheckinFields')}
                   </p>
                 </div>
                 <div className="flex gap-1 shrink-0">

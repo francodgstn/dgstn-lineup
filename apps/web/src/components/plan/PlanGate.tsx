@@ -1,6 +1,7 @@
 'use client'
 
 import { Lock } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import type { SaasPlan, PlanFeature } from '@linyup/shared'
@@ -18,18 +19,19 @@ interface PlanGateProps {
 }
 
 function UpgradePrompt({ minPlan, feature }: { minPlan: SaasPlan; feature?: PlanFeature }) {
+  const t = useTranslations('PlanGate')
   const { openUpgradeModal } = useUpgradeModal()
   return (
     <div className="rounded-lg border border-dashed p-6 text-center">
       <Lock className="h-5 w-5 mx-auto mb-2 text-muted-foreground/40" />
       <p className="text-sm font-medium text-foreground">
-        This feature requires a higher plan
+        {t('requiresHigherPlan')}
       </p>
       <button
         onClick={() => openUpgradeModal({ minPlan, feature })}
         className="mt-2 text-xs text-primary hover:underline"
       >
-        See upgrade options
+        {t('seeUpgradeOptions')}
       </button>
     </div>
   )

@@ -3144,22 +3144,36 @@
       "top_right": {
         "label": "Teamwachstum",
         "hint": "Arbeiten Sie am Team",
-        "actions": ["Teamevents", "Spezielle Sessions"]
+        "actions": [
+          "Teamevents",
+          "Spezielle Sessions"
+        ]
       },
       "top_left": {
         "label": "Neukundengewinnung",
         "hint": "Arbeiten Sie an der Neukundengewinnung",
-        "actions": ["Social Ads", "Website", "Mundpropaganda"]
+        "actions": [
+          "Social Ads",
+          "Website",
+          "Mundpropaganda"
+        ]
       },
       "bottom_right": {
         "label": "Engagement steigern",
         "hint": "Arbeiten Sie am Engagement",
-        "actions": ["Mehr Sessions", "Feedback", "Kontakte reaktivieren"]
+        "actions": [
+          "Mehr Sessions",
+          "Feedback",
+          "Kontakte reaktivieren"
+        ]
       },
       "bottom_left": {
         "label": "Starthilfe",
         "hint": "Arbeiten Sie am Einstieg",
-        "actions": ["Flexibler Zeitplan", "Energie fokussieren"]
+        "actions": [
+          "Flexibler Zeitplan",
+          "Energie fokussieren"
+        ]
       }
     }
   },
@@ -3218,7 +3232,11 @@
     "planContent": {
       "free": {
         "tagline": "Kostenlos starten mit bis zu 15 Kontakten.",
-        "features": ["Bis zu 15 aktive Kontakte", "Öffentlicher Bio-Link", "Sessions, Abos & Ziele"]
+        "features": [
+          "Bis zu 15 aktive Kontakte",
+          "Öffentlicher Bio-Link",
+          "Sessions, Abos & Ziele"
+        ]
       },
       "coach": {
         "tagline": "Alles, was ein Einzelcoach für eine professionelle Praxis braucht.",
@@ -3370,5 +3388,147 @@
   "OrgPlaces": {
     "title": "Standorte der Organisation",
     "subtitle": "Standorte, die mit jedem Studio dieser Organisation geteilt werden."
+  },
+  "EventTypesSettings": {
+    "title": "Ereignistypen",
+    "subtitle": "Legen Sie fest, welche Arten von Veranstaltungen Ihr Team durchführen kann. Vordefinierte Typen haben feste Check-in-Formulare; eigene Typen lassen Sie selbst Check-in-Felder definieren.",
+    "newType": "Neuer Typ",
+    "builtin": {
+      "heading": "Vordefiniert",
+      "badge": "Vordefiniert"
+    },
+    "fromPlugins": {
+      "heading": "Aus Plugins",
+      "badge": "Plugin",
+      "providedBy": "Bereitgestellt durch Plugin: {pluginId}"
+    },
+    "custom": {
+      "heading": "Eigene",
+      "empty": "Noch keine eigenen Ereignistypen. Erstellen Sie einen, um eigene Check-in-Felder hinzuzufügen.",
+      "checkinFieldCount": "{count, plural, one {# Check-in-Feld} other {# Check-in-Felder}}",
+      "noCheckinFields": "Keine Check-in-Felder"
+    },
+    "fieldTypes": {
+      "text": "Text",
+      "number": "Zahl",
+      "select": "Einfachauswahl",
+      "multiselect": "Mehrfachauswahl",
+      "boolean": "Ja / Nein"
+    },
+    "builtinLabels": {
+      "competition": "Wettkampf",
+      "camp": "Camp",
+      "exam": "Prüfung",
+      "seminar": "Seminar",
+      "workshop": "Workshop"
+    },
+    "fieldBuilder": {
+      "label": "Bezeichnung",
+      "labelPlaceholder": "Feldbezeichnung",
+      "type": "Typ",
+      "options": "Optionen (eine pro Zeile)",
+      "optionsPlaceholder": "Option 1\nOption 2\nOption 3",
+      "required": "Pflichtfeld",
+      "addField": "Check-in-Feld hinzufügen"
+    },
+    "form": {
+      "editTitle": "Ereignistyp bearbeiten",
+      "newTitle": "Neuer Ereignistyp",
+      "name": "Name *",
+      "namePlaceholder": "z. B. Gradierung",
+      "icon": "Symbol (Lucide-Name)",
+      "iconPlaceholder": "Star",
+      "color": "Farbe",
+      "checkinFields": "Check-in-Felder",
+      "checkinFieldsHint": "Diese Felder erscheinen im Check-in-Formular, wenn jemand zu diesem Ereignistyp eingecheckt wird.",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "saving": "Wird gespeichert…"
+    },
+    "deleteConfirm": "Ereignistyp „{name}“ löschen? Bestehende Ereignisse dieses Typs sind davon nicht betroffen."
+  },
+  "Referrals": {
+    "title": "Empfehlungsprogramm",
+    "subtitle": "Verfolgen Sie Mitgliederempfehlungen und verwalten Sie Belohnungen.",
+    "tabs": {
+      "referrals": "Empfehlungen",
+      "settings": "Einstellungen"
+    },
+    "filters": {
+      "all": "Alle"
+    },
+    "statuses": {
+      "friend_booked": "Freund gebucht",
+      "friend_signed_up": "Freund angemeldet",
+      "pending_reward": "Belohnung ausstehend",
+      "rewarded": "Belohnt"
+    },
+    "table": {
+      "referrer": "Werber",
+      "referred": "Freund (Empfohlen)",
+      "status": "Status",
+      "date": "Datum",
+      "reward": "Belohnung",
+      "action": "Aktion",
+      "rewardFormat": "{type} × {amount}",
+      "noValue": "—",
+      "empty": "Keine Empfehlungen gefunden.",
+      "statusGuide": "Status-Übersicht"
+    },
+    "actions": {
+      "confirmMembership": "Mitgliedschaft bestätigen",
+      "markRewarded": "Als belohnt markieren"
+    },
+    "actionDialog": {
+      "titleMarkRewarded": "Als belohnt markieren",
+      "referrerLabel": "Werber:",
+      "referredLabel": "Empfohlen:",
+      "rewardIntro": "Geben Sie die Belohnungsdetails für den Werber ein.",
+      "rewardTypeLabel": "Art der Belohnung",
+      "rewardTypePlaceholder": "z. B. Gratismonat, Rabatt, Geschenkgutschein",
+      "rewardAmountLabel": "Höhe der Belohnung",
+      "rewardAmountPlaceholder": "z. B. 1, 50, 100",
+      "notesLabel": "Notizen (optional)",
+      "confirmMembershipText": "Bestätigen Sie, dass <strong>{referredName}</strong> die Mitgliedschaft abgeschlossen hat. Dadurch wird die Empfehlung für <strong>{referrerName}</strong> als „Belohnung ausstehend“ markiert.",
+      "cancel": "Abbrechen",
+      "saving": "Wird gespeichert…",
+      "confirming": "Wird bestätigt…"
+    },
+    "statusInfo": {
+      "dialogTitle": "Empfehlungsstatus",
+      "intro": "Empfehlungen durchlaufen die folgenden Status, während Sie Massnahmen ergreifen.",
+      "description": {
+        "friend_booked": "Ein empfohlener Freund hat über den persönlichen Link des Werbers eine Probestunde gebucht. Noch keine Aktion erforderlich.",
+        "friend_signed_up": "Der Freund hat teilgenommen und Interesse an einer Mitgliedschaft gezeigt. Bestätigen Sie die Mitgliedschaft, um die Empfehlung weiterzuführen.",
+        "pending_reward": "Die Mitgliedschaft ist bestätigt. Der Werber hat Anspruch auf eine Belohnung — markieren Sie diese als belohnt, sobald sie ausgehändigt wurde.",
+        "rewarded": "Der Werber hat seine Belohnung erhalten. Diese Empfehlung ist abgeschlossen."
+      },
+      "flowLabel": "Ablauf:",
+      "flow": "{friendBooked} → {friendSignedUp} → {pendingReward} → {rewarded}",
+      "close": "Schliessen"
+    },
+    "disabledBanner": "Das Empfehlungsprogramm ist derzeit deaktiviert. Aktivieren Sie es im Tab «Einstellungen», damit Mitglieder Empfehlungslinks teilen können.",
+    "settings": {
+      "heading": "Einstellungen des Empfehlungsprogramms",
+      "description": "Wenn aktiviert, können Mitglieder einen persönlichen Empfehlungslink mit Freunden teilen. Die Empfehlung wird über den gesamten Lebenszyklus verfolgt, bis Sie den Werber manuell belohnen.",
+      "enableLabel": "Empfehlungsprogramm aktivieren",
+      "saveButton": "Einstellungen speichern",
+      "saving": "Wird gespeichert…",
+      "generateButtonTitle": "Empfehlungscodes für Kontakte generieren, die noch keinen haben",
+      "generateButton": "Codes generieren",
+      "generating": "Wird generiert…",
+      "saveSuccess": "Empfehlungseinstellungen gespeichert",
+      "saveError": "Einstellungen konnten nicht gespeichert werden",
+      "generateSuccess": "{count, plural, one {# neuer Empfehlungscode generiert} other {# neue Empfehlungscodes generiert}}",
+      "generateError": "Empfehlungscodes konnten nicht generiert werden"
+    },
+    "toasts": {
+      "updateSuccess": "Empfehlung erfolgreich aktualisiert",
+      "settingsSaveError": "Empfehlungseinstellungen konnten nicht gespeichert werden"
+    }
+  },
+  "PlanGate": {
+    "requiresHigherPlan": "Diese Funktion erfordert einen höheren Plan",
+    "seeUpgradeOptions": "Upgrade-Optionen ansehen"
   }
 }
