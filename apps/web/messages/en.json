@@ -3530,5 +3530,236 @@
   "PlanGate": {
     "requiresHigherPlan": "This feature requires a higher plan",
     "seeUpgradeOptions": "See upgrade options"
+  },
+  "Automations": {
+    "page": {
+      "title": "Automations",
+      "subtitle": "Trigger emails and alerts automatically based on contact activity.",
+      "templatesButton": "Templates",
+      "libraryButton": "Library",
+      "webhooksButton": "Webhooks",
+      "limitedPlanTitle": "Automations on your plan are limited",
+      "limitedPlanBody": "You can automate around your active modules and installed add-ons. Upgrade to {plan} for the full automation suite — including every add-on's triggers and actions.",
+      "emptyTitle": "No automations yet",
+      "emptyBody": "Load a starter kit in one click, browse the library to pick individual rules, or build your own.",
+      "installing": "Installing…",
+      "quickStart": "Quick-start (8 rules)",
+      "browseLibrary": "Browse library"
+    },
+    "common": {
+      "newAutomation": "New automation",
+      "active": "Active",
+      "paused": "Paused",
+      "edit": "Edit",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "inactive": "Inactive"
+    },
+    "deleteConfirm": "Delete \"{name}\"?",
+    "sections": {
+      "trigger": "Trigger",
+      "conditions": "Conditions",
+      "conditionsHint": "(all must match)",
+      "actions": "Actions"
+    },
+    "ruleCard": {
+      "unnamed": "(unnamed)",
+      "pauseAction": "Pause",
+      "activateAction": "Activate",
+      "runNow": "Run now",
+      "running": "Running…",
+      "delayMinutes": "{mins}m delay",
+      "delayHours": "{hrs}h delay",
+      "lastRun": "Last run {timeAgo}",
+      "sentCount": "{count, plural, one {# sent} other {# sent}}"
+    },
+    "timeAgo": {
+      "minutes": "{mins}m ago",
+      "hours": "{hrs}h ago",
+      "days": "{days}d ago"
+    },
+    "groups": {
+      "contact": "Contact",
+      "booking": "Booking",
+      "attendance": "Attendance",
+      "subscription": "Subscription",
+      "affiliation": "Affiliation",
+      "general": "General",
+      "plugins": "Plugins",
+      "acquisition": "Acquisition",
+      "other": "Other",
+      "subscriptionTypes": "Subscription types"
+    },
+    "triggers": {
+      "schedule_daily": "Daily scan (scheduled)",
+      "contact_created": "Contact created",
+      "booking_confirmed": "Booking confirmed",
+      "booking_no_show": "Booking marked no-show",
+      "booking_cancelled": "Booking cancelled",
+      "subscription_added": "Subscription added",
+      "subscription_removed": "Subscription removed",
+      "subscription_changed": "Subscription changed (any)",
+      "affiliation_added": "Affiliation added",
+      "affiliation_removed": "Affiliation removed",
+      "affiliation_changed": "Affiliation changed (any)",
+      "session_ended": "Session ended",
+      "inbound_webhook": "Inbound webhook",
+      "manual": "Manual only"
+    },
+    "conditions": {
+      "addCondition": "Add condition",
+      "tagPlaceholder": "Tag name",
+      "fieldEqualsFieldPlaceholder": "Field (e.g. type)",
+      "valuePlaceholder": "Value",
+      "affiliationTypeKeyPlaceholder": "type key (e.g. club_membership)",
+      "summarySubscription": "Subscription: {name}",
+      "summaryWithValue": "{label}: {value}",
+      "summaryNumber": "{label} {value}",
+      "summaryFieldEquals": "{field} = {value}",
+      "subscriptionScope": {
+        "any": "Any subscription",
+        "none": "No subscription"
+      },
+      "types": {
+        "acquisition_stage": "Acquisition stage",
+        "days_since_created": "Days since created ≥",
+        "subscription": "Subscription",
+        "subscription_status": "Subscription billing status",
+        "subscription_expires_in": "Subscription expires in ≤ (days)",
+        "has_affiliation": "Has an active affiliation",
+        "affiliation_type": "Affiliation type",
+        "sessions_attended_min": "Sessions attended ≥",
+        "sessions_attended_max": "Sessions attended ≤",
+        "sessions_attended_exactly": "Sessions attended =",
+        "inactivity_days": "Inactive for at least (days)",
+        "inactivity_days_max": "Inactive for at most (days)",
+        "bio_link_booking_no_show": "Bio-link booking no-show",
+        "tag": "Has tag",
+        "field_equals": "Field equals",
+        "birthday_today": "Birthday today"
+      }
+    },
+    "subscriptionStatus": {
+      "active": "Active",
+      "trialing": "Trialing",
+      "past_due": "Past due",
+      "paused": "Paused (frozen)",
+      "cancelled": "Cancelled",
+      "none": "No subscription"
+    },
+    "acquisitionStage": {
+      "trial_booked": "Trial booked",
+      "trial_attended": "Trial attended",
+      "joined": "Joined"
+    },
+    "actions": {
+      "addAction": "Add action",
+      "selectTemplatePlaceholder": "Select template",
+      "noTemplates": "No templates",
+      "alertPresetsComingSoon": "Alert presets coming soon",
+      "fieldPlaceholder": "Field",
+      "valuePlaceholder": "Value",
+      "selectGroupPlaceholder": "Select group",
+      "noGroupsYet": "No groups yet",
+      "tagPlaceholder": "Tag name (e.g. vip, at-risk, converted)",
+      "webhookUrlPlaceholder": "https://hooks.zapier.com/…",
+      "types": {
+        "send_email": "Send email",
+        "update_field": "Update contact field",
+        "assign_tag": "Add tag to contact",
+        "remove_tag": "Remove tag from contact",
+        "notify_team": "Notify team (email)",
+        "log_activity": "Log activity entry",
+        "webhook": "Webhook (POST)",
+        "add_to_group": "Add to group",
+        "remove_from_group": "Remove from group",
+        "create_alert": "Create alert (coming soon)"
+      },
+      "updateField": {
+        "acquisitionStage": "Acquisition stage"
+      },
+      "notifyTeam": {
+        "subjectPlaceholder": "Subject — use '{{firstname}}', '{{teamName}}'…",
+        "bodyPlaceholder": "Body (markdown) — '{{firstname}}' attended a session at '{{teamName}}'."
+      },
+      "logActivity": {
+        "messagePlaceholder": "Message — use '{{firstname}}', '{{teamName}}'…"
+      },
+      "summarySendEmail": "Email: {name}",
+      "summaryCreateAlert": "Create alert",
+      "summaryUpdateField": "Set {field} → {value}",
+      "summaryNotifyTeam": "Notify team: {subject}",
+      "summaryLogActivity": "Log: {message}",
+      "summaryAssignTag": "Add tag: {tag}",
+      "summaryRemoveTag": "Remove tag: {tag}",
+      "summaryWebhook": "Webhook: {url}"
+    },
+    "placeholders": {
+      "title": "Placeholders",
+      "clickToCopy": "Click to copy",
+      "copied": "✓ Copied",
+      "customTitle": "Custom",
+      "noCustomVars": "No custom variables yet.",
+      "manageInSettings": "Manage in Settings → Outreach",
+      "groups": {
+        "contact": "Contact",
+        "team": "Team",
+        "dates": "Dates"
+      },
+      "hints": {
+        "firstname": "First name",
+        "lastname": "Last name",
+        "acquisition_stage": "Trial booked / Trial attended / Joined",
+        "affiliation_summary": "Has active affiliation (true/false)",
+        "sessions_count": "Sessions attended",
+        "teamName": "Team name",
+        "bookingUrl": "Trial booking page",
+        "membershipUrl": "Membership signup",
+        "bioLinkUrl": "Bio-link page",
+        "websiteUrl": "Website (if set)",
+        "reviewUrl": "Review page (if set)",
+        "date": "Today",
+        "date+7": "+7 days (any N)",
+        "date-7": "-7 days (any N)"
+      }
+    },
+    "validation": {
+      "nameRequired": "Name is required",
+      "triggerRequired": "Trigger is required",
+      "required": "Required"
+    },
+    "dialogs": {
+      "rule": {
+        "editTitle": "Edit automation",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. No-show follow-up",
+        "whenLabel": "When",
+        "delayLabel": "Delay (minutes, optional)",
+        "webhookEndpointLabel": "Webhook endpoint",
+        "noWebhookEndpoints": "No endpoints yet — create one in the Webhooks dialog first.",
+        "selectEndpointPlaceholder": "Select endpoint",
+        "subscriptionTypeLabel": "Subscription type",
+        "affiliationTypeKeyLabel": "Affiliation type key (optional)",
+        "affiliationTypeKeyPlaceholder": "any — or a type key (e.g. club_membership)",
+        "submit": "Save automation",
+        "saveFailed": "Failed to save"
+      },
+      "templates": {
+        "title": "Email templates",
+        "empty": "No templates yet. Create one to use in automation rules.",
+        "newTemplate": "New template",
+        "nameLabel": "Template name",
+        "namePlaceholder": "e.g. No-show follow-up",
+        "subjectLabel": "Email subject",
+        "subjectPlaceholder": "We missed you!",
+        "bodyLabel": "Body",
+        "bodyPlaceholder": "Hi '{{firstname}}',&#10;&#10;We noticed you missed our session…",
+        "languageLabel": "Language",
+        "back": "← Back",
+        "saveChanges": "Save changes",
+        "createTemplate": "Create template"
+      }
+    }
   }
 }

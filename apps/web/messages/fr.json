@@ -3530,5 +3530,236 @@
   "PlanGate": {
     "requiresHigherPlan": "Cette fonctionnalité nécessite une offre supérieure",
     "seeUpgradeOptions": "Voir les options de mise à niveau"
+  },
+  "Automations": {
+    "page": {
+      "title": "Automatisations",
+      "subtitle": "Déclenchez automatiquement des e-mails et des alertes selon l'activité des contacts.",
+      "templatesButton": "Modèles",
+      "libraryButton": "Bibliothèque",
+      "webhooksButton": "Webhooks",
+      "limitedPlanTitle": "Les automatisations de votre offre sont limitées",
+      "limitedPlanBody": "Vous pouvez automatiser autour de vos modules actifs et de vos extensions installées. Passez à {plan} pour la suite d'automatisation complète — y compris les déclencheurs et actions de chaque extension.",
+      "emptyTitle": "Aucune automatisation pour l'instant",
+      "emptyBody": "Chargez un kit de démarrage en un clic, parcourez la bibliothèque pour choisir des règles individuelles, ou créez la vôtre.",
+      "installing": "Installation…",
+      "quickStart": "Démarrage rapide (8 règles)",
+      "browseLibrary": "Parcourir la bibliothèque"
+    },
+    "common": {
+      "newAutomation": "Nouvelle automatisation",
+      "active": "Actif",
+      "paused": "En pause",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "cancel": "Annuler",
+      "saving": "Enregistrement…",
+      "inactive": "Inactif"
+    },
+    "deleteConfirm": "Supprimer « {name} » ?",
+    "sections": {
+      "trigger": "Déclencheur",
+      "conditions": "Conditions",
+      "conditionsHint": "(toutes doivent correspondre)",
+      "actions": "Actions"
+    },
+    "ruleCard": {
+      "unnamed": "(sans nom)",
+      "pauseAction": "Mettre en pause",
+      "activateAction": "Activer",
+      "runNow": "Exécuter maintenant",
+      "running": "Exécution…",
+      "delayMinutes": "Délai de {mins} min",
+      "delayHours": "Délai de {hrs} h",
+      "lastRun": "Dernière exécution {timeAgo}",
+      "sentCount": "{count, plural, one {# envoyé} other {# envoyés}}"
+    },
+    "timeAgo": {
+      "minutes": "il y a {mins} min",
+      "hours": "il y a {hrs} h",
+      "days": "il y a {days} j"
+    },
+    "groups": {
+      "contact": "Contact",
+      "booking": "Réservation",
+      "attendance": "Présence",
+      "subscription": "Abonnement",
+      "affiliation": "Affiliation",
+      "general": "Général",
+      "plugins": "Plugins",
+      "acquisition": "Acquisition",
+      "other": "Autre",
+      "subscriptionTypes": "Types d'abonnement"
+    },
+    "triggers": {
+      "schedule_daily": "Analyse quotidienne (planifiée)",
+      "contact_created": "Contact créé",
+      "booking_confirmed": "Réservation confirmée",
+      "booking_no_show": "Réservation marquée absente",
+      "booking_cancelled": "Réservation annulée",
+      "subscription_added": "Abonnement ajouté",
+      "subscription_removed": "Abonnement supprimé",
+      "subscription_changed": "Abonnement modifié (tout type)",
+      "affiliation_added": "Affiliation ajoutée",
+      "affiliation_removed": "Affiliation supprimée",
+      "affiliation_changed": "Affiliation modifiée (tout type)",
+      "session_ended": "Séance terminée",
+      "inbound_webhook": "Webhook entrant",
+      "manual": "Manuel uniquement"
+    },
+    "conditions": {
+      "addCondition": "Ajouter une condition",
+      "tagPlaceholder": "Nom du tag",
+      "fieldEqualsFieldPlaceholder": "Champ (ex. type)",
+      "valuePlaceholder": "Valeur",
+      "affiliationTypeKeyPlaceholder": "clé de type (ex. club_membership)",
+      "summarySubscription": "Abonnement : {name}",
+      "summaryWithValue": "{label} : {value}",
+      "summaryNumber": "{label} {value}",
+      "summaryFieldEquals": "{field} = {value}",
+      "subscriptionScope": {
+        "any": "N'importe quel abonnement",
+        "none": "Pas d'abonnement"
+      },
+      "types": {
+        "acquisition_stage": "Étape d'acquisition",
+        "days_since_created": "Jours depuis la création ≥",
+        "subscription": "Abonnement",
+        "subscription_status": "Statut de facturation de l'abonnement",
+        "subscription_expires_in": "Abonnement expire dans ≤ (jours)",
+        "has_affiliation": "A une affiliation active",
+        "affiliation_type": "Type d'affiliation",
+        "sessions_attended_min": "Séances suivies ≥",
+        "sessions_attended_max": "Séances suivies ≤",
+        "sessions_attended_exactly": "Séances suivies =",
+        "inactivity_days": "Inactif depuis au moins (jours)",
+        "inactivity_days_max": "Inactif depuis au plus (jours)",
+        "bio_link_booking_no_show": "Réservation bio-link absente",
+        "tag": "A le tag",
+        "field_equals": "Le champ est égal à",
+        "birthday_today": "Anniversaire aujourd'hui"
+      }
+    },
+    "subscriptionStatus": {
+      "active": "Actif",
+      "trialing": "En période d'essai",
+      "past_due": "En retard",
+      "paused": "Pausé (gelé)",
+      "cancelled": "Annulé",
+      "none": "Pas d'abonnement"
+    },
+    "acquisitionStage": {
+      "trial_booked": "Essai réservé",
+      "trial_attended": "Essai effectué",
+      "joined": "Membre"
+    },
+    "actions": {
+      "addAction": "Ajouter une action",
+      "selectTemplatePlaceholder": "Choisir un modèle",
+      "noTemplates": "Aucun modèle",
+      "alertPresetsComingSoon": "Modèles d'alerte à venir",
+      "fieldPlaceholder": "Champ",
+      "valuePlaceholder": "Valeur",
+      "selectGroupPlaceholder": "Choisir un groupe",
+      "noGroupsYet": "Aucun groupe pour l'instant",
+      "tagPlaceholder": "Nom du tag (ex. vip, at-risk, converted)",
+      "webhookUrlPlaceholder": "https://hooks.zapier.com/…",
+      "types": {
+        "send_email": "Envoyer un e-mail",
+        "update_field": "Mettre à jour un champ du contact",
+        "assign_tag": "Ajouter un tag au contact",
+        "remove_tag": "Retirer un tag du contact",
+        "notify_team": "Notifier l'équipe (e-mail)",
+        "log_activity": "Ajouter une entrée d'activité",
+        "webhook": "Webhook (POST)",
+        "add_to_group": "Ajouter au groupe",
+        "remove_from_group": "Retirer du groupe",
+        "create_alert": "Créer une alerte (bientôt disponible)"
+      },
+      "updateField": {
+        "acquisitionStage": "Étape d'acquisition"
+      },
+      "notifyTeam": {
+        "subjectPlaceholder": "Objet — utilisez '{{firstname}}', '{{teamName}}'…",
+        "bodyPlaceholder": "Texte (markdown) — '{{firstname}}' a participé à une séance chez '{{teamName}}'."
+      },
+      "logActivity": {
+        "messagePlaceholder": "Message — utilisez '{{firstname}}', '{{teamName}}'…"
+      },
+      "summarySendEmail": "E-mail : {name}",
+      "summaryCreateAlert": "Créer une alerte",
+      "summaryUpdateField": "Définir {field} → {value}",
+      "summaryNotifyTeam": "Notifier l'équipe : {subject}",
+      "summaryLogActivity": "Journal : {message}",
+      "summaryAssignTag": "Ajouter le tag : {tag}",
+      "summaryRemoveTag": "Retirer le tag : {tag}",
+      "summaryWebhook": "Webhook : {url}"
+    },
+    "placeholders": {
+      "title": "Variables",
+      "clickToCopy": "Cliquer pour copier",
+      "copied": "✓ Copié",
+      "customTitle": "Personnalisées",
+      "noCustomVars": "Aucune variable personnalisée pour l'instant.",
+      "manageInSettings": "Gérer dans Paramètres → Outreach",
+      "groups": {
+        "contact": "Contact",
+        "team": "Équipe",
+        "dates": "Dates"
+      },
+      "hints": {
+        "firstname": "Prénom",
+        "lastname": "Nom",
+        "acquisition_stage": "Essai réservé / Essai effectué / Membre",
+        "affiliation_summary": "A une affiliation active (true/false)",
+        "sessions_count": "Séances suivies",
+        "teamName": "Nom de l'équipe",
+        "bookingUrl": "Page de réservation d'essai",
+        "membershipUrl": "Inscription à l'adhésion",
+        "bioLinkUrl": "Page bio-link",
+        "websiteUrl": "Site web (si défini)",
+        "reviewUrl": "Page d'avis (si définie)",
+        "date": "Aujourd'hui",
+        "date+7": "+7 jours (N au choix)",
+        "date-7": "-7 jours (N au choix)"
+      }
+    },
+    "validation": {
+      "nameRequired": "Le nom est requis",
+      "triggerRequired": "Le déclencheur est requis",
+      "required": "Requis"
+    },
+    "dialogs": {
+      "rule": {
+        "editTitle": "Modifier l'automatisation",
+        "nameLabel": "Nom",
+        "namePlaceholder": "ex. Relance après absence",
+        "whenLabel": "Quand",
+        "delayLabel": "Délai (minutes, facultatif)",
+        "webhookEndpointLabel": "Point de terminaison webhook",
+        "noWebhookEndpoints": "Aucun point de terminaison pour l'instant — créez-en un d'abord dans la boîte de dialogue Webhooks.",
+        "selectEndpointPlaceholder": "Choisir un point de terminaison",
+        "subscriptionTypeLabel": "Type d'abonnement",
+        "affiliationTypeKeyLabel": "Clé du type d'affiliation (facultatif)",
+        "affiliationTypeKeyPlaceholder": "n'importe lequel — ou une clé de type (ex. club_membership)",
+        "submit": "Enregistrer l'automatisation",
+        "saveFailed": "Échec de l'enregistrement"
+      },
+      "templates": {
+        "title": "Modèles d'e-mail",
+        "empty": "Aucun modèle pour l'instant. Créez-en un pour l'utiliser dans des règles d'automatisation.",
+        "newTemplate": "Nouveau modèle",
+        "nameLabel": "Nom du modèle",
+        "namePlaceholder": "ex. Relance après absence",
+        "subjectLabel": "Objet de l'e-mail",
+        "subjectPlaceholder": "Vous nous avez manqué !",
+        "bodyLabel": "Contenu",
+        "bodyPlaceholder": "Bonjour '{{firstname}}',&#10;&#10;Nous avons remarqué que vous avez manqué notre séance…",
+        "languageLabel": "Langue",
+        "back": "← Retour",
+        "saveChanges": "Enregistrer les modifications",
+        "createTemplate": "Créer un modèle"
+      }
+    }
   }
 }

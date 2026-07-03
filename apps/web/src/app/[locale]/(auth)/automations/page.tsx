@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { usePlan } from '@/hooks/usePlan'
+import { usePlanName } from '@/hooks/usePlanName'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import {
   DropdownMenu,
@@ -169,44 +170,45 @@ interface FormAction {
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-// `group` drives the sectioned dropdown (SelectGroup + divider). Order below.
-const TRIGGER_GROUP_ORDER = ['Contact', 'Booking', 'Attendance', 'Subscription', 'Affiliation', 'General', 'Plugins']
-const CONDITION_GROUP_ORDER = ['Acquisition', 'Subscription', 'Affiliation', 'Attendance', 'Other']
+// `group` drives the sectioned dropdown (SelectGroup + divider) — machine keys,
+// translated for display via Automations.groups.* (see renderGroupedOptions).
+const TRIGGER_GROUP_ORDER = ['contact', 'booking', 'attendance', 'subscription', 'affiliation', 'general', 'plugins']
+const CONDITION_GROUP_ORDER = ['acquisition', 'subscription', 'affiliation', 'attendance', 'other']
 
 const TRIGGER_OPTIONS = [
-  { value: 'schedule_daily', label: 'Daily scan (scheduled)', icon: Clock, supportsDelay: false, group: 'General' },
-  { value: 'contact_created', label: 'Contact created', icon: UserPlus, supportsDelay: true, group: 'Contact' },
-  { value: 'booking_confirmed', label: 'Booking confirmed', icon: CheckCircle, supportsDelay: true, group: 'Booking' },
-  { value: 'booking_no_show', label: 'Booking marked no-show', icon: XCircle, supportsDelay: true, group: 'Booking' },
-  { value: 'booking_cancelled', label: 'Booking cancelled', icon: XCircle, supportsDelay: true, group: 'Booking' },
-  { value: 'subscription_added', label: 'Subscription added', icon: CreditCard, supportsDelay: true, group: 'Subscription' },
-  { value: 'subscription_removed', label: 'Subscription removed', icon: CreditCard, supportsDelay: true, group: 'Subscription' },
-  { value: 'subscription_changed', label: 'Subscription changed (any)', icon: CreditCard, supportsDelay: true, group: 'Subscription' },
-  { value: 'affiliation_added', label: 'Affiliation added', icon: ShieldCheck, supportsDelay: true, group: 'Affiliation' },
-  { value: 'affiliation_removed', label: 'Affiliation removed', icon: ShieldCheck, supportsDelay: true, group: 'Affiliation' },
-  { value: 'affiliation_changed', label: 'Affiliation changed (any)', icon: ShieldCheck, supportsDelay: true, group: 'Affiliation' },
-  { value: 'session_ended', label: 'Session ended', icon: CalendarCheck, supportsDelay: true, group: 'Attendance' },
-  { value: 'inbound_webhook', label: 'Inbound webhook', icon: Webhook, supportsDelay: false, group: 'General' },
-  { value: 'manual', label: 'Manual only', icon: Play, supportsDelay: false, group: 'General' },
+  { value: 'schedule_daily', icon: Clock, supportsDelay: false, group: 'general' },
+  { value: 'contact_created', icon: UserPlus, supportsDelay: true, group: 'contact' },
+  { value: 'booking_confirmed', icon: CheckCircle, supportsDelay: true, group: 'booking' },
+  { value: 'booking_no_show', icon: XCircle, supportsDelay: true, group: 'booking' },
+  { value: 'booking_cancelled', icon: XCircle, supportsDelay: true, group: 'booking' },
+  { value: 'subscription_added', icon: CreditCard, supportsDelay: true, group: 'subscription' },
+  { value: 'subscription_removed', icon: CreditCard, supportsDelay: true, group: 'subscription' },
+  { value: 'subscription_changed', icon: CreditCard, supportsDelay: true, group: 'subscription' },
+  { value: 'affiliation_added', icon: ShieldCheck, supportsDelay: true, group: 'affiliation' },
+  { value: 'affiliation_removed', icon: ShieldCheck, supportsDelay: true, group: 'affiliation' },
+  { value: 'affiliation_changed', icon: ShieldCheck, supportsDelay: true, group: 'affiliation' },
+  { value: 'session_ended', icon: CalendarCheck, supportsDelay: true, group: 'attendance' },
+  { value: 'inbound_webhook', icon: Webhook, supportsDelay: false, group: 'general' },
+  { value: 'manual', icon: Play, supportsDelay: false, group: 'general' },
 ]
 
 const CONDITION_TYPE_OPTIONS = [
-  { value: 'acquisition_stage', label: 'Acquisition stage', input: 'acquisition_stage_select', group: 'Acquisition' },
-  { value: 'days_since_created', label: 'Days since created ≥', input: 'number', group: 'Acquisition' },
-  { value: 'subscription', label: 'Subscription', input: 'subscription_select', group: 'Subscription' },
-  { value: 'subscription_status', label: 'Subscription billing status', input: 'subscription_status_select', group: 'Subscription' },
-  { value: 'subscription_expires_in', label: 'Subscription expires in ≤ (days)', input: 'number', group: 'Subscription' },
-  { value: 'has_affiliation', label: 'Has an active affiliation', input: 'none', group: 'Affiliation' },
-  { value: 'affiliation_type', label: 'Affiliation type', input: 'affiliation_type_select', group: 'Affiliation' },
-  { value: 'sessions_attended_min', label: 'Sessions attended ≥', input: 'number', group: 'Attendance' },
-  { value: 'sessions_attended_max', label: 'Sessions attended ≤', input: 'number', group: 'Attendance' },
-  { value: 'sessions_attended_exactly', label: 'Sessions attended =', input: 'number', group: 'Attendance' },
-  { value: 'inactivity_days', label: 'Inactive for at least (days)', input: 'number', group: 'Attendance' },
-  { value: 'inactivity_days_max', label: 'Inactive for at most (days)', input: 'number', group: 'Attendance' },
-  { value: 'bio_link_booking_no_show', label: 'Bio-link booking no-show', input: 'none', group: 'Attendance' },
-  { value: 'tag', label: 'Has tag', input: 'text', group: 'Other' },
-  { value: 'field_equals', label: 'Field equals', input: 'field_equals', group: 'Other' },
-  { value: 'birthday_today', label: 'Birthday today', input: 'none', group: 'Other' },
+  { value: 'acquisition_stage', input: 'acquisition_stage_select', group: 'acquisition' },
+  { value: 'days_since_created', input: 'number', group: 'acquisition' },
+  { value: 'subscription', input: 'subscription_select', group: 'subscription' },
+  { value: 'subscription_status', input: 'subscription_status_select', group: 'subscription' },
+  { value: 'subscription_expires_in', input: 'number', group: 'subscription' },
+  { value: 'has_affiliation', input: 'none', group: 'affiliation' },
+  { value: 'affiliation_type', input: 'affiliation_type_select', group: 'affiliation' },
+  { value: 'sessions_attended_min', input: 'number', group: 'attendance' },
+  { value: 'sessions_attended_max', input: 'number', group: 'attendance' },
+  { value: 'sessions_attended_exactly', input: 'number', group: 'attendance' },
+  { value: 'inactivity_days', input: 'number', group: 'attendance' },
+  { value: 'inactivity_days_max', input: 'number', group: 'attendance' },
+  { value: 'bio_link_booking_no_show', input: 'none', group: 'attendance' },
+  { value: 'tag', input: 'text', group: 'other' },
+  { value: 'field_equals', input: 'field_equals', group: 'other' },
+  { value: 'birthday_today', input: 'none', group: 'other' },
 ]
 
 // Render a flat option list as grouped <SelectGroup> sections with dividers, in the
@@ -214,11 +216,12 @@ const CONDITION_TYPE_OPTIONS = [
 type GroupableOption = { value: string; label: string; group?: string }
 function renderGroupedOptions(
   options: ReadonlyArray<GroupableOption>,
-  order: string[]
+  order: string[],
+  groupLabel: (g: string) => string = (g) => g
 ) {
   const byGroup = new Map<string, GroupableOption[]>()
   for (const o of options) {
-    const g = o.group ?? 'Plugins'
+    const g = o.group ?? 'plugins'
     const arr = byGroup.get(g) ?? []
     arr.push(o)
     byGroup.set(g, arr)
@@ -231,7 +234,7 @@ function renderGroupedOptions(
     <React.Fragment key={g}>
       {gi > 0 && <SelectSeparator />}
       <SelectGroup>
-        <SelectLabel>{g}</SelectLabel>
+        <SelectLabel>{groupLabel(g)}</SelectLabel>
         {byGroup.get(g)!.map((o) => (
           <SelectItem key={o.value} value={o.value} className="text-xs">
             {o.label}
@@ -242,75 +245,89 @@ function renderGroupedOptions(
   ))
 }
 
-const SUBSCRIPTION_STATUS_VALUES = SUBSCRIPTION_ROLLUP_STATUSES.map((v) => ({
-  value: v,
-  label:
-    v === 'active'
-      ? 'Active'
-      : v === 'trialing'
-        ? 'Trialing'
-        : v === 'past_due'
-          ? 'Past due'
-          : v === 'paused'
-            ? 'Paused (frozen)'
-            : v === 'cancelled'
-              ? 'Cancelled'
-              : 'No subscription',
-}))
+const ACQUISITION_STAGE_VALUES = ['trial_booked', 'trial_attended', 'joined'] as const
 
-const ACQUISITION_STAGE_VALUES = [
-  { value: 'trial_booked', label: 'Trial booked' },
-  { value: 'trial_attended', label: 'Trial attended' },
-  { value: 'joined', label: 'Joined' },
-]
+const ACTION_TYPE_VALUES = [
+  'send_email',
+  'update_field',
+  'assign_tag',
+  'remove_tag',
+  'notify_team',
+  'log_activity',
+  'webhook',
+  'add_to_group',
+  'remove_from_group',
+  'create_alert',
+] as const
 
-const ACTION_TYPE_LABELS: Record<string, string> = {
-  send_email: 'Send email',
-  update_field: 'Update contact field',
-  assign_tag: 'Add tag to contact',
-  remove_tag: 'Remove tag from contact',
-  notify_team: 'Notify team (email)',
-  log_activity: 'Log activity entry',
-  webhook: 'Webhook (POST)',
-  add_to_group: 'Add to group',
-  remove_from_group: 'Remove from group',
-  create_alert: 'Create alert (coming soon)',
+function defaultActionTypeLabels(t: ReturnType<typeof useTranslations>): Record<string, string> {
+  return Object.fromEntries(
+    ACTION_TYPE_VALUES.map((v) => [v, t(`actions.types.${v}` as Parameters<typeof t>[0])])
+  )
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function triggerLabel(type: string): string {
-  return TRIGGER_OPTIONS.find((t) => t.value === type)?.label ?? type
+function triggerTypeLabel(t: ReturnType<typeof useTranslations>, type: string): string {
+  return TRIGGER_OPTIONS.some((o) => o.value === type)
+    ? t(`triggers.${type}` as Parameters<typeof t>[0])
+    : type
 }
 
-function conditionSummary(c: AutomationCondition, subName?: (id: string) => string): string {
+function conditionTypeLabel(t: ReturnType<typeof useTranslations>, type: string): string {
+  return CONDITION_TYPE_OPTIONS.some((o) => o.value === type)
+    ? t(`conditions.types.${type}` as Parameters<typeof t>[0])
+    : type
+}
+
+function subscriptionStatusLabel(t: ReturnType<typeof useTranslations>, status: string): string {
+  return t(`subscriptionStatus.${status}` as Parameters<typeof t>[0])
+}
+
+function acquisitionStageLabel(t: ReturnType<typeof useTranslations>, stage: string): string {
+  return t(`acquisitionStage.${stage}` as Parameters<typeof t>[0])
+}
+
+function updateFieldLabel(t: ReturnType<typeof useTranslations>, field: string): string {
+  return field === 'acquisition_stage' ? t('actions.updateField.acquisitionStage') : field
+}
+
+function conditionSummary(
+  t: ReturnType<typeof useTranslations>,
+  c: AutomationCondition,
+  subName?: (id: string) => string
+): string {
   const opt = CONDITION_TYPE_OPTIONS.find((o) => o.value === c.type)
   if (!opt) return c.type
-  if (opt.input === 'none') return opt.label
-  if (opt.input === 'number') return `${opt.label} ${c.value ?? ''}`
-  if (c.type === 'field_equals') return `${c.field ?? '?'} = ${c.value ?? ''}`
+  const label = conditionTypeLabel(t, c.type)
+  if (opt.input === 'none') return label
+  if (opt.input === 'number') return t('conditions.summaryNumber', { label, value: c.value ?? '' })
+  if (c.type === 'field_equals')
+    return t('conditions.summaryFieldEquals', { field: c.field ?? '?', value: c.value ?? '' })
   if (c.type === 'subscription' && c.value && c.value !== 'any' && c.value !== 'none') {
-    return `Subscription: ${subName?.(c.value) ?? c.value}`
+    return t('conditions.summarySubscription', { name: subName?.(c.value) ?? c.value })
   }
-  return `${opt.label}: ${c.value ?? ''}`
+  return t('conditions.summaryWithValue', { label, value: c.value ?? '' })
 }
 
 function actionSummary(
+  t: ReturnType<typeof useTranslations>,
   a: AutomationAction,
   templates: OutreachTemplate[],
   pluginActionLabels?: Record<string, string>
 ): string {
   if (a.type === 'send_email') {
-    const tmpl = templates.find((t) => t.id === (a.templateId ?? ''))
-    return `Email: ${tmpl?.name ?? a.templateId ?? '—'}`
+    const tmpl = templates.find((tm) => tm.id === (a.templateId ?? ''))
+    return t('actions.summarySendEmail', { name: tmpl?.name ?? a.templateId ?? '—' })
   }
-  if (a.type === 'create_alert') return 'Create alert'
-  if (a.type === 'update_field') return `Set ${a.field ?? '—'} → ${String(a.value ?? '—')}`
-  if (a.type === 'notify_team') return `Notify team: ${a.subject ?? ''}`
-  if (a.type === 'log_activity') return `Log: ${a.message ?? ''}`
-  if (a.type === 'assign_tag') return `Add tag: ${a.tag ?? '—'}`
-  if (a.type === 'remove_tag') return `Remove tag: ${a.tag ?? '—'}`
-  if (a.type === 'webhook') return `Webhook: ${a.url ?? '—'}`
+  if (a.type === 'create_alert') return t('actions.summaryCreateAlert')
+  if (a.type === 'update_field')
+    return t('actions.summaryUpdateField', { field: a.field ?? '—', value: String(a.value ?? '—') })
+  if (a.type === 'notify_team') return t('actions.summaryNotifyTeam', { subject: a.subject ?? '' })
+  if (a.type === 'log_activity') return t('actions.summaryLogActivity', { message: a.message ?? '' })
+  if (a.type === 'assign_tag') return t('actions.summaryAssignTag', { tag: a.tag ?? '—' })
+  if (a.type === 'remove_tag') return t('actions.summaryRemoveTag', { tag: a.tag ?? '—' })
+  if (a.type === 'webhook') return t('actions.summaryWebhook', { url: a.url ?? '—' })
   // Plugin-contributed actions — use the label from the manifest if available
   if (a.type.startsWith('plugin:')) {
     return pluginActionLabels?.[a.type] ?? a.type
@@ -318,14 +335,14 @@ function actionSummary(
   return a.type
 }
 
-function timeAgo(ts: { toDate(): Date } | null | undefined): string {
+function timeAgo(t: ReturnType<typeof useTranslations>, ts: { toDate(): Date } | null | undefined): string {
   if (!ts) return ''
   const ms = Date.now() - ts.toDate().getTime()
   const mins = Math.floor(ms / 60000)
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 60) return t('timeAgo.minutes', { mins })
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+  if (hrs < 24) return t('timeAgo.hours', { hrs })
+  return t('timeAgo.days', { days: Math.floor(hrs / 24) })
 }
 
 /** Normalise legacy rule docs (template_id / alert_preset_id → actions) */
@@ -394,7 +411,7 @@ function useTemplates(teamId: string | null) {
 // ─── RuleCard ─────────────────────────────────────────────────────────────────
 
 function TriggerIcon({ type, className }: { type: string; className?: string }) {
-  const opt = TRIGGER_OPTIONS.find((t) => t.value === type)
+  const opt = TRIGGER_OPTIONS.find((o) => o.value === type)
   const Icon = opt?.icon ?? Zap
   return <Icon className={className ?? 'h-4 w-4'} />
 }
@@ -416,6 +433,7 @@ function RuleCard({
   onRunNow: () => void
   onDelete: () => void
 }) {
+  const t = useTranslations('Automations')
   const [running, setRunning] = useState(false)
   const subName = (id: string) => subscriptionTypes.find((s) => s.id === id)?.name ?? id
 
@@ -442,12 +460,12 @@ function RuleCard({
             className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5"
           />
           <h3 className="font-semibold text-sm leading-tight truncate">
-            {rule.name || '(unnamed)'}
+            {rule.name || t('ruleCard.unnamed')}
           </h3>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant={rule.active ? 'default' : 'secondary'} className="text-xs">
-            {rule.active ? 'Active' : 'Paused'}
+            {rule.active ? t('common.active') : t('common.paused')}
           </Badge>
           <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent transition-colors">
@@ -456,31 +474,31 @@ function RuleCard({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={onEdit}>
                 <Pencil className="h-3.5 w-3.5 mr-2" />
-                Edit
+                {t('common.edit')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onToggle}>
                 {rule.active ? (
                   <>
                     <CirclePause className="h-3.5 w-3.5 mr-2" />
-                    Pause
+                    {t('ruleCard.pauseAction')}
                   </>
                 ) : (
                   <>
                     <CirclePlay className="h-3.5 w-3.5 mr-2" />
-                    Activate
+                    {t('ruleCard.activateAction')}
                   </>
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleRunNow} disabled={running}>
                 <Play className="h-3.5 w-3.5 mr-2" />
-                {running ? 'Running…' : 'Run now'}
+                {running ? t('ruleCard.running') : t('ruleCard.runNow')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={onDelete}
                 className="text-destructive focus:text-destructive"
               >
                 <Trash2 className="h-3.5 w-3.5 mr-2" />
-                Delete
+                {t('common.delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -489,13 +507,13 @@ function RuleCard({
 
       {/* Trigger line */}
       <div className="text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">{triggerLabel(trigger.type)}</span>
+        <span className="font-medium text-foreground">{triggerTypeLabel(t, trigger.type)}</span>
         {trigger.delayMinutes && trigger.delayMinutes > 0 && (
           <span className="ml-1">
             ·{' '}
             {trigger.delayMinutes < 60
-              ? `${trigger.delayMinutes}m delay`
-              : `${trigger.delayMinutes / 60}h delay`}
+              ? t('ruleCard.delayMinutes', { mins: trigger.delayMinutes })
+              : t('ruleCard.delayHours', { hrs: trigger.delayMinutes / 60 })}
           </span>
         )}
       </div>
@@ -508,7 +526,7 @@ function RuleCard({
               key={i}
               className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium text-muted-foreground bg-muted"
             >
-              {conditionSummary(c, subName)}
+              {conditionSummary(t, c, subName)}
             </span>
           ))}
         </div>
@@ -530,7 +548,7 @@ function RuleCard({
               {a.type === 'assign_tag' && <Tag className="h-3 w-3" />}
               {a.type === 'remove_tag' && <Tag className="h-3 w-3" />}
               {a.type === 'webhook' && <Webhook className="h-3 w-3" />}
-              {actionSummary(a, templates)}
+              {actionSummary(t, a, templates)}
             </span>
           ))}
         </div>
@@ -539,8 +557,8 @@ function RuleCard({
       {/* Footer */}
       {rule.last_run_at && (
         <p className="text-xs text-muted-foreground border-t pt-2 mt-1">
-          Last run {timeAgo(rule.last_run_at)}
-          {rule.last_run_sent != null && ` · ${rule.last_run_sent} sent`}
+          {t('ruleCard.lastRun', { timeAgo: timeAgo(t, rule.last_run_at) })}
+          {rule.last_run_sent != null && ` · ${t('ruleCard.sentCount', { count: rule.last_run_sent })}`}
         </p>
       )}
     </div>
@@ -558,13 +576,19 @@ function ConditionEditor({
   onChange: (c: FormCondition[]) => void
   subscriptionTypes: SubscriptionType[]
 }) {
+  const t = useTranslations('Automations')
+  const groupLabel = (g: string) => t(`groups.${g}` as Parameters<typeof t>[0])
   // 'any' / 'none' plus the team's actual subscription types, so a rule can target
   // a specific one (e.g. "subscribed to Athlete plan").
   const subscriptionOptions = [
-    { value: 'any', label: 'Any subscription', group: 'General' },
-    { value: 'none', label: 'No subscription', group: 'General' },
-    ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name, group: 'Subscription types' })),
+    { value: 'any', label: t('conditions.subscriptionScope.any'), group: 'general' },
+    { value: 'none', label: t('conditions.subscriptionScope.none'), group: 'general' },
+    ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name, group: 'subscriptionTypes' })),
   ]
+  const resolvedConditionOptions = CONDITION_TYPE_OPTIONS.map((o) => ({
+    ...o,
+    label: conditionTypeLabel(t, o.value),
+  }))
   function add() {
     onChange([...conditions, { type: 'acquisition_stage', value: 'trial_booked' }])
   }
@@ -609,12 +633,11 @@ function ConditionEditor({
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
-                      {CONDITION_TYPE_OPTIONS.find((o) => o.value === cond.type)?.label ??
-                        cond.type}
+                      {conditionTypeLabel(t, cond.type)}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {renderGroupedOptions(CONDITION_TYPE_OPTIONS, CONDITION_GROUP_ORDER)}
+                    {renderGroupedOptions(resolvedConditionOptions, CONDITION_GROUP_ORDER, groupLabel)}
                   </SelectContent>
                 </Select>
 
@@ -631,8 +654,8 @@ function ConditionEditor({
                         </SelectTrigger>
                         <SelectContent>
                           {ACQUISITION_STAGE_VALUES.map((s) => (
-                            <SelectItem key={s.value} value={s.value} className="text-xs">
-                              {s.label}
+                            <SelectItem key={s} value={s} className="text-xs">
+                              {acquisitionStageLabel(t, s)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -641,7 +664,7 @@ function ConditionEditor({
                     {opt?.input === 'affiliation_type_select' && (
                       <Input
                         className="h-8 text-xs"
-                        placeholder="type key (e.g. club_membership)"
+                        placeholder={t('conditions.affiliationTypeKeyPlaceholder')}
                         value={cond.value}
                         onChange={(e) => update(i, { value: e.target.value })}
                       />
@@ -658,7 +681,7 @@ function ConditionEditor({
                           </span>
                         </SelectTrigger>
                         <SelectContent>
-                          {renderGroupedOptions(subscriptionOptions, ['General', 'Subscription types'])}
+                          {renderGroupedOptions(subscriptionOptions, ['general', 'subscriptionTypes'], groupLabel)}
                         </SelectContent>
                       </Select>
                     )}
@@ -669,14 +692,13 @@ function ConditionEditor({
                       >
                         <SelectTrigger className="h-8 text-xs">
                           <span className="flex flex-1 text-left text-xs truncate">
-                            {SUBSCRIPTION_STATUS_VALUES.find((sv) => sv.value === cond.value)?.label ??
-                              cond.value}
+                            {subscriptionStatusLabel(t, cond.value)}
                           </span>
                         </SelectTrigger>
                         <SelectContent>
-                          {SUBSCRIPTION_STATUS_VALUES.map((sv) => (
-                            <SelectItem key={sv.value} value={sv.value} className="text-xs">
-                              {sv.label}
+                          {SUBSCRIPTION_ROLLUP_STATUSES.map((sv) => (
+                            <SelectItem key={sv} value={sv} className="text-xs">
+                              {subscriptionStatusLabel(t, sv)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -694,7 +716,7 @@ function ConditionEditor({
                     {opt?.input === 'text' && (
                       <Input
                         className="h-8 text-xs"
-                        placeholder="tag name"
+                        placeholder={t('conditions.tagPlaceholder')}
                         value={cond.value}
                         onChange={(e) => update(i, { value: e.target.value })}
                       />
@@ -709,13 +731,13 @@ function ConditionEditor({
                 <div className="grid grid-cols-2 gap-2">
                   <Input
                     className="h-8 text-xs"
-                    placeholder="Field (e.g. type)"
+                    placeholder={t('conditions.fieldEqualsFieldPlaceholder')}
                     value={cond.condField ?? ''}
                     onChange={(e) => update(i, { condField: e.target.value })}
                   />
                   <Input
                     className="h-8 text-xs"
-                    placeholder="Value"
+                    placeholder={t('conditions.valuePlaceholder')}
                     value={cond.value}
                     onChange={(e) => update(i, { value: e.target.value })}
                   />
@@ -736,7 +758,7 @@ function ConditionEditor({
       })}
       <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={add}>
         <Plus className="h-3 w-3 mr-1" />
-        Add condition
+        {t('conditions.addCondition')}
       </Button>
     </div>
   )
@@ -747,7 +769,6 @@ function ConditionEditor({
 const UPDATE_FIELD_OPTIONS = [
   {
     value: 'acquisition_stage',
-    label: 'Acquisition stage',
     values: ['trial_booked', 'trial_attended', 'joined'],
   },
 ] as const
@@ -767,7 +788,8 @@ function ActionEditor({
   contactGroups: { id: string; name: string }[]
   groupsEnabled: boolean
 }) {
-  const resolvedActionLabels = labelOverrides ?? ACTION_TYPE_LABELS
+  const t = useTranslations('Automations')
+  const resolvedActionLabels = labelOverrides ?? defaultActionTypeLabels(t)
   function add() {
     onChange([...actions, { type: 'send_email', templateId: '' }])
   }
@@ -812,38 +834,38 @@ function ActionEditor({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="send_email" className="text-xs">
-                    Send email
+                    {t('actions.types.send_email')}
                   </SelectItem>
                   <SelectItem value="update_field" className="text-xs">
-                    Update contact field
+                    {t('actions.types.update_field')}
                   </SelectItem>
                   <SelectItem value="assign_tag" className="text-xs">
-                    Add tag to contact
+                    {t('actions.types.assign_tag')}
                   </SelectItem>
                   <SelectItem value="remove_tag" className="text-xs">
-                    Remove tag from contact
+                    {t('actions.types.remove_tag')}
                   </SelectItem>
                   <SelectItem value="notify_team" className="text-xs">
-                    Notify team (email)
+                    {t('actions.types.notify_team')}
                   </SelectItem>
                   <SelectItem value="log_activity" className="text-xs">
-                    Log activity entry
+                    {t('actions.types.log_activity')}
                   </SelectItem>
                   <SelectItem value="webhook" className="text-xs">
-                    Webhook (POST)
+                    {t('actions.types.webhook')}
                   </SelectItem>
                   {groupsEnabled && (
                     <>
                       <SelectItem value="add_to_group" className="text-xs">
-                        Add to group
+                        {t('actions.types.add_to_group')}
                       </SelectItem>
                       <SelectItem value="remove_from_group" className="text-xs">
-                        Remove from group
+                        {t('actions.types.remove_from_group')}
                       </SelectItem>
                     </>
                   )}
                   <SelectItem value="create_alert" className="text-xs">
-                    Create alert (coming soon)
+                    {t('actions.types.create_alert')}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -856,20 +878,20 @@ function ActionEditor({
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
-                      {templates.find((t) => t.id === action.templateId)?.name ?? (
-                        <span className="text-muted-foreground">Select template</span>
+                      {templates.find((tm) => tm.id === action.templateId)?.name ?? (
+                        <span className="text-muted-foreground">{t('actions.selectTemplatePlaceholder')}</span>
                       )}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
                     {templates.length === 0 ? (
                       <SelectItem value="__none" disabled className="text-xs text-muted-foreground">
-                        No templates
+                        {t('actions.noTemplates')}
                       </SelectItem>
                     ) : (
-                      templates.map((t) => (
-                        <SelectItem key={t.id} value={t.id} className="text-xs">
-                          {t.name}
+                      templates.map((tm) => (
+                        <SelectItem key={tm.id} value={tm.id} className="text-xs">
+                          {tm.name}
                         </SelectItem>
                       ))
                     )}
@@ -880,7 +902,7 @@ function ActionEditor({
               {/* create_alert placeholder */}
               {action.type === 'create_alert' && (
                 <p className="text-xs text-muted-foreground self-center">
-                  Alert presets coming soon
+                  {t('actions.alertPresetsComingSoon')}
                 </p>
               )}
             </div>
@@ -900,15 +922,17 @@ function ActionEditor({
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
-                      {UPDATE_FIELD_OPTIONS.find((o) => o.value === action.field)?.label ?? (
-                        <span className="text-muted-foreground">Field</span>
+                      {action.field ? (
+                        updateFieldLabel(t, action.field)
+                      ) : (
+                        <span className="text-muted-foreground">{t('actions.fieldPlaceholder')}</span>
                       )}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
                     {UPDATE_FIELD_OPTIONS.map((o) => (
                       <SelectItem key={o.value} value={o.value} className="text-xs">
-                        {o.label}
+                        {updateFieldLabel(t, o.value)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -919,12 +943,12 @@ function ActionEditor({
                   onValueChange={(v) => update(i, { fieldValue: v ?? '' })}
                 >
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Value" />
+                    <SelectValue placeholder={t('actions.valuePlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
                     {(selectedFieldMeta(action)?.values ?? []).map((v) => (
                       <SelectItem key={v} value={v} className="text-xs">
-                        {v}
+                        {acquisitionStageLabel(t, v)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -936,14 +960,14 @@ function ActionEditor({
               <div className="space-y-2">
                 <Input
                   className="h-8 text-xs"
-                  placeholder="Subject — use {{firstname}}, {{teamName}}…"
+                  placeholder={t('actions.notifyTeam.subjectPlaceholder')}
                   value={action.subject ?? ''}
                   onChange={(e) => update(i, { subject: e.target.value })}
                 />
                 <Textarea
                   className="text-xs font-mono resize-none"
                   rows={3}
-                  placeholder="Body (markdown) — {{firstname}} attended a session at {{teamName}}."
+                  placeholder={t('actions.notifyTeam.bodyPlaceholder')}
                   value={action.body ?? ''}
                   onChange={(e) => update(i, { body: e.target.value })}
                 />
@@ -953,7 +977,7 @@ function ActionEditor({
             {action.type === 'log_activity' && (
               <Input
                 className="h-8 text-xs"
-                placeholder="Message — use {{firstname}}, {{teamName}}…"
+                placeholder={t('actions.logActivity.messagePlaceholder')}
                 value={action.message ?? ''}
                 onChange={(e) => update(i, { message: e.target.value })}
               />
@@ -962,7 +986,7 @@ function ActionEditor({
             {(action.type === 'assign_tag' || action.type === 'remove_tag') && (
               <Input
                 className="h-8 text-xs"
-                placeholder="Tag name (e.g. vip, at-risk, converted)"
+                placeholder={t('actions.tagPlaceholder')}
                 value={action.tag ?? ''}
                 onChange={(e) => update(i, { tag: e.target.value })}
               />
@@ -971,7 +995,7 @@ function ActionEditor({
             {action.type === 'webhook' && (
               <Input
                 className="h-8 text-xs"
-                placeholder="https://hooks.zapier.com/…"
+                placeholder={t('actions.webhookUrlPlaceholder')}
                 value={action.url ?? ''}
                 onChange={(e) => update(i, { url: e.target.value })}
               />
@@ -982,14 +1006,14 @@ function ActionEditor({
                 <SelectTrigger className="h-8 text-xs">
                   <span className="flex flex-1 text-left text-xs truncate">
                     {contactGroups.find((g) => g.id === action.group_id)?.name ?? (
-                      <span className="text-muted-foreground">Select group</span>
+                      <span className="text-muted-foreground">{t('actions.selectGroupPlaceholder')}</span>
                     )}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
                   {contactGroups.length === 0 ? (
                     <SelectItem value="__none" disabled className="text-xs text-muted-foreground">
-                      No groups yet
+                      {t('actions.noGroupsYet')}
                     </SelectItem>
                   ) : (
                     contactGroups.map((g) => (
@@ -1016,7 +1040,7 @@ function ActionEditor({
       ))}
       <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={add}>
         <Plus className="h-3 w-3 mr-1" />
-        Add action
+        {t('actions.addAction')}
       </Button>
     </div>
   )
@@ -1024,14 +1048,16 @@ function ActionEditor({
 
 // ─── RuleDialog ───────────────────────────────────────────────────────────────
 
-const ruleSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  trigger_type: z.string().min(1, 'Trigger is required'),
-  delay_minutes: z.coerce.number().min(0).optional(),
-  active: z.boolean(),
-})
+function createRuleSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    name: z.string().min(1, t('validation.nameRequired')),
+    trigger_type: z.string().min(1, t('validation.triggerRequired')),
+    delay_minutes: z.coerce.number().min(0).optional(),
+    active: z.boolean(),
+  })
+}
 
-type RuleFormValues = z.infer<typeof ruleSchema>
+type RuleFormValues = z.infer<ReturnType<typeof createRuleSchema>>
 
 function RuleDialog({
   open,
@@ -1062,7 +1088,10 @@ function RuleDialog({
   // Deep-link prefill for a NEW rule (e.g. from the subscription editor).
   prefill?: { triggerType?: string; subscriptionTypeId?: string }
 }) {
-  const resolvedTriggerOptions = triggerOptionsProp ?? TRIGGER_OPTIONS
+  const t = useTranslations('Automations')
+  const groupLabel = (g: string) => t(`groups.${g}` as Parameters<typeof t>[0])
+  const resolvedTriggerOptions =
+    triggerOptionsProp ?? TRIGGER_OPTIONS.map((o) => ({ ...o, label: triggerTypeLabel(t, o.value) }))
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
   const { isInstalled } = useInstalledPlugins()
   const groupsEnabled = isInstalled('contact-groups')
@@ -1074,6 +1103,7 @@ function RuleDialog({
   const [triggerSubTypeId, setTriggerSubTypeId] = useState('')
   const [triggerAffTypeKey, setTriggerAffTypeKey] = useState('')
   const [submitError, setSubmitError] = useState('')
+  const ruleSchema = useMemo(() => createRuleSchema(t), [t])
 
   const {
     register,
@@ -1089,7 +1119,7 @@ function RuleDialog({
 
   const triggerType = watch('trigger_type')
   const supportsDelay =
-    resolvedTriggerOptions.find((t) => t.value === triggerType)?.supportsDelay ?? false
+    resolvedTriggerOptions.find((opt) => opt.value === triggerType)?.supportsDelay ?? false
 
   // Populate form when editing
   useEffect(() => {
@@ -1208,7 +1238,7 @@ function RuleDialog({
       onSaved()
       onOpenChange(false)
     } catch (err) {
-      setSubmitError((err as Error).message || 'Failed to save')
+      setSubmitError((err as Error).message || t('dialogs.rule.saveFailed'))
     }
   }
 
@@ -1216,7 +1246,7 @@ function RuleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Edit automation' : 'New automation'}</DialogTitle>
+          <DialogTitle>{editing ? t('dialogs.rule.editTitle') : t('common.newAutomation')}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -1224,12 +1254,12 @@ function RuleDialog({
           <div className="flex gap-3 items-end">
             <div className="flex-1">
               <Label htmlFor="rl-name" className="text-xs font-medium">
-                Name
+                {t('dialogs.rule.nameLabel')}
               </Label>
               <Input
                 id="rl-name"
                 {...register('name')}
-                placeholder="e.g. No-show follow-up"
+                placeholder={t('dialogs.rule.namePlaceholder')}
                 className="mt-1"
               />
               {errors.name && (
@@ -1243,7 +1273,7 @@ function RuleDialog({
                 onCheckedChange={(v) => setValue('active', v)}
               />
               <Label htmlFor="rl-active" className="text-xs">
-                Active
+                {t('common.active')}
               </Label>
             </div>
           </div>
@@ -1253,30 +1283,30 @@ function RuleDialog({
           {/* Trigger */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Trigger
+              {t('sections.trigger')}
             </p>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-xs">When</Label>
+                <Label className="text-xs">{t('dialogs.rule.whenLabel')}</Label>
                 <Select
                   value={triggerType}
                   onValueChange={(v) => setValue('trigger_type', v ?? '')}
                 >
                   <SelectTrigger className="mt-1 h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
-                      {resolvedTriggerOptions.find((t) => t.value === triggerType)?.label ??
+                      {resolvedTriggerOptions.find((opt) => opt.value === triggerType)?.label ??
                         triggerType}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {renderGroupedOptions(resolvedTriggerOptions, TRIGGER_GROUP_ORDER)}
+                    {renderGroupedOptions(resolvedTriggerOptions, TRIGGER_GROUP_ORDER, groupLabel)}
                   </SelectContent>
                 </Select>
               </div>
 
               {supportsDelay && (
                 <div>
-                  <Label className="text-xs">Delay (minutes, optional)</Label>
+                  <Label className="text-xs">{t('dialogs.rule.delayLabel')}</Label>
                   <Input
                     type="number"
                     min={0}
@@ -1291,10 +1321,10 @@ function RuleDialog({
             {/* Inbound webhook — endpoint selector */}
             {triggerType === 'inbound_webhook' && (
               <div>
-                <Label className="text-xs">Webhook endpoint</Label>
+                <Label className="text-xs">{t('dialogs.rule.webhookEndpointLabel')}</Label>
                 {webhookEndpoints.length === 0 ? (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    No endpoints yet — create one in the Webhooks dialog first.
+                    {t('dialogs.rule.noWebhookEndpoints')}
                   </p>
                 ) : (
                   <Select
@@ -1304,7 +1334,7 @@ function RuleDialog({
                     <SelectTrigger className="mt-1 h-8 text-xs">
                       <span className="flex flex-1 text-left text-xs truncate">
                         {webhookEndpoints.find((ep) => ep.id === webhookEndpointId)?.name ?? (
-                          <span className="text-muted-foreground">Select endpoint</span>
+                          <span className="text-muted-foreground">{t('dialogs.rule.selectEndpointPlaceholder')}</span>
                         )}
                       </span>
                     </SelectTrigger>
@@ -1323,18 +1353,18 @@ function RuleDialog({
             {/* Delta trigger scope — which subscription type was added/removed */}
             {(triggerType === 'subscription_added' || triggerType === 'subscription_removed') && (
               <div>
-                <Label className="text-xs">Subscription type</Label>
+                <Label className="text-xs">{t('dialogs.rule.subscriptionTypeLabel')}</Label>
                 <Select value={triggerSubTypeId} onValueChange={(v) => setTriggerSubTypeId(v ?? '')}>
                   <SelectTrigger className="mt-1 h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
                       {triggerSubTypeId
                         ? (subscriptionTypes.find((s) => s.id === triggerSubTypeId)?.name ??
                           triggerSubTypeId)
-                        : 'Any subscription'}
+                        : t('conditions.subscriptionScope.any')}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="" className="text-xs">Any subscription</SelectItem>
+                    <SelectItem value="" className="text-xs">{t('conditions.subscriptionScope.any')}</SelectItem>
                     {subscriptionTypes.map((s) => (
                       <SelectItem key={s.id} value={s.id} className="text-xs">
                         {s.name}
