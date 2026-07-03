@@ -1378,10 +1378,10 @@ function RuleDialog({
             {/* Delta trigger scope — which affiliation type was added/removed */}
             {(triggerType === 'affiliation_added' || triggerType === 'affiliation_removed') && (
               <div>
-                <Label className="text-xs">Affiliation type key (optional)</Label>
+                <Label className="text-xs">{t('dialogs.rule.affiliationTypeKeyLabel')}</Label>
                 <Input
                   className="mt-1 h-8 text-xs"
-                  placeholder="any — or a type key (e.g. club_membership)"
+                  placeholder={t('dialogs.rule.affiliationTypeKeyPlaceholder')}
                   value={triggerAffTypeKey}
                   onChange={(e) => setTriggerAffTypeKey(e.target.value)}
                 />
@@ -1394,7 +1394,7 @@ function RuleDialog({
           {/* Conditions */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Conditions <span className="normal-case font-normal">(all must match)</span>
+              {t('sections.conditions')} <span className="normal-case font-normal">{t('sections.conditionsHint')}</span>
             </p>
             <ConditionEditor
               conditions={conditions}
@@ -1408,7 +1408,7 @@ function RuleDialog({
           {/* Actions */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Actions
+              {t('sections.actions')}
             </p>
             <ActionEditor
               actions={actions}
@@ -1424,10 +1424,10 @@ function RuleDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving…' : 'Save automation'}
+              {isSubmitting ? t('common.saving') : t('dialogs.rule.submit')}
             </Button>
           </DialogFooter>
         </form>
@@ -1440,37 +1440,21 @@ function RuleDialog({
 
 const PLACEHOLDER_GROUPS = [
   {
-    label: 'Contact',
-    items: [
-      { key: 'firstname', hint: 'First name' },
-      { key: 'lastname', hint: 'Last name' },
-      { key: 'acquisition_stage', hint: 'Trial booked / Trial attended / Joined' },
-      { key: 'affiliation_summary', hint: 'Has active affiliation (true/false)' },
-      { key: 'sessions_count', hint: 'Sessions attended' },
-    ],
+    groupKey: 'contact',
+    items: ['firstname', 'lastname', 'acquisition_stage', 'affiliation_summary', 'sessions_count'],
   },
   {
-    label: 'Team',
-    items: [
-      { key: 'teamName', hint: 'Team name' },
-      { key: 'bookingUrl', hint: 'Trial booking page' },
-      { key: 'membershipUrl', hint: 'Membership signup' },
-      { key: 'bioLinkUrl', hint: 'Bio-link page' },
-      { key: 'websiteUrl', hint: 'Website (if set)' },
-      { key: 'reviewUrl', hint: 'Review page (if set)' },
-    ],
+    groupKey: 'team',
+    items: ['teamName', 'bookingUrl', 'membershipUrl', 'bioLinkUrl', 'websiteUrl', 'reviewUrl'],
   },
   {
-    label: 'Dates',
-    items: [
-      { key: 'date', hint: 'Today' },
-      { key: 'date+7', hint: '+7 days (any N)' },
-      { key: 'date-7', hint: '-7 days (any N)' },
-    ],
+    groupKey: 'dates',
+    items: ['date', 'date+7', 'date-7'],
   },
-]
+] as const
 
 function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<string, string> }) {
+  const t = useTranslations('Automations')
   const [copied, setCopied] = useState<string>('')
 
   const copyToken = (key: string) => {
@@ -1483,26 +1467,28 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
   return (
     <div className="w-56 shrink-0 border-l overflow-y-auto px-3 py-4 space-y-4">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-        Placeholders
+        {t('placeholders.title')}
       </p>
-      <p className="text-xs text-muted-foreground -mt-2">Click to copy</p>
+      <p className="text-xs text-muted-foreground -mt-2">{t('placeholders.clickToCopy')}</p>
 
       {PLACEHOLDER_GROUPS.map((group) => (
-        <div key={group.label}>
-          <p className="text-xs font-medium text-foreground mb-1">{group.label}</p>
+        <div key={group.groupKey}>
+          <p className="text-xs font-medium text-foreground mb-1">
+            {t(`placeholders.groups.${group.groupKey}` as Parameters<typeof t>[0])}
+          </p>
           <div className="space-y-0.5">
-            {group.items.map((item) => (
+            {group.items.map((key) => (
               <button
-                key={item.key}
+                key={key}
                 type="button"
-                onClick={() => copyToken(item.key)}
+                onClick={() => copyToken(key)}
                 className="w-full text-left px-2 py-1 rounded hover:bg-accent transition-colors group"
               >
                 <span className="font-mono text-xs text-primary group-hover:underline">
-                  {copied === item.key ? '✓ Copied' : `{{${item.key}}}`}
+                  {copied === key ? t('placeholders.copied') : `{{${key}}}`}
                 </span>
                 <span className="block text-xs text-muted-foreground leading-tight">
-                  {item.hint}
+                  {t(`placeholders.hints.${key}` as Parameters<typeof t>[0])}
                 </span>
               </button>
             ))}
@@ -1512,16 +1498,16 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
 
       {/* Custom variables */}
       <div>
-        <p className="text-xs font-medium text-foreground mb-1">Custom</p>
+        <p className="text-xs font-medium text-foreground mb-1">{t('placeholders.customTitle')}</p>
         {Object.keys(customPlaceholders).length === 0 ? (
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground italic">No custom variables yet.</p>
+            <p className="text-xs text-muted-foreground italic">{t('placeholders.noCustomVars')}</p>
             <Link
               href="/settings/team"
               className="text-xs text-primary hover:underline"
               onClick={() => {}}
             >
-              Manage in Settings → Outreach
+              {t('placeholders.manageInSettings')}
             </Link>
           </div>
         ) : (
@@ -1534,7 +1520,7 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
                 className="w-full text-left px-2 py-1 rounded hover:bg-accent transition-colors group"
               >
                 <span className="font-mono text-xs text-primary group-hover:underline">
-                  {copied === key ? '✓ Copied' : `{{${key}}}`}
+                  {copied === key ? t('placeholders.copied') : `{{${key}}}`}
                 </span>
                 <span className="block text-xs text-muted-foreground leading-tight truncate">
                   {value}
@@ -1545,7 +1531,7 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
               href="/settings/team"
               className="block text-xs text-muted-foreground hover:underline mt-1 px-2"
             >
-              Manage in Settings → Outreach
+              {t('placeholders.manageInSettings')}
             </Link>
           </div>
         )}
@@ -1556,13 +1542,15 @@ function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<s
 
 // ─── TemplateDialog ───────────────────────────────────────────────────────────
 
-const tmplSchema = z.object({
-  name: z.string().min(1, 'Required'),
-  subject: z.string().min(1, 'Required'),
-  body: z.string().min(1, 'Required'),
-  language: z.string().min(1),
-})
-type TmplFormValues = z.infer<typeof tmplSchema>
+function createTmplSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    name: z.string().min(1, t('validation.required')),
+    subject: z.string().min(1, t('validation.required')),
+    body: z.string().min(1, t('validation.required')),
+    language: z.string().min(1),
+  })
+}
+type TmplFormValues = z.infer<ReturnType<typeof createTmplSchema>>
 
 function TemplateDialog({
   open,
@@ -1573,6 +1561,7 @@ function TemplateDialog({
   onOpenChange: (v: boolean) => void
   teamId: string
 }) {
+  const t = useTranslations('Automations')
   const qc = useQueryClient()
   const { data: allTemplates = [], isLoading } = useQuery<OutreachTemplate[]>({
     queryKey: ['outreach_templates_all', teamId],
@@ -1603,6 +1592,7 @@ function TemplateDialog({
   const [editingTmpl, setEditingTmpl] = useState<OutreachTemplate | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [submitErr, setSubmitErr] = useState('')
+  const tmplSchema = useMemo(() => createTmplSchema(t), [t])
 
   const {
     register,
@@ -1662,7 +1652,7 @@ function TemplateDialog({
         className={`sm:max-w-[900px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden`}
       >
         <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b">
-          <DialogTitle>Email templates</DialogTitle>
+          <DialogTitle>{t('dialogs.templates.title')}</DialogTitle>
         </DialogHeader>
 
         {!formOpen ? (
@@ -1672,7 +1662,7 @@ function TemplateDialog({
 
             {!isLoading && allTemplates.length === 0 && (
               <p className="text-sm text-muted-foreground py-4 text-center">
-                No templates yet. Create one to use in automation rules.
+                {t('dialogs.templates.empty')}
               </p>
             )}
 
@@ -1686,7 +1676,7 @@ function TemplateDialog({
                   <p className="text-xs text-muted-foreground truncate">{tmpl.subject}</p>
                   {!tmpl.active && (
                     <Badge variant="secondary" className="text-xs mt-1">
-                      Inactive
+                      {t('common.inactive')}
                     </Badge>
                   )}
                 </div>
@@ -1716,7 +1706,7 @@ function TemplateDialog({
 
             <Button variant="outline" className="w-full" onClick={() => setFormOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              New template
+              {t('dialogs.templates.newTemplate')}
             </Button>
           </div>
         ) : (
@@ -1728,10 +1718,10 @@ function TemplateDialog({
               className="flex-1 overflow-y-auto px-6 py-5 space-y-4"
             >
               <div>
-                <Label className="text-xs">Template name</Label>
+                <Label className="text-xs">{t('dialogs.templates.nameLabel')}</Label>
                 <Input
                   {...register('name')}
-                  placeholder="e.g. No-show follow-up"
+                  placeholder={t('dialogs.templates.namePlaceholder')}
                   className="mt-1"
                 />
                 {errors.name && (
@@ -1739,18 +1729,18 @@ function TemplateDialog({
                 )}
               </div>
               <div>
-                <Label className="text-xs">Email subject</Label>
-                <Input {...register('subject')} placeholder="We missed you!" className="mt-1" />
+                <Label className="text-xs">{t('dialogs.templates.subjectLabel')}</Label>
+                <Input {...register('subject')} placeholder={t('dialogs.templates.subjectPlaceholder')} className="mt-1" />
                 {errors.subject && (
                   <p className="text-xs text-destructive mt-1">{errors.subject.message}</p>
                 )}
               </div>
               <div>
-                <Label className="text-xs">Body</Label>
+                <Label className="text-xs">{t('dialogs.templates.bodyLabel')}</Label>
                 <Textarea
                   {...register('body')}
                   rows={12}
-                  placeholder="Hi {{firstname}},&#10;&#10;We noticed you missed our session…"
+                  placeholder={t('dialogs.templates.bodyPlaceholder')}
                   className="mt-1 font-mono text-xs"
                 />
                 {errors.body && (
@@ -1758,11 +1748,12 @@ function TemplateDialog({
                 )}
               </div>
               <div className="w-36">
-                <Label className="text-xs">Language</Label>
+                <Label className="text-xs">{t('dialogs.templates.languageLabel')}</Label>
                 <select
                   {...register('language')}
                   className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
                 >
+                  {/* Language endonyms — intentionally not translated, same convention as UserMenu's locale switcher */}
                   <option value="en">English</option>
                   <option value="de">Deutsch</option>
                   <option value="fr">Français</option>
@@ -1772,10 +1763,10 @@ function TemplateDialog({
               {submitErr && <p className="text-xs text-destructive">{submitErr}</p>}
               <div className="flex justify-between pt-1 pb-4">
                 <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>
-                  ← Back
+                  {t('dialogs.templates.back')}
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Saving…' : editingTmpl ? 'Save changes' : 'Create template'}
+                  {isSubmitting ? t('common.saving') : editingTmpl ? t('dialogs.templates.saveChanges') : t('dialogs.templates.createTemplate')}
                 </Button>
               </div>
             </form>
@@ -1792,6 +1783,8 @@ function TemplateDialog({
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default function AutomationsPage() {
+  const t = useTranslations('Automations')
+  const planName = usePlanName()
   const { currentTeamId, user } = useAuth()
   const { isAtLeast } = usePlan()
   // Automations are available on every tier; Studio/Org get the full suite while
@@ -1804,7 +1797,7 @@ export default function AutomationsPage() {
   const { plugins: installedPlugins } = useInstalledPlugins()
 
   const allTriggerOptions = [
-    ...TRIGGER_OPTIONS,
+    ...TRIGGER_OPTIONS.map((o) => ({ ...o, label: triggerTypeLabel(t, o.value) })),
     ...installedPlugins.flatMap((p) =>
       (p.manifest.automationTriggers ?? []).map((tr) => ({
         value: tr.id,
@@ -1832,7 +1825,7 @@ export default function AutomationsPage() {
   )
 
   const allActionTypeLabels: Record<string, string> = {
-    ...ACTION_TYPE_LABELS,
+    ...defaultActionTypeLabels(t),
     ...pluginActionLabels,
   }
 
@@ -1923,7 +1916,7 @@ export default function AutomationsPage() {
   }
 
   async function handleDelete(rule: AutomationRule) {
-    if (!currentTeamId || !confirm(`Delete "${rule.name}"?`)) return
+    if (!currentTeamId || !confirm(t('deleteConfirm', { name: rule.name }))) return
     await deleteDoc(doc(db, TEAMS_COLLECTION, currentTeamId, 'automation_rules', rule.id))
     invalidateRules()
   }
@@ -1946,24 +1939,24 @@ export default function AutomationsPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
               <Workflow className="h-6 w-6" />
-              Automations
+              {t('page.title')}
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Trigger emails and alerts automatically based on contact activity.
+              {t('page.subtitle')}
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
             <Button variant="outline" size="sm" onClick={() => setTemplateDialogOpen(true)}>
               <FileText className="h-4 w-4 mr-1.5" />
-              Templates
+              {t('page.templatesButton')}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
               <BookOpen className="h-4 w-4 mr-1.5" />
-              Library
+              {t('page.libraryButton')}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setWebhooksOpen(true)}>
               <Webhook className="h-4 w-4 mr-1.5" />
-              Webhooks
+              {t('page.webhooksButton')}
             </Button>
             <Button
               size="sm"
@@ -1973,7 +1966,7 @@ export default function AutomationsPage() {
               }}
             >
               <Plus className="h-4 w-4 mr-1.5" />
-              New automation
+              {t('common.newAutomation')}
             </Button>
           </div>
         </div>
@@ -1982,10 +1975,9 @@ export default function AutomationsPage() {
             modules and add-ons; Studio unlocks the full suite. */}
         {!fullAutomations && (
           <div className="rounded-lg border border-primary/30 bg-primary/[0.04] px-4 py-3 text-sm">
-            <p className="font-medium">Automations on your plan are limited</p>
+            <p className="font-medium">{t('page.limitedPlanTitle')}</p>
             <p className="text-muted-foreground">
-              You can automate around your active modules and installed add-ons. Upgrade to Studio
-              for the full automation suite — including every add-on&apos;s triggers and actions.
+              {t('page.limitedPlanBody', { plan: planName('studio') })}
             </p>
           </div>
         )}
@@ -2006,20 +1998,19 @@ export default function AutomationsPage() {
               <Workflow className="h-8 w-8 text-muted-foreground" />
             </div>
             <div>
-              <p className="font-semibold">No automations yet</p>
+              <p className="font-semibold">{t('page.emptyTitle')}</p>
               <p className="text-muted-foreground text-sm mt-1 max-w-xs">
-                Load a starter kit in one click, browse the library to pick individual rules, or
-                build your own.
+                {t('page.emptyBody')}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap justify-center">
               <Button variant="outline" onClick={handleQuickStart} disabled={quickStarting}>
                 <Sparkles className="h-4 w-4 mr-2" />
-                {quickStarting ? 'Installing…' : 'Quick-start (8 rules)'}
+                {quickStarting ? t('page.installing') : t('page.quickStart')}
               </Button>
               <Button onClick={() => setLibraryOpen(true)}>
                 <BookOpen className="h-4 w-4 mr-2" />
-                Browse library
+                {t('page.browseLibrary')}
               </Button>
             </div>
           </div>
@@ -2029,7 +2020,7 @@ export default function AutomationsPage() {
         {activeRules.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Active
+              {t('common.active')}
             </h2>
             <div className="grid gap-6 sm:grid-cols-2">
               {activeRules.map((rule) => (
@@ -2055,7 +2046,7 @@ export default function AutomationsPage() {
         {pausedRules.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Paused
+              {t('common.paused')}
             </h2>
             <div className="grid gap-6 sm:grid-cols-2">
               {pausedRules.map((rule) => (
