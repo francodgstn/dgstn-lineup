@@ -78,7 +78,10 @@ jobs:
           PUBLIC_SITE_URL: https://linyup.com
           PUBLIC_DEMO_URL: https://demo.linyup.com
           PUBLIC_FIREBASE_PROJECT_ID: linyup-staging
-          PUBLIC_FIREBASE_API_KEY: AIzaSyAuMHWbGKmyL78xVfrStkIctShzqrd4zcg
+          # Firebase web API keys are public client identifiers, but keep this out
+          # of source (and consistent with prod) via a repo variable. Set the
+          # STAGING_FIREBASE_API_KEY Actions variable to the staging web API key.
+          PUBLIC_FIREBASE_API_KEY: ${{ vars.STAGING_FIREBASE_API_KEY }}
 
       # ADC from the auth step is detected automatically — do NOT pass any
       # GOOGLE_APPLICATION_CREDENTIALS* env var here.

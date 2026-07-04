@@ -75,25 +75,6 @@ jobs:
           PUBLIC_POSTHOG_KEY: ${{ vars.PROD_POSTHOG_KEY }}
           PUBLIC_POSTHOG_HOST: https://eu.i.posthog.com
 
-      # TEMPORARY DIAGNOSTIC — capture the real auth failure.
-      # firebase-tools masks the WIF→STS→impersonation error as the generic
-      # "Failed to authenticate". This step forces the same exchange via gcloud
-      # (raw STS/IAM error) and via firebase-tools --debug, then prints the
-      # credentials-file type. It never fails the job (continue-on-error), so it
-      # only adds signal. Remove once the WIF/SA issue is resolved.
-      - name: Diagnose auth (debug)
-        continue-on-error: true
-        run: |
-          echo "::group::credentials file (external_account vs service_account)"
-          python3 -c "import json,os;f=os.environ['GOOGLE_APPLICATION_CREDENTIALS'];d=json.load(open(f));print('type:',d.get('type'));print('audience:',d.get('audience'));print('sa_impersonation_url:',d.get('service_account_impersonation_url'))" || true
-          echo "::endgroup::"
-          echo "::group::gcloud token exchange (raw STS/IAM error)"
-          gcloud auth print-access-token --verbosity=debug 2>&1 | tail -60 || true
-          echo "::endgroup::"
-          echo "::group::firebase-tools projects:list --debug (tail)"
-          npx firebase-tools projects:list --debug 2>&1 | tail -80 || true
-          echo "::endgroup::"
-
       # Backend first: functions, Firestore rules/indexes, and the static landing
       # site. The App Hosting apps (web + admin) are rolled out AFTER this so the
       # frontend never goes live ahead of the backend it depends on.

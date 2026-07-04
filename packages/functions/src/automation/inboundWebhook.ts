@@ -48,7 +48,9 @@ export const inboundWebhook = onRequest(
         .get()
     )
     if (endpointErr || !endpointSnap || endpointSnap.empty) {
-      console.log(`[inboundWebhook] Unknown or inactive key=${secretKey}`) // eslint-disable-line no-console
+      // Never log the raw secret key — it is the bearer credential for this
+      // capability URL and would leak into log sinks.
+      console.log('[inboundWebhook] Unknown or inactive endpoint key') // eslint-disable-line no-console
       res.status(200).json({ ok: false, reason: 'unknown_endpoint' })
       return
     }

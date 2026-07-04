@@ -18,6 +18,8 @@ import {
 } from '@linyup/shared'
 import type { Form, FormField } from '@linyup/shared'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { escapeHtml } from '../utils/html'
+import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
 const SUBMIT_RATE_LIMIT_MAX = 10 // per form, per IP, per hour
 const RATE_WINDOW_MS = 60 * 60 * 1000
@@ -106,13 +108,18 @@ function renderAnswersHtml(fields: FormField[], answers: Record<string, unknown>
       const v = answers[f.id]
       if (v == null || (Array.isArray(v) && v.length === 0) || v === '') return ''
       const display = Array.isArray(v) ? v.join(', ') : String(v)
-      return `<tr><td style="padding:8px 12px;font-weight:600;color:#555;vertical-align:top;white-space:nowrap;">${f.label}</td><td style="padding:8px 12px;color:#333;">${display.replace(/\n/g, '<br>')}</td></tr>`
+      // Field labels and answers are attacker-controlled on public forms — escape
+      // before interpolating, then re-introduce the intended newline <br> only.
+      const labelHtml = escapeHtml(f.label)
+      const displayHtml = escapeHtml(display).replace(/\n/g, '<br>')
+      return `<tr><td style="padding:8px 12px;font-weight:600;color:#555;vertical-align:top;white-space:nowrap;">${labelHtml}</td><td style="padding:8px 12px;color:#333;">${displayHtml}</td></tr>`
     })
     .join('')
   return `<table style="width:100%;border-collapse:collapse;">${rows}</table>`
 }
 
-export const submitForm = onCall(async (request) => {
+export const submitForm = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
+  monitorAppCheck(request, 'submitForm')
   const data = request.data as {
     teamId?: string
     formId?: string
@@ -265,7 +272,7 @@ export const submitForm = onCall(async (request) => {
       if (staffEmail) {
         const { html } = buildEmailTemplate({
           title: `New response: ${form.title}`,
-          body: `<p>A new response to <strong>${form.title}</strong> has been submitted.</p>${renderAnswersHtml(fields, answers)}`,
+          body: `<p>A new response to <strong>${escapeHtml(form.title)}</strong> has been submitted.</p>${renderAnswersHtml(fields, answers)}`,
         })
         await sendEmail({
           to: staffEmail,
@@ -286,7 +293,7 @@ export const submitForm = onCall(async (request) => {
       const body =
         form.confirmation?.emailBody ||
         form.confirmation?.message ||
-        `<p>Thank you — we've received your response to <strong>${form.title}</strong>.</p>`
+        `<p>Thank you — we've received your response to <strong>${escapeHtml(form.title)}</strong>.</p>`
       const { html } = buildEmailTemplate({ title, body })
       await sendEmail({ to: submitterEmail, teamId: data.teamId, subject: title, html })
     } catch (err) {

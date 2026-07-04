@@ -67,6 +67,9 @@ export default function SignupForm({ slug }: Props) {
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
   const [codeId, setCodeId] = useState('')
+  // Retained after a successful verify so completeSignup can re-present the code
+  // (defence in depth: ties completion to knowledge of the code, not just codeId).
+  const [verifiedCode, setVerifiedCode] = useState('')
   const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
   // Arriving from a 'full'-mode shop purchase (pay/result CTA): the buyer already paid
@@ -129,6 +132,7 @@ export default function SignupForm({ slug }: Props) {
         'verifyContactCode'
       )
       await fn({ codeId, code: values.code })
+      setVerifiedCode(values.code)
       setStep('details')
     } catch (err: unknown) {
       const e = err as { message?: string }
@@ -162,6 +166,7 @@ export default function SignupForm({ slug }: Props) {
       const fn = httpsCallable<
         {
           codeId: string
+          code: string
           contactDetails: Omit<DetailsValues, 'privacyConsent'> & { privacyConsent: boolean }
           acceptedDocuments?: Array<{ slug?: string; kind?: string; version?: string }>
         },
@@ -170,6 +175,7 @@ export default function SignupForm({ slug }: Props) {
 
       await fn({
         codeId,
+        code: verifiedCode,
         contactDetails: {
           firstname: values.firstname,
           lastname: values.lastname,

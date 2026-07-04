@@ -4,6 +4,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { to } from '../utils/async'
 import { sendEmail } from '../utils/email'
+import { escapeHtml } from '../utils/html'
 import { getHostingUrl } from '../utils/env'
 
 const EVENTS_COLLECTION = 'events'
@@ -15,6 +16,28 @@ const ATTENDEES_SUBCOLLECTION = 'attendees'
 
 function generateInvitationToken(): string {
   return crypto.randomBytes(32).toString('hex')
+}
+
+// An invitation token is a bearer credential that reveals contact PII on an
+// unauthenticated callable, so it must not live forever. Bound its lifetime to
+// the event itself: valid until the event ends (24h grace for late RSVP/viewing),
+// falling back to the start time, and only then to a 30-day cap when the event
+// carries no timestamps at all.
+const INVITATION_GRACE_MS = 24 * 60 * 60 * 1000
+const INVITATION_FALLBACK_MS = 30 * 24 * 60 * 60 * 1000
+function invitationExpiry(event: Record<string, unknown>): Timestamp {
+  const end = (event.end as Timestamp | undefined)?.toDate()
+  const start = (event.start as Timestamp | undefined)?.toDate()
+  const base = end ?? start
+  const ms = base ? base.getTime() + INVITATION_GRACE_MS : Date.now() + INVITATION_FALLBACK_MS
+  return Timestamp.fromMillis(ms)
+}
+
+// Legacy invitations predate the expiresAt field — treat a missing value as
+// non-expiring so existing links keep working; new/resent tokens always carry it.
+function invitationExpired(inv: Record<string, unknown>): boolean {
+  const expiresAt = inv.expiresAt as Timestamp | undefined
+  return expiresAt != null && expiresAt.toMillis() < Date.now()
 }
 
 function googleCalendarLink(
@@ -58,10 +81,12 @@ function buildInvitationEmail(params: {
     fee,
   } = params
   const subject = `Invitation: ${eventTitle}`
-  const feeHtml = fee ? `<p><strong>Fee:</strong> ${fee}</p>` : ''
-  const locHtml = location ? `<p><strong>Location:</strong> ${location}</p>` : ''
+  // Escape all text interpolations (firstname is contact-controlled; event fields
+  // are studio-authored). Links are server-generated (hex token / URLSearchParams).
+  const feeHtml = fee ? `<p><strong>Fee:</strong> ${escapeHtml(fee)}</p>` : ''
+  const locHtml = location ? `<p><strong>Location:</strong> ${escapeHtml(location)}</p>` : ''
   const calHtml = calendarLink ? `<p><a href="${calendarLink}">Add to Google Calendar</a></p>` : ''
-  const html = `<p>Hi ${firstname},</p><p>${teamName} invites you to <strong>${eventTitle}</strong>.</p><p><strong>When:</strong> ${eventStart}${eventEnd ? ` – ${eventEnd}` : ''}</p>${locHtml}${feeHtml}${calHtml}<p><a href="${link}">View invitation & RSVP</a></p>`
+  const html = `<p>Hi ${escapeHtml(firstname)},</p><p>${escapeHtml(teamName)} invites you to <strong>${escapeHtml(eventTitle)}</strong>.</p><p><strong>When:</strong> ${escapeHtml(eventStart)}${eventEnd ? ` – ${escapeHtml(eventEnd)}` : ''}</p>${locHtml}${feeHtml}${calHtml}<p><a href="${link}">View invitation &amp; RSVP</a></p>`
   const text = `Hi ${firstname},\n\n${teamName} invites you to ${eventTitle}.\nWhen: ${eventStart}${eventEnd ? ` – ${eventEnd}` : ''}\n${location ? `Location: ${location}\n` : ''}${fee ? `Fee: ${fee}\n` : ''}\nRSVP: ${link}`
   return { subject, html, text }
 }
@@ -170,7 +195,10 @@ export const sendEventInvitations = onCall(async (request) => {
         return
       }
 
-      const token = (existingInv?.token as string | undefined) ?? generateInvitationToken()
+      // Rotate the token on every (re)send: a resent invitation invalidates any
+      // previously emailed link so a leaked/forwarded old link stops working.
+      const token = generateInvitationToken()
+      const expiresAt = invitationExpiry(event)
       const link = `${getHostingUrl()}/public/event-invitation?token=${encodeURIComponent(token)}`
 
       const emailContent = buildInvitationEmail({
@@ -202,6 +230,7 @@ export const sendEventInvitations = onCall(async (request) => {
           sentAt: FieldValue.serverTimestamp(),
           sentBy: request.auth!.uid,
           token,
+          expiresAt,
           link,
           eventId,
         }
@@ -260,6 +289,8 @@ export const getEventInvitationDetails = onCall(async (request) => {
     throw new HttpsError('not-found', 'Invitation not found')
 
   const invDoc = invSnap.docs[0]
+  if (invitationExpired(invDoc.data()))
+    throw new HttpsError('failed-precondition', 'This invitation link has expired')
   const pathParts = invDoc.ref.path.split('/')
   const eventId = pathParts[1]
   const contactId = invDoc.data().contactId as string
@@ -336,6 +367,8 @@ export const handleEventInvitationResponse = onCall(async (request) => {
     throw new HttpsError('not-found', 'Invitation not found')
 
   const invDoc = invSnap.docs[0]
+  if (invitationExpired(invDoc.data()))
+    throw new HttpsError('failed-precondition', 'This invitation link has expired')
   const pathParts = invDoc.ref.path.split('/')
   const eventId = pathParts[1]
   const contactId = invDoc.data().contactId as string

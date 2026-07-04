@@ -4,6 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { onRequest } from 'firebase-functions/v2/https'
 import { MAIL_SENDS_COLLECTION, type BrevoWebhookEvent, type MailSuppressionReason } from '@linyup/shared'
 import { getSecret } from '../utils/secrets'
+import { timingSafeEqualStr } from '../utils/secureCompare'
 import { addSuppression } from './suppression'
 
 // Normalise Brevo's event names (payloads use snake_case; the create-webhook API
@@ -97,8 +98,9 @@ export const handleBrevoWebhook = onRequest({ invoker: 'public' }, async (req, r
     res.status(200).json({ ok: false })
     return
   }
-  const provided = (req.query.token as string | undefined) ?? req.get('x-webhook-token') ?? ''
-  if (!expected || provided !== expected) {
+  // Prefer the header (kept out of URLs/access logs) over the query param.
+  const provided = req.get('x-webhook-token') ?? (req.query.token as string | undefined) ?? ''
+  if (!expected || !timingSafeEqualStr(provided, expected)) {
     res.status(401).send('Unauthorized')
     return
   }

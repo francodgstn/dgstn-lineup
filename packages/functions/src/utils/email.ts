@@ -7,6 +7,7 @@
 //   • Omit `teamId` to send Linyup system mail (from hello@linyup.com).
 import { sendStudioMail, sendSystemMail, type SendOutcome } from '../mail/mailService'
 import type { MailAttachment } from '../mail/types'
+import { escapeHtml } from './html'
 
 export { idempotencyKey } from '../mail/mailService'
 
@@ -75,7 +76,7 @@ export function buildEmailTemplate({ title, body, footer }: { title: string; bod
 </head>
 <body>
   <div class="container">
-    <div class="header"><h1>${title}</h1></div>
+    <div class="header"><h1>${escapeHtml(title)}</h1></div>
     <div class="content">${body}</div>
     <div class="footer">${defaultFooter}</div>
   </div>

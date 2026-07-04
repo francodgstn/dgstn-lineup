@@ -197,8 +197,12 @@ export const getInTouchForm = onRequest(async (req, res) => {
   try {
     allowed = await checkRateLimit(ip)
   } catch (err) {
+    // Fail CLOSED: this is an anti-abuse gate on a public endpoint, so a failed
+    // rate-limit check must not become an open door. Return a retryable 503 so a
+    // genuine user recovers on retry while automated abuse is still throttled.
     console.error('Rate limit check failed:', err)
-    allowed = true // fail open
+    res.status(503).json({ success: false, error: 'Service temporarily unavailable. Please try again.' })
+    return
   }
 
   if (!allowed) {

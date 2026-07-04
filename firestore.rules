@@ -177,7 +177,17 @@ service cloud.firestore {
       return request.auth != null
              && request.auth.token.email != null
              && res.data.email != null
-             && request.auth.token.email == res.data.email;
+             && request.auth.token.email == res.data.email
+             // The email must be provably controlled by the caller, otherwise a
+             // Firebase email/password account registered with a victim's address
+             // (email_verified == false) could read that victim's contact records
+             // across every team. Real Firebase users must have a verified email;
+             // passwordless contact sessions are already code-verified but their
+             // custom token carries no email_verified claim, so accept a live
+             // (non-expired) contact session in its place.
+             && (request.auth.token.email_verified == true
+                 || (request.auth.token.sessionExpires != null
+                     && request.auth.token.sessionExpires >= request.time.toMillis()));
     }
 
     // A valid contact session (custom token) scoped to a given team. Used by the
@@ -279,9 +289,9 @@ service cloud.firestore {
         allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
       }
 
-      // Reports sub-collection
+      // Reports sub-collection — private to the owning user (no public consumer).
       match /user_weekly_reports/{weeklyReportId} {
-        allow read;
+        allow read: if (isAuthed() && request.auth.uid == userId) || hasRole('admin');
         allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
       }
 
@@ -292,16 +302,17 @@ service cloud.firestore {
       }
 
       // DEPRECATED: Sessions Tags sub-collection (moved to teams/{teamId}/sessions_tags)
-      // Kept for backward compatibility during migration
+      // Kept for backward compatibility during migration — owner-only read (no
+      // public consumer; the live data lives under teams/{teamId}/sessions_tags).
       match /sessions_tags/{tagId} {
-        allow read;
+        allow read: if (isAuthed() && request.auth.uid == userId) || hasRole('admin');
         allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
       }
 
       // DEPRECATED: Places sub-collection (moved to teams/{teamId}/team_places)
-      // Kept for backward compatibility during migration
+      // Kept for backward compatibility during migration — owner-only read.
       match /user_places/{tagId} {
-        allow read;
+        allow read: if (isAuthed() && request.auth.uid == userId) || hasRole('admin');
         allow write: if isOwner(get(/databases/$(database)/documents/users/$(userId))) || hasRole('admin');
       }
 
@@ -611,10 +622,11 @@ service cloud.firestore {
     }
 
     // Public user profiles (deprecated - now using users/{userId}/public_profile subcollection)
-    // This rule is kept for backwards compatibility during migration but can be removed
-    // once all data is migrated to the subcollection pattern
+    // No code reads this collection any more; lock it down (it can be removed once
+    // any residual migration data is gone). Public coach bios live in the
+    // users/{userId}/public_profile subcollection instead.
     match /users_public/{userId} {
-      allow read;
+      allow read: if false;
       allow write: if false;
     }
 
@@ -1017,9 +1029,11 @@ service cloud.firestore {
       // Single document GET: resource.data is available — staff OR public-by-tier.
       allow get: if (isAuthed() && isTeamMember(resource.data.teamId))
                  || canReadPublishedCourse(courseId, resource.data);
-      // Collection LIST: resource.data is NOT available for query rules.
-      // Staff only; the public Space lists via public_profile (collection group).
-      allow list: if isAuthed();
+      // Collection LIST: only a member of the queried team. The rule references
+      // resource.data.teamId, so Firestore requires the client query to be scoped
+      // `where('teamId','==', <team>)` and rejects any unscoped / cross-tenant list.
+      // The public Space lists via public_profile (collection group), never this.
+      allow list: if isAuthed() && isMemberOfResourceTeam(resource);
       allow create: if hasTeamRole(request.resource.data.teamId, 'manager');
       allow update, delete: if hasTeamRole(resource.data.teamId, 'manager');
 
@@ -1057,9 +1071,11 @@ service cloud.firestore {
     // ----------------------------------------------
     match /forms/{formId} {
       allow get: if isAuthed() && isTeamMember(resource.data.teamId);
-      // Collection LIST: resource.data is NOT available for query rules. Staff only;
-      // the public form page reads via public_profile (collection group).
-      allow list: if isAuthed();
+      // Collection LIST: only a member of the queried team. The rule references
+      // resource.data.teamId, so Firestore requires the client query to be scoped
+      // `where('teamId','==', <team>)` and rejects any unscoped / cross-tenant list.
+      // The public form page reads via public_profile (collection group), never this.
+      allow list: if isAuthed() && isMemberOfResourceTeam(resource);
       allow create: if hasTeamRole(request.resource.data.teamId, 'manager');
       allow update, delete: if hasTeamRole(resource.data.teamId, 'manager');
 
@@ -1082,9 +1098,11 @@ service cloud.firestore {
     // ----------------------------------------------
     match /documents/{documentId} {
       allow get: if isAuthed() && isTeamMember(resource.data.teamId);
-      // Collection LIST: resource.data is NOT available for query rules. Staff only;
-      // the public document page reads via public_profile (collection group).
-      allow list: if isAuthed();
+      // Collection LIST: only a member of the queried team. The rule references
+      // resource.data.teamId, so Firestore requires the client query to be scoped
+      // `where('teamId','==', <team>)` and rejects any unscoped / cross-tenant list.
+      // The public document page reads via public_profile (collection group), never this.
+      allow list: if isAuthed() && isMemberOfResourceTeam(resource);
       allow create: if hasTeamRole(request.resource.data.teamId, 'manager');
       allow update, delete: if hasTeamRole(resource.data.teamId, 'manager');
 
