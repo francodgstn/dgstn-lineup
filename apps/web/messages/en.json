@@ -1729,7 +1729,9 @@
     "unlockDesc": "This plugin is experimental. Enter the access key to enable it for your team.",
     "unlockPlaceholder": "Access key",
     "unlockError": "Invalid key, or unlocking failed.",
-    "unlockSuccess": "unlocked"
+    "unlockSuccess": "unlocked",
+    "sectionInstalled": "Installed",
+    "sectionAvailable": "Available"
   },
   "AiAssistant": {
     "launcherLabel": "AI assistant",

@@ -1729,7 +1729,9 @@
     "unlockDesc": "Questo plugin è sperimentale. Inserisci la chiave di accesso per attivarlo per il tuo team.",
     "unlockPlaceholder": "Chiave di accesso",
     "unlockError": "Chiave non valida o sblocco non riuscito.",
-    "unlockSuccess": "sbloccato"
+    "unlockSuccess": "sbloccato",
+    "sectionInstalled": "Installati",
+    "sectionAvailable": "Disponibili"
   },
   "AiAssistant": {
     "launcherLabel": "Assistente IA",

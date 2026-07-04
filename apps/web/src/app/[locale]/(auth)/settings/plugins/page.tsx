@@ -33,6 +33,7 @@ import {
   Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift,
   GraduationCap, Trophy, FolderTree, Search, Tag, ListPlus, ClipboardList,
   ImageIcon, FileText, CheckCircle2, Coins, Lock, Clock, FlaskConical, Star,
+  ChevronDown,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -642,6 +643,47 @@ function PluginUnlockDialog({
   )
 }
 
+// ─── Collapsible section (installed / available) ───────────────────────────────
+
+function PluginSection({
+  title,
+  count,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string
+  count: number
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <section className="space-y-3">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 text-left group"
+      >
+        <ChevronDown
+          className={cn(
+            'h-4 w-4 text-muted-foreground transition-transform',
+            !open && '-rotate-90',
+          )}
+        />
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          {count}
+        </span>
+      </button>
+      {open && (
+        <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+      )}
+    </section>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PluginsPage() {
@@ -660,6 +702,8 @@ export default function PluginsPage() {
   const [detailPlugin, setDetailPlugin] = useState<PluginManifest | null>(null)
   const [confirmAddon, setConfirmAddon] = useState<PluginManifest | null>(null)
   const [unlockTarget, setUnlockTarget] = useState<PluginManifest | null>(null)
+  const [installedOpen, setInstalledOpen] = useState(true)
+  const [availableOpen, setAvailableOpen] = useState(true)
 
   // ── Deep-link: ?plugin=<id> auto-opens the detail modal once per distinct value ──
   // Track the last param value we acted on so that closing the modal does not
@@ -773,6 +817,31 @@ export default function PluginsPage() {
     )
     .sort((a, b) => Number(b.recommended ?? false) - Number(a.recommended ?? false))
 
+  // Split into installed vs. available (org-managed installs count as installed).
+  const installedList = filteredPlugins.filter((m) => isInstalled(m.id))
+  const availableList = filteredPlugins.filter((m) => !isInstalled(m.id))
+
+  const renderCard = (manifest: PluginManifest) => {
+    const entry = installedPlugins.find((e) => e.manifest.id === manifest.id)
+    return (
+      <PluginCard
+        key={manifest.id}
+        manifest={manifest}
+        access={pluginAccessForPlan(manifest, plan)}
+        isInstalled={isInstalled(manifest.id)}
+        installedByOrg={entry?.source === 'org'}
+        isOwner={!!isOwner}
+        installing={installingId === manifest.id}
+        onInstall={() => handleInstall(manifest)}
+        onRemove={() => handleRemove(manifest)}
+        onConfigure={() => setConfigPlugin(manifest)}
+        onUpgrade={() => openUpgradeModal({ minPlan: manifest.minPlan })}
+        onUnlock={() => setUnlockTarget(manifest)}
+        onDetails={() => setDetailPlugin(manifest)}
+      />
+    )
+  }
+
   // Detail plugin's access + installed state (derived)
   const detailAccess = detailPlugin ? pluginAccessForPlan(detailPlugin, plan) : null
   const detailIsInstalled = detailPlugin ? isInstalled(detailPlugin.id) : false
@@ -836,29 +905,29 @@ export default function PluginsPage() {
         ))}
       </div>
 
-      {/* Grid */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {filteredPlugins.map((manifest) => {
-          const entry = installedPlugins.find((e) => e.manifest.id === manifest.id)
-          return (
-            <PluginCard
-              key={manifest.id}
-              manifest={manifest}
-              access={pluginAccessForPlan(manifest, plan)}
-              isInstalled={isInstalled(manifest.id)}
-              installedByOrg={entry?.source === 'org'}
-              isOwner={!!isOwner}
-              installing={installingId === manifest.id}
-              onInstall={() => handleInstall(manifest)}
-              onRemove={() => handleRemove(manifest)}
-              onConfigure={() => setConfigPlugin(manifest)}
-              onUpgrade={() => openUpgradeModal({ minPlan: manifest.minPlan })}
-              onUnlock={() => setUnlockTarget(manifest)}
-              onDetails={() => setDetailPlugin(manifest)}
-            />
-          )
-        })}
-      </div>
+      {/* Installed */}
+      {installedList.length > 0 && (
+        <PluginSection
+          title={t('sectionInstalled')}
+          count={installedList.length}
+          open={installedOpen}
+          onToggle={() => setInstalledOpen((v) => !v)}
+        >
+          {installedList.map(renderCard)}
+        </PluginSection>
+      )}
+
+      {/* Available (not installed) */}
+      {availableList.length > 0 && (
+        <PluginSection
+          title={t('sectionAvailable')}
+          count={availableList.length}
+          open={availableOpen}
+          onToggle={() => setAvailableOpen((v) => !v)}
+        >
+          {availableList.map(renderCard)}
+        </PluginSection>
+      )}
 
       {filteredPlugins.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-12">

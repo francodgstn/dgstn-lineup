@@ -1729,7 +1729,9 @@
     "unlockDesc": "Dieses Plugin ist experimentell. Gib den Zugangsschlüssel ein, um es für dein Team zu aktivieren.",
     "unlockPlaceholder": "Zugangsschlüssel",
     "unlockError": "Ungültiger Schlüssel oder Entsperren fehlgeschlagen.",
-    "unlockSuccess": "entsperrt"
+    "unlockSuccess": "entsperrt",
+    "sectionInstalled": "Installiert",
+    "sectionAvailable": "Verfügbar"
   },
   "AiAssistant": {
     "launcherLabel": "KI-Assistent",

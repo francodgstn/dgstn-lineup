@@ -1729,7 +1729,9 @@
     "unlockDesc": "Ce plugin est expérimental. Saisissez la clé d'accès pour l'activer pour votre équipe.",
     "unlockPlaceholder": "Clé d'accès",
     "unlockError": "Clé invalide ou échec du déverrouillage.",
-    "unlockSuccess": "déverrouillé"
+    "unlockSuccess": "déverrouillé",
+    "sectionInstalled": "Installés",
+    "sectionAvailable": "Disponibles"
   },
   "AiAssistant": {
     "launcherLabel": "Assistant IA",
