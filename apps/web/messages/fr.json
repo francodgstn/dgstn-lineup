@@ -1062,7 +1062,8 @@
     "dropInLabel": "Proposer le drop-in (paiement à la séance)",
     "dropInPriceLabel": "Prix du drop-in",
     "dropInPricePlaceholder": "p. ex. 25",
-    "dropInHelp": "Les contacts non couverts peuvent payer ce montant pour réserver une séance. Facturé via votre compte de paiement ; aucun abonnement n'est créé."
+    "dropInHelp": "Les contacts non couverts peuvent payer ce montant pour réserver une séance. Facturé via votre compte de paiement ; aucun abonnement n'est créé.",
+    "reorder": "Réorganiser"
   },
   "TeamSettings": {
     "title": "Paramètres de l'équipe",

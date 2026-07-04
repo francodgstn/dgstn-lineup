@@ -23,6 +23,8 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     slug: data.slug || '',
     color: data.color || null,
     image_url: data.image_url || null,
+    // Denormalised display order so public consumers sort like the admin list.
+    order: typeof data.order === 'number' ? data.order : null,
     isFreeTrial: data.isFreeTrial || false,
     level: data.level || null,
     // Denormalised access gate so the public booking UI can render lock badges.

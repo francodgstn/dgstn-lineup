@@ -24,6 +24,7 @@ import {
   EVENTS_COLLECTION,
   TEAMS_COLLECTION,
   TEAM_MEMBERS_SUBCOLLECTION,
+  compareActivities,
 } from '@linyup/shared'
 import type { Session, Activity, Event } from '@linyup/shared'
 import { useEventTypes } from '@/hooks/useEventTypes'
@@ -217,7 +218,9 @@ function useActivities(teamId: string | null) {
           orderBy('name', 'asc')
         )
       )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Activity)
+      return snap.docs
+        .map((d) => ({ ...d.data(), id: d.id }) as Activity)
+        .sort(compareActivities)
     },
   })
 }

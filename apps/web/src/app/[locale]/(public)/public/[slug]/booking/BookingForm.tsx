@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
-import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
+import { resolveActivityAccessRule, compareActivities, type ActivityAccessRule } from '@linyup/shared'
 import { useLocale, useTranslations } from 'next-intl'
 import {
   startOfMonth,
@@ -50,6 +50,7 @@ interface ActivityProfile {
   color?: string
   level?: string
   isFreeTrial?: boolean
+  order?: number
   accessRule?: ActivityAccessRule
   dropIn?: { enabled: boolean; priceAmount?: number }
 }
@@ -523,11 +524,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               color: data.color ?? undefined,
               level: data.level ?? undefined,
               isFreeTrial: data.isFreeTrial ?? false,
+              order: typeof data.order === 'number' ? data.order : undefined,
               accessRule: data.accessRule ?? undefined,
               dropIn: data.dropIn ?? undefined,
             }
           })
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort(compareActivities)
         setActivities(actList)
 
         // Load sessions

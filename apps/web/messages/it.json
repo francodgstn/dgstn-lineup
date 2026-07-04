@@ -1062,7 +1062,8 @@
     "dropInLabel": "Offri drop-in (paga a lezione)",
     "dropInPriceLabel": "Prezzo drop-in",
     "dropInPricePlaceholder": "es. 25",
-    "dropInHelp": "I contatti non coperti possono pagare questo importo per prenotare una singola lezione. Addebitato tramite il tuo account di pagamento; nessun abbonamento viene creato."
+    "dropInHelp": "I contatti non coperti possono pagare questo importo per prenotare una singola lezione. Addebitato tramite il tuo account di pagamento; nessun abbonamento viene creato.",
+    "reorder": "Riordina"
   },
   "TeamSettings": {
     "title": "Impostazioni del team",

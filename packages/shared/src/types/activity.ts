@@ -56,9 +56,27 @@ export interface Activity {
   dropIn?: { enabled: boolean; priceAmount?: number }
   isActive?: boolean
   image_url?: string
+  // Display order (lower = first), respected by the manager list, the public
+  // booking flow, the website, and any other place that lists activities. Absent
+  // values sort last (by name) until the studio reorders.
+  order?: number
   created_at?: Timestamp
   createdBy?: string
   archived_at?: Timestamp | null
+}
+
+/** Stable sort for activities: explicit `order` first (asc), then name. Absent
+ *  order sorts last. Single source of truth so the manager, the public booking
+ *  flow, the website, and everywhere else that lists activities agree. Typed
+ *  loosely so denormalised public-profile shapes can reuse it. */
+export function compareActivities(
+  a: { order?: number | null; name?: string },
+  b: { order?: number | null; name?: string },
+): number {
+  const ao = a.order ?? Number.MAX_SAFE_INTEGER
+  const bo = b.order ?? Number.MAX_SAFE_INTEGER
+  if (ao !== bo) return ao - bo
+  return (a.name ?? '').localeCompare(b.name ?? '')
 }
 
 export interface ActivityPublicProfile {
@@ -68,6 +86,8 @@ export interface ActivityPublicProfile {
   slug: string
   color?: string
   image_url?: string
+  /** Denormalised display order so public consumers sort identically to admin. */
+  order?: number
   /** Denormalised access gate so booking UIs can render lock state and rules can gate. */
   accessRule?: ActivityAccessRule
   /** Denormalised drop-in config so the booking UI can offer pay-per-class. */

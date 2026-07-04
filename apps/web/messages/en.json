@@ -1062,7 +1062,8 @@
     "dropInLabel": "Offer drop-in (pay per class)",
     "dropInPriceLabel": "Drop-in price",
     "dropInPricePlaceholder": "e.g. 25",
-    "dropInHelp": "Uncovered contacts can pay this to book a single class. Charged via your payment account; no membership is created."
+    "dropInHelp": "Uncovered contacts can pay this to book a single class. Charged via your payment account; no membership is created.",
+    "reorder": "Reorder"
   },
   "TeamSettings": {
     "title": "Team settings",

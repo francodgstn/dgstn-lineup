@@ -1062,7 +1062,8 @@
     "dropInLabel": "Drop-in anbieten (pro Kurs zahlen)",
     "dropInPriceLabel": "Drop-in-Preis",
     "dropInPricePlaceholder": "z. B. 25",
-    "dropInHelp": "Kontakte ohne Berechtigung können dies für die Buchung eines einzelnen Kurses zahlen. Abrechnung über dein Zahlungskonto; es wird keine Mitgliedschaft erstellt."
+    "dropInHelp": "Kontakte ohne Berechtigung können dies für die Buchung eines einzelnen Kurses zahlen. Abrechnung über dein Zahlungskonto; es wird keine Mitgliedschaft erstellt.",
+    "reorder": "Neu anordnen"
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",

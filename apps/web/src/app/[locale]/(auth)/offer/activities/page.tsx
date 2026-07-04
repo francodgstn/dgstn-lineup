@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
   collection, query, where, orderBy, getDocs,
-  addDoc, updateDoc, doc, serverTimestamp,
+  addDoc, updateDoc, doc, serverTimestamp, writeBatch,
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
@@ -25,12 +25,13 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ACTIVITIES_COLLECTION, resolveActivityAccessRule } from '@linyup/shared'
+import { ACTIVITIES_COLLECTION, resolveActivityAccessRule, compareActivities } from '@linyup/shared'
 import type { Activity, ActivityLevel, ActivityType } from '@linyup/shared'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Plus, Pencil, Archive, ImageIcon, X } from 'lucide-react'
+import { SortableList, SortableItem, type SortableRenderProps } from '@/components/ui/sortable'
+import { Plus, Pencil, Archive, ImageIcon, X, GripVertical } from 'lucide-react'
 
 // ─── archive confirm dialog ───────────────────────────────────────────────────
 
@@ -114,7 +115,9 @@ function useActivities(teamId: string | null) {
         orderBy('name', 'asc'),
       )
       const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Activity)
+      return snap.docs
+        .map((d) => ({ ...d.data(), id: d.id }) as Activity)
+        .sort(compareActivities)
     },
   })
 }
@@ -127,12 +130,15 @@ function ActivityDialog({
   teamId,
   userId,
   editing,
+  nextOrder,
 }: {
   open: boolean
   onClose: () => void
   teamId: string
   userId: string
   editing: Activity | null
+  /** Order assigned to a newly created activity so it appends to the end. */
+  nextOrder: number
 }) {
   const t = useTranslations('Activities')
   const qc = useQueryClient()
@@ -244,6 +250,7 @@ function ActivityDialog({
         teamId,
         createdBy: userId,
         isActive: true,
+        order: nextOrder,
         created_at: serverTimestamp(),
       })
       if (imageFile) {
@@ -477,23 +484,42 @@ function ActivityCard({
   activity,
   onEdit,
   onArchive,
+  sortable,
 }: {
   activity: Activity
   onEdit: () => void
   onArchive: () => void
+  sortable: SortableRenderProps
 }) {
   const t = useTranslations('Activities')
+  const { setNodeRef, style, attributes, listeners, isDragging } = sortable
 
   return (
-    <div className="flex items-start gap-3 p-4 rounded-lg border bg-card hover:shadow-sm transition-shadow">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-3 p-3 rounded-lg border bg-card ${
+        isDragging ? 'shadow-lg' : 'hover:shadow-sm'
+      } transition-shadow`}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="p-1 -ml-1 rounded text-muted-foreground hover:bg-muted transition-colors cursor-grab active:cursor-grabbing touch-none"
+        aria-label={t('reorder')}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+
       {activity.image_url ? (
-        <div className="mt-0.5 h-10 w-10 rounded-md overflow-hidden flex-shrink-0 ring-1 ring-inset ring-black/10">
+        <div className="h-10 w-10 rounded-md overflow-hidden flex-shrink-0 ring-1 ring-inset ring-black/10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={activity.image_url} alt="" className="h-full w-full object-cover" />
         </div>
       ) : (
         <div
-          className="mt-0.5 h-4 w-4 rounded-full flex-shrink-0 ring-1 ring-inset ring-black/10 self-center"
+          className="h-4 w-4 rounded-full flex-shrink-0 ring-1 ring-inset ring-black/10"
           style={{ backgroundColor: activity.color ?? '#e5e7eb' }}
         />
       )}
@@ -575,6 +601,22 @@ export default function ActivitiesPage() {
     setArchiving(null)
   }
 
+  // Drag-and-drop reorder. Persists `order = position` for the whole list in one
+  // batch (normalising any docs that never had an explicit order). Mirrors the
+  // subscription-types manager; the list is already sorted by compareActivities.
+  async function reorder(from: number, to: number) {
+    if (from === to || !currentTeamId) return
+    const next = [...activities]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    const batch = writeBatch(db)
+    next.forEach((a, i) => {
+      if (a.order !== i) batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), { order: i })
+    })
+    await batch.commit()
+    await qc.invalidateQueries({ queryKey: ['activities', currentTeamId] })
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -602,16 +644,22 @@ export default function ActivitiesPage() {
           </button>
         </div>
       ) : (
-        <div className="space-y-2">
-          {activities.map((a) => (
-            <ActivityCard
-              key={a.id}
-              activity={a}
-              onEdit={() => openEdit(a)}
-              onArchive={() => setArchiving(a)}
-            />
-          ))}
-        </div>
+        <SortableList ids={activities.map((a) => a.id)} onReorder={reorder}>
+          <div className="space-y-2">
+            {activities.map((a) => (
+              <SortableItem key={a.id} id={a.id}>
+                {(sortable) => (
+                  <ActivityCard
+                    activity={a}
+                    onEdit={() => openEdit(a)}
+                    onArchive={() => setArchiving(a)}
+                    sortable={sortable}
+                  />
+                )}
+              </SortableItem>
+            ))}
+          </div>
+        </SortableList>
       )}
 
       {currentTeamId && user && (
@@ -622,6 +670,7 @@ export default function ActivitiesPage() {
           teamId={currentTeamId}
           userId={user.uid}
           editing={editing}
+          nextOrder={activities.length}
         />
       )}
 

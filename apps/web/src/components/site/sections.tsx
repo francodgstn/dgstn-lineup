@@ -46,6 +46,7 @@ import type {
   PlacesSection,
   SocialLink,
 } from '@linyup/shared'
+import { compareActivities } from '@linyup/shared'
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
 import { usePlaces } from '@/hooks/usePlaces'
@@ -269,6 +270,7 @@ interface ActivityEntry {
   imageUrl?: string
   level?: string
   isFreeTrial?: boolean
+  order?: number
 }
 
 function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: RenderCtx }) {
@@ -298,10 +300,11 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               imageUrl: (data.image_url as string) || undefined,
               level: (data.level as string) || undefined,
               isFreeTrial: Boolean(data.isFreeTrial),
+              order: typeof data.order === 'number' ? (data.order as number) : undefined,
             }
           })
           .filter((a) => a.name)
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort(compareActivities)
         setActivities(list)
       })
       .catch(() => {
