@@ -83,7 +83,9 @@ each (`utils/appCheck.ts`). **Ships in monitor mode** (`APP_CHECK_ENFORCE=false`
 confirm `[appcheck-monitor]` logs show tokens → set `APP_CHECK_ENFORCE=true` (staging first).
 `sendContactVerificationCode` is deliberately **excluded** because the Expo mobile app calls
 it and cannot produce attestation tokens; mobile enforcement needs native App Check
-(`@react-native-firebase/app-check` + an EAS dev build) as a separate phase.
+(`@react-native-firebase/app-check` + an EAS dev build) as a separate phase. Turning
+enforcement on is a staged, manual procedure — see the runbook:
+[`app-check-rollout.md`](./app-check-rollout.md).
 
 ### 4 — Event-invitation tokens never expired + PII leak (M, fixed)
 `events/index.ts` minted `crypto.randomBytes(32)` tokens with no expiry, and
