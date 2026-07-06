@@ -34,7 +34,13 @@ type LoginResult =
   | { requiresContactSelection: true; email: string; matchedContacts: MatchedContact[] }
   | { customToken: string; sessionExpires: string; contact: PublicContact }
 
-export type PublicContactAuthStep = 'idle' | 'email' | 'code' | 'selectContact' | 'authenticated'
+export type PublicContactAuthStep =
+  | 'idle'
+  | 'email'
+  | 'code'
+  | 'selectContact'
+  | 'register'
+  | 'authenticated'
 
 interface PublicContactAuthContextValue {
   slug: string
@@ -45,14 +51,19 @@ interface PublicContactAuthContextValue {
   matchedContacts: MatchedContact[]
   requiresSignup: boolean
   signupEmail: string
+  /** Whether this sign-in flow may CREATE a minimal contact for an unknown email
+   *  (login-first checkout). Off by default — Space & co. keep the signup link. */
+  allowRegistration: boolean
   error: string | null
   /** Call to initiate the sign-in flow */
-  openSignIn: () => void
+  openSignIn: (options?: { allowRegistration?: boolean }) => void
   /** Cancel an in-progress sign-in flow (no-op once authenticated). */
   closeSignIn: () => void
   sendCode: (email: string) => Promise<void>
   verifyCode: (code: string) => Promise<void>
   selectContact: (contactId: string) => Promise<void>
+  /** Register a minimal new contact for the OTP-verified email (register step). */
+  registerContact: (firstname: string, lastname: string) => Promise<void>
   logout: () => Promise<void>
   clearError: () => void
 }
@@ -113,6 +124,7 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
   const [matchedContacts, setMatchedContacts] = useState<MatchedContact[]>([])
   const [requiresSignup, setRequiresSignup] = useState(false)
   const [signupEmail, setSignupEmail] = useState('')
+  const [allowRegistration, setAllowRegistration] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [codeId, setCodeId] = useState('')
   const [pendingCode, setPendingCode] = useState('')
@@ -126,10 +138,11 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
     }
   }, [])
 
-  const openSignIn = useCallback(() => {
+  const openSignIn = useCallback((options?: { allowRegistration?: boolean }) => {
     setError(null)
     setRequiresSignup(false)
     setMatchedContacts([])
+    setAllowRegistration(options?.allowRegistration === true)
     setStep('email')
   }, [])
 
@@ -171,6 +184,10 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
         if ('requiresSignup' in data && data.requiresSignup) {
           setSignupEmail(data.email)
           setRequiresSignup(true)
+          // Keep the verified code around: the register step re-submits it together
+          // with the minimal profile (same second-call pattern as selectContact).
+          setPendingCode(code)
+          if (allowRegistration) setStep('register')
           return
         }
 
@@ -197,7 +214,7 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
         setError(e.message ?? 'Incorrect code.')
       }
     },
-    [codeId]
+    [codeId, allowRegistration]
   )
 
   const selectContact = useCallback(
@@ -230,6 +247,45 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
     [codeId, pendingCode]
   )
 
+  // Login-first shop registration: the OTP already proved email ownership; submit
+  // the SAME verified code again with the minimal profile — the callable creates a
+  // provisional contact and mints the session in one step.
+  const registerContact = useCallback(
+    async (firstname: string, lastname: string) => {
+      setError(null)
+      try {
+        const fn = httpsCallable<
+          { codeId: string; code: string; newContact: { firstname: string; lastname: string } },
+          LoginResult
+        >(functions, 'loginContactWithCode')
+        const result = await fn({
+          codeId,
+          code: pendingCode,
+          newContact: { firstname: firstname.trim(), lastname: lastname.trim() },
+        })
+        const data = result.data
+
+        if ('customToken' in data) {
+          await signInWithCustomToken(auth, data.customToken)
+          const session: PersistedSession = {
+            contactId: data.contact.id,
+            sessionExpires: data.sessionExpires,
+            contact: data.contact,
+          }
+          saveSession(session)
+          setContact(data.contact)
+          setRequiresSignup(false)
+          setStep('authenticated')
+        }
+      } catch (err: unknown) {
+        // Surfaces the server copy (cap blocked / registration budget / expired code).
+        const e = err as { message?: string }
+        setError(e.message ?? 'Could not create your account.')
+      }
+    },
+    [codeId, pendingCode]
+  )
+
   const logout = useCallback(async () => {
     clearSession()
     setContact(null)
@@ -249,6 +305,7 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
     setStep((s) => (s === 'authenticated' ? s : 'idle'))
     setMatchedContacts([])
     setRequiresSignup(false)
+    setAllowRegistration(false)
     setError(null)
   }, [])
 
@@ -263,12 +320,14 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
     matchedContacts,
     requiresSignup,
     signupEmail,
+    allowRegistration,
     error,
     openSignIn,
     closeSignIn,
     sendCode,
     verifyCode,
     selectContact,
+    registerContact,
     logout,
     clearError,
   }

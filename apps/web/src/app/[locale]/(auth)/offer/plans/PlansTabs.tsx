@@ -19,16 +19,17 @@ export function PlansTabs({ initialTab }: { initialTab: Tab }) {
   return (
     <div className="space-y-6">
       <PageHeader title={t('plans')} />
-      <div className="flex gap-0 border-b">
+      {/* Prominent segmented switcher (each panel supplies its own body, no repeated header) */}
+      <div className="inline-flex gap-0.5 rounded-lg border bg-background p-0.5">
         {(['subscriptions', 'affiliations'] as const).map((key) => (
           <button
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
               tab === key
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {t(key)}

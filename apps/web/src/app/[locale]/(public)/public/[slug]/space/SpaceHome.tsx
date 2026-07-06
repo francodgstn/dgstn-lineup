@@ -34,6 +34,7 @@ export interface PublicCourseCard {
   accessType: 'free' | 'registered' | 'subscription' | 'purchase'
   subscriptionTypeIds?: string[]
   priceAmount?: number // 'purchase' tier: one-off price (major units)
+  hideFromShop?: boolean
   moduleCount?: number
   lessonCount?: number
   order?: number
@@ -182,7 +183,9 @@ export default function SpaceHome() {
   const hasSubscriptions =
     Array.isArray(profile.aggregator_subscription_types) && profile.aggregator_subscription_types.length > 0
   const hasProducts = Array.isArray(profile.products) && profile.products.length > 0
-  const hasPurchasableCourses = courses.some((c) => c.accessType === 'purchase' && (c.priceAmount ?? 0) > 0)
+  // The shop is the courses' home and lists every tier, so link to it whenever the
+  // studio has any shop-visible course (not just purchasable ones).
+  const hasShopCourses = courses.some((c) => c.hideFromShop !== true)
   const hasActiveSubscription = shownSubs.length > 0
   const shopLinks = [
     hasSubscriptions && {
@@ -198,7 +201,7 @@ export default function SpaceHome() {
       icon: ShoppingBag,
       href: `/public/${slug}/shop?tab=products`,
     },
-    hasPurchasableCourses && {
+    hasShopCourses && {
       key: 'courses',
       label: t('shopCourses'),
       icon: GraduationCap,
@@ -216,6 +219,42 @@ export default function SpaceHome() {
         </p>
       </div>
 
+      {/* Complete-signup reminder — PROMINENT when a paid 'full'-mode purchase left
+          the registration unfinished (pending_signup), light for self-registered
+          minimal contacts (shop/form entry). Studio-toggleable in Space settings
+          (mirrored to public_profile as space_signup_nudge). The signup page skips
+          the OTP for signed-in contacts, so the CTA is one step. */}
+      {(team as { space_signup_nudge?: boolean } | null)?.space_signup_nudge !== false &&
+        fullContact &&
+        !fullContact.signup_completed_at &&
+        (fullContact.pending_signup === true ? (
+          <div className="rounded-2xl p-4" style={{ background: accent, color: '#fff' }}>
+            <p className="text-sm font-semibold">{t('signupNudgeTitle')}</p>
+            <p className="mt-1 text-xs opacity-90">{t('signupNudgeBody')}</p>
+            <Link
+              href={`/public/${slug}/signup?from=checkout` as Route}
+              className="mt-3 inline-block rounded-full bg-white px-4 py-1.5 text-xs font-semibold"
+              style={{ color: accent }}
+            >
+              {t('signupNudgeCta')} →
+            </Link>
+          </div>
+        ) : fullContact.entry === 'shop' || fullContact.entry === 'form' ? (
+          <div
+            className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm"
+            style={cardStyle}
+          >
+            <span style={{ color: textMuted }}>{t('signupNudgeLight')}</span>
+            <Link
+              href={`/public/${slug}/signup?from=checkout` as Route}
+              className="shrink-0 text-xs font-medium hover:underline"
+              style={{ color: accent }}
+            >
+              {t('signupNudgeCta')} →
+            </Link>
+          </div>
+        ) : null)}
+
       {/* Membership */}
       <section className="rounded-2xl p-4" style={cardStyle}>
         <div className="flex items-center gap-2 mb-3">
@@ -225,7 +264,19 @@ export default function SpaceHome() {
           </h2>
         </div>
         {!hasMembership ? (
-          <p className="text-sm" style={{ color: textMuted }}>{t('membershipNone')}</p>
+          <div>
+            <p className="text-sm" style={{ color: textMuted }}>{t('membershipNone')}</p>
+            {/* Prompt to pick a plan — only when the studio actually sells subscriptions */}
+            {hasSubscriptions && (
+              <Link
+                href={`/public/${slug}/shop?tab=subscriptions` as Route}
+                className="mt-2 inline-block text-sm font-medium hover:underline"
+                style={{ color: accent }}
+              >
+                {t('membershipNoneCta')} →
+              </Link>
+            )}
+          </div>
         ) : (
           <div className="space-y-2">
             {shownSubs.map((s, i) => (

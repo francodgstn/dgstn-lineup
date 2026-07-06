@@ -183,6 +183,15 @@ export interface MemberPayment {
   contactId?: string | null
   /** Free-form purpose tag, e.g. 'drop_in' | 'belt_test' | 'shop'. */
   purpose: string
+  /** Sale kind for display, denormalized from checkout metadata (absent on plain
+   *  manager-created charges). Drives the payments-dashboard row label. */
+  kind?: 'product' | 'course' | 'drop_in' | 'membership'
+  productName?: string | null
+  variantLabel?: string | null
+  courseName?: string | null
+  /** kind 'membership': the subscription type's display name (also stamped onto
+   *  recurring invoice charges by the webhook, which carry no metadata of their own). */
+  subscriptionTypeName?: string | null
   /** Set for drop-in (pay-per-class) charges — the booked session. */
   sessionId?: string | null
   description?: string

@@ -1,4 +1,5 @@
 // Ported from hmd-lineup/functions/src/manageTeamMember/index.js
+import * as admin from 'firebase-admin'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
 import {
@@ -13,23 +14,24 @@ import type { TeamRole } from '@linyup/shared'
 // owner/manager) already treat it like viewer — a manager may add/remove/retitle
 // coaches and viewers, only an owner may manage managers/owners.
 const VALID_ROLES: TeamRole[] = ['owner', 'manager', 'coach', 'viewer']
-const VALID_ACTIONS = ['add', 'remove', 'updateRole'] as const
+const VALID_ACTIONS = ['add', 'remove', 'updateRole', 'setCoach'] as const
 type Action = (typeof VALID_ACTIONS)[number]
 
 export const manageTeamMember = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated')
 
   const callerId = request.auth.uid
-  const { teamId, action, userId, role } = request.data as {
+  const { teamId, action, userId, role, isCoach } = request.data as {
     teamId: string
     action: Action
     userId: string
     role?: TeamRole
+    isCoach?: boolean
   }
 
   if (!teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   if (!action || !(VALID_ACTIONS as readonly string[]).includes(action)) {
-    throw new HttpsError('invalid-argument', 'action must be one of: add, remove, updateRole')
+    throw new HttpsError('invalid-argument', `action must be one of: ${VALID_ACTIONS.join(', ')}`)
   }
 
   const [callerRoleErr, callerRole] = await to(getTeamRole(callerId, teamId))
@@ -113,6 +115,36 @@ export const manageTeamMember = onCall(async (request) => {
       }
 
       return { success: true, message: 'Team member role updated successfully', userId, newRole: role }
+    }
+
+    case 'setCoach': {
+      if (!userId) throw new HttpsError('invalid-argument', 'userId is required for setCoach action')
+
+      const [targetRoleErr, targetRole] = await to(getTeamRole(userId, teamId))
+      if (targetRoleErr) {
+        console.error('Error getting target user role:', targetRoleErr)
+        throw new HttpsError('internal', 'Failed to verify target user permissions')
+      }
+      if (!targetRole) throw new HttpsError('not-found', 'User is not a member of this team')
+
+      // Coach is a roster/relationship flag (no capability change), so any owner or
+      // manager may toggle it for any member — no role-precedence check needed.
+      const next = isCoach !== false // default true
+      const [setErr] = await to(
+        admin
+          .firestore()
+          .collection('teams')
+          .doc(teamId)
+          .collection('team_members')
+          .doc(userId)
+          .set({ is_coach: next }, { merge: true }),
+      )
+      if (setErr) {
+        console.error('Error setting coach flag:', setErr)
+        throw new HttpsError('internal', `Failed to update coach status: ${setErr.message}`)
+      }
+
+      return { success: true, message: 'Coach status updated', userId, isCoach: next }
     }
 
     default:

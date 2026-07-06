@@ -50,6 +50,10 @@ export interface Course {
   coverImageUrl?: string
   status: CourseStatus
   accessRule: CourseAccessRule // default { type: 'registered' }
+  // When true, the course is omitted from the public shop catalogue
+  // (/public/{slug}/shop). It stays openable via a direct link and still shows in a
+  // contact's Space "My courses" if they have access. Absent ⇒ visible in the shop.
+  hideFromShop?: boolean
   // Denormalised counters — maintained client-side, used for usage limits + list UI.
   moduleCount?: number
   lessonCount?: number

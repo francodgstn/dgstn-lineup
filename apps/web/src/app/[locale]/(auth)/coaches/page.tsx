@@ -32,7 +32,7 @@ import {
 import { UserCog, UserPlus, Trash2, Mail, Clock, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-type Member = { userId: string; role: TeamRole; displayName?: string; email?: string }
+type Member = { userId: string; role: TeamRole; displayName?: string; email?: string; isCoach?: boolean }
 type Invite = { id: string; email: string; role: string }
 
 function initials(name?: string, email?: string): string {
@@ -63,7 +63,9 @@ export default function CoachesPage() {
     },
   })
   const myRole = members.find((m) => m.userId === user?.uid)?.role ?? null
-  const coaches = members.filter((m) => m.role === 'coach')
+  // Coach roster = every member flagged as a coach (any role — owners/managers can
+  // coach too), per the per-member `isCoach` flag. Absent ⇒ coach by default.
+  const coaches = members.filter((m) => m.isCoach !== false)
 
   const { data: invites = [] } = useQuery<Invite[]>({
     queryKey: ['team-invitations', currentTeamId, 'coach'],

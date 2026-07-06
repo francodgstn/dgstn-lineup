@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -66,6 +67,7 @@ interface MemberDoc {
   addedBy?: string | null
   email?: string | null
   displayName?: string | null
+  isCoach: boolean
 }
 
 interface InvitationDoc extends TeamInvitation {
@@ -336,6 +338,7 @@ export default function TeamMembersPage() {
   const [changeRoleTarget, setChangeRoleTarget] = useState<MemberDoc | null>(null)
   const [cancelInviteTarget, setCancelInviteTarget] = useState<InvitationDoc | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [coachSaving, setCoachSaving] = useState<string | null>(null)
 
   // data — members (via callable so displayName + email are resolved server-side)
   const { data: members, isLoading: membersLoading } = useQuery<MemberDoc[]>({
@@ -349,6 +352,7 @@ export default function TeamMembersPage() {
         addedBy: string | null
         displayName: string | null
         email: string | null
+        isCoach: boolean
       }> }>(functions, 'listTeamMembers')
       const result = await fn({ teamId: teamId! })
       return result.data.members.map((m) => ({
@@ -359,6 +363,7 @@ export default function TeamMembersPage() {
         addedBy: m.addedBy,
         displayName: m.displayName,
         email: m.email,
+        isCoach: m.isCoach,
       } as MemberDoc))
     },
   })
@@ -430,6 +435,27 @@ export default function TeamMembersPage() {
     } finally {
       setActionLoading(false)
       setCancelInviteTarget(null)
+    }
+  }
+
+  // toggle a member's coach-roster membership (optimistic; reverts on error)
+  async function setCoach(m: MemberDoc, isCoach: boolean) {
+    if (!teamId) return
+    setCoachSaving(m.userId)
+    qc.setQueryData<MemberDoc[]>(['team-members', teamId], (prev) =>
+      prev?.map((x) => (x.userId === m.userId ? { ...x, isCoach } : x)),
+    )
+    try {
+      const fn = httpsCallable(functions, 'manageTeamMember')
+      await fn({ teamId, userId: m.userId, action: 'setCoach', isCoach })
+      qc.invalidateQueries({ queryKey: ['team-coaches-roster', teamId] })
+    } catch (err: unknown) {
+      addToast(err instanceof Error ? err.message : 'Error', 'error')
+      qc.setQueryData<MemberDoc[]>(['team-members', teamId], (prev) =>
+        prev?.map((x) => (x.userId === m.userId ? { ...x, isCoach: !isCoach } : x)),
+      )
+    } finally {
+      setCoachSaving(null)
     }
   }
 
@@ -511,6 +537,23 @@ export default function TeamMembersPage() {
                     {roleIcon(m.role)}
                     {roleLabel[m.role]}
                   </Badge>
+                  {/* Coach-roster toggle — coach-role members are always coaches */}
+                  {canManage ? (
+                    <div className="flex items-center gap-1.5 shrink-0" title={t('coachToggleHint')}>
+                      <Dumbbell className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Switch
+                        checked={m.role === 'coach' || m.isCoach}
+                        disabled={m.role === 'coach' || coachSaving === m.userId}
+                        onCheckedChange={(v) => setCoach(m, v)}
+                        aria-label={t('coachToggle')}
+                      />
+                    </div>
+                  ) : (m.role === 'coach' || m.isCoach) ? (
+                    <Badge variant="outline" className="shrink-0 flex items-center gap-1">
+                      <Dumbbell className="h-3 w-3" />
+                      {t('coachBadge')}
+                    </Badge>
+                  ) : null}
                   {/* Actions */}
                   {canManage && !isSelf && m.role !== 'owner' && (
                     <DropdownMenu>

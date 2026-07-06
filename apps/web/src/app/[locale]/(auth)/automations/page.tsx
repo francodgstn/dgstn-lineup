@@ -91,6 +91,7 @@ import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
+import { SystemEmailsCard } from './SystemEmailsCard'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups } from '@/plugins/contact-groups/hooks'
 
@@ -1844,6 +1845,9 @@ export default function AutomationsPage() {
     },
   })
 
+  // Rules vs the system-emails inventory — segmented views so the System emails
+  // panel isn't pushed below a long rule list.
+  const [view, setView] = useState<'rules' | 'system'>('rules')
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
   const [prefill, setPrefill] = useState<
@@ -1982,8 +1986,26 @@ export default function AutomationsPage() {
           </div>
         )}
 
+        {/* Rules ⇄ System emails switcher (segmented, like Plans & affiliations) */}
+        <div className="inline-flex gap-0.5 rounded-lg border bg-background p-0.5">
+          {(['rules', 'system'] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setView(key)}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                view === key
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {key === 'rules' ? t('page.tabRules') : t('systemEmails.title')}
+            </button>
+          ))}
+        </div>
+
         {/* Loading */}
-        {rulesLoading && (
+        {view === 'rules' && rulesLoading && (
           <div className="grid gap-6 sm:grid-cols-2">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-36 rounded-xl" />
@@ -1992,7 +2014,7 @@ export default function AutomationsPage() {
         )}
 
         {/* Empty state */}
-        {!rulesLoading && rules.length === 0 && (
+        {view === 'rules' && !rulesLoading && rules.length === 0 && (
           <div className="flex flex-col items-center gap-5 py-16 text-center">
             <div className="rounded-full bg-muted p-4">
               <Workflow className="h-8 w-8 text-muted-foreground" />
@@ -2017,7 +2039,7 @@ export default function AutomationsPage() {
         )}
 
         {/* Active rules */}
-        {activeRules.length > 0 && (
+        {view === 'rules' && activeRules.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               {t('common.active')}
@@ -2043,7 +2065,7 @@ export default function AutomationsPage() {
         )}
 
         {/* Paused rules */}
-        {pausedRules.length > 0 && (
+        {view === 'rules' && pausedRules.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               {t('common.paused')}
@@ -2068,16 +2090,22 @@ export default function AutomationsPage() {
           </div>
         )}
 
-        {/* Mobile FAB */}
-        <button
-          className="md:hidden fixed bottom-6 right-6 z-40 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
-          onClick={() => {
-            setEditingRule(null)
-            setRuleDialogOpen(true)
-          }}
-        >
-          <Plus className="h-6 w-6" />
-        </button>
+        {/* System emails — the automatic mail Linyup sends outside these rules.
+            Own view so a long rule list never buries it. */}
+        {view === 'system' && <SystemEmailsCard />}
+
+        {/* Mobile FAB (rules view only) */}
+        {view === 'rules' && (
+          <button
+            className="md:hidden fixed bottom-6 right-6 z-40 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+            onClick={() => {
+              setEditingRule(null)
+              setRuleDialogOpen(true)
+            }}
+          >
+            <Plus className="h-6 w-6" />
+          </button>
+        )}
       </div>
 
       {currentTeamId && (

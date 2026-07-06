@@ -189,6 +189,9 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     showBranding: (data.plan ?? 'free') === 'free',
     // Billing currency for the website pricing table (bio-link/website never read teams/).
     default_currency: (data.default_currency as string | undefined) || null,
+    // Space "complete your signup" reminder toggle (absent ⇒ on) — the Space only
+    // reads public_profile, so the setting must be mirrored here.
+    space_signup_nudge: data.settings?.space?.signup_nudge !== false,
     active_public_surfaces,
     // Recomputed every run (may be empty) so stale consent links never linger.
     signup_documents: signupDocuments,

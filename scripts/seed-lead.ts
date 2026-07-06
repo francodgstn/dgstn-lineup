@@ -19,6 +19,12 @@
  *   # Firestore/Auth/Storage host env vars for you (start the emulators first):
  *   pnpm lead:seed --lead swimli --target emulator
  *
+ *   # Also wire "pay with Linyup" (Stripe Connect) for the seeded team — pass an
+ *   # already-onboarded Stripe TEST account (acct_…). Precedence: --connect flag >
+ *   # STRIPE_CONNECT_TEST_ACCOUNT env > profile.stripeConnectTestAccount. Grab an
+ *   # acct id with `pnpm connect:test-account --list`. Survives reseeds:
+ *   pnpm lead:seed --lead swimli --target emulator --connect acct_123
+ *
  *   # ...or set the hosts yourself (an already-set host wins over --target):
  *   FIRESTORE_EMULATOR_HOST=localhost:8080 \
  *   FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
@@ -56,6 +62,7 @@ import {
 } from './lib/affiliations'
 import { buildStorefrontPageLinks } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
+import { linkConnectAccount } from './lib/connect'
 import type {
   LeadProfile,
   LeadContactDef,
@@ -74,6 +81,10 @@ const { values: cli } = parseArgs({
     // `--target emulator` fills in the emulator host env vars below so you don't
     // have to; `cloud` (the default) targets linyup-sandbox via ADC.
     target: { type: 'string' },
+    // Wire a Stripe TEST connected account (acct_…) for the "pay with Linyup" flow.
+    // Precedence: --connect > STRIPE_CONNECT_TEST_ACCOUNT env > profile field. The
+    // account must already be onboarded in Stripe test mode (see connect-test-account.ts).
+    connect: { type: 'string' },
   },
 })
 const LEAD = cli.lead ?? process.env.LEAD
@@ -571,6 +582,19 @@ async function seedLeadTenant(profile: LeadProfile) {
       links: portalLinks,
       socialLinks: profile.socialLinks,
     })
+
+  // Stripe Connect — wire a TEST connected account so "pay with Linyup" works out
+  // of the box (survives reseeds). Source: --connect flag > env > profile field.
+  // MUST run after the full team set() above, since it merge-adds teams/{id}.payments.
+  const connectAccount = cli.connect ?? process.env.STRIPE_CONNECT_TEST_ACCOUNT ?? profile.stripeConnectTestAccount
+  if (connectAccount) {
+    if (!connectAccount.startsWith('acct_')) {
+      console.warn(`   ⚠️  Ignoring Connect account '${connectAccount}' — expected an acct_… id.`)
+    } else {
+      await linkConnectAccount({ db, teamId, accountId: connectAccount })
+      console.log(`   💳 Wired Stripe Connect (${connectAccount}) — "pay with Linyup" ready.`)
+    }
+  }
 
   // Public mirror of the subscription types (what syncSubscriptionTypesToPublicProfile
   // would produce). price.id must equal the raw subscription_types price id or the
@@ -1646,7 +1670,10 @@ async function seedAutomations(teamId: string, language: string) {
       active: true,
       system_key: 'lib_trial_welcome',
       trigger: { type: 'contact_created' },
-      conditions: [{ type: 'contact_type', value: 'trial' }],
+      // Trial-funnel contacts only — off-funnel entries (shop/form, no stage) must
+      // NOT get the "first class" welcome. (The old contact_type condition is dead;
+      // the engine now fails closed on unknown types.)
+      conditions: [{ type: 'acquisition_stage', value: 'trial_booked' }],
       actions: [{ type: 'send_email', templateId: `${teamId}-tmpl-welcome` }],
     },
     {
@@ -1656,7 +1683,7 @@ async function seedAutomations(teamId: string, language: string) {
       system_key: 'lib_winback',
       trigger: { type: 'schedule_daily' },
       conditions: [
-        { type: 'contact_type', value: 'student' },
+        { type: 'acquisition_stage', value: 'joined' },
         { type: 'inactivity_days', value: 30 },
       ],
       actions: [

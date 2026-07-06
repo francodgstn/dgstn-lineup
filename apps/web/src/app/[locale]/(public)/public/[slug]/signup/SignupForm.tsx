@@ -9,6 +9,7 @@ import { functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
+import { usePublicContactAuth } from '../PublicContactAuthProvider'
 
 // ─── steps ───────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,9 @@ interface Props {
 export default function SignupForm({ slug }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
+  // A live contact session skips the email+OTP steps entirely: the session was
+  // itself minted by the same OTP flow, so re-verifying the inbox is pure friction.
+  const { isAuthenticated, contact: sessionContact } = usePublicContactAuth()
   const t = useTranslations('PublicSignup')
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
@@ -100,6 +104,16 @@ export default function SignupForm({ slug }: Props) {
   }, [emailForm])
   const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
   const detailsForm = useForm<DetailsValues>({ resolver: zodResolver(detailsSchema) })
+
+  // Signed-in contact → jump straight to the details step with names prefilled
+  // (completeSignup runs against the session, no code needed). Only from the
+  // email/code steps — never yank the user out of an in-progress details form.
+  useEffect(() => {
+    if (!isAuthenticated || !sessionContact) return
+    setStep((s) => (s === 'email' || s === 'code' ? 'details' : s))
+    if (!detailsForm.getValues('firstname')) detailsForm.setValue('firstname', sessionContact.firstname ?? '')
+    if (!detailsForm.getValues('lastname')) detailsForm.setValue('lastname', sessionContact.lastname ?? '')
+  }, [isAuthenticated, sessionContact, detailsForm])
 
   // ── Email step ─────────────────────────────────────────────────────────────
 
@@ -165,8 +179,9 @@ export default function SignupForm({ slug }: Props) {
     try {
       const fn = httpsCallable<
         {
-          codeId: string
-          code: string
+          codeId?: string
+          code?: string
+          teamId?: string
           contactDetails: Omit<DetailsValues, 'privacyConsent'> & { privacyConsent: boolean }
           acceptedDocuments?: Array<{ slug?: string; kind?: string; version?: string }>
         },
@@ -174,8 +189,8 @@ export default function SignupForm({ slug }: Props) {
       >(functions, 'completeSignup')
 
       await fn({
-        codeId,
-        code: verifiedCode,
+        // Session path (signed-in contact, no OTP round-trip) vs. anonymous code path.
+        ...(isAuthenticated && !codeId ? { teamId: teamId ?? undefined } : { codeId, code: verifiedCode }),
         contactDetails: {
           firstname: values.firstname,
           lastname: values.lastname,

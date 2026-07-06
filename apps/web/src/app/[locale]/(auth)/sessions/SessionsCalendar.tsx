@@ -13,6 +13,8 @@ import {
   Pencil,
   Trash2,
   CalendarDays,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import type { Session, Activity, Event } from '@linyup/shared'
 import { SessionPeekSheet } from '@/components/sessions/SessionPeekSheet'
@@ -416,6 +418,8 @@ export default function SessionsCalendar({
   const [selected, setSelected] = useState<Date>(() => new Date(today))
   const [peekSessionId, setPeekSessionId] = useState<string | null>(null)
   const [peekEventId, setPeekEventId] = useState<string | null>(null)
+  // Expand the week grid to full width, hiding the month mini-calendar + day agenda.
+  const [fullWeek, setFullWeek] = useState(false)
 
   const viewYear = externalYear ?? internalYear
   const viewMonth = externalMonth ?? internalMonth
@@ -559,7 +563,8 @@ export default function SessionsCalendar({
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-      {/* ── Calendar pane (right on desktop) ── */}
+      {/* ── Calendar pane (right on desktop) — hidden when the week is expanded ── */}
+      {!fullWeek && (
       <div className="lg:order-2 lg:w-72 shrink-0">
         {/* Month navigation */}
         <div className="flex items-center justify-between mb-3 px-0.5">
@@ -640,8 +645,9 @@ export default function SessionsCalendar({
           )}
         </div>
       </div>
+      )}
 
-      {/* ── Detail pane (left on desktop) ── */}
+      {/* ── Detail pane (left on desktop) — week grid; fills the row when expanded ── */}
       <div className="lg:order-1 flex-1 min-w-0">
         {/* Week header: stepper + range + today */}
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -654,9 +660,22 @@ export default function SessionsCalendar({
             </Button>
             <h3 className="font-semibold text-base truncate ml-1">{weekRangeLabel()}</h3>
           </div>
-          <Button variant="ghost" size="sm" onClick={goToday}>
-            {tCommon('today')}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={goToday}>
+              {tCommon('today')}
+            </Button>
+            {/* Expand the week grid to full width (hide month + agenda) — desktop only */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden lg:inline-flex h-7 w-7"
+              onClick={() => setFullWeek((v) => !v)}
+              title={fullWeek ? t('collapseWeek') : t('expandWeek')}
+              aria-label={fullWeek ? t('collapseWeek') : t('expandWeek')}
+            >
+              {fullWeek ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
 
         {/* ── Week timetable grid ── */}

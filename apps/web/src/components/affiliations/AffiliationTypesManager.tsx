@@ -52,6 +52,7 @@ import {
 import { Plus, Pencil, Trash2, Users } from 'lucide-react'
 import type { Route } from 'next'
 import { Link } from '@/i18n/navigation'
+import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
 
 /**
  * Manage the team's affiliation TYPES (e.g. club membership, federation licence).
@@ -405,7 +406,6 @@ export function AffiliationTypesManager({ team, teamId }: { team: Team; teamId: 
 /** Page wrapper — resolves the current team and renders the manager. */
 export function AffiliationsPage() {
   const { currentTeamId, team } = useAuth()
-  const t = useTranslations('OfferAffiliations')
 
   if (currentTeamId === null || !team) {
     return (
@@ -416,11 +416,12 @@ export function AffiliationsPage() {
     )
   }
 
+  // Header omitted — the parent "Plans & affiliations" page supplies the section
+  // header + switcher, so a title here would duplicate it.
   return (
     <div className="space-y-6">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="text-sm text-muted-foreground mt-1">{t('subtitle')}</p>
+      <div className="flex justify-end">
+        <PaymentSettingsLink />
       </div>
       <AffiliationTypesManager team={team} teamId={currentTeamId} />
     </div>

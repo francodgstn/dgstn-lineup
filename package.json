@@ -29,6 +29,7 @@
     "emulators:export:hmd": "firebase emulators:export ./snapshots/hmd-migration --project demo-linyup",
     "stripe:listen": "stripe listen --forward-to localhost:5001/demo-linyup/europe-west6/handleStripeWebhook --forward-connect-to localhost:5001/demo-linyup/europe-west6/handleConnectWebhook",
     "stripe:sync": "tsx scripts/stripe-sync.ts",
+    "connect:test-account": "tsx scripts/connect-test-account.ts",
     "migrate:hmd": "tsx --tsconfig tsconfig.scripts.json scripts/migrate-hmd.ts",
     "promote:team": "tsx --tsconfig tsconfig.scripts.json scripts/promote-team.ts",
     "staging:seed": "tsx scripts/seed-staging.ts",

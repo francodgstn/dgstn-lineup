@@ -3,33 +3,18 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import {
-  collection,
-  getDocs,
-  doc,
-  getDoc,
-  updateDoc,
-  arrayUnion,
-  arrayRemove,
-} from 'firebase/firestore'
-import { db } from '@/lib/firebase'
-import {
-  CONTACTS_COLLECTION,
-  TEAMS_COLLECTION,
-  ROLE_CONFIG_SUBCOLLECTION,
-  TEAM_MEMBERS_SUBCOLLECTION,
-  coachRolesFrom,
-  type Contact,
-  type TeamRole,
-} from '@linyup/shared'
+import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
+import { CONTACTS_COLLECTION, type Contact } from '@linyup/shared'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 
 // Multi-coach assignment for a contact. Owners/managers (members.manage) pick one or
 // more coaches; a coach-role member then sees the contact in their own book (own
-// scope keys off assigned_coach_ids). Eligible coaches = team members whose role is in
-// the team's coachRoles config (Coach always, owner/manager opt-in — Settings → Roles).
+// scope keys off assigned_coach_ids). Eligible coaches = team members flagged as
+// coaches (per-member is_coach; absent ⇒ coach — toggled per user in Settings → Team).
 // Writes assigned_coach_ids directly, independent of the profile form.
 export function CoachAssignment({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
@@ -38,28 +23,26 @@ export function CoachAssignment({ contact, teamId }: { contact: Contact; teamId:
   const canEdit = !!teamId && can('members.manage')
 
   const { data: coaches = [] } = useQuery({
-    queryKey: ['team-coaches', teamId],
+    queryKey: ['team-coaches-roster', teamId],
     enabled: canEdit,
     queryFn: async () => {
-      const cfg = await getDoc(
-        doc(db, TEAMS_COLLECTION, teamId!, ROLE_CONFIG_SUBCOLLECTION, 'coach'),
-      )
-      const roles = coachRolesFrom(
-        cfg.exists() ? (cfg.data()?.coachRoles as TeamRole[] | undefined) : undefined,
-      )
-      const snap = await getDocs(
-        collection(db, TEAMS_COLLECTION, teamId!, TEAM_MEMBERS_SUBCOLLECTION),
-      )
-      const eligible = snap.docs.filter((d) => roles.includes(d.data()?.role as TeamRole))
-      return Promise.all(
-        eligible.map(async (d) => {
-          const u = await getDoc(doc(db, 'users', d.id))
-          const name = u.exists()
-            ? (u.data()?.displayName as string) || (u.data()?.email as string)
-            : (d.data()?.email as string) || d.id
-          return { uid: d.id, name }
-        }),
-      )
+      // Member display names live on users/{uid}, which Firestore rules deny reading
+      // cross-user client-side — so the roster comes from the listTeamMembers callable
+      // (same source as useCoaches / the /coaches page). Coach roster = members flagged
+      // as coaches (per-member is_coach; absent ⇒ coach).
+      const res = await httpsCallable(functions, 'listTeamMembers')({ teamId })
+      const members =
+        (res.data as {
+          members?: Array<{
+            userId: string
+            displayName: string | null
+            email: string | null
+            isCoach: boolean
+          }>
+        }).members ?? []
+      return members
+        .filter((m) => m.isCoach)
+        .map((m) => ({ uid: m.userId, name: m.displayName || m.email || m.userId }))
     },
   })
 

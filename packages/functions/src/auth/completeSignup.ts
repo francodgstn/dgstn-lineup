@@ -6,6 +6,7 @@ import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { escapeHtml } from '../utils/html'
 import { timingSafeEqualStr } from '../utils/secureCompare'
+import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { assertVerifiableCode } from './verificationCode'
 import { to } from '../utils/async'
 import {
@@ -48,6 +49,9 @@ export const completeSignup = onCall(async (request) => {
   const data = request.data as {
     codeId?: string
     code?: string
+    // Session path: the team the signed-in contact is finalizing for (the code
+    // path derives it from the code doc instead).
+    teamId?: string
     contactDetails?: {
       firstname: string
       lastname: string
@@ -63,11 +67,8 @@ export const completeSignup = onCall(async (request) => {
     acceptedDocuments?: Array<{ slug?: string; kind?: string; version?: string }>
   }
 
-  if (!data?.codeId || !data?.contactDetails) {
-    throw new HttpsError('invalid-argument', 'codeId and contactDetails are required')
-  }
-  if (!data.code || !/^\d{6}$/.test(data.code)) {
-    throw new HttpsError('invalid-argument', 'A valid 6-digit code is required')
+  if (!data?.contactDetails) {
+    throw new HttpsError('invalid-argument', 'contactDetails are required')
   }
 
   const { contactDetails } = data
@@ -80,28 +81,62 @@ export const completeSignup = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'Privacy consent is required')
   }
 
-  const codeRef = admin.firestore().collection('verification_codes').doc(data.codeId)
-  const codeDoc = await codeRef.get()
-  if (!codeDoc.exists) throw new HttpsError('not-found', 'Invalid verification code')
+  // ── Identity: an OTP code (anonymous flow) OR a live contact session. The
+  // session was itself minted by the same OTP flow (≤7 days ago), so re-verifying
+  // the same inbox for an already-signed-in contact would be pure friction — the
+  // signup page skips straight to the details step and calls this with teamId only.
+  let email: string
+  let teamId: string
+  let codeRef: admin.firestore.DocumentReference | null = null
+  // Session path: finalize EXACTLY this contact (never an email guess — a family
+  // email may match several).
+  let sessionContactId: string | null = null
 
-  const codeData = codeDoc.data()!
+  if (data.codeId) {
+    if (!data.code || !/^\d{6}$/.test(data.code)) {
+      throw new HttpsError('invalid-argument', 'A valid 6-digit code is required')
+    }
+    codeRef = admin.firestore().collection('verification_codes').doc(data.codeId)
+    const codeDoc = await codeRef.get()
+    if (!codeDoc.exists) throw new HttpsError('not-found', 'Invalid verification code')
 
-  if (!codeData.verified) {
-    throw new HttpsError('failed-precondition', 'Email not verified. Please verify your email first.')
-  }
-  if (codeData.used) {
-    throw new HttpsError('already-exists', 'This verification code has already been used')
-  }
-  // Defence in depth: bind completion to knowledge of the code itself, not just
-  // the (client-held) codeId. The 15-min expiry is intentionally NOT re-checked
-  // here — verifyContactCode already enforced it; signup completion may legitimately
-  // happen later. Constant-time compare to avoid a timing oracle on the code.
-  if (!timingSafeEqualStr(String(codeData.code), data.code)) {
-    throw new HttpsError('permission-denied', 'Verification code does not match')
-  }
+    const codeData = codeDoc.data()!
 
-  const email: string = codeData.email
-  const teamId: string = codeData.team_id
+    if (!codeData.verified) {
+      throw new HttpsError('failed-precondition', 'Email not verified. Please verify your email first.')
+    }
+    if (codeData.used) {
+      throw new HttpsError('already-exists', 'This verification code has already been used')
+    }
+    // Defence in depth: bind completion to knowledge of the code itself, not just
+    // the (client-held) codeId. The 15-min expiry is intentionally NOT re-checked
+    // here — verifyContactCode already enforced it; signup completion may legitimately
+    // happen later. Constant-time compare to avoid a timing oracle on the code.
+    if (!timingSafeEqualStr(String(codeData.code), data.code)) {
+      throw new HttpsError('permission-denied', 'Verification code does not match')
+    }
+
+    email = codeData.email as string
+    teamId = codeData.team_id as string
+  } else {
+    const session = optionalContactSessionFromRequest(request)
+    if (!session || !data.teamId || session.teamId !== data.teamId) {
+      throw new HttpsError('invalid-argument', 'codeId or a signed-in contact session is required')
+    }
+    sessionContactId = session.contactId
+    teamId = session.teamId
+    // The address the contact authenticated with (token claim), falling back to
+    // the contact's stored primary email.
+    let sessionEmail = (request.auth?.token?.email as string | undefined)?.toLowerCase().trim()
+    if (!sessionEmail) {
+      const cSnap = await admin.firestore().collection(CONTACTS_COLLECTION).doc(session.contactId).get()
+      sessionEmail = ((cSnap.data()?.email as string | undefined) ?? '').toLowerCase().trim()
+    }
+    if (!sessionEmail) {
+      throw new HttpsError('failed-precondition', 'No email on this account — sign in again')
+    }
+    email = sessionEmail
+  }
 
   const team = await getTeam(teamId)
   if (!team) throw new HttpsError('not-found', 'Team not found')
@@ -177,7 +212,20 @@ export const completeSignup = onCall(async (request) => {
   }
 
   let contactRef: admin.firestore.DocumentReference
-  if (activeMatches.length === 0) {
+  if (sessionContactId) {
+    // Session path: finalize EXACTLY the signed-in contact (never an email guess).
+    // Keep its stored primary email — the session may have been opened via a
+    // login_emails allow-list address (e.g. a parent finalizing a child's profile),
+    // and that address must not overwrite the contact's own.
+    contactRef = db.collection(CONTACTS_COLLECTION).doc(sessionContactId)
+    const sessionSnap = await contactRef.get()
+    const sc = sessionSnap.data()
+    if (!sessionSnap.exists || sc?.teamId !== teamId || sc?.archived_at != null || sc?.deleted_at != null) {
+      throw new HttpsError('permission-denied', 'This account is no longer active')
+    }
+    const { email: _keepExistingEmail, ...profileWithoutEmail } = profile
+    await contactRef.set(profileWithoutEmail, { merge: true })
+  } else if (activeMatches.length === 0) {
     // No prior contact (minimal/off purchase, or signup without a purchase) — create.
     contactRef = db.collection(CONTACTS_COLLECTION).doc()
     await contactRef.set({
@@ -295,8 +343,8 @@ export const completeSignup = onCall(async (request) => {
     console.error('[completeSignup] affiliation creation failed (non-fatal):', err)
   }
 
-  // Mark code as used
-  await codeRef.update({ used: true, usedAt: FieldValue.serverTimestamp(), contactId })
+  // Mark code as used (code path only — the session path holds no code)
+  if (codeRef) await codeRef.update({ used: true, usedAt: FieldValue.serverTimestamp(), contactId })
 
   // Send welcome email
   try {

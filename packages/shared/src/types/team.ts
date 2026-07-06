@@ -290,6 +290,13 @@ export interface TeamMember {
   // back-compat: absent ⇒ rules fall back to the role → capability defaults.
   capabilities?: Capability[]
   scope?: DataScope
+  // Per-member coach flag: whether this member is part of the coach roster (shown
+  // in the /coaches list + the session instructor picker, and assignable as a
+  // contact's coach). Absent ⇒ coach (all members are coaches by default); set
+  // `false` to opt a member out. A relationship/roster flag only — it does NOT
+  // change capabilities or data scope. Managed via the manageTeamMember callable
+  // (team_members writes are owner/SDK-only). Replaced the role-level coachRoles.
+  is_coach?: boolean
 }
 
 export interface BookingSettings {
@@ -339,6 +346,10 @@ export interface TeamPublicProfile {
   // ANONYMOUS signup form can render consent links from a single world-readable
   // doc (never the private installed_plugins nor the root `documents` collection).
   signup_documents?: Array<{ slug: string; title: string; kind: DocumentKind }>
+  // Denormalized from teams/{id}.settings.space.signup_nudge (absent ⇒ true): whether
+  // the Space shows the "complete your signup" reminder to contacts who haven't
+  // finished the full registration. The Space only ever reads public_profile.
+  space_signup_nudge?: boolean
 }
 
 export interface TeamInvitation {

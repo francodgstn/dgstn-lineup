@@ -414,8 +414,14 @@ export function evaluateContactConditions(
       }
 
       default:
-        // unknown condition — pass (don't block)
-        break
+        // Unknown condition — FAIL CLOSED. A legacy/typo'd condition must never
+        // silently widen a rule's audience (an ignored `contact_type` condition once
+        // turned a "welcome new trial" rule into "email every new contact", spamming
+        // shop registrations). Blocking + logging makes the dead condition visible.
+        console.warn(
+          `[automation] unknown condition type '${(cond as { type?: string }).type}' — rule blocked (fail closed)`
+        ) // eslint-disable-line no-console
+        return false
     }
   }
   return true

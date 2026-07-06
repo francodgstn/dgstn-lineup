@@ -25,11 +25,10 @@ import {
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
-  PLAN_PRICING,
-  planHasHardContactCap,
   type ConnectOnboardingModel,
   type SaasPlan,
 } from '@linyup/shared'
+import { canCreateContact } from '../utils/contactCap'
 import { getSecret } from '../utils/secrets'
 import {
   constructConnectWebhookEvent,
@@ -192,19 +191,6 @@ function splitName(full?: string | null): { firstname: string; lastname: string 
   return { firstname: parts[0], lastname: parts.slice(1).join(' ') }
 }
 
-/** Active (non-archived, non-deleted) contact count — cap basis (matches admin). */
-async function activeContactCount(teamId: string): Promise<number> {
-  const agg = await admin
-    .firestore()
-    .collection(CONTACTS_COLLECTION)
-    .where('teamId', '==', teamId)
-    .where('deleted_at', '==', null)
-    .where('archived_at', '==', null)
-    .count()
-    .get()
-  return agg.data().count
-}
-
 /**
  * Resolve a contact by a UNIQUE email match, or CREATE one from the buyer's
  * checkout details. Matching mirrors resolveSingleContact: exactly one active
@@ -235,15 +221,12 @@ async function resolveOrCreateContact(
     return null
   }
 
-  // count === 0 → create the contact (cap-aware).
-  if (planHasHardContactCap(plan)) {
-    const cap = PLAN_PRICING[plan].includedContacts
-    if (cap != null && (await activeContactCount(teamId)) >= cap) {
-      console.log(
-        `[connect] shop purchase: contact cap reached (team=${teamId}, plan=${plan}) — contact not created`
-      )
-      return null
-    }
+  // count === 0 → create the contact (cap-aware; shared with shop registration).
+  if (!(await canCreateContact(teamId, plan))) {
+    console.log(
+      `[connect] shop purchase: contact cap reached (team=${teamId}, plan=${plan}) — contact not created`
+    )
+    return null
   }
 
   // Prefer the first/last name captured in the shop modal (passed via checkout
@@ -260,11 +243,13 @@ async function resolveOrCreateContact(
     firstname,
     lastname,
     ...(info.phone ? { phone: info.phone } : {}),
-    // A buyer who self-creates via the public shop has crossed into the community.
-    acquisition_stage: 'joined',
-    acquisition_stage_updated_at: FieldValue.serverTimestamp(),
-    converted_at: FieldValue.serverTimestamp(),
-    entry: 'signup',
+    // The shop is an OFF-FUNNEL entry route: a buyer who self-creates via the public
+    // shop hasn't started the trial→join journey (they may only have bought a one-off
+    // product/course, and may never intend to train). So they get NO acquisition_stage
+    // ("not applicable"); the purchase is captured on the subscription axis (recurring)
+    // or as payment/order history (one-off). If they later book a trial they enter the
+    // funnel normally. Their membership (if any) is reflected via active_subscriptions.
+    entry: 'shop',
     // 'full' checkout: paid but the buyer still has to finish signup (consent + the
     // studio's required fields). Flag it so the dashboard shows "pending signup" and the
     // signup-finalize page completes it. Set only on CREATE — never flip a returning member.
@@ -274,6 +259,38 @@ async function resolveOrCreateContact(
     created_at: FieldValue.serverTimestamp(),
   })
   return ref.id
+}
+
+/**
+ * Resolve the buyer's contact from checkout metadata: a login-first checkout always
+ * carries metadata.contactId (the session identity). Re-verified against the team
+ * before trusting — metadata is set server-side, but never skip the ownership check.
+ * Returns null for legacy sessions without one (caller falls back to email linking).
+ */
+async function verifiedMetadataContact(
+  teamId: string,
+  md: Record<string, string>
+): Promise<string | null> {
+  if (!md.contactId) return null
+  const snap = await admin.firestore().collection(CONTACTS_COLLECTION).doc(md.contactId).get()
+  return snap.exists && snap.data()?.teamId === teamId ? md.contactId : null
+}
+
+/**
+ * First successful payment CONFIRMS a provisional contact (a login-first shop
+ * registration — see Contact.provisional): clear the flag + purge deadline so the
+ * daily purge task leaves it alone. No-op for normal contacts.
+ */
+async function confirmProvisionalContact(contactId: string): Promise<void> {
+  const ref = admin.firestore().collection(CONTACTS_COLLECTION).doc(contactId)
+  const snap = await ref.get()
+  if (snap.exists && snap.data()?.provisional === true) {
+    await ref.update({
+      provisional: FieldValue.delete(),
+      provisional_expires_at: FieldValue.delete(),
+    })
+    console.log(`[connect] payment confirmed provisional contact ${contactId}`)
+  }
 }
 
 // ─── per-event-type handlers ─────────────────────────────────────────────────────
@@ -310,6 +327,16 @@ async function handlePaymentIntent(
             kind: 'course',
             courseId: md.courseId ?? null,
             courseName: md.courseTitle ?? null,
+          }
+        : {}),
+      // Membership purchases carry the subscription type name so the dashboard row
+      // reads "Monthly Unlimited" instead of a bare "payment". (One-off membership
+      // prices only — recurring invoice PIs carry no metadata; handleInvoice and the
+      // checkout handler stamp those.)
+      ...(md.kind === 'membership'
+        ? {
+            kind: 'membership',
+            subscriptionTypeName: md.subscriptionTypeName ?? null,
           }
         : {}),
       // Drop-in (pay-per-class) charges carry the booked session so the payments
@@ -397,13 +424,17 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
       teamId: team.teamId,
       subscriptionId: sub.id,
       customerId: typeof sub.customer === 'string' ? sub.customer : (sub.customer?.id ?? null),
-      contactId: md.contactId ?? null,
+      // Identity fields are OMITTED (not nulled) when the event's metadata lacks
+      // them: Stripe events are unordered, so a pre-backfill subscription event
+      // arriving AFTER checkout.session.completed must never wipe the contactId
+      // that handler already stamped (it broke the contact's Stripe-billing view).
+      ...(md.contactId ? { contactId: md.contactId } : {}),
       priceId: item?.price?.id ?? null,
       // The studio's stable type identity (from checkout metadata) — priceId above is
       // Stripe's ad-hoc inline price, useless for "same type" comparisons.
-      subscriptionTypeId: md.subscriptionTypeId ?? null,
-      subscriptionTypeName: md.subscriptionTypeName ?? null,
-      recurrence: md.recurrence ?? null,
+      ...(md.subscriptionTypeId ? { subscriptionTypeId: md.subscriptionTypeId } : {}),
+      ...(md.subscriptionTypeName ? { subscriptionTypeName: md.subscriptionTypeName } : {}),
+      ...(md.recurrence ? { recurrence: md.recurrence } : {}),
       amount: item?.price?.unit_amount ?? 0,
       currency: sub.currency ?? 'chf',
       application_fee_percent: sub.application_fee_percent ?? null,
@@ -441,7 +472,8 @@ async function handleInvoice(
 ): Promise<void> {
   const subId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id
   if (!subId) return
-  await memberSubscriptionRef(team.teamId, subId).set(
+  const subRef = memberSubscriptionRef(team.teamId, subId)
+  await subRef.set(
     {
       status: status === 'paid' ? 'active' : 'past_due',
       last_invoice_id: invoice.id ?? null,
@@ -451,6 +483,25 @@ async function handleInvoice(
     },
     { merge: true }
   )
+
+  // Link + label the invoice's charge: invoice-generated PaymentIntents carry no
+  // metadata, so handlePaymentIntent records them as bare unassigned 'payment' rows.
+  // The member_subscriptions doc holds the contact + type name — stamp them on.
+  const piId =
+    typeof invoice.payment_intent === 'string' ? invoice.payment_intent : invoice.payment_intent?.id
+  if (piId) {
+    const subSnap = await subRef.get()
+    const s = subSnap.data()
+    await memberPaymentRef(team.teamId, piId).set(
+      {
+        ...(s?.contactId ? { contactId: s.contactId } : {}),
+        kind: 'membership',
+        subscriptionTypeName: (s?.subscriptionTypeName as string | undefined) ?? null,
+        purpose: 'membership',
+      },
+      { merge: true }
+    )
+  }
 }
 
 /**
@@ -488,12 +539,9 @@ async function handleCheckoutCompleted(
   const name = (session.customer_details?.name as string | undefined) ?? null
   const phone = (session.customer_details?.phone as string | undefined) ?? null
 
-  // Prefer an explicit contactId (manager flow); else resolve/create by email.
-  let contactId: string | null = null
-  if (md.contactId) {
-    const snap = await admin.firestore().collection(CONTACTS_COLLECTION).doc(md.contactId).get()
-    if (snap.exists && snap.data()?.teamId === team.teamId) contactId = md.contactId
-  }
+  // Prefer the explicit contactId (login-first shop + manager flow); else
+  // resolve/create by email (legacy anonymous sessions).
+  let contactId: string | null = await verifiedMetadataContact(team.teamId, md)
   if (!contactId && email) {
     const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
     const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
@@ -511,6 +559,20 @@ async function handleCheckoutCompleted(
     )
   }
   if (!contactId) return // cap-blocked or no email — payment is still recorded by other handlers
+  await confirmProvisionalContact(contactId)
+
+  // 'full' checkout mode: the buyer owes the FULL signup (profile + consent) after
+  // paying. Under login-first the contact already exists at purchase time, so the
+  // creation-time flag in resolveOrCreateContact never fires — flag it here instead.
+  // Never re-flag someone who already completed the full signup.
+  if (md.contactMode === 'full') {
+    const pendingSnap = await admin.firestore().collection(CONTACTS_COLLECTION).doc(contactId).get()
+    const pc = pendingSnap.data()
+    if (pendingSnap.exists && !pc?.signup_completed_at && pc?.pending_signup !== true) {
+      await pendingSnap.ref.update({ pending_signup: true, signup_completed_at: null })
+      console.log(`[connect] flagged contact ${contactId} as pending signup ('full' checkout)`)
+    }
+  }
 
   const amountRappen = (session.amount_total as number | undefined) ?? 0
   let membershipExpiration: Timestamp | null = null
@@ -578,6 +640,21 @@ async function handleCheckoutCompleted(
       )
       return // do NOT snapshot the refunded duplicate onto the contact
     }
+
+    // Link + label the FIRST charge: the invoice-generated PaymentIntent carries no
+    // metadata of its own, so handlePaymentIntent recorded it as a bare 'payment'
+    // with no contact. Renewal invoices are stamped by handleInvoice.
+    if (latestPaymentIntentId) {
+      await memberPaymentRef(team.teamId, latestPaymentIntentId).set(
+        {
+          contactId,
+          kind: 'membership',
+          subscriptionTypeName: md.subscriptionTypeName ?? null,
+          purpose: 'membership',
+        },
+        { merge: true }
+      )
+    }
   } else {
     const months = md.includedMonths ? parseInt(md.includedMonths, 10) : 0
     membershipExpiration = months > 0 ? addMonths(months) : null
@@ -604,18 +681,26 @@ async function handleProductCheckout(
   session: any,
   md: Record<string, string>
 ): Promise<void> {
-  const email = (session.customer_details?.email ?? session.customer_email ?? '')
-    .toLowerCase()
-    .trim()
-  if (!email) return // nothing to link the sale to; payment is still recorded
+  // Login-first checkouts carry the buyer's exact contact in metadata (e.g. the
+  // child a parent selected at sign-in) — prefer it over email matching, which
+  // would land on the wrong family member. Email resolution stays as the safety
+  // net for in-flight legacy (anonymous) sessions.
+  let contactId = await verifiedMetadataContact(team.teamId, md)
+  if (!contactId) {
+    const email = (session.customer_details?.email ?? session.customer_email ?? '')
+      .toLowerCase()
+      .trim()
+    if (!email) return // nothing to link the sale to; payment is still recorded
 
-  const name = (session.customer_details?.name as string | undefined) ?? null
-  const phone = (session.customer_details?.phone as string | undefined) ?? null
+    const name = (session.customer_details?.name as string | undefined) ?? null
+    const phone = (session.customer_details?.phone as string | undefined) ?? null
 
-  const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
-  const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
-  const contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
-  if (!contactId) return // cap-blocked — payment still recorded, studio links it later
+    const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
+    const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
+    contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
+    if (!contactId) return // cap-blocked — payment still recorded, studio links it later
+  }
+  await confirmProvisionalContact(contactId)
 
   const piId =
     typeof session.payment_intent === 'string'
@@ -651,18 +736,24 @@ async function handleCourseCheckout(
   md: Record<string, string>
 ): Promise<void> {
   if (!md.courseId) return
-  const email = (session.customer_details?.email ?? session.customer_email ?? '')
-    .toLowerCase()
-    .trim()
-  if (!email) return // nothing to grant the entitlement to; payment is still recorded
+  // Login-first: grant the entitlement to the EXACT contact from metadata (the one
+  // the buyer was signed in as); email matching only for legacy sessions.
+  let contactId = await verifiedMetadataContact(team.teamId, md)
+  if (!contactId) {
+    const email = (session.customer_details?.email ?? session.customer_email ?? '')
+      .toLowerCase()
+      .trim()
+    if (!email) return // nothing to grant the entitlement to; payment is still recorded
 
-  const name = (session.customer_details?.name as string | undefined) ?? null
-  const phone = (session.customer_details?.phone as string | undefined) ?? null
+    const name = (session.customer_details?.name as string | undefined) ?? null
+    const phone = (session.customer_details?.phone as string | undefined) ?? null
 
-  const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
-  const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
-  const contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
-  if (!contactId) return // cap-blocked — payment still recorded, studio links it later
+    const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
+    const plan = (teamSnap.data()?.plan as SaasPlan | undefined) ?? 'free'
+    contactId = await resolveOrCreateContact(team.teamId, plan, { email, name, phone })
+    if (!contactId) return // cap-blocked — payment still recorded, studio links it later
+  }
+  await confirmProvisionalContact(contactId)
 
   const piId =
     typeof session.payment_intent === 'string'
@@ -724,6 +815,13 @@ async function handleDropInCheckout(
   const cSnap = await db.collection(CONTACTS_COLLECTION).doc(contactId).get()
   if (!cSnap.exists || cSnap.data()?.teamId !== team.teamId) return
   const contact = cSnap.data()!
+  // A paid drop-in also confirms a provisional (shop-registered) contact.
+  if (contact.provisional === true) {
+    await cSnap.ref.update({
+      provisional: FieldValue.delete(),
+      provisional_expires_at: FieldValue.delete(),
+    })
+  }
 
   const bookingRef = db.collection('sessions').doc(sessionId).collection('bookings').doc(contactId)
   const bSnap = await bookingRef.get()

@@ -285,4 +285,10 @@
   ::-webkit-scrollbar-thumb:hover {
     background: oklch(0.55 0.12 288 / 60%);
   }
+
+  /* Fully hidden scrollbar — for horizontal strips (e.g. the contact detail tab bar)
+     where the bar reads as noise; scroll still works via wheel/trackpad/drag. Covers
+     Firefox (scrollbar-width) too, which the webkit rules above don't reach. */
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
 }

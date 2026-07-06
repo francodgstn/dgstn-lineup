@@ -78,6 +78,16 @@ function makeContact(overrides: Partial<ContactData> = {}): ContactData {
   return { id: 'c1', ...overrides }
 }
 
+describe('evaluateContactConditions — unknown condition types fail closed', () => {
+  it('blocks the rule when a condition type is unrecognized (e.g. legacy contact_type)', () => {
+    // Regression: an ignored dead condition once turned a "welcome new trial" rule
+    // into "email every new contact" — spamming shop registrations.
+    const c = makeContact({ entry: 'shop' } as Partial<ContactData>)
+    const conditions = [{ type: 'contact_type', value: 'trial' } as never]
+    assert.equal(evaluateContactConditions(conditions, c, NOW), false)
+  })
+})
+
 describe('evaluateContactConditions — subscription condition', () => {
   it('none: passes when contact has no subscription (empty active_subscriptions, no primary)', () => {
     const c = makeContact({ subscription_type_id: undefined, active_subscriptions: [] })

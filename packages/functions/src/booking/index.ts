@@ -5,6 +5,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { getTeam } from '../utils/teams'
 import { sendEmail } from '../utils/email'
+import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { hashVerificationCode, verifyCode, generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
@@ -769,7 +770,9 @@ export const bookSession = onCall(async (request) => {
     }
   }
 
-  // Send confirmation email
+  // Send confirmation email — member-facing, per-team toggleable (Automations →
+  // System emails). Coach/studio notifications below are unaffected.
+  const confirmationEnabled = await systemEmailEnabledFor(data.teamId, 'booking_confirmation')
   const sessionStart: Date = sessionData.start.toDate()
   const sessionEnd: Date = sessionData.end.toDate()
 
@@ -818,16 +821,17 @@ export const bookSession = onCall(async (request) => {
         fr: `Rendez-vous confirmé – ${activityName}`,
         it: `Appuntamento confermato – ${activityName}`,
       }
-      await sendEmail({
-        to: sanitized.email,
-        subject: subjects[lang],
-        html: email.html,
-        text: email.text,
-        teamId: data.teamId,
-        attachments: [
-          { filename: ical.filename, content: ical.content, contentType: ical.contentType },
-        ],
-      })
+      if (confirmationEnabled)
+        await sendEmail({
+          to: sanitized.email,
+          subject: subjects[lang],
+          html: email.html,
+          text: email.text,
+          teamId: data.teamId,
+          attachments: [
+            { filename: ical.filename, content: ical.content, contentType: ical.contentType },
+          ],
+        })
     } catch (err) {
       console.error('Error sending coaching confirmation email:', err)
     }
@@ -882,14 +886,16 @@ export const bookSession = onCall(async (request) => {
         fr: `Réservation confirmée – ${activityName}`,
         it: `Prenotazione confermata – ${activityName}`,
       }
-      await sendEmail({
-        to: sanitized.email,
-        subject: subjects[lang],
-        html: confirmEmail.html,
-        text: confirmEmail.text,
-        teamId: data.teamId,
-      })
-      console.log(`Confirmation email sent to ${sanitized.email}`)
+      if (confirmationEnabled) {
+        await sendEmail({
+          to: sanitized.email,
+          subject: subjects[lang],
+          html: confirmEmail.html,
+          text: confirmEmail.text,
+          teamId: data.teamId,
+        })
+        console.log(`Confirmation email sent to ${sanitized.email}`)
+      }
     } catch (err) {
       console.error('Error sending confirmation email:', err)
     }
@@ -1052,13 +1058,15 @@ export const cancelBooking = onCall(async (request) => {
   const rebookLine = rebookUrl ? `<p><a href="${rebookUrl}">Book another session</a></p>` : ''
 
   try {
-    await sendEmail({
-      to: booking.email as string,
-      teamId,
-      subject: `Booking Cancelled – ${activityName}`,
-      html: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.</p>${rebookLine}`,
-      text: `Hi ${firstname},\n\nYour booking for ${activityName} with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.\n${rebookUrl ? `Book another session: ${rebookUrl}` : ''}`,
-    })
+    if (await systemEmailEnabledFor(teamId, 'booking_confirmation')) {
+      await sendEmail({
+        to: booking.email as string,
+        teamId,
+        subject: `Booking Cancelled – ${activityName}`,
+        html: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.</p>${rebookLine}`,
+        text: `Hi ${firstname},\n\nYour booking for ${activityName} with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.\n${rebookUrl ? `Book another session: ${rebookUrl}` : ''}`,
+      })
+    }
   } catch (err) {
     console.error('Error sending cancellation confirmation email:', err)
   }
@@ -1360,13 +1368,15 @@ export const rebookSession = onCall(async (request) => {
     : ''
 
   try {
-    await sendEmail({
-      to: booking.email as string,
-      teamId,
-      subject: `Booking Changed – ${activityName}`,
-      html: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} has been changed.</p><p><strong>Previous date:</strong> ${oldDateStr}</p><p><strong>New date:</strong> ${newDateStr} at ${newTimeStr}</p>${locationLine}${manageLink}`,
-      text: `Hi ${firstname},\n\nYour booking for ${activityName} with ${teamName} has been changed.\nPrevious date: ${oldDateStr}\nNew date: ${newDateStr} at ${newTimeStr}\n${newSession.location ? `Location: ${newSession.location}\n` : ''}${manageBookingUrl ? `Manage your booking: ${manageBookingUrl}` : ''}`,
-    })
+    if (await systemEmailEnabledFor(teamId, 'booking_confirmation')) {
+      await sendEmail({
+        to: booking.email as string,
+        teamId,
+        subject: `Booking Changed – ${activityName}`,
+        html: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} has been changed.</p><p><strong>Previous date:</strong> ${oldDateStr}</p><p><strong>New date:</strong> ${newDateStr} at ${newTimeStr}</p>${locationLine}${manageLink}`,
+        text: `Hi ${firstname},\n\nYour booking for ${activityName} with ${teamName} has been changed.\nPrevious date: ${oldDateStr}\nNew date: ${newDateStr} at ${newTimeStr}\n${newSession.location ? `Location: ${newSession.location}\n` : ''}${manageBookingUrl ? `Manage your booking: ${manageBookingUrl}` : ''}`,
+      })
+    }
   } catch (err) {
     console.error('Error sending rebook confirmation email:', err)
   }

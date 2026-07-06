@@ -159,7 +159,7 @@ function ContactsGate({ children }: { children: React.ReactNode }) {
       <p className="text-sm font-medium">{t('signInRequired')}</p>
       {auth.error && <p className="text-sm text-destructive">{auth.error}</p>}
       {auth.step === 'idle' && (
-        <Button onClick={auth.openSignIn}>{t('signIn')}</Button>
+        <Button onClick={() => auth.openSignIn()}>{t('signIn')}</Button>
       )}
       {auth.step === 'email' && (
         <div className="flex gap-2">

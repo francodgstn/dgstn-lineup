@@ -7,6 +7,7 @@ import { sendBookingReminders } from './sendBookingReminders'
 import { runScheduledRules } from './runScheduledRules'
 import { expireAffiliations } from './expireAffiliations'
 import { expirePendingBookings } from './expirePendingBookings'
+import { purgeProvisionalContacts } from './purgeProvisionalContacts'
 
 
 interface TaskResult {
@@ -31,6 +32,7 @@ export const dailyTasks = onSchedule(
       { name: 'runScheduledRules', handler: runScheduledRules },
       { name: 'expireAffiliations', handler: expireAffiliations },
       { name: 'expirePendingBookings', handler: expirePendingBookings },
+      { name: 'purgeProvisionalContacts', handler: purgeProvisionalContacts },
     ]
 
     const results: TaskResult[] = []

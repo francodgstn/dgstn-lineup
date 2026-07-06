@@ -35,6 +35,21 @@ For a persistent local snapshot: seed into running emulators, then
 (including uploaded images — note the snapshot bakes `localhost:9199` URLs, so it
 is for local rehearsal only).
 
+### Payments — "pay with Linyup" (Stripe Connect)
+
+To let a seeded lead tenant take payments, wire an already-onboarded Stripe **test**
+connected account (details: `docs/payment-contact-studio.md` → *Faster local setup*):
+
+```bash
+pnpm lead:seed --lead swimli --target emulator --connect acct_xxx
+```
+
+Precedence: `--connect` flag > `STRIPE_CONNECT_TEST_ACCOUNT` env >
+`profile.stripeConnectTestAccount`. Omit all three to skip payments wiring. The account
+must be onboarded once in Stripe test mode — grab its id with
+`pnpm connect:test-account --list`. Because it wires the team's `payments` block +
+`connect_accounts/{acct}`, `--reset` removes that doc along with the rest of the tenant.
+
 ## Adding a new lead
 
 > **Lead folders are local-only.** Every `scripts/leads/{lead}/` folder (profile +

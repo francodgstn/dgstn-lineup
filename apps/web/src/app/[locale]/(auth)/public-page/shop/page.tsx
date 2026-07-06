@@ -16,6 +16,7 @@ import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { TEAMS_COLLECTION, PRODUCTS_SUBCOLLECTION, COURSES_COLLECTION } from '@linyup/shared'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
 import { Card } from '@/components/ui/card'
 import { Tag, Package, GraduationCap, ExternalLink, ChevronRight, Plus, CreditCard, ArrowUpRight } from 'lucide-react'
 
@@ -82,20 +83,22 @@ export default function ShopSettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('title')}
-        subtitle={t('subtitle')}
-        action={
+        subtitle={
           previewUrl ? (
             <a
               href={previewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {t('preview')}
+              {previewUrl.replace(/^https?:\/\//, '')}
+              <ExternalLink className="h-3 w-3" />
             </a>
-          ) : undefined
+          ) : (
+            t('subtitle')
+          )
         }
+        action={<PaymentSettingsLink />}
       />
 
       {/* Sellable channels */}

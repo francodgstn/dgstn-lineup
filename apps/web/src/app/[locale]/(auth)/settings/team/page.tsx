@@ -84,6 +84,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
+import { BillingCurrencyCard, useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
@@ -1165,9 +1166,10 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
 function PaymentsTab({ teamId }: { teamId: string }) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
-  const { user } = useAuth()
+  const { user, team, teamRole } = useAuth()
   const { data: integrations = [], isLoading } = useGatewayIntegrations(teamId)
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
+  const { data: gatewayCurrency } = useGatewayCurrency(teamId)
 
   const [showDialog, setShowDialog] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -1282,6 +1284,15 @@ function PaymentsTab({ teamId }: { teamId: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Studio billing currency — applies to every payment surface (subs, products,
+          courses, shop). Lives here so there's a single home for it. */}
+      <BillingCurrencyCard
+        teamId={teamId}
+        current={team?.default_currency}
+        gatewayCurrency={gatewayCurrency}
+        canEdit={teamRole === 'owner'}
+      />
+
       {/* Accept payments with Linyup (Stripe Connect) — own card; renders only when enabled. */}
       <ConnectPaymentsCard teamId={teamId} />
 

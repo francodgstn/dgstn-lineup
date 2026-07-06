@@ -35,8 +35,7 @@ import {
   getConnectStripe,
 } from '../utils/connect/client'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
-import { resolveSingleContact } from '../utils/contacts'
-import { optionalContactSessionFromRequest } from '../utils/contactSession'
+import { requireContactSessionForTeam } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
 // Stripe's minimum charge for CHF is ~0.50 CHF.
@@ -319,7 +318,6 @@ export const createMembershipPayment = onCall(async (request) => {
   }
 })
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
 
 /**
@@ -343,11 +341,11 @@ export async function checkoutRateLimit(ipRaw: string | undefined): Promise<void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// createMembershipCheckout — PUBLIC (unauthenticated) sibling of
-// createMembershipPayment for the member-facing shop page. A member picks a
-// subscription type + price and their email; we charge on the studio's connected
-// account. No contactId is carried — the webhook links/creates the contact by
-// email. Guarded by the Connect kill-switch + a chargeable account + rate limit.
+// createMembershipCheckout — the member-facing shop's subscription checkout.
+// LOGIN-FIRST: requires a contact session for the team (the buyer signed in or
+// registered via the OTP flow before paying); metadata.contactId always links the
+// sale to that exact contact. Guarded by the Connect kill-switch + a chargeable
+// account + rate limit. Sibling of the manager-side createMembershipPayment.
 // ─────────────────────────────────────────────────────────────────────────────
 export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
   monitorAppCheck(request, 'createMembershipCheckout')
@@ -355,9 +353,6 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
     teamId?: string
     subscriptionTypeId?: string
     priceId?: string
-    memberEmail?: string
-    firstName?: string
-    lastName?: string
     slug?: string
     locale?: string
     idempotencyKey?: string
@@ -366,16 +361,18 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
   if (!data?.teamId || !data?.subscriptionTypeId || !data?.priceId) {
     throw new HttpsError('invalid-argument', 'teamId, subscriptionTypeId and priceId are required')
   }
-  const email = (data.memberEmail ?? '').toLowerCase().trim()
-  if (!EMAIL_RE.test(email)) {
-    throw new HttpsError('invalid-argument', 'A valid email is required')
-  }
   const { teamId, subscriptionTypeId, priceId } = data
   const locale = data.locale ?? 'en'
 
   await checkoutRateLimit(request.rawRequest?.ip)
 
-  // No auth: the only gates are the team's Connect kill-switch + chargeable account.
+  // Login-first: every shop purchase runs as a verified contact of this team (the
+  // sign-in/register flow precedes checkout). The session is the ONLY trusted
+  // identity source; its email claim doubles as the Stripe receipt address.
+  const session = await requireContactSessionForTeam(request, teamId)
+  const email = session.email ?? undefined
+
+  // Remaining gates: the team's Connect kill-switch + chargeable account.
   const team = await loadEnabledTeam(teamId)
   const { accountId, model } = requireChargeableAccount(team)
 
@@ -392,17 +389,10 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
   if (subType.public !== true || subType.active === false) {
     throw new HttpsError('failed-precondition', 'This item is not available')
   }
-  // Contact-capture mode is read server-side (never trust the client). Unless 'off',
-  // the buyer's first + last name are required so the webhook creates a real contact.
+  // Contact-capture mode is read server-side (never trust the client). Under
+  // login-first the buyer IS a contact already, so 'off'/'minimal' are moot; only
+  // 'full' still matters — it routes the success page to the finish-signup nudge.
   const contactMode = subType.checkout_contact_mode ?? 'minimal'
-  const firstName = (data.firstName ?? '').trim().slice(0, 500)
-  const lastName = (data.lastName ?? '').trim().slice(0, 500)
-  // A signed-in member's contact is already known — attach to it and skip re-collecting a name.
-  const session = optionalContactSessionFromRequest(request)
-  const isMember = session?.teamId === teamId
-  if (contactMode !== 'off' && !isMember && (!firstName || !lastName)) {
-    throw new HttpsError('invalid-argument', 'First and last name are required')
-  }
   const price = (subType.prices ?? []).find((p) => p.id === priceId && p.active !== false)
   if (!price) throw new HttpsError('not-found', 'Price not found on this subscription type')
 
@@ -413,47 +403,42 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
 
   // Block buying a subscription type the buyer ALREADY actively holds (recurring only —
   // one-off drop-ins may legitimately stack). A contact may hold several *different*
-  // types at once, but never two of the same. Best-effort: we only have the typed email,
-  // so we resolve a single active contact; family-shared emails (>1 match) or first-time
-  // buyers fall through and the webhook safety net cancels+refunds any duplicate. Query
-  // by contactId only (single-field index, like onMemberSubscriptionWrite) and filter
-  // type/status in memory — a contact has few subscriptions.
+  // types at once, but never two of the same. Login-first gives us the exact contact;
+  // races (two tabs) still fall through to the webhook safety net (cancel + refund).
+  // Query by contactId only (single-field index, like onMemberSubscriptionWrite) and
+  // filter type/status in memory — a contact has few subscriptions.
   if (isRecurringRecurrence(price.recurrence)) {
-    const existingContactId = isMember
-      ? session!.contactId
-      : (await resolveSingleContact(teamId, email)).contactId
-    if (existingContactId) {
-      const subsSnap = await admin
-        .firestore()
-        .collection(TEAMS_COLLECTION)
-        .doc(teamId)
-        .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
-        .where('contactId', '==', existingContactId)
-        .get()
-      const LIVE = new Set(['active', 'trialing', 'past_due'])
-      const holdsSameType = subsSnap.docs.some((d) => {
-        const s = d.data()
-        return (
-          s.subscriptionTypeId === subscriptionTypeId && LIVE.has(s.status as string) && !s.duplicate
-        )
-      })
-      if (holdsSameType) {
-        throw new HttpsError('already-exists', 'You already have this subscription.')
-      }
+    const subsSnap = await admin
+      .firestore()
+      .collection(TEAMS_COLLECTION)
+      .doc(teamId)
+      .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
+      .where('contactId', '==', session.contactId)
+      .get()
+    const LIVE = new Set(['active', 'trialing', 'past_due'])
+    const holdsSameType = subsSnap.docs.some((d) => {
+      const s = d.data()
+      return (
+        s.subscriptionTypeId === subscriptionTypeId && LIVE.has(s.status as string) && !s.duplicate
+      )
+    })
+    if (holdsSameType) {
+      throw new HttpsError('already-exists', 'You already have this subscription.')
     }
   }
 
-  // A 'full' purchase lands the buyer on the signup-finalize page (email prefilled);
-  // the rest return to the shop. The result page only honours seg=signup on success.
+  // A 'full' purchase lands the buyer on the signup-finalize page (email prefilled) —
+  // the finish-your-profile nudge; the rest return to the shop. The result page only
+  // honours seg=signup on success.
   const seg = contactMode === 'full' ? 'signup' : 'shop'
-  const emailQuery = contactMode === 'full' ? `&email=${encodeURIComponent(email)}` : ''
+  const emailQuery = contactMode === 'full' && email ? `&email=${encodeURIComponent(email)}` : ''
   const slugQuery = data.slug
     ? `&slug=${encodeURIComponent(data.slug)}&seg=${seg}${emailQuery}`
     : ''
   const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
   const productName = price.label ? `${subType.name} — ${price.label}` : subType.name
 
-  // Webhook reads this to create/link the buyer's contact. No contactId here.
+  // Webhook reads this to link the sale to the buyer's exact contact.
   const metadata: Record<string, string> = {
     teamId,
     kind: 'membership',
@@ -461,20 +446,15 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
     subscriptionTypeName: subType.name,
     priceId,
     recurrence: price.recurrence,
+    contactId: session.contactId,
+    contactMode,
   }
   if (price.included_months) metadata.includedMonths = String(price.included_months)
-  // The webhook builds the contact from these names; contactMode tells it whether to
-  // mark the contact 'pending signup' (full) or treat it as complete (minimal).
-  metadata.contactMode = contactMode
-  if (firstName) metadata.firstname = firstName
-  if (lastName) metadata.lastname = lastName
-  // Signed-in member → link to their exact contact (webhook prefers metadata.contactId).
-  if (isMember) metadata.contactId = session!.contactId
 
   const interval = recurrenceToStripeInterval(price.recurrence)
   const idempotencyKey =
     data.idempotencyKey ??
-    `membership-pub:${teamId}:${priceId}:${email}:${Math.floor(Date.now() / 60000)}`
+    `membership-pub:${teamId}:${priceId}:${session.contactId}:${Math.floor(Date.now() / 60000)}`
 
   try {
     if (isRecurringRecurrence(price.recurrence) && interval) {
@@ -513,12 +493,11 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// createProductCheckout — PUBLIC (unauthenticated) one-off checkout for the
-// member-facing shop's PRODUCTS section. Mirrors createMembershipCheckout but for
-// physical products: always a single charge (never recurring) on the studio's
-// connected account. The optional variantId selects a size/colour; the price is
-// the variant override or the product's base price. The webhook links/creates the
-// buyer's contact by email and records the sale (kind === 'product').
+// createProductCheckout — one-off checkout for the member-facing shop's PRODUCTS
+// section. LOGIN-FIRST (see createMembershipCheckout): the buyer holds a contact
+// session; metadata.contactId links the sale. Always a single charge (never
+// recurring) on the studio's connected account. The optional variantId selects a
+// size/colour; the price is the variant override or the product's base price.
 // ─────────────────────────────────────────────────────────────────────────────
 export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
   monitorAppCheck(request, 'createProductCheckout')
@@ -526,7 +505,6 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
     teamId?: string
     productId?: string
     variantId?: string
-    memberEmail?: string
     slug?: string
     locale?: string
     idempotencyKey?: string
@@ -535,17 +513,17 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
   if (!data?.teamId || !data?.productId) {
     throw new HttpsError('invalid-argument', 'teamId and productId are required')
   }
-  const email = (data.memberEmail ?? '').toLowerCase().trim()
-  if (!EMAIL_RE.test(email)) {
-    throw new HttpsError('invalid-argument', 'A valid email is required')
-  }
   const { teamId, productId } = data
   const variantId = data.variantId
   const locale = data.locale ?? 'en'
 
   await checkoutRateLimit(request.rawRequest?.ip)
 
-  // No auth: the only gates are the team's Connect kill-switch + chargeable account.
+  // Login-first: the buyer is a verified contact of this team (see membership above).
+  const session = await requireContactSessionForTeam(request, teamId)
+  const email = session.email ?? undefined
+
+  // Remaining gates: the team's Connect kill-switch + chargeable account.
   const team = await loadEnabledTeam(teamId)
   const { accountId, model } = requireChargeableAccount(team)
 
@@ -582,23 +560,21 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
   const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
   const productName = variantLabel ? `${product.name} — ${variantLabel}` : product.name
 
-  // Webhook reads this to record the sale + link/create the buyer's contact.
+  // Webhook reads this to record the sale + link it to the buyer's exact contact.
   const metadata: Record<string, string> = {
     teamId,
     kind: 'product',
     purpose: 'product',
     productId,
     productName: product.name,
+    contactId: session.contactId,
   }
   if (variantId) metadata.variantId = variantId
   if (variantLabel) metadata.variantLabel = variantLabel
-  // Signed-in member → link the sale to their exact contact.
-  const productSession = optionalContactSessionFromRequest(request)
-  if (productSession?.teamId === teamId) metadata.contactId = productSession.contactId
 
   const idempotencyKey =
     data.idempotencyKey ??
-    `product-pub:${teamId}:${productId}:${variantId ?? '_'}:${email}:${Math.floor(Date.now() / 60000)}`
+    `product-pub:${teamId}:${productId}:${variantId ?? '_'}:${session.contactId}:${Math.floor(Date.now() / 60000)}`
 
   try {
     const session = await createOneOffCheckoutSession({
@@ -620,18 +596,17 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// createCourseCheckout — public, one-off purchase of a 'purchase'-tier online course
-// (LMS). No auth: the buyer pays from the shop, then logs into the team's Space with
-// the same email to watch. The webhook grants a lifetime entitlement
-// (courses/{id}/purchases/{contactId}) + links/creates the buyer's contact by email.
-// Mirrors createProductCheckout; the success page lands in the Space (seg=space).
+// createCourseCheckout — one-off purchase of a 'purchase'-tier online course (LMS).
+// LOGIN-FIRST (see createMembershipCheckout): the buyer holds a contact session,
+// so the webhook grants the lifetime entitlement (courses/{id}/purchases/{contactId})
+// to exactly that contact — already signed in to watch. Mirrors createProductCheckout;
+// the success page lands in the Space (seg=space).
 // ─────────────────────────────────────────────────────────────────────────────
 export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
   monitorAppCheck(request, 'createCourseCheckout')
   const data = request.data as {
     teamId?: string
     courseId?: string
-    memberEmail?: string
     slug?: string
     locale?: string
     idempotencyKey?: string
@@ -640,16 +615,17 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   if (!data?.teamId || !data?.courseId) {
     throw new HttpsError('invalid-argument', 'teamId and courseId are required')
   }
-  const email = (data.memberEmail ?? '').toLowerCase().trim()
-  if (!EMAIL_RE.test(email)) {
-    throw new HttpsError('invalid-argument', 'A valid email is required')
-  }
   const { teamId, courseId } = data
   const locale = data.locale ?? 'en'
 
   await checkoutRateLimit(request.rawRequest?.ip)
 
-  // No auth: the only gates are the team's Connect kill-switch + chargeable account.
+  // Login-first: the buyer is a verified contact of this team — the entitlement is
+  // granted to exactly this contact (e.g. the child a parent selected at sign-in).
+  const session = await requireContactSessionForTeam(request, teamId)
+  const email = session.email ?? undefined
+
+  // Remaining gates: the team's Connect kill-switch + chargeable account.
   const team = await loadEnabledTeam(teamId)
   const { accountId, model } = requireChargeableAccount(team)
 
@@ -674,21 +650,19 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=space` : ''
   const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
 
-  // Webhook reads this to grant the entitlement + link/create the buyer's contact.
+  // Webhook reads this to grant the entitlement to the buyer's exact contact.
   const metadata: Record<string, string> = {
     teamId,
     kind: 'course',
     purpose: 'course',
     courseId,
     courseTitle: course.title,
+    contactId: session.contactId,
   }
-  // Signed-in member → grant the entitlement to their exact contact.
-  const courseSession = optionalContactSessionFromRequest(request)
-  if (courseSession?.teamId === teamId) metadata.contactId = courseSession.contactId
 
   const idempotencyKey =
     data.idempotencyKey ??
-    `course-pub:${teamId}:${courseId}:${email}:${Math.floor(Date.now() / 60000)}`
+    `course-pub:${teamId}:${courseId}:${session.contactId}:${Math.floor(Date.now() / 60000)}`
 
   try {
     const session = await createOneOffCheckoutSession({

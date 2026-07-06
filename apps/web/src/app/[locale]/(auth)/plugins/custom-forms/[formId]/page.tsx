@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import {
-  ArrowLeft, ArrowUp, ArrowDown, Trash2, Plus, ExternalLink, Download,
+  ArrowLeft, ArrowUp, ArrowDown, Trash2, Plus, ExternalLink, Download, X,
 } from 'lucide-react'
 import type { Form, FormField, FormFieldType, FormAccess, FormStatus } from '@linyup/shared'
 import {
@@ -109,18 +109,43 @@ function FieldEditor({
           </div>
 
           {CHOICE_TYPES.includes(field.type) && (
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">{t('options')}</Label>
-              <Textarea
-                value={(field.options ?? []).join('\n')}
-                onChange={(e) =>
-                  update(idx, {
-                    options: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
-                  })
-                }
-                placeholder={t('optionsPlaceholder')}
-                rows={3}
-              />
+              <div className="space-y-1.5">
+                {(field.options ?? []).map((opt, oi) => (
+                  <div key={oi} className="flex items-center gap-2">
+                    <Input
+                      value={opt}
+                      onChange={(e) => {
+                        const next = [...(field.options ?? [])]
+                        next[oi] = e.target.value
+                        update(idx, { options: next })
+                      }}
+                      placeholder={t('optionPlaceholder', { n: oi + 1 })}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() =>
+                        update(idx, { options: (field.options ?? []).filter((_, i) => i !== oi) })
+                      }
+                      aria-label={t('removeOption')}
+                    >
+                      <X className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => update(idx, { options: [...(field.options ?? []), ''] })}
+                >
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  {t('addOption')}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -335,7 +360,16 @@ export default function FormDetailPage() {
             onChange={(fields) => setDraft({ ...draft, fields })}
           />
           <Button
-            onClick={() => saveMutation.mutate({ fields: draft.fields })}
+            onClick={() =>
+              saveMutation.mutate({
+                // Drop blank option rows (allowed while editing) before persisting.
+                fields: draft.fields.map((f) =>
+                  f.options
+                    ? { ...f, options: f.options.map((o) => o.trim()).filter(Boolean) }
+                    : f
+                ),
+              })
+            }
             disabled={saveMutation.isPending}
           >
             {t('saveFields')}

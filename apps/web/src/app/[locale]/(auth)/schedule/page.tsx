@@ -28,6 +28,7 @@ import {
 } from '@linyup/shared'
 import type { Session, Activity, Event } from '@linyup/shared'
 import { useEventTypes } from '@/hooks/useEventTypes'
+import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -799,6 +800,8 @@ export default function CalendarPage() {
   const [tab, setTab] = useState<TimeTab>('upcoming')
   const [filter, setFilter] = useState<ItemFilter>('all')
   const [activityFilter, setActivityFilter] = useState<string | null>(null)
+  // 'all' · 'mine' (current user's uid) · a specific coach uid
+  const [coachFilter, setCoachFilter] = useState<string>('all')
   const [sessionDialog, setSessionDialog] = useState<{ open: boolean; editing: Session | null }>({
     open: false,
     editing: null,
@@ -813,6 +816,7 @@ export default function CalendarPage() {
   const activitiesQ = useActivities(currentTeamId)
   const eventsQ = useAllEvents(currentTeamId, orgId)
   const { data: members = [] } = useTeamMembers(currentTeamId)
+  const { pickable: coachRoster } = useCoaches(currentTeamId)
 
   const invalidateSessions = () => qc.invalidateQueries({ queryKey: ['sessions'] })
   const invalidateEvents = () => qc.invalidateQueries({ queryKey: ['events'] })
@@ -833,9 +837,19 @@ export default function CalendarPage() {
   // ── combined list ──
 
   const nowMs = Date.now()
+
+  // Coach filter — narrows sessions to a single instructor (or the current user).
+  // Events aren't coach-scoped, so a specific-coach filter hides them entirely,
+  // leaving only that coach's teaching schedule. Applies to both calendar + list.
+  const coachId = coachFilter === 'mine' ? (user?.uid ?? null) : coachFilter === 'all' ? null : coachFilter
+  const filteredSessions = (sessionsQ.data ?? []).filter(
+    (s) => !coachId || s.instructorId === coachId
+  )
+  const filteredEvents = coachFilter === 'all' ? (eventsQ.data ?? []) : []
+
   const allItems: ListItem[] = [
-    ...(sessionsQ.data ?? []).map((s) => ({ kind: 'session' as const, data: s })),
-    ...(eventsQ.data ?? []).map((e) => ({ kind: 'event' as const, data: e })),
+    ...filteredSessions.map((s) => ({ kind: 'session' as const, data: s })),
+    ...filteredEvents.map((e) => ({ kind: 'event' as const, data: e })),
   ]
   const listItems = allItems
     .filter((item) => (tab === 'upcoming' ? getItemMs(item) >= nowMs : getItemMs(item) < nowMs))
@@ -927,12 +941,35 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      {/* Coach filter — shared by calendar + list, only when >1 coach on roster */}
+      {coachRoster.length > 1 && (
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Select value={coachFilter} onValueChange={(v) => setCoachFilter(v ?? 'all')}>
+            <SelectTrigger className="h-8 text-xs w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('coachAll')}</SelectItem>
+              <SelectItem value="mine">{t('coachMine')}</SelectItem>
+              {coachRoster
+                .filter((c) => c.userId !== user?.uid)
+                .map((c) => (
+                  <SelectItem key={c.userId} value={c.userId}>
+                    {coachLabel(c)}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Calendar view */}
       {view === 'calendar' && (
         <SessionsCalendar
-          sessions={sessionsQ.data ?? []}
+          sessions={filteredSessions}
           activities={activitiesQ.data ?? []}
-          events={eventsQ.data ?? []}
+          events={filteredEvents}
           onEdit={(s) => setSessionDialog({ open: true, editing: s })}
           onDelete={handleDeleteSession}
           onEventEdit={(e) => setEventDialog({ open: true, editing: e })}

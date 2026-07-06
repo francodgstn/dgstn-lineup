@@ -7,6 +7,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { hasTeamRole, getTeam } from '../utils/teams'
 import { sendEmail } from '../utils/email'
+import { systemEmailEnabled } from '../utils/systemEmails'
 import { formatTimestamp } from '../utils/dateFormatting'
 
 const CONTACT_REQUESTS_SUBCOLLECTION = 'contact_requests'
@@ -56,7 +57,9 @@ export const manageContactUpdateRequest = onCall(async (request) => {
   const team = await getTeam(teamId)
   const teamName = team?.name ?? 'Our Team'
   const contactName = (requestData.contact_name as string) || 'Member'
-  const contactEmail = requestData.contact_email as string | undefined
+  // Outcome emails to the contact are per-team toggleable (Automations → System emails).
+  const notifyContact = systemEmailEnabled(team, 'contact_update_review')
+  const contactEmail = notifyContact ? (requestData.contact_email as string | undefined) : undefined
 
   if (action === 'approve') {
     const submittedData = requestData.submitted_data as Record<string, unknown> | undefined

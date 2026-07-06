@@ -9,6 +9,7 @@ import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
+import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -107,11 +108,12 @@ export default function OnlineCoursesPage() {
   const limits = getOnlineCoursesLimits()
   const atCourseCap = courses.length >= limits.maxCoursesPerTeam
 
-  // Public Space shortcut (like the bio-link / website pages).
-  const spaceUrl = team?.slug
+  // Public shortcut → the shop's Online courses tab (the courses' public home; Space
+  // is the contacts' personal portal, not the catalogue).
+  const shopUrl = team?.slug
     ? typeof window !== 'undefined'
-      ? `${window.location.origin}/public/${team.slug}/space`
-      : `/public/${team.slug}/space`
+      ? `${window.location.origin}/public/${team.slug}/shop?tab=courses`
+      : `/public/${team.slug}/shop?tab=courses`
     : null
 
   function clearCover() {
@@ -183,14 +185,14 @@ export default function OnlineCoursesPage() {
           <GraduationCap className="h-5 w-5 text-muted-foreground" />
           <div>
             <h1 className="text-2xl font-semibold">{t('title')}</h1>
-            {spaceUrl ? (
+            {shopUrl ? (
               <a
-                href={spaceUrl}
+                href={shopUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-0.5 flex items-center gap-1 text-sm text-primary hover:underline"
               >
-                {spaceUrl.replace(/^https?:\/\//, '')}
+                {shopUrl.replace(/^https?:\/\//, '')}
                 <ExternalLink className="h-3 w-3" />
               </a>
             ) : (
@@ -206,6 +208,7 @@ export default function OnlineCoursesPage() {
           <span className="text-xs text-muted-foreground">
             {t('quotaCourses', { count: courses.length, max: limits.maxCoursesPerTeam })}
           </span>
+          <PaymentSettingsLink />
         </div>
       </div>
 

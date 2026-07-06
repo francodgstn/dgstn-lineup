@@ -5,14 +5,27 @@ import type { AffiliationSummary } from './affiliation'
 // Single ordered, OPEN vocab. The stage is a high-water milestone: it advances on
 // transition and never flips backward. Reserved (design-for, don't build):
 // upstream 'enquired'; downstream 'left' | 'won_back'.
+//
+// The funnel is OPTIONAL: it measures progress toward joining the training
+// relationship (trial → join). A contact who entered off-funnel — bought in the shop
+// or submitted a public form without ever booking/attending a trial — simply has NO
+// acquisition_stage yet (see Contact.acquisition_stage). Absent = "not on the funnel",
+// NOT a stage. Such a contact enters the funnel later, normally, if they book a trial.
 export const ACQUISITION_STAGES = ['trial_booked', 'trial_attended', 'joined'] as const
 export type AcquisitionStage = (typeof ACQUISITION_STAGES)[number]
 
 // How the contact first ENTERED — immutable birth fact, set once by the entry event.
-// 'booking' | 'walk_in' are the trial doors (walk-in is born already 'trial_attended');
-// 'signup' (direct join) and 'import' (migration) are non-trial entries born 'joined';
-// 'form' is a lead captured via a published Custom Form (top-of-funnel, born 'trial_booked').
-export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form'] as const
+// Two kinds:
+//  • FUNNEL doors — born on the trial funnel:
+//      'booking'  → trial door, born 'trial_booked'
+//      'walk_in'  → trial door, born already 'trial_attended'
+//      'signup'   → direct join, born 'joined'
+//      'import'   → migration, born 'joined'
+//  • OFF-FUNNEL routes — enter the contact base with NO acquisition_stage (not on the
+//    funnel; a purchase/lead-capture is not a funnel milestone):
+//      'shop'     → self-created by a public shop purchase (product / course / membership)
+//      'form'     → lead captured via a published Custom Form
+export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form', 'shop'] as const
 export type ContactEntry = (typeof CONTACT_ENTRIES)[number]
 
 // Source axis — marketing CHANNEL (attribution only), set once, never overwritten.
@@ -102,7 +115,13 @@ export interface Contact {
   // Sticky high-water funnel position (trial_booked → trial_attended → joined).
   // Advances on transition, never regresses. Per-session attendance is a fact on
   // the booking, not here — the booking event PROMOTES the milestone.
-  acquisition_stage: AcquisitionStage
+  // OPTIONAL: absent = the contact is NOT on the trial funnel. An off-funnel entry
+  // ('shop' / 'form' — a buyer or a captured lead) has no stage until it first books
+  // a trial, at which point it enters the funnel normally. Never synthesise a stage
+  // for these; "not applicable" is the honest value (don't assert a milestone that
+  // didn't happen). The purchase itself is never a stage — a recurring purchase lives
+  // on the subscription axis, a one-off on order/payment history.
+  acquisition_stage?: AcquisitionStage
   acquisition_stage_updated_at?: Timestamp
   // Immutable birth fact: which door the contact came through; sets the birth stage.
   // Correctable for data-entry mistakes, but never silently moves the stage.
@@ -120,6 +139,15 @@ export interface Contact {
   // considered complete). See CheckoutContactMode.
   pending_signup?: boolean
   signup_completed_at?: Timestamp | null
+  // Anti-flooding for the login-first shop checkout: a contact self-created at
+  // registration (OTP + minimal name form) is PROVISIONAL until its first successful
+  // payment — excluded from the contact-cap count, listed under the contacts page's
+  // "Unconfirmed" tab, and hard-deleted by the daily purge task once
+  // provisional_expires_at passes without a payment. The Connect webhook clears both
+  // fields when a payment linked to this contact succeeds; a studio can also confirm
+  // manually. Absent ⇒ a normal, confirmed contact.
+  provisional?: boolean
+  provisional_expires_at?: Timestamp | null
 
   // ─── Source axis ───────────────────────────────────────────────────────────
   // Marketing channel + free-form detail. Set once at creation, never overwritten.

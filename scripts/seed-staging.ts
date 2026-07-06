@@ -2238,7 +2238,9 @@ async function seedAutomations(teamId: string, language: string) {
       active: true,
       system_key: 'lib_trial_welcome',
       trigger: { type: 'contact_created' },
-      conditions: [{ type: 'contact_type', value: 'trial' }],
+      // Trial-funnel contacts only — off-funnel entries (shop/form, no stage) must
+      // NOT get the "first class" welcome (engine fails closed on unknown types).
+      conditions: [{ type: 'acquisition_stage', value: 'trial_booked' }],
       actions: [{ type: 'send_email', templateId: `${teamId}-tmpl-welcome` }],
     },
     {
@@ -2248,7 +2250,7 @@ async function seedAutomations(teamId: string, language: string) {
       system_key: 'lib_winback',
       trigger: { type: 'schedule_daily' },
       conditions: [
-        { type: 'contact_type', value: 'student' },
+        { type: 'acquisition_stage', value: 'joined' },
         { type: 'inactivity_days', value: 30 },
       ],
       actions: [

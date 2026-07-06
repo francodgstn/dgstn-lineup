@@ -11,7 +11,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { collectionGroup, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { useTranslations, useLocale } from 'next-intl'
-import { ShoppingBag, GraduationCap, Loader2, X } from 'lucide-react'
+import { ShoppingBag, GraduationCap, Loader2, X, Play, Lock, LogIn } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
+import type { Route } from 'next'
 import { db, functions } from '@/lib/firebase'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { formatCurrency } from '@/lib/format'
@@ -49,18 +51,26 @@ interface ProductEntry {
   variants?: ProductVariantEntry[]
 }
 
+type CourseAccessType = 'free' | 'registered' | 'subscription' | 'purchase'
+
 interface CourseEntry {
   id: string
+  slug: string
   title: string
   summary?: string
   coverImageUrl?: string
-  priceAmount: number
+  accessType: CourseAccessType
+  subscriptionTypeIds?: string[]
+  priceAmount?: number // 'purchase' tier only
 }
 
 // Raw shape of a course's world-readable public_profile summary (syncCoursePublicProfile).
 interface RawCoursePublicProfile {
   accessType?: string
+  slug?: string
+  subscriptionTypeIds?: string[]
   priceAmount?: number | null
+  hideFromShop?: boolean
   title?: string
   summary?: string
   coverImageUrl?: string | null
@@ -74,18 +84,6 @@ type Checkout =
   | { kind: 'product'; product: ProductEntry; variantId: string | null }
   | { kind: 'course'; course: CourseEntry }
 
-function prefillEmail(): string {
-  try {
-    const raw = localStorage.getItem('linyup:space:session')
-    if (raw) return (JSON.parse(raw)?.contact?.email as string | undefined) ?? ''
-  } catch {
-    /* ignore */
-  }
-  return ''
-}
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 export default function ShopHome({
   focusTypeId,
   focusCourseId,
@@ -98,13 +96,13 @@ export default function ShopHome({
   const t = useTranslations('Shop')
   const locale = useLocale()
   const { slug, teamId, team } = usePublicTeam()
-  const { isAuthenticated, contact, openSignIn, closeSignIn, requiresSignup, signupEmail } =
-    usePublicContactAuth()
+  const { isAuthenticated, contact, openSignIn, logout } = usePublicContactAuth()
 
   const [plans, setPlans] = useState<PlanEntry[]>([])
   const [pendingCheckout, setPendingCheckout] = useState<Checkout | null>(null)
   const [products, setProducts] = useState<ProductEntry[]>([])
   const [courses, setCourses] = useState<CourseEntry[]>([])
+  const [purchasedCourseIds, setPurchasedCourseIds] = useState<Set<string>>(new Set())
   const [currency, setCurrency] = useState('CHF')
   const [loading, setLoading] = useState(true)
   const [systemDark, setSystemDark] = useState(false)
@@ -112,18 +110,16 @@ export default function ShopHome({
   const [tabTouched, setTabTouched] = useState(false)
   const [checkout, setCheckout] = useState<Checkout | null>(null)
   const [courseFocusHandled, setCourseFocusHandled] = useState(false)
-  const [email, setEmail] = useState('')
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
     let cancelled = false
-    // Memberships + products live on the team's single public_profile doc; sellable
-    // courses are world-readable per-course public_profile summaries (same collection-
-    // group query the Space uses), filtered to the 'purchase' tier.
+    // Memberships + products live on the team's single public_profile doc; courses are
+    // world-readable per-course public_profile summaries (same collection-group query
+    // the Space uses). The shop is the courses' home, so it lists EVERY tier — only
+    // courses the studio explicitly hid from the catalogue are dropped.
     const profileP = getDoc(doc(db, 'teams', teamId, 'public_profile', teamId))
     const coursesP = getDocs(
       query(
@@ -142,19 +138,17 @@ export default function ShopHome({
         setCurrency((snap.data()?.default_currency as string | undefined) ?? 'CHF')
         const courseList: CourseEntry[] = courseSnap.docs
           .map((d) => ({ id: d.ref.parent.parent?.id ?? d.id, data: d.data() as RawCoursePublicProfile }))
-          .filter(
-            ({ data }) =>
-              data.accessType === 'purchase' &&
-              typeof data.priceAmount === 'number' &&
-              data.priceAmount > 0
-          )
+          .filter(({ data }) => data.hideFromShop !== true)
           .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0))
           .map(({ id, data }) => ({
             id,
+            slug: data.slug ?? '',
             title: data.title ?? '',
             summary: data.summary || undefined,
             coverImageUrl: data.coverImageUrl || undefined,
-            priceAmount: data.priceAmount as number,
+            accessType: (data.accessType as CourseAccessType) ?? 'registered',
+            subscriptionTypeIds: data.subscriptionTypeIds ?? [],
+            priceAmount: typeof data.priceAmount === 'number' ? data.priceAmount : undefined,
           }))
         setCourses(courseList)
       })
@@ -171,6 +165,33 @@ export default function ShopHome({
       cancelled = true
     }
   }, [teamId])
+
+  // Which 'purchase'-tier courses the signed-in contact already owns (lifetime
+  // entitlements) — so an owned course shows "Open" instead of "Buy".
+  useEffect(() => {
+    if (!isAuthenticated || !contact?.id) {
+      setPurchasedCourseIds(new Set())
+      return
+    }
+    let cancelled = false
+    getDocs(
+      query(
+        collectionGroup(db, 'purchases'),
+        where('contactId', '==', contact.id),
+        where('teamId', '==', teamId)
+      )
+    )
+      .then((snap) => {
+        if (cancelled) return
+        setPurchasedCourseIds(
+          new Set(snap.docs.map((d) => (d.data().courseId as string | undefined) ?? d.id))
+        )
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated, contact?.id, teamId])
 
   useEffect(() => {
     if (team?.bioLinkTheme !== 'auto') return
@@ -209,32 +230,33 @@ export default function ShopHome({
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [focusTypeId, loading, tab])
 
-  // Every purchase tries login first: signed-in members go straight to the modal
-  // (the purchase attaches to their contact via the session); everyone else opens
-  // the sign-in dialog and the checkout resumes once auth resolves (effect below).
+  // LOGIN-FIRST: every purchase requires a contact session — signed-in buyers go
+  // straight to the confirm sheet (the purchase attaches to their contact via the
+  // session); everyone else signs in or registers (allowRegistration) and the
+  // checkout resumes once auth resolves (effect below). No anonymous checkout.
   const startCheckout = useCallback(
     (c: Checkout) => {
       if (isAuthenticated) {
         setCheckout(c)
-        setEmail(prefillEmail())
-        setFirstName('')
-        setLastName('')
         setError(null)
       } else {
         setPendingCheckout(c)
-        openSignIn()
+        openSignIn({ allowRegistration: true })
       }
     },
     [isAuthenticated, openSignIn]
   )
 
   // Deep-link from the Space "Buy" CTA (?course=): open that course's checkout once.
+  // Only purchase-tier courses are buyable — ignore the param for other tiers.
   useEffect(() => {
     if (!focusCourseId || loading || courseFocusHandled) return
     const c = courses.find((x) => x.id === focusCourseId)
-    if (c) startCheckout({ kind: 'course', course: c })
+    if (c && c.accessType === 'purchase' && !purchasedCourseIds.has(c.id)) {
+      startCheckout({ kind: 'course', course: c })
+    }
     setCourseFocusHandled(true)
-  }, [focusCourseId, loading, courseFocusHandled, courses, startCheckout])
+  }, [focusCourseId, loading, courseFocusHandled, courses, purchasedCourseIds, startCheckout])
 
   const isDark = team?.bioLinkTheme === 'dark' || (team?.bioLinkTheme === 'auto' && systemDark)
   const bg = team?.bioLinkBackground
@@ -256,25 +278,15 @@ export default function ShopHome({
     [t]
   )
 
-  // Resume a pending checkout once sign-in resolves: authenticated → buy as that
-  // contact; email not recognized (requiresSignup) → fall through to guest checkout.
+  // Resume a pending checkout once sign-in (or registration) resolves — always as
+  // the authenticated contact. Unknown emails register in the sign-in dialog; there
+  // is no anonymous fallback anymore.
   useEffect(() => {
-    if (!pendingCheckout) return
-    if (isAuthenticated) {
-      setCheckout(pendingCheckout)
-      setEmail(prefillEmail())
-      setFirstName('')
-      setLastName('')
-      setError(null)
-      setPendingCheckout(null)
-    } else if (requiresSignup) {
-      closeSignIn()
-      setCheckout(pendingCheckout)
-      setEmail(signupEmail || '')
-      setError(null)
-      setPendingCheckout(null)
-    }
-  }, [isAuthenticated, requiresSignup, pendingCheckout, signupEmail, closeSignIn])
+    if (!pendingCheckout || !isAuthenticated) return
+    setCheckout(pendingCheckout)
+    setError(null)
+    setPendingCheckout(null)
+  }, [isAuthenticated, pendingCheckout])
 
   function openMembership(
     typeId: string,
@@ -294,30 +306,35 @@ export default function ShopHome({
     startCheckout({ kind: 'course', course })
   }
 
+  // What the catalogue card offers for a course, given the visitor's session:
+  //  'open'      → can read it now → link to the player
+  //  'buy'       → purchase-tier, not owned → checkout
+  //  'signin'    → registered/subscription course, needs a login first
+  //  'subscribe' → subscription course, signed in but no qualifying membership
+  const subscriptionTypeId = contact?.subscription_type_id
+  const courseAccess = (c: CourseEntry): 'open' | 'buy' | 'signin' | 'subscribe' => {
+    const includedBySub =
+      !!subscriptionTypeId && (c.subscriptionTypeIds ?? []).includes(subscriptionTypeId)
+    if (c.accessType === 'purchase') {
+      if (isAuthenticated && (purchasedCourseIds.has(c.id) || includedBySub)) return 'open'
+      return 'buy'
+    }
+    if (c.accessType === 'free') return 'open'
+    if (!isAuthenticated) return 'signin'
+    if (c.accessType === 'registered') return 'open'
+    return includedBySub ? 'open' : 'subscribe'
+  }
+
   // The amount shown in the checkout modal.
   const checkoutAmount = (() => {
     if (!checkout) return 0
     if (checkout.kind === 'membership') return checkout.price.amount
-    if (checkout.kind === 'course') return checkout.course.priceAmount
+    if (checkout.kind === 'course') return checkout.course.priceAmount ?? 0
     return resolveProductPrice(checkout.product, checkout.variantId)
   })()
 
   async function submit() {
-    if (!checkout || !EMAIL_RE.test(email.trim())) {
-      setError(t('emailInvalid'))
-      return
-    }
-    // Memberships (unless mode 'off') collect the buyer's name so checkout creates a
-    // real contact.
-    if (
-      checkout.kind === 'membership' &&
-      checkout.mode !== 'off' &&
-      !isAuthenticated &&
-      (!firstName.trim() || !lastName.trim())
-    ) {
-      setError(t('nameRequired'))
-      return
-    }
+    if (!checkout) return
     setSubmitting(true)
     setError(null)
     try {
@@ -328,9 +345,6 @@ export default function ShopHome({
             teamId: string
             subscriptionTypeId: string
             priceId: string
-            memberEmail: string
-            firstName: string
-            lastName: string
             slug: string
             locale: string
             origin?: string
@@ -341,9 +355,6 @@ export default function ShopHome({
           teamId,
           subscriptionTypeId: checkout.typeId,
           priceId: checkout.price.id,
-          memberEmail: email.trim(),
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
           slug,
           locale,
           origin: window.location.origin,
@@ -356,7 +367,6 @@ export default function ShopHome({
             teamId: string
             productId: string
             variantId?: string
-            memberEmail: string
             slug: string
             locale: string
             origin?: string
@@ -367,7 +377,6 @@ export default function ShopHome({
           teamId,
           productId: checkout.product.id,
           ...(checkout.variantId ? { variantId: checkout.variantId } : {}),
-          memberEmail: email.trim(),
           slug,
           locale,
           origin: window.location.origin,
@@ -379,7 +388,6 @@ export default function ShopHome({
           {
             teamId: string
             courseId: string
-            memberEmail: string
             slug: string
             locale: string
             origin?: string
@@ -389,7 +397,6 @@ export default function ShopHome({
         const res = await fn({
           teamId,
           courseId: checkout.course.id,
-          memberEmail: email.trim(),
           slug,
           locale,
           origin: window.location.origin,
@@ -399,6 +406,16 @@ export default function ShopHome({
       }
     } catch (err) {
       const code = (err as FunctionsError)?.code
+      if (code === 'functions/unauthenticated' || code === 'functions/permission-denied') {
+        // Session expired (or went stale) mid-flow — re-run the sign-in and resume.
+        setSubmitting(false)
+        setCheckout(null)
+        setPendingCheckout(checkout)
+        await logout()
+        openSignIn({ allowRegistration: true })
+        setError(null)
+        return
+      }
       setError(
         code === 'functions/already-exists'
           ? t('alreadySubscribed')
@@ -624,42 +641,80 @@ export default function ShopHome({
                 {t('coursesSection')}
               </h2>
             )}
-            {courses.map((course) => (
-              <div
-                key={course.id}
-                className="rounded-2xl border overflow-hidden flex flex-col"
-                style={{ background: cardBg, borderColor: cardBorder }}
-              >
+            {courses.map((course) => {
+              const access = courseAccess(course)
+              const badge =
+                course.accessType === 'purchase'
+                  ? formatCurrency(course.priceAmount ?? 0, currency)
+                  : course.accessType === 'free'
+                    ? t('accessFree')
+                    : course.accessType === 'subscription'
+                      ? t('accessSubscription')
+                      : t('accessRegistered')
+              const btn = 'mt-auto w-full rounded-full px-4 py-2 text-sm font-semibold inline-flex items-center justify-center gap-1.5'
+              return (
                 <div
-                  className="aspect-video flex items-center justify-center overflow-hidden"
-                  style={{ background: onDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}
+                  key={course.id}
+                  className="rounded-2xl border overflow-hidden flex flex-col"
+                  style={{ background: cardBg, borderColor: cardBorder }}
                 >
-                  {course.coverImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={course.coverImageUrl} alt={course.title} className="h-full w-full object-cover" />
-                  ) : (
-                    <GraduationCap className="h-8 w-8" style={{ color: textMuted }} />
-                  )}
-                </div>
-                <div className="p-3 flex flex-col gap-1 flex-1">
-                  <p className="text-sm font-semibold leading-tight line-clamp-2">{course.title}</p>
-                  {course.summary && (
-                    <p className="text-xs line-clamp-2" style={{ color: textMuted }}>
-                      {course.summary}
-                    </p>
-                  )}
-                  <p className="mt-1 text-sm font-medium">{formatCurrency(course.priceAmount, currency)}</p>
-                  <button
-                    type="button"
-                    onClick={() => openCourse(course)}
-                    className="mt-2 w-full rounded-full px-4 py-2 text-sm font-semibold"
-                    style={{ background: accent, color: '#ffffff' }}
+                  <div
+                    className="aspect-video flex items-center justify-center overflow-hidden"
+                    style={{ background: onDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}
                   >
-                    {t('buy')}
-                  </button>
+                    {course.coverImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={course.coverImageUrl} alt={course.title} className="h-full w-full object-cover" />
+                    ) : (
+                      <GraduationCap className="h-8 w-8" style={{ color: textMuted }} />
+                    )}
+                  </div>
+                  <div className="p-3 flex flex-col gap-1 flex-1">
+                    <p className="text-sm font-semibold leading-tight line-clamp-2">{course.title}</p>
+                    {course.summary && (
+                      <p className="text-xs line-clamp-2" style={{ color: textMuted }}>
+                        {course.summary}
+                      </p>
+                    )}
+                    <p className="mt-1 mb-2 text-xs font-medium" style={{ color: textMuted }}>{badge}</p>
+                    {access === 'open' ? (
+                      <Link
+                        href={`/public/${slug}/space/courses/${course.slug}?from=shop` as Route}
+                        className={btn}
+                        style={{ background: accent, color: '#ffffff' }}
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                        {t('openCourse')}
+                      </Link>
+                    ) : access === 'buy' ? (
+                      <button type="button" onClick={() => openCourse(course)} className={btn} style={{ background: accent, color: '#ffffff' }}>
+                        {t('buy')}
+                      </button>
+                    ) : access === 'signin' ? (
+                      <button type="button" onClick={() => openSignIn()} className={btn} style={{ background: accent, color: '#ffffff' }}>
+                        <LogIn className="h-3.5 w-3.5" />
+                        {t('signInToAccess')}
+                      </button>
+                    ) : hasSubscriptions ? (
+                      <button
+                        type="button"
+                        onClick={() => { setTab('subscriptions'); setTabTouched(true) }}
+                        className={btn}
+                        style={{ background: accent, color: '#ffffff' }}
+                      >
+                        <Lock className="h-3.5 w-3.5" />
+                        {t('getMembership')}
+                      </button>
+                    ) : (
+                      <p className="mt-auto inline-flex items-center justify-center gap-1.5 text-xs" style={{ color: textMuted }}>
+                        <Lock className="h-3.5 w-3.5" />
+                        {t('subscriptionRequired')}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </section>
         )}
       </div>
@@ -729,58 +784,33 @@ export default function ShopHome({
               </p>
             )}
 
-            {checkout.kind === 'membership' && checkout.mode !== 'off' && !isAuthenticated && (
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium">{t('firstNameLabel')}</label>
-                  <input
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder={t('firstNameLabel')}
-                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                    style={{ borderColor: cardBorder, background: onDark ? 'rgba(0,0,0,0.2)' : '#fff', color: textMain }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium">{t('lastNameLabel')}</label>
-                  <input
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder={t('lastNameLabel')}
-                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                    style={{ borderColor: cardBorder, background: onDark ? 'rgba(0,0,0,0.2)' : '#fff', color: textMain }}
-                  />
-                </div>
-              </div>
-            )}
-            {isAuthenticated && contact ? (
-              // Signed-in member: the purchase attaches to their contact via the
-              // session (no email entry needed).
-              <div
-                className="mt-4 rounded-lg px-3 py-2 text-sm"
-                style={{ background: onDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', color: textMain }}
+            {/* Login-first: the purchase attaches to the signed-in contact via the
+                session. "Switch account" restarts sign-in keeping the checkout pending
+                (e.g. a parent switching to the right child before buying). */}
+            <div
+              className="mt-4 space-y-1 rounded-lg px-3 py-2 text-sm"
+              style={{ background: onDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', color: textMain }}
+            >
+              <p className="break-words">
+                {contact ? t('buyingAs', { name: `${contact.firstname} ${contact.lastname}` }) : ''}
+              </p>
+              {/* Own line so a long name never gets truncated by the link */}
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={async () => {
+                  const c = checkout
+                  setCheckout(null)
+                  setPendingCheckout(c)
+                  await logout()
+                  openSignIn({ allowRegistration: true })
+                }}
+                className="block text-xs underline-offset-2 hover:underline"
+                style={{ color: textMuted }}
               >
-                {t('buyingAs', { name: `${contact.firstname} ${contact.lastname}` })}
-              </div>
-            ) : (
-              <>
-                <label className="mt-4 block text-xs font-medium">{t('emailLabel')}</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t('emailPlaceholder')}
-                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                  style={{
-                    borderColor: cardBorder,
-                    background: onDark ? 'rgba(0,0,0,0.2)' : '#fff',
-                    color: textMain,
-                  }}
-                />
-              </>
-            )}
+                {t('switchAccount')}
+              </button>
+            </div>
             {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
             <button
               type="button"

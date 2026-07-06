@@ -382,7 +382,7 @@ const profileSchema = z.object({
   address_postal_code: z.string().max(20).optional(),
   address_locality: z.string().max(100).optional(),
   // Entry — editable for data-entry correction; does NOT move acquisition_stage
-  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form'] as const).optional(),
+  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form', 'shop'] as const).optional(),
   // Source axis
   source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
   source_detail: z.string().max(500).optional(),
@@ -1210,8 +1210,11 @@ function PromoteStageButton({
   const [busy, setBusy] = useState(false)
   const qc = useQueryClient()
 
+  // An off-funnel contact (no stage — e.g. entered via shop/form) can be placed ON
+  // the funnel at the first stage; from there it advances normally.
   const nextStage: AcquisitionStage | null =
-    contact.acquisition_stage === 'trial_booked' ? 'trial_attended'
+    !contact.acquisition_stage ? 'trial_booked'
+    : contact.acquisition_stage === 'trial_booked' ? 'trial_attended'
     : contact.acquisition_stage === 'trial_attended' ? 'joined'
     : null
 
@@ -1224,6 +1227,7 @@ function PromoteStageButton({
       await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
         acquisition_stage: nextStage,
         acquisition_stage_updated_at: now,
+        ...(nextStage === 'trial_booked' ? { trial_booked_at: now } : {}),
         ...(nextStage === 'trial_attended' ? { trial_attended_at: now } : {}),
         ...(nextStage === 'joined' ? { converted_at: now } : {}),
         updatedAt: now,
@@ -1244,7 +1248,9 @@ function PromoteStageButton({
       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
     >
       <ArrowRightLeft className="h-3.5 w-3.5" />
-      {t('promoteButton', { stage: t(`stage_${nextStage}` as Parameters<typeof t>[0]) })}
+      {contact.acquisition_stage
+        ? t('promoteButton', { stage: t(`stage_${nextStage}` as Parameters<typeof t>[0]) })
+        : t('placeOnFunnel')}
     </button>
   )
 }
@@ -1270,7 +1276,7 @@ function StageCorrectionMenu({
   const qc = useQueryClient()
 
   const stages = ACQUISITION_STAGES as readonly string[]
-  const currentRank = stages.indexOf(contact.acquisition_stage)
+  const currentRank = stages.indexOf(contact.acquisition_stage ?? '')
   const prevStage = currentRank > 0 ? ACQUISITION_STAGES[currentRank - 1] : null
 
   // Nothing to revert to at the first stage.
@@ -1363,7 +1369,7 @@ function AcquisitionTimeline({
   orientation?: 'horizontal' | 'vertical'
 }) {
   const t = useTranslations('Contacts')
-  const currentRank = (ACQUISITION_STAGES as readonly string[]).indexOf(contact.acquisition_stage)
+  const currentRank = (ACQUISITION_STAGES as readonly string[]).indexOf(contact.acquisition_stage ?? '')
   const fromYear = new Date().getFullYear() - 50
   const lastIndex = ACQUISITION_STAGES.length - 1
 
@@ -2137,6 +2143,9 @@ function ProfileTab({
             <div className="hidden md:block bg-border" />
             {/* Right — vertical stage timeline (earliest on top) */}
             <div className="md:pt-0.5">
+              {!contact.acquisition_stage && (
+                <p className="mb-2.5 text-xs text-muted-foreground">{t('offFunnelNote')}</p>
+              )}
               <AcquisitionTimeline contact={contact} control={control} orientation="vertical" />
             </div>
           </div>
@@ -4882,7 +4891,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
             return (
               <div className="flex items-stretch gap-1 border-b">
-                <div className="flex flex-1 gap-1 overflow-x-auto overflow-y-hidden">
+                <div className="flex flex-1 gap-1 overflow-x-auto overflow-y-hidden no-scrollbar">
                   {editingTabs ? (
                     <SortableList
                       horizontal

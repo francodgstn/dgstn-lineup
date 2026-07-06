@@ -224,19 +224,36 @@ membership is created — a drop-in is a single paid booking, not a subscription
 
 All are **function-written only**; managers/owners get read access for the dashboard.
 
-## Public shop (member self-checkout)
+## Public shop (member self-checkout) — LOGIN-FIRST
 
 A public, member-facing page at **`/public/{slug}/shop`** lists the team's public
-subscription types, products, and `purchase`-tier courses, and lets a member pay
-without logging in (email only). It reads the world-readable
-`aggregator_subscription_types` catalogue (incl. price `id` + `included_months`) and
-calls the **public** `createMembershipCheckout` / `createProductCheckout` /
-`createCourseCheckout` callables (unauthenticated; same Connect kill-switch +
-chargeable-account guards + an IP/hour rate limit). On success the
-`checkout.session.completed` webhook **links or creates** the buyer's contact from the
-Stripe `customer_details` — cap-aware: on a Free team at the 15-contact limit the
-contact is not created (payment is still recorded). Stripe redirects to
-`/{locale}/pay/result`.
+subscription types, products, and online courses. Checkout is **login-first — no
+anonymous buying**: the buyer completes the passwordless OTP sign-in before paying
+(picking a contact when the email matches several, e.g. a parent choosing the right
+child). An **unknown email registers a minimal contact** right in the sign-in dialog
+(first + last name only — `loginContactWithCode` with `newContact`); the full signup
+page stays as a secondary link.
+
+The `createMembershipCheckout` / `createProductCheckout` / `createCourseCheckout`
+callables **require a contact session** (`requireContactSessionForTeam`) and always
+carry `metadata.contactId`, so the webhook links the sale — and grants course
+entitlements — to the **exact** contact, never an email guess. Email-based
+`resolveOrCreateContact` remains only as the webhook's safety net for in-flight
+legacy sessions. Stripe redirects to `/{locale}/pay/result`.
+
+**Provisional contacts (anti-flooding).** A registration-created contact is
+`provisional: true` until its first successful payment: excluded from the contact-cap
+count, shown under the contacts page's **Unconfirmed** tab (with a purge countdown),
+confirmed by the webhook on payment (any kind, incl. drop-in) or manually, and
+hard-deleted by the daily `purgeProvisionalContacts` task after 7 unpaid days.
+Guards on registration: the plan's hard cap (Free 15, measured against *confirmed*
+actives → `failed-precondition` with `reason: 'contact_cap'`), a per-team daily
+registration budget (20/day), a per-IP hourly OTP-send limit, and App Check on both
+auth callables.
+
+**Contact-capture modes.** `checkout_contact_mode` `'off'`/`'minimal'` are obsolete
+under login-first (the buyer is always a real contact); **`'full'`** survives as the
+post-payment "finish your profile" nudge (success page lands on `seg=signup`).
 
 Entry points: a **bio-link** "Shop" system link (auto-shown once Connect is enabled,
 owner-toggleable) and the **website pricing** component (each plan card deep-links
@@ -283,6 +300,31 @@ invoice.paid, invoice.payment_failed
    `amount_refunded` + `status`; the application fee is reversed proportionally.
 7. **Dispute:** trigger `charge.dispute.created` (e.g. card `4000 0000 0000 0259`) → status
    surfaces on the payment doc.
+
+### Faster local setup — reuse a test account (`connect:test-account`)
+
+Steps 1–3 (hosted onboarding) only need doing **once** per Stripe test platform — the
+connected account persists in Stripe, but the Firestore wiring (`teams/{id}.payments` +
+`connect_accounts/{acct}`) is wiped on every emulator reseed / fresh team. Re-wire it in
+one command instead of re-onboarding:
+
+```bash
+pnpm connect:test-account --list                                    # list the acct_… ids
+pnpm connect:test-account --team <teamId> --account acct_xxx --target emulator
+```
+
+It writes both docs with `connectStatus: enabled` (what `requireChargeableAccount` gates
+on), trusting the account is already onboarded — the real charge still runs against Stripe,
+so the acct must genuinely be onboarded. Flags: `--refresh` pulls the real live status from
+Stripe (needs `STRIPE_SECRET_KEY`, else `packages/functions/.env.local`); `--disable` clears
+the wiring; `--target staging` targets linyup-staging via ADC (prod refused). One account
+maps to exactly one team (`connect_accounts/{acct}.teamId` is the webhook's route), so use
+one test account per team.
+
+Lead-demo seeds wire it inline: `pnpm lead:seed --lead <id> --connect acct_xxx` (or set
+`STRIPE_CONNECT_TEST_ACCOUNT` / `profile.stripeConnectTestAccount`), so a reseeded lead
+tenant can take payments immediately — shared helper `scripts/lib/connect.ts`. See
+`scripts/leads/README.md`.
 
 ### Drop-in (pay-per-class)
 

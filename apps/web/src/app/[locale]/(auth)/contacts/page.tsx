@@ -41,7 +41,7 @@ import {
   Search, UserPlus, X,
   AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
   MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
-  Check, Bookmark, BookmarkPlus, BarChart2, Pin, FolderTree, ShieldCheck,
+  Check, Bookmark, BookmarkPlus, BarChart2, Pin, FolderTree, ShieldCheck, UserCheck,
 } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
@@ -94,18 +94,20 @@ const createSchema = z.object({
 })
 type CreateValues = z.infer<typeof createSchema>
 
-/** Map entry choice → initial acquisition_stage + milestone timestamps. */
+/** Map entry choice → initial acquisition_stage + milestone timestamps. Off-funnel
+ *  entries ('shop' / 'form') get NO stage — they're not on the trial funnel. */
 function entryToStage(entry: ContactEntry): {
-  acquisition_stage: AcquisitionStage
+  acquisition_stage?: AcquisitionStage
   trial_attended_at?: ReturnType<typeof serverTimestamp>
   converted_at?: ReturnType<typeof serverTimestamp>
 } {
   switch (entry) {
-    case 'booking':
-    case 'form': return { acquisition_stage: 'trial_booked' }
+    case 'booking': return { acquisition_stage: 'trial_booked' }
     case 'walk_in': return { acquisition_stage: 'trial_attended', trial_attended_at: serverTimestamp() }
     case 'signup':
     case 'import': return { acquisition_stage: 'joined', converted_at: serverTimestamp() }
+    case 'form':
+    case 'shop': return {} // off-funnel entry — no acquisition stage
   }
 }
 
@@ -274,7 +276,7 @@ function CreateContactDialog({
   // lands in their own book and satisfies the own-scope Firestore rules.
   const { ownScoped } = useCapabilities()
   // entry options: booking (trial), walk_in (trial attended), signup (member), import (member)
-  const ENTRIES: ContactEntry[] = ['booking', 'walk_in', 'signup']
+  const ENTRIES = ['booking', 'walk_in', 'signup'] as const
 
   const onSubmit = async (values: CreateValues) => {
     if (atHardCap) {
@@ -504,6 +506,8 @@ interface Filters {
   groups: string[]           // contact_groups IDs (Contact Groups plugin); parents include subgroups
   engagement: EngagementBand[] // derived band: active / low / at_risk / inactive
   hasAlerts: boolean
+  // Paid a 'full'-mode purchase but hasn't completed the full signup (profile+consent)
+  pendingSignup: boolean
   sessionsMin: number | null
   sessionsMax: number | null
   inactivity: InactivityPreset | null
@@ -511,7 +515,7 @@ interface Filters {
 }
 const EMPTY_FILTERS: Filters = {
   stages: [], sources: [], statuses: [], subscriptions: [], groups: [], engagement: [],
-  hasAlerts: false, sessionsMin: null, sessionsMax: null, inactivity: null,
+  hasAlerts: false, pendingSignup: false, sessionsMin: null, sessionsMax: null, inactivity: null,
   rankFilter: null,
 }
 
@@ -519,6 +523,7 @@ function countActiveFilters(f: Filters): number {
   return f.stages.length + f.sources.length + f.statuses.length + f.subscriptions.length + f.groups.length
     + f.engagement.length
     + (f.hasAlerts ? 1 : 0)
+    + (f.pendingSignup ? 1 : 0)
     + (f.sessionsMin != null || f.sessionsMax != null ? 1 : 0)
     + (f.inactivity ? 1 : 0)
     + (f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0) ? 1 : 0)
@@ -533,6 +538,7 @@ const FILTER_PRESETS: SavedQuery[] = [
   { id: 'p-nosub',  name: 'No subscription', filters: { ...EMPTY_FILTERS, subscriptions: ['none'] } },
   { id: 'p-trials', name: 'Trials',          filters: { ...EMPTY_FILTERS, stages: ['trial_booked', 'trial_attended'] } },
   { id: 'p-alerts', name: 'Has alerts',      filters: { ...EMPTY_FILTERS, hasAlerts: true } },
+  { id: 'p-pending-signup', name: 'Pending signup', filters: { ...EMPTY_FILTERS, pendingSignup: true } },
 ]
 
 function useScrollLockOnOpen() {
@@ -1004,6 +1010,25 @@ function FilterChips({
         )}
       </button>
 
+      {/* Pending signup — paid a 'full'-mode purchase, full profile+consent still owed */}
+      <button type="button"
+        onClick={() => onChange({ ...filters, pendingSignup: !filters.pendingSignup })}
+        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+          filters.pendingSignup
+            ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
+            : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+        }`}>
+        <UserCheck className="h-3 w-3" />
+        {t('filterPendingSignup')}
+        {filters.pendingSignup && (
+          <span role="button" aria-label="Clear"
+            onClick={(e) => { e.stopPropagation(); onChange({ ...filters, pendingSignup: false }) }}
+            className="rounded-full p-0.5 hover:bg-primary/20 -mr-0.5">
+            <X className="h-3 w-3" />
+          </span>
+        )}
+      </button>
+
       {countActiveFilters(filters) > 0 && (
         <>
           <div className="h-5 w-px bg-border/50 shrink-0 mx-0.5" />
@@ -1077,6 +1102,21 @@ function ContactRow({
             {contact.pending_signup && (
               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                 {t('pendingSignup')}
+              </span>
+            )}
+            {/* Provisional shop registration — shows the purge countdown until a
+                payment (or manual confirm) clears it */}
+            {contact.provisional === true && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                {t('unconfirmedBadge', {
+                  days: Math.max(
+                    0,
+                    Math.ceil(
+                      ((contact.provisional_expires_at?.toDate?.().getTime() ?? Date.now()) - Date.now()) /
+                        86_400_000
+                    )
+                  ),
+                })}
               </span>
             )}
             {contact.affiliation_summary?.has_active && (
@@ -1579,10 +1619,13 @@ interface MoreAction {
 }
 
 function BulkBar({
-  count, tab, onArchive, onDelete, onRestore, onClear, moreActions = [], editActions = [],
+  count, tab, onArchive, onDelete, onRestore, onConfirm, onClear, moreActions = [], editActions = [],
 }: {
   count: number; tab: TabId
-  onArchive?: () => void; onDelete?: () => void; onRestore?: () => void; onClear: () => void
+  onArchive?: () => void; onDelete?: () => void; onRestore?: () => void
+  /** Unconfirmed tab: manually confirm provisional contacts (clears the purge deadline). */
+  onConfirm?: () => void
+  onClear: () => void
   moreActions?: MoreAction[]
   editActions?: MoreAction[]
 }) {
@@ -1614,6 +1657,12 @@ function BulkBar({
         </>
       )}
 
+      {onConfirm && (
+        <button onClick={onConfirm}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm hover:bg-muted transition-colors">
+          <UserCheck className="h-3.5 w-3.5" />{t('bulkConfirm')}
+        </button>
+      )}
       {onArchive && (
         <button onClick={onArchive}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm hover:bg-muted transition-colors">
@@ -1679,7 +1728,7 @@ function BulkBar({
 
 // ─── tab types ────────────────────────────────────────────────────────────────
 
-type TabId = 'active' | 'archived' | 'deleted' | 'requests'
+type TabId = 'active' | 'unconfirmed' | 'archived' | 'deleted' | 'requests'
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
@@ -1694,7 +1743,12 @@ export default function ContactsPage() {
   // Coaches (own-scoped) see only their assigned contacts and have no
   // archived/deleted admin views (those queries would be denied by the rules).
   const coachScopeUid = ownScoped ? (user?.uid ?? null) : null
-  const { data: active = [], isLoading: loadingActive } = useActiveContacts(currentTeamId, coachScopeUid)
+  const { data: allActive = [], isLoading: loadingActive } = useActiveContacts(currentTeamId, coachScopeUid)
+  // Provisional contacts (shop registrations awaiting their first payment) live in
+  // their own "Unconfirmed" tab and don't count toward the plan cap — mirrors the
+  // server-side canCreateContact (utils/contactCap.ts).
+  const active = useMemo(() => allActive.filter((c) => c.provisional !== true), [allActive])
+  const unconfirmed = useMemo(() => allActive.filter((c) => c.provisional === true), [allActive])
   const { data: archived = [], isLoading: loadingArchived } = useArchivedContacts(ownScoped ? null : currentTeamId)
   const { data: deleted = [], isLoading: loadingDeleted } = useDeletedContacts(ownScoped ? null : currentTeamId)
   const { data: requests = [] } = useContactRequests(currentTeamId)
@@ -1715,6 +1769,11 @@ export default function ContactsPage() {
   const nextPlan: SaasPlan | null = planIdx >= 0 && planIdx < PLAN_ORDER.length - 1 ? PLAN_ORDER[planIdx + 1] : null
 
   const [tab, setTab] = useState<TabId>('active')
+  // The Unconfirmed tab only exists while provisional contacts do — hop back to
+  // Active when the last one is confirmed/deleted (its tab entry disappears).
+  useEffect(() => {
+    if (tab === 'unconfirmed' && !loadingActive && unconfirmed.length === 0) setTab('active')
+  }, [tab, loadingActive, unconfirmed.length])
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -1785,6 +1844,9 @@ export default function ContactsPage() {
     if (f.hasAlerts)
       result = result.filter((c) => (c.alerts_count ?? 0) > 0)
 
+    if (f.pendingSignup)
+      result = result.filter((c) => c.pending_signup === true)
+
     if (f.sessionsMin != null)
       result = result.filter((c) => (c.total_sessions ?? 0) >= f.sessionsMin!)
     if (f.sessionsMax != null)
@@ -1836,14 +1898,22 @@ export default function ContactsPage() {
   /* eslint-disable react-hooks/exhaustive-deps -- applyFiltersAndSearch closes over contactGroups + team thresholds */
   const engagementThresholds = team?.engagement_thresholds
   const filteredActive   = useMemo(() => applyFiltersAndSearch(active,   filters, search), [active,   filters, search, contactGroups, engagementThresholds])
+  const filteredUnconfirmed = useMemo(() => applyFiltersAndSearch(unconfirmed, filters, search), [unconfirmed, filters, search, contactGroups, engagementThresholds])
   const filteredArchived = useMemo(() => applyFiltersAndSearch(archived, filters, search), [archived, filters, search, contactGroups, engagementThresholds])
   const filteredDeleted  = useMemo(() => applyFiltersAndSearch(deleted,  filters, search), [deleted,  filters, search, contactGroups, engagementThresholds])
   /* eslint-enable react-hooks/exhaustive-deps */
 
   // ── current list & loading state ──────────────────────────────────────────
 
-  const currentList = tab === 'active' ? filteredActive : tab === 'archived' ? filteredArchived : filteredDeleted
-  const isLoading = tab === 'active' ? loadingActive : tab === 'archived' ? loadingArchived : loadingDeleted
+  const currentList =
+    tab === 'active' ? filteredActive
+    : tab === 'unconfirmed' ? filteredUnconfirmed
+    : tab === 'archived' ? filteredArchived
+    : filteredDeleted
+  const isLoading =
+    tab === 'active' || tab === 'unconfirmed' ? loadingActive
+    : tab === 'archived' ? loadingArchived
+    : loadingDeleted
 
   // ── bulk handlers ─────────────────────────────────────────────────────────
 
@@ -1864,6 +1934,19 @@ export default function ContactsPage() {
   const restoreContacts = async (ids: string[]) => {
     await Promise.all(ids.map((id) =>
       updateDoc(doc(db, CONTACTS_COLLECTION, id), { archived_at: null, deleted_at: null })
+    ))
+    invalidateAll()
+  }
+
+  // Manually confirm provisional (shop-registered) contacts — the "keep" action of
+  // the Unconfirmed tab. Clears the flags so the purge task leaves them alone;
+  // normally a first payment does this via the webhook.
+  const confirmProvisional = async (ids: string[]) => {
+    await Promise.all(ids.map((id) =>
+      updateDoc(doc(db, CONTACTS_COLLECTION, id), {
+        provisional: deleteField(),
+        provisional_expires_at: deleteField(),
+      })
     ))
     invalidateAll()
   }
@@ -1933,13 +2016,18 @@ export default function ContactsPage() {
 
   const TABS: { id: TabId; label: string; count: number }[] = [
     { id: 'active',   label: t('tabActive'),   count: active.length },
+    // Unconfirmed = provisional shop registrations (no payment yet) — admin view,
+    // shown only when any exist.
+    ...(ownScoped || unconfirmed.length === 0
+      ? []
+      : [{ id: 'unconfirmed' as TabId, label: t('tabUnconfirmed'), count: unconfirmed.length }]),
     // Archived/deleted are studio-admin views — hidden for own-scoped coaches.
     ...(ownScoped ? [] : [{ id: 'archived' as TabId, label: t('tabArchived'), count: archived.length }]),
     ...(ownScoped ? [] : [{ id: 'deleted' as TabId, label: t('tabDeleted'), count: deleted.length }]),
     { id: 'requests', label: t('tabRequests'),  count: requests.filter((r) => (r.status ?? 'pending') === 'pending').length },
   ]
 
-  const selectable = tab === 'active' || tab === 'archived' || tab === 'deleted'
+  const selectable = tab === 'active' || tab === 'unconfirmed' || tab === 'archived' || tab === 'deleted'
   const selectedList = [...selected]
 
   return (
@@ -2158,6 +2246,7 @@ export default function ContactsPage() {
           count={selected.size}
           tab={tab}
           onArchive={tab === 'active' ? () => setConfirmArchive(selectedList) : undefined}
+          onConfirm={tab === 'unconfirmed' ? () => confirmProvisional(selectedList) : undefined}
           onRestore={tab === 'archived' || tab === 'deleted' ? () => setConfirmRestore(selectedList) : undefined}
           onDelete={tab !== 'deleted' ? () => setConfirmDelete(selectedList) : undefined}
           onClear={() => setSelected(new Set())}

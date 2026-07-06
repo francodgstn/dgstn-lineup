@@ -222,8 +222,10 @@ export const submitForm = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (
         lastname: '',
         email: submitterEmail,
         teamId: data.teamId,
+        // A public form is an OFF-FUNNEL entry: a captured lead hasn't started the
+        // trial→join journey, so NO acquisition_stage (not on the funnel). They enter
+        // the funnel later if they book a trial. Mirrors the shop entry route.
         entry: 'form',
-        acquisition_stage: 'trial_booked',
         source: 'website',
         source_detail: form.title,
         lead_acknowledged: false,

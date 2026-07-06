@@ -97,6 +97,9 @@ function MediaPlayer({ lesson }: { lesson: Lesson }) {
 
 interface Props {
   courseSlug: string
+  /** Where the visitor opened the course from — 'shop' returns to the shop's
+   *  Online courses tab; anything else (incl. absent) returns to the Space. */
+  from?: string
 }
 
 type GateReason = 'registered' | 'subscription' | null
@@ -109,9 +112,13 @@ interface CourseSummary {
   accessType: 'free' | 'registered' | 'subscription'
 }
 
-export default function CoursePlayer({ courseSlug }: Props) {
+export default function CoursePlayer({ courseSlug, from }: Props) {
   const t = useTranslations('Space')
   const { slug, teamId, isAuthenticated, openSignIn } = useSpaceAuth()
+  // Return the visitor to where they came from (shop catalogue vs their Space).
+  const backHref = (from === 'shop'
+    ? `/public/${slug}/shop?tab=courses`
+    : `/public/${slug}/space`) as Route
   const [summary, setSummary] = useState<CourseSummary | null>(null)
   const [course, setCourse] = useState<Course | null>(null)
   const [modules, setModules] = useState<CourseModule[]>([])
@@ -207,7 +214,7 @@ export default function CoursePlayer({ courseSlug }: Props) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
         <p className="text-sm text-muted-foreground">{t('notFound')}</p>
-        <Link href={`/public/${slug}/space` as Route} className="text-sm text-primary hover:underline">
+        <Link href={backHref} className="text-sm text-primary hover:underline">
           {t('backToCourses')}
         </Link>
       </div>
@@ -221,7 +228,7 @@ export default function CoursePlayer({ courseSlug }: Props) {
       <div className="min-h-screen">
         <div className="max-w-[640px] mx-auto px-5 py-10 space-y-6">
           <Link
-            href={`/public/${slug}/space` as Route}
+            href={backHref}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -256,7 +263,7 @@ export default function CoursePlayer({ courseSlug }: Props) {
       <div className="min-h-screen">
         <div className="max-w-[640px] mx-auto px-5 py-10 space-y-6">
           <Link
-            href={`/public/${slug}/space` as Route}
+            href={backHref}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -282,7 +289,7 @@ export default function CoursePlayer({ courseSlug }: Props) {
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* Back link */}
         <Link
-          href={`/public/${slug}/space` as Route}
+          href={backHref}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />

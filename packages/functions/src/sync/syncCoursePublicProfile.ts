@@ -32,6 +32,9 @@ export const syncCoursePublicProfile = onDocumentWritten('courses/{courseId}', a
       // One-off shop price for 'purchase'-tier courses (major units). null for the
       // free/registered/subscription tiers so the shop can ignore them.
       priceAmount: typeof data.accessRule?.priceAmount === 'number' ? data.accessRule.priceAmount : null,
+      // The shop lists ALL tiers; a studio can still hide a specific course from the
+      // catalogue. Absent/false ⇒ visible.
+      hideFromShop: data.hideFromShop === true,
       moduleCount: data.moduleCount ?? 0,
       lessonCount: data.lessonCount ?? 0,
       order: data.order ?? 0,

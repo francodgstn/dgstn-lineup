@@ -60,18 +60,13 @@ export function paymentLabel(row: UnifiedPaymentRow): string {
 }
 
 function connectDefaultLabel(p: MemberPayment): string {
-  const anyP = p as MemberPayment & {
-    kind?: string
-    productName?: string | null
-    variantLabel?: string | null
-    courseName?: string | null
+  if (p.kind === 'product') {
+    return p.variantLabel
+      ? `${p.productName ?? 'Product'} · ${p.variantLabel}`
+      : p.productName ?? 'Product'
   }
-  if (anyP.kind === 'product') {
-    return anyP.variantLabel
-      ? `${anyP.productName ?? 'Product'} · ${anyP.variantLabel}`
-      : anyP.productName ?? 'Product'
-  }
-  if (anyP.kind === 'course') return anyP.courseName ?? 'Course'
+  if (p.kind === 'course') return p.courseName ?? 'Course'
+  if (p.kind === 'membership') return p.subscriptionTypeName ?? 'Membership'
   return p.purpose || 'Payment'
 }
 

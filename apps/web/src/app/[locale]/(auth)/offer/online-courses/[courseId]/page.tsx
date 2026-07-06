@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -536,7 +537,7 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
 // ─── Settings tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, priceAmount, status,
+  courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, priceAmount, status, hideFromShop,
 }: {
   courseId: string
   teamId: string
@@ -547,6 +548,7 @@ function SettingsTab({
   subscriptionTypeIds?: string[]
   priceAmount?: number
   status: CourseStatus
+  hideFromShop?: boolean
 }) {
   const t = useTranslations('Courses')
   const { team } = useAuth()
@@ -559,6 +561,8 @@ function SettingsTab({
   const [localSubIds, setLocalSubIds] = useState<string[]>(initialSubIds ?? [])
   const initialPriceText = typeof priceAmount === 'number' ? String(priceAmount) : ''
   const [localPriceText, setLocalPriceText] = useState(initialPriceText)
+  // Modelled as "show in shop" for the UI (on = visible); stored as hideFromShop.
+  const [localShowInShop, setLocalShowInShop] = useState(hideFromShop !== true)
   const [uploading, setUploading] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -579,6 +583,7 @@ function SettingsTab({
     localSummary !== summary ||
     localAccess !== accessType ||
     localPriceText !== initialPriceText ||
+    localShowInShop !== (hideFromShop !== true) ||
     JSON.stringify(localSubIds.slice().sort()) !==
       JSON.stringify((initialSubIds ?? []).slice().sort())
 
@@ -597,6 +602,7 @@ function SettingsTab({
         title: localTitle.trim(),
         summary: localSummary.trim(),
         accessRule,
+        hideFromShop: !localShowInShop,
       })
     },
     onSuccess: () => { invalidate(); toast.success(t('settingsSaved')) },
@@ -732,6 +738,16 @@ function SettingsTab({
         )}
       </div>
 
+      {/* Shop visibility — the shop lists every published course; a studio can hide
+          a specific one from the catalogue (it stays openable via direct link). */}
+      <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+        <div className="space-y-0.5">
+          <Label htmlFor="show-in-shop" className="font-normal">{t('showInShop')}</Label>
+          <p className="text-xs text-muted-foreground">{t('showInShopHint')}</p>
+        </div>
+        <Switch id="show-in-shop" checked={localShowInShop} onCheckedChange={setLocalShowInShop} />
+      </div>
+
       <div className="flex gap-2">
         <Button onClick={() => saveMutation.mutate()} disabled={!dirty || purchasePriceInvalid || saveMutation.isPending}>
           {saveMutation.isPending ? t('saving') : t('saveSettings')}
@@ -846,6 +862,7 @@ export default function CourseBuilderPage() {
             subscriptionTypeIds={course.accessRule?.subscriptionTypeIds}
             priceAmount={course.accessRule?.priceAmount}
             status={course.status}
+            hideFromShop={course.hideFromShop}
           />
         </TabsContent>
       </Tabs>

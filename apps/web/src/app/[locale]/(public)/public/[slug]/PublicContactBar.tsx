@@ -2,8 +2,9 @@
 
 import { useCallback } from 'react'
 import { useTranslations } from 'next-intl'
-import { usePathname } from '@/i18n/navigation'
-import { LogIn, LogOut } from 'lucide-react'
+import { Link, usePathname } from '@/i18n/navigation'
+import type { Route } from 'next'
+import { CircleUser, LogIn, LogOut } from 'lucide-react'
 import { usePublicContactAuth } from './PublicContactAuthProvider'
 import { useSpaceTheme } from './space/useSpaceTheme'
 import SignInDialog from './space/SignInDialog'
@@ -19,7 +20,8 @@ export function PublicContactBar() {
     usePublicContactAuth()
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
 
-  const signInOpen = step === 'email' || step === 'code' || step === 'selectContact'
+  const signInOpen =
+    step === 'email' || step === 'code' || step === 'selectContact' || step === 'register'
   const onSignInOpenChange = useCallback(
     (open: boolean) => {
       if (!open) closeSignIn()
@@ -39,7 +41,17 @@ export function PublicContactBar() {
             className="flex items-center gap-1.5 rounded-full py-1 pl-3 pr-1 text-xs font-medium shadow-sm"
             style={{ background: cardBg, border: `1px solid ${cardBorder}`, color: textMain }}
           >
-            <span className="max-w-[120px] truncate">{contact.firstname}</span>
+            {/* Name links to the contact's personal Space (their portal home) */}
+            <Link
+              href={`/public/${slug}/space` as Route}
+              title={t('openSpace')}
+              className="flex min-w-0 items-center gap-1 transition-opacity hover:opacity-70"
+            >
+              <CircleUser className="h-3.5 w-3.5 shrink-0" style={{ color: accent }} />
+              <span className="max-w-[120px] truncate underline-offset-2 hover:underline">
+                {contact.firstname}
+              </span>
+            </Link>
             <button
               type="button"
               onClick={() => logout()}

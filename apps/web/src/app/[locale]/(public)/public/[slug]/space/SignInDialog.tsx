@@ -18,12 +18,14 @@ interface Props {
 export default function SignInDialog({ open, onOpenChange, slug }: Props) {
   const t = useTranslations('Space')
   const {
-    step, error, matchedContacts, requiresSignup, clearError,
-    sendCode, verifyCode, selectContact,
+    step, error, matchedContacts, requiresSignup, signupEmail, allowRegistration, clearError,
+    sendCode, verifyCode, selectContact, registerContact,
   } = useSpaceAuth()
 
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
+  const [firstname, setFirstname] = useState('')
+  const [lastname, setLastname] = useState('')
   const [countdown, setCountdown] = useState(0)
   const [submitting, setSubmitting] = useState(false)
 
@@ -62,6 +64,13 @@ export default function SignInDialog({ open, onOpenChange, slug }: Props) {
     setSubmitting(false)
   }
 
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    await registerContact(firstname, lastname)
+    setSubmitting(false)
+  }
+
   async function handleResend() {
     if (countdown > 0) return
     setCode('')
@@ -93,8 +102,53 @@ export default function SignInDialog({ open, onOpenChange, slug }: Props) {
           </div>
         )}
 
-        {/* Requires signup */}
-        {requiresSignup && (
+        {/* Unknown email → register (checkout flows) or the signup link (elsewhere) */}
+        {requiresSignup && allowRegistration ? (
+          <form onSubmit={handleRegister} className="space-y-4 py-2">
+            <p className="font-semibold">{t('signInDialogRegisterTitle')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('signInDialogRegisterDesc', { email: signupEmail })}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{t('signInDialogFirstName')}</label>
+                <input
+                  type="text"
+                  value={firstname}
+                  onChange={(e) => setFirstname(e.target.value)}
+                  autoComplete="given-name"
+                  required
+                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{t('signInDialogLastName')}</label>
+                <input
+                  type="text"
+                  value={lastname}
+                  onChange={(e) => setLastname(e.target.value)}
+                  autoComplete="family-name"
+                  required
+                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={submitting || !firstname.trim() || !lastname.trim()}
+              className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {submitting ? t('signInDialogSending') : t('signInDialogRegisterCta')}
+            </button>
+            {/* Secondary: the full signup page (profile + consent) for those who prefer it */}
+            <Link
+              href={`/public/${slug}/signup` as Route}
+              className="inline-block text-sm text-muted-foreground hover:text-foreground hover:underline"
+            >
+              {t('signInDialogSignupLink')} →
+            </Link>
+          </form>
+        ) : requiresSignup ? (
           <div className="space-y-4 py-2">
             <p className="font-semibold">{t('signInDialogRequiresSignup')}</p>
             <p className="text-sm text-muted-foreground">{t('signInDialogRequiresSignupDesc')}</p>
@@ -105,7 +159,7 @@ export default function SignInDialog({ open, onOpenChange, slug }: Props) {
               {t('signInDialogSignupLink')} →
             </Link>
           </div>
-        )}
+        ) : null}
 
         {/* Email step */}
         {!requiresSignup && currentStep === 'email' && (

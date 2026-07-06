@@ -23,6 +23,40 @@ export function optionalContactSessionFromRequest(
   return { contactId, teamId }
 }
 
+/**
+ * REQUIRE a live contact session for a specific team — the login-first checkout
+ * gate. On top of the claim checks (optionalContactSessionFromRequest), re-reads
+ * the contact doc: a 7-day token must not outlive the contact's deletion/archival
+ * or a team move. Error split lets clients react correctly:
+ *   • 'unauthenticated'   → no/expired session → open the sign-in flow
+ *   • 'permission-denied' → session is for another team / an inactive contact
+ * Returns the session identity plus the token's email claim (the address the
+ * buyer actually authenticated with — used e.g. as the Stripe receipt email).
+ */
+export async function requireContactSessionForTeam(
+  request: CallableRequest<unknown>,
+  teamId: string
+): Promise<{ contactId: string; teamId: string; email: string | null }> {
+  const session = optionalContactSessionFromRequest(request)
+  if (!session) {
+    throw new HttpsError('unauthenticated', 'Sign in to continue')
+  }
+  if (session.teamId !== teamId) {
+    throw new HttpsError('permission-denied', 'Session does not belong to this team')
+  }
+  const snap = await admin.firestore().collection('contacts').doc(session.contactId).get()
+  const c = snap.data()
+  if (!snap.exists || c?.teamId !== teamId || c?.archived_at != null || c?.deleted_at != null) {
+    throw new HttpsError('permission-denied', 'This account is no longer active')
+  }
+  const tokenEmail = request.auth?.token?.email as string | undefined
+  return {
+    contactId: session.contactId,
+    teamId,
+    email: tokenEmail ?? ((c?.email as string | undefined) ?? null),
+  }
+}
+
 interface ContactSessionOptions {
   allowedEmail?: string
 }

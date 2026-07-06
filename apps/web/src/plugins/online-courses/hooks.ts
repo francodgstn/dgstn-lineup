@@ -112,7 +112,7 @@ export async function createCourse(input: {
 
 export async function updateCourse(
   courseId: string,
-  patch: Partial<Pick<Course, 'title' | 'summary' | 'coverImageUrl' | 'status' | 'accessRule' | 'archived_at'>>,
+  patch: Partial<Pick<Course, 'title' | 'summary' | 'coverImageUrl' | 'status' | 'accessRule' | 'archived_at' | 'hideFromShop'>>,
 ): Promise<void> {
   await updateDoc(doc(coursesCol(), courseId), { ...patch, updated_at: serverTimestamp() })
 }

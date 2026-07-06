@@ -976,6 +976,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Rate-limit counters (per-IP OTP sends, per-team shop registrations) -
+    // function-written only (utils/rateLimit.ts)
+    match /auth_code_attempts/{bucketId} {
+      allow read: if false;
+      allow write: if false;
+    }
+    match /shop_registration_attempts/{bucketId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
     // ----------------------------------------------
     // Authentication Tokens
     // ----------------------------------------------

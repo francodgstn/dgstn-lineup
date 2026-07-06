@@ -12,6 +12,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { storage } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
+import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -282,6 +283,7 @@ export default function ProductsPage() {
           <span className="text-xs text-muted-foreground">
             {t('quota', { count: products.length, max: limits.maxProductsPerTeam })}
           </span>
+          <PaymentSettingsLink />
         </div>
       </div>
 

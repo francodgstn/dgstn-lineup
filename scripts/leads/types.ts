@@ -235,6 +235,14 @@ export interface LeadProfile {
   profileImageAsset?: string
   heroImageAsset?: string
 
+  /**
+   * Optional Stripe TEST connected account (acct_…) to wire for the "pay with
+   * Linyup" flow, so the seeded team can take payments without re-onboarding.
+   * Overridden by the --connect flag / STRIPE_CONNECT_TEST_ACCOUNT env. The acct
+   * must already be onboarded in Stripe test mode (see scripts/connect-test-account.ts).
+   */
+  stripeConnectTestAccount?: string
+
   /** Caveats printed after seeding (e.g. which prices are assumptions). */
   notes?: string[]
 }

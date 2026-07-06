@@ -10,6 +10,9 @@ export interface TeamMemberRecord {
   addedBy: string | null
   displayName: string | null
   email: string | null
+  // Coach-roster membership. Absent on the doc ⇒ true (all members are coaches by
+  // default); only an explicit `false` opts out. Always a definite boolean here.
+  isCoach: boolean
 }
 
 // Returns the member list of a team with display names resolved from users/{uid}.
@@ -60,6 +63,7 @@ export const listTeamMembers = onCall(async (request) => {
       addedBy: (m.addedBy as string | undefined) ?? null,
       displayName: (u?.displayName as string | undefined) ?? null,
       email: (u?.email as string | undefined) ?? null,
+      isCoach: m.is_coach !== false, // absent ⇒ coach by default
     }
   })
 

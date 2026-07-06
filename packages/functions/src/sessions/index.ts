@@ -5,6 +5,7 @@ import { addMonths, getDay } from 'date-fns'
 import { to } from '../utils/async'
 import { calculateOccurrences, validateRecurrence } from '../utils/recurrence'
 import { sendEmail } from '../utils/email'
+import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { getHostingUrl } from '../utils/env'
 
 const SESSION_SERIES_COLLECTION = 'session_series'
@@ -172,7 +173,18 @@ async function cancelSingleSession(
   let failed = 0
 
   const [bookingsErr, bookingsSnap] = await to(sessionRef.collection('bookings').get())
-  const bookingsToNotify = bookingsErr ? [] : (bookingsSnap?.docs ?? [])
+  let bookingsToNotify = bookingsErr ? [] : (bookingsSnap?.docs ?? [])
+
+  // Member cancellation notices are per-team toggleable (Automations → System emails).
+  const cancellationTeamId = (sessionData.teamId || sessionData.teacher) as string | undefined
+  if (
+    bookingsToNotify.length > 0 &&
+    cancellationTeamId &&
+    !(await systemEmailEnabledFor(cancellationTeamId, 'session_cancellation'))
+  ) {
+    console.log(`cancelSingleSession: cancellation emails disabled for team ${cancellationTeamId}`) // eslint-disable-line no-console
+    bookingsToNotify = []
+  }
 
   if (bookingsToNotify.length > 0) {
     let activityName = 'Session'

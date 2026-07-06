@@ -5,18 +5,32 @@ import * as crypto from 'crypto'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { bucketRateLimit } from '../utils/rateLimit'
+import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
 
 const CODE_EXPIRY_MS = 15 * 60 * 1000 // 15 minutes
 const MAX_CODES_PER_HOUR = 5
+// Per-IP ceiling across ALL emails/teams — the per-email limit above is defeated
+// by plus-addressing (me+1@gmail.com …), so cap the sender too. Generous enough
+// for a shared gym/family network.
+const MAX_CODES_PER_IP_PER_HOUR = 20
 
-export const sendContactVerificationCode = onCall(async (request) => {
+export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
+  monitorAppCheck(request, 'sendContactVerificationCode')
   const data = request.data as { email?: string; teamId?: string }
   const { email, teamId } = data
 
   if (!email || !teamId) {
     throw new HttpsError('invalid-argument', 'email and teamId are required')
   }
+
+  await bucketRateLimit({
+    collection: 'auth_code_attempts',
+    key: request.rawRequest?.ip,
+    limit: MAX_CODES_PER_IP_PER_HOUR,
+    windowMs: 3_600_000,
+  })
 
   const normalizedEmail = email.toLowerCase().trim()
   const team = await getTeam(teamId)
