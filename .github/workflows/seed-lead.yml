@@ -1,0 +1,75 @@
+name: Seed Lead Sandbox
+
+# Seeds a LEAD demo tenant (a prospective customer's sandbox — see
+# scripts/leads/README.md) into the linyup-sandbox project. Data only: no
+# functions/rules deploys, and it never touches the six /try playground teams
+# (those are managed by deploy-sandbox.yml's reseed step / pnpm sandbox:seed).
+#
+# Manual dispatch only. Pick the lead; tick `reset` to tear that lead's tenant
+# down first (lead-scoped — safe for everything else in the project).
+#
+# Adding a lead: create scripts/leads/{lead}/profile.ts (+ assets/) and add the
+# id to the `lead` options list below.
+
+on:
+  workflow_dispatch:
+    inputs:
+      lead:
+        description: 'Which lead tenant to seed'
+        type: choice
+        required: true
+        options:
+          - swimli
+      reset:
+        description: 'Tear the lead tenant down before seeding (lead-scoped)'
+        type: boolean
+        default: false
+
+# Required for keyless auth to GCP via Workload Identity Federation (OIDC).
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: seed-lead-${{ inputs.lead }}
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    name: Seed '${{ inputs.lead }}' into linyup-sandbox
+    runs-on: ubuntu-latest
+    environment: sandbox
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Pinned to 22.22.3: Node 22.23.0 carries a keep-alive regression
+          # (nodejs/node#63989) that breaks the WIF STS token exchange with
+          # "Premature close". Same pin as deploy-sandbox.yml — unpin together.
+          node-version: '22.22.3'
+          cache: 'pnpm'
+
+      # Keyless auth — exchanges the GitHub OIDC token for short-lived GCP
+      # credentials and writes an ADC file, which firebase-admin's
+      # applicationDefault() in scripts/seed-lead.ts picks up automatically.
+      # The deploy SA already has Firestore + Auth + Storage admin roles on
+      # linyup-sandbox (granted by infra/environments/sandbox iam module).
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # GOOGLE_CLOUD_PROJECT is pinned to satisfy seed-lead.ts's project guard
+      # regardless of what the auth step exported.
+      - name: Seed lead tenant
+        env:
+          GOOGLE_CLOUD_PROJECT: linyup-sandbox
+        run: pnpm lead:seed --lead ${{ inputs.lead }} ${{ inputs.reset && '--reset' || '' }}

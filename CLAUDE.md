@@ -275,15 +275,26 @@ firebase emulators:start --only auth,firestore,storage
 
 ### Emulator data modes
 
-Two isolated datasets, never mixed:
+Isolated datasets, never mixed:
 
 | Command | Dataset | Notes |
 |---|---|---|
 | `pnpm emulators:seed` | Fresh seed (wipes + re-seeds) | Three plan-tier demo accounts |
 | `pnpm emulators:demo` | `snapshots/demo/` | Persistent demo data for live demo; auto-saved on exit |
+| `pnpm emulators:swimli` | `snapshots/swimli/` | Swimli lead-demo rehearsal snapshot (see "Lead demo tenants") |
 | `pnpm emulators:hmd` | `snapshots/hmd-migration/` | Real HMD data after migration; auth+firestore only |
 
 `snapshots/` is gitignored. Bootstrap each snapshot once — see `scripts/MIGRATE-HMD.md` for the HMD snapshot and the inline docs in `scripts/emulators-demo.mjs` for the demo snapshot.
+
+### Lead demo tenants
+
+Prospective-customer sandboxes (real public business data + synthetic contacts),
+seeded by the generic `pnpm lead:seed --lead <id>` (`scripts/seed-lead.ts`) from
+per-lead profiles in `scripts/leads/{id}/profile.ts` — dual-target: local emulator
+or the cloud `linyup-sandbox` project (also dispatchable via the
+**Seed Lead Sandbox** GitHub Action with a lead picker). Lead tenants are NOT on
+the public `/try` picker; `--reset` tears down one lead only (never use
+`pnpm sandbox:reset` for that). Full docs: `scripts/leads/README.md`.
 
 ---
 

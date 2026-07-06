@@ -1,18 +1,23 @@
 #!/usr/bin/env node
 /**
- * Starts Firebase emulators with the demo snapshot (no seed wipe).
+ * Starts Firebase emulators with a saved snapshot (no seed wipe).
+ *
+ * Takes an optional snapshot name (default 'demo'): `node scripts/emulators-demo.mjs swimli`
+ * loads/saves snapshots/swimli/ instead — used by `pnpm emulators:swimli` for
+ * lead-demo rehearsal datasets (see scripts/leads/README.md).
  *
  * Bootstrap (first time):
  *   pnpm emulators:seed          ← fresh seed + keep running
- *   pnpm emulators:export:demo   ← save to snapshots/demo/
+ *                                  (lead snapshots: pnpm lead:seed --lead <id> instead)
+ *   pnpm emulators:export:demo   ← save to snapshots/demo/  (:swimli for that lead)
  *   pnpm emulators:demo          ← from now on, use this
  *
  * Usage:
  *   Terminal 1:  pnpm emulators:demo
  *   Terminal 2:  pnpm dev:web
  *
- * State is auto-saved to snapshots/demo/ on exit (--export-on-exit).
- * To discard changes and reset to saved state: Ctrl+C then pnpm emulators:demo again.
+ * State is auto-saved to the snapshot dir on exit (--export-on-exit).
+ * To discard changes and reset to saved state: Ctrl+C then start it again.
  */
 
 import { spawn } from 'child_process'
@@ -22,13 +27,23 @@ import { fileURLToPath } from 'url'
 import { join, dirname } from 'path'
 
 const ROOT     = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SNAPSHOT = join(ROOT, 'snapshots', 'demo')
+const NAME     = process.argv[2] ?? 'demo'
+const SNAPSHOT = join(ROOT, 'snapshots', NAME)
 
 if (!existsSync(SNAPSHOT)) {
-  console.error('❌ Demo snapshot not found at snapshots/demo/')
-  console.error('   Bootstrap it first:')
-  console.error('     pnpm emulators:seed          ← start fresh + seed')
-  console.error('     pnpm emulators:export:demo   ← save snapshot (while emulators:seed is running)')
+  console.error(`❌ Snapshot not found at snapshots/${NAME}/`)
+  console.error('   Bootstrap it first (while emulators are running):')
+  if (NAME === 'demo') {
+    console.error('     pnpm emulators:seed          ← start fresh + seed')
+    console.error('     pnpm emulators:export:demo   ← save snapshot (while emulators:seed is running)')
+  } else {
+    console.error('     pnpm emulators:start                       ← start empty emulators')
+    console.error(`     FIRESTORE_EMULATOR_HOST=localhost:8080 \\`)
+    console.error(`     FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \\`)
+    console.error(`     FIREBASE_STORAGE_EMULATOR_HOST=localhost:9199 \\`)
+    console.error(`     pnpm lead:seed --lead ${NAME}              ← seed the lead tenant`)
+    console.error(`     firebase emulators:export ./snapshots/${NAME} --project demo-linyup`)
+  }
   process.exit(1)
 }
 
@@ -67,7 +82,7 @@ console.log('==> Building Cloud Functions…')
 const fnCode = await runToCompletion('pnpm', ['--filter', '@linyup/functions', 'run', 'build'])
 if (fnCode !== 0) { console.error('❌ Functions build failed'); process.exit(1) }
 
-console.log(`==> Starting Firebase emulators with demo snapshot (${SNAPSHOT})`)
+console.log(`==> Starting Firebase emulators with '${NAME}' snapshot (${SNAPSHOT})`)
 const emulators = run('pnpm', [
   'exec', 'firebase', 'emulators:start',
   '--only', 'auth,firestore,functions,storage',
@@ -90,7 +105,7 @@ await waitForPort(5001)
 console.log('==> Waiting for Storage emulator on :9199')
 await waitForPort(9199)
 
-console.log('\n✅ Demo snapshot loaded — start the web app: pnpm dev:web')
-console.log('   State will be auto-saved to snapshots/demo/ on exit.\n')
+console.log(`\n✅ '${NAME}' snapshot loaded — start the web app: pnpm dev:web`)
+console.log(`   State will be auto-saved to snapshots/${NAME}/ on exit.\n`)
 
 await new Promise(() => {})

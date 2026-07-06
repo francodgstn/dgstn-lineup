@@ -1,0 +1,8 @@
+# Lead data folders (profiles + assets) are LOCAL-ONLY — never committed, so
+# prospective-customer business data never lands in the repo. Every per-lead folder
+# (scripts/leads/{lead}/) is ignored; only the shared infra is tracked:
+#   README.md, types.ts (the LeadProfile contract), and this file.
+#
+# Consequence: the "Seed Lead Sandbox" GitHub Action has no profiles to seed from —
+# lead seeding is local-only (supply the profile + images on your machine).
+*/
