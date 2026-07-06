@@ -8,7 +8,7 @@ site copy, images — used with their permission) plus fully **synthetic contact
 ## Seeding
 
 ```bash
-# Cloud linyup-sandbox (ADC locally, WIF in CI):
+# Cloud linyup-sandbox (via local ADC — gcloud auth application-default login):
 pnpm lead:seed --lead swimli            # idempotent — re-runs overwrite in place
 pnpm lead:seed --lead swimli --reset    # tear the lead's tenant down first
 
@@ -23,9 +23,8 @@ FIREBASE_STORAGE_EMULATOR_HOST=localhost:9199 \
 pnpm lead:seed --lead swimli
 ```
 
-Or via GitHub: **Actions → Seed Lead Sandbox → Run workflow** → pick the lead
-(tick `reset` for a clean slate). Never use `pnpm sandbox:reset` to clean up a
-lead — it wipes the six `/try` playground teams too; `--reset` is lead-scoped.
+Never use `pnpm sandbox:reset` to clean up a lead — it wipes the six `/try`
+playground teams too; `--reset` is lead-scoped.
 
 Lead tenants are intentionally **not** listed on the public `/try` picker
 (`apps/web/src/lib/demo.ts`) — access is via their direct logins (printed by the
@@ -41,9 +40,8 @@ is for local rehearsal only).
 > **Lead folders are local-only.** Every `scripts/leads/{lead}/` folder (profile +
 > assets) is gitignored via `scripts/leads/.gitignore`, so prospective-customer data
 > never lands in the repo — only `README.md` and `types.ts` are tracked. Keep your
-> lead folders on your machine (and back them up outside the repo). Because the
-> profiles aren't committed, the **"Seed Lead Sandbox" GitHub Action can't seed them
-> — seeding is local-only** (supply the profile + images on your machine).
+> lead folders on your machine (and back them up outside the repo). Seeding is
+> **local-only** — run it from your machine with the profile + images present.
 
 1. Create `scripts/leads/{lead}/profile.ts` exporting a `LeadProfile`
    (contract: `scripts/leads/types.ts`; the local `swimli` folder is the reference).

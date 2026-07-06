@@ -5,8 +5,8 @@
  *
  * Generic engine: all lead-specific data lives in a LeadProfile module at
  * scripts/leads/{lead}/profile.ts (see scripts/leads/README.md for the
- * contract). Add a lead = add a profile folder + a workflow choice entry in
- * .github/workflows/seed-lead.yml. Lead tenants are NOT listed on the public
+ * contract). Add a lead = add a profile folder under scripts/leads/{lead}/ (kept
+ * local-only — gitignored). Lead tenants are NOT listed on the public
  * /try picker (apps/web/src/lib/demo.ts) — access is via their direct logins
  * and /public/{slug} URLs only.
  *
@@ -27,9 +27,8 @@
  *
  * Targets (same dual-target pattern as seed-sandbox.ts):
  *   • Emulator when FIRESTORE_EMULATOR_HOST is set → `demo-linyup` namespace.
- *   • Otherwise the real `linyup-sandbox` project via ADC (locally:
- *     `gcloud auth application-default login`; in CI: the WIF auth step of
- *     .github/workflows/seed-lead.yml).
+ *   • Otherwise the real `linyup-sandbox` project via ADC
+ *     (`gcloud auth application-default login`).
  *
  * Storage bucket: `demo-linyup.appspot.com` (emulator) /
  * `linyup-sandbox.firebasestorage.app` (cloud) — override with

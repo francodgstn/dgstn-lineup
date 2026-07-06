@@ -3,6 +3,5 @@
 # (scripts/leads/{lead}/) is ignored; only the shared infra is tracked:
 #   README.md, types.ts (the LeadProfile contract), and this file.
 #
-# Consequence: the "Seed Lead Sandbox" GitHub Action has no profiles to seed from —
-# lead seeding is local-only (supply the profile + images on your machine).
+# Lead seeding is therefore local-only: supply the profile + images on your machine.
 */
