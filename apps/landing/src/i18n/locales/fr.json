@@ -391,7 +391,7 @@
     "cards": {
       "sell": {
         "title": "Vendez en ligne",
-        "body": "Vendez <strong>abonnements</strong>, <strong>affiliations</strong>, <strong>cours en ligne</strong> et <strong>produits</strong> dans votre propre boutique en ligne. Ou intégrez vos offres dans le site web."
+        "body": "Vendez <strong>abonnements</strong>, <strong>cours en ligne</strong> et <strong>produits</strong> dans votre propre boutique en ligne. Ou intégrez vos offres dans le site web."
       },
       "pay": {
         "title": "Acceptez les paiements",

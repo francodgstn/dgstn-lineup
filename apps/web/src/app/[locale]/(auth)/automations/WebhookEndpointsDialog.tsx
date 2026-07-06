@@ -156,8 +156,8 @@ export function WebhookEndpointsDialog({
 
         {!baseUrl && (
           <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-700 dark:text-amber-400">
-            Set <code className="font-mono">NEXT_PUBLIC_INBOUND_WEBHOOK_URL</code> to your deployed
-            Cloud Function URL so the full webhook URL is shown here.
+            Inbound webhooks aren&apos;t available in this environment yet. You can still
+            create endpoints — their full URLs will appear here once webhooks are enabled.
           </div>
         )}
 

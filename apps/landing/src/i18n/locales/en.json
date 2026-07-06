@@ -391,7 +391,7 @@
     "cards": {
       "sell": {
         "title": "Sell online",
-        "body": "Sell <strong>Subscriptions</strong>, <strong>Affiliations</strong>, <strong>Online Courses</strong> and <strong>Products</strong> in your very own online shop. Or integrate your offers in the website."
+        "body": "Sell <strong>Subscriptions</strong>, <strong>Online Courses</strong> and <strong>Products</strong> in your very own online shop. Or integrate your offers in the website."
       },
       "pay": {
         "title": "Accept payments",

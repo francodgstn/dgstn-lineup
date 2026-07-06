@@ -391,7 +391,7 @@
     "cards": {
       "sell": {
         "title": "Online verkaufen",
-        "body": "Verkaufe <strong>Abos</strong>, <strong>Zugehörigkeiten</strong>, <strong>Online-Kurse</strong> und <strong>Produkte</strong> in deinem eigenen Online-Shop. Oder binde deine Angebote in die Website ein."
+        "body": "Verkaufe <strong>Abos</strong>, <strong>Online-Kurse</strong> und <strong>Produkte</strong> in deinem eigenen Online-Shop. Oder binde deine Angebote in die Website ein."
       },
       "pay": {
         "title": "Zahlungen akzeptieren",
