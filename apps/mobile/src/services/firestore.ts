@@ -46,12 +46,11 @@ export const FirestoreService = {
     }
   },
 
-  // Verify code via existing membership signup function
+  // Verify code and log in via loginContactWithCode (validates OTP + mints session)
   async verifyCode(codeId: string, code: string, selectedContactId?: string): Promise<{
     verified: boolean;
     email: string;
-    prefillData?: Contact;
-    existingContactId?: string;
+    requiresSignup?: boolean;
     matchedContacts?: Contact[];
     requiresContactSelection?: boolean;
     customToken?: string | null;
@@ -60,15 +59,30 @@ export const FirestoreService = {
     teamSummaries?: { id: string; name: string }[] | null;
   }> {
     try {
-      const verifyContactCode = httpsCallable(getFunctions(), 'verifyContactCode');
+      const loginContactWithCode = httpsCallable(getFunctions(), 'loginContactWithCode');
 
-      const result = await verifyContactCode({
+      const result = await loginContactWithCode({
         codeId,
         code,
-        selectedContactId
+        selectedContactId,
       });
 
-      return result.data as any;
+      const data = result.data as any;
+
+      // loginContactWithCode returns customToken+contact on success,
+      // requiresContactSelection for multi-match, or requiresSignup for no match.
+      // Map to the shape AuthContext expects.
+      if (data.customToken) {
+        return { verified: true, email: data.email ?? '', ...data };
+      }
+      if (data.requiresContactSelection) {
+        return { verified: true, email: data.email ?? '', ...data };
+      }
+      if (data.requiresSignup) {
+        return { verified: true, email: data.email ?? '', requiresSignup: true };
+      }
+
+      return { verified: false, email: data.email ?? '' };
     } catch (error) {
       console.error('Error verifying code:', error);
       throw error;

@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from 'react-native-paper';
+import { gradientColors } from '../theme';
 
 interface GradientBackgroundProps {
   children: React.ReactNode;
@@ -10,11 +11,7 @@ interface GradientBackgroundProps {
 
 export const GradientBackground: React.FC<GradientBackgroundProps> = ({ children, style }) => {
   const theme = useTheme();
-  const isDark = theme.dark;
-
-  const colors = isDark
-    ? [theme.colors.background, '#0D1B2A', '#1B2838'] as const
-    : [theme.colors.background, '#EDF2FA', '#E0EAFC'] as const;
+  const colors = theme.dark ? gradientColors.dark : gradientColors.light;
 
   return (
     <LinearGradient

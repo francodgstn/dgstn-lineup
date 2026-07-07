@@ -35,8 +35,10 @@ export function LoginForm() {
       }
       router.replace('/')
       router.refresh()
-    } catch {
-      setError('Sign-in was cancelled or failed.')
+    } catch (e) {
+      // Keep the real reason in the logs; show the user a generic message.
+      console.error('operator sign-in failed:', e)
+      setError('Sign-in was cancelled or failed. Please try again.')
     } finally {
       setLoading(false)
     }
