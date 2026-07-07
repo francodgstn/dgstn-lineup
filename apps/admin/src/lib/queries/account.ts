@@ -181,7 +181,7 @@ function toSubscriptionView(sub: SaasSubscription): SubscriptionView {
 
 async function getTeamDetail(id: string): Promise<AccountDetail | null> {
   const teamRef = adminDb.collection(TEAMS_COLLECTION).doc(id)
-  const [teamDoc, subDoc, membersSnap, activitySnap, contactAgg] = await Promise.all([
+  const [teamDoc, subDoc, membersSnap, activitySnap, contactAgg, provisionalAgg] = await Promise.all([
     teamRef.get(),
     adminDb.collection(SAAS_SUBSCRIPTIONS_COLLECTION).doc(id).get(),
     teamRef.collection(TEAM_MEMBERS_SUBCOLLECTION).get(),
@@ -191,6 +191,14 @@ async function getTeamDetail(id: string): Promise<AccountDetail | null> {
       .limit(50)
       .get(),
     adminDb.collection(CONTACTS_COLLECTION).where('teamId', '==', id).count().get(),
+    // Provisional leads (trial bookings / form leads / unpaid shop registrations)
+    // don't count toward the plan cap — mirror functions utils/contactCap.ts.
+    adminDb
+      .collection(CONTACTS_COLLECTION)
+      .where('teamId', '==', id)
+      .where('provisional', '==', true)
+      .count()
+      .get(),
   ])
 
   if (!teamDoc.exists) return null
@@ -229,7 +237,10 @@ async function getTeamDetail(id: string): Promise<AccountDetail | null> {
     createdMs: team.created?.toMillis?.() ?? 0,
     orgId: team.org_id ?? null,
     subscription: sub ? toSubscriptionView(sub) : null,
-    contactUsage: contactUsageForPlan(plan, contactAgg.data().count),
+    contactUsage: contactUsageForPlan(
+      plan,
+      Math.max(0, contactAgg.data().count - provisionalAgg.data().count)
+    ),
     members,
     activity,
     payments,

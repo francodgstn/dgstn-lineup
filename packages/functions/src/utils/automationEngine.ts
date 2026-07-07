@@ -80,6 +80,13 @@ export type AutomationAction =
   | { type: 'assign_tag'; tag: string }
   | { type: 'remove_tag'; tag: string }
   | { type: 'update_field'; field: string; value: string | number | boolean | null }
+  // Archive (never delete) the contact. The daily scan skips archived contacts,
+  // so schedule_daily rules using this are naturally idempotent. Powers the
+  // default 'lib_trial_cleanup' rule (stale never-attended trial bookings).
+  | { type: 'archive_contact' }
+  // Append a timestamped note to the contact (contact_notes subcollection). The
+  // note supports the same {{firstname}}/{{date}}… placeholders as emails.
+  | { type: 'add_note'; note: string }
   | { type: 'notify_team'; subject: string; body: string }
   | { type: 'log_activity'; message: string }
   | { type: 'webhook'; url: string }
@@ -555,6 +562,8 @@ export function hasResolvableActions(actions: AutomationAction[], resolved: Reso
     if (a.type === 'send_email' && resolved.template) return true
     if (a.type === 'create_alert' && resolved.alertPreset) return true
     if (a.type === 'update_field') return true
+    if (a.type === 'archive_contact') return true
+    if (a.type === 'add_note') return true
     if (a.type === 'notify_team') return true
     if (a.type === 'log_activity') return true
     if (a.type === 'assign_tag') return true
@@ -645,29 +654,134 @@ async function executeActionsForContact(
         executed++
       }
 
-      // update_field — write a whitelisted contact field
+      // update_field — write an allowlisted contact field. Built-ins plus the
+      // team's custom fields (dotted 'custom_fields.{id}' paths, validated against
+      // custom_field_definitions so a rule can never write arbitrary keys).
       if (action.type === 'update_field') {
-        const ALLOWED_UPDATE_FIELDS = ['acquisition_stage', 'notes', 'tags'] as const
+        const ALLOWED_UPDATE_FIELDS = [
+          'acquisition_stage',
+          'notes',
+          'tags',
+          'source',
+          'source_detail',
+          'lead_acknowledged',
+        ] as const
         const field = action.field
-        if (!(ALLOWED_UPDATE_FIELDS as readonly string[]).includes(field)) {
+        const customFieldId = field.startsWith('custom_fields.')
+          ? field.slice('custom_fields.'.length)
+          : null
+        const customDef = customFieldId
+          ? (
+              teamData.custom_field_definitions as
+                | Array<{ id: string; type?: string }>
+                | undefined
+            )?.find((d) => d.id === customFieldId)
+          : undefined
+        // Rank fields ('ranks.{systemId}') — validate the system id against the
+        // team's configured ranking systems, never write an arbitrary key.
+        const rankSystemId = field.startsWith('ranks.') ? field.slice('ranks.'.length) : null
+        const isKnownRank =
+          rankSystemId != null &&
+          ((teamData.ranking_systems as Array<{ id: string }> | undefined) ?? []).some(
+            (r) => r.id === rankSystemId
+          )
+        const allowed =
+          customDef != null ||
+          isKnownRank ||
+          (ALLOWED_UPDATE_FIELDS as readonly string[]).includes(field)
+        if (!allowed) {
           console.log(
             `[automationEngine] update_field: field '${field}' not in allowlist, skipping`
           )
         } else {
-          await admin
-            .firestore()
-            .collection('contacts')
-            .doc(contactId)
-            .update({ [field]: action.value })
+          // The builder stores values as strings — coerce per field type
+          // (CustomFieldType: text | number | date | select | checkbox; ranks: number).
+          let value: string | number | boolean | null = action.value
+          if (field === 'lead_acknowledged' || customDef?.type === 'checkbox') {
+            value = value === true || value === 'true'
+          } else if (customDef?.type === 'number' || isKnownRank) {
+            const n = Number(value)
+            value = Number.isFinite(n) ? n : null
+          }
+          const update: Record<string, unknown> = { [field]: value }
+          // Stage writes behave like a manual promotion: stamp the milestone and,
+          // for attended/joined, MATERIALIZE a provisional lead (it now counts
+          // toward the contact cap — see Contact.provisional).
+          if (field === 'acquisition_stage') {
+            update.acquisition_stage_updated_at = FieldValue.serverTimestamp()
+            if (value === 'trial_attended') update.trial_attended_at = FieldValue.serverTimestamp()
+            if (value === 'joined') update.converted_at = FieldValue.serverTimestamp()
+            if (value === 'trial_attended' || value === 'joined') {
+              update.provisional = FieldValue.delete()
+              update.provisional_expires_at = FieldValue.delete()
+            }
+          }
+          await admin.firestore().collection('contacts').doc(contactId).update(update)
           await to(
             logActivity(teamId, {
               date: FieldValue.serverTimestamp(),
               event: 'automation_update_field',
               parameters: {
                 description:
-                  `Automation set '${field}' to '${String(action.value)}' for ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
+                  `Automation set '${field}' to '${String(value)}' for ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
                 field,
-                value: action.value,
+                value,
+                rule_id: ruleId,
+                automated: true,
+              },
+              refs: { contact: contactId, user: null },
+            })
+          )
+          executed++
+        }
+      }
+
+      // archive_contact — archive (never delete) the contact; the daily scan skips
+      // archived contacts, so re-runs are naturally idempotent.
+      if (action.type === 'archive_contact') {
+        await admin.firestore().collection('contacts').doc(contactId).update({
+          archived_at: FieldValue.serverTimestamp(),
+          archived_reason: 'automation',
+        })
+        await to(
+          logActivity(teamId, {
+            date: FieldValue.serverTimestamp(),
+            event: 'automation_archive_contact',
+            parameters: {
+              description:
+                `Automation archived ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
+              rule_id: ruleId,
+              automated: true,
+            },
+            refs: { contact: contactId, user: null },
+          })
+        )
+        executed++
+      }
+
+      // add_note — append a timestamped note to the contact (contact_notes
+      // subcollection), same shape the contact-detail Notes tab reads/writes.
+      if (action.type === 'add_note') {
+        const content = substituteVariables(action.note, contact, teamName, now, teamData).trim()
+        if (content) {
+          await admin
+            .firestore()
+            .collection('contacts')
+            .doc(contactId)
+            .collection('contact_notes')
+            .add({
+              content,
+              source: 'automation',
+              rule_id: ruleId,
+              created_at: FieldValue.serverTimestamp(),
+              updated_at: FieldValue.serverTimestamp(),
+            })
+          await to(
+            logActivity(teamId, {
+              date: FieldValue.serverTimestamp(),
+              event: 'automation_add_note',
+              parameters: {
+                description: `Automation added a note to ${contact.firstname || ''} ${contact.lastname || ''}.`.trim(),
                 rule_id: ruleId,
                 automated: true,
               },

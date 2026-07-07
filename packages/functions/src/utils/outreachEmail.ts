@@ -2,8 +2,11 @@
 // Variable substitution, HTML body rendering, and outreach email builder for team-defined templates.
 import { addDays, format } from 'date-fns'
 import { marked } from 'marked'
-import { wrapInLayout, gradients } from './emailLayout'
+import { wrapInLayout, gradients, buildTeamFooter } from './emailLayout'
 import { getHostingUrl } from './env'
+
+// Re-exported for existing importers — implementation lives in @linyup/shared.
+export { buildTeamFooter }
 
 const ACQUISITION_STAGE_LABELS: Record<string, string> = {
   trial_booked: 'Trial booked',
@@ -60,33 +63,6 @@ export function substituteVariables(
       const outreachPlaceholders = (teamData.outreach_placeholders as Record<string, string>) || {}
       return outreachPlaceholders[key] !== undefined ? outreachPlaceholders[key] : match
     })
-}
-
-/**
- * Builds the team-branded footer for outreach emails.
- */
-export function buildTeamFooter(teamData: TeamDataLike = {}, language = 'en'): string {
-  const socialLinks = (teamData.socialLinks as Array<{ platform: string; url: string }>) || []
-  const settings = (teamData.settings as Record<string, unknown>) || {}
-  const links: string[] = []
-  const website = socialLinks.find((l) => l.platform === 'website')?.url
-  if (website) links.push(`<a href="${website}">Website</a>`)
-  if (settings.legalGtcUrl)
-    links.push(`<a href="${settings.legalGtcUrl as string}">Terms &amp; Conditions</a>`)
-  if (settings.legalPrivacyUrl)
-    links.push(`<a href="${settings.legalPrivacyUrl as string}">Privacy Policy</a>`)
-  const linkLine = links.length ? `<p>${links.join(' &nbsp;·&nbsp; ')}</p>` : ''
-  const teamEmail = (settings.teamEmail as string) || ''
-  const emailLine = teamEmail
-    ? `<p>${(teamData.name as string) || ''} &nbsp;·&nbsp; ${teamEmail}</p>`
-    : teamData.name
-      ? `<p>${teamData.name as string}</p>`
-      : ''
-  const automated = language === 'it' ? 'Messaggio automatico.' : 'Automated message.'
-  const unsubLine = teamEmail
-    ? `<p>${automated} To unsubscribe, contact us at <a href="mailto:${teamEmail}">${teamEmail}</a> and we will update your preferences.</p>`
-    : `<p>${automated} To unsubscribe, reply to this email and we will update your preferences.</p>`
-  return emailLine + linkLine + unsubLine
 }
 
 /**

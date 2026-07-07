@@ -450,10 +450,20 @@ export const trackSessionParticipants = onDocumentWritten(
     }
     // First attendance promotes the acquisition stage trial_booked → trial_attended.
     // Sticky high-water mark: only advance on attendance, never regress on removal.
-    if (activityEvent === 'session_participant_add' && contact?.acquisition_stage === 'trial_booked') {
+    // A STAGE-LESS contact (off-funnel form/shop lead) attending enters the funnel
+    // here too — their first class IS their trial. Attendance also MATERIALIZES a
+    // provisional lead: it now counts toward the contact cap (see Contact.provisional).
+    if (
+      activityEvent === 'session_participant_add' &&
+      (contact?.acquisition_stage === 'trial_booked' || !contact?.acquisition_stage)
+    ) {
       counterUpdate.acquisition_stage = 'trial_attended'
       counterUpdate.acquisition_stage_updated_at = FieldValue.serverTimestamp()
       counterUpdate.trial_attended_at = sessionStart ?? FieldValue.serverTimestamp()
+    }
+    if (activityEvent === 'session_participant_add' && contact?.provisional === true) {
+      counterUpdate.provisional = FieldValue.delete()
+      counterUpdate.provisional_expires_at = FieldValue.delete()
     }
     await to(db.collection('contacts').doc(contactId).update(counterUpdate))
 

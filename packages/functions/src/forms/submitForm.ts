@@ -226,6 +226,9 @@ export const submitForm = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (
         // trial→join journey, so NO acquisition_stage (not on the funnel). They enter
         // the funnel later if they book a trial. Mirrors the shop entry route.
         entry: 'form',
+        // A captured lead doesn't count toward the contact cap until it materializes
+        // (attends / joins / pays). No expiry — never auto-purged. See Contact.provisional.
+        provisional: true,
         source: 'website',
         source_detail: form.title,
         lead_acknowledged: false,

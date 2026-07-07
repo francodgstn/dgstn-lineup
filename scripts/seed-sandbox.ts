@@ -2093,7 +2093,7 @@ async function seedDemoTeam(profile: SectorProfile) {
           c.type === 'student' && c.totalSessions > 20
             ? 'Consistent attendance. Progressing well — review focus areas next month.'
             : c.type === 'trial'
-              ? 'Came in via the website trial form — follow up after first class.'
+              ? 'Came in via the website trial form — follow up after first session.'
               : '',
         created_at: createdTs,
         deleted_at: null,
@@ -2605,12 +2605,12 @@ async function seedAutomations(teamId: string, language: string) {
     {
       id: `${teamId}-tmpl-welcome`,
       system_key: `lib_trial_welcome:${language}`,
-      name: 'Welcome to your first class',
+      name: 'Welcome to your first session',
       body_mode: 'markdown',
       language,
       active: true,
       subject: 'Welcome to {{teamName}}, {{firstname}}!',
-      body: 'Hi {{firstname}},\n\nWe are so excited to welcome you to **{{teamName}}** for your first class! Come a few minutes early, wear comfortable clothes, and bring water.\n\nSee you soon!\n\nThe {{teamName}} team',
+      body: 'Hi {{firstname}},\n\nWe are delighted to welcome you to **{{teamName}}** for your first session!\n\nArrive a few minutes early so we can welcome you and answer any questions — no experience needed, we will guide you through everything.\n\nWe look forward to meeting you!\n\nThe {{teamName}} team',
     },
     {
       id: `${teamId}-tmpl-winback`,
@@ -2620,7 +2620,7 @@ async function seedAutomations(teamId: string, language: string) {
       language,
       active: true,
       subject: '{{firstname}}, we miss you at {{teamName}}',
-      body: 'Hi {{firstname}},\n\nIt has been a while since your last visit. We would love to see you back. Reply to this email and we will help you find a class that fits your schedule.\n\nThe {{teamName}} team',
+      body: 'Hi {{firstname}},\n\nIt has been a while since your last session. Whenever you are ready to come back, we will be here.\n\nReply to this email and we will help you find a time that fits your schedule.\n\nThe {{teamName}} team',
     },
   ]
   for (const t of templates) {
@@ -2682,7 +2682,7 @@ async function seedAutomations(teamId: string, language: string) {
       system_key: 'lib_trial_welcome',
       trigger: { type: 'contact_created' },
       // Trial-funnel contacts only — off-funnel entries (shop/form, no stage) must
-      // NOT get the "first class" welcome (engine fails closed on unknown types).
+      // NOT get the "first session" welcome (engine fails closed on unknown types).
       conditions: [{ type: 'acquisition_stage', value: 'trial_booked' }],
       actions: [{ type: 'send_email', templateId: `${teamId}-tmpl-welcome` }],
     },
@@ -2712,6 +2712,21 @@ async function seedAutomations(teamId: string, language: string) {
         { type: 'create_alert', presetId: `${teamId}-preset-assessment` },
         { type: 'log_activity', message: '{{firstname}} reached 50 sessions 🎉' },
       ],
+    },
+    {
+      // Default lead-hygiene rule — mirrors the onTeamCreated trigger
+      // (@linyup/shared TRIAL_CLEANUP_RULE). Fixed doc id converges, no duplicate.
+      id: 'lib_trial_cleanup',
+      name: 'Archive stale trial bookings',
+      active: true,
+      system_key: 'lib_trial_cleanup',
+      trigger: { type: 'schedule_daily' },
+      conditions: [
+        { type: 'acquisition_stage', value: 'trial_booked' },
+        { type: 'sessions_attended_exactly', value: 0 },
+        { type: 'days_since_created', value: 30 },
+      ],
+      actions: [{ type: 'archive_contact' }],
     },
   ]
   for (const r of rules) {

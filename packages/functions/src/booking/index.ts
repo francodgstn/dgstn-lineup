@@ -4,7 +4,8 @@ import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { getTeam } from '../utils/teams'
-import { sendEmail } from '../utils/email'
+import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { hashVerificationCode, verifyCode, generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
@@ -644,6 +645,15 @@ export const bookSession = onCall(async (request) => {
       if (existingBooking.exists || existingParticipant.exists) {
         throw new HttpsError('already-exists', 'You are already registered for this session')
       }
+      // An existing OFF-FUNNEL contact (form/shop lead — no acquisition stage)
+      // booking a trial enters the funnel normally at this point.
+      if (!exactMatch.data().acquisition_stage) {
+        await exactMatch.ref.update({
+          acquisition_stage: 'trial_booked',
+          acquisition_stage_updated_at: FieldValue.serverTimestamp(),
+          trial_booked_at: FieldValue.serverTimestamp(),
+        })
+      }
     } else {
       isNewContact = true
       const newContactRef = admin.firestore().collection('contacts').doc()
@@ -657,6 +667,10 @@ export const bookSession = onCall(async (request) => {
         acquisition_stage: 'trial_booked',
         acquisition_stage_updated_at: FieldValue.serverTimestamp(),
         entry: 'booking',
+        // A never-attended trial lead doesn't count toward the contact cap (no
+        // expiry — the 'lib_trial_cleanup' automation archives stale ones).
+        // Cleared on first attendance/payment/promotion. See Contact.provisional.
+        provisional: true,
         teamId: data.teamId,
         archived_at: null,
         deleted_at: null,
@@ -1055,15 +1069,21 @@ export const cancelBooking = onCall(async (request) => {
   })
   const timeStr = `${sessionStart.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })} – ${sessionEnd.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}`
   const firstname = (booking.firstname as string) || 'Guest'
-  const rebookLine = rebookUrl ? `<p><a href="${rebookUrl}">Book another session</a></p>` : ''
+  const rebookLine = rebookUrl
+    ? `<p style="text-align:center;margin-top:24px;">${ctaButton(rebookUrl, 'Book another session')}</p>`
+    : ''
 
   try {
     if (await systemEmailEnabledFor(teamId, 'booking_confirmation')) {
+      const { html } = buildEmailTemplate({
+        title: 'Booking cancelled',
+        body: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.</p>${rebookLine}`,
+      })
       await sendEmail({
         to: booking.email as string,
         teamId,
         subject: `Booking Cancelled – ${activityName}`,
-        html: `<p>Hi ${firstname},</p><p>Your booking for <strong>${activityName}</strong> with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.</p>${rebookLine}`,
+        html,
         text: `Hi ${firstname},\n\nYour booking for ${activityName} with ${teamName} on ${dateStr} at ${timeStr} has been cancelled.\n${rebookUrl ? `Book another session: ${rebookUrl}` : ''}`,
       })
     }

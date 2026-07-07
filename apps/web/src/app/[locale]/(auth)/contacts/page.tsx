@@ -272,6 +272,11 @@ function CreateContactDialog({
     defaultValues: { entry: 'signup' },
   })
   const entry = watch('entry')
+  // At the hard cap only 'booking' is selectable — snap the default onto it.
+  useEffect(() => {
+    if (open && atHardCap && entry !== 'booking') setValue('entry', 'booking')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, atHardCap])
   // A coach (own-scoped) creating a contact auto-assigns it to themselves so it
   // lands in their own book and satisfies the own-scope Firestore rules.
   const { ownScoped } = useCapabilities()
@@ -279,7 +284,10 @@ function CreateContactDialog({
   const ENTRIES = ['booking', 'walk_in', 'signup'] as const
 
   const onSubmit = async (values: CreateValues) => {
-    if (atHardCap) {
+    // At the Free hard cap only counting entries are blocked — a trial 'booking'
+    // lead is PROVISIONAL (doesn't consume allowance) and stays allowed, matching
+    // the public booking page which keeps working at cap.
+    if (atHardCap && values.entry !== 'booking') {
       onOpenChange(false)
       return
     }
@@ -294,6 +302,9 @@ function CreateContactDialog({
       source: values.source || null,
       source_detail: values.source_detail || null,
       ...stageData,
+      // A never-attended trial lead doesn't count toward the cap; attendance /
+      // payment / promotion materializes it. See Contact.provisional.
+      ...(values.entry === 'booking' ? { provisional: true } : {}),
       acquisition_stage_updated_at: serverTimestamp(),
       lead_acknowledged: false,
       createdBy: userId,
@@ -316,23 +327,33 @@ function CreateContactDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="contents">
           <div className="space-y-4 pt-1">
-            {/* Entry choice — determines birth stage */}
+            {/* Entry choice — determines birth stage. At the Free hard cap, only
+                'booking' (a non-counting provisional lead) stays selectable. */}
             <div className="flex gap-2">
-              {ENTRIES.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setValue('entry', v)}
-                  className={`flex-1 py-1.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                    entry === v
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {t(`entry_${v}`)}
-                </button>
-              ))}
+              {ENTRIES.map((v) => {
+                const capBlocked = atHardCap === true && v !== 'booking'
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    disabled={capBlocked}
+                    onClick={() => setValue('entry', v)}
+                    className={`flex-1 py-1.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                      entry === v
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : capBlocked
+                          ? 'bg-background text-muted-foreground/40 cursor-not-allowed'
+                          : 'bg-background text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {t(`entry_${v}`)}
+                  </button>
+                )
+              })}
             </div>
+            {atHardCap && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">{t('capEntryHint')}</p>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -1104,9 +1125,9 @@ function ContactRow({
                 {t('pendingSignup')}
               </span>
             )}
-            {/* Provisional shop registration — shows the purge countdown until a
-                payment (or manual confirm) clears it */}
-            {contact.provisional === true && (
+            {/* Shop registration awaiting payment — the ONLY provisional kind with a
+                purge deadline; trial/form leads show their normal stage badges. */}
+            {contact.provisional === true && contact.provisional_expires_at != null && (
               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                 {t('unconfirmedBadge', {
                   days: Math.max(
@@ -1728,7 +1749,7 @@ function BulkBar({
 
 // ─── tab types ────────────────────────────────────────────────────────────────
 
-type TabId = 'active' | 'unconfirmed' | 'archived' | 'deleted' | 'requests'
+type TabId = 'active' | 'leads' | 'archived' | 'deleted' | 'requests'
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
@@ -1744,11 +1765,12 @@ export default function ContactsPage() {
   // archived/deleted admin views (those queries would be denied by the rules).
   const coachScopeUid = ownScoped ? (user?.uid ?? null) : null
   const { data: allActive = [], isLoading: loadingActive } = useActiveContacts(currentTeamId, coachScopeUid)
-  // Provisional contacts (shop registrations awaiting their first payment) live in
-  // their own "Unconfirmed" tab and don't count toward the plan cap — mirrors the
-  // server-side canCreateContact (utils/contactCap.ts).
+  // PROVISIONAL contacts — the not-yet-materialized leads (shop registrations
+  // awaiting payment, trial bookings never attended, form leads) — live in the
+  // "Leads" tab and don't count toward the plan cap; the Active tab therefore
+  // equals the counted roster. Mirrors server-side canCreateContact (contactCap.ts).
   const active = useMemo(() => allActive.filter((c) => c.provisional !== true), [allActive])
-  const unconfirmed = useMemo(() => allActive.filter((c) => c.provisional === true), [allActive])
+  const leads = useMemo(() => allActive.filter((c) => c.provisional === true), [allActive])
   const { data: archived = [], isLoading: loadingArchived } = useArchivedContacts(ownScoped ? null : currentTeamId)
   const { data: deleted = [], isLoading: loadingDeleted } = useDeletedContacts(ownScoped ? null : currentTeamId)
   const { data: requests = [] } = useContactRequests(currentTeamId)
@@ -1772,19 +1794,16 @@ export default function ContactsPage() {
   // The Unconfirmed tab only exists while provisional contacts do — hop back to
   // Active when the last one is confirmed/deleted (its tab entry disappears).
   useEffect(() => {
-    if (tab === 'unconfirmed' && !loadingActive && unconfirmed.length === 0) setTab('active')
-  }, [tab, loadingActive, unconfirmed.length])
+    if (tab === 'leads' && !loadingActive && leads.length === 0) setTab('active')
+  }, [tab, loadingActive, leads.length])
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [capDialogOpen, setCapDialogOpen] = useState(false)
 
-  // Both "add contact" entry points divert here when the Free cap is reached.
-  const openCreateDialog = () => {
-    if (freeCapBlocked) setCapDialogOpen(true)
-    else setDialogOpen(true)
-  }
+  // The create dialog always opens — at the Free hard cap it restricts the entry
+  // choice to 'booking' (a non-counting provisional lead) instead of blocking.
+  const openCreateDialog = () => setDialogOpen(true)
   const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'stage' | 'group-add' | 'group-remove' | null>(null)
 
   // confirm dialogs
@@ -1898,7 +1917,7 @@ export default function ContactsPage() {
   /* eslint-disable react-hooks/exhaustive-deps -- applyFiltersAndSearch closes over contactGroups + team thresholds */
   const engagementThresholds = team?.engagement_thresholds
   const filteredActive   = useMemo(() => applyFiltersAndSearch(active,   filters, search), [active,   filters, search, contactGroups, engagementThresholds])
-  const filteredUnconfirmed = useMemo(() => applyFiltersAndSearch(unconfirmed, filters, search), [unconfirmed, filters, search, contactGroups, engagementThresholds])
+  const filteredLeads = useMemo(() => applyFiltersAndSearch(leads, filters, search), [leads, filters, search, contactGroups, engagementThresholds])
   const filteredArchived = useMemo(() => applyFiltersAndSearch(archived, filters, search), [archived, filters, search, contactGroups, engagementThresholds])
   const filteredDeleted  = useMemo(() => applyFiltersAndSearch(deleted,  filters, search), [deleted,  filters, search, contactGroups, engagementThresholds])
   /* eslint-enable react-hooks/exhaustive-deps */
@@ -1907,11 +1926,11 @@ export default function ContactsPage() {
 
   const currentList =
     tab === 'active' ? filteredActive
-    : tab === 'unconfirmed' ? filteredUnconfirmed
+    : tab === 'leads' ? filteredLeads
     : tab === 'archived' ? filteredArchived
     : filteredDeleted
   const isLoading =
-    tab === 'active' || tab === 'unconfirmed' ? loadingActive
+    tab === 'active' || tab === 'leads' ? loadingActive
     : tab === 'archived' ? loadingArchived
     : loadingDeleted
 
@@ -1971,6 +1990,9 @@ export default function ContactsPage() {
       updateDoc(doc(db, CONTACTS_COLLECTION, id), {
         subscription_type_id: type?.id ?? null,
         subscription_type_name: type?.name ?? null,
+        // Assigning a subscription materializes a provisional lead (offline-paid
+        // members count toward the cap too). See Contact.provisional.
+        ...(type ? { provisional: deleteField(), provisional_expires_at: deleteField() } : {}),
         updatedAt: serverTimestamp(),
       })
     ))
@@ -1994,6 +2016,11 @@ export default function ContactsPage() {
         acquisition_stage_updated_at: now,
         ...(stage === 'trial_attended' ? { trial_attended_at: now } : {}),
         ...(stage === 'joined' ? { converted_at: now } : {}),
+        // Promoting past 'trial_booked' MATERIALIZES a provisional lead — it now
+        // counts toward the contact cap. See Contact.provisional.
+        ...(stage === 'trial_attended' || stage === 'joined'
+          ? { provisional: deleteField(), provisional_expires_at: deleteField() }
+          : {}),
         updatedAt: now,
       })
     ))
@@ -2016,18 +2043,19 @@ export default function ContactsPage() {
 
   const TABS: { id: TabId; label: string; count: number }[] = [
     { id: 'active',   label: t('tabActive'),   count: active.length },
-    // Unconfirmed = provisional shop registrations (no payment yet) — admin view,
-    // shown only when any exist.
-    ...(ownScoped || unconfirmed.length === 0
+    // Leads = ALL provisional contacts (trial bookings never attended, form leads,
+    // shop registrations awaiting payment) — the cap-exclusion set. Shown whenever
+    // any exist, INCLUDING for own-scoped coaches (their assigned leads live here).
+    ...(leads.length === 0
       ? []
-      : [{ id: 'unconfirmed' as TabId, label: t('tabUnconfirmed'), count: unconfirmed.length }]),
+      : [{ id: 'leads' as TabId, label: t('tabLeads'), count: leads.length }]),
     // Archived/deleted are studio-admin views — hidden for own-scoped coaches.
     ...(ownScoped ? [] : [{ id: 'archived' as TabId, label: t('tabArchived'), count: archived.length }]),
     ...(ownScoped ? [] : [{ id: 'deleted' as TabId, label: t('tabDeleted'), count: deleted.length }]),
     { id: 'requests', label: t('tabRequests'),  count: requests.filter((r) => (r.status ?? 'pending') === 'pending').length },
   ]
 
-  const selectable = tab === 'active' || tab === 'unconfirmed' || tab === 'archived' || tab === 'deleted'
+  const selectable = tab === 'active' || tab === 'leads' || tab === 'archived' || tab === 'deleted'
   const selectedList = [...selected]
 
   return (
@@ -2245,8 +2273,8 @@ export default function ContactsPage() {
         <BulkBar
           count={selected.size}
           tab={tab}
-          onArchive={tab === 'active' ? () => setConfirmArchive(selectedList) : undefined}
-          onConfirm={tab === 'unconfirmed' ? () => confirmProvisional(selectedList) : undefined}
+          onArchive={tab === 'active' || tab === 'leads' ? () => setConfirmArchive(selectedList) : undefined}
+          onConfirm={tab === 'leads' ? () => confirmProvisional(selectedList) : undefined}
           onRestore={tab === 'archived' || tab === 'deleted' ? () => setConfirmRestore(selectedList) : undefined}
           onDelete={tab !== 'deleted' ? () => setConfirmDelete(selectedList) : undefined}
           onClear={() => setSelected(new Set())}
@@ -2277,34 +2305,6 @@ export default function ContactsPage() {
           atHardCap={freeCapBlocked}
         />
       )}
-
-      {/* Free plan hard-cap dialog — shown instead of the create form */}
-      <Dialog open={capDialogOpen} onOpenChange={setCapDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t('freeCapDialogTitle')}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            {t('freeCapDialogBody', { included: usage.included ?? 0 })}
-          </p>
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setCapDialogOpen(false)}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {t('freeCapDialogDismiss')}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setCapDialogOpen(false); openUpgradeModal({ minPlan: 'coach' }) }}
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-            >
-              {t('freeCapDialogCta')}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ConfirmDialog
         open={confirmArchive.length > 0}

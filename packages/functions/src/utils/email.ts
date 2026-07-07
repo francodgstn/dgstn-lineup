@@ -8,6 +8,7 @@
 import { sendStudioMail, sendSystemMail, type SendOutcome } from '../mail/mailService'
 import type { MailAttachment } from '../mail/types'
 import { escapeHtml } from './html'
+import { wrapInLayout } from './emailLayout'
 
 export { idempotencyKey } from '../mail/mailService'
 
@@ -60,28 +61,13 @@ export async function sendBatchEmails(
 export function buildEmailTemplate({ title, body, footer }: { title: string; body: string; footer?: string }) {
   const defaultFooter = footer || 'This is an automated email from Linyup.<br>Please do not reply.'
 
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
-    .header h1 { margin: 0; font-size: 24px; }
-    .content { background: #ffffff; padding: 30px 20px; border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; }
-    .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 14px; color: #666; border-radius: 0 0 8px 8px; border-top: 1px solid #e0e0e0; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header"><h1>${escapeHtml(title)}</h1></div>
-    <div class="content">${body}</div>
-    <div class="footer">${defaultFooter}</div>
-  </div>
-</body>
-</html>`
+  // Delegates to the shared Linyup layout so transactional mail (bookings,
+  // codes, invites, billing) matches outreach/automation emails.
+  const html = wrapInLayout({
+    headerTitle: escapeHtml(title),
+    content: body,
+    footerContent: `<p>${defaultFooter}</p>`,
+  })
 
   const text = `${title}\n${'='.repeat(title.length)}\n\n${body.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()}\n\n---\n${defaultFooter.replace(/<[^>]*>/g, '')}`
 

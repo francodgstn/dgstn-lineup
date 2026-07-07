@@ -9,13 +9,11 @@ import {
   where,
   orderBy,
   getDocs,
-  getDoc,
   addDoc,
   updateDoc,
   deleteDoc,
   doc,
   serverTimestamp,
-  Timestamp,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -30,7 +28,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -78,20 +76,18 @@ import {
   FileText,
   Settings2,
   Zap,
-  RefreshCw,
   Sparkles,
   BookOpen,
   Tag,
   Webhook,
 } from 'lucide-react'
-import { TEAMS_COLLECTION, SUBSCRIPTION_ROLLUP_STATUSES } from '@linyup/shared'
-import type { SubscriptionType } from '@linyup/shared'
+import { TEAMS_COLLECTION, SUBSCRIPTION_ROLLUP_STATUSES, CONTACT_SOURCES } from '@linyup/shared'
+import type { SubscriptionType, CustomFieldDefinition, RankingSystem } from '@linyup/shared'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
-import { SystemEmailsCard } from './SystemEmailsCard'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups } from '@/plugins/contact-groups/hooks'
 
@@ -121,6 +117,7 @@ interface AutomationAction {
   subject?: string
   body?: string
   message?: string
+  note?: string // add_note
   tag?: string // assign_tag / remove_tag
   url?: string // webhook
 }
@@ -164,6 +161,7 @@ interface FormAction {
   subject?: string // notify_team — email subject
   body?: string // notify_team — email body (markdown)
   message?: string // log_activity — log message
+  note?: string // add_note — note content (markdown / placeholders)
   tag?: string // assign_tag / remove_tag
   url?: string // webhook
   group_id?: string // add_to_group / remove_from_group
@@ -250,7 +248,9 @@ const ACQUISITION_STAGE_VALUES = ['trial_booked', 'trial_attended', 'joined'] as
 
 const ACTION_TYPE_VALUES = [
   'send_email',
+  'add_note',
   'update_field',
+  'archive_contact',
   'assign_tag',
   'remove_tag',
   'notify_team',
@@ -289,8 +289,24 @@ function acquisitionStageLabel(t: ReturnType<typeof useTranslations>, stage: str
   return t(`acquisitionStage.${stage}` as Parameters<typeof t>[0])
 }
 
-function updateFieldLabel(t: ReturnType<typeof useTranslations>, field: string): string {
-  return field === 'acquisition_stage' ? t('actions.updateField.acquisitionStage') : field
+const UPDATE_FIELD_LABEL_KEYS: Record<string, string> = {
+  acquisition_stage: 'actions.updateField.acquisitionStage',
+  source: 'actions.updateField.source',
+  source_detail: 'actions.updateField.sourceDetail',
+  notes: 'actions.updateField.notes',
+  lead_acknowledged: 'actions.updateField.leadAcknowledged',
+}
+
+function updateFieldLabel(
+  t: ReturnType<typeof useTranslations>,
+  field: string,
+  customLabel?: string
+): string {
+  if (customLabel) return customLabel
+  const key = UPDATE_FIELD_LABEL_KEYS[field]
+  if (key) return t(key as Parameters<typeof t>[0])
+  // Custom fields are stored as dotted paths — show the definition id as fallback.
+  return field.startsWith('custom_fields.') ? field.slice('custom_fields.'.length) : field
 }
 
 function conditionSummary(
@@ -323,7 +339,12 @@ function actionSummary(
   }
   if (a.type === 'create_alert') return t('actions.summaryCreateAlert')
   if (a.type === 'update_field')
-    return t('actions.summaryUpdateField', { field: a.field ?? '—', value: String(a.value ?? '—') })
+    return t('actions.summaryUpdateField', {
+      field: updateFieldLabel(t, a.field ?? '—'),
+      value: String(a.value ?? '—'),
+    })
+  if (a.type === 'archive_contact') return t('actions.summaryArchiveContact')
+  if (a.type === 'add_note') return t('actions.summaryAddNote', { note: a.note ?? '' })
   if (a.type === 'notify_team') return t('actions.summaryNotifyTeam', { subject: a.subject ?? '' })
   if (a.type === 'log_activity') return t('actions.summaryLogActivity', { message: a.message ?? '' })
   if (a.type === 'assign_tag') return t('actions.summaryAssignTag', { tag: a.tag ?? '—' })
@@ -767,12 +788,53 @@ function ConditionEditor({
 
 // ─── Action editor ────────────────────────────────────────────────────────────
 
-const UPDATE_FIELD_OPTIONS = [
-  {
-    value: 'acquisition_stage',
-    values: ['trial_booked', 'trial_attended', 'joined'],
-  },
-] as const
+// update_field catalog: built-in contact fields + (in ActionEditor) the team's
+// custom fields. `kind` drives the value editor; keep in lockstep with the engine
+// allowlist in packages/functions/src/utils/automationEngine.ts.
+interface UpdateFieldOption {
+  value: string
+  /** Custom fields / ranks: the display label (built-ins translate via updateFieldLabel). */
+  label?: string
+  kind: 'enum' | 'text' | 'boolean' | 'number' | 'date'
+  values?: readonly string[]
+  /** For enum kinds whose raw values need friendly labels (e.g. rank levels). */
+  valueLabels?: Record<string, string>
+}
+
+const STATIC_UPDATE_FIELD_OPTIONS: readonly UpdateFieldOption[] = [
+  { value: 'acquisition_stage', kind: 'enum', values: ACQUISITION_STAGE_VALUES },
+  { value: 'source', kind: 'enum', values: CONTACT_SOURCES },
+  { value: 'source_detail', kind: 'text' },
+  { value: 'notes', kind: 'text' },
+  { value: 'lead_acknowledged', kind: 'boolean' },
+]
+
+/** Map a custom-field definition to an update_field option (dotted path). */
+function customFieldOption(d: CustomFieldDefinition): UpdateFieldOption {
+  return {
+    value: `custom_fields.${d.id}`,
+    label: d.label || d.id,
+    kind:
+      d.type === 'number' ? 'number'
+      : d.type === 'checkbox' ? 'boolean'
+      : d.type === 'date' ? 'date'
+      : d.type === 'select' ? 'enum'
+      : 'text',
+    ...(d.type === 'select' ? { values: d.options ?? [] } : {}),
+  }
+}
+
+/** Map a ranking system to an update_field option (dotted path `ranks.{id}`). */
+function rankSystemOption(r: RankingSystem): UpdateFieldOption {
+  const levels = [...(r.levels ?? [])].sort((a, b) => a.value - b.value)
+  return {
+    value: `ranks.${r.id}`,
+    label: r.name || r.id,
+    kind: 'enum',
+    values: levels.map((l) => String(l.value)),
+    valueLabels: Object.fromEntries(levels.map((l) => [String(l.value), l.label])),
+  }
+}
 
 function ActionEditor({
   actions,
@@ -790,6 +852,7 @@ function ActionEditor({
   groupsEnabled: boolean
 }) {
   const t = useTranslations('Automations')
+  const { team } = useAuth()
   const resolvedActionLabels = labelOverrides ?? defaultActionTypeLabels(t)
   function add() {
     onChange([...actions, { type: 'send_email', templateId: '' }])
@@ -801,8 +864,18 @@ function ActionEditor({
     onChange(actions.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
   }
 
+  // Built-in fields + the team's ranking systems + custom fields (plugin definitions).
+  const updateFieldOptions = useMemo<UpdateFieldOption[]>(
+    () => [
+      ...STATIC_UPDATE_FIELD_OPTIONS,
+      ...(team?.ranking_systems ?? []).map(rankSystemOption),
+      ...(team?.custom_field_definitions ?? []).map(customFieldOption),
+    ],
+    [team]
+  )
+
   const selectedFieldMeta = (action: FormAction) =>
-    UPDATE_FIELD_OPTIONS.find((o) => o.value === action.field)
+    updateFieldOptions.find((o) => o.value === action.field)
 
   return (
     <div className="space-y-3">
@@ -822,6 +895,7 @@ function ActionEditor({
                     subject: undefined,
                     body: undefined,
                     message: undefined,
+                    note: undefined,
                     tag: undefined,
                     url: undefined,
                     group_id: undefined,
@@ -836,6 +910,9 @@ function ActionEditor({
                 <SelectContent>
                   <SelectItem value="send_email" className="text-xs">
                     {t('actions.types.send_email')}
+                  </SelectItem>
+                  <SelectItem value="add_note" className="text-xs">
+                    {t('actions.types.add_note')}
                   </SelectItem>
                   <SelectItem value="update_field" className="text-xs">
                     {t('actions.types.update_field')}
@@ -914,46 +991,90 @@ function ActionEditor({
               <div className="grid grid-cols-2 gap-2">
                 <Select
                   value={action.field ?? ''}
-                  onValueChange={(v) =>
+                  onValueChange={(v) => {
+                    const meta = updateFieldOptions.find((o) => o.value === v)
                     update(i, {
                       field: v ?? '',
-                      fieldValue: selectedFieldMeta({ ...action, field: v ?? '' })?.values[0] ?? '',
+                      // Sensible default per kind: first enum value / 'true' / empty text.
+                      fieldValue:
+                        meta?.kind === 'enum'
+                          ? (meta.values?.[0] ?? '')
+                          : meta?.kind === 'boolean'
+                            ? 'true'
+                            : '',
                     })
-                  }
+                  }}
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <span className="flex flex-1 text-left text-xs truncate">
                       {action.field ? (
-                        updateFieldLabel(t, action.field)
+                        updateFieldLabel(t, action.field, selectedFieldMeta(action)?.label)
                       ) : (
                         <span className="text-muted-foreground">{t('actions.fieldPlaceholder')}</span>
                       )}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {UPDATE_FIELD_OPTIONS.map((o) => (
+                    {updateFieldOptions.map((o) => (
                       <SelectItem key={o.value} value={o.value} className="text-xs">
-                        {updateFieldLabel(t, o.value)}
+                        {updateFieldLabel(t, o.value, o.label)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                <Select
-                  value={action.fieldValue ?? ''}
-                  onValueChange={(v) => update(i, { fieldValue: v ?? '' })}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder={t('actions.valuePlaceholder')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(selectedFieldMeta(action)?.values ?? []).map((v) => (
-                      <SelectItem key={v} value={v} className="text-xs">
-                        {acquisitionStageLabel(t, v)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {(() => {
+                  const meta = selectedFieldMeta(action)
+                  // Enum fields (stage / source / select custom fields) → picker.
+                  if (!meta || meta.kind === 'enum') {
+                    return (
+                      <Select
+                        value={action.fieldValue ?? ''}
+                        onValueChange={(v) => update(i, { fieldValue: v ?? '' })}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder={t('actions.valuePlaceholder')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(meta?.values ?? []).map((v) => (
+                            <SelectItem key={v} value={v} className="text-xs">
+                              {meta?.value === 'acquisition_stage'
+                                ? acquisitionStageLabel(t, v)
+                                : (meta?.valueLabels?.[v] ?? v)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )
+                  }
+                  if (meta.kind === 'boolean') {
+                    return (
+                      <Select
+                        value={action.fieldValue ?? 'true'}
+                        onValueChange={(v) => update(i, { fieldValue: v ?? 'true' })}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true" className="text-xs">{t('actions.boolTrue')}</SelectItem>
+                          <SelectItem value="false" className="text-xs">{t('actions.boolFalse')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )
+                  }
+                  // text / number / date → typed input (value stored as string; the
+                  // engine coerces per the field definition).
+                  return (
+                    <Input
+                      type={meta.kind === 'number' ? 'number' : meta.kind === 'date' ? 'date' : 'text'}
+                      value={action.fieldValue ?? ''}
+                      onChange={(e) => update(i, { fieldValue: e.target.value })}
+                      placeholder={t('actions.valuePlaceholder')}
+                      className="h-8 text-xs"
+                    />
+                  )
+                })()}
               </div>
             )}
 
@@ -982,6 +1103,19 @@ function ActionEditor({
                 value={action.message ?? ''}
                 onChange={(e) => update(i, { message: e.target.value })}
               />
+            )}
+
+            {action.type === 'add_note' && (
+              <div className="space-y-1">
+                <Textarea
+                  className="text-xs resize-none"
+                  rows={3}
+                  placeholder={t('actions.addNote.placeholder')}
+                  value={action.note ?? ''}
+                  onChange={(e) => update(i, { note: e.target.value })}
+                />
+                <p className="text-[11px] text-muted-foreground">{t('actions.addNote.hint')}</p>
+              </div>
             )}
 
             {(action.type === 'assign_tag' || action.type === 'remove_tag') && (
@@ -1148,6 +1282,7 @@ function RuleDialog({
           subject: a.subject,
           body: a.body,
           message: a.message,
+          note: (a as { note?: string }).note,
           tag: (a as { tag?: string }).tag,
           url: (a as { url?: string }).url,
           group_id: (a as { group_id?: string }).group_id,
@@ -1213,6 +1348,7 @@ function RuleDialog({
           )
           .map((a) => {
             if (a.type === 'send_email') return { type: 'send_email', templateId: a.templateId }
+            if (a.type === 'add_note') return { type: 'add_note', note: a.note ?? '' }
             if (a.type === 'update_field')
               return { type: 'update_field', field: a.field ?? '', value: a.fieldValue ?? '' }
             if (a.type === 'notify_team')
@@ -1437,350 +1573,6 @@ function RuleDialog({
   )
 }
 
-// ─── PlaceholderPanel ────────────────────────────────────────────────────────
-
-const PLACEHOLDER_GROUPS = [
-  {
-    groupKey: 'contact',
-    items: ['firstname', 'lastname', 'acquisition_stage', 'affiliation_summary', 'sessions_count'],
-  },
-  {
-    groupKey: 'team',
-    items: ['teamName', 'bookingUrl', 'membershipUrl', 'bioLinkUrl', 'websiteUrl', 'reviewUrl'],
-  },
-  {
-    groupKey: 'dates',
-    items: ['date', 'date+7', 'date-7'],
-  },
-] as const
-
-function PlaceholderPanel({ customPlaceholders }: { customPlaceholders: Record<string, string> }) {
-  const t = useTranslations('Automations')
-  const [copied, setCopied] = useState<string>('')
-
-  const copyToken = (key: string) => {
-    const token = `{{${key}}}`
-    navigator.clipboard.writeText(token).catch(() => {})
-    setCopied(key)
-    setTimeout(() => setCopied(''), 2000)
-  }
-
-  return (
-    <div className="w-56 shrink-0 border-l overflow-y-auto px-3 py-4 space-y-4">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-        {t('placeholders.title')}
-      </p>
-      <p className="text-xs text-muted-foreground -mt-2">{t('placeholders.clickToCopy')}</p>
-
-      {PLACEHOLDER_GROUPS.map((group) => (
-        <div key={group.groupKey}>
-          <p className="text-xs font-medium text-foreground mb-1">
-            {t(`placeholders.groups.${group.groupKey}` as Parameters<typeof t>[0])}
-          </p>
-          <div className="space-y-0.5">
-            {group.items.map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => copyToken(key)}
-                className="w-full text-left px-2 py-1 rounded hover:bg-accent transition-colors group"
-              >
-                <span className="font-mono text-xs text-primary group-hover:underline">
-                  {copied === key ? t('placeholders.copied') : `{{${key}}}`}
-                </span>
-                <span className="block text-xs text-muted-foreground leading-tight">
-                  {t(`placeholders.hints.${key}` as Parameters<typeof t>[0])}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {/* Custom variables */}
-      <div>
-        <p className="text-xs font-medium text-foreground mb-1">{t('placeholders.customTitle')}</p>
-        {Object.keys(customPlaceholders).length === 0 ? (
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground italic">{t('placeholders.noCustomVars')}</p>
-            <Link
-              href="/settings/team"
-              className="text-xs text-primary hover:underline"
-              onClick={() => {}}
-            >
-              {t('placeholders.manageInSettings')}
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-0.5">
-            {Object.entries(customPlaceholders).map(([key, value]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => copyToken(key)}
-                className="w-full text-left px-2 py-1 rounded hover:bg-accent transition-colors group"
-              >
-                <span className="font-mono text-xs text-primary group-hover:underline">
-                  {copied === key ? t('placeholders.copied') : `{{${key}}}`}
-                </span>
-                <span className="block text-xs text-muted-foreground leading-tight truncate">
-                  {value}
-                </span>
-              </button>
-            ))}
-            <Link
-              href="/settings/team"
-              className="block text-xs text-muted-foreground hover:underline mt-1 px-2"
-            >
-              {t('placeholders.manageInSettings')}
-            </Link>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── TemplateDialog ───────────────────────────────────────────────────────────
-
-function createTmplSchema(t: ReturnType<typeof useTranslations>) {
-  return z.object({
-    name: z.string().min(1, t('validation.required')),
-    subject: z.string().min(1, t('validation.required')),
-    body: z.string().min(1, t('validation.required')),
-    language: z.string().min(1),
-  })
-}
-type TmplFormValues = z.infer<ReturnType<typeof createTmplSchema>>
-
-function TemplateDialog({
-  open,
-  onOpenChange,
-  teamId,
-}: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  teamId: string
-}) {
-  const t = useTranslations('Automations')
-  const qc = useQueryClient()
-  const { data: allTemplates = [], isLoading } = useQuery<OutreachTemplate[]>({
-    queryKey: ['outreach_templates_all', teamId],
-    enabled: open && !!teamId,
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, TEAMS_COLLECTION, teamId, 'outreach_templates'),
-          orderBy('name', 'asc')
-        )
-      )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as OutreachTemplate)
-    },
-  })
-
-  // Fetch team data for custom placeholders
-  const { data: teamDoc } = useQuery({
-    queryKey: ['team_for_templates', teamId],
-    enabled: open && !!teamId,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const snap = await getDoc(doc(db, TEAMS_COLLECTION, teamId))
-      return snap.data() ?? {}
-    },
-  })
-  const customPlaceholders = (teamDoc?.outreach_placeholders as Record<string, string>) ?? {}
-
-  const [editingTmpl, setEditingTmpl] = useState<OutreachTemplate | null>(null)
-  const [formOpen, setFormOpen] = useState(false)
-  const [submitErr, setSubmitErr] = useState('')
-  const tmplSchema = useMemo(() => createTmplSchema(t), [t])
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<TmplFormValues>({
-    resolver: zodResolver(tmplSchema),
-    defaultValues: { name: '', subject: '', body: '', language: 'en' },
-  })
-
-  useEffect(() => {
-    if (!formOpen) {
-      reset({ name: '', subject: '', body: '', language: 'en' })
-      setEditingTmpl(null)
-      setSubmitErr('')
-    } else if (editingTmpl)
-      reset({
-        name: editingTmpl.name,
-        subject: editingTmpl.subject,
-        body: editingTmpl.body,
-        language: editingTmpl.language,
-      })
-  }, [formOpen, editingTmpl, reset])
-
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['outreach_templates_all', teamId] })
-    qc.invalidateQueries({ queryKey: ['outreach_templates', teamId] })
-  }
-
-  const onSaveTmpl = async (vals: TmplFormValues) => {
-    setSubmitErr('')
-    try {
-      const tmplRef = collection(db, TEAMS_COLLECTION, teamId, 'outreach_templates')
-      if (editingTmpl) {
-        await updateDoc(doc(tmplRef, editingTmpl.id), { ...vals, active: true })
-      } else {
-        await addDoc(tmplRef, { ...vals, active: true, created_at: serverTimestamp() })
-      }
-      invalidate()
-      setFormOpen(false)
-    } catch (err) {
-      setSubmitErr((err as Error).message)
-    }
-  }
-
-  const onDelete = async (tmpl: OutreachTemplate) => {
-    await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'outreach_templates', tmpl.id), {
-      active: false,
-    })
-    invalidate()
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={`sm:max-w-[900px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden`}
-      >
-        <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b">
-          <DialogTitle>{t('dialogs.templates.title')}</DialogTitle>
-        </DialogHeader>
-
-        {!formOpen ? (
-          /* ── List view — full width ── */
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-            {isLoading && <Skeleton className="h-20 w-full" />}
-
-            {!isLoading && allTemplates.length === 0 && (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                {t('dialogs.templates.empty')}
-              </p>
-            )}
-
-            {allTemplates.map((tmpl) => (
-              <div
-                key={tmpl.id}
-                className="flex items-start justify-between gap-2 border rounded-lg p-3"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-sm truncate">{tmpl.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{tmpl.subject}</p>
-                  {!tmpl.active && (
-                    <Badge variant="secondary" className="text-xs mt-1">
-                      {t('common.inactive')}
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => {
-                      setEditingTmpl(tmpl)
-                      setFormOpen(true)
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => onDelete(tmpl)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-
-            <Button variant="outline" className="w-full" onClick={() => setFormOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              {t('dialogs.templates.newTemplate')}
-            </Button>
-          </div>
-        ) : (
-          /* ── Form view — two-panel ── */
-          <div className="flex flex-1 min-h-0">
-            {/* Left: form */}
-            <form
-              onSubmit={handleSubmit(onSaveTmpl)}
-              className="flex-1 overflow-y-auto px-6 py-5 space-y-4"
-            >
-              <div>
-                <Label className="text-xs">{t('dialogs.templates.nameLabel')}</Label>
-                <Input
-                  {...register('name')}
-                  placeholder={t('dialogs.templates.namePlaceholder')}
-                  className="mt-1"
-                />
-                {errors.name && (
-                  <p className="text-xs text-destructive mt-1">{errors.name.message}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs">{t('dialogs.templates.subjectLabel')}</Label>
-                <Input {...register('subject')} placeholder={t('dialogs.templates.subjectPlaceholder')} className="mt-1" />
-                {errors.subject && (
-                  <p className="text-xs text-destructive mt-1">{errors.subject.message}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs">{t('dialogs.templates.bodyLabel')}</Label>
-                <Textarea
-                  {...register('body')}
-                  rows={12}
-                  placeholder={t('dialogs.templates.bodyPlaceholder')}
-                  className="mt-1 font-mono text-xs"
-                />
-                {errors.body && (
-                  <p className="text-xs text-destructive mt-1">{errors.body.message}</p>
-                )}
-              </div>
-              <div className="w-36">
-                <Label className="text-xs">{t('dialogs.templates.languageLabel')}</Label>
-                <select
-                  {...register('language')}
-                  className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                >
-                  {/* Language endonyms — intentionally not translated, same convention as UserMenu's locale switcher */}
-                  <option value="en">English</option>
-                  <option value="de">Deutsch</option>
-                  <option value="fr">Français</option>
-                  <option value="it">Italiano</option>
-                </select>
-              </div>
-              {submitErr && <p className="text-xs text-destructive">{submitErr}</p>}
-              <div className="flex justify-between pt-1 pb-4">
-                <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>
-                  {t('dialogs.templates.back')}
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? t('common.saving') : editingTmpl ? t('dialogs.templates.saveChanges') : t('dialogs.templates.createTemplate')}
-                </Button>
-              </div>
-            </form>
-
-            {/* Right: placeholder sidebar */}
-            <PlaceholderPanel customPlaceholders={customPlaceholders} />
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default function AutomationsPage() {
@@ -1847,13 +1639,11 @@ export default function AutomationsPage() {
 
   // Rules vs the system-emails inventory — segmented views so the System emails
   // panel isn't pushed below a long rule list.
-  const [view, setView] = useState<'rules' | 'system'>('rules')
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
   const [prefill, setPrefill] = useState<
     { triggerType?: string; subscriptionTypeId?: string } | undefined
   >(undefined)
-  const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [webhooksOpen, setWebhooksOpen] = useState(false)
   const [quickStarting, setQuickStarting] = useState(false)
@@ -1950,10 +1740,14 @@ export default function AutomationsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
-            <Button variant="outline" size="sm" onClick={() => setTemplateDialogOpen(true)}>
-              <FileText className="h-4 w-4 mr-1.5" />
+            {/* Email templates + system-email toggles live in Settings → Emails */}
+            <Link
+              href={'/settings/emails' as Route}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              <Mail className="h-4 w-4 mr-1.5" />
               {t('page.templatesButton')}
-            </Button>
+            </Link>
             <Button variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
               <BookOpen className="h-4 w-4 mr-1.5" />
               {t('page.libraryButton')}
@@ -1986,26 +1780,9 @@ export default function AutomationsPage() {
           </div>
         )}
 
-        {/* Rules ⇄ System emails switcher (segmented, like Plans & affiliations) */}
-        <div className="inline-flex gap-0.5 rounded-lg border bg-background p-0.5">
-          {(['rules', 'system'] as const).map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setView(key)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                view === key
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {key === 'rules' ? t('page.tabRules') : t('systemEmails.title')}
-            </button>
-          ))}
-        </div>
 
         {/* Loading */}
-        {view === 'rules' && rulesLoading && (
+        {rulesLoading && (
           <div className="grid gap-6 sm:grid-cols-2">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-36 rounded-xl" />
@@ -2014,7 +1791,7 @@ export default function AutomationsPage() {
         )}
 
         {/* Empty state */}
-        {view === 'rules' && !rulesLoading && rules.length === 0 && (
+        {!rulesLoading && rules.length === 0 && (
           <div className="flex flex-col items-center gap-5 py-16 text-center">
             <div className="rounded-full bg-muted p-4">
               <Workflow className="h-8 w-8 text-muted-foreground" />
@@ -2039,7 +1816,7 @@ export default function AutomationsPage() {
         )}
 
         {/* Active rules */}
-        {view === 'rules' && activeRules.length > 0 && (
+        {activeRules.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               {t('common.active')}
@@ -2065,7 +1842,7 @@ export default function AutomationsPage() {
         )}
 
         {/* Paused rules */}
-        {view === 'rules' && pausedRules.length > 0 && (
+        {pausedRules.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               {t('common.paused')}
@@ -2090,22 +1867,16 @@ export default function AutomationsPage() {
           </div>
         )}
 
-        {/* System emails — the automatic mail Linyup sends outside these rules.
-            Own view so a long rule list never buries it. */}
-        {view === 'system' && <SystemEmailsCard />}
-
-        {/* Mobile FAB (rules view only) */}
-        {view === 'rules' && (
-          <button
-            className="md:hidden fixed bottom-6 right-6 z-40 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
-            onClick={() => {
-              setEditingRule(null)
-              setRuleDialogOpen(true)
-            }}
-          >
-            <Plus className="h-6 w-6" />
-          </button>
-        )}
+        {/* Mobile FAB */}
+        <button
+          className="md:hidden fixed bottom-6 right-6 z-40 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+          onClick={() => {
+            setEditingRule(null)
+            setRuleDialogOpen(true)
+          }}
+        >
+          <Plus className="h-6 w-6" />
+        </button>
       </div>
 
       {currentTeamId && (
@@ -2124,11 +1895,6 @@ export default function AutomationsPage() {
             triggerOptions={allTriggerOptions}
             actionTypeLabels={allActionTypeLabels}
             prefill={prefill}
-          />
-          <TemplateDialog
-            open={templateDialogOpen}
-            onOpenChange={setTemplateDialogOpen}
-            teamId={currentTeamId}
           />
           <LibraryDialog
             open={libraryOpen}

@@ -6,6 +6,7 @@ import * as crypto from 'crypto'
 import { regionalFunctions } from '../utils/functions'
 import { isTeamMember, hasTeamRole, hasCapability, getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { ctaButton } from '../utils/emailLayout'
 
 export const sendTeamInvitation = regionalFunctions.https.onCall(
   async (data: { teamId: string; email: string; role: 'manager' | 'coach' | 'viewer' }, context) => {
@@ -88,7 +89,7 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
       title: `You've been invited to join ${team.name} on Linyup`,
       body: `
         <p>You have been invited to join <strong>${team.name}</strong> as a <strong>${role}</strong>.</p>
-        <p><a href="${invitationUrl}" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p>
+        <p style="margin:16px 0;">${ctaButton(invitationUrl, 'Accept Invitation')}</p>
         <p>This invitation expires in 7 days.</p>
         <p>If you did not expect this invitation, you can safely ignore this email.</p>
       `,

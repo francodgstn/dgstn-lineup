@@ -15,6 +15,7 @@ import {
   Award,
   Wallet,
   Send,
+  Mail,
   ListChecks,
   LayoutTemplate,
 } from 'lucide-react'
@@ -53,6 +54,7 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   { id: 'teamGeneral', href: '/settings/team', labelKey: 'teamGeneral', icon: Settings, group: 'studio', exact: true },
   { id: 'teamPayments', href: '/settings/team?tab=payments', labelKey: 'teamPayments', icon: Wallet, group: 'studio' },
   { id: 'teamOutreach', href: '/settings/team?tab=outreach', labelKey: 'teamOutreach', icon: Send, group: 'studio' },
+  { id: 'teamEmails', href: '/settings/emails', labelKey: 'teamEmails', icon: Mail, group: 'studio' },
   { id: 'teamAlerts', href: '/settings/team?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'studio' },
   { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio' },
   // Affiliations moved to the main nav's "Offer" section (/offer/affiliations).

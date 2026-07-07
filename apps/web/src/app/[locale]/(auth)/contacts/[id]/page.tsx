@@ -16,6 +16,7 @@ import {
   getDocs,
   addDoc,
   deleteDoc,
+  deleteField,
   serverTimestamp,
   Timestamp,
   limit,
@@ -1230,6 +1231,11 @@ function PromoteStageButton({
         ...(nextStage === 'trial_booked' ? { trial_booked_at: now } : {}),
         ...(nextStage === 'trial_attended' ? { trial_attended_at: now } : {}),
         ...(nextStage === 'joined' ? { converted_at: now } : {}),
+        // Promoting past 'trial_booked' MATERIALIZES a provisional lead — it now
+        // counts toward the contact cap. See Contact.provisional.
+        ...(nextStage === 'trial_attended' || nextStage === 'joined'
+          ? { provisional: deleteField(), provisional_expires_at: deleteField() }
+          : {}),
         updatedAt: now,
       })
       qc.invalidateQueries({ queryKey: ['contact', contact.id] })
@@ -2568,6 +2574,10 @@ function SetSubscriptionDialog({
         subscription_recurrence: chosenPrice ? chosenPrice.recurrence : recurrence || null,
         subscription_amount: chosenPrice ? chosenPrice.amount : null,
         subscription_type_updated_at: serverTimestamp(),
+        // Assigning a subscription materializes a provisional lead (offline-paid
+        // members count toward the cap too). See Contact.provisional.
+        provisional: deleteField(),
+        provisional_expires_at: deleteField(),
       })
       onSaved()
       onOpenChange(false)

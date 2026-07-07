@@ -241,15 +241,22 @@ entitlements — to the **exact** contact, never an email guess. Email-based
 `resolveOrCreateContact` remains only as the webhook's safety net for in-flight
 legacy sessions. Stripe redirects to `/{locale}/pay/result`.
 
-**Provisional contacts (anti-flooding).** A registration-created contact is
-`provisional: true` until its first successful payment: excluded from the contact-cap
-count, shown under the contacts page's **Unconfirmed** tab (with a purge countdown),
-confirmed by the webhook on payment (any kind, incl. drop-in) or manually, and
-hard-deleted by the daily `purgeProvisionalContacts` task after 7 unpaid days.
-Guards on registration: the plan's hard cap (Free 15, measured against *confirmed*
-actives → `failed-precondition` with `reason: 'contact_cap'`), a per-team daily
-registration budget (20/day), a per-IP hourly OTP-send limit, and App Check on both
-auth callables.
+**Provisional contacts (leads don't count toward the cap).** `provisional: true`
+marks every entrant that hasn't MATERIALIZED yet — shop registrations awaiting their
+first payment, trial bookings never attended, and public-form leads. They are
+excluded from the contact-cap count and live under the contacts page's **Leads**
+tab. Materialization clears the flag: a successful payment (webhook, any kind incl.
+drop-in), first attendance, stage promotion to attended/joined, full signup
+completion, a manual subscription assignment, or the studio's manual Confirm.
+Only shop registrations carry `provisional_expires_at` (purge countdown): the daily
+`purgeProvisionalContacts` task hard-deletes those after 7 unpaid days. Trial/form
+leads are never purged — stale never-attended trial bookings are ARCHIVED by the
+default `lib_trial_cleanup` automation rule (installed active for every new team by
+`onTeamCreated`; editable/pausable in the Automations UI).
+Guards on shop registration: the plan's hard cap (Free 15, measured against
+*counted* actives → `failed-precondition` with `reason: 'contact_cap'`), a per-team
+daily registration budget (20/day), a per-IP hourly OTP-send limit, and App Check on
+both auth callables.
 
 **Contact-capture modes.** `checkout_contact_mode` `'off'`/`'minimal'` are obsolete
 under login-first (the buyer is always a real contact); **`'full'`** survives as the

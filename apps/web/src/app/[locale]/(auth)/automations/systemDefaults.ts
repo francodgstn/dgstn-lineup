@@ -48,7 +48,7 @@ We noticed you had a trial booked at **{{teamName}}** but did not make it in. No
 
 We would love to meet you. If you would like to find a new time, you can rebook here:
 
-📅 **[Book your trial ↗]({{bookingUrl}})**
+**[Book your trial ↗]({{bookingUrl}})**
 
 Any questions? Just reply to this email.
 
@@ -64,15 +64,15 @@ The {{teamName}} team`,
     subject: 'Great to meet you, {{firstname}}!',
     body: `Hi {{firstname}},
 
-It was wonderful having you at **{{teamName}}** for your first class!
+It was wonderful having you at **{{teamName}}** for your first session!
 
-If you would like to continue training with us, joining the team is easy:
+If you would like to continue with us, becoming a member is easy:
 
-📝 **[Complete your membership ↗]({{membershipUrl}})**
+**[Complete your membership ↗]({{membershipUrl}})**
 
 And if you have a moment, we would love to hear your first impression. Your review helps others find us and means a lot to our team:
 
-⭐ **[Leave a review ↗]({{reviewUrl}})**
+**[Leave a review ↗]({{reviewUrl}})**
 
 Any questions? Just hit reply and we will be happy to help.
 
@@ -91,13 +91,13 @@ The {{teamName}} team`,
 
 It has been a while since we have seen you at **{{teamName}}** and we just wanted to check in.
 
-Life gets busy, we get it. Whenever you are ready to get back on track, we will be here.
+Life gets busy — we get it. Whenever you are ready to come back, we will be here.
 
-📅 **[Book a session ↗]({{bookingUrl}})** or just come by, the door is always open.
+**[Book a session ↗]({{bookingUrl}})**
 
-If you enjoyed your time with us, we would love a quick review. It means the world to a small team:
+If you enjoyed your time with us, a quick review makes a real difference for a small team:
 
-⭐ **[Leave a review ↗]({{reviewUrl}})**
+**[Leave a review ↗]({{reviewUrl}})**
 
 See you soon,
 The {{teamName}} team`,
@@ -105,20 +105,20 @@ The {{teamName}} team`,
 
   {
     system_key: 'sys_milestone_10',
-    name: '10 classes — thank you!',
+    name: '10 sessions — thank you!',
     language: 'en',
     active: true,
     body_mode: 'markdown',
-    subject: '10 classes at {{teamName}}, {{firstname}}!',
+    subject: '10 sessions at {{teamName}}, {{firstname}} — thank you!',
     body: `Hi {{firstname}},
 
-You have just completed your **10th class** at {{teamName}} and we could not be more proud to have you with us!
+You have just completed your **10th session** at {{teamName}} — thank you for being part of our community!
 
-Thank you for your commitment and energy. You make our community better every time you show up.
+Your commitment and energy make a difference every time you show up.
 
-If you have not left us a review yet, this would be the perfect moment. People looking for a place like ours really do read experiences like yours:
+If you have not left us a review yet, this is a great moment. People looking for a place like ours really do read experiences like yours:
 
-⭐ **[Share your experience ↗]({{reviewUrl}})**
+**[Share your experience ↗]({{reviewUrl}})**
 
 Keep it up and see you soon!
 
@@ -191,7 +191,7 @@ export const SYSTEM_RULES: SystemRule[] = [
   {
     system_key: 'sys_rule_winback_30d',
     template_system_key: 'sys_winback',
-    name: 'Student inactive — 30 days',
+    name: 'Member inactive — 30 days',
     conditions: [
       { type: 'sessions_attended_min', value: 2 },
       { type: 'acquisition_stage', value: 'joined' },
@@ -202,7 +202,7 @@ export const SYSTEM_RULES: SystemRule[] = [
   {
     system_key: 'sys_rule_winback_60d',
     template_system_key: 'sys_winback',
-    name: 'Student inactive — 60 days',
+    name: 'Member inactive — 60 days',
     conditions: [
       { type: 'sessions_attended_min', value: 2 },
       { type: 'acquisition_stage', value: 'joined' },
@@ -213,7 +213,7 @@ export const SYSTEM_RULES: SystemRule[] = [
   {
     system_key: 'sys_rule_milestone_10',
     template_system_key: 'sys_milestone_10',
-    name: '10 classes milestone',
+    name: '10 sessions milestone',
     conditions: [{ type: 'sessions_attended_exactly', value: 10 }],
     active: false,
   },

@@ -3,7 +3,8 @@ import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { to } from '../utils/async'
-import { sendEmail } from '../utils/email'
+import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { detailsBox, ctaButton, factLines } from '../utils/emailLayout'
 import { escapeHtml } from '../utils/html'
 import { getHostingUrl } from '../utils/env'
 
@@ -83,10 +84,18 @@ function buildInvitationEmail(params: {
   const subject = `Invitation: ${eventTitle}`
   // Escape all text interpolations (firstname is contact-controlled; event fields
   // are studio-authored). Links are server-generated (hex token / URLSearchParams).
-  const feeHtml = fee ? `<p><strong>Fee:</strong> ${escapeHtml(fee)}</p>` : ''
-  const locHtml = location ? `<p><strong>Location:</strong> ${escapeHtml(location)}</p>` : ''
-  const calHtml = calendarLink ? `<p><a href="${calendarLink}">Add to Google Calendar</a></p>` : ''
-  const html = `<p>Hi ${escapeHtml(firstname)},</p><p>${escapeHtml(teamName)} invites you to <strong>${escapeHtml(eventTitle)}</strong>.</p><p><strong>When:</strong> ${escapeHtml(eventStart)}${eventEnd ? ` – ${escapeHtml(eventEnd)}` : ''}</p>${locHtml}${feeHtml}${calHtml}<p><a href="${link}">View invitation &amp; RSVP</a></p>`
+  const facts = [
+    `<strong>When:</strong> ${escapeHtml(eventStart)}${eventEnd ? ` – ${escapeHtml(eventEnd)}` : ''}`,
+    location ? `<strong>Location:</strong> ${escapeHtml(location)}` : '',
+    fee ? `<strong>Fee:</strong> ${escapeHtml(fee)}` : '',
+  ]
+  const calHtml = calendarLink
+    ? `<p style="text-align:center;"><a href="${calendarLink}">Add to Google Calendar</a></p>`
+    : ''
+  const { html } = buildEmailTemplate({
+    title: 'You are invited',
+    body: `<p>Hi ${escapeHtml(firstname)},</p><p>${escapeHtml(teamName)} invites you to <strong>${escapeHtml(eventTitle)}</strong>.</p>${detailsBox({ content: factLines(facts) })}<p style="text-align:center;margin-top:24px;">${ctaButton(link, 'View invitation &amp; RSVP')}</p>${calHtml}`,
+  })
   const text = `Hi ${firstname},\n\n${teamName} invites you to ${eventTitle}.\nWhen: ${eventStart}${eventEnd ? ` – ${eventEnd}` : ''}\n${location ? `Location: ${location}\n` : ''}${fee ? `Fee: ${fee}\n` : ''}\nRSVP: ${link}`
   return { subject, html, text }
 }

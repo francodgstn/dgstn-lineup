@@ -35,6 +35,7 @@
     "teamRanking": "Ranking",
     "teamPayments": "Payments",
     "teamOutreach": "Outreach",
+    "teamEmails": "Emails",
     "teamAffiliations": "Affiliations",
     "teamCustomFields": "Custom fields",
     "settingsHubTitle": "Settings",
@@ -338,11 +339,12 @@
     "source_import": "Import",
     "source_other": "Other",
     "tabAll": "All",
-    "tabActive": "All",
-    "tabUnconfirmed": "Unconfirmed",
+    "tabActive": "Active",
+    "tabLeads": "Leads",
     "tabRequests": "Requests",
     "unconfirmedBadge": "Unconfirmed · {days}d left",
     "bulkConfirm": "Confirm",
+    "capEntryHint": "At your plan's contact limit — only trial bookings (leads) can be added; they don't count until they attend or pay.",
     "notFound": "Contact not found.",
     "noNotes": "No notes yet.",
     "notesAddNote": "Add note",
@@ -617,10 +619,6 @@
     "capWarnBodyUpgrade": "Your plan includes {included} contacts and you have {used}. Upgrade your plan for a higher contact limit.",
     "capWarnBodyBlock": "Your plan includes {included} contacts and you have {used}. We won't block new contacts — add a +{blockSize} contact block for CHF {blockPrice}/mo, or upgrade for more room.",
     "capWarnBodyFreeHard": "The Free plan includes {included} contacts and you have {used}. Adding more manually is locked, but signups from your bio link still come through. Upgrade for a higher limit.",
-    "freeCapDialogTitle": "Contact limit reached",
-    "freeCapDialogBody": "The Free plan includes up to {included} active contacts. Upgrade to Coach to add more — or archive contacts you no longer need.",
-    "freeCapDialogDismiss": "Not now",
-    "freeCapDialogCta": "See upgrade options",
     "copyEmail": "Copy email",
     "emailCopied": "Copied!",
     "joinedOn": "Joined on",
@@ -3635,9 +3633,8 @@
     },
     "page": {
       "title": "Automations",
-      "tabRules": "Your automations",
       "subtitle": "Trigger emails and alerts automatically based on contact activity.",
-      "templatesButton": "Templates",
+      "templatesButton": "Emails & templates",
       "libraryButton": "Library",
       "webhooksButton": "Webhooks",
       "limitedPlanTitle": "Automations on your plan are limited",
@@ -3768,7 +3765,9 @@
       "webhookUrlPlaceholder": "https://hooks.zapier.com/…",
       "types": {
         "send_email": "Send email",
+        "add_note": "Add note to contact",
         "update_field": "Update contact field",
+        "archive_contact": "Archive contact",
         "assign_tag": "Add tag to contact",
         "remove_tag": "Remove tag from contact",
         "notify_team": "Notify team (email)",
@@ -3779,8 +3778,14 @@
         "create_alert": "Create alert (coming soon)"
       },
       "updateField": {
-        "acquisitionStage": "Acquisition stage"
+        "acquisitionStage": "Acquisition stage",
+        "source": "Source",
+        "sourceDetail": "Source detail",
+        "notes": "Notes (replace)",
+        "leadAcknowledged": "Lead acknowledged"
       },
+      "boolTrue": "Yes",
+      "boolFalse": "No",
       "notifyTeam": {
         "subjectPlaceholder": "Subject — use '{{firstname}}', '{{teamName}}'…",
         "bodyPlaceholder": "Body (markdown) — '{{firstname}}' attended a session at '{{teamName}}'."
@@ -3788,9 +3793,15 @@
       "logActivity": {
         "messagePlaceholder": "Message — use '{{firstname}}', '{{teamName}}'…"
       },
+      "addNote": {
+        "placeholder": "Note — use '{{firstname}}', '{{teamName}}', '{{date}}'…",
+        "hint": "Adds a timestamped note to the contact. Supports the same placeholders as emails."
+      },
       "summarySendEmail": "Email: {name}",
       "summaryCreateAlert": "Create alert",
       "summaryUpdateField": "Set {field} → {value}",
+      "summaryArchiveContact": "Archive the contact",
+      "summaryAddNote": "Add note: {note}",
       "summaryNotifyTeam": "Notify team: {subject}",
       "summaryLogActivity": "Log: {message}",
       "summaryAssignTag": "Add tag: {tag}",
@@ -3863,5 +3874,21 @@
         "createTemplate": "Create template"
       }
     }
+  },
+  "SettingsEmails": {
+    "title": "Emails",
+    "subtitle": "Manage the email templates your automations and campaigns send, and the automatic system emails.",
+    "templatesTitle": "Email templates",
+    "groupSystem": "Predefined templates",
+    "groupSystemHint": "Installed from the library. Customise the subject and text — the branded layout is applied automatically. Reset to the default anytime.",
+    "groupCustom": "Custom templates",
+    "modified": "Customised",
+    "reset": "Reset to default",
+    "resetConfirm": "Reset “{name}” to the default text? Your changes will be overwritten.",
+    "deactivate": "Deactivate",
+    "deactivateConfirm": "Deactivate “{name}”? Automations using it will stop sending until you edit and save it again.",
+    "preview": "Preview",
+    "previewNote": "Sample data — the layout, header and footer are applied automatically to every email.",
+    "subjectPreviewLabel": "Subject"
   }
 }

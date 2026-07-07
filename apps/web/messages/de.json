@@ -35,6 +35,7 @@
     "teamRanking": "Ranking",
     "teamPayments": "Zahlungen",
     "teamOutreach": "Outreach",
+    "teamEmails": "E-Mails",
     "teamAffiliations": "Zugehörigkeiten",
     "teamCustomFields": "Benutzerdefinierte Felder",
     "settingsHubTitle": "Einstellungen",
@@ -338,10 +339,11 @@
     "source_import": "Import",
     "source_other": "Sonstiges",
     "tabAll": "Alle",
-    "tabActive": "Alle",
-    "tabUnconfirmed": "Unbestätigt",
+    "tabActive": "Aktiv",
+    "tabLeads": "Leads",
     "unconfirmedBadge": "Unbestätigt · noch {days} T.",
     "bulkConfirm": "Bestätigen",
+    "capEntryHint": "Kontaktlimit deines Plans erreicht — nur Probetraining-Buchungen (Leads) können hinzugefügt werden; sie zählen erst nach Teilnahme oder Zahlung.",
     "tabRequests": "Anfragen",
     "notFound": "Kontakt nicht gefunden.",
     "noNotes": "Noch keine Notizen.",
@@ -617,10 +619,6 @@
     "capWarnBodyUpgrade": "Dein Plan enthält {included} Kontakte, du hast {used}. Mit einem Upgrade erhältst du ein höheres Kontaktlimit.",
     "capWarnBodyBlock": "Dein Plan enthält {included} Kontakte, du hast {used}. Wir blockieren keine neuen Kontakte — füge einen Block mit +{blockSize} Kontakten für CHF {blockPrice}/Mt. hinzu oder mach ein Upgrade für mehr Platz.",
     "capWarnBodyFreeHard": "Der Free-Plan enthält {included} Kontakte, du hast {used}. Das manuelle Hinzufügen ist gesperrt, aber Anmeldungen über deinen öffentlichen Bio-Link kommen weiterhin rein. Upgrade für ein höheres Limit.",
-    "freeCapDialogTitle": "Kontaktlimit erreicht",
-    "freeCapDialogBody": "Der Free-Plan enthält bis zu {included} aktive Kontakte. Upgrade auf Coach, um mehr hinzuzufügen — oder archiviere Kontakte, die du nicht mehr brauchst.",
-    "freeCapDialogDismiss": "Nicht jetzt",
-    "freeCapDialogCta": "Upgrade-Optionen ansehen",
     "copyEmail": "E-Mail kopieren",
     "emailCopied": "Kopiert!",
     "joinedOn": "Beigetreten am",
@@ -3635,9 +3633,8 @@
     },
     "page": {
       "title": "Automatisierungen",
-      "tabRules": "Deine Automatisierungen",
       "subtitle": "Löse automatisch E-Mails und Benachrichtigungen basierend auf Kontaktaktivität aus.",
-      "templatesButton": "Vorlagen",
+      "templatesButton": "E-Mails & Vorlagen",
       "libraryButton": "Bibliothek",
       "webhooksButton": "Webhooks",
       "limitedPlanTitle": "Automatisierungen sind in deinem Plan eingeschränkt",
@@ -3768,7 +3765,9 @@
       "webhookUrlPlaceholder": "https://hooks.zapier.com/…",
       "types": {
         "send_email": "E-Mail senden",
+        "add_note": "Notiz zum Kontakt hinzufügen",
         "update_field": "Kontaktfeld aktualisieren",
+        "archive_contact": "Kontakt archivieren",
         "assign_tag": "Tag zum Kontakt hinzufügen",
         "remove_tag": "Tag vom Kontakt entfernen",
         "notify_team": "Team benachrichtigen (E-Mail)",
@@ -3779,8 +3778,14 @@
         "create_alert": "Alarm erstellen (bald verfügbar)"
       },
       "updateField": {
-        "acquisitionStage": "Akquisitionsphase"
+        "acquisitionStage": "Akquisitionsphase",
+        "source": "Quelle",
+        "sourceDetail": "Quellen-Detail",
+        "notes": "Notizen (ersetzen)",
+        "leadAcknowledged": "Lead gesehen"
       },
+      "boolTrue": "Ja",
+      "boolFalse": "Nein",
       "notifyTeam": {
         "subjectPlaceholder": "Betreff — verwende '{{firstname}}', '{{teamName}}'…",
         "bodyPlaceholder": "Text (Markdown) — '{{firstname}}' hat an einer Einheit bei '{{teamName}}' teilgenommen."
@@ -3788,9 +3793,15 @@
       "logActivity": {
         "messagePlaceholder": "Nachricht — verwende '{{firstname}}', '{{teamName}}'…"
       },
+      "addNote": {
+        "placeholder": "Notiz — verwende '{{firstname}}', '{{teamName}}', '{{date}}'…",
+        "hint": "Fügt dem Kontakt eine Notiz mit Zeitstempel hinzu. Unterstützt dieselben Platzhalter wie E-Mails."
+      },
       "summarySendEmail": "E-Mail: {name}",
       "summaryCreateAlert": "Alarm erstellen",
       "summaryUpdateField": "{field} → {value} setzen",
+      "summaryArchiveContact": "Kontakt archivieren",
+      "summaryAddNote": "Notiz hinzufügen: {note}",
       "summaryNotifyTeam": "Team benachrichtigen: {subject}",
       "summaryLogActivity": "Protokoll: {message}",
       "summaryAssignTag": "Tag hinzufügen: {tag}",
@@ -3863,5 +3874,21 @@
         "createTemplate": "Vorlage erstellen"
       }
     }
+  },
+  "SettingsEmails": {
+    "title": "E-Mails",
+    "subtitle": "Verwalte die E-Mail-Vorlagen deiner Automatisierungen und Kampagnen sowie die automatischen System-E-Mails.",
+    "templatesTitle": "E-Mail-Vorlagen",
+    "groupSystem": "Vordefinierte Vorlagen",
+    "groupSystemHint": "Aus der Bibliothek installiert. Passe Betreff und Text an — das Marken-Layout wird automatisch angewendet. Jederzeit auf den Standard zurücksetzbar.",
+    "groupCustom": "Eigene Vorlagen",
+    "modified": "Angepasst",
+    "reset": "Auf Standard zurücksetzen",
+    "resetConfirm": "„{name}“ auf den Standardtext zurücksetzen? Deine Änderungen werden überschrieben.",
+    "deactivate": "Deaktivieren",
+    "deactivateConfirm": "„{name}“ deaktivieren? Automatisierungen, die diese Vorlage nutzen, senden nicht mehr, bis du sie wieder bearbeitest und speicherst.",
+    "preview": "Vorschau",
+    "previewNote": "Beispieldaten — Layout, Kopf- und Fusszeile werden bei jeder E-Mail automatisch angewendet.",
+    "subjectPreviewLabel": "Betreff"
   }
 }

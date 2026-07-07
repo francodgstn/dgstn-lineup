@@ -4,6 +4,7 @@
 // the admin server action keeps SMTP latency out of the operator's request.
 import { regionalFunctions } from '../utils/functions'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { ctaButton } from '../utils/emailLayout'
 import { getHostingUrl } from '../utils/env'
 import { SIGNUP_INVITES_COLLECTION } from '@linyup/shared'
 
@@ -19,7 +20,7 @@ export const onSignupInviteCreated = regionalFunctions.firestore
       title: "You're invited to Linyup",
       body: `
         <p>You've been invited to create your Linyup account.</p>
-        <p><a href="${signupUrl}" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Create your account</a></p>
+        <p style="margin:16px 0;">${ctaButton(signupUrl, 'Create your account')}</p>
         <p>Please sign up using this email address: <strong>${email}</strong>.</p>
         <p>If you weren't expecting this invitation, you can safely ignore this email.</p>
       `,

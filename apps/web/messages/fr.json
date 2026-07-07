@@ -35,6 +35,7 @@
     "teamRanking": "Niveaux",
     "teamPayments": "Paiements",
     "teamOutreach": "Outreach",
+    "teamEmails": "E-mails",
     "teamAffiliations": "Affiliations",
     "teamCustomFields": "Champs personnalisés",
     "settingsHubTitle": "Paramètres",
@@ -338,10 +339,11 @@
     "source_import": "Import",
     "source_other": "Autre",
     "tabAll": "Tous",
-    "tabActive": "Tous",
-    "tabUnconfirmed": "Non confirmés",
+    "tabActive": "Actifs",
+    "tabLeads": "Prospects",
     "unconfirmedBadge": "Non confirmé · {days} j restants",
     "bulkConfirm": "Confirmer",
+    "capEntryHint": "Limite de contacts de votre offre atteinte — seules les réservations d'essai (prospects) peuvent être ajoutées ; elles ne comptent qu'après participation ou paiement.",
     "tabRequests": "Demandes",
     "notFound": "Contact introuvable.",
     "noNotes": "Aucune note pour l'instant.",
@@ -617,10 +619,6 @@
     "capWarnBodyUpgrade": "Votre offre inclut {included} contacts et vous en avez {used}. Passez à une offre supérieure pour une limite de contacts plus élevée.",
     "capWarnBodyBlock": "Votre offre inclut {included} contacts et vous en avez {used}. Nous ne bloquons pas les nouveaux contacts — ajoutez un bloc de +{blockSize} contacts pour CHF {blockPrice}/mois, ou passez à une offre supérieure pour plus d'espace.",
     "capWarnBodyFreeHard": "L'offre Gratuite inclut {included} contacts et vous en avez {used}. L'ajout manuel est bloqué, mais les inscriptions via votre bio link passent toujours. Passez à une offre supérieure pour augmenter la limite.",
-    "freeCapDialogTitle": "Limite de contacts atteinte",
-    "freeCapDialogBody": "L'offre Gratuite inclut jusqu'à {included} contacts actifs. Passez à Coach pour en ajouter davantage — ou archivez les contacts dont vous n'avez plus besoin.",
-    "freeCapDialogDismiss": "Pas maintenant",
-    "freeCapDialogCta": "Voir les options d'upgrade",
     "copyEmail": "Copier l'e-mail",
     "emailCopied": "Copié !",
     "joinedOn": "Inscrit le",
@@ -3635,9 +3633,8 @@
     },
     "page": {
       "title": "Automatisations",
-      "tabRules": "Vos automatisations",
       "subtitle": "Déclenchez automatiquement des e-mails et des alertes selon l'activité des contacts.",
-      "templatesButton": "Modèles",
+      "templatesButton": "E-mails et modèles",
       "libraryButton": "Bibliothèque",
       "webhooksButton": "Webhooks",
       "limitedPlanTitle": "Les automatisations de votre offre sont limitées",
@@ -3768,7 +3765,9 @@
       "webhookUrlPlaceholder": "https://hooks.zapier.com/…",
       "types": {
         "send_email": "Envoyer un e-mail",
+        "add_note": "Ajouter une note au contact",
         "update_field": "Mettre à jour un champ du contact",
+        "archive_contact": "Archiver le contact",
         "assign_tag": "Ajouter un tag au contact",
         "remove_tag": "Retirer un tag du contact",
         "notify_team": "Notifier l'équipe (e-mail)",
@@ -3779,8 +3778,14 @@
         "create_alert": "Créer une alerte (bientôt disponible)"
       },
       "updateField": {
-        "acquisitionStage": "Étape d'acquisition"
+        "acquisitionStage": "Étape d'acquisition",
+        "source": "Source",
+        "sourceDetail": "Détail de la source",
+        "notes": "Notes (remplacer)",
+        "leadAcknowledged": "Prospect vu"
       },
+      "boolTrue": "Oui",
+      "boolFalse": "Non",
       "notifyTeam": {
         "subjectPlaceholder": "Objet — utilisez '{{firstname}}', '{{teamName}}'…",
         "bodyPlaceholder": "Texte (markdown) — '{{firstname}}' a participé à une séance chez '{{teamName}}'."
@@ -3788,9 +3793,15 @@
       "logActivity": {
         "messagePlaceholder": "Message — utilisez '{{firstname}}', '{{teamName}}'…"
       },
+      "addNote": {
+        "placeholder": "Note — utilisez '{{firstname}}', '{{teamName}}', '{{date}}'…",
+        "hint": "Ajoute au contact une note horodatée. Prend en charge les mêmes variables que les e-mails."
+      },
       "summarySendEmail": "E-mail : {name}",
       "summaryCreateAlert": "Créer une alerte",
       "summaryUpdateField": "Définir {field} → {value}",
+      "summaryArchiveContact": "Archiver le contact",
+      "summaryAddNote": "Ajouter une note : {note}",
       "summaryNotifyTeam": "Notifier l'équipe : {subject}",
       "summaryLogActivity": "Journal : {message}",
       "summaryAssignTag": "Ajouter le tag : {tag}",
@@ -3863,5 +3874,21 @@
         "createTemplate": "Créer un modèle"
       }
     }
+  },
+  "SettingsEmails": {
+    "title": "E-mails",
+    "subtitle": "Gérez les modèles d’e-mails envoyés par vos automatisations et campagnes, ainsi que les e-mails système automatiques.",
+    "templatesTitle": "Modèles d’e-mails",
+    "groupSystem": "Modèles prédéfinis",
+    "groupSystemHint": "Installés depuis la bibliothèque. Personnalisez l’objet et le texte — la mise en page de marque est appliquée automatiquement. Réinitialisable à tout moment.",
+    "groupCustom": "Modèles personnalisés",
+    "modified": "Personnalisé",
+    "reset": "Réinitialiser",
+    "resetConfirm": "Réinitialiser « {name} » au texte par défaut ? Vos modifications seront écrasées.",
+    "deactivate": "Désactiver",
+    "deactivateConfirm": "Désactiver « {name} » ? Les automatisations qui l’utilisent cesseront d’envoyer jusqu’à ce que vous le modifiiez et l’enregistriez à nouveau.",
+    "preview": "Aperçu",
+    "previewNote": "Données d’exemple — la mise en page, l’en-tête et le pied de page sont appliqués automatiquement à chaque e-mail.",
+    "subjectPreviewLabel": "Objet"
   }
 }

@@ -11,6 +11,7 @@ setGlobalOptions({ region: 'europe-west6' })
 
 // Teams
 export { createTeam } from './teams/createTeam'
+export { onTeamCreated } from './teams/onTeamCreated'
 export { validateTeamSlug } from './teams/validateTeamSlug'
 export { sendTeamInvitation } from './teams/sendTeamInvitation'
 export { getTeamInvitationDetails } from './teams/getTeamInvitationDetails'

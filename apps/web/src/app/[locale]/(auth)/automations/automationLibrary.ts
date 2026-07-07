@@ -16,6 +16,7 @@
 
 import type { LucideIcon } from 'lucide-react'
 import { UserPlus, RefreshCw, Trophy, CalendarCheck, Settings2 } from 'lucide-react'
+import { TRIAL_CLEANUP_RULE, TRIAL_CLEANUP_RULE_KEY } from '@linyup/shared'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,6 +33,8 @@ export interface TemplateContent {
 export type LibraryAction =
   | { type: 'send_email'; template_key: string } // resolved to templateId at install time
   | { type: 'update_field'; field: string; value: string }
+  | { type: 'archive_contact' } // archive (never delete) the contact
+  | { type: 'add_note'; note: string } // append a timestamped note to the contact
   | { type: 'notify_team'; subject: string; body: string }
   | { type: 'log_activity'; message: string }
 
@@ -87,22 +90,22 @@ export const AUTOMATION_LIBRARY: LibraryItem[] = [
     tags: ['trial', 'welcome', 'first contact', 'onboarding'],
     requires_plan: 'studio',
     template: {
-      name: 'Welcome to your first class',
+      name: 'Welcome to your first session',
       body_mode: 'markdown',
       translations: {
         en: {
           subject: 'Welcome to {{teamName}}, {{firstname}}!',
           body: `Hi {{firstname}},
 
-We are so excited to have you joining us at **{{teamName}}** for your first class!
+We are delighted to welcome you to **{{teamName}}** for your first session!
 
-Here is everything you need to know before you arrive:
+A few things to know before you arrive:
 
-- **Come a few minutes early** so we can welcome you properly and answer any questions.
-- Wear comfortable clothes and bring water.
-- No experience needed — we will take care of the rest.
+- **Arrive a few minutes early** so we can welcome you and answer any questions.
+- No experience needed — we will guide you through everything.
+- Need to reschedule? Just reply to this email or rebook online.
 
-📅 **[Book your trial session ↗]({{bookingUrl}})**
+**[Book your trial session ↗]({{bookingUrl}})**
 
 We look forward to meeting you!
 
@@ -112,15 +115,15 @@ The {{teamName}} team`,
           subject: 'Willkommen bei {{teamName}}, {{firstname}}!',
           body: `Hallo {{firstname}},
 
-wir freuen uns sehr, dich bei **{{teamName}}** zum ersten Training begrüssen zu dürfen!
+herzlich willkommen bei **{{teamName}}** — wir freuen uns auf deine erste Session!
 
-Was du wissen solltest, bevor du kommst:
+Ein paar Hinweise vor deinem Besuch:
 
-- **Komm ein paar Minuten früher** — wir begrüssen dich gerne persönlich und beantworten deine Fragen.
-- Trag bequeme Kleidung und bring Wasser mit.
-- Keine Erfahrung nötig — wir kümmern uns um den Rest.
+- **Komm ein paar Minuten früher**, damit wir dich in Ruhe begrüssen und deine Fragen beantworten können.
+- Keine Vorkenntnisse nötig — wir begleiten dich Schritt für Schritt.
+- Termin verschieben? Antworte einfach auf diese E-Mail oder buche online neu.
 
-📅 **[Trainingszeit buchen ↗]({{bookingUrl}})**
+**[Probetermin buchen ↗]({{bookingUrl}})**
 
 Wir freuen uns, dich kennenzulernen!
 
@@ -130,17 +133,17 @@ Das {{teamName}}-Team`,
           subject: 'Bienvenue chez {{teamName}}, {{firstname}} !',
           body: `Bonjour {{firstname}},
 
-Nous sommes ravis de vous accueillir chez **{{teamName}}** pour votre premier cours !
+Bienvenue chez **{{teamName}}** — nous nous réjouissons de vous accueillir pour votre première séance !
 
-Ce qu'il faut savoir avant d'arriver :
+Quelques informations avant votre venue :
 
 - **Arrivez quelques minutes à l'avance** pour que nous puissions vous accueillir et répondre à vos questions.
-- Portez des vêtements confortables et apportez de l'eau.
-- Aucune expérience nécessaire — nous nous occupons du reste.
+- Aucune expérience nécessaire — nous vous guiderons pas à pas.
+- Besoin de reporter ? Répondez simplement à cet e-mail ou réservez un nouveau créneau en ligne.
 
-📅 **[Réserver votre séance d'essai ↗]({{bookingUrl}})**
+**[Réserver votre séance d'essai ↗]({{bookingUrl}})**
 
-Nous avons hâte de vous rencontrer !
+Au plaisir de vous rencontrer !
 
 L'équipe {{teamName}}`,
         },
@@ -148,15 +151,15 @@ L'équipe {{teamName}}`,
           subject: 'Benvenuto/a a {{teamName}}, {{firstname}}!',
           body: `Ciao {{firstname}},
 
-Siamo felicissimi di accoglierti a **{{teamName}}** per il tuo primo allenamento!
+Benvenuto/a a **{{teamName}}** — siamo felici di accoglierti per la tua prima sessione!
 
-Ecco tutto quello che devi sapere prima di venire:
+Alcune informazioni prima del tuo arrivo:
 
-- **Arriva qualche minuto prima** — ti accoglieremo personalmente e risponderemo alle tue domande.
-- Indossa abiti comodi e porta dell'acqua.
-- Nessuna esperienza necessaria — pensiamo noi al resto.
+- **Arriva qualche minuto prima**, così potremo accoglierti con calma e rispondere alle tue domande.
+- Nessuna esperienza necessaria — ti guideremo passo dopo passo.
+- Devi spostare l'appuntamento? Rispondi a questa email o prenota di nuovo online.
 
-📅 **[Prenota la tua sessione di prova ↗]({{bookingUrl}})**
+**[Prenota la tua sessione di prova ↗]({{bookingUrl}})**
 
 Non vediamo l'ora di conoscerti!
 
@@ -168,6 +171,24 @@ Il team {{teamName}}`,
       trigger: { type: 'contact_created' },
       conditions: [{ type: 'acquisition_stage', value: 'trial_booked' }],
       actions: [{ type: 'send_email', template_key: 'lib_trial_welcome' }],
+    },
+  },
+
+  {
+    // Installed ACTIVE by default for every new team (functions onTeamCreated) —
+    // rule shape shared via @linyup/shared TRIAL_CLEANUP_RULE. Listed here so
+    // existing teams can (re)install it and everyone can see/edit what it does.
+    library_key: TRIAL_CLEANUP_RULE_KEY,
+    category: 'trial',
+    name: TRIAL_CLEANUP_RULE.name,
+    description:
+      'Keeps your list clean: archives (never deletes) trial bookings that never attended within 30 days. Edit the rule to change the window. Installed automatically for new teams.',
+    tags: ['trial', 'cleanup', 'archive', 'hygiene'],
+    requires_plan: 'coach',
+    rule: {
+      trigger: { type: TRIAL_CLEANUP_RULE.trigger.type },
+      conditions: TRIAL_CLEANUP_RULE.conditions.map((c) => ({ ...c })),
+      actions: [{ type: 'archive_contact' }],
     },
   },
 
@@ -209,7 +230,7 @@ We know life can be unpredictable — we noticed you missed your trial at **{{te
 
 If you are still interested, we would love to have you. Booking again takes just a moment:
 
-📅 **[Find a new time ↗]({{bookingUrl}})**
+**[Find a new time ↗]({{bookingUrl}})**
 
 No pressure — but the door is always open.
 
@@ -223,7 +244,7 @@ das Leben ist manchmal unberechenbar — wir haben bemerkt, dass du dein Probetr
 
 Falls du noch Interesse hast, sind wir gerne für dich da. Eine neue Zeit buchen geht ganz schnell:
 
-📅 **[Neuen Termin finden ↗]({{bookingUrl}})**
+**[Neuen Termin finden ↗]({{bookingUrl}})**
 
 Kein Druck — die Tür steht immer offen.
 
@@ -237,7 +258,7 @@ Nous savons que la vie peut être imprévisible — nous avons remarqué que vou
 
 Si vous êtes toujours intéressé·e, nous serions ravis de vous accueillir. Reprendre rendez-vous ne prend qu'un instant :
 
-📅 **[Trouver un nouveau créneau ↗]({{bookingUrl}})**
+**[Trouver un nouveau créneau ↗]({{bookingUrl}})**
 
 Sans pression — la porte est toujours ouverte.
 
@@ -251,7 +272,7 @@ La vita può essere imprevedibile — abbiamo notato che hai perso il tuo appunt
 
 Se sei ancora interessato/a, ci farebbe molto piacere averti con noi. Prenotare un nuovo orario è semplicissimo:
 
-📅 **[Trova un nuovo orario ↗]({{bookingUrl}})**
+**[Trova un nuovo orario ↗]({{bookingUrl}})**
 
 Nessuna pressione — la porta è sempre aperta.
 
@@ -292,8 +313,8 @@ Il team {{teamName}}`,
     library_key: 'sys_rule_trial_day1',
     category: 'trial',
     name: 'Trial attended — day-1 follow-up',
-    description: 'Follows up the day after a trial contact completes their first class.',
-    tags: ['trial', 'follow-up', 'conversion', 'first class'],
+    description: 'Follows up the day after a trial contact completes their first session.',
+    tags: ['trial', 'follow-up', 'conversion', 'first session'],
     requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
@@ -310,7 +331,7 @@ Il team {{teamName}}`,
     library_key: 'sys_rule_trial_7d',
     category: 'trial',
     name: 'Trial attended — 7-day nudge',
-    description: "Nudges a trial contact who hasn't subscribed 7 days after their first class.",
+    description: "Nudges a trial contact who hasn't subscribed 7 days after their first session.",
     tags: ['trial', 'nudge', 'conversion', 'inactivity'],
     requires_plan: 'studio',
     rule: {
@@ -348,9 +369,9 @@ Il team {{teamName}}`,
   {
     library_key: 'sys_rule_winback_30d',
     category: 'retention',
-    name: 'Student inactive — 30 days',
-    description: 'Win-back email after 30 days of inactivity for regular students.',
-    tags: ['student', 'winback', 'inactivity', 'retention'],
+    name: 'Member inactive — 30 days',
+    description: 'Win-back email after 30 days of inactivity for regular members.',
+    tags: ['member', 'winback', 'inactivity', 'retention'],
     requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
@@ -366,9 +387,9 @@ Il team {{teamName}}`,
   {
     library_key: 'sys_rule_winback_60d',
     category: 'retention',
-    name: 'Student inactive — 60 days',
-    description: 'Second win-back email for students absent for 60 days.',
-    tags: ['student', 'winback', 'inactivity', 'retention'],
+    name: 'Member inactive — 60 days',
+    description: 'Second win-back email for members absent for 60 days.',
+    tags: ['member', 'winback', 'inactivity', 'retention'],
     requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
@@ -384,9 +405,9 @@ Il team {{teamName}}`,
   {
     library_key: 'lib_winback_90d',
     category: 'retention',
-    name: 'Student inactive — 90 days (last chance)',
-    description: 'A final, heartfelt reach-out to students who have been away for 3 months.',
-    tags: ['student', 'winback', 'inactivity', 'retention', 'last chance'],
+    name: 'Member inactive — 90 days (last chance)',
+    description: 'A final, heartfelt reach-out to members who have been away for 3 months.',
+    tags: ['member', 'winback', 'inactivity', 'retention', 'last chance'],
     requires_plan: 'studio',
     template: {
       name: 'One last message from us',
@@ -402,11 +423,11 @@ We genuinely miss having you around. If something got in the way — life, work,
 
 Whenever you are ready, we will be here. No judgment, no catch-up required.
 
-📅 **[Come back ↗]({{bookingUrl}})**
+**[Come back ↗]({{bookingUrl}})**
 
 If you have moved on, that is okay too. We just wanted you to know the door is always open.
 
-With care,
+Warm regards,
 The {{teamName}} team`,
         },
         de: {
@@ -419,7 +440,7 @@ Wir vermissen dich wirklich. Wenn etwas dazwischengekommen ist — das Leben, di
 
 Wann immer du bereit bist, sind wir für dich da. Kein Druck, kein Aufholen nötig.
 
-📅 **[Wieder einsteigen ↗]({{bookingUrl}})**
+**[Wieder einsteigen ↗]({{bookingUrl}})**
 
 Wenn du dich anderweitig entschieden hast, ist das auch vollkommen in Ordnung. Wir wollten nur, dass du weisst: die Tür steht immer offen.
 
@@ -436,11 +457,11 @@ Vous nous manquez sincèrement. Si quelque chose s'est mis en travers du chemin 
 
 Quand vous serez prêt·e, nous serons là. Sans jugement, sans avoir besoin de rattraper quoi que ce soit.
 
-📅 **[Revenir ↗]({{bookingUrl}})**
+**[Revenir ↗]({{bookingUrl}})**
 
 Si vous avez tourné la page, c'est tout à fait bien aussi. Nous voulions juste que vous sachiez que la porte est toujours ouverte.
 
-Avec sincérité,
+Bien cordialement,
 L'équipe {{teamName}}`,
         },
         it: {
@@ -453,11 +474,11 @@ Ci manchi davvero. Se qualcosa ti ha impedito di tornare — la vita, il lavoro,
 
 Quando sei pronto/a, siamo qui. Senza giudizi, senza pressioni.
 
-📅 **[Torna con noi ↗]({{bookingUrl}})**
+**[Torna con noi ↗]({{bookingUrl}})**
 
 Se hai deciso di andare avanti altrove, va benissimo così. Volevamo solo che tu sapesse che la porta è sempre aperta.
 
-Con affetto,
+Un caro saluto,
 Il team {{teamName}}`,
         },
       },
@@ -488,15 +509,15 @@ Il team {{teamName}}`,
           subject: '{{firstname}}, your membership at {{teamName}} has expired',
           body: `Hi {{firstname}},
 
-Your membership at **{{teamName}}** has expired. We hope you have enjoyed training with us!
+Your membership at **{{teamName}}** has expired. We hope you have enjoyed your time with us!
 
 If you would like to continue, renewing is simple:
 
-📝 **[Renew your membership ↗]({{membershipUrl}})**
+**[Renew your membership ↗]({{membershipUrl}})**
 
 If you have any questions or would like to talk about your options, just reply to this email — we are happy to help.
 
-We hope to see you on the mat again soon.
+We hope to welcome you back soon.
 
 The {{teamName}} team`,
         },
@@ -504,11 +525,11 @@ The {{teamName}} team`,
           subject: '{{firstname}}, deine Mitgliedschaft bei {{teamName}} ist abgelaufen',
           body: `Hallo {{firstname}},
 
-deine Mitgliedschaft bei **{{teamName}}** ist abgelaufen. Wir hoffen, du hattest eine tolle Zeit beim Training!
+deine Mitgliedschaft bei **{{teamName}}** ist abgelaufen. Wir hoffen, du hattest eine tolle Zeit bei uns!
 
 Wenn du weitermachen möchtest, ist die Verlängerung ganz einfach:
 
-📝 **[Mitgliedschaft verlängern ↗]({{membershipUrl}})**
+**[Mitgliedschaft verlängern ↗]({{membershipUrl}})**
 
 Wenn du Fragen hast oder über deine Möglichkeiten sprechen möchtest, antworte einfach auf diese E-Mail — wir helfen dir gerne.
 
@@ -520,11 +541,11 @@ Das {{teamName}}-Team`,
           subject: '{{firstname}}, votre adhésion chez {{teamName}} a expiré',
           body: `Bonjour {{firstname}},
 
-Votre adhésion chez **{{teamName}}** a expiré. Nous espérons que vous avez apprécié vous entraîner avec nous !
+Votre adhésion chez **{{teamName}}** a expiré. Nous espérons que vous avez apprécié votre expérience parmi nous !
 
 Si vous souhaitez continuer, le renouvellement est simple :
 
-📝 **[Renouveler votre adhésion ↗]({{membershipUrl}})**
+**[Renouveler votre adhésion ↗]({{membershipUrl}})**
 
 Si vous avez des questions ou souhaitez discuter de vos options, répondez simplement à cet e-mail — nous sommes là pour vous aider.
 
@@ -536,11 +557,11 @@ L'équipe {{teamName}}`,
           subject: '{{firstname}}, la tua iscrizione a {{teamName}} è scaduta',
           body: `Ciao {{firstname}},
 
-La tua iscrizione a **{{teamName}}** è scaduta. Speriamo tu abbia apprezzato allenarti con noi!
+La tua iscrizione a **{{teamName}}** è scaduta. Speriamo tu abbia apprezzato il tuo percorso con noi!
 
 Se vuoi continuare, il rinnovo è semplicissimo:
 
-📝 **[Rinnova la tua iscrizione ↗]({{membershipUrl}})**
+**[Rinnova la tua iscrizione ↗]({{membershipUrl}})**
 
 Se hai domande o vuoi parlare delle tue opzioni, rispondi a questa email — siamo felici di aiutarti.
 
@@ -565,89 +586,89 @@ Il team {{teamName}}`,
   {
     library_key: 'lib_milestone_1st',
     category: 'milestones',
-    name: '1st class — welcome to the family',
-    description: "Celebrates a contact's first completed class and invites them to join.",
-    tags: ['milestone', 'first class', 'welcome', 'conversion'],
+    name: '1st session — a great start',
+    description: "Celebrates a contact's first completed session and invites them to join.",
+    tags: ['milestone', 'first session', 'welcome', 'conversion'],
     requires_plan: 'studio',
     template: {
-      name: 'You did it — first class done!',
+      name: 'First session — done!',
       body_mode: 'markdown',
       translations: {
         en: {
-          subject: 'Your first class at {{teamName}} — {{firstname}}, you did it!',
+          subject: 'Your first session at {{teamName}} — well done, {{firstname}}!',
           body: `Hi {{firstname}},
 
 You showed up, and that is the hardest part. Welcome to **{{teamName}}**!
 
-We hope your first class was a great experience. Every journey starts with one session, and you have just taken yours.
+We hope your first session was a great experience. Every journey starts with one session, and you have just taken yours.
 
 If you would like to keep training with us, joining is easy:
 
-📝 **[Become a member ↗]({{membershipUrl}})**
+**[Become a member ↗]({{membershipUrl}})**
 
 And if you enjoyed your time, we would love a quick review — it means a lot to a small team like ours:
 
-⭐ **[Leave a review ↗]({{reviewUrl}})**
+**[Leave a review ↗]({{reviewUrl}})**
 
 See you next time!
 
 The {{teamName}} team`,
         },
         de: {
-          subject: 'Dein erstes Training bei {{teamName}} — {{firstname}}, du hast es geschafft!',
+          subject: 'Deine erste Session bei {{teamName}} — gut gemacht, {{firstname}}!',
           body: `Hallo {{firstname}},
 
 du bist erschienen — das ist das Schwierigste. Willkommen bei **{{teamName}}**!
 
-Wir hoffen, dein erstes Training war ein tolles Erlebnis. Jede Reise beginnt mit einer Einheit, und du hast gerade deine erste absolviert.
+Wir hoffen, deine erste Session war ein tolles Erlebnis. Jede Reise beginnt mit einer Session, und du hast gerade deine erste absolviert.
 
 Wenn du weiter mit uns trainieren möchtest, ist der Beitritt ganz einfach:
 
-📝 **[Mitglied werden ↗]({{membershipUrl}})**
+**[Mitglied werden ↗]({{membershipUrl}})**
 
 Und wenn dir die Zeit bei uns gefallen hat, würden wir uns über eine kurze Bewertung freuen:
 
-⭐ **[Bewertung hinterlassen ↗]({{reviewUrl}})**
+**[Bewertung hinterlassen ↗]({{reviewUrl}})**
 
 Bis zum nächsten Mal!
 
 Das {{teamName}}-Team`,
         },
         fr: {
-          subject: "Votre premier cours chez {{teamName}} — {{firstname}}, vous l'avez fait !",
+          subject: 'Votre première séance chez {{teamName}} — bravo, {{firstname}} !',
           body: `Bonjour {{firstname}},
 
 Vous êtes venu·e, et c'est la partie la plus difficile. Bienvenue chez **{{teamName}}** !
 
-Nous espérons que votre premier cours a été une belle expérience. Chaque aventure commence par une séance, et vous venez d'accomplir la vôtre.
+Nous espérons que votre première séance a été une belle expérience. Chaque aventure commence par une séance, et vous venez d'accomplir la vôtre.
 
 Si vous souhaitez continuer à vous entraîner avec nous, rejoindre le club est simple :
 
-📝 **[Devenir membre ↗]({{membershipUrl}})**
+**[Devenir membre ↗]({{membershipUrl}})**
 
 Et si vous avez apprécié votre expérience, un avis rapide nous aiderait beaucoup :
 
-⭐ **[Laisser un avis ↗]({{reviewUrl}})**
+**[Laisser un avis ↗]({{reviewUrl}})**
 
 À bientôt !
 
 L'équipe {{teamName}}`,
         },
         it: {
-          subject: "Il tuo primo allenamento a {{teamName}} — {{firstname}}, ce l'hai fatta!",
+          subject: 'La tua prima sessione a {{teamName}} — complimenti, {{firstname}}!',
           body: `Ciao {{firstname}},
 
 Sei venuto/a — ed è la parte più difficile. Benvenuto/a a **{{teamName}}**!
 
-Speriamo che il tuo primo allenamento sia stata un'esperienza meravigliosa. Ogni viaggio inizia con una sessione, e tu hai appena completato la tua.
+Speriamo che la tua prima sessione sia stata un'esperienza meravigliosa. Ogni viaggio inizia con una sessione, e tu hai appena completato la tua.
 
 Se vuoi continuare ad allenarti con noi, diventare membro è semplice:
 
-📝 **[Diventa membro ↗]({{membershipUrl}})**
+**[Diventa membro ↗]({{membershipUrl}})**
 
 E se hai apprezzato la tua esperienza, una breve recensione per noi vale moltissimo:
 
-⭐ **[Lascia una recensione ↗]({{reviewUrl}})**
+**[Lascia una recensione ↗]({{reviewUrl}})**
 
 A presto!
 
@@ -665,71 +686,70 @@ Il team {{teamName}}`,
   {
     library_key: 'lib_milestone_5',
     category: 'milestones',
-    name: '5 classes — finding your rhythm',
-    description: 'Sends a congratulatory email after a contact completes 5 classes.',
-    tags: ['milestone', '5 classes', 'congratulations'],
+    name: '5 sessions — finding your rhythm',
+    description: 'Sends a congratulatory email after a contact completes 5 sessions.',
+    tags: ['milestone', '5 sessions', 'congratulations'],
     requires_plan: 'studio',
     template: {
-      name: "5 classes — you're finding your rhythm!",
+      name: '5 sessions — finding your rhythm!',
       body_mode: 'markdown',
       translations: {
         en: {
-          subject: "5 classes at {{teamName}}, {{firstname}} — you're finding your rhythm!",
+          subject: "5 sessions at {{teamName}}, {{firstname}} — you're finding your rhythm!",
           body: `Hi {{firstname}},
 
-Five classes in — you are officially finding your rhythm at **{{teamName}}** and we could not be happier to have you with us!
+Five sessions in — you are officially finding your rhythm at **{{teamName}}** and we are glad to have you with us!
 
-Consistency is everything in training, and you are already building it. Keep it up!
+Consistency is everything, and you are already building it. Keep it up!
 
 If you have a spare moment, sharing your experience helps others find a place like ours:
 
-⭐ **[Leave a review ↗]({{reviewUrl}})**
+**[Leave a review ↗]({{reviewUrl}})**
 
-See you on the mat,
+See you soon,
 The {{teamName}} team`,
         },
         de: {
-          subject:
-            '5 Trainingseinheiten bei {{teamName}}, {{firstname}} — du findest deinen Rhythmus!',
+          subject: '5 Sessions bei {{teamName}}, {{firstname}} — du findest deinen Rhythmus!',
           body: `Hallo {{firstname}},
 
-Fünf Trainingseinheiten absolviert — du findest deinen Rhythmus bei **{{teamName}}** und wir freuen uns sehr, dich dabei zu haben!
+Fünf Sessions absolviert — du findest deinen Rhythmus bei **{{teamName}}** und wir freuen uns sehr, dich dabei zu haben!
 
-Regelmässigkeit ist alles im Training, und du baust sie bereits auf. Weiter so!
+Regelmässigkeit ist alles, und du baust sie bereits auf. Weiter so!
 
 Wenn du einen Moment Zeit hast, hilft deine Erfahrung anderen dabei, einen Platz wie unseren zu finden:
 
-⭐ **[Bewertung hinterlassen ↗]({{reviewUrl}})**
+**[Bewertung hinterlassen ↗]({{reviewUrl}})**
 
-Bis zum nächsten Training,
+Bis bald,
 Das {{teamName}}-Team`,
         },
         fr: {
-          subject: '5 cours chez {{teamName}}, {{firstname}} — vous trouvez votre rythme !',
+          subject: '5 séances chez {{teamName}}, {{firstname}} — vous trouvez votre rythme !',
           body: `Bonjour {{firstname}},
 
-Cinq cours au compteur — vous trouvez votre rythme chez **{{teamName}}** et nous sommes ravis de vous avoir parmi nous !
+Cinq séances au compteur — vous trouvez votre rythme chez **{{teamName}}** et nous sommes ravis de vous avoir parmi nous !
 
 La régularité est la clé de la progression, et vous êtes déjà en train de la construire. Continuez comme ça !
 
 Si vous avez un moment, votre avis aide d'autres personnes à nous trouver :
 
-⭐ **[Laisser un avis ↗]({{reviewUrl}})**
+**[Laisser un avis ↗]({{reviewUrl}})**
 
-À bientôt sur le tatami,
+À bientôt,
 L'équipe {{teamName}}`,
         },
         it: {
-          subject: '5 allenamenti a {{teamName}}, {{firstname}} — stai trovando il tuo ritmo!',
+          subject: '5 sessioni a {{teamName}}, {{firstname}} — stai trovando il tuo ritmo!',
           body: `Ciao {{firstname}},
 
-Cinque allenamenti completati — stai trovando il tuo ritmo a **{{teamName}}** e siamo molto felici di averti con noi!
+Cinque sessioni completate — stai trovando il tuo ritmo a **{{teamName}}** e siamo molto felici di averti con noi!
 
-La costanza è tutto nell'allenamento, e tu la stai già costruendo. Continua così!
+La costanza è tutto, e tu la stai già costruendo. Continua così!
 
 Se hai un momento, condividere la tua esperienza aiuta altri a trovare un posto come il nostro:
 
-⭐ **[Lascia una recensione ↗]({{reviewUrl}})**
+**[Lascia una recensione ↗]({{reviewUrl}})**
 
 A presto,
 Il team {{teamName}}`,
@@ -746,9 +766,9 @@ Il team {{teamName}}`,
   {
     library_key: 'sys_rule_milestone_10',
     category: 'milestones',
-    name: '10 classes — thank you!',
-    description: 'Celebrates 10 completed classes and requests a review.',
-    tags: ['milestone', '10 classes', 'thank you', 'review'],
+    name: '10 sessions — thank you!',
+    description: 'Celebrates 10 completed sessions and requests a review.',
+    tags: ['milestone', '10 sessions', 'thank you', 'review'],
     requires_plan: 'studio',
     rule: {
       trigger: { type: 'schedule_daily' },
@@ -760,73 +780,73 @@ Il team {{teamName}}`,
   {
     library_key: 'lib_milestone_25',
     category: 'milestones',
-    name: '25 classes — committed!',
-    description: 'Recognises the dedication of reaching 25 classes.',
-    tags: ['milestone', '25 classes', 'committed', 'congratulations'],
+    name: '25 sessions — committed!',
+    description: 'Recognises the dedication of reaching 25 sessions.',
+    tags: ['milestone', '25 sessions', 'committed', 'congratulations'],
     requires_plan: 'studio',
     template: {
-      name: "25 classes — you're committed!",
+      name: "25 sessions — you're committed!",
       body_mode: 'markdown',
       translations: {
         en: {
-          subject: "25 classes, {{firstname}} — you're truly committed!",
+          subject: '25 sessions, {{firstname}} — thank you for your commitment!',
           body: `Hi {{firstname}},
 
-**25 classes** at **{{teamName}}** — that is no accident. It takes real commitment to show up consistently, and you have it.
+**25 sessions** at **{{teamName}}** — that is no accident. It takes real commitment to show up consistently, and you have it.
 
 You are an important part of what makes our community special. Thank you for being here.
 
 If you have not shared your experience yet, this is a great moment — your story could inspire someone who is still on the fence:
 
-⭐ **[Share your journey ↗]({{reviewUrl}})**
+**[Share your journey ↗]({{reviewUrl}})**
 
 Keep going — you are doing great.
 
 The {{teamName}} team`,
         },
         de: {
-          subject: '25 Trainingseinheiten, {{firstname}} — du bist wirklich dran!',
+          subject: '25 Sessions, {{firstname}} — danke für dein Engagement!',
           body: `Hallo {{firstname}},
 
-**25 Trainingseinheiten** bei **{{teamName}}** — das passiert nicht zufällig. Es braucht echte Disziplin, um regelmässig zu erscheinen, und du hast sie.
+**25 Sessions** bei **{{teamName}}** — das passiert nicht zufällig. Es braucht echte Disziplin, um regelmässig zu erscheinen, und du hast sie.
 
 Du bist ein wichtiger Teil von dem, was unsere Gemeinschaft besonders macht. Danke, dass du dabei bist.
 
 Falls du deine Erfahrung noch nicht geteilt hast, ist jetzt ein guter Moment — deine Geschichte könnte jemanden inspirieren, der noch zögert:
 
-⭐ **[Teile deinen Weg ↗]({{reviewUrl}})**
+**[Teile deinen Weg ↗]({{reviewUrl}})**
 
 Weiter so — du machst das grossartig.
 
 Das {{teamName}}-Team`,
         },
         fr: {
-          subject: '25 cours, {{firstname}} — vous êtes vraiment engagé·e !',
+          subject: '25 séances, {{firstname}} — merci pour votre engagement !',
           body: `Bonjour {{firstname}},
 
-**25 cours** chez **{{teamName}}** — ce n'est pas un hasard. Il faut un vrai engagement pour se présenter régulièrement, et vous l'avez.
+**25 séances** chez **{{teamName}}** — ce n'est pas un hasard. Il faut un vrai engagement pour se présenter régulièrement, et vous l'avez.
 
 Vous faites partie intégrante de ce qui rend notre communauté spéciale. Merci d'être là.
 
 Si vous n'avez pas encore partagé votre expérience, c'est le bon moment — votre témoignage pourrait inspirer quelqu'un qui hésite encore :
 
-⭐ **[Partagez votre parcours ↗]({{reviewUrl}})**
+**[Partagez votre parcours ↗]({{reviewUrl}})**
 
 Continuez — vous faites du très bon travail.
 
 L'équipe {{teamName}}`,
         },
         it: {
-          subject: '25 allenamenti, {{firstname}} — sei davvero determinato/a!',
+          subject: '25 sessioni, {{firstname}} — grazie per il tuo impegno!',
           body: `Ciao {{firstname}},
 
-**25 allenamenti** a **{{teamName}}** — non è un caso. Ci vuole vera dedizione per presentarsi con costanza, e tu ce l'hai.
+**25 sessioni** a **{{teamName}}** — non è un caso. Ci vuole vera dedizione per presentarsi con costanza, e tu ce l'hai.
 
 Sei una parte importante di ciò che rende speciale la nostra comunità. Grazie per essere qui.
 
 Se non hai ancora condiviso la tua esperienza, questo è il momento giusto — la tua storia potrebbe ispirare qualcuno che è ancora indeciso:
 
-⭐ **[Condividi il tuo percorso ↗]({{reviewUrl}})**
+**[Condividi il tuo percorso ↗]({{reviewUrl}})**
 
 Continua così — stai facendo un lavoro straordinario.
 
@@ -844,81 +864,81 @@ Il team {{teamName}}`,
   {
     library_key: 'lib_milestone_50',
     category: 'milestones',
-    name: '50 classes — legend status',
-    description: 'A major celebration for contacts who reach 50 classes.',
-    tags: ['milestone', '50 classes', 'legend', 'congratulations'],
+    name: '50 sessions — a milestone worth celebrating',
+    description: 'A celebration for contacts who reach 50 sessions.',
+    tags: ['milestone', '50 sessions', 'congratulations'],
     requires_plan: 'studio',
     template: {
-      name: '50 classes — legend status!',
+      name: '50 sessions — congratulations!',
       body_mode: 'markdown',
       translations: {
         en: {
-          subject: "50 classes, {{firstname}} — you're a legend at {{teamName}}!",
+          subject: '50 sessions at {{teamName}} — congratulations, {{firstname}}!',
           body: `Hi {{firstname}},
 
-**50 classes.** Let that sink in.
+**50 sessions** at **{{teamName}}** — a milestone few reach.
 
-You have shown up fifty times, pushed through fifty sessions, and you have become a true part of the **{{teamName}}** family. That is something to be genuinely proud of.
+You have shown up fifty times and become a real part of our community. That is something to be genuinely proud of.
 
-Thank you for the energy you bring every time you walk through the door. You make this place better for everyone.
+Thank you for the energy you bring every time — it makes a difference for everyone around you.
 
-If you feel like celebrating this milestone with a quick review, we would be honoured:
+If you would like to mark the occasion with a quick review, we would be honoured:
 
-⭐ **[Share your 50-class story ↗]({{reviewUrl}})**
+**[Share your story ↗]({{reviewUrl}})**
 
 Here is to the next fifty!
 
 The {{teamName}} team`,
         },
         de: {
-          subject: '50 Trainingseinheiten, {{firstname}} — du bist eine Legende bei {{teamName}}!',
+          subject: '50 Sessions bei {{teamName}} — herzlichen Glückwunsch, {{firstname}}!',
           body: `Hallo {{firstname}},
 
-**50 Trainingseinheiten.** Lass das kurz wirken.
+**50 Sessions** bei **{{teamName}}** — ein Meilenstein, den nur wenige erreichen.
 
-Du bist fünfzigmal erschienen, hast fünfzig Einheiten durchgezogen und bist zu einem echten Teil der **{{teamName}}**-Familie geworden. Das ist etwas, worauf du wirklich stolz sein kannst.
+Du bist fünfzigmal erschienen und ein fester Teil unserer Community geworden. Darauf kannst du wirklich stolz sein.
 
-Danke für die Energie, die du jedes Mal mitbringst, wenn du durch unsere Tür trittst. Du machst diesen Ort für alle besser.
+Danke für die Energie, die du jedes Mal mitbringst — sie macht einen Unterschied für alle um dich herum.
 
 Wenn du diesen Meilenstein mit einer kurzen Bewertung feiern möchtest, würden wir uns sehr freuen:
 
-⭐ **[Teile deine 50-Einheiten-Geschichte ↗]({{reviewUrl}})**
+**[Teile deine Geschichte ↗]({{reviewUrl}})**
 
 Auf die nächsten fünfzig!
 
 Das {{teamName}}-Team`,
         },
         fr: {
-          subject: '50 cours, {{firstname}} — vous êtes une légende chez {{teamName}} !',
+          subject: '50 séances chez {{teamName}} — félicitations, {{firstname}} !',
           body: `Bonjour {{firstname}},
 
-**50 cours.** Laissez ce chiffre résonner.
+**50 séances** chez **{{teamName}}** — un jalon que peu de personnes atteignent.
 
-Vous vous êtes présenté·e cinquante fois, vous avez traversé cinquante séances et vous êtes devenu·e une vraie partie de la famille **{{teamName}}**. C'est quelque chose dont vous pouvez être véritablement fier·fière.
+Vous êtes venu·e cinquante fois et vous faites désormais pleinement partie de notre communauté. Vous pouvez en être véritablement fier·fière.
 
-Merci pour l'énergie que vous apportez à chaque fois que vous franchissez notre porte. Vous rendez cet endroit meilleur pour tout le monde.
+Merci pour l'énergie que vous apportez à chaque fois — elle fait la différence pour tout le monde autour de vous.
 
-Si vous souhaitez célébrer ce jalon avec un avis rapide, nous en serions honorés :
+Si vous souhaitez marquer l'occasion avec un avis rapide, nous en serions honorés :
 
-⭐ **[Partagez votre histoire en 50 cours ↗]({{reviewUrl}})**
+**[Partagez votre histoire ↗]({{reviewUrl}})**
 
 À la prochaine cinquantaine !
 
 L'équipe {{teamName}}`,
         },
         it: {
-          subject: '50 allenamenti, {{firstname}} — sei una leggenda a {{teamName}}!',
+          subject: '50 sessioni a {{teamName}} — congratulazioni, {{firstname}}!',
           body: `Ciao {{firstname}},
 
-**50 allenamenti.** Lascia che questo numero entri dentro.
+**50 sessioni** a **{{teamName}}** — un traguardo che pochi raggiungono.
 
-Ti sei presentato/a cinquanta volte, hai completato cinquanta sessioni e sei diventato/a una vera parte della famiglia **{{teamName}}**. È qualcosa di cui essere genuinamente orgoglioso/a.
+Ti sei presentato/a cinquanta volte e sei diventato/a una parte importante della nostra comunità. È qualcosa di cui essere davvero orgoglioso/a.
 
-Grazie per l'energia che porti ogni volta che varchi la nostra porta. Rendi questo posto migliore per tutti.
+Grazie per l'energia che porti ogni volta — fa la differenza per tutti intorno a te.
 
 Se vuoi celebrare questo traguardo con una breve recensione, ne saremmo onorati:
 
-⭐ **[Condividi la tua storia da 50 allenamenti ↗]({{reviewUrl}})**
+**[Condividi la tua storia ↗]({{reviewUrl}})**
 
 Ai prossimi cinquanta!
 
@@ -954,35 +974,35 @@ Thanks for joining us today at **{{teamName}}**! We hope you had a great session
 
 Your feedback helps us keep improving. If you have a minute, we would love to hear how it went:
 
-⭐ **[Share your experience ↗]({{reviewUrl}})**
+**[Share your experience ↗]({{reviewUrl}})**
 
 See you next time!
 
 The {{teamName}} team`,
         },
         de: {
-          subject: 'Wie war dein Training bei {{teamName}}, {{firstname}}?',
+          subject: 'Wie war deine Session bei {{teamName}}, {{firstname}}?',
           body: `Hallo {{firstname}},
 
-danke, dass du heute bei **{{teamName}}** dabei warst! Wir hoffen, das Training hat dir Spass gemacht.
+danke, dass du heute bei **{{teamName}}** dabei warst! Wir hoffen, die Session hat dir Spass gemacht.
 
 Dein Feedback hilft uns, uns stetig zu verbessern. Wenn du einen Moment Zeit hast, würden wir uns sehr über deine Rückmeldung freuen:
 
-⭐ **[Teile deine Erfahrung ↗]({{reviewUrl}})**
+**[Teile deine Erfahrung ↗]({{reviewUrl}})**
 
 Bis zum nächsten Mal!
 
 Das {{teamName}}-Team`,
         },
         fr: {
-          subject: "Comment s'est passé votre cours chez {{teamName}}, {{firstname}} ?",
+          subject: "Comment s'est passée votre séance chez {{teamName}}, {{firstname}} ?",
           body: `Bonjour {{firstname}},
 
-Merci d'avoir participé à notre cours aujourd'hui chez **{{teamName}}** ! Nous espérons que la séance s'est bien passée.
+Merci d'avoir participé à votre séance aujourd'hui chez **{{teamName}}** ! Nous espérons qu'elle s'est bien passée.
 
 Votre avis nous aide à nous améliorer en permanence. Si vous avez une minute, nous serions ravis de connaître votre ressenti :
 
-⭐ **[Partagez votre expérience ↗]({{reviewUrl}})**
+**[Partagez votre expérience ↗]({{reviewUrl}})**
 
 À bientôt !
 
@@ -996,7 +1016,7 @@ Grazie per aver partecipato oggi a **{{teamName}}**! Speriamo che la sessione si
 
 Il tuo feedback ci aiuta a migliorare continuamente. Se hai un minuto, ci farebbe molto piacere sapere come è andata:
 
-⭐ **[Condividi la tua esperienza ↗]({{reviewUrl}})**
+**[Condividi la tua esperienza ↗]({{reviewUrl}})**
 
 A presto!
 

@@ -1,4 +1,5 @@
 import { buildEmailTemplate } from '../utils/email'
+import { detailsBox, ctaButton, factLines, BRAND } from '../utils/emailLayout'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 
@@ -65,35 +66,41 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
     it: `Ciao ${firstname},`,
   }
 
-  const lines: Record<Lang, string[]> = {
+  const intros: Record<Lang, string> = {
+    en: `Your session at <strong>${teamName}</strong> has been confirmed.`,
+    de: `Ihre Sitzung bei <strong>${teamName}</strong> wurde bestätigt.`,
+    fr: `Votre session chez <strong>${teamName}</strong> a été confirmée.`,
+    it: `La tua sessione presso <strong>${teamName}</strong> è stata confermata.`,
+  }
+
+  const facts: Record<Lang, string[]> = {
     en: [
-      `Your session at <strong>${teamName}</strong> has been confirmed.`,
       `<strong>Activity:</strong> ${activityName}`,
       `<strong>Date:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Location:</strong> ${locationName}` : '',
-      'We look forward to seeing you!',
     ],
     de: [
-      `Ihre Sitzung bei <strong>${teamName}</strong> wurde bestätigt.`,
       `<strong>Aktivität:</strong> ${activityName}`,
       `<strong>Datum:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Ort:</strong> ${locationName}` : '',
-      'Wir freuen uns auf Sie!',
     ],
     fr: [
-      `Votre session chez <strong>${teamName}</strong> a été confirmée.`,
       `<strong>Activité :</strong> ${activityName}`,
       `<strong>Date :</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Lieu :</strong> ${locationName}` : '',
-      'Nous avons hâte de vous voir !',
     ],
     it: [
-      `La tua sessione presso <strong>${teamName}</strong> è stata confermata.`,
       `<strong>Attività:</strong> ${activityName}`,
       `<strong>Data:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Luogo:</strong> ${locationName}` : '',
-      'Non vediamo l\'ora di vederti!',
     ],
+  }
+
+  const closings: Record<Lang, string> = {
+    en: 'We look forward to seeing you!',
+    de: 'Wir freuen uns auf Sie!',
+    fr: 'Nous avons hâte de vous voir !',
+    it: "Non vediamo l'ora di vederti!",
   }
 
   const manageLabels: Record<Lang, string> = {
@@ -105,8 +112,12 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
 
   const body = [
     `<p>${greetings[lang]}</p>`,
-    ...lines[lang].filter(Boolean).map((l) => `<p>${l}</p>`),
-    manageBookingUrl ? `<p><a href="${manageBookingUrl}">${manageLabels[lang]}</a></p>` : '',
+    `<p>${intros[lang]}</p>`,
+    detailsBox({ content: factLines(facts[lang]) }),
+    `<p>${closings[lang]}</p>`,
+    manageBookingUrl
+      ? `<p style="text-align:center;margin-top:24px;">${ctaButton(manageBookingUrl, manageLabels[lang])}</p>`
+      : '',
   ]
     .filter(Boolean)
     .join('\n')
@@ -193,15 +204,21 @@ export function buildBookingReminderEmail(params: ReminderParams) {
 
   const locationLine = locationName
     ? `<strong>${locationLabels[lang]}:</strong> ${locationName}${locationAddress ? `, ${locationAddress}` : ''}`
-    : null
+    : ''
 
   const body = [
     `<p>${greetings[lang]}</p>`,
     `<p>${intros[lang]}</p>`,
-    `<p><strong>${activityLabels[lang]}:</strong> ${activityName}</p>`,
-    `<p><strong>${dateLabels[lang]}:</strong> ${date} – ${endTime}</p>`,
-    locationLine ? `<p>${locationLine}</p>` : null,
-    manageBookingUrl ? `<p><a href="${manageBookingUrl}">${manageLabels[lang]}</a></p>` : null,
+    detailsBox({
+      content: factLines([
+        `<strong>${activityLabels[lang]}:</strong> ${activityName}`,
+        `<strong>${dateLabels[lang]}:</strong> ${date} – ${endTime}`,
+        locationLine,
+      ]),
+    }),
+    manageBookingUrl
+      ? `<p style="text-align:center;margin-top:24px;">${ctaButton(manageBookingUrl, manageLabels[lang])}</p>`
+      : null,
   ]
     .filter(Boolean)
     .join('\n')
@@ -269,7 +286,8 @@ export function buildTeacherNotificationEmail(params: NotificationParams) {
     ],
   }
 
-  const body = lines[lang].map((l) => `<p>${l}</p>`).join('\n')
+  const [greeting, ...factList] = lines[lang]
+  const body = [`<p>${greeting}</p>`, detailsBox({ content: factLines(factList) })].join('\n')
   return buildEmailTemplate({ title: titles[lang], body })
 }
 
@@ -290,11 +308,12 @@ export function buildVerificationCodeEmail(params: VerificationCodeParams) {
     it: `Il tuo codice di verifica per ${teamName}`,
   }
 
+  const codeStyle = `font-size:2rem;font-weight:bold;letter-spacing:0.25em;color:${BRAND.primaryDeep};text-align:center;`
   const bodies: Record<Lang, string> = {
-    en: `<p>Your verification code is:</p><p style="font-size:2rem;font-weight:bold;letter-spacing:0.25em">${code}</p><p>This code expires in ${expiresInMinutes} minutes. Do not share it.</p>`,
-    de: `<p>Ihr Verifizierungscode lautet:</p><p style="font-size:2rem;font-weight:bold;letter-spacing:0.25em">${code}</p><p>Dieser Code läuft in ${expiresInMinutes} Minuten ab. Geben Sie ihn nicht weiter.</p>`,
-    fr: `<p>Votre code de vérification est :</p><p style="font-size:2rem;font-weight:bold;letter-spacing:0.25em">${code}</p><p>Ce code expire dans ${expiresInMinutes} minutes. Ne le partagez pas.</p>`,
-    it: `<p>Il tuo codice di verifica è:</p><p style="font-size:2rem;font-weight:bold;letter-spacing:0.25em">${code}</p><p>Questo codice scade in ${expiresInMinutes} minuti. Non condividerlo.</p>`,
+    en: `<p>Your verification code is:</p><p style="${codeStyle}">${code}</p><p>This code expires in ${expiresInMinutes} minutes. Do not share it.</p>`,
+    de: `<p>Ihr Verifizierungscode lautet:</p><p style="${codeStyle}">${code}</p><p>Dieser Code läuft in ${expiresInMinutes} Minuten ab. Geben Sie ihn nicht weiter.</p>`,
+    fr: `<p>Votre code de vérification est :</p><p style="${codeStyle}">${code}</p><p>Ce code expire dans ${expiresInMinutes} minutes. Ne le partagez pas.</p>`,
+    it: `<p>Il tuo codice di verifica è:</p><p style="${codeStyle}">${code}</p><p>Questo codice scade in ${expiresInMinutes} minuti. Non condividerlo.</p>`,
   }
 
   return buildEmailTemplate({ title: titles[lang], body: bodies[lang] })

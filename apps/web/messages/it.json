@@ -35,6 +35,7 @@
     "teamRanking": "Livelli",
     "teamPayments": "Pagamenti",
     "teamOutreach": "Outreach",
+    "teamEmails": "Email",
     "teamAffiliations": "Affiliazioni",
     "teamCustomFields": "Campi personalizzati",
     "settingsHubTitle": "Impostazioni",
@@ -338,10 +339,11 @@
     "source_import": "Import",
     "source_other": "Altro",
     "tabAll": "Tutti",
-    "tabActive": "Tutti",
-    "tabUnconfirmed": "Non confermati",
+    "tabActive": "Attivi",
+    "tabLeads": "Lead",
     "unconfirmedBadge": "Non confermato · {days} g rimasti",
     "bulkConfirm": "Conferma",
+    "capEntryHint": "Limite contatti del piano raggiunto — puoi aggiungere solo prenotazioni di prova (lead); contano solo dopo la partecipazione o il pagamento.",
     "tabRequests": "Richieste",
     "notFound": "Contatto non trovato.",
     "noNotes": "Nessuna nota ancora.",
@@ -617,10 +619,6 @@
     "capWarnBodyUpgrade": "Il tuo piano include {included} contatti e ne hai {used}. Esegui l’upgrade per un limite di contatti più alto.",
     "capWarnBodyBlock": "Il tuo piano include {included} contatti e ne hai {used}. Non blocchiamo i nuovi contatti — aggiungi un blocco di +{blockSize} contatti per CHF {blockPrice}/mese oppure esegui l’upgrade per più spazio.",
     "capWarnBodyFreeHard": "Il piano Free include {included} contatti e ne hai {used}. L’aggiunta manuale è bloccata, ma le iscrizioni dal tuo bio link continuano ad arrivare. Esegui l’upgrade per un limite più alto.",
-    "freeCapDialogTitle": "Limite contatti raggiunto",
-    "freeCapDialogBody": "Il piano Free include fino a {included} contatti attivi. Passa al Coach per aggiungerne altri — o archivia i contatti di cui non hai più bisogno.",
-    "freeCapDialogDismiss": "Non ora",
-    "freeCapDialogCta": "Vedi le opzioni di upgrade",
     "copyEmail": "Copia email",
     "emailCopied": "Copiato!",
     "joinedOn": "Iscritto il",
@@ -3635,9 +3633,8 @@
     },
     "page": {
       "title": "Automazioni",
-      "tabRules": "Le tue automazioni",
       "subtitle": "Attiva automaticamente email e avvisi in base all'attività dei contatti.",
-      "templatesButton": "Modelli",
+      "templatesButton": "Email e modelli",
       "libraryButton": "Libreria",
       "webhooksButton": "Webhook",
       "limitedPlanTitle": "Le automazioni del tuo piano sono limitate",
@@ -3768,7 +3765,9 @@
       "webhookUrlPlaceholder": "https://hooks.zapier.com/…",
       "types": {
         "send_email": "Invia email",
+        "add_note": "Aggiungi nota al contatto",
         "update_field": "Aggiorna campo del contatto",
+        "archive_contact": "Archivia contatto",
         "assign_tag": "Aggiungi tag al contatto",
         "remove_tag": "Rimuovi tag dal contatto",
         "notify_team": "Notifica il team (email)",
@@ -3779,8 +3778,14 @@
         "create_alert": "Crea avviso (in arrivo)"
       },
       "updateField": {
-        "acquisitionStage": "Fase di acquisizione"
+        "acquisitionStage": "Fase di acquisizione",
+        "source": "Fonte",
+        "sourceDetail": "Dettaglio fonte",
+        "notes": "Note (sostituisce)",
+        "leadAcknowledged": "Lead visto"
       },
+      "boolTrue": "Sì",
+      "boolFalse": "No",
       "notifyTeam": {
         "subjectPlaceholder": "Oggetto — usa '{{firstname}}', '{{teamName}}'…",
         "bodyPlaceholder": "Testo (markdown) — '{{firstname}}' ha partecipato a una sessione presso '{{teamName}}'."
@@ -3788,9 +3793,15 @@
       "logActivity": {
         "messagePlaceholder": "Messaggio — usa '{{firstname}}', '{{teamName}}'…"
       },
+      "addNote": {
+        "placeholder": "Nota — usa '{{firstname}}', '{{teamName}}', '{{date}}'…",
+        "hint": "Aggiunge al contatto una nota con data e ora. Supporta gli stessi segnaposto delle email."
+      },
       "summarySendEmail": "Email: {name}",
       "summaryCreateAlert": "Crea avviso",
       "summaryUpdateField": "Imposta {field} → {value}",
+      "summaryArchiveContact": "Archivia il contatto",
+      "summaryAddNote": "Aggiungi nota: {note}",
       "summaryNotifyTeam": "Notifica il team: {subject}",
       "summaryLogActivity": "Registro: {message}",
       "summaryAssignTag": "Aggiungi tag: {tag}",
@@ -3863,5 +3874,21 @@
         "createTemplate": "Crea modello"
       }
     }
+  },
+  "SettingsEmails": {
+    "title": "Email",
+    "subtitle": "Gestisci i modelli email inviati dalle tue automazioni e campagne, e le email di sistema automatiche.",
+    "templatesTitle": "Modelli email",
+    "groupSystem": "Modelli predefiniti",
+    "groupSystemHint": "Installati dalla libreria. Personalizza oggetto e testo — il layout del brand viene applicato automaticamente. Ripristinabile in qualsiasi momento.",
+    "groupCustom": "Modelli personalizzati",
+    "modified": "Personalizzato",
+    "reset": "Ripristina predefinito",
+    "resetConfirm": "Ripristinare “{name}” al testo predefinito? Le tue modifiche verranno sovrascritte.",
+    "deactivate": "Disattiva",
+    "deactivateConfirm": "Disattivare “{name}”? Le automazioni che lo usano smetteranno di inviare finché non lo modifichi e salvi di nuovo.",
+    "preview": "Anteprima",
+    "previewNote": "Dati di esempio — layout, intestazione e piè di pagina vengono applicati automaticamente a ogni email.",
+    "subjectPreviewLabel": "Oggetto"
   }
 }

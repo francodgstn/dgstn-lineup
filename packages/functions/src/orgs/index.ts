@@ -5,6 +5,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { getSecret } from '../utils/secrets'
 import { getHostingUrl, resolveBaseUrl } from '../utils/env'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { ctaButton } from '../utils/emailLayout'
 import { getTeam } from '../utils/teams'
 import { StripeAdapter } from '../utils/gateway/stripe'
 import type { OrgRole } from '@linyup/shared'
@@ -185,7 +186,7 @@ export const inviteTeamToOrg = onCall(async (request) => {
     body: `
       <p>You have been invited to join ${teamLabel} to the organization <strong>${org.name}</strong> on Linyup.</p>
       <p>By accepting, your team's billing will be managed by the organization and you'll get access to all organization plan features.</p>
-      <p><a href="${acceptUrl}" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p>
+      <p style="margin:16px 0;">${ctaButton(acceptUrl, 'Accept Invitation')}</p>
       <p>This invitation expires in 7 days. If you did not expect this, you can safely ignore this email.</p>
     `,
   })
@@ -519,7 +520,7 @@ export const requestTeamAccess = onCall(async (request) => {
             <p><strong>${requesterName}</strong>, an admin of the organization <strong>${orgName}</strong>,
             has requested <strong>${accessLabel}</strong> access to your team <strong>${teamName}</strong> on Linyup.</p>
             <p>You can review and approve or deny this request in your team's settings.</p>
-            <p><a href="${hostingUrl}/settings?tab=org" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">Review Request</a></p>
+            <p style="margin:16px 0;">${ctaButton(`${hostingUrl}/settings?tab=org`, 'Review Request')}</p>
           `,
         })
 

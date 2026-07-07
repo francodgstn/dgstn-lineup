@@ -42,20 +42,22 @@ export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   const codeData = await assertVerifiableCodeById(data.codeId, data.code)
 
   const email: string = (codeData.email as string).toLowerCase().trim()
-  const teamId: string = codeData.team_id as string
+  const teamId: string | null =
+    typeof codeData.team_id === 'string' && codeData.team_id.length > 0
+      ? codeData.team_id
+      : null
 
   // Match contacts whose PRIMARY email is this address, OR whose login-email
-  // allow-list contains it (e.g. a parent signing in to a child's profile). Two
-  // queries merged by id: the primary lookup (email + teamId), and an
-  // array-contains on `login_emails` (single-field index — filter teamId in
-  // memory to avoid a composite index, per the index gotcha).
+  // allow-list contains it (e.g. a parent signing in to a child's profile).
+  // When teamId is known, scope the primary query to that team. When it's null
+  // (mobile app flow — no team selected upfront), query by email across all
+  // teams and optionally narrow to the teamIds stored on the code doc.
+  const primaryQuery = teamId
+    ? admin.firestore().collection('contacts').where('email', '==', email).where('teamId', '==', teamId).get()
+    : admin.firestore().collection('contacts').where('email', '==', email).get()
+
   const [primarySnap, allowSnap] = await Promise.all([
-    admin
-      .firestore()
-      .collection('contacts')
-      .where('email', '==', email)
-      .where('teamId', '==', teamId)
-      .get(),
+    primaryQuery,
     admin
       .firestore()
       .collection('contacts')
@@ -63,11 +65,19 @@ export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       .get(),
   ])
 
-  // Dedupe by doc id; keep only this team's active (non-archived, non-deleted) contacts.
+  // Dedupe by doc id; keep only active (non-archived, non-deleted) contacts.
+  // When teamId is set, restrict to that team; otherwise accept all teams
+  // (optionally narrowed by the code doc's teamIds list).
+  const allowedTeamIds: string[] | null =
+    !teamId && Array.isArray(codeData.teamIds) && codeData.teamIds.length > 0
+      ? codeData.teamIds
+      : null
+
   const byId = new Map<string, admin.firestore.QueryDocumentSnapshot>()
   for (const doc of [...primarySnap.docs, ...allowSnap.docs]) {
     const d = doc.data()
-    if (d.teamId !== teamId) continue
+    if (teamId && d.teamId !== teamId) continue
+    if (allowedTeamIds && !allowedTeamIds.includes(d.teamId)) continue
     if (d.archived_at != null || d.deleted_at != null) continue
     byId.set(doc.id, doc)
   }
@@ -76,8 +86,9 @@ export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   if (activeContacts.length === 0) {
     const firstname = (data.newContact?.firstname ?? '').trim().slice(0, 100)
     const lastname = (data.newContact?.lastname ?? '').trim().slice(0, 100)
-    if (!data.newContact || !firstname || !lastname) {
-      // No registration payload → the client shows the register (or signup) step.
+    if (!data.newContact || !firstname || !lastname || !teamId) {
+      // No registration payload (or no team context) → the client shows the
+      // register / signup step. Shop registration requires a known teamId.
       return { requiresSignup: true, email }
     }
 
@@ -143,7 +154,7 @@ export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   }
 
   // Determine which contact to log in as
-  let contactId: string
+  let chosen: admin.firestore.QueryDocumentSnapshot
   if (data.selectedContactId) {
     const found = activeContacts.find((doc) => doc.id === data.selectedContactId)
     if (!found) {
@@ -152,12 +163,13 @@ export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         'The selected contact does not match any active contact for this email and team'
       )
     }
-    contactId = found.id
+    chosen = found
   } else {
-    contactId = activeContacts[0].id
+    chosen = activeContacts[0]
   }
 
-  const session = await buildContactSession(contactId, teamId, email, { allowedEmail: email })
+  const contactTeamId: string = chosen.data().teamId
+  const session = await buildContactSession(chosen.id, contactTeamId, email, { allowedEmail: email })
 
   return {
     customToken: session.customToken,

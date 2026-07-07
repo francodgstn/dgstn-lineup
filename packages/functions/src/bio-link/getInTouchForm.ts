@@ -103,7 +103,7 @@ function buildNotificationEmail(fields: Record<string, string>, teamName: string
     ${detailsBox({ title: 'Submission Details', content: table })}
     <p style="color:#666;font-size:14px;">Submitted at: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/Zurich' })}</p>
   `
-  return wrapInLayout({ language: 'en', headerIcon: '✉️', headerTitle: 'New Message', content })
+  return wrapInLayout({ language: 'en', headerTitle: 'New message', content })
 }
 
 export const getInTouchForm = onRequest(async (req, res) => {

@@ -139,13 +139,17 @@ export interface Contact {
   // considered complete). See CheckoutContactMode.
   pending_signup?: boolean
   signup_completed_at?: Timestamp | null
-  // Anti-flooding for the login-first shop checkout: a contact self-created at
-  // registration (OTP + minimal name form) is PROVISIONAL until its first successful
-  // payment — excluded from the contact-cap count, listed under the contacts page's
-  // "Unconfirmed" tab, and hard-deleted by the daily purge task once
-  // provisional_expires_at passes without a payment. The Connect webhook clears both
-  // fields when a payment linked to this contact succeeds; a studio can also confirm
-  // manually. Absent ⇒ a normal, confirmed contact.
+  // PROVISIONAL = a lead that does NOT count toward the plan's contact cap yet.
+  // Carried by every entrant that hasn't materialized: shop registrations awaiting
+  // their first payment, trial bookings never attended, and public-form leads. All
+  // live under the contacts page's "Leads" tab. MATERIALIZATION clears both fields:
+  // a successful payment (Connect webhook), first attendance (booked→attended
+  // promotion), stage promotion to attended/joined, full signup completion, a
+  // manual subscription assignment, or the studio's manual Confirm.
+  // provisional_expires_at is set ONLY for shop registrations (anti-flooding): the
+  // daily purge task hard-deletes those once it passes unpaid. Leads without an
+  // expiry are never purged — stale trial bookings are archived by the opt-out
+  // 'lib_trial_cleanup' automation instead. Absent ⇒ a normal, counted contact.
   provisional?: boolean
   provisional_expires_at?: Timestamp | null
 

@@ -166,6 +166,15 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       if (isContactCovered(accessRule, match.data() as CoverageContact)) {
         throw new HttpsError('failed-precondition', 'You can already book this class for free')
       }
+      // An existing OFF-FUNNEL contact (form/shop lead — no stage) booking a
+      // drop-in enters the funnel normally at this point.
+      if (!match.data().acquisition_stage) {
+        await match.ref.update({
+          acquisition_stage: 'trial_booked',
+          acquisition_stage_updated_at: FieldValue.serverTimestamp(),
+          trial_booked_at: FieldValue.serverTimestamp(),
+        })
+      }
     } else {
       isNewContact = true
       const ref = db.collection('contacts').doc()
@@ -177,6 +186,9 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         acquisition_stage: 'trial_booked',
         acquisition_stage_updated_at: FieldValue.serverTimestamp(),
         entry: 'booking',
+        // Doesn't count toward the cap until they attend/pay (the drop-in payment
+        // webhook clears the flag on success). See Contact.provisional.
+        provisional: true,
         teamId,
         archived_at: null,
         deleted_at: null,

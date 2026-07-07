@@ -1,6 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { markNoShowBookings } from './markNoShowBookings'
-import { autoArchiveTrialContacts } from './autoArchiveTrialContacts'
 import { resetExpiredStreaks } from './resetExpiredStreaks'
 import { resetMonthlyScores } from './resetMonthlyScores'
 import { sendBookingReminders } from './sendBookingReminders'
@@ -25,7 +24,8 @@ export const dailyTasks = onSchedule(
 
     const tasks: Array<{ name: string; handler: () => Promise<unknown> }> = [
       { name: 'markNoShowBookings', handler: markNoShowBookings },
-      { name: 'autoArchiveTrialContacts', handler: autoArchiveTrialContacts },
+      // autoArchiveTrialContacts was retired — stale trial bookings are archived by
+      // the default 'lib_trial_cleanup' automation rule instead (see onTeamCreated).
       { name: 'resetExpiredStreaks', handler: resetExpiredStreaks },
       { name: 'resetMonthlyScores', handler: resetMonthlyScores },
       { name: 'sendBookingReminders', handler: sendBookingReminders },

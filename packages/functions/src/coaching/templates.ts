@@ -1,4 +1,5 @@
 import { buildEmailTemplate } from '../utils/email'
+import { detailsBox, ctaButton, factLines } from '../utils/emailLayout'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 
@@ -120,10 +121,17 @@ export function buildCoachingConfirmationEmail(params: ConfirmParams) {
   const cancelLabels: Record<Lang, string> = {
     en: 'Cancel appointment', de: 'Termin absagen', fr: 'Annuler le rendez-vous', it: 'Annulla appuntamento',
   }
+  // lines[lang] = [intro, ...facts, ics-note]
+  const [intro, ...rest] = lines[lang]
+  const icsNote = rest.pop() as string
   const body = [
     `<p>${greetings[lang]}</p>`,
-    ...lines[lang].filter(Boolean).map((l) => `<p>${l}</p>`),
-    ...(cancelUrl ? [`<p><a href="${cancelUrl}">${cancelLabels[lang]}</a></p>`] : []),
+    `<p>${intro}</p>`,
+    detailsBox({ content: factLines(rest) }),
+    `<p>${icsNote}</p>`,
+    ...(cancelUrl
+      ? [`<p style="text-align:center;margin-top:24px;">${ctaButton(cancelUrl, cancelLabels[lang])}</p>`]
+      : []),
   ].join('\n')
 
   return buildEmailTemplate({ title: titles[lang], body })
@@ -207,7 +215,8 @@ export function buildCoachNotificationEmail(params: CoachNotifParams) {
       notes ? `<strong>Note:</strong> ${notes}` : '',
     ],
   }
-  const body = lines[lang].filter(Boolean).map((l) => `<p>${l}</p>`).join('\n')
+  const [greeting, ...factList] = lines[lang]
+  const body = [`<p>${greeting}</p>`, detailsBox({ content: factLines(factList) })].join('\n')
   return buildEmailTemplate({ title: titles[lang], body })
 }
 

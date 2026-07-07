@@ -224,7 +224,16 @@ export const completeSignup = onCall(async (request) => {
       throw new HttpsError('permission-denied', 'This account is no longer active')
     }
     const { email: _keepExistingEmail, ...profileWithoutEmail } = profile
-    await contactRef.set(profileWithoutEmail, { merge: true })
+    await contactRef.set(
+      {
+        ...profileWithoutEmail,
+        // Completing the full signup MATERIALIZES a provisional lead — it now
+        // counts toward the contact cap (see Contact.provisional).
+        provisional: FieldValue.delete(),
+        provisional_expires_at: FieldValue.delete(),
+      },
+      { merge: true }
+    )
   } else if (activeMatches.length === 0) {
     // No prior contact (minimal/off purchase, or signup without a purchase) — create.
     contactRef = db.collection(CONTACTS_COLLECTION).doc()
@@ -254,7 +263,15 @@ export const completeSignup = onCall(async (request) => {
       )
     }
     contactRef = activeMatches[0].ref
-    await contactRef.set(profile, { merge: true })
+    await contactRef.set(
+      {
+        ...profile,
+        // Full signup materializes a provisional lead (counts toward the cap).
+        provisional: FieldValue.delete(),
+        provisional_expires_at: FieldValue.delete(),
+      },
+      { merge: true }
+    )
   }
   const contactId = contactRef.id
 

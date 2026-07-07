@@ -4,7 +4,8 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { addMonths, getDay } from 'date-fns'
 import { to } from '../utils/async'
 import { calculateOccurrences, validateRecurrence } from '../utils/recurrence'
-import { sendEmail } from '../utils/email'
+import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { getHostingUrl } from '../utils/env'
 
@@ -153,10 +154,13 @@ function buildCancellationEmail(params: {
   })
   const timeStr = `${params.sessionStart.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })} – ${params.sessionEnd.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}`
   const rebookLine = params.rebookUrl
-    ? `<p><a href="${params.rebookUrl}">Book another session</a></p>`
+    ? `<p style="text-align:center;margin-top:24px;">${ctaButton(params.rebookUrl, 'Book another session')}</p>`
     : ''
   const subject = `Session Cancelled – ${params.activityName}`
-  const html = `<p>Hi ${params.firstname},</p><p>Your session <strong>${params.activityName}</strong> on ${dateStr} at ${timeStr} has been cancelled by ${params.teamName}.</p>${rebookLine}<p>We apologise for the inconvenience.</p>`
+  const { html } = buildEmailTemplate({
+    title: 'Session cancelled',
+    body: `<p>Hi ${params.firstname},</p><p>Your session <strong>${params.activityName}</strong> on ${dateStr} at ${timeStr} has been cancelled by ${params.teamName}.</p><p>We apologise for the inconvenience.</p>${rebookLine}`,
+  })
   const text = `Hi ${params.firstname},\n\nYour session ${params.activityName} on ${dateStr} at ${timeStr} has been cancelled by ${params.teamName}.\n${params.rebookUrl ? `Book another session: ${params.rebookUrl}\n` : ''}We apologise for the inconvenience.`
   return { subject, html, text }
 }
