@@ -423,6 +423,21 @@
     "feeOrgNote": "remises selon le volume disponibles",
     "feesMicrocopy": "Vous voyez exactement ce que vous payez : les frais de traitement Stripe au prix coûtant, plus un petit pourcentage Linyup sur les paiements que vous encaissez. Aucuns frais fixes par transaction, aucune majoration sur la part de Stripe."
   },
+  "founder": {
+    "eyebrow": "Le mot du fondateur",
+    "heading": "Pourquoi j'ai créé Linyup",
+    "body": [
+      "J'entraîne dans un club à Bâle, alors l'administratif, je l'ai vécu : les tableurs, les relances, ces logiciels qui semblent pensés pour des comptables, pas pour des coachs.",
+      "La plupart des outils sont lourds et chers, et ce n'est pas un hasard. Beaucoup reposent sur des technologies vieilles de plusieurs décennies : chaque amélioration est lente et coûteuse, et c'est vous qui payez.",
+      "Je fais les choses autrement. Linyup est créé par un seul coach avec une approche AI-first, ce qui me permet de livrer de vraies fonctionnalités en quelques jours, de rester simple et de proposer un prix juste plutôt que des tarifs d'entreprise. Cela veut aussi dire que je peux ajouter ce dont vous avez vraiment besoin. Dites-moi la seule chose que votre outil actuel ne sait pas faire, et il y a de fortes chances qu'elle soit dans Linyup la semaine prochaine.",
+      "C'est toute l'idée : un outil moderne, honnête et abordable pour les coachs, les studios et les clubs, construit avec celles et ceux qui l'utilisent.",
+      "Si ça vous parle, j'aimerais beaucoup quelques partenaires fondateurs pour le façonner avec moi."
+    ],
+    "name": "Franco",
+    "role": "Coach · Bâle",
+    "signature": "Franco",
+    "photoAlt": "Franco, fondateur de Linyup"
+  },
   "cta": {
     "title": "Prêt à vous lancer ?",
     "subtitle": "Rejoignez les coaches et studios qui utilisent déjà Linyup pour gérer leur activité.",

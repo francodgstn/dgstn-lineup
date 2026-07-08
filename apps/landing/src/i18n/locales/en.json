@@ -423,6 +423,21 @@
     "feeOrgNote": "volume discounts available",
     "feesMicrocopy": "You see exactly what you pay: Stripe's processing fee at cost, plus a small Linyup percentage on the payments you take. No fixed per-transaction fee, no markup on Stripe's cut."
   },
+  "founder": {
+    "eyebrow": "From the founder",
+    "heading": "Why I made Linyup",
+    "body": [
+      "I coach at a club in Basel, so I've lived the admin: the spreadsheets, the chasing, the software that feels built for accountants, not coaches.",
+      "Most tools are clumsy and expensive, and it's no accident. A lot of them run on decades-old technology, so every improvement is slow and costly, and you pay for that.",
+      "I do things differently. Linyup is made by one coach with an AI-first approach, so I can ship real features in days, keep it simple, and charge a fair price instead of enterprise rates. It also means I can add what you actually need. Tell me the one thing your current tool can't do, and there's a good chance it'll be in Linyup next week.",
+      "That's the whole idea: a modern, honest, affordable tool for coaches, studios and clubs, built with the people who use it.",
+      "If that sounds like your kind of thing, I'd love a few founding partners to shape it with."
+    ],
+    "name": "Franco",
+    "role": "Coach · Basel",
+    "signature": "Franco",
+    "photoAlt": "Franco, founder of Linyup"
+  },
   "cta": {
     "title": "Ready to get started?",
     "subtitle": "Join coaches and studios already using Linyup to run their business.",

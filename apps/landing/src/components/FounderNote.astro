@@ -1,0 +1,122 @@
+---
+import type { Language } from '~/i18n';
+import { useTranslations, useTranslationList } from '~/i18n';
+
+interface Props {
+  lang: Language;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const tList = useTranslationList(lang);
+const paragraphs = tList('founder.body');
+---
+
+<!-- Founder note — a calm, full-width band that leads into the closing CTA.
+     Deliberately quieter than the feature cards (soft tinted band, generous
+     whitespace, editorial body type) so it reads as a human pause. -->
+<section class="founder" aria-labelledby="founder-heading">
+  <div class="wrap">
+    <div class="founder-row">
+      <div class="founder-photo">
+        {/* Placeholder — drop a real photo at apps/landing/public/founder.jpg
+            and point src at "/founder.jpg" to swap it in. */}
+        <img src="/founder.svg" alt={t('founder.photoAlt')} width="480" height="600" loading="lazy" />
+      </div>
+
+      <div class="founder-copy">
+        <span class="founder-eyebrow">{t('founder.eyebrow')}</span>
+        <h2 id="founder-heading">{t('founder.heading')}</h2>
+        {paragraphs.map((p) => <p>{p}</p>)}
+
+        <div class="founder-sign">
+          <span class="sig" aria-hidden="true">{t('founder.signature')}</span>
+          <span class="who"><strong>{t('founder.name')}</strong> · {t('founder.role')}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .founder {
+    padding: 96px 0;
+    /* Soft tinted band (theme-aware — --purple-50 flips in dark mode), distinct
+       from the white sections around it and leading into the dark CTA below. */
+    background: var(--purple-50);
+    border-top: 1px solid var(--purple-100);
+    border-bottom: 1px solid var(--purple-100);
+  }
+
+  .founder-row {
+    display: grid;
+    grid-template-columns: minmax(0, 320px) 1fr;
+    gap: 56px;
+    align-items: center;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  .founder-photo {
+    border-radius: 20px;
+    overflow: hidden;
+    aspect-ratio: 4 / 5;
+    background: var(--purple-100);
+    box-shadow: var(--shadow-md);
+  }
+  .founder-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .founder-eyebrow {
+    display: inline-block;
+    margin-bottom: 14px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--purple-700);
+  }
+
+  .founder-copy h2 {
+    font-family: "Sora", var(--font-sans);
+    font-weight: 700;
+    font-size: 32px;
+    letter-spacing: -0.01em;
+    color: var(--heading);
+    margin: 0 0 20px;
+  }
+
+  .founder-copy p {
+    font-family: "Inter", var(--font-sans);
+    font-size: 16.5px;
+    line-height: 1.75;
+    color: var(--foreground);
+    margin: 0 0 16px;
+    max-width: 60ch;
+  }
+  .founder-copy p:last-of-type { margin-bottom: 0; }
+
+  .founder-sign { margin-top: 30px; }
+  .founder-sign .sig {
+    display: block;
+    font-family: "Caveat", cursive;
+    font-weight: 600;
+    font-size: 42px;
+    line-height: 1;
+    color: var(--primary);
+  }
+  .founder-sign .who {
+    display: block;
+    margin-top: 6px;
+    font-family: "Inter", var(--font-sans);
+    font-size: 14px;
+    color: var(--muted-foreground);
+  }
+  .founder-sign .who strong { color: var(--foreground); font-weight: 600; }
+
+  @media (max-width: 860px) {
+    .founder { padding: 64px 0; }
+    .founder-row { grid-template-columns: 1fr; gap: 32px; max-width: 560px; }
+    .founder-photo { width: 180px; margin: 0 auto; }
+    .founder-copy h2 { font-size: 26px; }
+  }
+</style>
