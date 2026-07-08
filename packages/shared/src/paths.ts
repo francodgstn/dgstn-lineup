@@ -144,6 +144,12 @@ export const SITE_PUBLISHED_COLLECTION = 'site_published'
 // keyed by teamId; managers author it directly (no draft/publish split).
 export const EMBED_WIDGETS_COLLECTION = 'embed_widgets'
 
+// Organization website (org-level site builder). Mirrors the team site but keyed
+// by orgId. org_site_drafts: PRIVATE working copy (org_admin). org_site_published:
+// PUBLIC snapshot, written only by the publishOrgWebsite Cloud Function.
+export const ORG_SITE_DRAFTS_COLLECTION = 'org_site_drafts'
+export const ORG_SITE_PUBLISHED_COLLECTION = 'org_site_published'
+
 // Stripe Connect (member → studio payments — studio's own Stripe balance).
 // connect_accounts is TOP-LEVEL, keyed by the Stripe connected account id
 // (acct_...), so the Connect webhook resolves event.account → teamId with a

@@ -6,6 +6,12 @@ service firebase.storage {
       return request.auth != null
         && firestore.exists(/databases/(default)/documents/teams/$(teamId)/team_members/$(request.auth.uid));
     }
+    // Org admin of an organization — gates writes to the org website's images.
+    function isOrgAdminStorage(orgId) {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/organizations/$(orgId)/org_members/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/organizations/$(orgId)/org_members/$(request.auth.uid)).data.role == 'org_admin';
+    }
     // A valid contact session (custom token) scoped to a team — used by the public
     // "Space" web area so a signed-in contact can fetch gated course media.
     function isContactSessionForTeam(teamId) {
@@ -85,6 +91,17 @@ service firebase.storage {
       allow write: if isTeamMemberStorage(teamId)
         && request.resource.size < 50 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|audio/.*|video/.*|application/pdf');
+    }
+
+    // Organization website images (hero/gallery) live under
+    // organizations/{orgId}/site/{sectionId}/... They are shown on the PUBLIC org
+    // site, so reads are open (also served via the download token); writes are
+    // org-admin-only and image-only.
+    match /organizations/{orgId}/site/{allPaths=**} {
+      allow read: if true;
+      allow write: if isOrgAdminStorage(orgId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
     }
 
     match /contacts/{contactId}/{allPaths=**} {
