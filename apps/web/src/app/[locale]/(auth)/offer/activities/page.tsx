@@ -84,6 +84,8 @@ const ACTIVITY_TYPES: ActivityType[] = ['group_class', 'coaching']
 const activitySchema = z.object({
   name: z.string().min(1, 'Required').max(80),
   description: z.string().max(500).optional(),
+  prerequisites: z.string().max(300).optional(),
+  confirmationInstructions: z.string().max(2000).optional(),
   type: z.enum(['group_class', 'coaching'] as const).default('group_class'),
   level: z.enum(LEVELS),
   color: z.string().optional(),
@@ -163,6 +165,8 @@ function ActivityDialog({
       ? {
           name: editing.name,
           description: editing.description ?? '',
+          prerequisites: editing.prerequisites ?? '',
+          confirmationInstructions: editing.confirmationInstructions ?? '',
           type: (editing.type ?? 'group_class') as ActivityType,
           level: editing.level ?? 'all',
           color: editing.color ?? '',
@@ -172,7 +176,8 @@ function ActivityDialog({
           dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
         }
       : {
-          name: '', description: '', type: 'group_class' as ActivityType, level: 'all',
+          name: '', description: '', prerequisites: '', confirmationInstructions: '',
+          type: 'group_class' as ActivityType, level: 'all',
           color: '#6366f1', accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '',
         },
@@ -206,6 +211,8 @@ function ActivityDialog({
       const updates: Record<string, unknown> = {
         name: data.name,
         description: data.description ?? '',
+        prerequisites: data.prerequisites ?? '',
+        confirmationInstructions: data.confirmationInstructions ?? '',
         type: data.type,
         level: data.level,
         color: data.color ?? '',
@@ -232,6 +239,8 @@ function ActivityDialog({
       const newRef = await addDoc(collection(db, ACTIVITIES_COLLECTION), {
         name: data.name,
         description: data.description ?? '',
+        prerequisites: data.prerequisites ?? '',
+        confirmationInstructions: data.confirmationInstructions ?? '',
         type: data.type,
         level: data.level,
         color: data.color ?? '',
@@ -284,6 +293,29 @@ function ActivityDialog({
               rows={2}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="act-prereq">{t('fieldPrerequisites')}</Label>
+            <textarea
+              id="act-prereq"
+              {...register('prerequisites')}
+              rows={2}
+              placeholder={t('prerequisitesPlaceholder')}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+            />
+            <p className="text-xs text-muted-foreground">{t('prerequisitesHelp')}</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="act-confirm-instructions">{t('fieldConfirmationInstructions')}</Label>
+            <textarea
+              id="act-confirm-instructions"
+              {...register('confirmationInstructions')}
+              rows={3}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+            />
+            <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
           </div>
 
           {/* Type */}

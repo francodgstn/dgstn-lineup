@@ -27,6 +27,7 @@ import {
   SITE_DRAFTS_COLLECTION,
   SITE_PUBLISHED_COLLECTION,
   EMBED_WIDGETS_COLLECTION,
+  MESSAGING_POLICIES_COLLECTION,
   // platform-wide / cross-tenant
   USERS_COLLECTION,
   APP_SETTINGS_COLLECTION,
@@ -36,6 +37,7 @@ import {
   ORGANIZATIONS_COLLECTION,
   MAIL_SUPPRESSIONS_COLLECTION,
   MAIL_SENDS_COLLECTION,
+  SMS_SUPPRESSIONS_COLLECTION,
   PROJECTS_COLLECTION,
   CATEGORIES_COLLECTION,
   CONNECT_WEBHOOK_EVENTS_COLLECTION,
@@ -108,6 +110,9 @@ export const TENANT_DATA_COLLECTIONS: TenantCollection[] = [
   { collection: SITE_DRAFTS_COLLECTION, match: { by: 'docId' } },
   { collection: SITE_PUBLISHED_COLLECTION, match: { by: 'docId' } },
   { collection: EMBED_WIDGETS_COLLECTION, match: { by: 'docId' } },
+  // Operator-set outbound-delivery policy; doc id = teamId (or orgId/'system',
+  // which per-team teardown never touches).
+  { collection: MESSAGING_POLICIES_COLLECTION, match: { by: 'docId' } },
 ]
 
 /**
@@ -127,6 +132,9 @@ export const PLATFORM_COLLECTIONS: string[] = [
   ORGANIZATIONS_COLLECTION,
   MAIL_SUPPRESSIONS_COLLECTION,
   MAIL_SENDS_COLLECTION,
+  // Phone-number opt-outs span tenants (a number opts out globally, like a
+  // bounced email address) — never part of a per-team teardown.
+  SMS_SUPPRESSIONS_COLLECTION,
   PROJECTS_COLLECTION,
   CATEGORIES_COLLECTION,
   CONNECT_WEBHOOK_EVENTS_COLLECTION,

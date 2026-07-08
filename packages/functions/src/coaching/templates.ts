@@ -1,5 +1,6 @@
 import { buildEmailTemplate } from '../utils/email'
 import { detailsBox, ctaButton, factLines } from '../utils/emailLayout'
+import { instructionsBox } from '../booking/templates'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 
@@ -63,11 +64,13 @@ interface ConfirmParams {
   location?: string | null
   onlineUrl?: string | null
   cancelUrl?: string | null
+  /** Studio-authored plain-text note (activity override ?? team setting). */
+  instructions?: string | null
   lang?: Lang
 }
 
 export function buildCoachingConfirmationEmail(params: ConfirmParams) {
-  const { firstname, teamName, slotTitle, coachName, start, end, location, onlineUrl, cancelUrl, lang = 'en' } = params
+  const { firstname, teamName, slotTitle, coachName, start, end, location, onlineUrl, cancelUrl, instructions, lang = 'en' } = params
   const dateStr = formatDateTime(start, lang)
   const endTime = formatTime(end, lang)
 
@@ -128,6 +131,7 @@ export function buildCoachingConfirmationEmail(params: ConfirmParams) {
     `<p>${greetings[lang]}</p>`,
     `<p>${intro}</p>`,
     detailsBox({ content: factLines(rest) }),
+    ...(instructions?.trim() ? [instructionsBox(instructions, lang)] : []),
     `<p>${icsNote}</p>`,
     ...(cancelUrl
       ? [`<p style="text-align:center;margin-top:24px;">${ctaButton(cancelUrl, cancelLabels[lang])}</p>`]

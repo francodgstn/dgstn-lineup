@@ -85,6 +85,28 @@ export interface CustomFieldDefinition {
   required?: boolean
 }
 
+// ─── Booking reminders ────────────────────────────────────────────────────────
+// A team's reminder schedule (settings.bookingReminderSteps): one entry per
+// reminder sent before a booked session, e.g. email 168h + email 48h + SMS 24h.
+// When unset, the legacy single-email behavior applies (settings.bookingReminderHours,
+// default 24h). settings.bookingRemindersEnabled remains the master toggle.
+export interface BookingReminderStep {
+  id: string // stable per-step marker key on the booking's reminders_sent map
+  channel: 'email' | 'sms'
+  offsetHours: number // hours before session start
+}
+
+/** Steps for a team's settings — authored steps, else the legacy single email. */
+export function resolveBookingReminderSteps(settings: {
+  bookingReminderSteps?: BookingReminderStep[]
+  bookingReminderHours?: number
+}): BookingReminderStep[] {
+  if (settings.bookingReminderSteps?.length) return settings.bookingReminderSteps
+  return [
+    { id: 'legacy', channel: 'email', offsetHours: settings.bookingReminderHours || 24 },
+  ]
+}
+
 // A "page link" target — one of the team's own public surfaces, reachable at
 // /public/{slug}/{route}. Replaces the former per-surface boolean flags
 // (is{Booking,Membership,Courses,Shop}Link) with a single discriminator so new

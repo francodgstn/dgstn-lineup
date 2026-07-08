@@ -15,7 +15,9 @@ import {
 import { StatusBadge, PlanBadge, PaymentsBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
+import { getMessagingInfo } from '@/lib/queries/messaging'
 import { ConnectToggle } from './connect-toggle'
+import { MessagingPolicyCard } from './messaging-policy-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +42,7 @@ export default async function AccountDetailPage({
 
   const sub = account.subscription
   const usage = account.contactUsage
+  const messaging = await getMessagingInfo(account.id)
 
   return (
     <div className="flex flex-col gap-6">
@@ -144,6 +147,65 @@ export default async function AccountDetailPage({
             </CardContent>
           </Card>
         )}
+      </div>
+
+      {/* Outbound messaging — operator-only delivery policy + recent ledger. */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Outbound messaging policy</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <MessagingPolicyCard
+              entityId={account.id}
+              initialPolicy={messaging.policy}
+              env={messaging.env}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="py-0">
+          <div className="px-4 pt-4">
+            <CardTitle>Recent sends</CardTitle>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Channel</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {messaging.recentSends.length === 0 && (
+                <TableRow>
+                  <TableCell className="py-4 text-muted-foreground" colSpan={3}>
+                    No ledger entries (only keyed sends are recorded).
+                  </TableCell>
+                </TableRow>
+              )}
+              {messaging.recentSends.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="text-muted-foreground">{formatDate(s.updatedMs)}</TableCell>
+                  <TableCell className="text-xs">{s.channel}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        s.status === 'suppressed' || s.status === 'failed' || s.status === 'bounced'
+                          ? 'warning'
+                          : 'outline'
+                      }
+                      className="font-normal"
+                    >
+                      {s.status}
+                      {s.suppressReason ? ` · ${s.suppressReason}` : ''}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       </div>
 
       <Card>

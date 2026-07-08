@@ -11,6 +11,7 @@
     "build": "turbo run build",
     "dev:web": "pnpm --filter @linyup/web dev",
     "dev:admin": "pnpm --filter @linyup/admin dev",
+    "dev:admin:sandbox": "pnpm --filter @linyup/admin dev:sandbox",
     "dev:landing": "pnpm --filter @linyup/landing dev",
     "dev:mobile": "pnpm --filter student-app start",
     "lint": "turbo run lint",
@@ -36,7 +37,8 @@
     "staging:reset": "tsx scripts/reset-staging-db.ts --confirm",
     "lead:seed": "tsx scripts/seed-lead.ts",
     "sandbox:seed": "tsx scripts/seed-sandbox.ts",
-    "sandbox:reset": "tsx scripts/reset-sandbox-db.ts --confirm"
+    "sandbox:reset": "tsx scripts/reset-sandbox-db.ts --confirm",
+    "messaging:policy": "tsx scripts/messaging-policy.ts"
   },
   "devDependencies": {
     "firebase-admin": "^13.0.0",

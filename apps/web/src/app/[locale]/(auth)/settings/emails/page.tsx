@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SystemEmailsCard } from './SystemEmailsCard'
+import { BookingInstructionsCard } from './BookingInstructionsCard'
+import { SmsSenderCard } from './SmsSenderCard'
 import { TemplateEditor, type OutreachTemplate } from './TemplateEditor'
 import { templateDefault } from './templateDefaults'
 
@@ -199,6 +201,12 @@ export default function SettingsEmailsPage() {
 
       {/* ── System (transactional) emails ── */}
       <SystemEmailsCard />
+
+      {/* ── Booking confirmation note (team-wide instructions block) ── */}
+      <BookingInstructionsCard />
+
+      {/* ── SMS sender (owner-only; hidden for managers) ── */}
+      <SmsSenderCard />
 
       {currentTeamId && (
         <TemplateEditor

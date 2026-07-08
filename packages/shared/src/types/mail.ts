@@ -30,9 +30,42 @@ export interface MailSendRecord {
   // 'studio' mail is sent on behalf of a team; 'system' mail is Linyup's own.
   stream: 'system' | 'studio'
   team_id?: string
-  status: 'sent' | 'delivered' | 'bounced' | 'blocked' | 'spam' | 'failed'
+  // 'suppressed' = never handed to the provider (synthetic recipient or a
+  // messaging-policy drop); suppress_reason explains which layer dropped it.
+  status: 'sent' | 'delivered' | 'bounced' | 'blocked' | 'spam' | 'failed' | 'suppressed'
+  suppress_reason?: 'synthetic' | 'policy_silent' | 'policy_allowlist'
   created_at: Timestamp
   updated_at: Timestamp
+}
+
+// ─── per-tenant messaging policy (messaging_policies/{entityId}) ─────────────
+// OPERATOR-controlled outbound-delivery policy — the answer to mixed-tenant
+// environments (the sandbox hosts lead demos AND the public /try playground).
+// Client reads/writes are DENIED by rules (the /try teams have shared owner
+// logins); only the Admin SDK writes these (seeders, ops scripts, operator
+// console). Resolved by the mail/SMS services per send, after the env kill
+// switch; a tenant without a doc falls back to the MESSAGING_DEFAULT_MODE env
+// param ('silent' on the sandbox, 'live' in production).
+//
+// entityId = teamId | orgId | the literal 'system' (Linyup's own system stream).
+
+export type MessagingMode = 'live' | 'allowlist' | 'redirect' | 'silent'
+
+export interface MessagingPolicy {
+  entityId: string
+  mode: MessagingMode
+  // allowlist mode: recipients kept when they match an exact address (case-
+  // insensitive) or a '@domain.tld' entry. Everything else is dropped.
+  allowEmails?: string[]
+  // allowlist mode: E.164 phone numbers granted SMS delivery.
+  allowPhones?: string[]
+  // redirect mode: every email/SMS is delivered to this target instead.
+  redirectEmail?: string
+  redirectPhone?: string
+  // Operator context, e.g. "founder demo — deliver to Ash only".
+  note?: string
+  updated_at?: Timestamp
+  updated_by?: string
 }
 
 // Shape of a single Brevo transactional webhook event (the subset we consume).

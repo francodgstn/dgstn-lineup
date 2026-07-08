@@ -276,6 +276,17 @@ service cloud.firestore {
     match /mail_sends/{idempotencyKey} {
       allow read, write: if false;
     }
+    // SMS pipeline — same posture as mail: functions-only, phone numbers are PII.
+    match /sms_suppressions/{phoneHash} {
+      allow read, write: if false;
+    }
+    // Per-tenant outbound-delivery policy — OPERATOR-only (Admin SDK: seeders,
+    // ops scripts, operator console). Never client-writable: demo tenants have
+    // shared owner logins, so an owner-writable policy could be flipped to live
+    // delivery by anyone. Resolved server-side by the mail/SMS services.
+    match /messaging_policies/{entityId} {
+      allow read, write: if false;
+    }
 
     // Private user profiles
     match /users/{userId} {
@@ -732,13 +743,31 @@ service cloud.firestore {
                          || hasRole('admin');
       }
 
-      // Rules apply to all other child collections
-      match /{allChildren=**} {
+      // Lesson-credit grants — balances must be tamper-proof: readable by the
+      // studio + the contact themself, written ONLY by Cloud Functions (the
+      // Connect webhook, the grantCredits callable, bookSession's spend and
+      // cancelBooking's refund — all bypass rules). Matched explicitly BEFORE
+      // the generic child-collection rule below, which excludes this name from
+      // its write grant (rules are additive across overlapping matches).
+      match /credit_grants/{grantId} {
         allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
                       || isSelfContact(contactId)
                       || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
-        allow write: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin');
+        allow write: if false;
+      }
+
+      // Rules apply to all other child collections. Single-segment on purpose:
+      // the only deeper path (goals/{id}/evaluations) is matched explicitly
+      // above, and a recursive wildcard here could not exclude credit_grants
+      // from its write grant.
+      match /{subcollection}/{docId} {
+        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+                      || hasRole('admin')
+                      || isSelfContact(contactId)
+                      || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
+        allow write: if subcollection != 'credit_grants'
+                      && (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin'));
       }
 
     }

@@ -104,6 +104,10 @@ export interface Contact {
   birthplace?: string
   weight?: number
   avatar_url?: string
+  // Contact asked not to receive SMS (reminders etc.). Email is unaffected.
+  // Checked by the SMS service before every send; a global per-number opt-out
+  // additionally lives in sms_suppressions.
+  sms_opt_out?: boolean
 
   // Address
   address?: ContactAddress
@@ -185,6 +189,10 @@ export interface Contact {
   // by onMemberSubscriptionWrite). Empty/absent when none. Drives the multi-subscription
   // chips on the contacts list + detail.
   active_subscriptions?: ActiveSubscriptionSummary[]
+  // Lesson-credit balances by subscription type (denormalised from the
+  // credit_grants subcollection by onCreditGrantWrite). Only non-exhausted,
+  // non-expired grants contribute. Empty/absent when the contact holds none.
+  credit_summary?: CreditSummaryEntry[]
 
   // Notes (plain text; rich-text JSON stored as string in hmd-lineup)
   notes?: string
@@ -303,9 +311,48 @@ export interface SubscriptionPrice {
   recurrence: SubscriptionRecurrence
   // For one_time prices: months of membership granted by the charge (e.g. an
   // "intro offer: 100, 2 months incl." sets membership_expiration = now + 2 months).
+  // On a credit price, this is the pack's VALIDITY window (grant expiry).
   included_months?: number
+  // Credit pack (one_time only): the purchase grants this many lesson credits,
+  // decremented by bookSession on credit-gated activities. Materialized as a
+  // CreditGrant under contacts/{id}/credit_grants by the Connect webhook /
+  // grantCredits callable. Absent ⇒ a plain time-based price.
+  credits?: number
   label?: string // optional, e.g. "Intro offer"
   active?: boolean // default true; inactive prices are hidden from the table + assignment
+}
+
+// ─── lesson credits (contacts/{id}/credit_grants) ─────────────────────────────
+// One doc per pack purchase (or manual grant). Balances live here — auditable,
+// per-purchase expiry, FIFO consumption; the denormalised rollup a UI reads
+// cheaply is Contact.credit_summary (maintained by the onCreditGrantWrite sync).
+// Stripe-purchased grants use the paymentIntentId as doc id (duplicate-webhook
+// safe); manual/seed grants use generated ids.
+
+export type CreditGrantSource = 'stripe' | 'manual' | 'seed'
+
+export interface CreditGrant {
+  id: string
+  teamId: string
+  subscription_type_id: string
+  subscription_type_name?: string | null
+  price_id?: string | null
+  credits_total: number
+  credits_used: number // 0..credits_total; only ever changed by Cloud Functions
+  expires_at?: Timestamp | null // null = no expiry
+  source: CreditGrantSource
+  payment_intent_id?: string | null
+  created_at?: Timestamp
+  created_by?: string | null
+}
+
+// Denormalised per-type balance on the contact doc (what lists, the access gate
+// and the Space read without querying the subcollection).
+export interface CreditSummaryEntry {
+  subscription_type_id: string
+  subscription_type_name?: string | null
+  remaining: number
+  next_expires_at?: Timestamp | null
 }
 
 // How the public shop captures a contact when this subscription is bought:

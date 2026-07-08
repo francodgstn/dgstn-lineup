@@ -16,7 +16,7 @@ import { db } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { GraduationCap, CreditCard, BadgeCheck, CalendarClock, User, ChevronRight, LogIn, ShoppingBag } from 'lucide-react'
+import { GraduationCap, CreditCard, BadgeCheck, CalendarClock, User, ChevronRight, LogIn, ShoppingBag, Ticket } from 'lucide-react'
 import { formatCurrency } from '@/lib/format'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
@@ -300,6 +300,37 @@ export default function SpaceHome() {
           </div>
         )}
       </section>
+
+      {/* Lesson credits — compact list of credit-pack balances (denormalised
+          Contact.credit_summary). Hidden entirely when the contact holds none. */}
+      {(fullContact?.credit_summary?.length ?? 0) > 0 && (
+        <section className="rounded-2xl p-4" style={cardStyle}>
+          <div className="flex items-center gap-2 mb-3">
+            <Ticket className="h-4 w-4" style={{ color: accent }} />
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: textMuted }}>
+              {t('creditsTitle')}
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {fullContact!.credit_summary!.map((entry) => (
+              <div key={entry.subscription_type_id} className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium" style={{ color: textMain }}>
+                  {entry.subscription_type_name ?? t('membershipActive')}
+                </span>
+                <span className="text-sm" style={{ color: textMuted }}>
+                  {t('creditsRemaining', { count: entry.remaining })}
+                  {entry.next_expires_at && (
+                    <>
+                      {' '}
+                      · {t('creditsExpiresOn', { date: entry.next_expires_at.toDate().toLocaleDateString() })}
+                    </>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* My courses — accessible entitlements only; discovery/buying is in the shop.
           Hidden entirely when the studio publishes no courses. */}

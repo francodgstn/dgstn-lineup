@@ -21,12 +21,59 @@ import {
   buildCoachingICalAttachment,
   buildCoachNotificationEmail,
 } from '../coaching/templates'
-import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
+import {
+  resolveActivityAccessRule,
+  CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
+  type ActivityAccessRule,
+  type SubscriptionPrice,
+} from '@linyup/shared'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 const VALID_LANGS: Lang[] = ['en', 'de', 'fr', 'it']
 function isLang(v: unknown): v is Lang {
   return VALID_LANGS.includes(v as Lang)
+}
+
+/**
+ * Does HOLDING a subscription of this type grant unmetered (non-credit) access?
+ * Used by the booking access gate: credit-pack types must not pass on the
+ * membership snapshot alone — their access is metered by credit balance.
+ *   • The contact's held price is a non-credit price of this type → true.
+ *   • The contact's held price is a credit price of this type      → false.
+ *   • Price unknown: true unless EVERY active price carries credits (a
+ *     credits-only type can only ever grant metered access).
+ */
+async function typeGrantsUnmeteredAccess(
+  teamId: string,
+  subscriptionTypeId: string,
+  contact: FirebaseFirestore.DocumentData
+): Promise<boolean> {
+  try {
+    const snap = await admin
+      .firestore()
+      .collection('teams')
+      .doc(teamId)
+      .collection('subscription_types')
+      .doc(subscriptionTypeId)
+      .get()
+    if (!snap.exists) return true // unknown type — behave as before credits existed
+    const prices = ((snap.data()?.prices as SubscriptionPrice[] | undefined) ?? []).filter(
+      (p) => p.active !== false
+    )
+    if (prices.length === 0 || prices.every((p) => !p.credits)) return true
+    const heldPriceId =
+      contact.subscription_type_id === subscriptionTypeId
+        ? (contact.subscription_price_id as string | undefined)
+        : undefined
+    if (heldPriceId) {
+      const heldPrice = prices.find((p) => p.id === heldPriceId)
+      if (heldPrice) return !heldPrice.credits
+    }
+    // Held price unknown: lenient unless the type is credits-only.
+    return prices.some((p) => !p.credits)
+  } catch {
+    return true // fail open — same behavior as before the credits feature
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -494,6 +541,8 @@ export const bookSession = onCall(async (request) => {
   const isCoachingSession = sessionData.activityType === 'coaching'
   let activityName = (sessionData.activityName as string) || 'Session'
   let accessRule: ActivityAccessRule = { type: 'open' }
+  // Per-activity confirmation note (overrides the team-wide setting below).
+  let activityInstructions: string | null = null
 
   if (isCoachingSession) {
     // Coaching carries the access gate directly on the session doc.
@@ -506,6 +555,20 @@ export const bookSession = onCall(async (request) => {
     const bookingsCount = (sessionData.bookings_count as number) || 0
     if (sessionData.status === 'full' || bookingsCount >= maxParticipants) {
       throw new HttpsError('failed-precondition', 'This coaching slot is fully booked.')
+    }
+    if (sessionData.activityId) {
+      try {
+        const actDoc = await admin
+          .firestore()
+          .collection('activities')
+          .doc(sessionData.activityId as string)
+          .get()
+        if (actDoc.exists) {
+          activityInstructions = (actDoc.data()!.confirmationInstructions as string) || null
+        }
+      } catch (_) {
+        /* non-fatal */
+      }
     }
   } else if (sessionData.activityId) {
     try {
@@ -521,11 +584,19 @@ export const bookSession = onCall(async (request) => {
           accessRule: actData.accessRule as ActivityAccessRule | undefined,
           isFreeTrial: actData.isFreeTrial as boolean | undefined,
         })
+        activityInstructions = (actData.confirmationInstructions as string) || null
       }
     } catch (_) {
       /* non-fatal */
     }
   }
+
+  // Studio note appended to the confirmation email: activity override ?? team default.
+  const teamInstructions =
+    ((team.settings as Record<string, unknown> | undefined)?.bookingConfirmationInstructions as
+      | string
+      | undefined) || null
+  const bookingInstructions = activityInstructions?.trim() || teamInstructions?.trim() || null
 
   if (!isCoachingSession) {
     // Group-class booking cap (optional; enforced against the live reserved count).
@@ -541,6 +612,9 @@ export const bookSession = onCall(async (request) => {
   // ── Access gate (paid-access axis) ─────────────────────────────────────────
   // Set when a 'subscription' rule matched a live subscription — stored on the booking.
   let matchedSubscriptionTypeId: string | null = null
+  // Set when the match came from a lesson-credit pack: one credit of this type is
+  // decremented transactionally with the booking write below.
+  let creditSpendTypeId: string | null = null
   if (accessRule.type !== 'open') {
     if (!authenticatedContact) {
       const msg = isCoachingSession
@@ -567,11 +641,50 @@ export const bookSession = onCall(async (request) => {
       })
       if (authenticatedContact.subscription_type_id)
         held.add(authenticatedContact.subscription_type_id)
-      matchedSubscriptionTypeId = allowed.find((id) => held.has(id)) ?? null
+
+      // Lesson-credit balances (denormalised rollup; expiry re-checked on spend).
+      const nowMs = Date.now()
+      const creditTypes = new Set(
+        (
+          (authenticatedContact.credit_summary as
+            | Array<{
+                subscription_type_id: string
+                remaining: number
+                next_expires_at?: Timestamp | null
+              }>
+            | undefined) ?? []
+        )
+          .filter(
+            (e) =>
+              e.remaining > 0 && (!e.next_expires_at || e.next_expires_at.toMillis() > nowMs)
+          )
+          .map((e) => e.subscription_type_id)
+      )
+
+      // 1) Unmetered coverage first — a held subscription whose type isn't
+      //    credits-only never burns credits.
+      for (const id of allowed) {
+        if (!held.has(id)) continue
+        if (await typeGrantsUnmeteredAccess(data.teamId, id, authenticatedContact)) {
+          matchedSubscriptionTypeId = id
+          break
+        }
+      }
+      // 2) Credit coverage — spend one credit (transactionally, at booking write).
       if (!matchedSubscriptionTypeId) {
+        const creditType = allowed.find((id) => creditTypes.has(id))
+        if (creditType) {
+          matchedSubscriptionTypeId = creditType
+          creditSpendTypeId = creditType
+        }
+      }
+      if (!matchedSubscriptionTypeId) {
+        const heldCreditType = allowed.some((id) => held.has(id))
         throw new HttpsError(
           'permission-denied',
-          'This class requires an active membership you do not currently hold.'
+          heldCreditType
+            ? 'No lesson credits remaining on your pack. Purchase a new pack to book this class.'
+            : 'This class requires an active membership you do not currently hold.'
         )
       }
     }
@@ -694,42 +807,95 @@ export const bookSession = onCall(async (request) => {
       ? data.subscription_type_id
       : null)
 
-  await admin
+  const bookingDoc = {
+    firstname: sanitized.firstname,
+    lastname: sanitized.lastname,
+    email: sanitized.email,
+    phone: sanitized.phone ?? null,
+    contact: contactId,
+    session: data.sessionId,
+    teamId: data.teamId,
+    joinedAt: FieldValue.serverTimestamp(),
+    fromBioLink: true,
+    is_new_contact: isNewContact,
+    booking_token: bookingToken,
+    booking_ip: bookingIp,
+    authenticated_booking: isAuthenticatedBooking,
+    subscription_type_id: subscriptionTypeId,
+  }
+  const sessionCounterUpdate = {
+    has_bookings: true,
+    bio_link_bookings_count: FieldValue.increment(1),
+    ...(isNewContact && { bio_link_new_contact_bookings_count: FieldValue.increment(1) }),
+    last_booking_at: FieldValue.serverTimestamp(),
+  }
+  const bookingRef = admin
     .firestore()
     .collection('sessions')
     .doc(data.sessionId)
     .collection('bookings')
     .doc(contactId)
-    .set({
-      firstname: sanitized.firstname,
-      lastname: sanitized.lastname,
-      email: sanitized.email,
-      phone: sanitized.phone ?? null,
-      contact: contactId,
-      session: data.sessionId,
-      teamId: data.teamId,
-      joinedAt: FieldValue.serverTimestamp(),
-      fromBioLink: true,
-      is_new_contact: isNewContact,
-      booking_token: bookingToken,
-      booking_ip: bookingIp,
-      authenticated_booking: isAuthenticatedBooking,
-      subscription_type_id: subscriptionTypeId,
-    })
+  const sessionRef = admin.firestore().collection('sessions').doc(data.sessionId)
 
-  await admin
-    .firestore()
-    .collection('sessions')
-    .doc(data.sessionId)
-    .set(
-      {
-        has_bookings: true,
-        bio_link_bookings_count: FieldValue.increment(1),
-        ...(isNewContact && { bio_link_new_contact_bookings_count: FieldValue.increment(1) }),
-        last_booking_at: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
+  if (creditSpendTypeId) {
+    // Credit-pack booking: spend one credit atomically with the booking write.
+    // FIFO across the contact's usable grants (soonest expiry first, then oldest).
+    // The concurrent-booking race is settled here: the transaction re-reads the
+    // grants and fails when the last credit was consumed in the meantime.
+    const db = admin.firestore()
+    await db.runTransaction(async (tx) => {
+      const grantsQuery = db
+        .collection('contacts')
+        .doc(contactId)
+        .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
+        .where('teamId', '==', data.teamId)
+        .where('subscription_type_id', '==', creditSpendTypeId)
+      const grantsSnap = await tx.get(grantsQuery)
+      const nowMs = Date.now()
+      interface UsableGrant {
+        ref: FirebaseFirestore.DocumentReference
+        credits_total: number
+        credits_used: number
+        expires_at: Timestamp | null
+        created_at: Timestamp | null
+      }
+      const usable: UsableGrant[] = grantsSnap.docs
+        .map((d) => {
+          const g = d.data()
+          return {
+            ref: d.ref,
+            credits_total: (g.credits_total as number) ?? 0,
+            credits_used: (g.credits_used as number) ?? 0,
+            expires_at: (g.expires_at as Timestamp | null) ?? null,
+            created_at: (g.created_at as Timestamp | null) ?? null,
+          }
+        })
+        .filter(
+          (g) =>
+            g.credits_used < g.credits_total && (!g.expires_at || g.expires_at.toMillis() > nowMs)
+        )
+        .sort((a, b) => {
+          const ax = a.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
+          const bx = b.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
+          if (ax !== bx) return ax - bx
+          return (a.created_at?.toMillis() ?? 0) - (b.created_at?.toMillis() ?? 0)
+        })
+      const grant = usable[0]
+      if (!grant) {
+        throw new HttpsError(
+          'permission-denied',
+          'No lesson credits remaining on your pack. Purchase a new pack to book this class.'
+        )
+      }
+      tx.update(grant.ref, { credits_used: grant.credits_used + 1 })
+      tx.set(bookingRef, { ...bookingDoc, credit_grant_id: grant.ref.id, credit_spent: 1 })
+      tx.set(sessionRef, sessionCounterUpdate, { merge: true })
+    })
+  } else {
+    // Non-credit path — unchanged.
+    await bookingRef.set(bookingDoc)
+    await sessionRef.set(sessionCounterUpdate, { merge: true })
+  }
 
   if (!isNewContact) {
     await admin
@@ -816,6 +982,7 @@ export const bookSession = onCall(async (request) => {
         location: sessionData.location || null,
         onlineUrl: sessionData.onlineUrl || null,
         cancelUrl: cancelUrl || null,
+        instructions: bookingInstructions,
         lang,
       })
       const ical = buildCoachingICalAttachment({
@@ -892,6 +1059,7 @@ export const bookSession = onCall(async (request) => {
         sessionEnd,
         locationName: sessionData.location || null,
         manageBookingUrl,
+        instructions: bookingInstructions,
         lang,
       })
       const subjects: Record<Lang, string> = {
@@ -1041,20 +1209,38 @@ export const cancelBooking = onCall(async (request) => {
       activityName = (actDoc.data()?.name as string) || 'Session'
   }
 
-  const cancelBatch = db.batch()
-  cancelBatch.update(bookingDoc.ref, {
-    status: 'cancelled',
-    cancelled_at: FieldValue.serverTimestamp(),
-  })
-  cancelBatch.update(db.collection('sessions').doc(sessionId), {
-    bio_link_bookings_count: FieldValue.increment(-1),
-  })
-  if (contactId) {
-    cancelBatch.update(db.collection('contacts').doc(contactId), {
-      pending_bookings_count: FieldValue.increment(-1),
+  // Transaction (not a batch) so a spent lesson credit is refunded atomically
+  // with the cancellation. Refund floors at 0 and applies even if the grant has
+  // expired meanwhile — the swimmer paid for a lesson they now didn't take.
+  await db.runTransaction(async (tx) => {
+    let grantRefund: { ref: FirebaseFirestore.DocumentReference; used: number } | null = null
+    if (contactId && booking.credit_grant_id && booking.credit_spent) {
+      const grantRef = db
+        .collection('contacts')
+        .doc(contactId)
+        .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
+        .doc(booking.credit_grant_id as string)
+      const grantSnap = await tx.get(grantRef)
+      if (grantSnap.exists) {
+        grantRefund = { ref: grantRef, used: (grantSnap.data()?.credits_used as number) ?? 0 }
+      }
+    }
+    tx.update(bookingDoc.ref, {
+      status: 'cancelled',
+      cancelled_at: FieldValue.serverTimestamp(),
     })
-  }
-  await cancelBatch.commit()
+    tx.update(db.collection('sessions').doc(sessionId), {
+      bio_link_bookings_count: FieldValue.increment(-1),
+    })
+    if (contactId) {
+      tx.update(db.collection('contacts').doc(contactId), {
+        pending_bookings_count: FieldValue.increment(-1),
+      })
+    }
+    if (grantRefund) {
+      tx.update(grantRefund.ref, { credits_used: Math.max(0, grantRefund.used - 1) })
+    }
+  })
 
   const rebookUrl = teamSlug
     ? `${getHostingUrl()}/public/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`

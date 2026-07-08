@@ -53,6 +53,7 @@ interface ActivityProfile {
   order?: number
   accessRule?: ActivityAccessRule
   dropIn?: { enabled: boolean; priceAmount?: number }
+  prerequisites?: string
 }
 
 interface SessionProfile {
@@ -527,6 +528,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               order: typeof data.order === 'number' ? data.order : undefined,
               accessRule: data.accessRule ?? undefined,
               dropIn: data.dropIn ?? undefined,
+              prerequisites: data.prerequisites ?? undefined,
             }
           })
           .sort(compareActivities)
@@ -998,6 +1000,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                       {a.description}
                     </p>
                   )}
+                  {a.prerequisites && (
+                    <p className="text-xs text-amber-700 mt-1.5">
+                      <span className="font-medium">{t('prerequisitesLabel')}</span>{' '}
+                      {a.prerequisites}
+                    </p>
+                  )}
                 </div>
                 {hasSessions && (
                   <div className="flex items-center pr-4 text-muted-foreground">
@@ -1032,6 +1040,13 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">{t('pickDateTimeSubtitle')}</p>
         </div>
+
+        {selectedActivity?.prerequisites && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span className="font-semibold">{t('prerequisitesLabel')}</span>{' '}
+            {selectedActivity.prerequisites}
+          </div>
+        )}
 
         {availableDates.length === 0 ? (
           <div className="rounded-xl border bg-muted/30 p-8 text-center">

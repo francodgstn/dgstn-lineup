@@ -1,5 +1,23 @@
 import { buildEmailTemplate } from '../utils/email'
 import { detailsBox, ctaButton, factLines, BRAND } from '../utils/emailLayout'
+import { escapeHtml } from '../utils/html'
+
+// Localised heading for the studio's custom instructions box (confirmation emails).
+const INSTRUCTIONS_TITLES: Record<'en' | 'de' | 'fr' | 'it', string> = {
+  en: 'Important',
+  de: 'Wichtig',
+  fr: 'Important',
+  it: 'Importante',
+}
+
+/** Studio-authored plain-text instructions → highlighted box. Text is escaped,
+ *  newlines become <br>, and bare URLs become clickable links. */
+export function instructionsBox(instructions: string, lang: 'en' | 'de' | 'fr' | 'it'): string {
+  const html = escapeHtml(instructions.trim())
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:inherit;">$1</a>')
+    .replace(/\n/g, '<br>')
+  return detailsBox({ title: INSTRUCTIONS_TITLES[lang], content: `<p style="margin:0;">${html}</p>` })
+}
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 
@@ -34,6 +52,8 @@ interface ConfirmationParams {
   sessionEnd: Date
   locationName?: string | null
   manageBookingUrl?: string | null
+  /** Studio-authored plain-text note (activity override ?? team setting). */
+  instructions?: string | null
   lang?: Lang
 }
 
@@ -46,6 +66,7 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
     sessionEnd,
     locationName,
     manageBookingUrl,
+    instructions,
     lang = 'en',
   } = params
 
@@ -114,6 +135,7 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
     `<p>${greetings[lang]}</p>`,
     `<p>${intros[lang]}</p>`,
     detailsBox({ content: factLines(facts[lang]) }),
+    instructions?.trim() ? instructionsBox(instructions, lang) : '',
     `<p>${closings[lang]}</p>`,
     manageBookingUrl
       ? `<p style="text-align:center;margin-top:24px;">${ctaButton(manageBookingUrl, manageLabels[lang])}</p>`
@@ -224,6 +246,36 @@ export function buildBookingReminderEmail(params: ReminderParams) {
     .join('\n')
 
   return buildEmailTemplate({ title: titles[lang], body })
+}
+
+// Single-segment SMS reminder (~160 chars incl. the alphanumeric sender). Kept
+// deliberately terse: team, activity, day+time, location. The manage-booking
+// link is left to the email steps — URLs blow the segment budget.
+export function buildBookingReminderSms(params: {
+  teamName: string
+  activityName: string
+  sessionStart: Date
+  locationName?: string | null
+  lang?: Lang
+}): string {
+  const { teamName, activityName, sessionStart, locationName, lang = 'en' } = params
+  const localeMap: Record<Lang, string> = { en: 'en-GB', de: 'de-CH', fr: 'fr-CH', it: 'it-CH' }
+  const when = sessionStart.toLocaleString(localeMap[lang], {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Zurich',
+  })
+  const reminders: Record<Lang, string> = {
+    en: 'Reminder',
+    de: 'Erinnerung',
+    fr: 'Rappel',
+    it: 'Promemoria',
+  }
+  const location = locationName ? ` @ ${locationName}` : ''
+  return `${teamName}: ${reminders[lang]} — ${activityName}, ${when}${location}`
 }
 
 interface NotificationParams {

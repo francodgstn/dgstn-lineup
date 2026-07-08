@@ -2566,6 +2566,18 @@ async function seedDemoTeam(profile: SectorProfile) {
       updated_at: nowTs,
     })
 
+  // ── messaging policy: /try teams NEVER deliver outbound mail/SMS ────────────
+  // Anonymous visitors hold the shared owner logins and public surfaces (forms,
+  // booking OTP) accept arbitrary recipient addresses — hard-silence the tenant
+  // regardless of the environment's MESSAGING_DEFAULT_MODE.
+  await db.collection('messaging_policies').doc(teamId).set({
+    entityId: teamId,
+    mode: 'silent',
+    note: '/try playground — public shared logins; no outbound messaging.',
+    updated_at: nowTs,
+    updated_by: 'seed-sandbox',
+  })
+
   // ── student auth user (custom-token identity matching generateAuthToken) ───
   const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
   const studentContactId = contactIds[studentIdx]

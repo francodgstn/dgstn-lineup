@@ -7,6 +7,20 @@ import { runScheduledRules } from './runScheduledRules'
 import { expireAffiliations } from './expireAffiliations'
 import { expirePendingBookings } from './expirePendingBookings'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
+import { publishMessagingEnv } from '../mail/messagingEnvStatus'
+
+// Booking reminders run HOURLY (not in the 02:00 batch): multi-step schedules
+// (e.g. SMS 24h before) need offset accuracy, and SMS quiet-hour deferrals need
+// frequent retries. Idempotent via per-step reminders_sent markers.
+// Piggybacked: the messaging ENV snapshot for the operator console (a new
+// deploy's param values are visible within the hour).
+export const bookingRemindersHourly = onSchedule(
+  { schedule: 'every 1 hours', timeZone: 'UTC', timeoutSeconds: 300, memory: '512MiB' },
+  async () => {
+    await publishMessagingEnv()
+    await sendBookingReminders()
+  },
+)
 
 
 interface TaskResult {
@@ -28,7 +42,7 @@ export const dailyTasks = onSchedule(
       // the default 'lib_trial_cleanup' automation rule instead (see onTeamCreated).
       { name: 'resetExpiredStreaks', handler: resetExpiredStreaks },
       { name: 'resetMonthlyScores', handler: resetMonthlyScores },
-      { name: 'sendBookingReminders', handler: sendBookingReminders },
+      // sendBookingReminders moved to the hourly bookingRemindersHourly schedule.
       { name: 'runScheduledRules', handler: runScheduledRules },
       { name: 'expireAffiliations', handler: expireAffiliations },
       { name: 'expirePendingBookings', handler: expirePendingBookings },

@@ -14,11 +14,18 @@ import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION } from '@linyup/shared'
+import { TEAMS_COLLECTION, resolveBookingReminderSteps, type BookingReminderStep } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { MailCheck } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
+import { MailCheck, Plus, X } from 'lucide-react'
 
 type ToggleKey =
   | 'booking_confirmation'
@@ -46,7 +53,103 @@ interface TeamEmailSettings {
   settings?: {
     system_emails?: Record<string, boolean>
     bookingRemindersEnabled?: boolean
+    bookingReminderHours?: number
+    bookingReminderSteps?: BookingReminderStep[]
   }
+}
+
+// ─── reminder schedule editor ─────────────────────────────────────────────────
+// The offsets a studio can pick per step. Custom values can come later; these
+// presets cover the common flows (incl. SWIMLI's 1 week / 2 days / day before).
+const OFFSET_PRESETS = [336, 168, 72, 48, 24, 12, 2] as const
+
+function stepId(channel: string, offsetHours: number): string {
+  return `step-${channel}-${offsetHours}h`
+}
+
+function ReminderStepsEditor({
+  steps,
+  disabled,
+  onChange,
+}: {
+  steps: BookingReminderStep[]
+  disabled: boolean
+  onChange: (next: BookingReminderStep[]) => void
+}) {
+  const t = useTranslations('SettingsEmails')
+
+  const offsetLabel = (h: number) =>
+    h % 24 === 0 ? t('reminderOffsetDays', { days: h / 24 }) : t('reminderOffsetHours', { hours: h })
+
+  function update(i: number, patch: Partial<BookingReminderStep>) {
+    const next = steps.map((s, idx) => {
+      if (idx !== i) return s
+      const merged = { ...s, ...patch }
+      return { ...merged, id: stepId(merged.channel, merged.offsetHours) }
+    })
+    onChange(next)
+  }
+
+  return (
+    <div className="ml-0 sm:ml-6 mt-2 space-y-2">
+      {steps.map((s, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <Select
+            value={s.channel}
+            onValueChange={(v) => update(i, { channel: v as BookingReminderStep['channel'] })}
+          >
+            <SelectTrigger className="w-28 h-8 text-xs" disabled={disabled}>
+              <span>{s.channel === 'sms' ? t('reminderChannelSms') : t('reminderChannelEmail')}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="email">{t('reminderChannelEmail')}</SelectItem>
+              <SelectItem value="sms">{t('reminderChannelSms')}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={String(s.offsetHours)}
+            onValueChange={(v) => update(i, { offsetHours: Number(v) })}
+          >
+            <SelectTrigger className="w-44 h-8 text-xs" disabled={disabled}>
+              <span>{offsetLabel(s.offsetHours)}</span>
+            </SelectTrigger>
+            <SelectContent>
+              {[...new Set([...OFFSET_PRESETS, s.offsetHours])]
+                .sort((a, b) => b - a)
+                .map((h) => (
+                  <SelectItem key={h} value={String(h)}>
+                    {offsetLabel(h)}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <button
+            type="button"
+            disabled={disabled || steps.length <= 1}
+            onClick={() => onChange(steps.filter((_, idx) => idx !== i))}
+            className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors disabled:opacity-30"
+            title={t('reminderRemoveStep')}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          disabled={disabled || steps.length >= 5}
+          onClick={() => onChange([...steps, { id: stepId('email', 48), channel: 'email', offsetHours: 48 }])}
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          {t('reminderAddStep')}
+        </Button>
+        <p className="text-xs text-muted-foreground">{t('reminderSmsNote')}</p>
+      </div>
+    </div>
+  )
 }
 
 function readState(team: TeamEmailSettings | null | undefined): Record<ToggleKey, boolean> {
@@ -69,11 +172,22 @@ export function SystemEmailsCard() {
   )
   const [saving, setSaving] = useState<ToggleKey | null>(null)
 
+  // Reminder schedule (settings.bookingReminderSteps; legacy single email when unset).
+  const teamSettings = (team as TeamEmailSettings | null)?.settings ?? {}
+  const [steps, setSteps] = useState<BookingReminderStep[]>(() =>
+    resolveBookingReminderSteps(teamSettings)
+  )
+  const [stepsSaving, setStepsSaving] = useState(false)
+
   // Re-sync once the team doc (or a team switch) loads.
   const serialized = JSON.stringify(readState(team as TeamEmailSettings | null))
+  const serializedSteps = JSON.stringify(resolveBookingReminderSteps(teamSettings))
   useEffect(() => {
     setState(JSON.parse(serialized) as Record<ToggleKey, boolean>)
   }, [serialized])
+  useEffect(() => {
+    setSteps(JSON.parse(serializedSteps) as BookingReminderStep[])
+  }, [serializedSteps])
 
   async function toggle(key: ToggleKey, value: boolean) {
     if (!currentTeamId || !canEdit) return
@@ -85,6 +199,24 @@ export function SystemEmailsCard() {
       setState((s) => ({ ...s, [key]: !value })) // revert on failure
     } finally {
       setSaving(null)
+    }
+  }
+
+  async function saveSteps(next: BookingReminderStep[]) {
+    if (!currentTeamId || !canEdit) return
+    // Dedupe identical channel+offset entries (they'd share a sent-marker id).
+    const deduped = next.filter((s, i) => next.findIndex((o) => o.id === s.id) === i)
+    const prev = steps
+    setSteps(deduped) // optimistic
+    setStepsSaving(true)
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
+        'settings.bookingReminderSteps': deduped,
+      })
+    } catch {
+      setSteps(prev) // revert on failure
+    } finally {
+      setStepsSaving(false)
     }
   }
 
@@ -103,18 +235,27 @@ export function SystemEmailsCard() {
 
       <div className="divide-y">
         {TOGGLE_KEYS.map((key) => (
-          <div key={key} className="flex items-center justify-between gap-4 py-2.5">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{t(`systemEmails.${key}` as Parameters<typeof t>[0])}</p>
-              <p className="text-xs text-muted-foreground">
-                {t(`systemEmails.${key}Desc` as Parameters<typeof t>[0])}
-              </p>
+          <div key={key} className="py-2.5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{t(`systemEmails.${key}` as Parameters<typeof t>[0])}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t(`systemEmails.${key}Desc` as Parameters<typeof t>[0])}
+                </p>
+              </div>
+              <Switch
+                checked={state[key]}
+                disabled={!canEdit || saving === key}
+                onCheckedChange={(v) => toggle(key, v)}
+              />
             </div>
-            <Switch
-              checked={state[key]}
-              disabled={!canEdit || saving === key}
-              onCheckedChange={(v) => toggle(key, v)}
-            />
+            {key === 'booking_reminder' && state.booking_reminder && (
+              <ReminderStepsEditor
+                steps={steps}
+                disabled={!canEdit || stepsSaving}
+                onChange={saveSteps}
+              />
+            )}
           </div>
         ))}
 

@@ -33,6 +33,8 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     ...(data.dropIn?.enabled && typeof data.dropIn.priceAmount === 'number'
       ? { dropIn: { enabled: true, priceAmount: data.dropIn.priceAmount } }
       : {}),
+    // Display-only prerequisites shown on the public booking pages.
+    prerequisites: data.prerequisites || null,
   }
 
   await afterRef.collection('public_profile').doc(activityId).set(publicProfile)

@@ -54,6 +54,13 @@ export interface Activity {
    *  one-off price to book a single session. Charged via Stripe Connect; no membership
    *  is created. Group-class only for now. Price is major units (team default_currency). */
   dropIn?: { enabled: boolean; priceAmount?: number }
+  /** Display-only entry requirements shown on the public booking pages (e.g.
+   *  "25m front crawl with side breathing"). Not enforced anywhere. */
+  prerequisites?: string
+  /** Extra instructions appended to this activity's booking confirmation email,
+   *  overriding the team-wide `settings.bookingConfirmationInstructions`.
+   *  Email-only — never mirrored to the public profile. */
+  confirmationInstructions?: string
   isActive?: boolean
   image_url?: string
   // Display order (lower = first), respected by the manager list, the public
@@ -92,4 +99,6 @@ export interface ActivityPublicProfile {
   accessRule?: ActivityAccessRule
   /** Denormalised drop-in config so the booking UI can offer pay-per-class. */
   dropIn?: { enabled: boolean; priceAmount?: number }
+  /** Denormalised display-only prerequisites for the public booking pages. */
+  prerequisites?: string
 }

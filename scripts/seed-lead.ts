@@ -204,11 +204,16 @@ function acquisitionFieldsFor(opts: {
   hasAttended: boolean
   milestoneTs: admin.firestore.Timestamp
   seed: string
+  /** Authored acquisition source (profile override; default seeded-random). */
+  source?: string
+  /** Free-text detail shown with the source (e.g. 'QR poster', 'Meta ads'). */
+  sourceDetail?: string
 }): Record<string, unknown> {
   const { type, hasAttended, milestoneTs, seed } = opts
   const out: Record<string, unknown> = {
     acquisition_stage_updated_at: milestoneTs,
-    source: pickSource(seed),
+    source: opts.source ?? pickSource(seed),
+    ...(opts.sourceDetail ? { source_detail: opts.sourceDetail } : {}),
   }
   if (type === 'student') {
     out.acquisition_stage = 'joined'
@@ -428,6 +433,7 @@ const TENANT_DOCID_COLLECTIONS = [
   'site_drafts',
   'site_published',
   'embed_widgets',
+  'messaging_policies',
 ]
 
 async function resetLeadTenant(teamId: string) {
@@ -500,6 +506,39 @@ async function seedLeadTenant(profile: LeadProfile) {
   // ── subscription types ────────────────────────────────────────────────────
   const subByKey = new Map(profile.subscriptions.map((s) => [s.key, s]))
   const subIdOf = (key: string) => `${teamId}-sub-${key}`
+  // Firestore price entries for a subscription type: multi-price `prices[]` when
+  // authored, else the legacy single price/recurrence/includedMonths fields.
+  function subPricesOf(st: (typeof profile.subscriptions)[number]) {
+    const id = subIdOf(st.key)
+    if (st.prices?.length) {
+      return st.prices.map((p) => ({
+        id: `${id}-price-${p.key}`,
+        amount: p.amount,
+        recurrence: p.recurrence,
+        active: true,
+        ...(p.label ? { label: p.label } : {}),
+        ...(p.includedMonths ? { included_months: p.includedMonths } : {}),
+        ...(p.credits ? { credits: p.credits } : {}),
+      }))
+    }
+    if (st.price != null && st.recurrence) {
+      return [
+        {
+          id: `${id}-price`,
+          amount: st.price,
+          recurrence: st.recurrence,
+          active: true,
+          ...(st.includedMonths ? { included_months: st.includedMonths } : {}),
+        },
+      ]
+    }
+    return []
+  }
+  // Shop contact-capture mode: 'full' when any price creates a lasting membership.
+  function subCheckoutMode(st: (typeof profile.subscriptions)[number]) {
+    const prices = subPricesOf(st)
+    return prices.some((p) => p.recurrence !== 'per_class') ? 'full' : 'minimal'
+  }
   function resolveSub(subKey: string | null): {
     id: string
     name: string
@@ -511,16 +550,42 @@ async function seedLeadTenant(profile: LeadProfile) {
     const found = subByKey.get(subKey)
     if (!found) throw new Error(`Unknown subKey '${subKey}' in profile '${profile.id}'`)
     const id = subIdOf(found.key)
-    return found.price != null && found.recurrence
-      ? {
-          id,
-          name: found.name,
-          recurrence: found.recurrence,
-          priceId: `${id}-price`,
-          amount: found.price,
-        }
-      : { id, name: found.name, recurrence: found.recurrence }
+    const prices = subPricesOf(found)
+    if (prices.length > 0) {
+      // Contacts snapshot the first authored price (the "standard" one).
+      const p = prices[0]
+      return { id, name: found.name, recurrence: p.recurrence, priceId: p.id, amount: p.amount }
+    }
+    return { id, name: found.name, recurrence: found.recurrence }
   }
+
+  // ── places ────────────────────────────────────────────────────────────────
+  const placeByKey = new Map((profile.places ?? []).map((p) => [p.key, p]))
+  const placeIdOf = (key: string) => `${teamId}-place-${key}`
+  function resolvePlace(placeKey?: string): {
+    placeId: string | null
+    label: string
+    address: string
+    mapsUrl: string | null
+  } {
+    if (placeKey) {
+      const p = placeByKey.get(placeKey)
+      if (!p) throw new Error(`Unknown placeKey '${placeKey}' in profile '${profile.id}'`)
+      return {
+        placeId: placeIdOf(p.key),
+        label: p.name,
+        address: p.address,
+        mapsUrl: p.mapsUrl ?? null,
+      }
+    }
+    return {
+      placeId: null,
+      label: profile.location.label,
+      address: profile.location.address,
+      mapsUrl: profile.location.mapsUrl ?? null,
+    }
+  }
+  const primaryPlace = (profile.places ?? []).find((p) => p.isPrimary) ?? profile.places?.[0]
 
   const rankingSystem = profile.rankingSystem
   const rankSystemId = rankingSystem?.id ?? null
@@ -573,7 +638,26 @@ async function seedLeadTenant(profile: LeadProfile) {
       default_currency: profile.currency,
       affiliations_enabled: true,
       ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],
-      settings: { gamification: profile.gamification, teamEmail: profile.contactEmail },
+      settings: {
+        gamification: profile.gamification,
+        teamEmail: profile.contactEmail,
+        ...(profile.bookingConfirmationInstructions
+          ? { bookingConfirmationInstructions: profile.bookingConfirmationInstructions }
+          : {}),
+        ...(profile.reminders?.steps?.length
+          ? {
+              bookingRemindersEnabled: true,
+              bookingReminderSteps: profile.reminders.steps.map((s, i) => ({
+                id: `step-${i}-${s.channel}-${s.offsetHours}h`,
+                channel: s.channel,
+                offsetHours: s.offsetHours,
+              })),
+            }
+          : {}),
+      },
+      ...(profile.customFieldDefinitions?.length
+        ? { custom_field_definitions: profile.customFieldDefinitions }
+        : {}),
       bioLinkTheme: 'light',
       bioLinkAccentColor: profile.accentColor,
       bioLinkBackground,
@@ -582,6 +666,83 @@ async function seedLeadTenant(profile: LeadProfile) {
       links: portalLinks,
       socialLinks: profile.socialLinks,
     })
+
+  // ── places (teams/{id}/team_places) ───────────────────────────────────────
+  for (let i = 0; i < (profile.places ?? []).length; i++) {
+    const p = (profile.places ?? [])[i]
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('team_places')
+      .doc(placeIdOf(p.key))
+      .set({
+        teamId,
+        scope: 'team',
+        name: p.name,
+        address: p.address,
+        ...(p.mapsUrl ? { mapsLink: p.mapsUrl } : {}),
+        isPrimary: p === primaryPlace,
+        order: i,
+        created_at: ts(daysFromNow(-200)),
+        createdBy: uid,
+      })
+  }
+
+  // ── SMS sender config (integrations/sms_sender; consumed by the SMS service) ──
+  if (profile.smsSenderName) {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('integrations')
+      .doc('sms_sender')
+      .set({
+        type: 'sms_sender',
+        senderName: profile.smsSenderName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 11),
+        enabled: true,
+        updated_at: ts(now()),
+        updatedBy: uid,
+      })
+  }
+
+  // ── Messaging policy (messaging_policies/{teamId}; operator-only) ──────────
+  // GENERAL RULE for lead seeds: the initial setup delivers ONLY to the operator
+  // (you). Default mode = 'redirect' → OPERATOR_EMAIL, so EVERYTHING the tenant
+  // produces (your own test OTP/confirmations AND the owner notifications that
+  // would otherwise go to the lead's studio inbox) funnels to your inbox, while
+  // the lead's real addresses and the synthetic contact pool receive nothing.
+  // Handing the sandbox to the lead is a DELIBERATE later step: flip to
+  // 'allowlist' (add the lead) or 'live' in the operator console / via
+  // `pnpm messaging:policy`. A profile may override via `profile.messagingPolicy`,
+  // but the operator email is always kept reachable so you never lose oversight.
+  {
+    const OPERATOR_EMAIL = (process.env.LEAD_OPERATOR_EMAIL || 'franco.dgstn@gmail.com')
+      .trim()
+      .toLowerCase()
+    const mp = profile.messagingPolicy ?? {}
+    const mode = mp.mode ?? 'redirect'
+    const redirectEmail = (mp.redirectEmail || OPERATOR_EMAIL).trim().toLowerCase()
+    // In allowlist mode the operator is always included (retains visibility).
+    const allowEmails = [
+      ...new Set(
+        [OPERATOR_EMAIL, ...(mp.allowEmails ?? [])].map((e) => e.trim().toLowerCase()).filter(Boolean)
+      ),
+    ]
+    const policyDoc: Record<string, unknown> = {
+      entityId: teamId,
+      mode,
+      note:
+        mp.note ??
+        `Lead demo '${profile.id}' — initial setup delivers only to the operator (${OPERATOR_EMAIL}). Switch to allowlist/live at handover.`,
+      updated_at: ts(now()),
+      updated_by: 'seed-lead',
+    }
+    if (mode === 'redirect') policyDoc.redirectEmail = redirectEmail
+    if (mode === 'allowlist') policyDoc.allowEmails = allowEmails
+    if (mp.allowPhones?.length) policyDoc.allowPhones = mp.allowPhones
+    await db.collection('messaging_policies').doc(teamId).set(policyDoc)
+    const target = mode === 'redirect' ? redirectEmail : mode === 'allowlist' ? allowEmails.join(', ') : '—'
+    console.log(`   ✉️  Messaging policy: ${mode}${target !== '—' ? ` → ${target}` : ''}`)
+  }
 
   // Stripe Connect — wire a TEST connected account so "pay with Linyup" works out
   // of the box (survives reseeds). Source: --connect flag > env > profile field.
@@ -605,22 +766,23 @@ async function seedLeadTenant(profile: LeadProfile) {
       name: string
       description?: string
       checkout_contact_mode?: string
-      prices?: { id: string; amount: number; recurrence: string; included_months?: number }[]
+      prices?: {
+        id: string
+        amount: number
+        recurrence: string
+        label?: string
+        included_months?: number
+        credits?: number
+      }[]
     } = {
       id: subIdOf(st.key),
       name: st.name,
-      checkout_contact_mode: st.recurrence && st.recurrence !== 'per_class' ? 'full' : 'minimal',
+      checkout_contact_mode: subCheckoutMode(st),
     }
     if (st.description) entry.description = st.description
-    if (st.price != null && st.recurrence) {
-      entry.prices = [
-        {
-          id: `${subIdOf(st.key)}-price`,
-          amount: st.price,
-          recurrence: st.recurrence,
-          ...(st.includedMonths ? { included_months: st.includedMonths } : {}),
-        },
-      ]
+    const prices = subPricesOf(st)
+    if (prices.length > 0) {
+      entry.prices = prices.map(({ active: _active, ...p }) => p)
     }
     return entry
   })
@@ -657,6 +819,14 @@ async function seedLeadTenant(profile: LeadProfile) {
       // Written directly (sync triggers may not be deployed on the sandbox):
       // site + shop + space are all live for a seeded lead tenant.
       active_public_surfaces: { site: true, shop: true, space: true },
+      // Main Address for the bio-link map (normally denormalised on place write).
+      mainAddress: primaryPlace
+        ? {
+            name: primaryPlace.name,
+            address: primaryPlace.address,
+            ...(primaryPlace.mapsUrl ? { mapsLink: primaryPlace.mapsUrl } : {}),
+          }
+        : { name: profile.location.label, address: profile.location.address },
       aggregator_subscription_types: publicSubTypes,
       membershipRequiredFields: null,
       membershipOptionalFields: null,
@@ -730,6 +900,15 @@ async function seedLeadTenant(profile: LeadProfile) {
       ? await uploadAsset(a.imageAsset, `teams/${teamId}/activities/${actIds[i]}/cover`)
       : null
     actImageUrls.push(imageUrl)
+    // Paid-access gate; keep isFreeTrial in sync (legacy queries read it).
+    const accessRule = {
+      type: a.accessTier ?? (a.isFreeTrial ? 'open' : 'members'),
+      ...(a.accessTier === 'subscription'
+        ? { subscriptionTypeIds: (a.accessSubKeys ?? []).map(subIdOf) }
+        : {}),
+    }
+    const dropIn =
+      a.dropInPrice != null ? { enabled: true, priceAmount: a.dropInPrice } : { enabled: false }
     await db
       .collection('activities')
       .doc(actIds[i])
@@ -740,7 +919,13 @@ async function seedLeadTenant(profile: LeadProfile) {
         color: a.color,
         level: a.level,
         description: a.description,
-        isFreeTrial: a.isFreeTrial,
+        ...(a.prerequisites ? { prerequisites: a.prerequisites } : {}),
+        ...(a.confirmationInstructions
+          ? { confirmationInstructions: a.confirmationInstructions }
+          : {}),
+        isFreeTrial: accessRule.type === 'open',
+        accessRule,
+        dropIn,
         base_score: a.base_score,
         type: 'group_class',
         isActive: true,
@@ -758,8 +943,11 @@ async function seedLeadTenant(profile: LeadProfile) {
         slug: a.slug,
         color: a.color,
         description: a.description,
+        ...(a.prerequisites ? { prerequisites: a.prerequisites } : {}),
         image_url: imageUrl,
-        isFreeTrial: a.isFreeTrial,
+        isFreeTrial: accessRule.type === 'open',
+        accessRule,
+        ...(dropIn.enabled ? { dropIn } : {}),
         level: a.level,
       })
   }
@@ -801,10 +989,13 @@ async function seedLeadTenant(profile: LeadProfile) {
     })
 
   // ── coaching: one availability template + materialized slots per coach ────
-  for (const tpl of profile.coaching.templates) {
+  for (let tplIdx = 0; tplIdx < profile.coaching.templates.length; tplIdx++) {
+    const tpl = profile.coaching.templates[tplIdx]
     const coachUid = uidOf(tpl.staffKey)
     const coachName = staffName(tpl.staffKey)
-    const templateId = `${teamId}-tpl-${tpl.staffKey}`
+    // Index-suffixed so one coach can hold several availability templates.
+    const templateId = `${teamId}-tpl-${tpl.staffKey}-${tplIdx}`
+    const tplPlace = resolvePlace(tpl.placeKey)
     await db
       .collection('coach_availability')
       .doc(templateId)
@@ -818,7 +1009,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         duration_minutes: tpl.durationMin,
         max_participants: 1,
         isFreeTrial: tpl.isFreeTrial,
-        location: profile.location.label,
+        location: tplPlace.label,
+        ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
         onlineUrl: null,
         status: 'active',
         recurrence: {
@@ -844,7 +1036,7 @@ async function seedLeadTenant(profile: LeadProfile) {
     for (let i = 0; i < slotDates.length; i++) {
       const base = slotDates[i]
       const end = minutesOffset(base, tpl.durationMin)
-      const sid = `${teamId}-coaching-${tpl.staffKey}-${i}`
+      const sid = `${teamId}-coaching-${tpl.staffKey}-${tplIdx}-${i}`
       const isFull = tpl.bookedSlots.includes(i)
       const status = isFull ? 'full' : 'open'
       const common = {
@@ -859,7 +1051,9 @@ async function seedLeadTenant(profile: LeadProfile) {
         duration_minutes: tpl.durationMin,
         max_participants: 1,
         bookings_count: isFull ? 1 : 0,
-        location: profile.location.label,
+        location: tplPlace.label,
+        locationAddress: tplPlace.address,
+        ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
         onlineUrl: null,
         isFreeTrial: tpl.isFreeTrial,
         status,
@@ -901,18 +1095,7 @@ async function seedLeadTenant(profile: LeadProfile) {
   // ── subscription types (raw docs) ─────────────────────────────────────────
   for (const st of profile.subscriptions) {
     const id = subIdOf(st.key)
-    const prices =
-      st.price != null && st.recurrence
-        ? [
-            {
-              id: `${id}-price`,
-              amount: st.price,
-              recurrence: st.recurrence,
-              active: true,
-              ...(st.includedMonths ? { included_months: st.includedMonths } : {}),
-            },
-          ]
-        : []
+    const prices = subPricesOf(st)
     await db
       .collection('teams')
       .doc(teamId)
@@ -924,7 +1107,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         source: st.source,
         active: true,
         public: true,
-        checkout_contact_mode: st.recurrence && st.recurrence !== 'per_class' ? 'full' : 'minimal',
+        checkout_contact_mode: subCheckoutMode(st),
         prices,
         teamId,
         created_at: ts(daysFromNow(-120)),
@@ -939,6 +1122,7 @@ async function seedLeadTenant(profile: LeadProfile) {
     end: Date
     actIdx: number
     staffKey: string
+    placeKey?: string
     allowBooking: boolean
     isPast: boolean
   }
@@ -957,6 +1141,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         end: minutesOffset(date, slot.durMin),
         actIdx: slot.activityIdx,
         staffKey: slot.staffKey,
+        placeKey: slot.placeKey,
         allowBooking: !isPast,
         isPast,
       })
@@ -972,6 +1157,7 @@ async function seedLeadTenant(profile: LeadProfile) {
     const id = `${teamId}-session-${i.toString().padStart(3, '0')}`
     sessionIds.push(id)
     const instructorName = staffName(s.staffKey)
+    const place = resolvePlace(s.placeKey)
 
     await db
       .collection('sessions')
@@ -982,8 +1168,9 @@ async function seedLeadTenant(profile: LeadProfile) {
         activityName: a.name,
         start: ts(s.date),
         end: ts(s.end),
-        location: profile.location.label,
-        locationAddress: profile.location.address,
+        location: place.label,
+        locationAddress: place.address,
+        ...(place.placeId ? { placeId: place.placeId } : {}),
         instructorName,
         instructorId: uidOf(s.staffKey),
         ...(a.capacity != null ? { max_participants: a.capacity } : {}),
@@ -1010,10 +1197,10 @@ async function seedLeadTenant(profile: LeadProfile) {
           activityImage: actImageUrls[s.actIdx],
           start: ts(s.date),
           end: ts(s.end),
-          location: profile.location.label,
+          location: place.label,
           instructorName,
-          locationAddress: profile.location.address,
-          locationMapsUrl: profile.location.mapsUrl ?? null,
+          locationAddress: place.address,
+          locationMapsUrl: place.mapsUrl,
           capacity: a.capacity,
           participants_count: 0,
           allowBooking: true,
@@ -1052,6 +1239,8 @@ async function seedLeadTenant(profile: LeadProfile) {
       hasAttended: c.totalSessions > 0,
       milestoneTs: createdTs,
       seed,
+      source: c.source,
+      sourceDetail: c.sourceDetail,
     })
     const baseTags = c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : []
     const tags = c.type === 'external' ? [...baseTags, 'external'] : baseTags
@@ -1106,6 +1295,7 @@ async function seedLeadTenant(profile: LeadProfile) {
             }
           : {}),
         ...(c.assignedToStaffKey ? { assigned_coach_ids: [uidOf(c.assignedToStaffKey)] } : {}),
+        ...(c.customFields ? { custom_fields: c.customFields } : {}),
         created_at: createdTs,
         deleted_at: null,
         archived_at: null,
@@ -1186,6 +1376,53 @@ async function seedLeadTenant(profile: LeadProfile) {
           end_date: null,
           created_at: ts(startedAt),
         })
+
+      // Lesson-credit grant — when the held subscription type carries credit-pack
+      // prices, seed one partially-consumed grant (first credit price) + the
+      // credit_summary rollup the onCreditGrantWrite sync would compute, so pack
+      // holders can book credit-gated classes without live functions.
+      const subDef = subByKey.get(c.subKey!)
+      const creditPrice = subDef?.prices?.find((p) => p.credits)
+      if (subDef && creditPrice?.credits) {
+        const used = Math.min(
+          creditPrice.credits - 1,
+          Math.floor(seededRand(seed + 'cu') * creditPrice.credits)
+        )
+        const remaining = creditPrice.credits - used
+        const expiresAt = ts(daysFromNow(30 * (creditPrice.includedMonths ?? 6) - 20))
+        await db
+          .collection('contacts')
+          .doc(id)
+          .collection('credit_grants')
+          .doc(`${id}-grant-0`)
+          .set({
+            teamId,
+            subscription_type_id: sub.id,
+            subscription_type_name: sub.name,
+            price_id: `${sub.id}-price-${creditPrice.key}`,
+            credits_total: creditPrice.credits,
+            credits_used: used,
+            expires_at: expiresAt,
+            source: 'seed',
+            created_at: ts(startedAt),
+          })
+        await db
+          .collection('contacts')
+          .doc(id)
+          .set(
+            {
+              credit_summary: [
+                {
+                  subscription_type_id: sub.id,
+                  subscription_type_name: sub.name,
+                  remaining,
+                  next_expires_at: expiresAt,
+                },
+              ],
+            },
+            { merge: true }
+          )
+      }
     }
 
     // monthly scores (gamification) — adults with attendance only
@@ -1480,7 +1717,7 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
 
   // ── automations (sector-neutral, {{placeholders}}) ─────────────────────────
-  await seedAutomations(teamId, profile.language)
+  await seedAutomations(profile, teamId, profile.language)
 
   // ── events ─────────────────────────────────────────────────────────────────
   for (let ei = 0; ei < profile.events.length; ei++) {
@@ -1620,10 +1857,71 @@ async function seedLeadTenant(profile: LeadProfile) {
   return { teamId, studentEmail, sessionCount: sessionDefs.length }
 }
 
-// ── automations (copied from seed-sandbox.ts — sector-neutral copy) ──────────
+// ── automations ───────────────────────────────────────────────────────────────
+// Profile-authored templates + rules when present (profile.automations), else the
+// sector-neutral welcome/win-back pair. The lib_trial_cleanup hygiene rule is
+// always installed (fixed doc id converges with the onTeamCreated trigger).
 
-async function seedAutomations(teamId: string, language: string) {
+async function seedAutomations(profile: LeadProfile, teamId: string, language: string) {
   const teamRef = db.collection('teams').doc(teamId)
+
+  if (profile.automations) {
+    const tmplIdOf = (key: string) => `${teamId}-tmpl-${key}`
+    const templateKeys = new Set(profile.automations.templates.map((t) => t.key))
+    for (const t of profile.automations.templates) {
+      await teamRef
+        .collection('outreach_templates')
+        .doc(tmplIdOf(t.key))
+        .set({
+          name: t.name,
+          subject: t.subject,
+          body: t.body,
+          body_mode: 'markdown',
+          language,
+          active: true,
+          ...(t.systemKey ? { system_key: t.systemKey } : {}),
+          created_at: ts(daysFromNow(-60)),
+        })
+    }
+    for (const r of profile.automations.rules) {
+      const actions = r.actions.map((a) => {
+        const { templateKey, ...rest } = a
+        if (!templateKey) return rest
+        if (!templateKeys.has(templateKey))
+          throw new Error(`Unknown templateKey '${templateKey}' in rule '${r.key}'`)
+        return { ...rest, templateId: tmplIdOf(templateKey) }
+      })
+      await teamRef
+        .collection('automation_rules')
+        .doc(`${teamId}-rule-${r.key}`)
+        .set({
+          name: r.name,
+          active: r.active ?? true,
+          trigger: r.trigger,
+          conditions: r.conditions ?? [],
+          actions,
+          ...(r.systemKey ? { system_key: r.systemKey } : {}),
+          created_at: ts(daysFromNow(-60)),
+          updated_at: ts(daysFromNow(-5)),
+        })
+    }
+    // Always keep the default lead-hygiene rule (same doc id as onTeamCreated).
+    await teamRef.collection('automation_rules').doc('lib_trial_cleanup').set({
+      name: 'Archive stale trial bookings',
+      active: true,
+      system_key: 'lib_trial_cleanup',
+      trigger: { type: 'schedule_daily' },
+      conditions: [
+        { type: 'acquisition_stage', value: 'trial_booked' },
+        { type: 'sessions_attended_exactly', value: 0 },
+        { type: 'days_since_created', value: 30 },
+      ],
+      actions: [{ type: 'archive_contact' }],
+      created_at: ts(daysFromNow(-60)),
+      updated_at: ts(daysFromNow(-5)),
+    })
+    return
+  }
 
   const templates = [
     {
@@ -1736,6 +2034,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     { id: 'website' },
     { id: 'online-courses' },
     { id: 'products' },
+    ...(profile.customFieldDefinitions?.length ? [{ id: 'custom-fields' }] : []),
     ...(profile.documents.length > 0
       ? [{ id: 'documents', config: { signupDocumentIds: signupDocIds } }]
       : []),
@@ -1927,14 +2226,15 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     const doc = profile.documents[i]
     const docId = `${teamId}-doc-${doc.key}`
     const docRef = db.collection('documents').doc(docId)
+    const isExternal = !!doc.externalUrl
     await docRef.set({
       id: docId,
       teamId,
       title: doc.title,
       slug: doc.slug,
       kind: doc.kind,
-      source: 'rich_text',
-      body: doc.body,
+      source: isExternal ? 'external_link' : 'rich_text',
+      ...(isExternal ? { externalUrl: doc.externalUrl } : { body: doc.body }),
       summary: doc.summary,
       status: 'published',
       isPublic: true,
@@ -1950,9 +2250,10 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       slug: doc.slug,
       title: doc.title,
       kind: doc.kind,
-      source: 'rich_text',
+      source: isExternal ? 'external_link' : 'rich_text',
+      ...(isExternal ? { externalUrl: doc.externalUrl } : {}),
       summary: doc.summary,
-      bodyHtml: doc.body,
+      ...(isExternal ? {} : { bodyHtml: doc.body }),
       updated_at: docNow,
     })
   }

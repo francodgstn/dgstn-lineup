@@ -275,6 +275,8 @@ export const createMembershipPayment = onCall(async (request) => {
   }
   if (data.contactId) metadata.contactId = data.contactId
   if (price.included_months) metadata.includedMonths = String(price.included_months)
+  // Credit pack: the webhook materialises a CreditGrant alongside the membership.
+  if (price.credits) metadata.credits = String(price.credits)
 
   const interval = recurrenceToStripeInterval(price.recurrence)
   const idempotencyKey =
@@ -450,6 +452,8 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
     contactMode,
   }
   if (price.included_months) metadata.includedMonths = String(price.included_months)
+  // Credit pack: the webhook materialises a CreditGrant alongside the membership.
+  if (price.credits) metadata.credits = String(price.credits)
 
   const interval = recurrenceToStripeInterval(price.recurrence)
   const idempotencyKey =

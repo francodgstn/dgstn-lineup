@@ -51,6 +51,7 @@ export { onSessionUpdate } from './sync/onSessionUpdate'
 export { onActivityTypeChange } from './sync/onActivityTypeChange'
 export { onInstalledPluginStatusChange } from './sync/onInstalledPluginStatusChange'
 export { onAffiliationWrite } from './sync/onAffiliationWrite'
+export { onCreditGrantWrite } from './sync/onCreditGrantWrite'
 
 // Booking
 export {
@@ -84,6 +85,7 @@ export { deleteContact, restoreContact, checkInContact, moveContacts } from './c
 export { generateContactQR } from './contacts/generateContactQR'
 export { getContactQR } from './contacts/getContactQR'
 export { requestContactUpdate } from './contacts/requestContactUpdate'
+export { grantCredits } from './contacts/grantCredits'
 export { manageContactUpdateRequest } from './contacts/manageContactUpdateRequest'
 export { switchActiveContact } from './contacts/switchActiveContact'
 export { listMyContactPayments, createContactBillingPortalSession } from './contacts/contactPayments'
@@ -107,8 +109,8 @@ export {
 } from './analytics'
 export { capturePlatformMetrics } from './analytics/platformMetrics'
 
-// Daily maintenance tasks
-export { dailyTasks } from './dailyTasks'
+// Daily maintenance tasks + the hourly multi-step booking-reminder scan
+export { dailyTasks, bookingRemindersHourly } from './dailyTasks'
 
 // Auth / Membership
 export { verifyContactCode, completeSignup } from './auth/completeSignup'

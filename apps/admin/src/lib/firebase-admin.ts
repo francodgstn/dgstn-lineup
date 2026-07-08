@@ -41,3 +41,21 @@ const app = globalForAdmin._adminApp ?? (globalForAdmin._adminApp = createApp())
 
 export const adminDb = getFirestore(app)
 export const adminAuth = getAuth(app)
+
+// Which Firebase backend this console is operating on — surfaced in the shell
+// (sidebar + mobile header) so an operator always knows what they're touching.
+// Derives from the SAME resolution as the app initialization above, so the
+// label can never drift from reality.
+export interface FirebaseTarget {
+  /** e.g. 'demo-linyup · emulator', 'linyup-sandbox', 'linyup-prod' */
+  label: string
+  /** True on the production project — the shell renders the label as a warning. */
+  isProd: boolean
+}
+
+export function describeFirebaseTarget(): FirebaseTarget {
+  return {
+    label: useEmulators ? `${projectId} · emulator` : projectId,
+    isProd: !useEmulators && projectId === 'linyup-prod',
+  }
+}

@@ -170,7 +170,9 @@
       "Bash(gcloud functions *)",
       "Bash(cat)",
       "Bash(rm -f .git/COMMIT_MSG_TMP)",
-      "Bash(xargs grep -l \"CourseAccessRule\\\\|courseId\")"
+      "Bash(xargs grep -l \"CourseAccessRule\\\\|courseId\")",
+      "Bash(cat > *)",
+      "Bash(xargs grep -l \"sendMail\\\\|sendEmail\\\\|sendSms\")"
     ]
   }
 }

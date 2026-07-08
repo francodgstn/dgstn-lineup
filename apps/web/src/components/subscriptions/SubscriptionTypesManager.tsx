@@ -59,8 +59,11 @@ const priceSchema = z.object({
   id: z.string(),
   amount: z.coerce.number().positive(),
   recurrence: z.enum(RECURRENCES),
-  // Months of membership granted by a one_time price (e.g. intro offer).
+  // Months of membership granted by a one_time price (e.g. intro offer). On a
+  // credit price, this is the pack's validity window.
   included_months: z.coerce.number().int().positive().optional(),
+  // Credit pack (one_time only): the purchase grants this many lesson credits.
+  credits: z.coerce.number().int().positive().optional(),
   label: z.string().max(40).optional(),
   active: z.boolean().optional(),
 })
@@ -91,6 +94,7 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
       amount: p.amount,
       recurrence: p.recurrence,
       included_months: p.included_months,
+      credits: p.credits,
       label: p.label ?? '',
       active: p.active ?? true,
     })),
@@ -153,6 +157,10 @@ function SubTypeDialog({
       if (p.label?.trim()) entry.label = p.label.trim()
       if (p.recurrence === 'one_time' && p.included_months) {
         entry.included_months = p.included_months
+      }
+      // Credit packs are one_time only; omit credits: 0/undefined (don't write it).
+      if (p.recurrence === 'one_time' && p.credits) {
+        entry.credits = p.credits
       }
       return entry
     })
@@ -346,6 +354,19 @@ function SubTypeDialog({
                         />
                       )}
                     </div>
+                    {watch(`prices.${i}.recurrence`) === 'one_time' && (
+                      <div className="space-y-1">
+                        <Input
+                          type="number"
+                          step="1"
+                          min="0"
+                          {...register(`prices.${i}.credits`)}
+                          className="w-[160px] h-8 text-sm"
+                          placeholder={t('subTypeCreditsPlaceholder')}
+                        />
+                        <p className="text-xs text-muted-foreground">{t('subTypeCreditsHelp')}</p>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <Input
                         {...register(`prices.${i}.label`)}
@@ -537,6 +558,15 @@ export const SubscriptionTypesManager = forwardRef<
                               className="text-[11px] px-1.5 py-0.5 rounded bg-muted font-medium"
                             >
                               {formatCurrency(p.amount, currency)} · {tc(`recurrence_${p.recurrence}`)}
+                              {!!p.credits && (
+                                <>
+                                  {' '}
+                                  ·{' '}
+                                  <span className="text-primary">
+                                    {t('subTypeCreditsBadge', { count: p.credits })}
+                                  </span>
+                                </>
+                              )}
                             </span>
                           ))}
                         </div>

@@ -13,6 +13,13 @@
       "runtimeArgs": ["dev:web"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:admin"],
+      "port": 3002,
+      "autoPort": true
     }
   ]
 }

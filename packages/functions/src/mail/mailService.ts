@@ -9,6 +9,12 @@ import { getManagedStudioFrom, getSystemSender } from './senderIdentity'
 import { resolveStudioSender } from './senderResolution'
 import { loadOrgContext, loadStudioContext } from './senderConfig'
 import { isSuppressed } from './suppression'
+import {
+  applyEmailPolicy,
+  envDefaultMode,
+  isSyntheticEmail,
+  resolveMessagingPolicy,
+} from './messagingPolicy'
 import type { MailProvider, OutboundMessage, ResolvedSender } from './types'
 
 const testModeEnabled = defineString('TEST_MODE', {
@@ -77,6 +83,35 @@ async function sendWithRetry(
   throw lastErr
 }
 
+// Records a keyed send that was dropped before the provider (synthetic recipient
+// or policy) so ledger gaps are explainable. Keyless sends are only console-logged.
+async function writeSuppressedLedger(
+  ledgerRef: FirebaseFirestore.DocumentReference | null,
+  stream: MailStream,
+  teamId: string | undefined,
+  reason: 'synthetic' | 'policy_silent' | 'policy_allowlist',
+): Promise<void> {
+  if (!ledgerRef) return
+  const now = FieldValue.serverTimestamp()
+  try {
+    await ledgerRef.set(
+      {
+        idempotency_key: ledgerRef.id,
+        provider: 'brevo',
+        stream,
+        ...(teamId ? { team_id: teamId } : {}),
+        status: 'suppressed',
+        suppress_reason: reason,
+        updated_at: now,
+        created_at: now,
+      },
+      { merge: true },
+    )
+  } catch (err) {
+    console.warn('[mail] failed to write suppressed ledger entry:', err)
+  }
+}
+
 async function dispatch(
   msg: OutboundMessage,
   sender: ResolvedSender,
@@ -109,13 +144,40 @@ async function dispatch(
     }
   }
 
-  // ── Recipients: test-mode redirect, else drop suppressed addresses ─────────
+  // ── Recipients: test-mode redirect, else synthetic guard → policy → suppression ──
   let recipients = toArray(msg.to)
   if (testMode) {
+    // Local-dev/CI convenience: redirect everything to one inbox. Deliberately
+    // BYPASSES the per-tenant policy layer below.
     const redirect = testEmail.value()
     console.log(`[mail] TEST MODE → redirecting ${recipients.join(', ')} to ${redirect}`)
     recipients = redirect ? [redirect] : []
   } else {
+    // Layer 1 — synthetic recipients (RFC-2606 reserved domains, i.e. seeded demo
+    // contacts) never reach the provider, in ANY environment. Protects the Brevo
+    // sender reputation from @example.com bounces on reseeds/automations.
+    const synthetic = recipients.filter(isSyntheticEmail)
+    if (synthetic.length) console.log(`[mail] dropping synthetic recipients: ${synthetic.join(', ')}`)
+    recipients = recipients.filter((r) => !isSyntheticEmail(r))
+    if (recipients.length === 0) {
+      await writeSuppressedLedger(ledgerRef, stream, teamId, 'synthetic')
+      return { skipped: true }
+    }
+
+    // Layer 2 — per-tenant delivery policy (operator-set; env default when absent).
+    const entityId = stream === 'system' ? 'system' : (teamId ?? 'system')
+    const policy = await resolveMessagingPolicy(entityId)
+    const decision = applyEmailPolicy(recipients, policy, envDefaultMode())
+    if (decision.droppedAll) {
+      console.log(`[mail] policy '${policy?.mode ?? envDefaultMode()}' for '${entityId}' dropped all recipients (${decision.droppedAll})`)
+      await writeSuppressedLedger(ledgerRef, stream, teamId, decision.droppedAll)
+      return { skipped: true }
+    }
+    if (decision.recipients.join(',') !== recipients.join(',')) {
+      console.log(`[mail] policy for '${entityId}' adjusted recipients: ${recipients.join(', ')} → ${decision.recipients.join(', ')}`)
+    }
+    recipients = decision.recipients
+
     const checked = await Promise.all(
       recipients.map(async (email) => ({ email, suppressed: await isSuppressed(email) })),
     )

@@ -30,6 +30,55 @@ export interface LeadStaffDef {
   email: string
 }
 
+export interface LeadPlaceDef {
+  /** id suffix → `{teamId}-place-{key}`; referenced by LeadGridSlot.placeKey etc. */
+  key: string
+  name: string
+  address: string
+  mapsUrl?: string
+  /** The team's Main Address (denormalised to the bio-link). Exactly one. */
+  isPrimary?: boolean
+}
+
+export interface LeadCustomFieldDef {
+  /** Stable id — the key used in Contact.custom_fields. */
+  id: string
+  label: string
+  type: 'text' | 'number' | 'date' | 'select' | 'checkbox'
+  options?: string[] // for type 'select'
+  required?: boolean
+}
+
+export interface LeadReminderStep {
+  channel: 'email' | 'sms'
+  /** Hours before session start (e.g. 168 = 1 week, 48 = 2 days, 24 = day before). */
+  offsetHours: number
+}
+
+export interface LeadAutomationTemplateDef {
+  /** id suffix → `{teamId}-tmpl-{key}`; referenced by rule actions' templateKey. */
+  key: string
+  name: string
+  subject: string
+  /** Markdown body; {{teamName}} / {{firstname}} placeholders supported. */
+  body: string
+  /** Library key (`lib_…:{lang}`) when the template mirrors a stock one. */
+  systemKey?: string
+}
+
+export interface LeadAutomationRuleDef {
+  /** id suffix → `{teamId}-rule-{key}`. */
+  key: string
+  name: string
+  active?: boolean
+  systemKey?: string
+  /** Engine trigger, e.g. { type: 'session_ended', delayMinutes: 120 }. */
+  trigger: Record<string, unknown>
+  conditions?: Record<string, unknown>[]
+  /** Engine actions; `templateKey` entries are resolved to seeded template ids. */
+  actions: (Record<string, unknown> & { templateKey?: string })[]
+}
+
 export interface LeadActivityDef {
   name: string
   slug: string
@@ -42,6 +91,31 @@ export interface LeadActivityDef {
   capacity: number | null
   /** Assets-folder base name for the cover image (e.g. 'activity-squad-technique'). */
   imageAsset?: string
+  /** Display-only entry requirements shown on the public booking page. */
+  prerequisites?: string
+  /** Per-activity confirmation-email note (overrides the team-wide one). */
+  confirmationInstructions?: string
+  /** Paid-access gate; defaults derived from isFreeTrial when unset. */
+  accessTier?: 'open' | 'members' | 'subscription'
+  /** For accessTier 'subscription': LeadSubscriptionDef.keys that grant access. */
+  accessSubKeys?: string[]
+  /** Drop-in / pay-per-class price (major units) for uncovered contacts. */
+  dropInPrice?: number
+}
+
+export interface LeadSubscriptionPriceDef {
+  /** id suffix → `{teamId}-sub-{subKey}-price-{key}`. */
+  key: string
+  /** Shown in the price picker + shop, e.g. "x3 Starter Pack". */
+  label?: string
+  amount: number
+  recurrence: LeadRecurrence
+  /** For one_time prices: how long the purchase covers (months). */
+  includedMonths?: number
+  /** Lesson credits granted by the purchase (credit packs; Wave 3 feature). */
+  credits?: number
+  /** True when the price is a plausible assumption, not confirmed public data. */
+  assumed?: boolean
 }
 
 export interface LeadSubscriptionDef {
@@ -57,6 +131,9 @@ export interface LeadSubscriptionDef {
   includedMonths?: number
   /** True when the price is a plausible assumption, not confirmed public data. */
   priceAssumed?: boolean
+  /** Multi-price types (e.g. single / 3-pack / 5-pack). When set, overrides the
+   *  single price/recurrence/includedMonths fields above. */
+  prices?: LeadSubscriptionPriceDef[]
 }
 
 export interface LeadGridSlot {
@@ -69,6 +146,8 @@ export interface LeadGridSlot {
   activityIdx: number
   /** Which staff member teaches it (LeadStaffDef.key). */
   staffKey: string
+  /** Where it happens (LeadPlaceDef.key); falls back to LeadProfile.location. */
+  placeKey?: string
   /** Only materialize in upcoming weeks (new offerings with no history). */
   upcomingOnly?: boolean
 }
@@ -84,6 +163,8 @@ export interface LeadCoachingTemplate {
   slotCount: number
   /** Indices (0-based, chronological) of slots seeded as already booked/full. */
   bookedSlots: number[]
+  /** Where it happens (LeadPlaceDef.key); falls back to LeadProfile.location. */
+  placeKey?: string
 }
 
 export interface LeadContactDef {
@@ -100,6 +181,12 @@ export interface LeadContactDef {
   subKey: string | null
   /** Assign to a coach's own-scope view (LeadStaffDef.key). */
   assignedToStaffKey?: string
+  /** Acquisition source override (default: seeded-random). */
+  source?: 'website' | 'referral' | 'social' | 'event' | 'other'
+  /** Free-text detail shown with the source (e.g. 'QR poster', 'Meta ads'). */
+  sourceDetail?: string
+  /** Values for the team's custom field definitions (keyed by definition id). */
+  customFields?: Record<string, string | number | boolean>
   /** Present for child contacts (baby/toddler classes): parent + guardian fields.
    *  Kids get no gamification, no goals, no leaderboard presence, no auth login. */
   kid?: {
@@ -162,9 +249,12 @@ export interface LeadDocumentDef {
   key: string
   title: string
   slug: string
-  kind: 'terms' | 'privacy' | 'regulation'
+  kind: 'terms' | 'privacy' | 'regulation' | 'other'
   summary: string
+  /** Rich-text body; ignored when externalUrl is set. */
   body: string
+  /** Externally-hosted document (e.g. a SignWell agreement) → source 'external_link'. */
+  externalUrl?: string
   /** Attach to the public signup flow (documents plugin config). */
   inSignup?: boolean
 }
@@ -202,6 +292,32 @@ export interface LeadProfile {
   location: { label: string; address: string; mapsUrl?: string }
   contactPhone: string
   contactEmail: string
+
+  /** Physical locations (pools, gyms, studios). Slots reference them by key. */
+  places?: LeadPlaceDef[]
+  /** Account-wide extra contact fields (installs the custom-fields plugin). */
+  customFieldDefinitions?: LeadCustomFieldDef[]
+  /** Team-wide note appended to booking confirmation emails ("Important" box). */
+  bookingConfirmationInstructions?: string
+  /** Booking reminder schedule (settings.bookingReminderSteps; Wave 2 sends SMS). */
+  reminders?: { steps: LeadReminderStep[] }
+  /** SMS sender name (≤11 alphanumeric chars) → integrations/sms_sender. */
+  smsSenderName?: string
+  /** Profile-authored automations; replaces the stock welcome/win-back pair.
+   *  The lib_trial_cleanup hygiene rule is always installed regardless. */
+  automations?: { templates: LeadAutomationTemplateDef[]; rules: LeadAutomationRuleDef[] }
+  /** Outbound-delivery policy (messaging_policies/{teamId}, operator-only).
+   *  Default: allowlist of the owner's + the profile's contact email — the lead
+   *  gets real OTP/confirmations while synthetic contacts stay silent. Extra
+   *  entries extend the allowlist ('@domain.tld' entries allowed); phones are
+   *  E.164 for SMS delivery. mode override for special cases (e.g. 'silent'). */
+  messagingPolicy?: {
+    mode?: 'live' | 'allowlist' | 'redirect' | 'silent'
+    allowEmails?: string[]
+    allowPhones?: string[]
+    redirectEmail?: string
+    note?: string
+  }
 
   staff: LeadStaffDef[]
   rankingSystem: {

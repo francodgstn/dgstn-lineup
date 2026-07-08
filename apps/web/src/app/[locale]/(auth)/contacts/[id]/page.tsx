@@ -89,6 +89,7 @@ import type {
   ContactSource,
   ContactGender,
   SubscriptionType,
+  SubscriptionPrice,
   SubscriptionHistoryEntry,
   ContactAlert,
   AlertScheduleType,
@@ -159,7 +160,9 @@ import {
   Check,
   IdCard,
   RefreshCw,
+  Ticket,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   Tooltip as UITooltip,
   TooltipTrigger,
@@ -2341,6 +2344,7 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
   const { data: history = [], isLoading } = useSubscriptionHistory(contact.id)
   const { data: subTypes = [] } = useSubscriptionTypes(teamId)
   const [assignOpen, setAssignOpen] = useState(false)
+  const [grantOpen, setGrantOpen] = useState(false)
   const { team } = useAuth()
   const currency = (team?.default_currency ?? 'CHF').toUpperCase()
 
@@ -2403,6 +2407,43 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
             {t('addSubscription')}
           </button>
         </div>
+      </div>
+
+      {/* ── Lesson credits (packs) ── */}
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Ticket className="h-3.5 w-3.5" />
+            {t('creditsHeadingCard')}
+          </p>
+          <button
+            onClick={() => setGrantOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors shrink-0"
+          >
+            <Plus className="h-4 w-4" />
+            {t('grantCredits')}
+          </button>
+        </div>
+        {(contact.credit_summary?.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('noCredits')}</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {contact.credit_summary!.map((entry) => (
+              <li key={entry.subscription_type_id} className="text-sm flex items-center gap-1.5">
+                <span className="font-medium">
+                  {entry.subscription_type_name ?? t('subscriptionHeadingCard')}
+                </span>
+                <span className="text-muted-foreground">
+                  ·{' '}
+                  {t('creditsRemaining', { count: entry.remaining })}
+                  {entry.next_expires_at && (
+                    <> · {t('creditsExpiresOn', { date: formatDate(entry.next_expires_at) })}</>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* ── Stripe billing (freeze / resume) ── */}
@@ -2494,7 +2535,199 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
         currency={currency}
         onSaved={() => { invalidateContact(); invalidateHistory() }}
       />
+
+      <GrantCreditsDialog
+        open={grantOpen}
+        onOpenChange={setGrantOpen}
+        contact={contact}
+        subTypes={subTypes}
+        onGranted={invalidateContact}
+      />
     </div>
+  )
+}
+
+// ─── grant credits dialog (manual lesson-credit pack grant) ──────────────────
+
+function GrantCreditsDialog({
+  open,
+  onOpenChange,
+  contact,
+  subTypes,
+  onGranted,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  contact: Contact
+  subTypes: SubscriptionType[]
+  onGranted: () => void
+}) {
+  const t = useTranslations('Contacts')
+  const [typeId, setTypeId] = useState('')
+  const [priceId, setPriceId] = useState('')
+  const [customCredits, setCustomCredits] = useState('')
+  const [customMonths, setCustomMonths] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Only types with at least one credit-bearing price are grantable.
+  const creditTypes = subTypes.filter((st) =>
+    (st.prices ?? []).some((p) => p.recurrence === 'one_time' && !!p.credits)
+  )
+  const selectedType = creditTypes.find((st) => st.id === typeId)
+  const creditPrices = (selectedType?.prices ?? []).filter(
+    (p) => p.recurrence === 'one_time' && !!p.credits
+  )
+  const selectedPrice = creditPrices.find((p) => p.id === priceId)
+
+  useEffect(() => {
+    if (!open) return
+    setTypeId('')
+    setPriceId('')
+    setCustomCredits('')
+    setCustomMonths('')
+    setError(null)
+  }, [open])
+
+  const canSave =
+    !!typeId && (!!priceId || (Number(customCredits) >= 1 && Number(customCredits) <= 100))
+
+  const save = async () => {
+    if (!canSave) return
+    setSaving(true)
+    setError(null)
+    try {
+      const fn = httpsCallable<
+        {
+          contactId: string
+          subscriptionTypeId: string
+          priceId?: string
+          credits?: number
+          validityMonths?: number
+        },
+        { success: boolean; credits: number }
+      >(functions, 'grantCredits')
+      await fn({
+        contactId: contact.id,
+        subscriptionTypeId: typeId,
+        ...(priceId
+          ? { priceId }
+          : {
+              credits: Number(customCredits),
+              ...(customMonths ? { validityMonths: Number(customMonths) } : {}),
+            }),
+      })
+      // The rollup on the contact doc is recomputed by a Cloud Function trigger,
+      // so it may lag a moment behind this optimistic success state.
+      toast.success(t('creditsGranted'))
+      onGranted()
+      onOpenChange(false)
+    } catch (err) {
+      console.error('[contact] grant credits failed:', err)
+      setError(t('creditsGrantError'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const priceLabel = (p: SubscriptionPrice) =>
+    `${p.label ? `${p.label} · ` : ''}${t('creditsCountLabel', { count: p.credits ?? 0 })}`
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t('grantCredits')}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <Field label={t('subscriptionTypeName')} required>
+            <Select
+              value={typeId}
+              onValueChange={(v) => {
+                setTypeId(v ?? '')
+                setPriceId('')
+              }}
+            >
+              <SelectTrigger>
+                <span className="flex flex-1 text-left text-sm truncate">
+                  {selectedType ? selectedType.name : <span className="text-muted-foreground">—</span>}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">—</SelectItem>
+                {creditTypes.map((st) => (
+                  <SelectItem key={st.id} value={st.id}>
+                    {st.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {creditTypes.length === 0 && (
+              <p className="text-xs text-muted-foreground">{t('creditsNoTypesHelp')}</p>
+            )}
+          </Field>
+
+          {typeId && creditPrices.length > 0 && (
+            <Field label={t('creditsPackLabel')}>
+              <Select value={priceId} onValueChange={(v) => setPriceId(v ?? '')}>
+                <SelectTrigger>
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {selectedPrice ? priceLabel(selectedPrice) : <span className="text-muted-foreground">—</span>}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">{t('creditsCustomOption')}</SelectItem>
+                  {creditPrices.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {priceLabel(p)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+
+          {typeId && !priceId && (
+            <div className="grid grid-cols-2 gap-2">
+              <Field label={t('creditsCustomAmount')} required>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={customCredits}
+                  onChange={(e) => setCustomCredits(e.target.value)}
+                />
+              </Field>
+              <Field label={t('creditsCustomValidity')}>
+                <Input
+                  type="number"
+                  min={0}
+                  value={customMonths}
+                  onChange={(e) => setCustomMonths(e.target.value)}
+                />
+              </Field>
+            </div>
+          )}
+
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+          >
+            {t('cancel')}
+          </button>
+          <button
+            onClick={save}
+            disabled={saving || !canSave}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            {saving ? t('saveChanges') : t('grantCredits')}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

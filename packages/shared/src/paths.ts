@@ -70,6 +70,15 @@ export const EMAIL_SENDER_INTEGRATION_DOC = 'email_sender'
 // mail_sends: idempotency + delivery ledger (doc id = idempotency key).
 export const MAIL_SUPPRESSIONS_COLLECTION = 'mail_suppressions'
 export const MAIL_SENDS_COLLECTION = 'mail_sends'
+// sms_suppressions: opted-out/undeliverable phone numbers (doc id = sha256(E.164)).
+// Same Admin-SDK-only posture as the mail collections.
+export const SMS_SUPPRESSIONS_COLLECTION = 'sms_suppressions'
+// messaging_policies: OPERATOR-controlled per-tenant outbound-delivery policy
+// (doc id = teamId | orgId | 'system'). Admin-SDK-only; see MessagingPolicy.
+export const MESSAGING_POLICIES_COLLECTION = 'messaging_policies'
+// Well-known integration doc id for a studio's SMS sender configuration
+// (teams/{id}/integrations/sms_sender): { type, senderName, enabled }.
+export const SMS_SENDER_INTEGRATION_DOC = 'sms_sender'
 
 export const PROJECTS_COLLECTION = 'projects'
 export const CONTACTS_COLLECTION = 'contacts'
@@ -79,6 +88,8 @@ export const CONTACT_NOTES_SUBCOLLECTION = 'contact_notes'
 export const CONTACT_GOALS_SUBCOLLECTION = 'goals'
 export const CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION = 'performance_checkins'
 export const CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION = 'subscription_history'
+// Lesson-credit grants (pack purchases) — functions-only writes; see CreditGrant.
+export const CONTACT_CREDIT_GRANTS_SUBCOLLECTION = 'credit_grants'
 export const SUBSCRIPTION_TRANSITIONS_SUBCOLLECTION = 'subscription_transitions'
 // Affiliation set — a contact may hold several (club + federation licence + grading).
 export const CONTACT_AFFILIATIONS_SUBCOLLECTION = 'affiliations'

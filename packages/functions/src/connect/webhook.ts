@@ -20,6 +20,7 @@ import {
   CONNECT_ACCOUNTS_COLLECTION,
   CONNECT_WEBHOOK_EVENTS_COLLECTION,
   CONTACTS_COLLECTION,
+  CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   COURSES_COLLECTION,
   COURSE_PURCHASES_SUBCOLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
@@ -134,6 +135,51 @@ async function resolveContactId(
   return null
 }
 
+/**
+ * Materialise a lesson-credit grant for a paid credit pack (metadata.credits on
+ * a one-off membership charge). Doc id = paymentIntentId, so the two webhook
+ * events a purchase produces (checkout.session.completed + payment_intent.succeeded)
+ * converge on one grant — `create()` refuses the second write. The
+ * onCreditGrantWrite sync recomputes Contact.credit_summary.
+ */
+async function applyCreditGrant(
+  teamId: string,
+  contactId: string,
+  md: Record<string, string>,
+  paymentIntentId: string
+): Promise<void> {
+  const credits = md.credits ? parseInt(md.credits, 10) : 0
+  if (!credits || credits <= 0 || !md.subscriptionTypeId) return
+  const months = md.includedMonths ? parseInt(md.includedMonths, 10) : 0
+  try {
+    await admin
+      .firestore()
+      .collection(CONTACTS_COLLECTION)
+      .doc(contactId)
+      .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
+      .doc(paymentIntentId)
+      .create({
+        teamId,
+        subscription_type_id: md.subscriptionTypeId,
+        subscription_type_name: md.subscriptionTypeName ?? null,
+        price_id: md.priceId ?? null,
+        credits_total: credits,
+        credits_used: 0,
+        expires_at: months > 0 ? addMonths(months) : null,
+        source: 'stripe',
+        payment_intent_id: paymentIntentId,
+        created_at: FieldValue.serverTimestamp(),
+      })
+    console.log(
+      `[connect] credit grant: ${credits} credits (type=${md.subscriptionTypeId}) → contact ${contactId}`
+    )
+  } catch (err: unknown) {
+    // ALREADY_EXISTS = the sibling webhook event won the race — expected.
+    if ((err as { code?: number }).code === 6) return
+    throw err
+  }
+}
+
 /** Write the subscription fields onto a known contact + an activity-log entry.
  * Note: membership_expiration is NOT written here — the subscription axis
  * (subscription_type_id etc.) is separate from the affiliation axis. */
@@ -173,7 +219,12 @@ async function writeContactMembership(
 async function applyMembership(
   teamId: string,
   md: Record<string, string>,
-  opts: { amountRappen: number; membershipExpiration: Timestamp | null; fallbackEmail?: string | null }
+  opts: {
+    amountRappen: number
+    membershipExpiration: Timestamp | null
+    fallbackEmail?: string | null
+    paymentIntentId?: string | null
+  }
 ): Promise<void> {
   if (md.kind !== 'membership' || !md.subscriptionTypeId) return
   const contactId = await resolveContactId(teamId, md, opts.fallbackEmail)
@@ -182,6 +233,7 @@ async function applyMembership(
     return
   }
   await writeContactMembership(teamId, contactId, md, opts)
+  if (opts.paymentIntentId) await applyCreditGrant(teamId, contactId, md, opts.paymentIntentId)
 }
 
 function splitName(full?: string | null): { firstname: string; lastname: string } {
@@ -359,13 +411,15 @@ async function handlePaymentIntent(
     { merge: true }
   )
 
-  // A successful one-off membership charge updates the buyer's contact membership.
+  // A successful one-off membership charge updates the buyer's contact membership
+  // (and materialises the credit grant when the price is a credit pack).
   if (status === 'succeeded') {
     const months = md.includedMonths ? parseInt(md.includedMonths, 10) : 0
     await applyMembership(team.teamId, md, {
       amountRappen: pi.amount ?? 0,
       membershipExpiration: months > 0 ? addMonths(months) : null,
       fallbackEmail: (pi.receipt_email as string | undefined) ?? null,
+      paymentIntentId: (pi.id as string | undefined) ?? null,
     })
   }
 }
@@ -662,7 +716,12 @@ async function handleCheckoutCompleted(
       typeof session.payment_intent === 'string'
         ? session.payment_intent
         : session.payment_intent?.id
-    if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+    if (piId) {
+      await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+      // Credit pack purchase → materialise the grant (idempotent vs the
+      // payment_intent.succeeded sibling event; doc id = piId).
+      await applyCreditGrant(team.teamId, contactId, md, piId)
+    }
   }
 
   await writeContactMembership(team.teamId, contactId, md, { amountRappen, membershipExpiration })

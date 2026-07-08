@@ -27,6 +27,7 @@ interface PlanPrice {
   recurrence: string
   label?: string
   included_months?: number
+  credits?: number
 }
 interface PlanEntry {
   id: string
@@ -532,13 +533,17 @@ export default function ShopHome({
                       <div className="min-w-0">
                         <span className="text-sm font-medium">
                           {formatCurrency(price.amount, currency)}
-                          <span style={{ color: textMuted }}> {recurrenceSuffix(price.recurrence)}</span>
+                          {price.credits ? (
+                            <span style={{ color: textMuted }}> · {t('creditsCount', { count: price.credits })}</span>
+                          ) : (
+                            <span style={{ color: textMuted }}> {recurrenceSuffix(price.recurrence)}</span>
+                          )}
                         </span>
                         {(price.label || price.included_months) && (
                           <span className="ml-2 text-xs" style={{ color: textMuted }}>
                             {price.label}
                             {price.included_months
-                              ? ` · ${t('includedMonths', { count: price.included_months })}`
+                              ? ` · ${t(price.credits ? 'creditsValidMonths' : 'includedMonths', { count: price.included_months })}`
                               : ''}
                           </span>
                         )}

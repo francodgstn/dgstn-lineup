@@ -52,13 +52,15 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
     })
 
     // `id` + `included_months` are needed by the public shop checkout (resolves a
-    // price by id; one-time prices grant a membership duration).
+    // price by id; one-time prices grant a membership duration). `credits` lets
+    // the shop card render "N lessons · valid M months" for credit packs.
     type PublicPrice = {
       id: string
       amount: number
       recurrence: string
       label?: string
       included_months?: number
+      credits?: number
     }
     const publicTypes = docsSorted.map((d) => {
       const data = d.data()
@@ -91,10 +93,12 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
             recurrence: string
             label?: string
             included_months?: number
+            credits?: number
           }) => {
             const price: PublicPrice = { id: p.id, amount: p.amount, recurrence: p.recurrence }
             if (p.label) price.label = p.label
             if (typeof p.included_months === 'number') price.included_months = p.included_months
+            if (typeof p.credits === 'number' && p.credits > 0) price.credits = p.credits
             return price
           }
         )
