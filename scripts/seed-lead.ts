@@ -496,6 +496,20 @@ async function seedLeadTenant(profile: LeadProfile) {
   const uidOf = (staffKey: string) =>
     staffKey === owner.key ? `${teamId}-uid` : `${teamId}-${staffKey}`
   const uid = uidOf(owner.key)
+  // The operator who runs demos — receives all mail under the redirect policy AND
+  // can sign in as the demo-login contact. Shared by the messaging policy + the
+  // demo-login contact's login_emails.
+  const OPERATOR_EMAIL = (process.env.LEAD_OPERATOR_EMAIL || 'franco.dgstn@gmail.com')
+    .trim()
+    .toLowerCase()
+  // Real emails allowed to sign in AS the demo-login contact (operator + profile).
+  const demoLoginEmails = [
+    ...new Set(
+      [OPERATOR_EMAIL, ...(profile.demoLoginEmails ?? [])]
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ].slice(0, 5) // Contact.login_emails is capped at 5
   const staffByKey = new Map(profile.staff.map((s) => [s.key, s]))
   const staffName = (key: string) => {
     const s = staffByKey.get(key)
@@ -715,9 +729,6 @@ async function seedLeadTenant(profile: LeadProfile) {
   // `pnpm messaging:policy`. A profile may override via `profile.messagingPolicy`,
   // but the operator email is always kept reachable so you never lose oversight.
   {
-    const OPERATOR_EMAIL = (process.env.LEAD_OPERATOR_EMAIL || 'franco.dgstn@gmail.com')
-      .trim()
-      .toLowerCase()
     const mp = profile.messagingPolicy ?? {}
     const mode = mp.mode ?? 'redirect'
     const redirectEmail = (mp.redirectEmail || OPERATOR_EMAIL).trim().toLowerCase()
@@ -1291,9 +1302,21 @@ async function seedLeadTenant(profile: LeadProfile) {
               emergency_contacts: [
                 { name: c.kid.parentName, phone: c.kid.parentPhone, email: c.kid.parentEmail },
               ],
-              login_emails: [c.kid.parentEmail],
             }
           : {}),
+        // login_emails = passwordless sign-in allow-list. Kids: the parent email.
+        // A demo-login contact ALSO gets the operator (+ profile) emails so you /
+        // the lead can sign in AS this member. Deduped, real addresses only.
+        ...(() => {
+          const emails = [
+            ...(c.kid ? [c.kid.parentEmail] : []),
+            ...(c.demoLogin ? demoLoginEmails : []),
+          ]
+            .map((e) => e.trim().toLowerCase())
+            .filter(Boolean)
+          const deduped = [...new Set(emails)].slice(0, 5)
+          return deduped.length ? { login_emails: deduped } : {}
+        })(),
         ...(c.assignedToStaffKey ? { assigned_coach_ids: [uidOf(c.assignedToStaffKey)] } : {}),
         ...(c.customFields ? { custom_fields: c.customFields } : {}),
         created_at: createdTs,
@@ -1854,7 +1877,15 @@ async function seedLeadTenant(profile: LeadProfile) {
       created_at: ts(now()),
     })
 
-  return { teamId, studentEmail, sessionCount: sessionDefs.length }
+  // Demo-login contact (if any) — surfaced in the seed summary so you know which
+  // member to sign in as, and with which emails.
+  const demoIdx = pool.findIndex((c) => c.demoLogin)
+  const demoContact =
+    demoIdx >= 0
+      ? { name: `${pool[demoIdx].firstname} ${pool[demoIdx].lastname}`.trim(), emails: demoLoginEmails }
+      : null
+
+  return { teamId, studentEmail, sessionCount: sessionDefs.length, demoContact }
 }
 
 // ── automations ───────────────────────────────────────────────────────────────
@@ -2381,7 +2412,7 @@ async function main() {
 
   if (cli.reset) await resetLeadTenant(teamId)
 
-  const { studentEmail, sessionCount } = await seedLeadTenant(profile)
+  const { studentEmail, sessionCount, demoContact } = await seedLeadTenant(profile)
 
   console.log(
     `\n✅ Lead tenant seeded — ${profile.contacts.length} contacts, ${sessionCount} sessions\n`
@@ -2393,6 +2424,15 @@ async function main() {
     )
   }
   console.log(`     student  (member Space login)     ${studentEmail}`)
+  if (demoContact) {
+    console.log(
+      `\n   👤 Contact POV — sign in AS "${demoContact.name}" (shop/Space) via the ` +
+        `passwordless code, using any of: ${demoContact.emails.join(', ')}`
+    )
+    console.log(
+      '      (the code is delivered per the messaging policy — allowlist/redirect the tester so it reaches their inbox)'
+    )
+  }
   console.log(
     `\n   Public surfaces: /public/${profile.slug} (bio-link · site · booking · shop · space · coaching)`
   )

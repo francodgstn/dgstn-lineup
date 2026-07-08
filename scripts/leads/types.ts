@@ -187,6 +187,11 @@ export interface LeadContactDef {
   sourceDetail?: string
   /** Values for the team's custom field definitions (keyed by definition id). */
   customFields?: Record<string, string | number | boolean>
+  /** Mark this synthetic contact as the DEMO-LOGIN target: its `login_emails`
+   *  gets the operator (+ profile `demoLoginEmails`), so you/the lead can sign in
+   *  AS this member (shop, Space, courses) via the passwordless code flow. Pick a
+   *  data-rich contact (subscription + credit pack + bookings) for a full POV. */
+  demoLogin?: boolean
   /** Present for child contacts (baby/toddler classes): parent + guardian fields.
    *  Kids get no gamification, no goals, no leaderboard presence, no auth login. */
   kid?: {
@@ -318,6 +323,11 @@ export interface LeadProfile {
     redirectEmail?: string
     note?: string
   }
+  /** Extra REAL emails added to the demo-login contact's `login_emails` (the one
+   *  flagged `demoLogin`), on top of the operator email the seeder always adds —
+   *  e.g. the lead's own address so they can try the member POV. Delivery of the
+   *  login code still obeys the messaging policy (allowlist/redirect the tester). */
+  demoLoginEmails?: string[]
 
   staff: LeadStaffDef[]
   rankingSystem: {

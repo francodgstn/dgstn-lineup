@@ -50,6 +50,28 @@ must be onboarded once in Stripe test mode — grab its id with
 `pnpm connect:test-account --list`. Because it wires the team's `payments` block +
 `connect_accounts/{acct}`, `--reset` removes that doc along with the rest of the tenant.
 
+### Contact POV — sign in as a member (shop / Space)
+
+To try the **member** experience (shop checkout, Space, courses, credit balance)
+without a real inbox for each synthetic contact, flag one data-rich contact in the
+profile with `demoLogin: true` (pick one with a subscription + credit pack +
+bookings — the richest POV). The seeder adds the operator email
+(`LEAD_OPERATOR_EMAIL`, default the maintainer's) to that contact's
+`login_emails`; add the lead's own address via profile-level `demoLoginEmails`:
+
+```ts
+// profile.ts
+contacts: [{ firstname: 'Priya', /* … */ demoLogin: true }, /* … */],
+demoLoginEmails: ['hello@swimliclub.com'], // + operator, added automatically
+```
+
+Then sign in on `/public/{slug}/shop` (or `/space`) with the passwordless code,
+using any allow-listed email. **Delivery of the code obeys the messaging policy**
+(studio stream): under the default `redirect → operator` only the operator
+receives codes, so for the lead to self-serve, switch the tenant policy to
+`allowlist` including their address (operator console / `pnpm messaging:policy`).
+`login_emails` is capped at 5.
+
 ## Adding a new lead
 
 > **Lead folders are local-only.** Every `scripts/leads/{lead}/` folder (profile +
