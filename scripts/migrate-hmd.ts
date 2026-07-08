@@ -34,6 +34,7 @@ import { pass08Events }             from './migration/passes/08-events'
 import { pass10Referrals }          from './migration/passes/10-referrals'
 import { pass11TeamSubcollections } from './migration/passes/11-team-subcollections'
 import { pass12Places }             from './migration/passes/12-places'
+import { pass13OrgWebsite }         from './migration/passes/13-org-website'
 import { verify }                   from './migration/verify'
 
 const { values } = parseArgs({
@@ -142,6 +143,7 @@ async function run() {
   if (!only || only === 'referrals')           await pass10Referrals(cfg)
   if (!only || only === 'team-subcollections') await pass11TeamSubcollections(cfg, teamIds)
   if (!only || only === 'places')              await pass12Places(cfg, teamIds)
+  if (!only || only === 'org-website')         await pass13OrgWebsite(cfg)
 
   if (!only || only === 'verify' || values['verify']) await verify(teamIds)
 
