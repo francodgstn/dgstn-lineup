@@ -10,6 +10,7 @@ import {
   resolveSystemLinkTarget,
 } from '@linyup/shared'
 import type { PublicSurface, ActivePublicSurfaces, DocumentKind } from '@linyup/shared'
+import { rebuildTeamPublicCoaches } from './syncTeamCoachesPublicProfile'
 
 export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (event) => {
   const { teamId } = event.params
@@ -208,4 +209,8 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // (e.g. aggregator_subscription_types, bookingSettings) aren't clobbered by a
   // team-doc write. Every field above is recomputed each run, so merge is safe.
   await afterRef.collection('public_profile').doc(teamId).set(publicProfile, { merge: true })
+
+  // Re-derive the opt-in public coach roster too — a team write is also how
+  // `public_coaches_enabled` gets toggled, and that field lives on this same doc.
+  await rebuildTeamPublicCoaches(teamId)
 })

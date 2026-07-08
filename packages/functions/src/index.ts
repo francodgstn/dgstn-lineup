@@ -45,6 +45,7 @@ export { syncSubscriptionTypesToPublicProfile } from './sync/syncSubscriptionTyp
 export { syncProductsToPublicProfile } from './sync/syncProductsToPublicProfile'
 export { syncMemberCapabilities } from './sync/syncMemberCapabilities'
 export { syncPrimaryPlaceToPublicProfile } from './sync/syncPrimaryPlaceToPublicProfile'
+export { syncTeamCoachesPublicProfile } from './sync/syncTeamCoachesPublicProfile'
 export { onContactSubscriptionChange } from './sync/onContactSubscriptionChange'
 export { onMemberSubscriptionWrite } from './sync/onMemberSubscriptionWrite'
 export { onSessionUpdate } from './sync/onSessionUpdate'
@@ -201,6 +202,9 @@ export { submitForm } from './forms/submitForm'
 
 // Website plugin (studio site builder) — publish/unpublish the public snapshot
 export { publishWebsite, unpublishWebsite } from './website'
+
+// Organization website (org-level public site) — publish/unpublish the public snapshot
+export { publishOrgWebsite, unpublishOrgWebsite } from './orgWebsite'
 
 // Automation engine (Phase 1–3: scheduled, manual callables, event triggers, delayed via Cloud Tasks)
 export {

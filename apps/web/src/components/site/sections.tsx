@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import type {
   WebsiteSection,
+  OrgSiteSection,
   HeroSection,
   ContentSection,
   GallerySection,
@@ -45,16 +46,24 @@ import type {
   ContactSection,
   PlacesSection,
   SocialLink,
+  OrgSiteTeamRef,
 } from '@linyup/shared'
 import { compareActivities } from '@linyup/shared'
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
 import { usePlaces } from '@/hooks/usePlaces'
+import { ClubsBlock, LocationsBlock, CoachesBlock } from './orgSections'
 
 export interface RenderCtx {
   palette: SitePalette
   slug: string
-  teamId: string
+  /** Team sites only (undefined for org sites — use `orgId`/`orgTeams` instead). */
+  teamId?: string
+  /** Org sites only. */
+  orgId?: string
+  /** Org sites only — the embedded member-team snapshot, used by the clubs/
+   *  locations/coaches aggregate blocks to fetch each club's live public_profile. */
+  orgTeams?: OrgSiteTeamRef[]
   preview: boolean
   socialLinks?: SocialLink[]
 }
@@ -460,7 +469,9 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
 
   useEffect(() => {
     let alive = true
-    getDoc(doc(db, 'teams', teamId, 'public_profile', teamId))
+    // PricingBlock only ever renders inside a team site (org sites have no
+    // 'pricing' section type), so teamId is always defined here.
+    getDoc(doc(db, 'teams', teamId!, 'public_profile', teamId!))
       .then((snap) => {
         if (!alive) return
         const list = (snap.data()?.aggregator_subscription_types ?? []) as PlanEntry[]
@@ -928,7 +939,9 @@ function ContactBlock({ section, ctx }: { section: ContactSection; ctx: RenderCt
 // `places` snapshot; the builder preview resolves the selected ids live.
 function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx }) {
   const { palette, preview, teamId } = ctx
-  const { data: pool = [] } = usePlaces(preview && !section.places ? teamId : null)
+  // PlacesBlock only ever renders inside a team site (org sites have no
+  // 'places' section type), so teamId is always defined here.
+  const { data: pool = [] } = usePlaces(preview && !section.places ? (teamId ?? null) : null)
   const places =
     section.places ??
     (section.placeIds ?? [])
@@ -1001,7 +1014,13 @@ function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx 
 
 // ─── dispatcher ───────────────────────────────────────────────────────────────
 
-export function SectionBlock({ section, ctx }: { section: WebsiteSection; ctx: RenderCtx }) {
+export function SectionBlock({
+  section,
+  ctx,
+}: {
+  section: WebsiteSection | OrgSiteSection
+  ctx: RenderCtx
+}) {
   switch (section.type) {
     case 'hero':
       return <HeroBlock section={section} ctx={ctx} />
@@ -1020,13 +1039,19 @@ export function SectionBlock({ section, ctx }: { section: WebsiteSection; ctx: R
       return <ContactBlock section={section} ctx={ctx} />
     case 'places':
       return <PlacesBlock section={section} ctx={ctx} />
+    case 'clubs':
+      return <ClubsBlock section={section} ctx={ctx} />
+    case 'locations':
+      return <LocationsBlock section={section} ctx={ctx} />
+    case 'coaches':
+      return <CoachesBlock section={section} ctx={ctx} />
     default:
       return null
   }
 }
 
 /** Default nav label per section type (used when a section has no heading). */
-export function sectionNavLabel(section: WebsiteSection): string {
+export function sectionNavLabel(section: WebsiteSection | OrgSiteSection): string {
   switch (section.type) {
     case 'content':
     case 'about':
@@ -1043,6 +1068,12 @@ export function sectionNavLabel(section: WebsiteSection): string {
       return section.heading || 'Contact'
     case 'places':
       return section.heading || 'Locations'
+    case 'clubs':
+      return section.heading || 'Clubs'
+    case 'locations':
+      return section.heading || 'Locations'
+    case 'coaches':
+      return section.heading || 'Coaches'
     default:
       return ''
   }

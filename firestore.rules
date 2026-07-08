@@ -1170,6 +1170,26 @@ service cloud.firestore {
       allow write: if false; // Cloud Functions only
     }
 
+    // ----------------------------------------------
+    // Organization website — org-level public site (mirrors the website plugin
+    // above, keyed by orgId instead of teamId; see publishOrgWebsite / ../orgWebsite)
+    // ----------------------------------------------
+
+    // PRIVATE working copy. Keyed by orgId. Builder reads/writes the draft;
+    // never exposed publicly. Org admins only.
+    match /org_site_drafts/{orgId} {
+      allow read, write: if hasOrgRole(orgId, 'org_admin');
+    }
+
+    // PUBLIC snapshot of a published org site. Keyed by orgId. World-readable so
+    // the public org site route can render it. Written ONLY by the
+    // publishOrgWebsite Cloud Function, which whitelists fields — clients can
+    // never write restricted data here.
+    match /org_site_published/{orgId} {
+      allow read;            // fully public
+      allow write: if false; // Cloud Functions only
+    }
+
     // Standalone embed widgets. Keyed by teamId. World-readable so the public
     // /embed/[slug]/[widgetId] route can render a widget without a published site.
     // Authored directly by managers (the widget config IS the public config — no
