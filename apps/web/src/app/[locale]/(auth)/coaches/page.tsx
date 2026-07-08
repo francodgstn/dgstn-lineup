@@ -10,7 +10,7 @@
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore'
+import { collection, query, where, orderBy, getDocs, doc, updateDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -43,16 +44,32 @@ function initials(name?: string, email?: string): string {
 
 export default function CoachesPage() {
   const t = useTranslations('Coaches')
-  const { currentTeamId, user } = useAuth()
+  const { currentTeamId, user, team, teamRole } = useAuth()
   const { isAtLeast, isLoading: planLoading } = usePlan()
   const { can } = useCapabilities()
   const qc = useQueryClient()
 
   const [inviteOpen, setInviteOpen] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<Member | null>(null)
+  const [orgToggling, setOrgToggling] = useState(false)
 
   const studioPlus = isAtLeast('studio')
   const canManage = can('coaches.manage')
+
+  // Publishing the roster is a team-doc write (Firestore rules require the
+  // owner role), and only meaningful for teams that belong to an organization
+  // (the org website is the only public surface that aggregates coaches).
+  async function toggleOrgListing(checked: boolean) {
+    if (!currentTeamId || orgToggling) return
+    setOrgToggling(true)
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), { public_coaches_enabled: checked })
+    } catch {
+      toast.error(t('errorGeneric'))
+    } finally {
+      setOrgToggling(false)
+    }
+  }
 
   const { data: members = [], isLoading: membersLoading } = useQuery<Member[]>({
     queryKey: ['team-members', currentTeamId],
@@ -131,6 +148,24 @@ export default function CoachesPage() {
           </Button>
         )}
       </div>
+
+      {/* Organization listing opt-in — only relevant for teams that belong to an
+          org (the org website's Coaches block is the only public aggregator),
+          and only the team owner can flip it (matches the teams/{teamId} write rule). */}
+      {team?.org_id && teamRole === 'owner' && (
+        <label className="flex items-start justify-between gap-4 rounded-xl border bg-card p-4">
+          <span>
+            <span className="block text-sm font-medium">{t('orgListingLabel')}</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">{t('orgListingHint')}</span>
+          </span>
+          <Switch
+            checked={team.public_coaches_enabled ?? false}
+            onCheckedChange={toggleOrgListing}
+            disabled={orgToggling}
+            className="mt-0.5 shrink-0"
+          />
+        </label>
+      )}
 
       {/* Coaches list */}
       {membersLoading ? (
