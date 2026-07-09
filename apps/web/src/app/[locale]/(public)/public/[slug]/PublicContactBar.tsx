@@ -12,7 +12,10 @@ import SignInDialog from './space/SignInDialog'
 // Shared sign-in control for public surfaces that lack their own auth chrome
 // (bio-link, booking, signup, documents, shop, coaching …). Space has its own
 // header control and the full website (/site) has its own design, so both opt out.
-// Backed by the lifted contact-session context, so a login persists across surfaces.
+// The entrance-tablet kiosk (/kiosk) is a fixed, low-chrome surface with no contact
+// auth at all (it uses a separate device-pairing session — see kiosk/KioskLock.tsx),
+// so it opts out too. Backed by the lifted contact-session context, so a login
+// persists across surfaces.
 export function PublicContactBar() {
   const t = useTranslations('Space')
   const pathname = usePathname()
@@ -31,7 +34,7 @@ export function PublicContactBar() {
 
   // Precise segment match (so a slug like "spacegym" isn't mistaken for /space).
   const onSurface = (s: string) => pathname.endsWith(`/${s}`) || pathname.includes(`/${s}/`)
-  if (onSurface('space') || onSurface('site')) return null
+  if (onSurface('space') || onSurface('site') || onSurface('kiosk')) return null
 
   return (
     <>

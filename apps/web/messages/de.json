@@ -2202,7 +2202,10 @@
     "registered": "Alles bereit – willkommen!",
     "startOver": "Neu beginnen",
     "standbyTapHint": "Zum Fortfahren irgendwo tippen",
-    "loading": "Wird geladen…"
+    "loading": "Wird geladen…",
+    "notAvailable": "Der Kiosk-Modus ist für dieses Studio nicht verfügbar.",
+    "noSessions": "Keine Termine geplant.",
+    "pinClear": "Löschen"
   },
   "OrgWebsite": {
     "title": "Organisations-Website",

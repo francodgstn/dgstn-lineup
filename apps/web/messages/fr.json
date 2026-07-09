@@ -2202,7 +2202,10 @@
     "registered": "C'est fait – bienvenue !",
     "startOver": "Recommencer",
     "standbyTapHint": "Touchez l'écran pour continuer",
-    "loading": "Chargement…"
+    "loading": "Chargement…",
+    "notAvailable": "Le mode kiosque n’est pas disponible pour ce studio.",
+    "noSessions": "Aucune séance programmée.",
+    "pinClear": "Effacer"
   },
   "OrgWebsite": {
     "title": "Site de l'organisation",

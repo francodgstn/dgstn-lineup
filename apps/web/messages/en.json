@@ -2202,7 +2202,10 @@
     "registered": "You're all set — welcome!",
     "startOver": "Start over",
     "standbyTapHint": "Tap anywhere to continue",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "notAvailable": "Kiosk mode isn’t available for this studio.",
+    "noSessions": "No sessions scheduled.",
+    "pinClear": "Clear"
   },
   "OrgWebsite": {
     "title": "Organization website",

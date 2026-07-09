@@ -2202,7 +2202,10 @@
     "registered": "Tutto pronto – benvenuto!",
     "startOver": "Ricomincia",
     "standbyTapHint": "Tocca ovunque per continuare",
-    "loading": "Caricamento…"
+    "loading": "Caricamento…",
+    "notAvailable": "La modalità chiosco non è disponibile per questo studio.",
+    "noSessions": "Nessuna sessione in programma.",
+    "pinClear": "Cancella"
   },
   "OrgWebsite": {
     "title": "Sito dell'organizzazione",
