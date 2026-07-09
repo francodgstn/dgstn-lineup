@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import { Globe, Menu, X } from 'lucide-react'
-import type { SiteMeta, WebsiteSection, SocialLink } from '@linyup/shared'
+import type { SiteMeta, WebsiteSection, OrgSiteSection, OrgSiteTeamRef, SocialLink } from '@linyup/shared'
 import { buildPalette, FONT_STACK, ctaHref } from './theme'
 import { SectionBlock, sectionNavLabel, SOCIAL_ICONS, type RenderCtx } from './sections'
 
-/** Structural subset satisfied by both SiteDraft (builder preview) and
- *  PublishedSite (public route). */
+/** Structural subset satisfied by SiteDraft/PublishedSite (team sites, builder
+ *  preview) AND OrgSiteDraft/OrgPublishedSite (org sites). `teamId` is only
+ *  present on team-shaped sites; org sites pass their scope via the separate
+ *  `orgId`/`orgTeams` props below instead of through `site`. */
 export interface RenderableSite {
-  teamId: string
+  teamId?: string
   name: string
   slug: string
   meta: SiteMeta
-  sections: WebsiteSection[]
+  sections: (WebsiteSection | OrgSiteSection)[]
   socialLinks?: SocialLink[]
   showBranding?: boolean
 }
@@ -21,9 +23,14 @@ export interface RenderableSite {
 export default function WebsiteRenderer({
   site,
   preview = false,
+  orgId,
+  orgTeams,
 }: {
   site: RenderableSite
   preview?: boolean
+  /** Org sites only — the org id and its embedded member-team snapshot. */
+  orgId?: string
+  orgTeams?: OrgSiteTeamRef[]
 }) {
   const [systemDark, setSystemDark] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -40,7 +47,13 @@ export default function WebsiteRenderer({
   const palette = buildPalette(site.meta, systemDark)
   const font = FONT_STACK[site.meta.font] ?? FONT_STACK.sans
   const ctx: RenderCtx = {
-    palette, slug: site.slug, teamId: site.teamId, preview, socialLinks: site.socialLinks,
+    palette,
+    slug: site.slug,
+    teamId: site.teamId,
+    orgId,
+    orgTeams,
+    preview,
+    socialLinks: site.socialLinks,
   }
 
   const navItems = site.meta.header.showNav
@@ -157,7 +170,7 @@ export default function WebsiteRenderer({
       </header>
 
       <main id="top">
-        {site.sections.map((s: WebsiteSection) => (
+        {site.sections.map((s: WebsiteSection | OrgSiteSection) => (
           <SectionBlock key={s.id} section={s} ctx={ctx} />
         ))}
       </main>

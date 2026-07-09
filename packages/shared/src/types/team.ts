@@ -291,6 +291,11 @@ export interface Team {
   // Which public surface `/public/{slug}` resolves to. Defaults to 'bio-link'
   // (always present, every plan) when unset. See PublicSurface.
   default_public_surface?: PublicSurface
+  // Opt-in: publish this team's coach roster (name + optional photo) to the
+  // world-readable public_profile, so an organization website can list coaches
+  // across its clubs. Default OFF (staff PII stays private until the team opts in).
+  // The roster is the members flagged `is_coach !== false` (same set as /coaches).
+  public_coaches_enabled?: boolean
   // Timestamps
   created: Timestamp
   createdBy: string
@@ -332,6 +337,13 @@ export interface BookingSettings {
   coachingEnabled?: boolean
 }
 
+/** A coach as exposed on the world-readable team public_profile (opt-in). */
+export interface PublicCoach {
+  uid: string
+  name: string
+  photoUrl?: string
+}
+
 export interface TeamPublicProfile {
   name: string
   description?: string
@@ -345,6 +357,10 @@ export interface TeamPublicProfile {
   bioLinkAccentColor?: string
   bioLinkBackground?: BioLinkBackground
   bookingSettings?: BookingSettings
+  // Opt-in coach roster (name + optional photo), maintained by
+  // syncTeamCoachesPublicProfile when `public_coaches_enabled` is true. Consumed by
+  // the organization website's coaches section. Absent/empty ⇒ not opted in.
+  coaches?: PublicCoach[]
   // Denormalized from teams/{id}.plan by syncTeamPublicProfile — true on the
   // free plan, where the bio-link shows a "Powered by Linyup" badge. The bio-link
   // must never read teams/, so the flag lives here.

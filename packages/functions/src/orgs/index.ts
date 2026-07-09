@@ -21,7 +21,9 @@ async function getPlatformStripeAdapter(): Promise<StripeAdapter> {
   )
 }
 
-async function assertOrgAdmin(uid: string, orgId: string): Promise<void> {
+// Exported so other org-scoped callables (e.g. ../orgWebsite) reuse the exact
+// same org-admin gate instead of re-implementing the org_members role check.
+export async function assertOrgAdmin(uid: string, orgId: string): Promise<void> {
   const memberDoc = await admin.firestore()
     .collection('organizations').doc(orgId)
     .collection('org_members').doc(uid)

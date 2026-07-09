@@ -17,41 +17,52 @@ import type {
   PublishedSite,
   SiteMeta,
   WebsiteSection,
+  HeroSection,
+  ContentSection,
+  GallerySection,
+  ContactSection,
 } from '@linyup/shared'
 
 // ─── sanitizers ───────────────────────────────────────────────────────────────
 // The draft is authored by a (semi-trusted) manager, but site_published is
 // fully public. We re-derive every published field from an explicit whitelist so
 // nothing unexpected — and nothing restricted — can leak into the public doc.
+//
+// The primitives + the four "presentational" section builders below (hero,
+// content, gallery, contact) are exported so the organization website module
+// (../orgWebsite) can reuse the EXACT same rules instead of re-implementing them —
+// those four section types are shared verbatim between the team site and the org
+// site; only the aggregate section types (activities/pricing/schedule/places at
+// team level, clubs/locations/coaches at org level) differ.
 
-type Dict = Record<string, unknown>
+export type Dict = Record<string, unknown>
 
-const asDict = (v: unknown): Dict => (v && typeof v === 'object' ? (v as Dict) : {})
+export const asDict = (v: unknown): Dict => (v && typeof v === 'object' ? (v as Dict) : {})
 
-function str(v: unknown, max = 2000): string {
+export function str(v: unknown, max = 2000): string {
   return typeof v === 'string' ? v.slice(0, max) : ''
 }
-function optStr(v: unknown, max = 2000): string | undefined {
+export function optStr(v: unknown, max = 2000): string | undefined {
   const s = str(v, max)
   return s ? s : undefined
 }
 /** Allow only https?:// URLs; everything else (javascript:, data:, …) is dropped. */
-function safeUrl(v: unknown): string | undefined {
+export function safeUrl(v: unknown): string | undefined {
   return typeof v === 'string' && /^https?:\/\/.+/.test(v) ? v.slice(0, 2000) : undefined
 }
-function num(v: unknown, min: number, max: number, fallback: number): number {
+export function num(v: unknown, min: number, max: number, fallback: number): number {
   const n = Number(v)
   if (!Number.isFinite(n)) return fallback
   return Math.min(max, Math.max(min, n))
 }
-function bool(v: unknown): boolean {
+export function bool(v: unknown): boolean {
   return v === true
 }
-function oneOf<T extends string>(v: unknown, allowed: readonly T[], fallback: T): T {
+export function oneOf<T extends string>(v: unknown, allowed: readonly T[], fallback: T): T {
   return typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as T) : fallback
 }
 /** Drop keys whose value is undefined (Firestore rejects undefined). */
-function clean<T extends Dict>(obj: T): T {
+export function clean<T extends Dict>(obj: T): T {
   for (const k of Object.keys(obj)) if (obj[k] === undefined) delete obj[k]
   return obj
 }
@@ -61,13 +72,73 @@ function clean<T extends Dict>(obj: T): T {
 // same allowlist. Everything else — <script>, styles, event handlers, non-http(s)
 // URLs — is stripped before the HTML reaches the fully-public site_published doc.
 
-function sanitizeCta(v: unknown): Dict | undefined {
+export function sanitizeCta(v: unknown): Dict | undefined {
   const d = asDict(v)
   const label = optStr(d.label, 120)
   if (!label) return undefined
   const action0 = oneOf(d.action, ['booking', 'signup', 'membership', 'url'] as const, 'url')
   const action = action0 === 'membership' ? 'signup' : action0 // normalize legacy alias
   return clean({ label, action, url: action === 'url' ? safeUrl(d.url) : undefined })
+}
+
+// ─── shared section builders (reused by ../orgWebsite) ─────────────────────────
+
+export function sanitizeHeroSection(d: Dict, id: string): HeroSection | null {
+  const headline = optStr(d.headline, 200)
+  if (!headline) return null
+  return clean({
+    id, type: 'hero', headline,
+    subheadline: optStr(d.subheadline, 400),
+    bgImageUrl: safeUrl(d.bgImageUrl),
+    overlay: num(d.overlay, 0, 100, 40),
+    align: oneOf(d.align, ['left', 'center'] as const, 'center'),
+    cta: sanitizeCta(d.cta),
+  }) as unknown as HeroSection
+}
+
+// Generic content block. 'about' is the legacy literal — normalized to 'content'
+// on publish. Heading is optional; drop only when fully empty.
+export function sanitizeContentSection(d: Dict, id: string): ContentSection | null {
+  const heading = optStr(d.heading, 200)
+  const body = sanitizeRichHtml(str(d.body, 50000))
+  const imageUrl = safeUrl(d.imageUrl)
+  if (!heading && !body && !imageUrl) return null
+  return clean({
+    id, type: 'content', heading, body,
+    imageUrl,
+    imageSide: oneOf(d.imageSide, ['left', 'right'] as const, 'left'),
+  }) as unknown as ContentSection
+}
+
+export function sanitizeGallerySection(d: Dict, id: string): GallerySection | null {
+  const images = (Array.isArray(d.images) ? d.images : [])
+    .map((img) => {
+      const i = asDict(img)
+      const url = safeUrl(i.url)
+      return url ? clean({ url, caption: optStr(i.caption, 200) }) : null
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .slice(0, 60)
+  const columns = num(d.columns, 2, 4, 3)
+  return clean({
+    id, type: 'gallery',
+    heading: optStr(d.heading, 200),
+    images,
+    columns: (columns === 2 || columns === 4 ? columns : 3) as 2 | 3 | 4,
+  }) as unknown as GallerySection
+}
+
+export function sanitizeContactSection(d: Dict, id: string): ContactSection {
+  return clean({
+    id, type: 'contact',
+    heading: optStr(d.heading, 200),
+    address: optStr(d.address, 400),
+    phone: optStr(d.phone, 64),
+    email: optStr(d.email, 200),
+    hours: optStr(d.hours, 400),
+    mapQuery: optStr(d.mapQuery, 400),
+    showSocial: bool(d.showSocial),
+  }) as unknown as ContactSection
 }
 
 function sanitizeSection(raw: unknown): WebsiteSection | null {
@@ -86,49 +157,15 @@ function sanitizeSection(raw: unknown): WebsiteSection | null {
 
 function buildSection(d: Dict, id: string, type: string): WebsiteSection | null {
   switch (type) {
-    case 'hero': {
-      const headline = optStr(d.headline, 200)
-      if (!headline) return null
-      return clean({
-        id, type: 'hero', headline,
-        subheadline: optStr(d.subheadline, 400),
-        bgImageUrl: safeUrl(d.bgImageUrl),
-        overlay: num(d.overlay, 0, 100, 40),
-        align: oneOf(d.align, ['left', 'center'] as const, 'center'),
-        cta: sanitizeCta(d.cta),
-      }) as unknown as WebsiteSection
-    }
+    case 'hero':
+      return sanitizeHeroSection(d, id)
     // Generic content block. 'about' is the legacy literal — normalized to
     // 'content' on publish. Heading is optional; drop only when fully empty.
     case 'content':
-    case 'about': {
-      const heading = optStr(d.heading, 200)
-      const body = sanitizeRichHtml(str(d.body, 50000))
-      const imageUrl = safeUrl(d.imageUrl)
-      if (!heading && !body && !imageUrl) return null
-      return clean({
-        id, type: 'content', heading, body,
-        imageUrl,
-        imageSide: oneOf(d.imageSide, ['left', 'right'] as const, 'left'),
-      }) as unknown as WebsiteSection
-    }
-    case 'gallery': {
-      const images = (Array.isArray(d.images) ? d.images : [])
-        .map((img) => {
-          const i = asDict(img)
-          const url = safeUrl(i.url)
-          return url ? clean({ url, caption: optStr(i.caption, 200) }) : null
-        })
-        .filter((x): x is NonNullable<typeof x> => x !== null)
-        .slice(0, 60)
-      const columns = num(d.columns, 2, 4, 3)
-      return clean({
-        id, type: 'gallery',
-        heading: optStr(d.heading, 200),
-        images,
-        columns: (columns === 2 || columns === 4 ? columns : 3) as 2 | 3 | 4,
-      }) as unknown as WebsiteSection
-    }
+    case 'about':
+      return sanitizeContentSection(d, id)
+    case 'gallery':
+      return sanitizeGallerySection(d, id)
     case 'activities': {
       const columns = num(d.columns, 2, 4, 3)
       return clean({
@@ -161,18 +198,8 @@ function buildSection(d: Dict, id: string, type: string): WebsiteSection | null 
         showBooking: bool(d.showBooking),
       }) as unknown as WebsiteSection
     }
-    case 'contact': {
-      return clean({
-        id, type: 'contact',
-        heading: optStr(d.heading, 200),
-        address: optStr(d.address, 400),
-        phone: optStr(d.phone, 64),
-        email: optStr(d.email, 200),
-        hours: optStr(d.hours, 400),
-        mapQuery: optStr(d.mapQuery, 400),
-        showSocial: bool(d.showSocial),
-      }) as unknown as WebsiteSection
-    }
+    case 'contact':
+      return sanitizeContactSection(d, id)
     // Places: keep only the selection + presentation here; the actual place data
     // is embedded at publish time (enrichSectionsWithPlaces) — sanitizers are pure.
     case 'places': {
@@ -265,7 +292,7 @@ async function enrichSectionsWithPlaces(
   }
 }
 
-function sanitizeMeta(raw: unknown, fallbackTitle: string): SiteMeta {
+export function sanitizeMeta(raw: unknown, fallbackTitle: string): SiteMeta {
   const d = asDict(raw)
   const header = asDict(d.header)
   const footer = asDict(d.footer)

@@ -5,7 +5,7 @@ import { Link, usePathname } from '@/i18n/navigation'
 import { useParams } from 'next/navigation'
 import { OrgProvider, useOrg } from '@/contexts/OrgContext'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Building2, Users, CreditCard, Settings, ChevronLeft, CalendarRange, Shield, IdCard, MapPin, Blocks } from 'lucide-react'
+import { Building2, Users, CreditCard, Settings, ChevronLeft, CalendarRange, Shield, IdCard, MapPin, Blocks, Globe } from 'lucide-react'
 import type { Route } from 'next'
 
 function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNode }) {
@@ -19,6 +19,7 @@ function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNod
     { href: `/org/${orgId}/affiliations`, label: affiliationTerm,      icon: IdCard },
     { href: `/org/${orgId}/ranking`,     label: t('tabRanking'),     icon: Shield },
     { href: `/org/${orgId}/places`,      label: t('tabPlaces'),      icon: MapPin },
+    { href: `/org/${orgId}/website`,     label: t('tabWebsite'),     icon: Globe },
     { href: `/org/${orgId}/plugins`,     label: t('tabPlugins'),     icon: Blocks },
     { href: `/org/${orgId}/members`,     label: t('tabMembers'),     icon: Users },
     { href: `/org/${orgId}/billing`,     label: t('tabBilling'),     icon: CreditCard },

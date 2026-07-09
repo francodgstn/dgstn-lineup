@@ -42,6 +42,8 @@ import {
   CATEGORIES_COLLECTION,
   CONNECT_WEBHOOK_EVENTS_COLLECTION,
   COACH_SLOTS_COLLECTION,
+  ORG_SITE_DRAFTS_COLLECTION,
+  ORG_SITE_PUBLISHED_COLLECTION,
 } from './paths'
 
 /** How a top-level collection's documents are matched to a team. */
@@ -138,6 +140,10 @@ export const PLATFORM_COLLECTIONS: string[] = [
   PROJECTS_COLLECTION,
   CATEGORIES_COLLECTION,
   CONNECT_WEBHOOK_EVENTS_COLLECTION,
+  // Org-level website docs are keyed by orgId (not teamId), so per-TEAM teardown
+  // never touches them — they belong with the org itself.
+  ORG_SITE_DRAFTS_COLLECTION,
+  ORG_SITE_PUBLISHED_COLLECTION,
 ]
 
 /**
