@@ -17,20 +17,27 @@ const paragraphs = tList('founder.body');
      whitespace, editorial body type) so it reads as a human pause. -->
 <section class="founder" aria-labelledby="founder-heading">
   <div class="wrap">
-    <div class="founder-row">
-      <div class="founder-photo">
-        {/* Founder photo at apps/landing/public/founder.png. */}
-        <img src="/founder.png" alt={t('founder.photoAlt')} width="480" height="600" loading="lazy" />
-      </div>
-
-      <div class="founder-copy">
+    <div class="founder-inner">
+      {/* Eyebrow + heading span the full width above the row so the photo's top
+          lines up with the body text (not the heading) on large screens. */}
+      <header class="founder-head">
         <span class="founder-eyebrow">{t('founder.eyebrow')}</span>
         <h2 id="founder-heading">{t('founder.heading')}</h2>
-        {paragraphs.map((p) => <p>{p}</p>)}
+      </header>
 
-        <div class="founder-sign">
-          <span class="sig" aria-hidden="true">{t('founder.signature')}</span>
-          <span class="who"><strong>{t('founder.name')}</strong> · {t('founder.role')}</span>
+      <div class="founder-row">
+        <div class="founder-photo">
+          {/* Founder photo at apps/landing/public/founder.png. */}
+          <img src="/founder.png" alt={t('founder.photoAlt')} width="480" height="600" loading="lazy" />
+        </div>
+
+        <div class="founder-copy">
+          {paragraphs.map((p) => <p>{p}</p>)}
+
+          <div class="founder-sign">
+            <span class="sig" aria-hidden="true">{t('founder.signature')}</span>
+            <span class="who"><strong>{t('founder.name')}</strong> · {t('founder.role')}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -47,15 +54,22 @@ const paragraphs = tList('founder.body');
     border-bottom: 1px solid var(--purple-100);
   }
 
+  .founder-inner {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  .founder-head {
+    margin-bottom: 32px;
+  }
+
   .founder-row {
     display: grid;
     grid-template-columns: minmax(0, 260px) 1fr;
     gap: 56px;
-    /* Top-align on the large-screen two-column layout so the photo sits with
-       the eyebrow/heading; the mobile breakpoint below stacks and re-centers. */
+    /* Top-align so the photo's top edge lines up with the first body paragraph
+       (the heading sits above, full width); the mobile breakpoint stacks. */
     align-items: start;
-    max-width: 960px;
-    margin: 0 auto;
   }
 
   .founder-photo {
@@ -77,13 +91,13 @@ const paragraphs = tList('founder.body');
     color: var(--purple-700);
   }
 
-  .founder-copy h2 {
+  .founder-head h2 {
     font-family: "Sora", var(--font-sans);
     font-weight: 700;
     font-size: 32px;
     letter-spacing: -0.01em;
     color: var(--heading);
-    margin: 0 0 20px;
+    margin: 0;
   }
 
   .founder-copy p {
@@ -116,8 +130,10 @@ const paragraphs = tList('founder.body');
 
   @media (max-width: 860px) {
     .founder { padding: 64px 0; }
-    .founder-row { grid-template-columns: 1fr; gap: 32px; max-width: 560px; }
+    .founder-inner { max-width: 560px; }
+    .founder-head { margin-bottom: 24px; }
+    .founder-row { grid-template-columns: 1fr; gap: 32px; }
     .founder-photo { width: 180px; margin: 0 auto; }
-    .founder-copy h2 { font-size: 26px; }
+    .founder-head h2 { font-size: 26px; }
   }
 </style>
