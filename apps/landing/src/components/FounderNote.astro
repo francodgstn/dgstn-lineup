@@ -17,27 +17,26 @@ const paragraphs = tList('founder.body');
      whitespace, editorial body type) so it reads as a human pause. -->
 <section class="founder" aria-labelledby="founder-heading">
   <div class="wrap">
-    <div class="founder-inner">
-      {/* Eyebrow + heading span the full width above the row so the photo's top
-          lines up with the body text (not the heading) on large screens. */}
+    {/* 2-row grid: eyebrow+heading stay in the text column (row 1); the photo
+        sits in its own column but on row 2, so its top lines up with the body
+        text rather than the heading. Robust across locales — no fixed offsets. */}
+    <div class="founder-row">
       <header class="founder-head">
         <span class="founder-eyebrow">{t('founder.eyebrow')}</span>
         <h2 id="founder-heading">{t('founder.heading')}</h2>
       </header>
 
-      <div class="founder-row">
-        <div class="founder-photo">
-          {/* Founder photo at apps/landing/public/founder.png. */}
-          <img src="/founder.png" alt={t('founder.photoAlt')} width="480" height="600" loading="lazy" />
-        </div>
+      <div class="founder-photo">
+        {/* Founder photo at apps/landing/public/founder.png. */}
+        <img src="/founder.png" alt={t('founder.photoAlt')} width="480" height="600" loading="lazy" />
+      </div>
 
-        <div class="founder-copy">
-          {paragraphs.map((p) => <p>{p}</p>)}
+      <div class="founder-copy">
+        {paragraphs.map((p) => <p>{p}</p>)}
 
-          <div class="founder-sign">
-            <span class="sig" aria-hidden="true">{t('founder.signature')}</span>
-            <span class="who"><strong>{t('founder.name')}</strong> · {t('founder.role')}</span>
-          </div>
+        <div class="founder-sign">
+          <span class="sig" aria-hidden="true">{t('founder.signature')}</span>
+          <span class="who"><strong>{t('founder.name')}</strong> · {t('founder.role')}</span>
         </div>
       </div>
     </div>
@@ -54,22 +53,29 @@ const paragraphs = tList('founder.body');
     border-bottom: 1px solid var(--purple-100);
   }
 
-  .founder-inner {
+  .founder-row {
+    display: grid;
+    grid-template-columns: minmax(0, 260px) 1fr;
+    column-gap: 56px;
+    align-items: start;
     max-width: 960px;
     margin: 0 auto;
   }
 
+  /* Heading in the text column (row 1); photo + body share row 2 so the photo's
+     top aligns with the first body paragraph, not the heading. */
   .founder-head {
-    margin-bottom: 32px;
+    grid-column: 2;
+    grid-row: 1;
+    margin-bottom: 20px;
   }
-
-  .founder-row {
-    display: grid;
-    grid-template-columns: minmax(0, 260px) 1fr;
-    gap: 56px;
-    /* Top-align so the photo's top edge lines up with the first body paragraph
-       (the heading sits above, full width); the mobile breakpoint stacks. */
-    align-items: start;
+  .founder-photo {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .founder-copy {
+    grid-column: 2;
+    grid-row: 2;
   }
 
   .founder-photo {
@@ -130,9 +136,11 @@ const paragraphs = tList('founder.body');
 
   @media (max-width: 860px) {
     .founder { padding: 64px 0; }
-    .founder-inner { max-width: 560px; }
-    .founder-head { margin-bottom: 24px; }
-    .founder-row { grid-template-columns: 1fr; gap: 32px; }
+    .founder-row { grid-template-columns: 1fr; row-gap: 24px; max-width: 560px; }
+    /* Stack in DOM order: heading → photo → text. */
+    .founder-head,
+    .founder-photo,
+    .founder-copy { grid-column: 1; grid-row: auto; }
     .founder-photo { width: 180px; margin: 0 auto; }
     .founder-head h2 { font-size: 26px; }
   }
