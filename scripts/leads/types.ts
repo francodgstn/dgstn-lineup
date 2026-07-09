@@ -297,6 +297,12 @@ export interface LeadProfile {
    *  color (e.g. '#fde0dd') or a full CSS value (e.g. 'linear-gradient(…)').
    *  When set it overrides `portalGradient`. (Booking follows the app theme.) */
   publicBackground?: string
+  /** How many FUTURE weeks of the weekly grid to materialize as bookable
+   *  sessions (default 3). Raise it so a lead trying the system for a while has
+   *  a schedule that lasts; the public booking window is derived from it. Keep
+   *  it under ~11 weeks unless the grid is small (the booking query caps the
+   *  number of upcoming sessions it lists). */
+  scheduleWeeksAhead?: number
   socialLinks: { platform: string; url: string }[]
   /** Main venue, used on sessions + the site contact section. */
   location: { label: string; address: string; mapsUrl?: string }

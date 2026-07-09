@@ -510,6 +510,15 @@ async function seedLeadTenant(profile: LeadProfile) {
         .filter(Boolean)
     ),
   ].slice(0, 5) // Contact.login_emails is capped at 5
+  // How many FUTURE weeks of the weekly grid to materialize as bookable sessions
+  // (default 3). A lead trying the system for a while wants a schedule that lasts,
+  // so leads can extend it (swimli: ~3 months). The public booking window is
+  // derived from this below so the extended sessions actually show.
+  // NB: these are individually materialized session docs — the eventual scalable
+  // path is recurring `session_series` + the generateRecurringSessions scheduled
+  // function, which would roll the window forward on its own.
+  const scheduleWeeksAhead = Math.max(1, profile.scheduleWeeksAhead ?? 3)
+  const bookingWindowMonths = Math.max(2, Math.ceil(scheduleWeeksAhead / 4))
   const staffByKey = new Map(profile.staff.map((s) => [s.key, s]))
   const staffName = (key: string) => {
     const s = staffByKey.get(key)
@@ -827,7 +836,8 @@ async function seedLeadTenant(profile: LeadProfile) {
       links: portalLinks,
       bookingSettings: {
         flowType: 'activity-first',
-        windowMonths: 2,
+        // Cover the materialized future window so the booking page shows it all.
+        windowMonths: bookingWindowMonths,
         showPhone: true,
         ctaUrl: null,
         ctaLabel: null,
@@ -1045,9 +1055,11 @@ async function seedLeadTenant(profile: LeadProfile) {
 
     // Materialize the next N occurrences of the template's recurrence days so
     // the bookable slots match the advertised weekdays regardless of run date.
+    // The day cap follows the schedule horizon so a larger slotCount can reach out.
     const [tplHH, tplMM] = tpl.time.split(':').map(Number)
+    const coachingDayCap = scheduleWeeksAhead * 7 + 7
     const slotDates: Date[] = []
-    for (let dayOffset = 1; slotDates.length < tpl.slotCount && dayOffset <= 35; dayOffset++) {
+    for (let dayOffset = 1; slotDates.length < tpl.slotCount && dayOffset <= coachingDayCap; dayOffset++) {
       const d = daysFromNow(dayOffset)
       if (!tpl.daysOfWeek.includes(d.getDay())) continue
       d.setHours(tplHH, tplMM ?? 0, 0, 0)
@@ -1148,7 +1160,8 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
   const sessionDefs: SessionDef[] = []
   const nowDate = now()
-  for (let week = -4; week <= 3; week++) {
+  // 4 weeks of history (for reports/attendance) + `scheduleWeeksAhead` future weeks.
+  for (let week = -4; week <= scheduleWeeksAhead; week++) {
     const monday = mondayOfWeeksAgo(-week)
     for (const slot of profile.weeklyGrid) {
       const date = new Date(monday)
@@ -2106,6 +2119,9 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     theme: 'light',
     accentColor: profile.accentColor,
     font: 'sans',
+    // Match the branded public surfaces (bio-link / shop / Space) — a light
+    // custom page background pairs with the light theme's dark text.
+    ...(profile.publicBackground ? { background: profile.publicBackground } : {}),
     seo: { title: profile.teamName, description: profile.description },
     header: { showNav: true, ctaLabel: 'Book now', ctaAction: 'booking' },
     footer: { showSocial: true },

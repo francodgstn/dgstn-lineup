@@ -5,6 +5,9 @@ import type { SiteMeta, SiteCta, SiteFont } from '@linyup/shared'
 export interface SitePalette {
   isDark: boolean
   bg: string
+  // Translucent header/nav background — always a valid solid+alpha (never the
+  // custom page background, which may be a gradient that can't take an alpha).
+  headerBg: string
   surface: string
   border: string
   text: string
@@ -14,12 +17,12 @@ export interface SitePalette {
 }
 
 export function buildPalette(
-  meta: { theme: SiteMeta['theme']; accentColor?: string },
+  meta: { theme: SiteMeta['theme']; accentColor?: string; background?: string },
   systemDark: boolean
 ): SitePalette {
   const isDark = meta.theme === 'dark' || (meta.theme === 'auto' && systemDark)
   const accent = meta.accentColor || '#6366f1'
-  return isDark
+  const base = isDark
     ? {
         isDark,
         accent,
@@ -40,6 +43,9 @@ export function buildPalette(
         text: '#0f172a',
         muted: '#64748b',
       }
+  // Header floats as a translucent version of the THEME solid; the page bg may
+  // be a custom color/gradient underneath it.
+  return { ...base, headerBg: `${base.bg}d9`, bg: meta.background || base.bg }
 }
 
 export const FONT_STACK: Record<SiteFont, string> = {

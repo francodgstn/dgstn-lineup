@@ -179,6 +179,11 @@ export interface SiteMeta {
   theme: SiteTheme
   accentColor: string
   font: SiteFont
+  // Optional custom page background (a hex color or full CSS value, e.g. a
+  // linear-gradient). Overrides the theme's default page background; the header
+  // keeps a theme-based translucent bar. Text stays theme-driven, so pick a
+  // background that suits the chosen `theme` (a light one for theme: 'light').
+  background?: string
   seo?: SiteSeo
   header: SiteHeader
   footer: SiteFooter

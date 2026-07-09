@@ -80,7 +80,7 @@ export default function WebsiteRenderer({
       {/* Header */}
       <header
         className="sticky top-0 z-20 backdrop-blur"
-        style={{ background: `${palette.bg}d9`, borderBottom: `1px solid ${palette.border}` }}
+        style={{ background: palette.headerBg, borderBottom: `1px solid ${palette.border}` }}
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
           <a
