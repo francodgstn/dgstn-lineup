@@ -20,7 +20,15 @@ export const onInstalledPluginStatusChange = onDocumentWritten(
       ? (event.data.after.data()?.status as string | undefined)
       : undefined
 
-    // Only act when transitioning away from 'active':
+    // Recompute active_public_surfaces on EVERY write — not just deactivation.
+    // Installing a plugin (or editing its config, e.g. kiosk's denormalized
+    // public subset) can flip a surface live just as much as deactivating one
+    // can flip it dark, so this must run unconditionally, ahead of the
+    // teardown-only early-return below.
+    await touchTeamForSurfaceRecompute(teamId)
+
+    // Only tear down plugin-specific public artefacts when transitioning away
+    // from 'active':
     //   - doc deleted (afterStatus undefined) while it was active before, OR
     //   - status changed from 'active' to something else
     const wasActive = beforeStatus === 'active'
@@ -37,9 +45,5 @@ export const onInstalledPluginStatusChange = onDocumentWritten(
       // Batch-delete all document/public_profile summaries for this team.
       await deleteAllDocumentPublicProfiles(teamId)
     }
-
-    // Deactivating a plugin can flip several surfaces (site/space/documents) —
-    // nudge the team doc so syncTeamPublicProfile recomputes active_public_surfaces.
-    await touchTeamForSurfaceRecompute(teamId)
   }
 )

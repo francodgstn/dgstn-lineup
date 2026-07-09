@@ -1,5 +1,6 @@
 // Keeps teams/{teamId}/public_profile/{teamId} in sync when a team document changes
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import {
   TEAMS_COLLECTION,
@@ -8,8 +9,10 @@ import {
   FORMS_COLLECTION,
   DOCUMENTS_COLLECTION,
   resolveSystemLinkTarget,
+  toKioskPublicConfig,
+  DEFAULT_KIOSK_CONFIG,
 } from '@linyup/shared'
-import type { PublicSurface, ActivePublicSurfaces, DocumentKind } from '@linyup/shared'
+import type { PublicSurface, ActivePublicSurfaces, DocumentKind, KioskConfig } from '@linyup/shared'
 import { rebuildTeamPublicCoaches } from './syncTeamCoachesPublicProfile'
 
 export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (event) => {
@@ -28,18 +31,21 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // Each check uses limit(1) to avoid full scans.
 
   // site: website plugin active AND a published site exists
-  const [websitePluginSnap, sitePublishedSnap] = await Promise.all([
+  // kiosk: entrance-tablet surface — live whenever the plugin install is active.
+  const [websitePluginSnap, sitePublishedSnap, kioskPluginSnap] = await Promise.all([
     db
       .doc(
         `${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/website`
       )
       .get(),
     db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).get(),
+    db.doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/kiosk`).get(),
   ])
   const siteActive =
     websitePluginSnap.exists &&
     websitePluginSnap.data()?.status === 'active' &&
     sitePublishedSnap.exists
+  const kioskActive = kioskPluginSnap.exists && kioskPluginSnap.data()?.status === 'active'
 
   // online-courses plugin snapshot — used by the shop capability check below.
   const onlineCoursesPluginSnap = await db
@@ -151,6 +157,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     shop: shopActive,
     forms: formsActive,
     documents: documentsActive,
+    kiosk: kioskActive,
   }
 
   // ── default_public_surface ───────────────────────────────────────────────────
@@ -203,6 +210,18 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // if unset so existing docs with no preference are not polluted with undefined.
   if (defaultSurface !== undefined) {
     publicProfile.default_public_surface = defaultSurface
+  }
+
+  // Denormalize the kiosk config (MINUS the PIN — toKioskPublicConfig strips it)
+  // when the plugin is active; explicitly delete the field otherwise so a stale
+  // config can never linger on a public, world-readable doc after deactivation.
+  if (kioskActive) {
+    const kioskCfg = kioskPluginSnap.data()?.config as KioskConfig | undefined
+    publicProfile.kiosk = kioskCfg
+      ? toKioskPublicConfig(kioskCfg)
+      : toKioskPublicConfig(DEFAULT_KIOSK_CONFIG)
+  } else {
+    publicProfile.kiosk = FieldValue.delete()
   }
 
   // Merge so sibling syncs that write other public_profile fields with merge

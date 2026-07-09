@@ -141,6 +141,9 @@ export {
 export { unlockPlugin } from './plugins/unlockPlugin'
 export { assistantChat } from './assistant'
 
+// Kiosk mode (entrance-tablet PIN unlock)
+export { unlockKiosk } from './kiosk'
+
 // Organizations (multi-team tier)
 export {
   createOrganization,
