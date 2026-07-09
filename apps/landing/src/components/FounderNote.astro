@@ -19,9 +19,8 @@ const paragraphs = tList('founder.body');
   <div class="wrap">
     <div class="founder-row">
       <div class="founder-photo">
-        {/* Placeholder — drop a real photo at apps/landing/public/founder.jpg
-            and point src at "/founder.jpg" to swap it in. */}
-        <img src="/founder.svg" alt={t('founder.photoAlt')} width="480" height="600" loading="lazy" />
+        {/* Founder photo at apps/landing/public/founder.png. */}
+        <img src="/founder.png" alt={t('founder.photoAlt')} width="480" height="600" loading="lazy" />
       </div>
 
       <div class="founder-copy">
@@ -50,9 +49,11 @@ const paragraphs = tList('founder.body');
 
   .founder-row {
     display: grid;
-    grid-template-columns: minmax(0, 320px) 1fr;
+    grid-template-columns: minmax(0, 260px) 1fr;
     gap: 56px;
-    align-items: center;
+    /* Top-align on the large-screen two-column layout so the photo sits with
+       the eyebrow/heading; the mobile breakpoint below stacks and re-centers. */
+    align-items: start;
     max-width: 960px;
     margin: 0 auto;
   }
