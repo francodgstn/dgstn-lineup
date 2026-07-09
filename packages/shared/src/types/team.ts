@@ -7,6 +7,8 @@ import type { PublicMainAddress } from './place'
 import type { EngagementThresholds } from './engagement'
 // Type-only — capabilities.ts imports TeamRole from here; erased at compile (no cycle).
 import type { Capability, DataScope } from './capabilities'
+// Type-only — kiosk.ts imports nothing from here; no cycle.
+import type { KioskPublicConfig } from './kiosk'
 
 // Team roles. owner/manager/viewer are the fixed SYSTEM roles (capability sets in
 // code, never customizable). 'coach' is a predefined-but-team-customizable role
@@ -34,6 +36,7 @@ export type PublicSurface =
   | 'shop'
   | 'signup'
   | 'documents'
+  | 'kiosk'
 
 // Denormalized onto TeamPublicProfile so the public root page (which may only
 // read world-readable public_profile, never the private installed_plugins) can
@@ -56,6 +59,9 @@ export interface ActivePublicSurfaces {
   // ≥1 published + public Document exists (documents plugin active). Reached via the
   // /public/{slug}/documents index, so — unlike forms — it CAN be a default landing.
   documents?: boolean
+  // kiosk plugin active — the entrance-tablet surface at /public/{slug}/kiosk.
+  // Reached by its own URL (paired to a device), never a default landing.
+  kiosk?: boolean
 }
 
 export interface RankLevel {
@@ -378,6 +384,10 @@ export interface TeamPublicProfile {
   // content). Computed by syncTeamPublicProfile; the public root reads this to
   // avoid redirecting to a dead surface and to fall back to the bio-link.
   active_public_surfaces?: ActivePublicSurfaces
+  // Public subset of the kiosk plugin config (installed_plugins/kiosk.config),
+  // denormalized by syncTeamPublicProfile MINUS the PIN, so the public kiosk page
+  // reads layout/features from one world-readable doc. Present only when installed.
+  kiosk?: KioskPublicConfig
   // Documents the studio attached to the signup consent checkbox (documents
   // plugin config). Denormalized by syncTeamPublicProfile from the published +
   // public documents referenced in installed_plugins/documents.config so the
