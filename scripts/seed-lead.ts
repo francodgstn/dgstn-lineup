@@ -626,7 +626,16 @@ async function seedLeadTenant(profile: LeadProfile) {
 
   // ── team doc + public profile ─────────────────────────────────────────────
   const portalLinks = buildStorefrontPageLinks()
-  const bioLinkBackground = { type: 'gradient', color: profile.portalGradient }
+  // Branded-surface background (bio-link home / shop / Space). A custom
+  // publicBackground overrides the named gradient — the renderer uses the CSS
+  // value verbatim when it isn't a BIO_LINK_GRADIENTS key. 'solid' for a bare
+  // hex, 'gradient' for a linear-/radial-gradient string.
+  const bioLinkBackground = profile.publicBackground
+    ? {
+        type: /gradient\s*\(/i.test(profile.publicBackground) ? 'gradient' : 'solid',
+        color: profile.publicBackground,
+      }
+    : { type: 'gradient', color: profile.portalGradient }
   const profileImage = await uploadAsset(
     profile.profileImageAsset ?? 'profile',
     `teams/${teamId}/portal/profile`

@@ -158,8 +158,9 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
       )}
 
       <div className="max-w-[640px] mx-auto px-5 pb-16">
-        {/* Avatar */}
-        <div className={`flex justify-center ${team.heroImage ? '-mt-12' : 'pt-10'}`}>
+        {/* Avatar — relative z-10 so it stacks ABOVE the (position:relative) hero
+            image it overlaps via -mt-12; without it the positioned hero paints on top. */}
+        <div className={`relative z-10 flex justify-center ${team.heroImage ? '-mt-12' : 'pt-10'}`}>
           <div
             className="h-24 w-24 rounded-full overflow-hidden ring-4 shadow-lg flex-shrink-0"
             style={{ boxShadow: `0 0 0 4px ${cardBg}` }}
