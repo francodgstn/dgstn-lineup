@@ -101,64 +101,68 @@ export default function ShopSettingsPage() {
         action={<PaymentSettingsLink />}
       />
 
-      {/* Sellable channels */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          {t('channelsTitle')}
-        </h2>
-        <div className="space-y-2">
-          <ChannelRow
-            icon={Tag}
-            label={t('subscriptions')}
-            count={subCount}
-            manageHref={'/offer/subscriptions' as Route}
-            setUpLabel={t('setUp')}
-          />
-          <ChannelRow
-            icon={Package}
-            label={t('products')}
-            count={productCount}
-            manageHref={'/offer/products' as Route}
-            setupPluginId={flags.productsActive ? undefined : 'products'}
-            setUpLabel={t('setUp')}
-          />
-          <ChannelRow
-            icon={GraduationCap}
-            label={t('courses')}
-            count={courseCount}
-            manageHref={'/offer/online-courses' as Route}
-            setupPluginId={flags.coursesActive ? undefined : 'online-courses'}
-            setUpLabel={t('setUp')}
-          />
-        </div>
-      </section>
-
-      {/* Payments — configured in payment settings; this is just a shortcut. */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          {t('paymentsTitle')}
-        </h2>
-        <Card className="flex items-center justify-between gap-4 p-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-              <CreditCard className="h-[18px] w-[18px]" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{t('paymentsDesc')}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {t('currency')}: <span className="font-mono tabular-nums">{currency}</span>
-              </p>
-            </div>
+      {/* Two sections side-by-side (½ each) from md up; stacked on small screens.
+          items-start so the shorter Payments column doesn't stretch to match. */}
+      <div className="grid gap-6 md:grid-cols-2 md:items-start">
+        {/* Sellable channels */}
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('channelsTitle')}
+          </h2>
+          <div className="space-y-2">
+            <ChannelRow
+              icon={Tag}
+              label={t('subscriptions')}
+              count={subCount}
+              manageHref={'/offer/subscriptions' as Route}
+              setUpLabel={t('setUp')}
+            />
+            <ChannelRow
+              icon={Package}
+              label={t('products')}
+              count={productCount}
+              manageHref={'/offer/products' as Route}
+              setupPluginId={flags.productsActive ? undefined : 'products'}
+              setUpLabel={t('setUp')}
+            />
+            <ChannelRow
+              icon={GraduationCap}
+              label={t('courses')}
+              count={courseCount}
+              manageHref={'/offer/online-courses' as Route}
+              setupPluginId={flags.coursesActive ? undefined : 'online-courses'}
+              setUpLabel={t('setUp')}
+            />
           </div>
-          <Link
-            href={'/settings/team?tab=payments' as Route}
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
-          >
-            {t('openSettings')}
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
-        </Card>
-      </section>
+        </section>
+
+        {/* Payments — configured in payment settings; this is just a shortcut. */}
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('paymentsTitle')}
+          </h2>
+          <Card className="flex items-center justify-between gap-4 p-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                <CreditCard className="h-[18px] w-[18px]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{t('paymentsDesc')}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t('currency')}: <span className="font-mono tabular-nums">{currency}</span>
+                </p>
+              </div>
+            </div>
+            <Link
+              href={'/settings/team?tab=payments' as Route}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+            >
+              {t('openSettings')}
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </Card>
+        </section>
+      </div>
     </div>
   )
 }

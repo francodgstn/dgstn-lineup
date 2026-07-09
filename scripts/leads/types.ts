@@ -292,6 +292,11 @@ export interface LeadProfile {
   accentColor: string
   /** BIO_LINK_GRADIENTS key (apps/web/src/lib/bioLink.ts). */
   portalGradient: string
+  /** Optional custom background for the branded public surfaces that read
+   *  `bioLinkBackground` — the bio-link home, the shop, and the Space. A hex
+   *  color (e.g. '#fde0dd') or a full CSS value (e.g. 'linear-gradient(…)').
+   *  When set it overrides `portalGradient`. (Booking follows the app theme.) */
+  publicBackground?: string
   socialLinks: { platform: string; url: string }[]
   /** Main venue, used on sessions + the site contact section. */
   location: { label: string; address: string; mapsUrl?: string }
