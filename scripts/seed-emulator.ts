@@ -34,6 +34,7 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099'
 process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080'
 
 import admin from 'firebase-admin'
+import { DEFAULT_PAYMENT_MODES } from '@linyup/shared'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
@@ -516,6 +517,7 @@ async function seedTeam(opts: {
       plan,
       plan_status: planStatus,
       default_currency: 'CHF',
+      payment_modes: [...DEFAULT_PAYMENT_MODES],
       ...(trialEndsAt ? { trial_ends_at: trialEndsAt } : {}),
       ...(affiliationsEnabled ? { affiliations_enabled: true } : {}),
       ...(teamOrgId ? { organization_ids: [teamOrgId] } : {}),

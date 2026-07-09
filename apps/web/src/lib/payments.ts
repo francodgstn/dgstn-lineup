@@ -4,7 +4,7 @@
 // them the same — amount, status, contact assignment, and the "what was paid"
 // comment (explicit comment, falling back to a derived label).
 
-import type { MemberPayment, ExternalPayment } from '@linyup/shared'
+import type { MemberPayment, ExternalPayment, PaymentLineItem } from '@linyup/shared'
 
 export type PaymentSource = 'connect' | 'byo'
 
@@ -25,6 +25,10 @@ export interface UnifiedPaymentRow {
   status: string
   /** Explicit free-text comment, if set. */
   comment: string | null
+  /** Structured link (BYO/manual), for the assign dialog. Connect rows leave it null. */
+  lineItem: PaymentLineItem | null
+  /** Studio-configured mode for manual payments (Cash / TWINT / …); null otherwise. */
+  paymentMode: string | null
   /** Derived "what was paid" label, used when comment is empty. */
   defaultLabel: string
   /** Timestamp-like (has .toDate()) for date formatting / sorting. */
@@ -83,6 +87,8 @@ export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[]
     currency: p.currency ?? 'chf',
     status: p.status,
     comment: p.comment ?? null,
+    lineItem: null, // Connect rows are auto-linked by the webhook; editing not needed
+    paymentMode: null,
     defaultLabel: connectDefaultLabel(p),
     createdAt: (p.created_at as unknown as { toDate?: () => Date }) ?? null,
     feeAmount: p.application_fee_amount ?? 0,
@@ -105,7 +111,14 @@ export function byoToUnified(events: Array<ExternalPayment & { id: string }>): U
     currency: e.currency ?? 'CHF',
     status: 'paid',
     comment: e.comment ?? null,
-    defaultLabel: e.gateway === 'payrexx' ? 'Payrexx payment' : 'Stripe payment',
+    lineItem: e.line_item ?? null,
+    paymentMode: e.payment_mode ?? null,
+    defaultLabel:
+      e.gateway === 'payrexx'
+        ? 'Payrexx payment'
+        : e.gateway === 'manual'
+          ? 'Manual payment'
+          : 'Stripe payment',
     createdAt: (e.processed_at as unknown as { toDate?: () => Date }) ?? null,
     feeAmount: 0, // BYO has no platform fee — money never touches Linyup
     refundable: false, // BYO is record-only — refunds happen in the studio's own gateway

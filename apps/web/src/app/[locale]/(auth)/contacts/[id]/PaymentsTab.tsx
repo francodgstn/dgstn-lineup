@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { CreditCard, Pencil, Snowflake, Play } from 'lucide-react'
+import { CreditCard, Pencil, Snowflake, Play, Plus } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { httpsCallable } from 'firebase/functions'
 import { collection, getDocs, query, where } from 'firebase/firestore'
@@ -31,6 +31,7 @@ import {
   formatPaymentDate,
 } from '@/lib/payments'
 import { AssignPaymentDialog, type AssignPaymentTarget } from '@/components/payments/AssignPaymentDialog'
+import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -287,6 +288,7 @@ export function PaymentsTab({
   const tid = teamId ?? null
   const { data, isLoading } = useContactPayments(tid, contact.id)
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
+  const [recordOpen, setRecordOpen] = useState(false)
 
   // Determine whether Connect is in play: show subscriptions section only
   // when there's a teamId (subscriptions section guards internally via isLoading/empty).
@@ -333,6 +335,17 @@ export function PaymentsTab({
       )}
 
       {/* ── Payment history ── */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('paymentsHeading')}
+        </p>
+        {tid && (
+          <Button size="sm" variant="outline" onClick={() => setRecordOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            {t('recordButton')}
+          </Button>
+        )}
+      </div>
       {rows.length === 0 ? (
         <div className="py-12 text-center text-sm text-muted-foreground">
           <CreditCard className="h-6 w-6 mx-auto mb-2 opacity-40" />
@@ -347,6 +360,7 @@ export function PaymentsTab({
                   <p className="text-sm font-medium truncate">{paymentLabel(row)}</p>
                   <p className="text-xs text-muted-foreground">
                     {formatPaymentDate(row.createdAt)}
+                    {row.paymentMode && <> · {row.paymentMode}</>}
                     {row.amountRefunded > 0 && (
                       <> · {t('refunded')} {formatMoneyMinor(row.amountRefunded, row.currency)}</>
                     )}
@@ -370,6 +384,7 @@ export function PaymentsTab({
                       paymentId: row.paymentId,
                       contactId: row.contactId,
                       comment: row.comment,
+                      lineItem: row.lineItem,
                     })
                   }
                 >
@@ -386,6 +401,15 @@ export function PaymentsTab({
           teamId={tid}
           target={assignTarget}
           onClose={() => setAssignTarget(null)}
+        />
+      )}
+
+      {tid && (
+        <RecordPaymentDialog
+          teamId={tid}
+          open={recordOpen}
+          onClose={() => setRecordOpen(false)}
+          contactId={contact.id}
         />
       )}
     </div>

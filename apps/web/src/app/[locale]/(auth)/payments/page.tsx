@@ -28,6 +28,7 @@ import {
   type UnifiedPaymentRow,
 } from '@/lib/payments'
 import { AssignPaymentDialog, type AssignPaymentTarget } from '@/components/payments/AssignPaymentDialog'
+import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -70,8 +71,9 @@ const PAYMENT_STATUS_STYLES: Record<string, string> = {
 
 export default function PaymentsDashboardPage() {
   const t = useTranslations('PaymentsDashboard')
-  const { currentTeamId } = useAuth()
+  const { currentTeamId, team } = useAuth()
   const teamId = currentTeamId ?? null
+  const connectReady = !!team?.payments?.connectAccountId
 
   const { data: payments = [], isLoading } = useMemberPayments(teamId)
   const { data: events = [], isLoading: loadingEvents } = usePaymentEvents(teamId)
@@ -81,6 +83,7 @@ export default function PaymentsDashboardPage() {
 
   const [refundTarget, setRefundTarget] = useState<UnifiedPaymentRow | null>(null)
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
+  const [recordOpen, setRecordOpen] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unassigned'>('all')
 
   const contactName = useMemo(() => {
@@ -112,7 +115,15 @@ export default function PaymentsDashboardPage() {
           <CreditCard className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold">{t('title')}</h1>
         </div>
-        {teamId && <CreatePaymentLinkDialog teamId={teamId} />}
+        <div className="flex items-center gap-2">
+          {teamId && (
+            <Button size="sm" variant="outline" onClick={() => setRecordOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              {t('recordButton')}
+            </Button>
+          )}
+          {teamId && connectReady && <CreatePaymentLinkDialog teamId={teamId} />}
+        </div>
       </div>
 
       {/* Filter: all / unassigned */}
@@ -156,6 +167,7 @@ export default function PaymentsDashboardPage() {
                     <p className="text-sm font-medium truncate">{paymentLabel(row)}</p>
                     <p className="text-xs text-muted-foreground">
                       {formatPaymentDate(row.createdAt)}
+                      {row.paymentMode && <> · {row.paymentMode}</>}
                       {row.source === 'connect' && row.feeAmount > 0 && (
                         <> · {t('fee')} {formatMoneyMinor(row.feeAmount, row.currency)}</>
                       )}
@@ -202,6 +214,7 @@ export default function PaymentsDashboardPage() {
                         paymentId: row.paymentId,
                         contactId: row.contactId,
                         comment: row.comment,
+                        lineItem: row.lineItem,
                       })
                     }
                   >
@@ -255,6 +268,14 @@ export default function PaymentsDashboardPage() {
           teamId={teamId}
           target={assignTarget}
           onClose={() => setAssignTarget(null)}
+        />
+      )}
+
+      {teamId && (
+        <RecordPaymentDialog
+          teamId={teamId}
+          open={recordOpen}
+          onClose={() => setRecordOpen(false)}
         />
       )}
 

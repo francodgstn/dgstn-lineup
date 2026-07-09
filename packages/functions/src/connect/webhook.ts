@@ -39,6 +39,7 @@ import {
 } from '../utils/connect/client'
 import { persistAccountStatus } from './access'
 import { resolveSingleContact } from '../utils/contacts'
+import { writeContactSubscriptionFields } from '../payments/effects'
 
 // Account/capability events → re-fetch the account (source of truth) and persist.
 // Covers classic Connect account events and v2 thin account events.
@@ -190,18 +191,16 @@ async function writeContactMembership(
   opts: { amountRappen: number; membershipExpiration: Timestamp | null }
 ): Promise<void> {
   const db = admin.firestore()
-  const update: Record<string, unknown> = {
-    last_payment_at: FieldValue.serverTimestamp(),
-    subscription_type_id: md.subscriptionTypeId,
-    subscription_type_name: md.subscriptionTypeName ?? null,
-    subscription_price_id: md.priceId ?? null,
-    subscription_recurrence: md.recurrence ?? null,
-    subscription_amount: Math.round(opts.amountRappen) / 100, // contact stores major units
-    subscription_type_updated_at: FieldValue.serverTimestamp(),
-  }
-  // membership_expiration intentionally not written — subscription axis only
+  // Subscription-axis fields via the shared writer (single source of the field list).
+  // membership_expiration intentionally not written — subscription axis only.
   void opts.membershipExpiration
-  await db.collection(CONTACTS_COLLECTION).doc(contactId).set(update, { merge: true })
+  await writeContactSubscriptionFields(db, contactId, {
+    subscriptionTypeId: md.subscriptionTypeId,
+    subscriptionTypeName: md.subscriptionTypeName ?? null,
+    priceId: md.priceId ?? null,
+    recurrence: md.recurrence ?? null,
+    amountMajor: Math.round(opts.amountRappen) / 100, // contact stores major units
+  })
   await db
     .collection(CONTACTS_COLLECTION)
     .doc(contactId)

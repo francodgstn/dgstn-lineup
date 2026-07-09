@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Plus_Jakarta_Sans, Fredoka, Sora } from 'next/font/google'
 import { getLocale } from 'next-intl/server'
-import { ThemeProvider } from 'next-themes'
+import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
 const jakarta = Plus_Jakarta_Sans({

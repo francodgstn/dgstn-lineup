@@ -199,6 +199,10 @@ export const handleTeamStripeWebhook = onRequest({ invoker: 'public' }, async (r
           amount: extracted.amount,
           currency: extracted.currency,
           subscription_type_id: extracted.subscriptionTypeId,
+          // Structured link — a manager can enrich it (course/product/price) on assign.
+          line_item: extracted.subscriptionTypeId
+            ? { kind: 'subscription', subscriptionTypeId: extracted.subscriptionTypeId, label: comment }
+            : null,
           membership_expiration: null,
           comment,
           raw_status: event.type,

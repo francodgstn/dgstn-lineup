@@ -79,9 +79,12 @@ export function BillingCurrencyCard({
   }
 
   return (
-    <div className="flex items-end gap-3 rounded-lg border p-4">
-      <div className="space-y-1.5">
+    <div className="h-full rounded-lg border p-4 space-y-3">
+      <div>
         <Label>{t('billingCurrency')}</Label>
+        <p className="text-xs text-muted-foreground mt-0.5">{t('billingCurrencyDesc')}</p>
+      </div>
+      <div className="flex items-end gap-3">
         <Select value={value} onValueChange={(v) => v && setValue(v)} disabled={!canEdit}>
           <SelectTrigger className="w-56">
             <SelectValue />
@@ -95,13 +98,12 @@ export function BillingCurrencyCard({
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{t('billingCurrencyDesc')}</p>
+        {canEdit && dirty && (
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving ? t('saving') : t('save')}
+          </Button>
+        )}
       </div>
-      {canEdit && dirty && (
-        <Button size="sm" onClick={save} disabled={saving}>
-          {saving ? t('saving') : t('save')}
-        </Button>
-      )}
     </div>
   )
 }

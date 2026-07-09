@@ -18,6 +18,7 @@ import {
   type ExternalPayment,
   type MemberPayment,
   type MemberSubscription,
+  type PaymentLineItem,
 } from '@linyup/shared'
 
 /** The browser origin to send to checkout/onboarding callables so Stripe returns
@@ -210,7 +211,8 @@ export function useContactPayments(teamId: string | null, contactId: string | nu
   })
 }
 
-/** (Re)assign the contact and/or edit the comment on a Connect or BYO payment. */
+/** (Re)assign the contact, edit the comment, and/or set the line-item on a
+ * Connect or BYO payment. */
 export function useUpdatePaymentRecord() {
   const qc = useQueryClient()
   return useMutation({
@@ -220,6 +222,7 @@ export function useUpdatePaymentRecord() {
       paymentId: string
       contactId?: string | null
       comment?: string | null
+      lineItem?: PaymentLineItem | null
     }) => {
       const fn = httpsCallable<typeof vars, { ok: boolean; contactId: string | null }>(
         functions,
@@ -229,6 +232,34 @@ export function useUpdatePaymentRecord() {
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['member-payments', vars.teamId] })
+      qc.invalidateQueries({ queryKey: ['payment-events', vars.teamId] })
+      qc.invalidateQueries({ queryKey: ['contact-payments'] })
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+    },
+  })
+}
+
+/** Record a manual cash / bank-transfer payment into the unified ledger. */
+export function useRecordManualPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (vars: {
+      teamId: string
+      contactId?: string | null
+      amount: number
+      currency?: string
+      occurredAt?: number
+      paymentMode?: string
+      lineItem?: PaymentLineItem | null
+      comment?: string | null
+    }) => {
+      const fn = httpsCallable<typeof vars, { id: string; duplicate?: boolean }>(
+        functions,
+        'recordManualPayment'
+      )
+      return (await fn(vars)).data
+    },
+    onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['payment-events', vars.teamId] })
       qc.invalidateQueries({ queryKey: ['contact-payments'] })
       qc.invalidateQueries({ queryKey: ['contacts'] })

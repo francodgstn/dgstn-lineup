@@ -1,17 +1,18 @@
 'use client'
 
-// Shared "assign contact + edit comment" dialog for a single payment, used by the
-// general payments page and the per-contact Payments tab. The contact picker
-// searches by name/email; the comment field is free-text with predefined preset
-// suggestions (PAYMENT_COMMENT_PRESETS) shown as quick-pick chips. Both rails
-// (Connect + BYO) flow through the one updatePaymentRecord callable.
+// Shared "link a payment" dialog for a single payment, used by the general payments
+// page and the per-contact Payments tab. A manager can set what was bought
+// (line-item → drives entitlements), assign the contact, and edit a free-text note
+// (with PAYMENT_COMMENT_PRESETS quick-picks). Both rails (Connect + BYO) flow
+// through the one updatePaymentRecord callable.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { Check, Loader2, Search, UserX } from 'lucide-react'
-import { PAYMENT_COMMENT_PRESETS } from '@linyup/shared'
-import { useActiveContacts } from '@/hooks/useActiveContacts'
+import { Loader2 } from 'lucide-react'
+import { PAYMENT_COMMENT_PRESETS, type PaymentLineItem } from '@linyup/shared'
 import { useUpdatePaymentRecord } from '@/hooks/useConnect'
+import { ContactPicker } from '@/components/payments/ContactPicker'
+import { PaymentLineItemPicker } from '@/components/payments/PaymentLineItemPicker'
 import {
   Dialog,
   DialogContent,
@@ -29,11 +30,7 @@ export interface AssignPaymentTarget {
   paymentId: string
   contactId: string | null
   comment: string | null
-}
-
-function contactName(c: { firstname?: string; lastname?: string; email?: string; id: string }): string {
-  const name = `${c.firstname ?? ''} ${c.lastname ?? ''}`.trim()
-  return name || c.email || c.id
+  lineItem?: PaymentLineItem | null
 }
 
 export function AssignPaymentDialog({
@@ -47,12 +44,11 @@ export function AssignPaymentDialog({
 }) {
   const t = useTranslations('PaymentsDashboard')
   const tp = useTranslations('PaymentComment')
-  const { data: contacts = [] } = useActiveContacts(teamId)
   const update = useUpdatePaymentRecord()
 
   const [contactId, setContactId] = useState<string>(target?.contactId ?? '')
   const [comment, setComment] = useState<string>(target?.comment ?? '')
-  const [search, setSearch] = useState('')
+  const [lineItem, setLineItem] = useState<PaymentLineItem | null>(target?.lineItem ?? null)
 
   // Re-seed local state whenever a new target is opened (parent passes a fresh
   // object each time), so the dialog always reflects the row being edited.
@@ -60,21 +56,9 @@ export function AssignPaymentDialog({
     if (target) {
       setContactId(target.contactId ?? '')
       setComment(target.comment ?? '')
-      setSearch('')
+      setLineItem(target.lineItem ?? null)
     }
   }, [target])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const list = q
-      ? contacts.filter((c) =>
-          `${contactName(c)} ${c.email ?? ''}`.toLowerCase().includes(q)
-        )
-      : contacts
-    return list.slice(0, 50)
-  }, [contacts, search])
-
-  const selectedContact = contacts.find((c) => c.id === contactId)
 
   async function save() {
     if (!target) return
@@ -84,13 +68,15 @@ export function AssignPaymentDialog({
       paymentId: string
       contactId?: string | null
       comment?: string | null
+      lineItem?: PaymentLineItem | null
     } = { teamId, source: target.source, paymentId: target.paymentId }
 
     if (contactId !== (target.contactId ?? '')) vars.contactId = contactId || null
     if (comment.trim() !== (target.comment ?? '').trim()) vars.comment = comment.trim() || null
+    if (JSON.stringify(lineItem) !== JSON.stringify(target.lineItem ?? null)) vars.lineItem = lineItem
 
     // Nothing changed — just close.
-    if (vars.contactId === undefined && vars.comment === undefined) {
+    if (vars.contactId === undefined && vars.comment === undefined && vars.lineItem === undefined) {
       onClose()
       return
     }
@@ -106,7 +92,16 @@ export function AssignPaymentDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Comment with preset quick-picks */}
+          {/* What was bought (structured → drives entitlements) */}
+          <PaymentLineItemPicker teamId={teamId} value={lineItem} onChange={setLineItem} />
+
+          {/* Contact */}
+          <div className="space-y-1.5">
+            <Label>{t('assignContactLabel')}</Label>
+            <ContactPicker teamId={teamId} value={contactId} onChange={setContactId} />
+          </div>
+
+          {/* Free-text note with preset quick-picks */}
           <div className="space-y-1.5">
             <Label>{t('commentLabel')}</Label>
             <Input
@@ -135,64 +130,6 @@ export function AssignPaymentDialog({
                 )
               })}
             </div>
-          </div>
-
-          {/* Contact picker */}
-          <div className="space-y-1.5">
-            <Label>{t('assignContactLabel')}</Label>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t('assignSearchPlaceholder')}
-                className="pl-8"
-              />
-            </div>
-            <div className="max-h-56 overflow-auto rounded-lg border divide-y">
-              {/* Unassign option */}
-              <button
-                type="button"
-                onClick={() => setContactId('')}
-                className={cn(
-                  'flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted',
-                  contactId === '' && 'bg-muted'
-                )}
-              >
-                <UserX className="h-4 w-4 text-muted-foreground" />
-                <span className="flex-1">{t('assignUnassigned')}</span>
-                {contactId === '' && <Check className="h-4 w-4 text-primary" />}
-              </button>
-              {filtered.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setContactId(c.id)}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted',
-                    contactId === c.id && 'bg-muted'
-                  )}
-                >
-                  <span className="flex-1 min-w-0">
-                    <span className="block truncate font-medium">{contactName(c)}</span>
-                    {c.email && (
-                      <span className="block truncate text-xs text-muted-foreground">{c.email}</span>
-                    )}
-                  </span>
-                  {contactId === c.id && <Check className="h-4 w-4 text-primary" />}
-                </button>
-              ))}
-              {filtered.length === 0 && (
-                <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                  {t('assignNoContacts')}
-                </p>
-              )}
-            </div>
-            {selectedContact && (
-              <p className="text-xs text-muted-foreground">
-                {t('assignSelected', { name: contactName(selectedContact) })}
-              </p>
-            )}
           </div>
         </div>
 

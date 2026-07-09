@@ -264,6 +264,10 @@ export interface Team {
   // Billing currency for subscription-type prices (ISO 4217, e.g. 'CHF').
   // Pre-filled from the configured payment gateway's currency when one exists.
   default_currency?: string
+  // Studio-configurable modes for MANUAL payments (cash / bank transfer / TWINT / …).
+  // Free-text labels the owner manages in Settings → Payments; the Record-payment
+  // dialog offers them (a sensible default set is shown until customized).
+  payment_modes?: string[]
   // Operational flags for launch / founder onboarding (see docs/launch/).
   flags?: {
     // Linyup-internal / synthetic tenant (e.g. the prod smoke-test studio).
