@@ -33,7 +33,7 @@ import {
   Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift,
   GraduationCap, Trophy, FolderTree, Search, Tag, ListPlus, ClipboardList,
   ImageIcon, FileText, CheckCircle2, Coins, Lock, Clock, FlaskConical, Star,
-  ChevronDown,
+  ChevronDown, Monitor,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils'
 import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
 import { ConfigPanel as WhatsappConfigPanel } from '@/plugins/whatsapp/ConfigPanel'
 import { ConfigPanel as WebsiteConfigPanel } from '@/plugins/website/ConfigPanel'
+import { ConfigPanel as KioskConfigPanel } from '@/plugins/kiosk/ConfigPanel'
 
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   ListPlus,
   ClipboardList,
   FileText,
+  Monitor,
 }
 
 function PluginIcon({ name, className }: { name: string; className?: string }) {
@@ -551,6 +553,7 @@ function PluginConfigDialog({
     'ai-insights': AiInsightsConfigPanel,
     'whatsapp':    WhatsappConfigPanel,
     'website':     WebsiteConfigPanel,
+    'kiosk':       KioskConfigPanel,
   }
   const ConfigPanel = CONFIG_PANELS[manifest.id] ?? null
 
