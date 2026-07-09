@@ -545,7 +545,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           where('allowBooking', '==', true),
           where('start', '>=', Timestamp.now()),
           orderBy('start', 'asc'),
-          limit(100)
+          // A real studio with several daily classes easily exceeds 100 upcoming
+          // sessions across a multi-month booking window; the calendar still
+          // paginates by day, this just caps how many are fetched up front.
+          limit(200)
         )
         const sessSnap = await getDocs(sessQ)
         const sessList: SessionProfile[] = sessSnap.docs
