@@ -19,10 +19,25 @@ import {
   CONTACTS_COLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   PAYMENT_EVENTS_SUBCOLLECTION,
+  type PaymentLineItem,
 } from '@linyup/shared'
 import { assertManager } from './access'
+import { applyPaymentEffects, normalizePaymentLineItem } from '../payments/effects'
 
 const MAX_COMMENT_LEN = 500
+
+/** The line-item to apply on assign: the manager's explicit pick, else the row's
+ * stored line_item, else a bare subscription link derived from subscription_type_id. */
+function effectiveLineItem(
+  explicit: PaymentLineItem | null,
+  payment: FirebaseFirestore.DocumentData
+): PaymentLineItem | null {
+  if (explicit) return explicit
+  if (payment.line_item) return normalizePaymentLineItem(payment.line_item)
+  const subTypeId = payment.subscription_type_id as string | undefined
+  if (subTypeId) return { kind: 'subscription', subscriptionTypeId: subTypeId }
+  return null
+}
 
 export const updatePaymentRecord = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
@@ -35,6 +50,8 @@ export const updatePaymentRecord = onCall(async (request) => {
     contactId?: string | null
     // comment: any string sets it; omit → unchanged.
     comment?: string | null
+    // lineItem: structured "what was bought"; omit → unchanged.
+    lineItem?: unknown
   }
   if (!data?.teamId || !data?.paymentId) {
     throw new HttpsError('invalid-argument', 'teamId and paymentId are required')
@@ -47,9 +64,11 @@ export const updatePaymentRecord = onCall(async (request) => {
 
   const changingContact = Object.prototype.hasOwnProperty.call(data, 'contactId')
   const changingComment = Object.prototype.hasOwnProperty.call(data, 'comment')
-  if (!changingContact && !changingComment) {
+  const changingLineItem = Object.prototype.hasOwnProperty.call(data, 'lineItem')
+  if (!changingContact && !changingComment && !changingLineItem) {
     throw new HttpsError('invalid-argument', 'Nothing to update')
   }
+  const newLineItem = changingLineItem ? normalizePaymentLineItem(data.lineItem) : null
 
   await assertManager(request.auth.uid, teamId)
 
@@ -95,6 +114,12 @@ export const updatePaymentRecord = onCall(async (request) => {
     finalComment = (data.comment ?? '').toString().trim().slice(0, MAX_COMMENT_LEN) || null
     update.comment = finalComment
   }
+  if (changingLineItem) {
+    update.line_item = newLineItem
+    if (newLineItem?.kind === 'subscription') {
+      update.subscription_type_id = newLineItem.subscriptionTypeId ?? null
+    }
+  }
 
   if (changingContact) {
     if (source === 'byo') {
@@ -109,29 +134,45 @@ export const updatePaymentRecord = onCall(async (request) => {
 
   await docRef.set(update, { merge: true })
 
-  // On (re)assign to a contact, apply best-effort membership + log the activity.
-  if (changingContact && newContactId) {
-    const contactUpdate: Record<string, unknown> = { last_payment_at: now }
-    if (source === 'byo') {
-      // BYO docs carry the subscription linkage; re-apply it like the webhook does.
-      // Note: membership_expiration is NOT written to the contact — the subscription
-      // axis (subscription_type_id) is separate from the affiliation axis.
-      const subTypeId = payment.subscription_type_id as string | undefined
-      if (subTypeId) contactUpdate.subscription_type_id = subTypeId
-    }
-    await db.collection(CONTACTS_COLLECTION).doc(newContactId).set(contactUpdate, { merge: true })
+  // Who this row is (now) linked to, and whether we should (re)apply effects.
+  const existingContact = (source === 'byo' ? payment.contact_id : payment.contactId) as
+    | string
+    | null
+    | undefined
+  const targetContactId = changingContact ? newContactId : (existingContact ?? null)
+  const shouldApply = !!targetContactId && (changingContact ? !!newContactId : changingLineItem)
 
-    const label = changingComment ? finalComment : (payment.comment as string | undefined) ?? null
-    await db
-      .collection(CONTACTS_COLLECTION)
-      .doc(newContactId)
-      .collection('activity_log')
-      .add({
-        type: 'payment_assigned',
-        source: source === 'byo' ? ((payment.gateway as string | undefined) ?? 'byo') : 'stripe_connect',
-        message: `Payment assigned to this contact${label ? ` · ${label}` : ''}`,
-        timestamp: now,
+  if (shouldApply && targetContactId) {
+    const rowSource =
+      source === 'byo' ? ((payment.gateway as string | undefined) ?? 'byo') : 'stripe_connect'
+    const li = effectiveLineItem(newLineItem, payment)
+    if (li) {
+      // Full effects: subscription fields / course entitlement / credits + activity.
+      await applyPaymentEffects(db, {
+        teamId,
+        contactId: targetContactId,
+        lineItem: li,
+        amountRappen: typeof payment.amount === 'number' ? payment.amount : null,
+        currency: (payment.currency as string | undefined) ?? 'CHF',
+        source: rowSource,
+        paymentRef: docRef.id,
       })
+    } else {
+      // No structured item — just stamp + log the bare assignment.
+      await db.collection(CONTACTS_COLLECTION).doc(targetContactId).set({ last_payment_at: now }, { merge: true })
+      const label = changingComment ? finalComment : (payment.comment as string | undefined) ?? null
+      await db
+        .collection(CONTACTS_COLLECTION)
+        .doc(targetContactId)
+        .collection('activity_log')
+        .add({
+          type: 'payment_assigned',
+          source: rowSource,
+          message: `Payment assigned to this contact${label ? ` · ${label}` : ''}`,
+          payment_id: docRef.id,
+          timestamp: now,
+        })
+    }
   }
 
   return { ok: true, contactId: newContactId, source }

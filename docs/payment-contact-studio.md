@@ -8,6 +8,7 @@
 > |---|---|---|---|
 > | **Pay via Linyup** (Stripe Connect) | the **studio's** Stripe balance | yes (per-tier) | runs checkout, refunds, reconciliation |
 > | **BYO gateway** (Payrexx / Stripe-BYO) | the studio's **own** account | no | **records** the payment + links a contact (minimal) |
+> | **Manual** (cash / bank transfer) | outside Linyup entirely | no | **records** the payment a manager types in + applies what was bought |
 >
 > CHF-first (with TWINT on Connect). All money is **integer minor units** (Rappen) — never floats.
 
@@ -36,13 +37,27 @@ multiple matches → the payment is still **recorded as Unassigned**, and a mana
 assigns it. (The public Connect **shop** keeps its approved behaviour: 1 match →
 link, 0 → auto-create the contact cap-aware, >1 → Unassigned, never guess.)
 
-**Assign + comment.** One callable, `updatePaymentRecord({ teamId, source:
-'connect'|'byo', paymentId, contactId?, comment? })` (manager-only), handles
-(re)assigning the contact **and** editing a free-text `comment` ("what was paid")
-for either rail. On assign it stamps `last_payment_at` + an `activity_log` entry;
-BYO docs additionally re-apply the subscription linkage. The comment is prefilled
-with a default suggestion and the UI offers preset quick-picks
-(`PAYMENT_COMMENT_PRESETS` in `@linyup/shared`, i18n'd via `PaymentComment.preset_*`).
+**Assign, link, comment.** `updatePaymentRecord({ teamId, source:'connect'|'byo',
+paymentId, contactId?, comment?, lineItem? })` (manager-only) (re)assigns the contact,
+sets a structured **line-item** ("what was bought"), and/or edits a free-text `comment`
+("what was paid" note). The comment is prefilled with a default and offers preset
+quick-picks (`PAYMENT_COMMENT_PRESETS`, i18n'd via `PaymentComment.preset_*`).
+
+**Applying a line-item runs the real effects** — the same a Connect purchase would —
+through one shared helper, `applyPaymentEffects` (`packages/functions/src/payments/effects.ts`),
+reused by the BYO webhooks, the manual entry, and `updatePaymentRecord` on assign:
+
+| `line_item.kind` | Effect on the contact |
+|---|---|
+| `subscription` | Set subscription fields (`subscription_type_id`/name/price/recurrence) + a credit grant when the price carries `credits`. **No** affiliation/expiry write — the subscription axis is separate from the affiliation axis. |
+| `course` | Grant the **lifetime entitlement** (`courses/{id}/purchases/{contactId}`) — unlocks the course in the Space. |
+| `product` | Record-only: an `activity_log` entry (merch, no entitlement). |
+| `drop_in` / `other` | `last_payment_at` + an activity entry. |
+
+Every effect appends an `activity_log` entry carrying the `payment_id` so the contact
+timeline links back to the exact payment. Effects are idempotent (course keyed by
+`contactId`; credits keyed by the payment ref), so a redelivery or a re-save never
+double-grants.
 
 ---
 
@@ -558,3 +573,37 @@ checkout.session.completed` (or pay a test Checkout on the studio's own test acc
 | `skipped_status:…` (Payrexx) | Payment not confirmed yet — normal; the gateway sends events at each status change. |
 | `test_mode` (Payrexx) | `mode: TEST` — set `ALLOW_TEST_PAYREXX=true` on staging, or use a live payment. |
 | `already_processed` / `duplicate` | A retried/previously-processed event — safe to ignore. |
+
+---
+
+# Rail C — Manual (cash / bank transfer)
+
+A studio that takes **cash** or a **bank transfer** — money that never touches any
+gateway — records it by hand into the same unified ledger. It's a `payment_events` row
+with `gateway: 'manual'`, so it appears on the Payments page and the contact Payments
+tab, and reuses the assign/link/edit path like every other external payment.
+
+- **Where:** the **Payments** page → *Record payment*, or a contact's **Payments** tab
+  (contact prefilled). The page is a core manager surface — always available, even for a
+  studio with **no** gateway configured at all.
+- **What a manager enters:** amount, date, a **payment mode** (studio-configurable —
+  Cash / Bank transfer / TWINT / …; see below), an optional contact, a structured
+  **line-item** (subscription / course / product / drop-in), and an optional note.
+- **Payment modes are configurable.** The owner manages the list in
+  **Settings → Payments → Manual payment modes** (`teams/{teamId}.payment_modes`,
+  owner-only). Until customized, a default set (Cash / Bank transfer / TWINT) is offered.
+  The chosen mode is stored on the row as `payment_mode` and shown in the payments list —
+  so a Swiss studio taking TWINT to a personal number just adds that mode once.
+- **Callable:** `recordManualPayment` (manager-only, `packages/functions/src/payments/`)
+  writes the row and — when a contact + line-item are given — runs `applyPaymentEffects`
+  (see **Unified payments view**), so a cash course sale actually unlocks the course, a
+  cash membership sets the subscription (+ credits), etc.
+- **Idempotency:** the doc id is `manual:{id}`; pass an `idempotencyKey` to make a retry
+  a no-op.
+- **Not a gateway:** no webhook, no signing secret, no Stripe/Payrexx config. It is
+  purely bookkeeping + entitlements. Refunds are out of scope (adjust in your own books).
+
+> The credit-pack counterpart for cash sales, `grantCredits`
+> (`packages/functions/src/contacts/`), still exists for granting lesson credits
+> directly; a manual payment with a subscription line-item whose price carries credits
+> grants them the same way.

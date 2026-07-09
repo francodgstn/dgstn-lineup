@@ -84,6 +84,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
+import { PaymentModesCard } from '@/components/payments/PaymentModesCard'
 import { BillingCurrencyCard, useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
 import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
@@ -1284,15 +1285,6 @@ function PaymentsTab({ teamId }: { teamId: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Studio billing currency — applies to every payment surface (subs, products,
-          courses, shop). Lives here so there's a single home for it. */}
-      <BillingCurrencyCard
-        teamId={teamId}
-        current={team?.default_currency}
-        gatewayCurrency={gatewayCurrency}
-        canEdit={teamRole === 'owner'}
-      />
-
       {/* Accept payments with Linyup (Stripe Connect) — own card; renders only when enabled. */}
       <ConnectPaymentsCard teamId={teamId} />
 
@@ -1348,6 +1340,21 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       )}
         </CardContent>
       </Card>
+
+      {/* Studio billing currency + manual payment modes — paired, shown last. */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <BillingCurrencyCard
+          teamId={teamId}
+          current={team?.default_currency}
+          gatewayCurrency={gatewayCurrency}
+          canEdit={teamRole === 'owner'}
+        />
+        <PaymentModesCard
+          teamId={teamId}
+          current={team?.payment_modes}
+          canEdit={teamRole === 'owner'}
+        />
+      </div>
 
       {/* Add/edit dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>

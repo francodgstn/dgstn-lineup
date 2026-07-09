@@ -9,6 +9,7 @@ import {
   ROLE_RANK,
   resolveRoleCapabilities,
   dataScopeForRole,
+  DEFAULT_PAYMENT_MODES,
 } from '@linyup/shared'
 
 export async function isAdmin(userId: string): Promise<boolean> {
@@ -293,6 +294,8 @@ export async function createTeamRecord(
     settings: teamData.settings || {},
     slug,
     links: defaultLinks,
+    // Default manual payment modes (Settings → Payments) — editable by the owner.
+    payment_modes: [...DEFAULT_PAYMENT_MODES],
     created: FieldValue.serverTimestamp(),
     createdBy: ownerId,
   })

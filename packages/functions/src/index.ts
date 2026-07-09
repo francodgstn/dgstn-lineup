@@ -183,8 +183,10 @@ export {
 } from './connect/payments'
 export { refundMemberPayment } from './connect/refunds'
 export { handleConnectWebhook } from './connect/webhook'
-// Cross-rail payment editing (assign contact + edit comment) for Connect + BYO.
+// Cross-rail payment editing (assign contact + edit comment + line-item) for Connect + BYO.
 export { updatePaymentRecord } from './connect/updatePayment'
+// Manual cash / bank-transfer payments — recorded into the unified payment_events ledger.
+export { recordManualPayment } from './payments/recordManualPayment'
 
 // Outreach
 export { sendOutreachEmail } from './outreach'

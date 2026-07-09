@@ -34,6 +34,7 @@
 
 import admin from 'firebase-admin'
 import { applicationDefault } from 'firebase-admin/app'
+import { DEFAULT_PAYMENT_MODES } from '@linyup/shared'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
@@ -1543,6 +1544,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       plan: 'studio',
       plan_status: 'active',
       default_currency: 'CHF',
+      payment_modes: [...DEFAULT_PAYMENT_MODES],
       // Standalone Studio demo teams enable the affiliation axis (team-local 'club').
       affiliations_enabled: true,
       ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],

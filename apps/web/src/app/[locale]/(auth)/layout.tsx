@@ -104,7 +104,9 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/contacts', labelKey: 'contacts', icon: Users },
       // Coaches (team staff) — studio/org only; the coach plan is single-person.
       { href: '/coaches', labelKey: 'coaches', icon: UserCog, requiresPlan: 'studio' },
-      { href: '/payments', labelKey: 'payments', icon: Wallet, requiresConnect: true },
+      // Core manager surface: cash/manual payments work with no gateway at all,
+      // so Payments is always available (record + assign + Connect/BYO management).
+      { href: '/payments', labelKey: 'payments', icon: Wallet },
       // Automations is operational (workflows acting on contacts/bookings), so it
       // lives in Run rather than Grow.
       { href: '/automations', labelKey: 'automations', icon: Workflow },

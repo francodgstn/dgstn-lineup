@@ -213,6 +213,10 @@ export const handlePayrexxWebhook = onRequest(
           amount: typeof transaction.amount === 'number' ? transaction.amount : null,
           currency: cfg.currency,
           subscription_type_id: subscriptionTypeId,
+          // Structured link — a manager can enrich it (course/product/price) on assign.
+          line_item: subscriptionTypeId
+            ? { kind: 'subscription', subscriptionTypeId, label: comment }
+            : null,
           membership_expiration: membershipExpiration,
           comment,
           raw_status: status,
