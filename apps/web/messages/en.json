@@ -1140,7 +1140,10 @@
     "prerequisitesHelp": "Shown on the public booking page. Informational only — not enforced.",
     "fieldConfirmationInstructions": "Booking confirmation note",
     "confirmationInstructionsHelp": "Added to this activity's booking confirmation email, replacing the team-wide note from Settings → Emails.",
-    "reorder": "Reorder"
+    "reorder": "Reorder",
+    "quickCreateSubPlaceholder": "New subscription name…",
+    "quickCreateSubButton": "Create",
+    "quickCreateSubHint": "Creates a basic subscription linked to this activity. Pricing can be added later in the subscription settings."
   },
   "TeamSettings": {
     "title": "Team settings",
@@ -1316,7 +1319,11 @@
     "autoPaused": "Paused",
     "autoTriggerSubscribed": "When subscribed",
     "autoTriggerUnsubscribed": "When unsubscribed",
-    "autoTriggerChanged": "When subscription changes"
+    "autoTriggerChanged": "When subscription changes",
+    "subTypeActivitiesLabel": "Activities this subscription unlocks",
+    "subTypeActivitiesDesc": "Holders of this subscription can book these activities. Linking an activity restricts its booking to subscribers.",
+    "subTypeActivitiesEmpty": "No activities yet — create them under Offer → Activities.",
+    "subTypeActivitiesHint": "Unlinking the last subscription from an activity makes it bookable by all members again."
   },
   "Bookings": {
     "title": "Bookings",
@@ -3264,7 +3271,8 @@
     "durationMinutes": "{mins}m",
     "durationHoursMinutes": "{h}h {m}m",
     "durationHours": "{h}h",
-    "bookingRequired": "Booking required"
+    "bookingRequired": "Booking required",
+    "errorNoSubscriptionForActivity": "You don’t currently hold a membership that includes this activity. Please contact the studio or check the available plans."
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Book a Trial Class",
@@ -3617,7 +3625,13 @@
     "cameraAccessDenied": "Camera access denied. Allow camera and try again.",
     "invalidQrCode": "Invalid QR code",
     "contactAlreadyCheckedIn": "{name} already checked in",
-    "contactCheckedIn": "✓ {name} checked in"
+    "contactCheckedIn": "✓ {name} checked in",
+    "noSubBadge": "No subscription",
+    "noSubBadgeTitle": "This contact holds no valid subscription for this activity",
+    "noSubConfirmTitle": "No valid subscription",
+    "noSubConfirmBody": "{name} doesn’t hold a valid subscription for this activity. Add them anyway?",
+    "noSubConfirmCancel": "Cancel",
+    "noSubConfirmAddAnyway": "Add anyway"
   },
   "OrgEvents": {
     "title": "Organization events",

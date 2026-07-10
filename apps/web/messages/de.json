@@ -1140,7 +1140,10 @@
     "prerequisitesHelp": "Wird auf der öffentlichen Buchungsseite angezeigt. Nur informativ — wird nicht erzwungen.",
     "fieldConfirmationInstructions": "Hinweis in der Buchungsbestätigung",
     "confirmationInstructionsHelp": "Wird der Buchungsbestätigung dieser Aktivität hinzugefügt und ersetzt den teamweiten Hinweis aus Einstellungen → E-Mails.",
-    "reorder": "Neu anordnen"
+    "reorder": "Neu anordnen",
+    "quickCreateSubPlaceholder": "Name des neuen Abos…",
+    "quickCreateSubButton": "Erstellen",
+    "quickCreateSubHint": "Erstellt ein einfaches Abo, das mit dieser Aktivität verknüpft ist. Preise können später in den Abo-Einstellungen ergänzt werden."
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",
@@ -1316,7 +1319,11 @@
     "autoPaused": "Pausiert",
     "autoTriggerSubscribed": "Wenn abonniert",
     "autoTriggerUnsubscribed": "Wenn gekündigt",
-    "autoTriggerChanged": "Wenn sich das Abo ändert"
+    "autoTriggerChanged": "Wenn sich das Abo ändert",
+    "subTypeActivitiesLabel": "Aktivitäten, die dieses Abo freischaltet",
+    "subTypeActivitiesDesc": "Inhaber dieses Abos können diese Aktivitäten buchen. Eine Verknüpfung beschränkt die Buchung der Aktivität auf Abonnenten.",
+    "subTypeActivitiesEmpty": "Noch keine Aktivitäten — erstelle sie unter Angebot → Aktivitäten.",
+    "subTypeActivitiesHint": "Wird das letzte Abo einer Aktivität entfernt, ist sie wieder für alle Mitglieder buchbar."
   },
   "Bookings": {
     "title": "Buchungen",
@@ -3264,7 +3271,8 @@
     "durationMinutes": "{mins} Min.",
     "durationHoursMinutes": "{h} Std. {m} Min.",
     "durationHours": "{h} Std.",
-    "bookingRequired": "Buchung erforderlich"
+    "bookingRequired": "Buchung erforderlich",
+    "errorNoSubscriptionForActivity": "Sie haben derzeit keine Mitgliedschaft, die diese Aktivität einschliesst. Bitte kontaktieren Sie das Studio oder prüfen Sie die verfügbaren Angebote."
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Probetraining buchen",
@@ -3617,7 +3625,13 @@
     "cameraAccessDenied": "Kamerazugriff verweigert. Bitte erlauben Sie den Zugriff und versuchen Sie es erneut.",
     "invalidQrCode": "Ungültiger QR-Code",
     "contactAlreadyCheckedIn": "{name} ist bereits eingecheckt",
-    "contactCheckedIn": "✓ {name} eingecheckt"
+    "contactCheckedIn": "✓ {name} eingecheckt",
+    "noSubBadge": "Kein Abo",
+    "noSubBadgeTitle": "Dieser Kontakt hat kein gültiges Abo für diese Aktivität",
+    "noSubConfirmTitle": "Kein gültiges Abo",
+    "noSubConfirmBody": "{name} hat kein gültiges Abo für diese Aktivität. Trotzdem hinzufügen?",
+    "noSubConfirmCancel": "Abbrechen",
+    "noSubConfirmAddAnyway": "Trotzdem hinzufügen"
   },
   "OrgEvents": {
     "title": "Organisationsveranstaltungen",

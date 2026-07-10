@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
-import { resolveActivityAccessRule, compareActivities, type ActivityAccessRule } from '@linyup/shared'
+import { resolveActivityAccessRule, compareActivities, activityRequiresSubscription, type ActivityAccessRule } from '@linyup/shared'
 import { useLocale, useTranslations } from 'next-intl'
 import {
   startOfMonth,
@@ -91,6 +91,9 @@ interface ContactData {
   lastname: string
   email: string
   phone: string
+  /** Subscription-type ids the contact holds (live subs, primary snapshot, valid
+   *  credit packs) — returned by verifyBookingCode for the pre-booking warning. */
+  held_subscription_type_ids?: string[]
 }
 
 type Step =
@@ -749,7 +752,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         const cId = result.data.selectedContactId!
         setSelectedContactId(cId)
         setVerifiedContactData(result.data.contactData ?? null)
-        await doAuthenticatedBooking(cId, returningCodeId, selectedSession)
+        await doAuthenticatedBooking(cId, returningCodeId, selectedSession, result.data.contactData)
       }
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string }
@@ -773,7 +776,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       const cId = result.data.selectedContactId!
       setSelectedContactId(cId)
       setVerifiedContactData(result.data.contactData ?? null)
-      await doAuthenticatedBooking(cId, returningCodeId, selectedSession)
+      await doAuthenticatedBooking(cId, returningCodeId, selectedSession, result.data.contactData)
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string }
       if (e.code === 'already-exists') {
@@ -787,8 +790,28 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   async function doAuthenticatedBooking(
     contactId: string,
     codeId: string,
-    session: SessionProfile
+    session: SessionProfile,
+    contactData?: ContactData | null
   ) {
+    // Personalised gate warning: the identified contact holds no subscription the
+    // activity accepts — tell them in their language instead of surfacing
+    // bookSession's raw permission error. Skipped when drop-in is offered so the
+    // contact can back out to the guest pay-per-class path (bookSession itself has
+    // no drop-in handling and would still reject them here). A subscription-gated
+    // activity with an EMPTY allow-list (misconfig) also skips this and falls
+    // through to the server error. bookSession stays authoritative either way.
+    const required = selectedActivity
+      ? activityRequiresSubscription(resolveActivityAccessRule(selectedActivity))
+      : null
+    if (
+      required?.length &&
+      contactData?.held_subscription_type_ids &&
+      !contactData.held_subscription_type_ids.some((id) => required.includes(id)) &&
+      !dropInAvailable
+    ) {
+      setReturningError(t('errorNoSubscriptionForActivity'))
+      return
+    }
     const bookSessionFn = httpsCallable(functions, 'bookSession')
     await bookSessionFn({
       teamId,

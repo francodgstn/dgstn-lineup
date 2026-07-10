@@ -18,11 +18,12 @@ import { useRouter as useI18nRouter } from '@/i18n/navigation'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Pencil, Trash2, UserPlus,
   MapPin, Clock, Users, QrCode, BookOpen, CheckCircle2, UserX,
-  ExternalLink, X, Check, Ban,
+  ExternalLink, X, Check, Ban, AlertTriangle,
 } from 'lucide-react'
 import {
   SESSIONS_COLLECTION, ACTIVITIES_COLLECTION, CONTACTS_COLLECTION,
-  PARTICIPANTS_SUBCOLLECTION,
+  PARTICIPANTS_SUBCOLLECTION, resolveActivityAccessRule,
+  activityRequiresSubscription, contactHoldsCoveringSubscription,
 } from '@linyup/shared'
 import type { Session, Booking, Contact, Activity } from '@linyup/shared'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
@@ -138,7 +139,7 @@ function useQrScanner(onScan: (text: string) => void) {
 // ─── add participants dialog ──────────────────────────────────────────────────
 
 function AddParticipantsDialog({
-  open, onOpenChange, teamId, sessionId, existingIds, onAdded,
+  open, onOpenChange, teamId, sessionId, existingIds, onAdded, requiredSubscriptionTypeIds,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -146,10 +147,18 @@ function AddParticipantsDialog({
   sessionId: string
   existingIds: Set<string>
   onAdded: () => void
+  /** Subscription-type ids the session's activity demands; null/empty = not gated. */
+  requiredSubscriptionTypeIds: string[] | null
 }) {
   const t = useTranslations('SessionDetail')
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
+  // Contact awaiting the "no valid subscription — add anyway?" confirmation.
+  const [confirming, setConfirming] = useState<Contact | null>(null)
+
+  const isCovered = (c: Contact) =>
+    !requiredSubscriptionTypeIds?.length ||
+    contactHoldsCoveringSubscription(c, requiredSubscriptionTypeIds)
 
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
     queryKey: ['contacts', 'active', teamId],
@@ -179,7 +188,12 @@ function AddParticipantsDialog({
     )
   })
 
-  const add = async (contact: Contact) => {
+  const add = async (contact: Contact, { force = false } = {}) => {
+    if (!force && !isCovered(contact)) {
+      setConfirming(contact)
+      return
+    }
+    setConfirming(null)
     setAdding(contact.id)
     try {
       const participantRef = doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, contact.id)
@@ -204,6 +218,10 @@ function AddParticipantsDialog({
     return `${c.firstname?.[0] ?? ''}${c.lastname?.[0] ?? ''}`.toUpperCase() || '?'
   }
 
+  useEffect(() => {
+    if (!open) setConfirming(null)
+  }, [open])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
@@ -219,6 +237,34 @@ function AddParticipantsDialog({
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
+        {confirming ? (
+          <div className="px-4 py-4 space-y-3">
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-amber-900">{t('noSubConfirmTitle')}</p>
+                <p className="text-xs text-amber-800">
+                  {t('noSubConfirmBody', { name: `${confirming.firstname} ${confirming.lastname}` })}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirming(null)}
+                className="px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+              >
+                {t('noSubConfirmCancel')}
+              </button>
+              <button
+                onClick={() => add(confirming, { force: true })}
+                disabled={adding === confirming.id}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition-colors disabled:opacity-50"
+              >
+                {t('noSubConfirmAddAnyway')}
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="overflow-y-auto max-h-80">
           {isLoading && (
             <div className="px-4 py-3 space-y-2">
@@ -242,10 +288,17 @@ function AddParticipantsDialog({
                 <p className="text-sm font-medium truncate">{c.firstname} {c.lastname}</p>
                 {c.email && <p className="text-xs text-muted-foreground truncate">{c.email}</p>}
               </div>
+              {!isCovered(c) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0">
+                  <AlertTriangle className="h-3 w-3" />
+                  {t('noSubBadge')}
+                </span>
+              )}
               {adding === c.id && <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
             </button>
           ))}
         </div>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -359,6 +412,52 @@ export default function SessionDetailPage() {
       return { id: snap.docs[0].id, ...snap.docs[0].data() } as Session
     },
   })
+
+  // Subscription gate of this session's activity. Mirrors bookSession's resolution
+  // order: a coaching session's own denormalised rule is authoritative (per-slot
+  // overrides); group classes read the linked activity. null/empty = not gated.
+  const gateActivity = (activitiesQ.data ?? []).find((a) => a.id === sessionQ.data?.activityId)
+  const sessionRule = (sessionQ.data as { accessRule?: Parameters<typeof resolveActivityAccessRule>[0]['accessRule'] } | null | undefined)?.accessRule
+  const isCoachingSession = sessionQ.data?.activityType === 'coaching'
+  const accessRule = isCoachingSession
+    ? sessionQ.data
+      ? resolveActivityAccessRule({ accessRule: sessionRule, isFreeTrial: sessionQ.data.isFreeTrial })
+      : null
+    : gateActivity
+      ? resolveActivityAccessRule(gateActivity)
+      : null
+  const requiredSubIds = activityRequiresSubscription(accessRule)
+
+  // Contact docs (subscription snapshots included) for the roster coverage badges.
+  // Shares the add-dialog's cache key; only fetched when the activity is gated.
+  const rosterContactsQ = useQuery<Contact[]>({
+    queryKey: ['contacts', 'active', currentTeamId],
+    enabled: !!currentTeamId && !!requiredSubIds?.length,
+    queryFn: async () => {
+      const q = query(
+        collection(db, CONTACTS_COLLECTION),
+        where('teamId', '==', currentTeamId),
+        where('deleted_at', '==', null),
+        where('archived_at', '==', null),
+        orderBy('lastname'),
+        orderBy('firstname'),
+      )
+      const snap = await getDocs(q)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
+    },
+  })
+
+  // contactId → covered; contacts we can't see (archived etc.) get no badge.
+  const rosterCoverage = new Map<string, boolean>(
+    requiredSubIds?.length
+      ? (rosterContactsQ.data ?? []).map((c) => [
+          c.id,
+          contactHoldsCoveringSubscription(c, requiredSubIds),
+        ])
+      : [],
+  )
+  const showsNoSubBadge = (contactId?: string | null) =>
+    !!contactId && rosterCoverage.get(contactId) === false
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['session', sessionId] })
@@ -603,6 +702,12 @@ export default function SessionDetailPage() {
                 <p className="text-sm font-medium">{b.lastname} {b.firstname}</p>
                 {b.email && <p className="text-xs text-muted-foreground">{b.email}</p>}
               </div>
+              {showsNoSubBadge(b.contact) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0" title={t('noSubBadgeTitle')}>
+                  <AlertTriangle className="h-3 w-3" />
+                  {t('noSubBadge')}
+                </span>
+              )}
               <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">{t('pendingBadge')}</Badge>
               <div className="flex items-center gap-1">
                 <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title={t('confirmAttendanceTitle')}>
@@ -679,6 +784,12 @@ export default function SessionDetailPage() {
                 <p className="text-xs text-muted-foreground">{t('confirmedFromBooking')}</p>
               )}
             </div>
+            {showsNoSubBadge(p.contact) && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0" title={t('noSubBadgeTitle')}>
+                <AlertTriangle className="h-3 w-3" />
+                {t('noSubBadge')}
+              </span>
+            )}
             <button onClick={() => removeParticipant(p.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeCheckInTitle')}>
               <X className="h-3.5 w-3.5" />
             </button>
@@ -704,6 +815,7 @@ export default function SessionDetailPage() {
           sessionId={sessionId}
           existingIds={existingParticipantIds}
           onAdded={() => { invalidate(); setAddOpen(false) }}
+          requiredSubscriptionTypeIds={requiredSubIds}
         />
       )}
 

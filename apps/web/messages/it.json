@@ -1140,7 +1140,10 @@
     "prerequisitesHelp": "Mostrato sulla pagina pubblica di prenotazione. Solo informativo — non vincolante.",
     "fieldConfirmationInstructions": "Nota di conferma prenotazione",
     "confirmationInstructionsHelp": "Aggiunta all'e-mail di conferma prenotazione di questa attività, sostituendo la nota del team in Impostazioni → E-mail.",
-    "reorder": "Riordina"
+    "reorder": "Riordina",
+    "quickCreateSubPlaceholder": "Nome del nuovo abbonamento…",
+    "quickCreateSubButton": "Crea",
+    "quickCreateSubHint": "Crea un abbonamento di base collegato a questa attività. I prezzi possono essere aggiunti in seguito nelle impostazioni degli abbonamenti."
   },
   "TeamSettings": {
     "title": "Impostazioni del team",
@@ -1316,7 +1319,11 @@
     "autoPaused": "In pausa",
     "autoTriggerSubscribed": "Quando abbonato",
     "autoTriggerUnsubscribed": "Quando disiscritto",
-    "autoTriggerChanged": "Quando l'abbonamento cambia"
+    "autoTriggerChanged": "Quando l'abbonamento cambia",
+    "subTypeActivitiesLabel": "Attività sbloccate da questo abbonamento",
+    "subTypeActivitiesDesc": "I titolari di questo abbonamento possono prenotare queste attività. Collegare un’attività ne limita la prenotazione agli abbonati.",
+    "subTypeActivitiesEmpty": "Nessuna attività al momento — creale in Offerta → Attività.",
+    "subTypeActivitiesHint": "Rimuovendo l’ultimo abbonamento da un’attività, questa torna prenotabile da tutti i membri."
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -3264,7 +3271,8 @@
     "durationMinutes": "{mins} min",
     "durationHoursMinutes": "{h} h {m} min",
     "durationHours": "{h} h",
-    "bookingRequired": "Prenotazione obbligatoria"
+    "bookingRequired": "Prenotazione obbligatoria",
+    "errorNoSubscriptionForActivity": "Al momento non hai un abbonamento che include questa attività. Contatta lo studio o consulta i piani disponibili."
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Prenota una lezione di prova",
@@ -3617,7 +3625,13 @@
     "cameraAccessDenied": "Accesso alla fotocamera negato. Consenti l'accesso e riprova.",
     "invalidQrCode": "Codice QR non valido",
     "contactAlreadyCheckedIn": "{name} ha già effettuato il check-in",
-    "contactCheckedIn": "✓ {name} check-in effettuato"
+    "contactCheckedIn": "✓ {name} check-in effettuato",
+    "noSubBadge": "Senza abbonamento",
+    "noSubBadgeTitle": "Questo contatto non ha un abbonamento valido per questa attività",
+    "noSubConfirmTitle": "Nessun abbonamento valido",
+    "noSubConfirmBody": "{name} non ha un abbonamento valido per questa attività. Aggiungere comunque?",
+    "noSubConfirmCancel": "Annulla",
+    "noSubConfirmAddAnyway": "Aggiungi comunque"
   },
   "OrgEvents": {
     "title": "Eventi dell'organizzazione",

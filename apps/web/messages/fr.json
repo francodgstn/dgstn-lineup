@@ -1140,7 +1140,10 @@
     "prerequisitesHelp": "Affiché sur la page de réservation publique. Informatif uniquement — non contraignant.",
     "fieldConfirmationInstructions": "Note de confirmation de réservation",
     "confirmationInstructionsHelp": "Ajoutée à l'e-mail de confirmation de réservation de cette activité, remplaçant la note d'équipe de Paramètres → E-mails.",
-    "reorder": "Réorganiser"
+    "reorder": "Réorganiser",
+    "quickCreateSubPlaceholder": "Nom du nouvel abonnement…",
+    "quickCreateSubButton": "Créer",
+    "quickCreateSubHint": "Crée un abonnement de base lié à cette activité. Les tarifs peuvent être ajoutés plus tard dans les réglages des abonnements."
   },
   "TeamSettings": {
     "title": "Paramètres de l'équipe",
@@ -1316,7 +1319,11 @@
     "autoPaused": "En pause",
     "autoTriggerSubscribed": "Quand abonné",
     "autoTriggerUnsubscribed": "Quand désabonné",
-    "autoTriggerChanged": "Quand l'abonnement change"
+    "autoTriggerChanged": "Quand l'abonnement change",
+    "subTypeActivitiesLabel": "Activités débloquées par cet abonnement",
+    "subTypeActivitiesDesc": "Les titulaires de cet abonnement peuvent réserver ces activités. Lier une activité réserve sa réservation aux abonnés.",
+    "subTypeActivitiesEmpty": "Aucune activité pour l’instant — créez-les sous Offre → Activités.",
+    "subTypeActivitiesHint": "Si le dernier abonnement est retiré d’une activité, elle redevient réservable par tous les membres."
   },
   "Bookings": {
     "title": "Réservations",
@@ -3264,7 +3271,8 @@
     "durationMinutes": "{mins} min",
     "durationHoursMinutes": "{h} h {m} min",
     "durationHours": "{h} h",
-    "bookingRequired": "Réservation obligatoire"
+    "bookingRequired": "Réservation obligatoire",
+    "errorNoSubscriptionForActivity": "Vous n’avez actuellement aucun abonnement incluant cette activité. Veuillez contacter le studio ou consulter les formules disponibles."
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Réserver un cours d'essai",
@@ -3617,7 +3625,13 @@
     "cameraAccessDenied": "Accès à la caméra refusé. Autorisez l'accès et réessayez.",
     "invalidQrCode": "Code QR invalide",
     "contactAlreadyCheckedIn": "{name} est déjà enregistré",
-    "contactCheckedIn": "✓ {name} enregistré"
+    "contactCheckedIn": "✓ {name} enregistré",
+    "noSubBadge": "Sans abonnement",
+    "noSubBadgeTitle": "Ce contact n’a pas d’abonnement valide pour cette activité",
+    "noSubConfirmTitle": "Aucun abonnement valide",
+    "noSubConfirmBody": "{name} n’a pas d’abonnement valide pour cette activité. L’ajouter quand même ?",
+    "noSubConfirmCancel": "Annuler",
+    "noSubConfirmAddAnyway": "Ajouter quand même"
   },
   "OrgEvents": {
     "title": "Événements de l'organisation",

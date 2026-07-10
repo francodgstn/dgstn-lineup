@@ -608,6 +608,14 @@ async function seedTeam(opts: {
     })
 
   // ── activities ──────────────────────────────────────────────────────────────
+  // MMA showcases the activity↔subscription link: gated on the plan tier's
+  // "unlimited" subscription types, so seeded contacts split into covered and
+  // uncovered (exercises the session badges, the warn+confirm, and the
+  // subscription-side activities editor). isFreeTrial stays in sync (open ⇔ true).
+  const mmaSubIds =
+    plan === 'coach'
+      ? [`${teamId}-sub-monthly`, `${teamId}-sub-10class`]
+      : [`${teamId}-sub-premium`, `${teamId}-sub-elite`]
   const activities = [
     {
       id: `${teamId}-act-bjj`,
@@ -617,6 +625,7 @@ async function seedTeam(opts: {
       level: 'all',
       isFreeTrial: true,
       type: 'group_class' as const,
+      accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
     },
     {
       id: `${teamId}-act-mma`,
@@ -626,6 +635,10 @@ async function seedTeam(opts: {
       level: 'intermediate',
       isFreeTrial: false,
       type: 'group_class' as const,
+      accessRule: { type: 'subscription', subscriptionTypeIds: mmaSubIds } as {
+        type: string
+        subscriptionTypeIds?: string[]
+      },
     },
     {
       id: `${teamId}-act-kickbox`,
@@ -635,6 +648,7 @@ async function seedTeam(opts: {
       level: 'all',
       isFreeTrial: true,
       type: 'group_class' as const,
+      accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
     },
     {
       id: `${teamId}-act-yoga`,
@@ -644,6 +658,7 @@ async function seedTeam(opts: {
       level: 'all',
       isFreeTrial: true,
       type: 'group_class' as const,
+      accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
     },
   ]
   for (const a of activities) {
@@ -659,6 +674,7 @@ async function seedTeam(opts: {
       color: a.color,
       image_url: null,
       isFreeTrial: a.isFreeTrial,
+      accessRule: a.accessRule,
       level: a.level,
     })
   }

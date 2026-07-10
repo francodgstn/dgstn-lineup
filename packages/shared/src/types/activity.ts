@@ -102,3 +102,61 @@ export interface ActivityPublicProfile {
   /** Denormalised display-only prerequisites for the public booking pages. */
   prerequisites?: string
 }
+
+/** The subscription-type ids an access rule demands, or null when the rule doesn't
+ *  gate on subscriptions at all (open/members). An empty array is a real (mis)config
+ *  — a subscription-gated activity nobody can book — and is returned as-is. */
+export function activityRequiresSubscription(
+  accessRule: ActivityAccessRule | null | undefined,
+): string[] | null {
+  if (!accessRule || accessRule.type !== 'subscription') return null
+  return accessRule.subscriptionTypeIds ?? []
+}
+
+// Structural subset of Contact the coverage check reads — typed loosely so it
+// accepts full Contact docs, denormalised snapshots, and test fixtures alike.
+export interface SubscriptionCoverageSnapshot {
+  subscription_type_id?: string | null
+  active_subscriptions?: Array<{ subscription_type_id?: string | null }> | null
+  credit_summary?: Array<{
+    subscription_type_id?: string | null
+    remaining?: number
+    next_expires_at?: { toMillis(): number } | null
+  }> | null
+}
+
+/** The subscription-type ids a contact currently "holds" for coverage purposes:
+ *  live subscriptions in `active_subscriptions`, the primary `subscription_type_id`
+ *  snapshot, and non-exhausted, non-expired lesson-credit balances. Mirrors the
+ *  coverage union in the bookSession callable (which stays authoritative — it
+ *  additionally SPENDS credits). */
+export function heldSubscriptionTypeIds(
+  contact: SubscriptionCoverageSnapshot | null | undefined,
+  nowMs: number = Date.now(),
+): string[] {
+  if (!contact) return []
+  const held = new Set<string>()
+  for (const s of contact.active_subscriptions ?? []) {
+    if (s.subscription_type_id) held.add(s.subscription_type_id)
+  }
+  if (contact.subscription_type_id) held.add(contact.subscription_type_id)
+  for (const e of contact.credit_summary ?? []) {
+    if (!e.subscription_type_id) continue
+    if ((e.remaining ?? 0) <= 0) continue
+    if (e.next_expires_at && e.next_expires_at.toMillis() <= nowMs) continue
+    held.add(e.subscription_type_id)
+  }
+  return Array.from(held)
+}
+
+/** Read-only "is this contact covered for these subscription types" check, shared by
+ *  the admin session UI, the roster badges, and the member-facing booking warning. */
+export function contactHoldsCoveringSubscription(
+  contact: SubscriptionCoverageSnapshot | null | undefined,
+  subscriptionTypeIds: string[] | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!contact || !subscriptionTypeIds?.length) return false
+  const held = new Set(heldSubscriptionTypeIds(contact, nowMs))
+  return subscriptionTypeIds.some((id) => held.has(id))
+}
