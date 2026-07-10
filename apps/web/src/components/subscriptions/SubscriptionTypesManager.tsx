@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -16,8 +16,13 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION } from '@linyup/shared'
-import type { SubscriptionType, SubscriptionPrice } from '@linyup/shared'
+import {
+  TEAMS_COLLECTION,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  ACTIVITIES_COLLECTION,
+  resolveActivityAccessRule,
+} from '@linyup/shared'
+import type { SubscriptionType, SubscriptionPrice, Activity } from '@linyup/shared'
 import {
   Dialog,
   DialogContent,
@@ -43,6 +48,7 @@ import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Globe, GripVertical } fro
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { SubscriptionAutomationsSection } from '@/components/subscriptions/SubscriptionAutomationsSection'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import { useActivities } from '@/hooks/useActivities'
 import { formatCurrency } from '@/lib/format'
 
 const RECURRENCES = [
@@ -137,9 +143,73 @@ function SubTypeDialog({
 
   const { fields, append, remove, move } = useFieldArray({ control, name: 'prices' })
 
+  // ── Linked activities (inverse view of Activity.accessRule) ──────────────────
+  // The persisted link lives on the activity docs (accessRule.subscriptionTypeIds);
+  // this section just edits it from the subscription side. Edit-only: a new type
+  // has no id to write into activities until saved.
+  const qcActivities = useQueryClient()
+  const { data: activities = [] } = useActivities(editing ? teamId : null)
+  const linkedInitially = useMemo(() => {
+    if (!editing) return []
+    return activities
+      .filter((a) => {
+        const rule = resolveActivityAccessRule(a)
+        return rule.type === 'subscription' && (rule.subscriptionTypeIds ?? []).includes(editing.id)
+      })
+      .map((a) => a.id)
+  }, [activities, editing])
+  // null = untouched (mirror the docs); an array = the user's pending selection.
+  const [linkedDraft, setLinkedDraft] = useState<string[] | null>(null)
+  const linkedIds = linkedDraft ?? linkedInitially
+  const toggleLinked = (activityId: string) =>
+    setLinkedDraft(
+      linkedIds.includes(activityId)
+        ? linkedIds.filter((id) => id !== activityId)
+        : [...linkedIds, activityId],
+    )
+
   useEffect(() => {
-    if (open) reset(emptyDefaults(editing))
+    if (open) {
+      reset(emptyDefaults(editing))
+      setLinkedDraft(null)
+    }
   }, [open, editing, reset])
+
+  /** Diff the drafted selection against the docs and batch-write accessRule changes.
+   *  Linking promotes an open/members activity to the subscription tier; unlinking
+   *  the LAST subscription reverts it to members (never a locked empty allow-list). */
+  async function persistLinkedActivities(subTypeId: string) {
+    if (!linkedDraft) return
+    const before = new Set(linkedInitially)
+    const after = new Set(linkedDraft)
+    const batch = writeBatch(db)
+    let dirty = false
+    for (const a of activities) {
+      const rule = resolveActivityAccessRule(a)
+      const has = (rule.subscriptionTypeIds ?? []).includes(subTypeId)
+      if (after.has(a.id) && !before.has(a.id) && !has) {
+        const ids = [...(rule.subscriptionTypeIds ?? []), subTypeId]
+        batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), {
+          accessRule: { type: 'subscription', subscriptionTypeIds: ids },
+          isFreeTrial: false,
+        })
+        dirty = true
+      } else if (!after.has(a.id) && before.has(a.id) && has) {
+        const ids = (rule.subscriptionTypeIds ?? []).filter((id) => id !== subTypeId)
+        batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), {
+          accessRule: ids.length
+            ? { type: 'subscription', subscriptionTypeIds: ids }
+            : { type: 'members' },
+          isFreeTrial: false,
+        })
+        dirty = true
+      }
+    }
+    if (dirty) {
+      await batch.commit()
+      qcActivities.invalidateQueries({ queryKey: ['activities', teamId] })
+    }
+  }
 
   const source = watch('source')
   const active = watch('active') ?? true
@@ -178,6 +248,7 @@ function SubTypeDialog({
         doc(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION, editing.id),
         payload
       )
+      await persistLinkedActivities(editing.id)
     } else {
       await addDoc(collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION), {
         ...payload,
@@ -409,6 +480,42 @@ function SubTypeDialog({
               </div>
             )}
           </div>
+
+          {/* Activities this subscription unlocks — inverse editor over the
+              activities' accessRule (saved together with the type) */}
+          {editing && (
+            <div className="space-y-2 rounded-lg border border-dashed p-3">
+              <div className="space-y-0.5">
+                <Label>{t('subTypeActivitiesLabel')}</Label>
+                <p className="text-xs text-muted-foreground">{t('subTypeActivitiesDesc')}</p>
+              </div>
+              {activities.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{t('subTypeActivitiesEmpty')}</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {activities.map((a: Activity) => (
+                    <label
+                      key={a.id}
+                      className="flex items-center gap-2 cursor-pointer text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        className="accent-primary"
+                        checked={linkedIds.includes(a.id)}
+                        onChange={() => toggleLinked(a.id)}
+                      />
+                      <span
+                        className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                        style={{ background: a.color || '#6366f1' }}
+                      />
+                      {a.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">{t('subTypeActivitiesHint')}</p>
+            </div>
+          )}
 
           {/* Automations referencing this subscription + a quick create shortcut */}
           {editing && <SubscriptionAutomationsSection teamId={teamId} subscriptionType={editing} />}

@@ -23,6 +23,7 @@ import {
 } from '../coaching/templates'
 import {
   resolveActivityAccessRule,
+  heldSubscriptionTypeIds,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   type ActivityAccessRule,
   type SubscriptionPrice,
@@ -251,6 +252,9 @@ export const verifyBookingCode = onCall(async (request) => {
         lastname: c.lastname || '',
         email: c.email || '',
         phone: c.phone || '',
+        // Coverage snapshot so the booking UI can warn about a missing
+        // subscription up front (bookSession stays authoritative).
+        held_subscription_type_ids: heldSubscriptionTypeIds(c),
       },
       requiresContactSelection: false,
     }
@@ -306,6 +310,7 @@ export const verifyBookingCode = onCall(async (request) => {
         lastname: c.lastname || '',
         email: c.email || '',
         phone: c.phone || '',
+        held_subscription_type_ids: heldSubscriptionTypeIds(c),
       },
       requiresContactSelection: false,
     }

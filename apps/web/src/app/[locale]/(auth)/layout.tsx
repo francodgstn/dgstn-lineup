@@ -470,9 +470,12 @@ function useHiddenSuggestions() {
 
 // Per-section collapse state for the sidebar nav, persisted in the browser.
 const NAV_COLLAPSED_KEY = 'linyup_nav_collapsed_sections'
+// Sections start collapsed until the user opens one (stored prefs then win) —
+// keyed by NAV_SECTIONS labelKeys.
+const NAV_DEFAULT_COLLAPSED = ['sectionRun', 'sectionOffer', 'sectionGrow']
 
 function useCollapsedSections() {
-  const [collapsed, setCollapsed] = useState<string[]>([])
+  const [collapsed, setCollapsed] = useState<string[]>(NAV_DEFAULT_COLLAPSED)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(NAV_COLLAPSED_KEY)

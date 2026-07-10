@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
-  collection, query, where, orderBy, getDocs,
-  addDoc, updateDoc, doc, serverTimestamp, writeBatch,
+  collection, addDoc, updateDoc, doc, serverTimestamp, writeBatch,
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
@@ -25,9 +24,10 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ACTIVITIES_COLLECTION, resolveActivityAccessRule, compareActivities } from '@linyup/shared'
+import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule } from '@linyup/shared'
 import type { Activity, ActivityLevel, ActivityType } from '@linyup/shared'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import { useActivities } from '@/hooks/useActivities'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SortableList, SortableItem, type SortableRenderProps } from '@/components/ui/sortable'
@@ -102,28 +102,6 @@ const activitySchema = z.object({
 
 type ActivityFormData = z.infer<typeof activitySchema>
 
-// ─── data hook ────────────────────────────────────────────────────────────────
-
-function useActivities(teamId: string | null) {
-  return useQuery<Activity[]>({
-    queryKey: ['activities', teamId],
-    enabled: !!teamId,
-    queryFn: async () => {
-      if (!teamId) return []
-      const q = query(
-        collection(db, ACTIVITIES_COLLECTION),
-        where('teamId', '==', teamId),
-        where('isActive', '==', true),
-        orderBy('name', 'asc'),
-      )
-      const snap = await getDocs(q)
-      return snap.docs
-        .map((d) => ({ ...d.data(), id: d.id }) as Activity)
-        .sort(compareActivities)
-    },
-  })
-}
-
 // ─── dialog ───────────────────────────────────────────────────────────────────
 
 function ActivityDialog({
@@ -158,6 +136,8 @@ function ActivityDialog({
     handleSubmit,
     control,
     watch,
+    setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
@@ -184,6 +164,39 @@ function ActivityDialog({
   })
   const accessTier = watch('accessTier')
   const dropInEnabled = watch('dropInEnabled')
+
+  // Inline quick-create: "create or link a subscription to this activity" without
+  // leaving the form. Writes a minimal type (pricing is configured later in the
+  // subscriptions manager) and auto-checks it in the allow-list above.
+  const [newSubName, setNewSubName] = useState('')
+  const [creatingSub, setCreatingSub] = useState(false)
+
+  async function quickCreateSubscription() {
+    const name = newSubName.trim()
+    if (!name || creatingSub) return
+    setCreatingSub(true)
+    try {
+      const ref = await addDoc(
+        collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION),
+        {
+          name,
+          description: null,
+          source: 'internal',
+          active: true,
+          public: false,
+          checkout_contact_mode: 'minimal',
+          prices: [],
+          order: subscriptionTypes.length,
+          created_at: serverTimestamp(),
+        },
+      )
+      setValue('subscriptionTypeIds', [...getValues('subscriptionTypeIds'), ref.id])
+      setNewSubName('')
+      qc.invalidateQueries({ queryKey: ['subscription-types', teamId] })
+    } finally {
+      setCreatingSub(false)
+    }
+  }
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -471,6 +484,31 @@ function ActivityDialog({
                         </label>
                       ))
                     )}
+                    <div className="flex items-center gap-2 pt-1.5 border-t mt-1.5">
+                      <Input
+                        value={newSubName}
+                        onChange={(e) => setNewSubName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            void quickCreateSubscription()
+                          }
+                        }}
+                        placeholder={t('quickCreateSubPlaceholder')}
+                        className="h-8 text-sm flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!newSubName.trim() || creatingSub}
+                        onClick={() => void quickCreateSubscription()}
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        {t('quickCreateSubButton')}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{t('quickCreateSubHint')}</p>
                   </div>
                 )}
               />
