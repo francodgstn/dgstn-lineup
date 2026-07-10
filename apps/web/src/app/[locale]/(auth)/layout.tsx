@@ -804,7 +804,19 @@ function ShortcutsNav({
   // Insertion index (in the displayed list) the dragged row would drop into.
   const [dropAt, setDropAt] = useState<number | null>(null)
 
-  if (entries.length === 0) return null
+  // Keep the group visible even when empty (expanded sidebar only) — a short
+  // muted hint explains how it fills up. The icon rail just skips it.
+  if (entries.length === 0) {
+    if (collapsed) return null
+    return (
+      <div className="mt-3 border-t pt-3">
+        <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>
+        <p className="px-3 py-1 text-xs leading-relaxed text-muted-foreground/60">
+          {t('navShortcutsEmpty')}
+        </p>
+      </div>
+    )
+  }
 
   const pinnedCount = entries.filter((e) => pinnedIds.includes(e.id)).length
   const visibleCount = Math.max(SHORTCUTS_VISIBLE_MIN, pinnedCount)
