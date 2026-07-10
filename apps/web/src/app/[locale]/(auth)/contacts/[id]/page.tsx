@@ -4,6 +4,7 @@ import { useState, use, useMemo, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useRouter, Link } from '@/i18n/navigation'
+import { useSearchParams } from 'next/navigation'
 import {
   doc,
   getDoc,
@@ -4811,16 +4812,18 @@ function UpsertAffiliationDialog({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type TabId =
-  | 'profile'
-  | 'stats'
-  | 'activity'
-  | 'followups'
-  | 'bookings'
-  | 'affiliation'
-  | 'payments'
-  | 'goals'
-  | 'gamification'
+const TAB_IDS = [
+  'profile',
+  'stats',
+  'activity',
+  'followups',
+  'bookings',
+  'affiliation',
+  'payments',
+  'goals',
+  'gamification',
+] as const
+type TabId = (typeof TAB_IDS)[number]
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -4837,7 +4840,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     },
   })
   const membershipFieldLocked = orgMembershipLocked && !isOrgAdmin
-  const [tab, setTab] = useState<TabId>('profile')
+  // Deep-link support: /contacts/{id}?tab=payments opens that tab (e.g. from the
+  // payments table). Falls back to profile for a missing/unknown value.
+  const searchParams = useSearchParams()
+  const [tab, setTab] = useState<TabId>(() => {
+    const p = searchParams.get('tab')
+    return p && (TAB_IDS as readonly string[]).includes(p) ? (p as TabId) : 'profile'
+  })
   // User-reorderable tab strip (opt-in edit mode; order persisted per-browser).
   const [tabOrder, setTabOrder] = useContactTabOrder()
   const [editingTabs, setEditingTabs] = useState(false)

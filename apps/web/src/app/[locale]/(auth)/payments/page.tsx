@@ -6,8 +6,10 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
-import { CreditCard, Loader2, Plus, Copy, Check, UserPlus, Pencil } from 'lucide-react'
+import { CreditCard, Loader2, Plus, Copy, Check, UserPlus, Pencil, Search } from 'lucide-react'
+import type { Route } from 'next'
 import type { SubscriptionType } from '@linyup/shared'
+import { Link } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useMemberPayments,
@@ -35,6 +37,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import {
   Select,
   SelectContent,
@@ -75,8 +85,14 @@ export default function PaymentsDashboardPage() {
   const teamId = currentTeamId ?? null
   const connectReady = !!team?.payments?.connectAccountId
 
-  const { data: payments = [], isLoading } = useMemberPayments(teamId)
-  const { data: events = [], isLoading: loadingEvents } = usePaymentEvents(teamId)
+  // Progressive page size — "Load more" bumps it and both rails refetch. Real
+  // cursor pagination / server-side filtering comes later; this keeps it usable.
+  const [pageSize, setPageSize] = useState(50)
+
+  const { data: payments = [], isLoading, isFetching: fetchingPayments } =
+    useMemberPayments(teamId, pageSize)
+  const { data: events = [], isLoading: loadingEvents, isFetching: fetchingEvents } =
+    usePaymentEvents(teamId, pageSize)
   const { data: subscriptions = [] } = useMemberSubscriptions(teamId)
   const { data: contacts = [] } = useActiveContacts(teamId)
   const refund = useRefundMemberPayment()
@@ -85,6 +101,7 @@ export default function PaymentsDashboardPage() {
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
   const [recordOpen, setRecordOpen] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unassigned'>('all')
+  const [search, setSearch] = useState('')
 
   const contactName = useMemo(() => {
     const m = new Map<string, string>()
@@ -99,8 +116,33 @@ export default function PaymentsDashboardPage() {
     [payments, events]
   )
   const unassignedCount = rows.filter((r) => !r.assigned).length
-  const visible = filter === 'unassigned' ? rows.filter((r) => !r.assigned) : rows
+
+  // Apply the all/unassigned filter + free-text search (over the loaded rows).
+  const filtered = useMemo(() => {
+    let list = filter === 'unassigned' ? rows.filter((r) => !r.assigned) : rows
+    const q = search.trim().toLowerCase()
+    if (q) {
+      list = list.filter((r) =>
+        [
+          paymentLabel(r),
+          r.paymentMode ?? '',
+          r.contactId ? contactName.get(r.contactId) ?? '' : '',
+          r.email ?? '',
+          r.comment ?? '',
+          (r.amount / 100).toString(),
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(q)
+      )
+    }
+    return list
+  }, [rows, filter, search, contactName])
+
   const loading = isLoading || loadingEvents
+  // A full page from either rail hints there may be more to fetch.
+  const hasMore = payments.length >= pageSize || events.length >= pageSize
+  const fetchingMore = fetchingPayments || fetchingEvents
 
   async function confirmRefund() {
     if (!refundTarget || !teamId) return
@@ -126,8 +168,8 @@ export default function PaymentsDashboardPage() {
         </div>
       </div>
 
-      {/* Filter: all / unassigned */}
-      <div className="flex items-center gap-2">
+      {/* Toolbar: filter + search */}
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
           variant={filter === 'all' ? 'default' : 'outline'}
@@ -147,97 +189,171 @@ export default function PaymentsDashboardPage() {
             </Badge>
           )}
         </Button>
+        <div className="relative ml-auto w-full sm:w-64">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('searchPlaceholder')}
+            className="pl-8"
+          />
+        </div>
       </div>
 
-      {/* Payments (Connect + BYO, unified) */}
+      {/* Payments table (Connect + BYO, unified) */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium">{t('paymentsHeading')}</h2>
         {loading ? (
-          <Skeleton className="h-24 rounded" />
-        ) : visible.length === 0 ? (
+          <Skeleton className="h-40 rounded" />
+        ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center">
-            {filter === 'unassigned' ? t('noUnassigned') : t('noPayments')}
+            {search
+              ? t('noResults')
+              : filter === 'unassigned'
+                ? t('noUnassigned')
+                : t('noPayments')}
           </p>
         ) : (
-          <Card>
-            <CardContent className="p-0 divide-y">
-              {visible.map((row) => (
-                <div key={row.key} className="flex items-center gap-3 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{paymentLabel(row)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatPaymentDate(row.createdAt)}
-                      {row.paymentMode && <> · {row.paymentMode}</>}
-                      {row.source === 'connect' && row.feeAmount > 0 && (
-                        <> · {t('fee')} {formatMoneyMinor(row.feeAmount, row.currency)}</>
-                      )}
-                      {row.amountRefunded > 0 && (
-                        <> · {t('refunded')} {formatMoneyMinor(row.amountRefunded, row.currency)}</>
-                      )}
-                    </p>
-                    <p className="text-xs mt-0.5">
-                      {row.assigned ? (
-                        <span className="text-muted-foreground">
-                          {row.contactId ? contactName.get(row.contactId) ?? '—' : '—'}
-                        </span>
-                      ) : (
-                        <Badge variant="outline" className="text-amber-700 border-amber-300">
-                          {t('unassigned')}
-                          {row.email ? ` · ${row.email}` : ''}
-                        </Badge>
-                      )}
-                    </p>
-                  </div>
+          <>
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('colDate')}</TableHead>
+                      <TableHead>{t('colDetails')}</TableHead>
+                      <TableHead>{t('colContact')}</TableHead>
+                      <TableHead>{t('colSource')}</TableHead>
+                      <TableHead>{t('colStatus')}</TableHead>
+                      <TableHead className="text-right">{t('colAmount')}</TableHead>
+                      <TableHead className="w-0" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((row) => (
+                      <TableRow key={row.key}>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatPaymentDate(row.createdAt)}
+                        </TableCell>
+                        <TableCell className="max-w-[220px]">
+                          <div className="truncate font-medium">{paymentLabel(row)}</div>
+                          {row.source === 'connect' && row.feeAmount > 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              {t('fee')} {formatMoneyMinor(row.feeAmount, row.currency)}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-[180px]">
+                          {row.assigned ? (
+                            row.contactId ? (
+                              <Link
+                                href={`/contacts/${row.contactId}?tab=payments` as Route}
+                                className="block truncate text-primary hover:underline"
+                              >
+                                {contactName.get(row.contactId) ?? '—'}
+                              </Link>
+                            ) : (
+                              <span className="block truncate">—</span>
+                            )
+                          ) : (
+                            <>
+                              <Badge variant="outline" className="text-amber-700 border-amber-300">
+                                {t('unassigned')}
+                              </Badge>
+                              {row.email && (
+                                <div className="truncate text-xs text-muted-foreground">
+                                  {row.email}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-muted-foreground">
+                            {t(`gateway_${row.gateway}` as never)}
+                          </Badge>
+                          {row.paymentMode && (
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              {row.paymentMode}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {row.disputed && (
+                              <Badge variant="outline" className="text-red-700 border-red-300">
+                                {t('disputed')}
+                              </Badge>
+                            )}
+                            <Badge
+                              variant="secondary"
+                              className={PAYMENT_STATUS_STYLES[row.status] ?? 'bg-muted'}
+                            >
+                              {row.source === 'byo'
+                                ? t('status_paid')
+                                : t(`status_${row.status}` as never)}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-right tabular-nums">
+                          <div className="font-medium">{formatMoneyMinor(row.amount, row.currency)}</div>
+                          {row.amountRefunded > 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              -{formatMoneyMinor(row.amountRefunded, row.currency)}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setAssignTarget({
+                                  source: row.source,
+                                  paymentId: row.paymentId,
+                                  contactId: row.contactId,
+                                  comment: row.comment,
+                                  lineItem: row.lineItem,
+                                })
+                              }
+                            >
+                              {row.assigned ? (
+                                <Pencil className="h-3.5 w-3.5" />
+                              ) : (
+                                <>
+                                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                                  {t('assign')}
+                                </>
+                              )}
+                            </Button>
+                            {row.refundable && (
+                              <Button size="sm" variant="outline" onClick={() => setRefundTarget(row)}>
+                                {t('refund')}
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
 
-                  <Badge variant="outline" className="hidden sm:inline-flex text-muted-foreground">
-                    {t(`gateway_${row.gateway}` as never)}
-                  </Badge>
-                  {row.disputed && (
-                    <Badge variant="outline" className="text-red-700 border-red-300">
-                      {t('disputed')}
-                    </Badge>
-                  )}
-                  <Badge variant="secondary" className={PAYMENT_STATUS_STYLES[row.status] ?? 'bg-muted'}>
-                    {row.source === 'byo' ? t('status_paid') : t(`status_${row.status}` as never)}
-                  </Badge>
-                  <span className="text-sm font-medium tabular-nums">
-                    {formatMoneyMinor(row.amount, row.currency)}
-                  </span>
-
-                  {/* Assign / edit (both rails) */}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setAssignTarget({
-                        source: row.source,
-                        paymentId: row.paymentId,
-                        contactId: row.contactId,
-                        comment: row.comment,
-                        lineItem: row.lineItem,
-                      })
-                    }
-                  >
-                    {row.assigned ? (
-                      <Pencil className="h-3.5 w-3.5" />
-                    ) : (
-                      <>
-                        <UserPlus className="h-3.5 w-3.5 mr-1" />
-                        {t('assign')}
-                      </>
-                    )}
-                  </Button>
-
-                  {/* Refund (Connect only) */}
-                  {row.refundable && (
-                    <Button size="sm" variant="outline" onClick={() => setRefundTarget(row)}>
-                      {t('refund')}
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+            {hasMore && (
+              <div className="flex justify-center">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPageSize((p) => p + 50)}
+                  disabled={fetchingMore}
+                >
+                  {fetchingMore && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                  {t('loadMore')}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </section>
 
