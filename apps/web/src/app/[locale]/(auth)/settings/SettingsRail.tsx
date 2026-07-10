@@ -14,7 +14,7 @@ import type { Route } from 'next'
 import { Pin, Search } from 'lucide-react'
 import { planSupportsAffiliations } from '@linyup/shared'
 import { SETTINGS_ITEMS, SETTINGS_GROUPS } from '@/lib/settings-nav'
-import { useSettingsPins } from '@/contexts/SettingsPinsContext'
+import { useNavPins } from '@/contexts/NavPinsContext'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { Input } from '@/components/ui/input'
@@ -26,7 +26,7 @@ export function SettingsRail() {
   const currentTab = searchParams.get('tab')
   const { plan } = usePlan()
   const { isInstalled } = useInstalledPlugins()
-  const { isPinned, togglePin } = useSettingsPins()
+  const { isPinned, togglePin } = useNavPins()
   const [query, setQuery] = useState('')
 
   const q = query.trim().toLowerCase()

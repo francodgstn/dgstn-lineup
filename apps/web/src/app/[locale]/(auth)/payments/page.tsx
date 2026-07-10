@@ -6,10 +6,8 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
-import { CreditCard, Loader2, Plus, Copy, Check, UserPlus, Pencil, Search } from 'lucide-react'
-import type { Route } from 'next'
+import { CreditCard, Loader2, Plus, Copy, Check, Search } from 'lucide-react'
 import type { SubscriptionType } from '@linyup/shared'
-import { Link } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useMemberPayments,
@@ -26,25 +24,20 @@ import {
   mergePaymentRows,
   paymentLabel,
   formatMoneyMinor,
-  formatPaymentDate,
   type UnifiedPaymentRow,
 } from '@/lib/payments'
-import { AssignPaymentDialog, type AssignPaymentTarget } from '@/components/payments/AssignPaymentDialog'
+import {
+  AssignPaymentDialog,
+  type AssignPaymentTarget,
+} from '@/components/payments/AssignPaymentDialog'
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
+import { PaymentsTable } from '@/components/payments/PaymentsTable'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   Select,
   SelectContent,
@@ -70,15 +63,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-const PAYMENT_STATUS_STYLES: Record<string, string> = {
-  succeeded: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  paid: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  partially_refunded: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  refunded: 'bg-muted text-muted-foreground',
-  failed: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  pending: 'bg-muted text-muted-foreground',
-}
-
 export default function PaymentsDashboardPage() {
   const t = useTranslations('PaymentsDashboard')
   const { currentTeamId, team } = useAuth()
@@ -89,10 +73,16 @@ export default function PaymentsDashboardPage() {
   // cursor pagination / server-side filtering comes later; this keeps it usable.
   const [pageSize, setPageSize] = useState(50)
 
-  const { data: payments = [], isLoading, isFetching: fetchingPayments } =
-    useMemberPayments(teamId, pageSize)
-  const { data: events = [], isLoading: loadingEvents, isFetching: fetchingEvents } =
-    usePaymentEvents(teamId, pageSize)
+  const {
+    data: payments = [],
+    isLoading,
+    isFetching: fetchingPayments,
+  } = useMemberPayments(teamId, pageSize)
+  const {
+    data: events = [],
+    isLoading: loadingEvents,
+    isFetching: fetchingEvents,
+  } = usePaymentEvents(teamId, pageSize)
   const { data: subscriptions = [] } = useMemberSubscriptions(teamId)
   const { data: contacts = [] } = useActiveContacts(teamId)
   const refund = useRefundMemberPayment()
@@ -126,7 +116,7 @@ export default function PaymentsDashboardPage() {
         [
           paymentLabel(r),
           r.paymentMode ?? '',
-          r.contactId ? contactName.get(r.contactId) ?? '' : '',
+          r.contactId ? (contactName.get(r.contactId) ?? '') : '',
           r.email ?? '',
           r.comment ?? '',
           (r.amount / 100).toString(),
@@ -214,131 +204,12 @@ export default function PaymentsDashboardPage() {
           </p>
         ) : (
           <>
-            <Card className="overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('colDate')}</TableHead>
-                      <TableHead>{t('colDetails')}</TableHead>
-                      <TableHead>{t('colContact')}</TableHead>
-                      <TableHead>{t('colSource')}</TableHead>
-                      <TableHead>{t('colStatus')}</TableHead>
-                      <TableHead className="text-right">{t('colAmount')}</TableHead>
-                      <TableHead className="w-0" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((row) => (
-                      <TableRow key={row.key}>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                          {formatPaymentDate(row.createdAt)}
-                        </TableCell>
-                        <TableCell className="max-w-[220px]">
-                          <div className="truncate font-medium">{paymentLabel(row)}</div>
-                          {row.source === 'connect' && row.feeAmount > 0 && (
-                            <div className="text-xs text-muted-foreground">
-                              {t('fee')} {formatMoneyMinor(row.feeAmount, row.currency)}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="max-w-[180px]">
-                          {row.assigned ? (
-                            row.contactId ? (
-                              <Link
-                                href={`/contacts/${row.contactId}?tab=payments` as Route}
-                                className="block truncate text-primary hover:underline"
-                              >
-                                {contactName.get(row.contactId) ?? '—'}
-                              </Link>
-                            ) : (
-                              <span className="block truncate">—</span>
-                            )
-                          ) : (
-                            <>
-                              <Badge variant="outline" className="text-amber-700 border-amber-300">
-                                {t('unassigned')}
-                              </Badge>
-                              {row.email && (
-                                <div className="truncate text-xs text-muted-foreground">
-                                  {row.email}
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-muted-foreground">
-                            {t(`gateway_${row.gateway}` as never)}
-                          </Badge>
-                          {row.paymentMode && (
-                            <div className="mt-0.5 text-xs text-muted-foreground">
-                              {row.paymentMode}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {row.disputed && (
-                              <Badge variant="outline" className="text-red-700 border-red-300">
-                                {t('disputed')}
-                              </Badge>
-                            )}
-                            <Badge
-                              variant="secondary"
-                              className={PAYMENT_STATUS_STYLES[row.status] ?? 'bg-muted'}
-                            >
-                              {row.source === 'byo'
-                                ? t('status_paid')
-                                : t(`status_${row.status}` as never)}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-right tabular-nums">
-                          <div className="font-medium">{formatMoneyMinor(row.amount, row.currency)}</div>
-                          {row.amountRefunded > 0 && (
-                            <div className="text-xs text-muted-foreground">
-                              -{formatMoneyMinor(row.amountRefunded, row.currency)}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                setAssignTarget({
-                                  source: row.source,
-                                  paymentId: row.paymentId,
-                                  contactId: row.contactId,
-                                  comment: row.comment,
-                                  lineItem: row.lineItem,
-                                })
-                              }
-                            >
-                              {row.assigned ? (
-                                <Pencil className="h-3.5 w-3.5" />
-                              ) : (
-                                <>
-                                  <UserPlus className="h-3.5 w-3.5 mr-1" />
-                                  {t('assign')}
-                                </>
-                              )}
-                            </Button>
-                            {row.refundable && (
-                              <Button size="sm" variant="outline" onClick={() => setRefundTarget(row)}>
-                                {t('refund')}
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </Card>
+            <PaymentsTable
+              rows={filtered}
+              contactName={(id) => contactName.get(id)}
+              onAssign={setAssignTarget}
+              onRefund={setRefundTarget}
+            />
 
             {hasMore && (
               <div className="flex justify-center">
@@ -440,7 +311,10 @@ function CreatePaymentLinkDialog({ teamId }: { teamId: string }) {
   const [copied, setCopied] = useState(false)
 
   const sellableTypes = useMemo(
-    () => types.filter((ty) => ty.active !== false && (ty.prices ?? []).some((p) => p.active !== false)),
+    () =>
+      types.filter(
+        (ty) => ty.active !== false && (ty.prices ?? []).some((p) => p.active !== false)
+      ),
     [types]
   )
   const selectedType: SubscriptionType | undefined = sellableTypes.find((ty) => ty.id === typeId)
@@ -529,7 +403,11 @@ function CreatePaymentLinkDialog({ teamId }: { teamId: string }) {
 
             <div className="space-y-1.5">
               <Label>{t('selectPrice')}</Label>
-              <Select value={priceId} onValueChange={(v) => setPriceId(v ?? '')} disabled={!selectedType}>
+              <Select
+                value={priceId}
+                onValueChange={(v) => setPriceId(v ?? '')}
+                disabled={!selectedType}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={t('selectPrice')} />
                 </SelectTrigger>
