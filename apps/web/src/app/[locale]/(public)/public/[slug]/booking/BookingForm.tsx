@@ -794,8 +794,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     contactData?: ContactData | null
   ) {
     // Personalised gate warning: the identified contact holds no subscription the
-    // activity accepts (and no drop-in escape hatch exists) — tell them in their
-    // language instead of surfacing bookSession's raw permission error.
+    // activity accepts — tell them in their language instead of surfacing
+    // bookSession's raw permission error. Skipped when drop-in is offered so the
+    // contact can back out to the guest pay-per-class path (bookSession itself has
+    // no drop-in handling and would still reject them here). A subscription-gated
+    // activity with an EMPTY allow-list (misconfig) also skips this and falls
+    // through to the server error. bookSession stays authoritative either way.
     const required = selectedActivity
       ? activityRequiresSubscription(resolveActivityAccessRule(selectedActivity))
       : null

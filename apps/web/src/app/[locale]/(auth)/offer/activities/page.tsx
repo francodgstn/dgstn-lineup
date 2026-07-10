@@ -280,7 +280,7 @@ function ActivityDialog({
         if (url) await updateDoc(newRef, { image_url: url })
       }
     }
-    await qc.invalidateQueries({ queryKey: ['activities', teamId] })
+    await qc.invalidateQueries({ queryKey: ['activities'] })
     onClose()
   }
 
@@ -667,7 +667,7 @@ export default function ActivitiesPage() {
   async function handleArchiveConfirm() {
     if (!archiving) return
     await updateDoc(doc(db, ACTIVITIES_COLLECTION, archiving.id), { isActive: false })
-    await qc.invalidateQueries({ queryKey: ['activities', currentTeamId] })
+    await qc.invalidateQueries({ queryKey: ['activities'] })
     setArchiving(null)
   }
 
@@ -684,7 +684,7 @@ export default function ActivitiesPage() {
       if (a.order !== i) batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), { order: i })
     })
     await batch.commit()
-    await qc.invalidateQueries({ queryKey: ['activities', currentTeamId] })
+    await qc.invalidateQueries({ queryKey: ['activities'] })
   }
 
   return (

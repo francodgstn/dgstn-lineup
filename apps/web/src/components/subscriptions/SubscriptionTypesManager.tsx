@@ -14,6 +14,7 @@ import {
   deleteDoc,
   serverTimestamp,
   writeBatch,
+  runTransaction,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import {
@@ -175,40 +176,46 @@ function SubTypeDialog({
     }
   }, [open, editing, reset])
 
-  /** Diff the drafted selection against the docs and batch-write accessRule changes.
+  /** Diff the drafted selection against the docs and write accessRule changes.
    *  Linking promotes an open/members activity to the subscription tier; unlinking
-   *  the LAST subscription reverts it to members (never a locked empty allow-list). */
+   *  the LAST subscription reverts it to members (never a locked empty allow-list).
+   *  Runs in a transaction with fresh reads so a concurrent accessRule edit (e.g.
+   *  from the activity dialog) isn't clobbered by our cached snapshot. */
   async function persistLinkedActivities(subTypeId: string) {
     if (!linkedDraft) return
     const before = new Set(linkedInitially)
     const after = new Set(linkedDraft)
-    const batch = writeBatch(db)
-    let dirty = false
-    for (const a of activities) {
-      const rule = resolveActivityAccessRule(a)
-      const has = (rule.subscriptionTypeIds ?? []).includes(subTypeId)
-      if (after.has(a.id) && !before.has(a.id) && !has) {
-        const ids = [...(rule.subscriptionTypeIds ?? []), subTypeId]
-        batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), {
-          accessRule: { type: 'subscription', subscriptionTypeIds: ids },
-          isFreeTrial: false,
-        })
-        dirty = true
-      } else if (!after.has(a.id) && before.has(a.id) && has) {
-        const ids = (rule.subscriptionTypeIds ?? []).filter((id) => id !== subTypeId)
-        batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), {
-          accessRule: ids.length
-            ? { type: 'subscription', subscriptionTypeIds: ids }
-            : { type: 'members' },
-          isFreeTrial: false,
-        })
-        dirty = true
-      }
-    }
-    if (dirty) {
-      await batch.commit()
-      qcActivities.invalidateQueries({ queryKey: ['activities', teamId] })
-    }
+    const changed = activities.filter((a) => after.has(a.id) !== before.has(a.id))
+    if (!changed.length) return
+    await runTransaction(db, async (tx) => {
+      const snaps = await Promise.all(
+        changed.map((a) => tx.get(doc(db, ACTIVITIES_COLLECTION, a.id)))
+      )
+      snaps.forEach((snap, i) => {
+        if (!snap.exists()) return
+        const a = changed[i]
+        const rule = resolveActivityAccessRule(snap.data() as Activity)
+        const has = (rule.subscriptionTypeIds ?? []).includes(subTypeId)
+        if (after.has(a.id) && !has) {
+          tx.update(snap.ref, {
+            accessRule: {
+              type: 'subscription',
+              subscriptionTypeIds: [...(rule.subscriptionTypeIds ?? []), subTypeId],
+            },
+            isFreeTrial: false,
+          })
+        } else if (!after.has(a.id) && has) {
+          const ids = (rule.subscriptionTypeIds ?? []).filter((id) => id !== subTypeId)
+          tx.update(snap.ref, {
+            accessRule: ids.length
+              ? { type: 'subscription', subscriptionTypeIds: ids }
+              : { type: 'members' },
+            isFreeTrial: false,
+          })
+        }
+      })
+    })
+    qcActivities.invalidateQueries({ queryKey: ['activities'] })
   }
 
   const source = watch('source')
