@@ -946,6 +946,7 @@ async function seedTeam(opts: TeamSeed) {
       base_score: 12,
       description:
         'Gi grappling from fundamentals to advanced — positions, escapes and submissions.',
+      accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
     },
     {
       id: `${teamId}-act-mma`,
@@ -957,6 +958,14 @@ async function seedTeam(opts: TeamSeed) {
       type: 'group_class' as const,
       base_score: 15,
       description: 'Striking-to-grappling transitions and cage craft for experienced athletes.',
+      // Showcases the activity↔subscription link (see seed-emulator.ts).
+      accessRule: {
+        type: 'subscription',
+        subscriptionTypeIds:
+          plan === 'coach'
+            ? [`${teamId}-sub-monthly`, `${teamId}-sub-10class`]
+            : [`${teamId}-sub-premium`, `${teamId}-sub-elite`],
+      } as { type: string; subscriptionTypeIds?: string[] },
     },
     {
       id: `${teamId}-act-kickbox`,
@@ -968,6 +977,7 @@ async function seedTeam(opts: TeamSeed) {
       type: 'group_class' as const,
       base_score: 10,
       description: 'Pad work, combinations and conditioning — a serious workout for every level.',
+      accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
     },
     {
       id: `${teamId}-act-yoga`,
@@ -979,6 +989,7 @@ async function seedTeam(opts: TeamSeed) {
       type: 'group_class' as const,
       base_score: 8,
       description: 'Recovery-focused mobility and breath work to keep you on the mats.',
+      accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
     },
   ]
   for (const a of activities) {
@@ -995,6 +1006,7 @@ async function seedTeam(opts: TeamSeed) {
       description: a.description,
       image_url: null,
       isFreeTrial: a.isFreeTrial,
+      accessRule: a.accessRule,
       level: a.level,
     })
   }
