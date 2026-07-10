@@ -2,7 +2,7 @@
 // per-contact Payments tab). Connect (member_payments) and BYO (payment_events)
 // have different shapes; we normalize both into UnifiedPaymentRow so the UI treats
 // them the same — amount, status, contact assignment, and the "what was paid"
-// comment (explicit comment, falling back to a derived label).
+// label (linked line item → explicit comment → derived gateway default).
 
 import type { MemberPayment, ExternalPayment, PaymentLineItem } from '@linyup/shared'
 
@@ -58,16 +58,29 @@ export function formatPaymentDate(ts: { toDate?: () => Date } | null | undefined
   return d ? d.toLocaleDateString() : ''
 }
 
-/** The label to show for "what was paid": explicit comment, else derived default. */
+/** Primary "what was paid" label: the linked line item (subscription / course /
+ * product) wins, then the explicit comment, then the derived gateway default. */
 export function paymentLabel(row: UnifiedPaymentRow): string {
-  return (row.comment && row.comment.trim()) || row.defaultLabel
+  return (
+    (row.lineItem?.label && row.lineItem.label.trim()) ||
+    (row.comment && row.comment.trim()) ||
+    row.defaultLabel
+  )
+}
+
+/** Secondary note under the label: the comment, when the primary label already
+ * shows the linked line item (avoids repeating identical text). */
+export function paymentNote(row: UnifiedPaymentRow): string | null {
+  const li = row.lineItem?.label?.trim()
+  const c = row.comment?.trim()
+  return li && c && c !== li ? c : null
 }
 
 function connectDefaultLabel(p: MemberPayment): string {
   if (p.kind === 'product') {
     return p.variantLabel
       ? `${p.productName ?? 'Product'} · ${p.variantLabel}`
-      : p.productName ?? 'Product'
+      : (p.productName ?? 'Product')
   }
   if (p.kind === 'course') return p.courseName ?? 'Course'
   if (p.kind === 'membership') return p.subscriptionTypeName ?? 'Membership'

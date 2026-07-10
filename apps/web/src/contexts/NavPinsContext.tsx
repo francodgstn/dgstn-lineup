@@ -1,0 +1,164 @@
+'use client'
+
+// Per-browser sidebar personalisation: which nav items are pinned and which were
+// recently visited. Both feed the sidebar's "Shortcuts" group (pinned first, then
+// recents) — Firebase-console style. ANY nav destination can be pinned (main nav,
+// settings, plugin items), keyed by a stable id. Unpinning demotes an item to a
+// recent (it stays in Shortcuts); removeShortcut drops it entirely. Shared via
+// context so the sidebar and the /settings rail stay in sync within a tab
+// (localStorage's `storage` event only fires across tabs). One-time migration
+// from the legacy settings-only key.
+
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { DEFAULT_PINNED_IDS } from '@/lib/settings-nav'
+
+const STORAGE_KEY = 'linyup_nav_pins'
+const LEGACY_KEY = 'linyup_settings_pins'
+const RECENTS_KEY = 'linyup_nav_recents'
+const RECENTS_MAX = 10
+
+function persistPins(ids: string[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(ids))
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistRecents(ids: string[]) {
+  try {
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(ids))
+  } catch {
+    /* ignore */
+  }
+}
+
+interface NavPinsValue {
+  pinnedIds: string[]
+  isPinned: (id: string) => boolean
+  togglePin: (id: string) => void
+  /** Replace the pin order wholesale (drag-and-drop reordering). */
+  setPinOrder: (ids: string[]) => void
+  /** Most-recently-visited nav ids, newest first (may include pinned ids). */
+  recentIds: string[]
+  /** Record a visit to a nav destination (moves it to the front of recents). */
+  recordVisit: (id: string) => void
+  /** Remove an item from Shortcuts entirely (unpin + drop from recents). */
+  removeShortcut: (id: string) => void
+}
+
+const NavPinsContext = createContext<NavPinsValue | null>(null)
+
+export function NavPinsProvider({ children }: { children: React.ReactNode }) {
+  // Start from defaults; hydrate from localStorage after mount (avoids SSR mismatch).
+  const [pinnedIds, setPinnedIds] = useState<string[]>(DEFAULT_PINNED_IDS)
+  const [recentIds, setRecentIds] = useState<string[]>([])
+  // recordVisit can fire (from the sidebar's pathname effect) before the hydration
+  // effect below has loaded stored recents — merge from storage in that window so
+  // the first visit of a session never clobbers the history.
+  const recentsHydrated = useRef(false)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        setPinnedIds(JSON.parse(raw) as string[])
+      } else {
+        // One-time migration from the settings-only pin key.
+        const legacy = localStorage.getItem(LEGACY_KEY)
+        if (legacy) {
+          const ids = JSON.parse(legacy) as string[]
+          setPinnedIds(ids)
+          persistPins(ids)
+        }
+      }
+      const recents = localStorage.getItem(RECENTS_KEY)
+      if (recents) {
+        const stored = JSON.parse(recents) as string[]
+        // Keep anything recorded before hydration in front of the stored history.
+        setRecentIds((prev) =>
+          prev.length ? Array.from(new Set([...prev, ...stored])).slice(0, RECENTS_MAX) : stored
+        )
+      }
+    } catch {
+      /* ignore malformed storage */
+    }
+    recentsHydrated.current = true
+  }, [])
+
+  const pushRecent = useCallback((id: string) => {
+    setRecentIds((prev) => {
+      let base = prev
+      if (!recentsHydrated.current) {
+        try {
+          const raw = localStorage.getItem(RECENTS_KEY)
+          if (raw) base = Array.from(new Set([...prev, ...(JSON.parse(raw) as string[])]))
+        } catch {
+          /* ignore */
+        }
+      }
+      if (base[0] === id) return base
+      const next = [id, ...base.filter((p) => p !== id)].slice(0, RECENTS_MAX)
+      persistRecents(next)
+      return next
+    })
+  }, [])
+
+  const togglePin = useCallback(
+    (id: string) => {
+      const removing = pinnedIds.includes(id)
+      const next = removing ? pinnedIds.filter((p) => p !== id) : [...pinnedIds, id]
+      setPinnedIds(next)
+      persistPins(next)
+      // Firebase-style: unpinning demotes the item to a recent shortcut rather
+      // than dropping it from the Shortcuts group (removeShortcut does that).
+      if (removing) pushRecent(id)
+    },
+    [pinnedIds, pushRecent]
+  )
+
+  const setPinOrder = useCallback((ids: string[]) => {
+    setPinnedIds(ids)
+    persistPins(ids)
+  }, [])
+
+  const removeShortcut = useCallback(
+    (id: string) => {
+      if (pinnedIds.includes(id)) {
+        const next = pinnedIds.filter((p) => p !== id)
+        setPinnedIds(next)
+        persistPins(next)
+      }
+      setRecentIds((prev) => {
+        const next = prev.filter((p) => p !== id)
+        if (next.length !== prev.length) persistRecents(next)
+        return next
+      })
+    },
+    [pinnedIds]
+  )
+
+  const isPinned = useCallback((id: string) => pinnedIds.includes(id), [pinnedIds])
+
+  return (
+    <NavPinsContext.Provider
+      value={{
+        pinnedIds,
+        isPinned,
+        togglePin,
+        setPinOrder,
+        recentIds,
+        recordVisit: pushRecent,
+        removeShortcut,
+      }}
+    >
+      {children}
+    </NavPinsContext.Provider>
+  )
+}
+
+export function useNavPins(): NavPinsValue {
+  const ctx = useContext(NavPinsContext)
+  if (!ctx) throw new Error('useNavPins must be used within NavPinsProvider')
+  return ctx
+}

@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { CreditCard, Pencil, Snowflake, Play, Plus } from 'lucide-react'
+import { CreditCard, Snowflake, Play, Plus } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { httpsCallable } from 'firebase/functions'
 import { collection, getDocs, query, where } from 'firebase/firestore'
@@ -22,16 +22,13 @@ import {
   TEAMS_COLLECTION,
 } from '@linyup/shared'
 import { useContactPayments } from '@/hooks/useConnect'
+import { connectToUnified, byoToUnified, mergePaymentRows, formatMoneyMinor } from '@/lib/payments'
 import {
-  connectToUnified,
-  byoToUnified,
-  mergePaymentRows,
-  paymentLabel,
-  formatMoneyMinor,
-  formatPaymentDate,
-} from '@/lib/payments'
-import { AssignPaymentDialog, type AssignPaymentTarget } from '@/components/payments/AssignPaymentDialog'
+  AssignPaymentDialog,
+  type AssignPaymentTarget,
+} from '@/components/payments/AssignPaymentDialog'
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
+import { PaymentsTable } from '@/components/payments/PaymentsTable'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -45,17 +42,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-
-// ─── payment status styles ─────────────────────────────────────────────────────
-
-const STATUS_STYLES: Record<string, string> = {
-  succeeded: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  paid: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  partially_refunded: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  refunded: 'bg-muted text-muted-foreground',
-  failed: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  pending: 'bg-muted text-muted-foreground',
-}
 
 // ─── rollup badge ─────────────────────────────────────────────────────────────
 
@@ -77,10 +63,7 @@ function RollupBadge({
 }) {
   if (status === 'none') return null
   return (
-    <Badge
-      variant="secondary"
-      className={`text-xs ${ROLLUP_BADGE_STYLES[status]}`}
-    >
+    <Badge variant="secondary" className={`text-xs ${ROLLUP_BADGE_STYLES[status]}`}>
       {t(`subStatus_${status}` as `subStatus_${SubscriptionRollupStatus}`)}
     </Badge>
   )
@@ -169,9 +152,7 @@ export function MemberSubscriptionsSection({
 
   if (recurringOnly.length === 0) {
     return (
-      <p className="py-4 text-sm text-center text-muted-foreground">
-        {t('noMemberSubscriptions')}
-      </p>
+      <p className="py-4 text-sm text-center text-muted-foreground">{t('noMemberSubscriptions')}</p>
     )
   }
 
@@ -180,9 +161,7 @@ export function MemberSubscriptionsSection({
   }
 
   function canFreeze(sub: MemberSubscription) {
-    return (
-      (sub.status === 'active' || sub.status === 'trialing') && !isBillingPaused(sub)
-    )
+    return (sub.status === 'active' || sub.status === 'trialing') && !isBillingPaused(sub)
   }
 
   return (
@@ -249,7 +228,12 @@ export function MemberSubscriptionsSection({
       </div>
 
       {/* Freeze confirm dialog */}
-      <AlertDialog open={freezeTarget !== null} onOpenChange={(open) => { if (!open) setFreezeTarget(null) }}>
+      <AlertDialog
+        open={freezeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setFreezeTarget(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('freezeConfirmTitle')}</AlertDialogTitle>
@@ -298,10 +282,7 @@ export function PaymentsTab({
 
   const rows = useMemo(
     () =>
-      mergePaymentRows(
-        connectToUnified(data?.payments ?? []),
-        byoToUnified(data?.events ?? [])
-      ),
+      mergePaymentRows(connectToUnified(data?.payments ?? []), byoToUnified(data?.events ?? [])),
     [data]
   )
 
@@ -326,11 +307,7 @@ export function PaymentsTab({
               <RollupBadge status={rollupStatus} t={t} />
             )}
           </div>
-          <MemberSubscriptionsSection
-            teamId={tid}
-            contactId={contact.id}
-            t={t}
-          />
+          <MemberSubscriptionsSection teamId={tid} contactId={contact.id} t={t} />
         </div>
       )}
 
@@ -352,48 +329,9 @@ export function PaymentsTab({
           {t('contactNoPayments')}
         </div>
       ) : (
-        <div className="space-y-3">
-          <div className="rounded-lg border divide-y">
-            {rows.map((row) => (
-              <div key={row.key} className="flex items-center gap-3 p-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{paymentLabel(row)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatPaymentDate(row.createdAt)}
-                    {row.paymentMode && <> · {row.paymentMode}</>}
-                    {row.amountRefunded > 0 && (
-                      <> · {t('refunded')} {formatMoneyMinor(row.amountRefunded, row.currency)}</>
-                    )}
-                  </p>
-                </div>
-                <Badge variant="outline" className="hidden sm:inline-flex text-muted-foreground">
-                  {t(`gateway_${row.gateway}` as never)}
-                </Badge>
-                <Badge variant="secondary" className={STATUS_STYLES[row.status] ?? 'bg-muted'}>
-                  {row.source === 'byo' ? t('status_paid') : t(`status_${row.status}` as never)}
-                </Badge>
-                <span className="text-sm font-medium tabular-nums">
-                  {formatMoneyMinor(row.amount, row.currency)}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setAssignTarget({
-                      source: row.source,
-                      paymentId: row.paymentId,
-                      contactId: row.contactId,
-                      comment: row.comment,
-                      lineItem: row.lineItem,
-                    })
-                  }
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
+        // Same table as the general /payments page, minus the (redundant) contact
+        // column — one shared component so the two views never drift.
+        <PaymentsTable rows={rows} showContact={false} onAssign={setAssignTarget} />
       )}
 
       {tid && (
