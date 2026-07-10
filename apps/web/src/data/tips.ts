@@ -12,4 +12,6 @@ export const TIPS: DiscoverTip[] = [
   { id: 'contacts', icon: 'Users', href: '/contacts' },
   { id: 'website', icon: 'Globe', href: '/plugins/website' },
   { id: 'recurring', icon: 'CalendarClock', href: '/schedule' },
+  // No href — the tip is about the sidebar itself (pin from any menu row).
+  { id: 'pinNav', icon: 'Pin' },
 ]
