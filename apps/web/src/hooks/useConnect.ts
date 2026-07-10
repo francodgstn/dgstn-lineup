@@ -105,16 +105,16 @@ export function useHasByoGateway(teamId: string | null) {
   })
 }
 
-export function useMemberPayments(teamId: string | null) {
+export function useMemberPayments(teamId: string | null, pageLimit = 50) {
   return useQuery({
-    queryKey: ['member-payments', teamId],
+    queryKey: ['member-payments', teamId, pageLimit],
     enabled: !!teamId,
     queryFn: async (): Promise<MemberPayment[]> => {
       const snap = await getDocs(
         query(
           collection(db, TEAMS_COLLECTION, teamId!, MEMBER_PAYMENTS_SUBCOLLECTION),
           orderBy('created_at', 'desc'),
-          limit(50)
+          limit(pageLimit)
         )
       )
       return snap.docs.map((d) => d.data() as MemberPayment)
@@ -161,16 +161,16 @@ export function useRefundMemberPayment() {
 
 /** BYO ledger (Payrexx / Stripe-BYO) for the team — function-written, rules allow
  * manager/owner reads. Includes unassigned payments (no contact matched). */
-export function usePaymentEvents(teamId: string | null) {
+export function usePaymentEvents(teamId: string | null, pageLimit = 100) {
   return useQuery({
-    queryKey: ['payment-events', teamId],
+    queryKey: ['payment-events', teamId, pageLimit],
     enabled: !!teamId,
     queryFn: async (): Promise<Array<ExternalPayment & { id: string }>> => {
       const snap = await getDocs(
         query(
           collection(db, TEAMS_COLLECTION, teamId!, PAYMENT_EVENTS_SUBCOLLECTION),
           orderBy('processed_at', 'desc'),
-          limit(100)
+          limit(pageLimit)
         )
       )
       return snap.docs.map((d) => ({ ...(d.data() as ExternalPayment), id: d.id }))
