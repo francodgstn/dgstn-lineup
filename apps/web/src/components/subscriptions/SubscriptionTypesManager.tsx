@@ -146,10 +146,10 @@ function SubTypeDialog({
 
   // ── Linked activities (inverse view of Activity.accessRule) ──────────────────
   // The persisted link lives on the activity docs (accessRule.subscriptionTypeIds);
-  // this section just edits it from the subscription side. Edit-only: a new type
-  // has no id to write into activities until saved.
+  // this section just edits it from the subscription side. On create, the links
+  // are written right after addDoc returns the new type's id.
   const qcActivities = useQueryClient()
-  const { data: activities = [] } = useActivities(editing ? teamId : null)
+  const { data: activities = [] } = useActivities(teamId)
   const linkedInitially = useMemo(() => {
     if (!editing) return []
     return activities
@@ -257,11 +257,18 @@ function SubTypeDialog({
       )
       await persistLinkedActivities(editing.id)
     } else {
-      await addDoc(collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION), {
-        ...payload,
-        order: nextOrder,
-        created_at: serverTimestamp(),
-      })
+      const ref = await addDoc(
+        collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION),
+        {
+          ...payload,
+          order: nextOrder,
+          created_at: serverTimestamp(),
+        }
+      )
+      // Link the selected activities to the freshly-created type. If this write
+      // fails the type still exists (just unlinked) — the links can be added by
+      // reopening it, so we don't roll the creation back.
+      await persistLinkedActivities(ref.id)
     }
     onSaved()
     onOpenChange(false)
@@ -489,40 +496,36 @@ function SubTypeDialog({
           </div>
 
           {/* Activities this subscription unlocks — inverse editor over the
-              activities' accessRule (saved together with the type) */}
-          {editing && (
-            <div className="space-y-2 rounded-lg border border-dashed p-3">
-              <div className="space-y-0.5">
-                <Label>{t('subTypeActivitiesLabel')}</Label>
-                <p className="text-xs text-muted-foreground">{t('subTypeActivitiesDesc')}</p>
-              </div>
-              {activities.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{t('subTypeActivitiesEmpty')}</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {activities.map((a: Activity) => (
-                    <label
-                      key={a.id}
-                      className="flex items-center gap-2 cursor-pointer text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="accent-primary"
-                        checked={linkedIds.includes(a.id)}
-                        onChange={() => toggleLinked(a.id)}
-                      />
-                      <span
-                        className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                        style={{ background: a.color || '#6366f1' }}
-                      />
-                      {a.name}
-                    </label>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">{t('subTypeActivitiesHint')}</p>
+              activities' accessRule (saved together with the type; on create,
+              the links are written once the new type's id exists) */}
+          <div className="space-y-2 rounded-lg border border-dashed p-3">
+            <div className="space-y-0.5">
+              <Label>{t('subTypeActivitiesLabel')}</Label>
+              <p className="text-xs text-muted-foreground">{t('subTypeActivitiesDesc')}</p>
             </div>
-          )}
+            {activities.length === 0 ? (
+              <p className="text-xs text-muted-foreground">{t('subTypeActivitiesEmpty')}</p>
+            ) : (
+              <div className="space-y-1.5">
+                {activities.map((a: Activity) => (
+                  <label key={a.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      className="accent-primary"
+                      checked={linkedIds.includes(a.id)}
+                      onChange={() => toggleLinked(a.id)}
+                    />
+                    <span
+                      className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                      style={{ background: a.color || '#6366f1' }}
+                    />
+                    {a.name}
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">{t('subTypeActivitiesHint')}</p>
+          </div>
 
           {/* Automations referencing this subscription + a quick create shortcut */}
           {editing && <SubscriptionAutomationsSection teamId={teamId} subscriptionType={editing} />}
