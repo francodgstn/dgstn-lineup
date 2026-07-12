@@ -26,7 +26,14 @@ import {
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
+  buildConnectChargeTxn,
+  buildConnectRefundTxn,
+  buildDisputeTxn,
+  buildPayoutTxn,
+  financeTxnId,
+  mapCategory,
   type ConnectOnboardingModel,
+  type FinanceCategory,
   type SaasPlan,
 } from '@linyup/shared'
 import { canCreateContact } from '../utils/contactCap'
@@ -40,6 +47,12 @@ import {
 import { persistAccountStatus } from './access'
 import { resolveSingleContact } from '../utils/contacts'
 import { writeContactSubscriptionFields } from '../payments/effects'
+import {
+  linkFinanceTxnContact,
+  linkFinanceTxnPayout,
+  recordFinanceTransaction,
+  retrieveChargeFees,
+} from '../finance/journal'
 
 // Account/capability events → re-fetch the account (source of truth) and persist.
 // Covers classic Connect account events and v2 thin account events.
@@ -346,11 +359,34 @@ async function confirmProvisionalContact(contactId: string): Promise<void> {
 
 // ─── per-event-type handlers ─────────────────────────────────────────────────────
 
+/** Best-effort: mirror a late-resolved buyer contact onto the finance journal
+ * charge row (checkout handlers link the contact AFTER payment_intent.succeeded
+ * already journaled the charge). Metadata only — never touches amounts. */
+async function stampFinanceContact(teamId: string, piId: string, contactId: string): Promise<void> {
+  try {
+    await linkFinanceTxnContact(teamId, financeTxnId('connect', 'charge', piId), contactId)
+  } catch (err) {
+    console.warn(`[connect] finance contact stamp failed (pi=${piId}):`, err)
+  }
+}
+
+/** Human "what was paid" label for the finance journal, from checkout metadata. */
+function financeDescription(md: Record<string, string>): string | null {
+  if (md.kind === 'product') {
+    return md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? null)
+  }
+  if (md.kind === 'course') return md.courseTitle ?? null
+  if (md.kind === 'membership') return md.subscriptionTypeName ?? null
+  if (md.kind === 'drop_in') return md.activityName ?? 'Drop-in'
+  return md.purpose ?? null
+}
+
 async function handlePaymentIntent(
   team: TeamRef,
   pi: any,
   status: 'succeeded' | 'failed',
-  eventId: string
+  eventId: string,
+  accountId?: string
 ): Promise<void> {
   const md = (pi.metadata ?? {}) as Record<string, string>
   const now = FieldValue.serverTimestamp()
@@ -420,6 +456,39 @@ async function handlePaymentIntent(
       fallbackEmail: (pi.receipt_email as string | undefined) ?? null,
       paymentIntentId: (pi.id as string | undefined) ?? null,
     })
+
+    // Finance journal: fetch the authoritative fee split (Stripe fee + application
+    // fee + net) from the charge's balance transaction, then append the charge row.
+    // Failures never break payment processing — the backfill reconciles.
+    try {
+      const chargeId =
+        typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null)
+      const fees = accountId && chargeId ? await retrieveChargeFees(accountId, chargeId) : null
+      await recordFinanceTransaction(
+        buildConnectChargeTxn({
+          teamId: team.teamId,
+          paymentIntentId: pi.id as string,
+          amount: (pi.amount as number) ?? 0,
+          currency: pi.currency as string | undefined,
+          applicationFeeAmount: (pi.application_fee_amount as number) ?? 0,
+          fees,
+          kind: md.kind ?? null,
+          contactId: md.contactId ?? null,
+          description: financeDescription(md),
+          occurredAtMs: typeof pi.created === 'number' ? pi.created * 1000 : Date.now(),
+          eventId,
+        })
+      )
+      // Mirror the fee split onto the member_payments doc for the dashboard.
+      if (fees) {
+        await memberPaymentRef(team.teamId, pi.id).set(
+          { stripe_fee_amount: fees.stripeFee, balance_txn_id: fees.balanceTxnId },
+          { merge: true }
+        )
+      }
+    } catch (err) {
+      console.error(`[connect] finance journal write failed (pi=${pi.id}):`, err)
+    }
   }
 }
 
@@ -451,9 +520,41 @@ async function handleChargeRefunded(team: TeamRef, charge: any, eventId: string)
     },
     { merge: true }
   )
+
+  // Finance journal: one row PER refund object (partials each get a row; the
+  // deterministic re_ id makes redeliveries no-ops). Context (kind/contact/label)
+  // comes from the payment doc just updated.
+  try {
+    const paySnap = await memberPaymentRef(team.teamId, piId).get()
+    const pay = paySnap.data() ?? {}
+    for (const r of (charge.refunds?.data ?? []) as any[]) {
+      await recordFinanceTransaction(
+        buildConnectRefundTxn({
+          teamId: team.teamId,
+          refundId: r.id as string,
+          paymentIntentId: piId,
+          amount: (r.amount as number) ?? 0,
+          feeReversed: amount > 0 ? Math.round((((r.amount as number) ?? 0) / amount) * appFee) : 0,
+          currency: (charge.currency as string | undefined) ?? (pay.currency as string | undefined),
+          kind: (pay.kind as string | undefined) ?? null,
+          contactId: (pay.contactId as string | undefined) ?? null,
+          description: (pay.comment as string | undefined) ?? (pay.subscriptionTypeName as string | undefined) ?? null,
+          occurredAtMs: typeof r.created === 'number' ? r.created * 1000 : Date.now(),
+          eventId,
+        })
+      )
+    }
+  } catch (err) {
+    console.error(`[connect] finance journal refund write failed (pi=${piId}):`, err)
+  }
 }
 
-async function handleDispute(team: TeamRef, dispute: any, eventId: string): Promise<void> {
+async function handleDispute(
+  team: TeamRef,
+  dispute: any,
+  phase: 'created' | 'closed',
+  eventId: string
+): Promise<void> {
   const piId = typeof dispute.payment_intent === 'string' ? dispute.payment_intent : dispute.payment_intent?.id
   if (!piId) return
   await memberPaymentRef(team.teamId, piId).set(
@@ -466,6 +567,95 @@ async function handleDispute(team: TeamRef, dispute: any, eventId: string): Prom
     },
     { merge: true }
   )
+
+  // Finance journal. Funds movement comes from the dispute's balance transactions
+  // (an inquiry/early-warning dispute has none — nothing to journal then):
+  //   created      → withdrawal entries (net < 0) → 'dispute' row
+  //   closed 'won' → reversal entries  (net > 0) → 'dispute_reversal' row
+  // The dispute fee is the residual between balance net and the disputed amount,
+  // so the row always ties to what actually moved on the studio's balance.
+  try {
+    const bts = ((dispute.balance_transactions ?? []) as any[]).filter(
+      (bt) => typeof bt?.net === 'number'
+    )
+    const kind = phase === 'closed' && dispute.status === 'won' ? 'dispute_reversal' : 'dispute'
+    if (phase === 'closed' && dispute.status !== 'won') return // lost/warning-closed: nothing new moved
+    const relevant = bts.filter((bt) => (kind === 'dispute' ? bt.net < 0 : bt.net > 0))
+    if (relevant.length === 0) return
+    const balanceNet = relevant.reduce((sum, bt) => sum + (bt.net as number), 0)
+
+    const paySnap = await memberPaymentRef(team.teamId, piId).get()
+    const pay = paySnap.data() ?? {}
+    await recordFinanceTransaction(
+      buildDisputeTxn({
+        teamId: team.teamId,
+        disputeId: dispute.id as string,
+        paymentIntentId: piId,
+        amount: (dispute.amount as number) ?? 0,
+        balanceNet,
+        kind,
+        currency: (dispute.currency as string | undefined) ?? (pay.currency as string | undefined),
+        contactId: (pay.contactId as string | undefined) ?? null,
+        category: mapCategory(pay.kind as string | undefined) as FinanceCategory,
+        description: dispute.reason ? `Dispute · ${dispute.reason}` : 'Dispute',
+        occurredAtMs: typeof dispute.created === 'number' ? dispute.created * 1000 : Date.now(),
+        eventId,
+      })
+    )
+  } catch (err) {
+    console.error(`[connect] finance journal dispute write failed (dp=${dispute.id}):`, err)
+  }
+}
+
+/**
+ * payout.paid / payout.failed on the connected account — the settlement events
+ * that let a studio reconcile Linyup's journal against its bank statement.
+ * Writes the payout row, then stamps payout_id onto the charge rows whose
+ * balance transactions the payout swept (metadata linkage; rows not yet written
+ * are picked up by the backfill's payout pass).
+ * NOTE (ops): the Stripe Connect webhook endpoint must be subscribed to
+ * payout.paid + payout.failed — see docs/finance-reports.md.
+ */
+async function handlePayout(
+  team: TeamRef,
+  payout: any,
+  kind: 'paid' | 'failed',
+  accountId: string,
+  eventId: string
+): Promise<void> {
+  const created = await recordFinanceTransaction(
+    buildPayoutTxn({
+      teamId: team.teamId,
+      payoutId: payout.id as string,
+      amount: (payout.amount as number) ?? 0,
+      kind,
+      currency: payout.currency as string | undefined,
+      occurredAtMs: typeof payout.created === 'number' ? payout.created * 1000 : Date.now(),
+      arrivalDateMs: typeof payout.arrival_date === 'number' ? payout.arrival_date * 1000 : null,
+      eventId,
+    })
+  )
+  if (!created || kind !== 'paid') return
+
+  // Link the swept charges (bounded pagination; linkage is best-effort metadata).
+  try {
+    const stripe = await getConnectStripe()
+    let startingAfter: string | undefined
+    for (let page = 0; page < 20; page += 1) {
+      const list: any = await stripe.balanceTransactions.list(
+        { payout: payout.id as string, limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) },
+        { stripeAccount: accountId }
+      )
+      for (const bt of (list.data ?? []) as any[]) {
+        if (bt.type === 'payout') continue
+        await linkFinanceTxnPayout(team.teamId, bt.id as string, payout.id as string)
+      }
+      if (!list.has_more || !list.data?.length) break
+      startingAfter = list.data[list.data.length - 1].id as string
+    }
+  } catch (err) {
+    console.warn(`[connect] payout linkage failed (po=${payout.id}):`, err)
+  }
 }
 
 async function handleSubscription(team: TeamRef, sub: any, eventId: string): Promise<void> {
@@ -554,6 +744,7 @@ async function handleInvoice(
       },
       { merge: true }
     )
+    if (s?.contactId) await stampFinanceContact(team.teamId, piId, s.contactId as string)
   }
 }
 
@@ -698,6 +889,7 @@ async function handleCheckoutCompleted(
     // metadata of its own, so handlePaymentIntent recorded it as a bare 'payment'
     // with no contact. Renewal invoices are stamped by handleInvoice.
     if (latestPaymentIntentId) {
+      await stampFinanceContact(team.teamId, latestPaymentIntentId, contactId)
       await memberPaymentRef(team.teamId, latestPaymentIntentId).set(
         {
           contactId,
@@ -717,6 +909,7 @@ async function handleCheckoutCompleted(
         : session.payment_intent?.id
     if (piId) {
       await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+      await stampFinanceContact(team.teamId, piId, contactId)
       // Credit pack purchase → materialise the grant (idempotent vs the
       // payment_intent.succeeded sibling event; doc id = piId).
       await applyCreditGrant(team.teamId, contactId, md, piId)
@@ -764,7 +957,10 @@ async function handleProductCheckout(
     typeof session.payment_intent === 'string'
       ? session.payment_intent
       : session.payment_intent?.id
-  if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+  if (piId) {
+    await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+    await stampFinanceContact(team.teamId, piId, contactId)
+  }
 
   const label = md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? 'Product')
   await admin
@@ -817,7 +1013,10 @@ async function handleCourseCheckout(
     typeof session.payment_intent === 'string'
       ? session.payment_intent
       : session.payment_intent?.id
-  if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+  if (piId) {
+    await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+    await stampFinanceContact(team.teamId, piId, contactId)
+  }
 
   // Grant the lifetime entitlement. Doc id = contactId → idempotent on redelivery.
   await admin
@@ -948,7 +1147,10 @@ async function handleDropInCheckout(
       { merge: true }
     )
 
-  if (piId) await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+  if (piId) {
+    await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
+    await stampFinanceContact(team.teamId, piId, contactId)
+  }
 
   await db
     .collection(CONTACTS_COLLECTION)
@@ -1037,17 +1239,25 @@ export const handleConnectWebhook = onRequest({ invoker: 'public' }, async (req,
           await handleCheckoutCompleted(team, obj, accountId, event.id)
           break
         case 'payment_intent.succeeded':
-          await handlePaymentIntent(team, obj, 'succeeded', event.id)
+          await handlePaymentIntent(team, obj, 'succeeded', event.id, accountId)
           break
         case 'payment_intent.payment_failed':
-          await handlePaymentIntent(team, obj, 'failed', event.id)
+          await handlePaymentIntent(team, obj, 'failed', event.id, accountId)
           break
         case 'charge.refunded':
           await handleChargeRefunded(team, obj, event.id)
           break
         case 'charge.dispute.created':
+          await handleDispute(team, obj, 'created', event.id)
+          break
         case 'charge.dispute.closed':
-          await handleDispute(team, obj, event.id)
+          await handleDispute(team, obj, 'closed', event.id)
+          break
+        case 'payout.paid':
+          await handlePayout(team, obj, 'paid', accountId!, event.id)
+          break
+        case 'payout.failed':
+          await handlePayout(team, obj, 'failed', accountId!, event.id)
           break
         case 'customer.subscription.created':
         case 'customer.subscription.updated':

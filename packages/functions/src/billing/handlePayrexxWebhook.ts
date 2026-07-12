@@ -41,8 +41,10 @@ import {
   CONTACTS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   PAYMENT_EVENTS_SUBCOLLECTION,
+  buildExternalPaymentTxn,
 } from '@linyup/shared'
 import type { PayrexxGatewayConfig } from '@linyup/shared'
+import { recordFinanceTransaction } from '../finance/journal'
 
 export const handlePayrexxWebhook = onRequest(
   { invoker: 'public' },
@@ -254,6 +256,28 @@ export const handlePayrexxWebhook = onRequest(
       (subscriptionTypeId ? ` sub=${subscriptionTypeId}` : '') +
       (validUntilStr ? ` expires=${validUntilStr}` : '')
     )
+
+    // Finance journal (core infrastructure, best-effort — a failure never breaks
+    // payment recording; the backfill reconciles). BYO rails are fee-blind.
+    if (typeof transaction.amount === 'number' && transaction.amount > 0) {
+      try {
+        await recordFinanceTransaction(
+          buildExternalPaymentTxn({
+            teamId,
+            gateway: 'payrexx',
+            gatewayRef: String(transactionId),
+            amount: transaction.amount,
+            currency: cfg.currency,
+            contactId,
+            lineItemKind: subscriptionTypeId ? 'subscription' : null,
+            description: comment,
+            occurredAtMs: Date.now(),
+          })
+        )
+      } catch (err) {
+        console.error(`[handlePayrexxWebhook] finance journal write failed team=${teamId}:`, err)
+      }
+    }
 
     // ── 11. Activity log (best-effort, outside transaction) — assigned only ────
     if (contactId) {

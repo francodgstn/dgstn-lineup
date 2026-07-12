@@ -172,3 +172,12 @@ export const PAYMENT_EVENTS_SUBCOLLECTION = 'payment_events'
 // Idempotency markers for the Connect webhook (doc id = Stripe event id).
 // Admin-SDK only; clients never read or write it.
 export const CONNECT_WEBHOOK_EVENTS_COLLECTION = 'connect_webhook_events'
+
+// Finance journal — the normalized, immutable money-event log all financial
+// reporting derives from (see types/finance.ts). Written ONLY by Cloud Functions
+// (webhooks + recordManualPayment + the backfill script); managers/owners read.
+// Doc id is deterministic (financeTxnId) for idempotency across retries/backfill.
+export const FINANCE_TRANSACTIONS_SUBCOLLECTION = 'finance_transactions'
+// Derived monthly rollups (doc id = 'YYYY-MM'), regenerated from the journal by
+// the monthlyFinanceReports cron — always overwritten (journal is source of truth).
+export const FINANCE_MONTHLY_REPORTS_SUBCOLLECTION = 'finance_monthly_reports'

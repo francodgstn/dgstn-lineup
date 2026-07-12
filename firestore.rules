@@ -569,6 +569,21 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Finance journal — the normalized, immutable money-event log (all rails).
+      // Written ONLY by Cloud Functions (webhooks / recordManualPayment / backfill);
+      // corrections are compensating rows, never edits. Financial data → manager+.
+      match /finance_transactions/{txnId} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
+      // Derived monthly finance reports — regenerated from the journal by the
+      // monthlyFinanceReports cron (always overwritten; journal is source of truth).
+      match /finance_monthly_reports/{month} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
       // Custom event types (team-level; org-level event types live under organizations/{orgId}/event_types)
       match /event_types/{typeId} {
         allow read:   if isTeamMember(teamId);

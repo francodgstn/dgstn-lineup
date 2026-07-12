@@ -14,8 +14,10 @@ import {
   TEAMS_COLLECTION,
   CONTACTS_COLLECTION,
   PAYMENT_EVENTS_SUBCOLLECTION,
+  buildExternalPaymentTxn,
 } from '@linyup/shared'
 import { assertManager } from '../connect/access'
+import { recordFinanceTransaction } from '../finance/journal'
 import { applyPaymentEffects, normalizePaymentLineItem } from './effects'
 
 const MAX_COMMENT_LEN = 500
@@ -105,6 +107,26 @@ export const recordManualPayment = onCall(async (request) => {
     }
     console.error(`[recordManualPayment] write failed team=${teamId}:`, err)
     throw new HttpsError('internal', 'Failed to record the payment')
+  }
+
+  // Finance journal (core infrastructure, best-effort — a failure never breaks
+  // payment recording; the backfill reconciles).
+  try {
+    await recordFinanceTransaction(
+      buildExternalPaymentTxn({
+        teamId,
+        gateway: 'manual',
+        gatewayRef: ref,
+        amount,
+        currency,
+        contactId,
+        lineItemKind: lineItem?.kind ?? null,
+        description: comment ?? lineItem?.label ?? paymentMode,
+        occurredAtMs: typeof data.occurredAt === 'number' ? data.occurredAt : Date.now(),
+      })
+    )
+  } catch (err) {
+    console.error(`[recordManualPayment] finance journal write failed team=${teamId}:`, err)
   }
 
   // Apply the purchase effects (course unlock / subscription fields / credits).
