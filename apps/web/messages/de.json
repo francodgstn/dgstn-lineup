@@ -4162,5 +4162,9 @@
     "reminderAddStep": "Erinnerung hinzufügen",
     "reminderRemoveStep": "Erinnerung entfernen",
     "reminderSmsNote": "SMS-Erinnerungen werden nur zwischen 08:00 und 21:00 Uhr versendet."
+  },
+  "Finance": {
+    "exportCsv": "CSV exportieren",
+    "exportFailed": "Export fehlgeschlagen — bitte erneut versuchen."
   }
 }

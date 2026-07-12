@@ -4162,5 +4162,9 @@
     "reminderAddStep": "Add reminder",
     "reminderRemoveStep": "Remove reminder",
     "reminderSmsNote": "SMS reminders are sent between 08:00 and 21:00 only."
+  },
+  "Finance": {
+    "exportCsv": "Export CSV",
+    "exportFailed": "Export failed — please try again."
   }
 }

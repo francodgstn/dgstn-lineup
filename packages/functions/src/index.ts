@@ -188,8 +188,10 @@ export { updatePaymentRecord } from './connect/updatePayment'
 // Manual cash / bank-transfer payments — recorded into the unified payment_events ledger.
 export { recordManualPayment } from './payments/recordManualPayment'
 
-// Finance — monthly rollups of the finance journal (always-on core infra).
+// Finance — monthly rollups of the finance journal (always-on core infra) and
+// the plugin-gated monthly CSV export.
 export { monthlyFinanceReports } from './finance/monthlyReports'
+export { exportFinanceReport } from './finance/exportReport'
 
 // Outreach
 export { sendOutreachEmail } from './outreach'

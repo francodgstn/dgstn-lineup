@@ -4162,5 +4162,9 @@
     "reminderAddStep": "Aggiungi promemoria",
     "reminderRemoveStep": "Rimuovi promemoria",
     "reminderSmsNote": "I promemoria SMS vengono inviati solo tra le 08:00 e le 21:00."
+  },
+  "Finance": {
+    "exportCsv": "Esporta CSV",
+    "exportFailed": "Esportazione non riuscita — riprova."
   }
 }

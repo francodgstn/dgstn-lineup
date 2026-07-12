@@ -4162,5 +4162,9 @@
     "reminderAddStep": "Ajouter un rappel",
     "reminderRemoveStep": "Supprimer le rappel",
     "reminderSmsNote": "Les rappels SMS ne sont envoyés qu'entre 08h00 et 21h00."
+  },
+  "Finance": {
+    "exportCsv": "Exporter CSV",
+    "exportFailed": "Échec de l'export — veuillez réessayer."
   }
 }
