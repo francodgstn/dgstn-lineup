@@ -162,7 +162,9 @@ export interface AccountingPeriodSummary {
   teamId: string
   period: string
   fiscal_year: number
-  /** account_code → month totals (posted entries only; reversed excluded). */
+  /** account_code → month totals over ALL entries. A reversed entry and its
+   * reversal both stay in the totals and cancel — classic bookkeeping; the
+   * 'reversed' status is display metadata, never an exclusion filter. */
   totals: Record<string, { debit: number; credit: number }>
   entry_count: number
   computed_at: Timestamp

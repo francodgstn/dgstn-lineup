@@ -193,6 +193,13 @@ export { recordManualPayment } from './payments/recordManualPayment'
 export { monthlyFinanceReports } from './finance/monthlyReports'
 export { exportFinanceReport } from './finance/exportReport'
 
+// Accounting (finance plugin) — double-entry ledger derived from the journal.
+export { onFinanceTransactionWrite } from './accounting/onFinanceTransactionWrite'
+export { rebuildAccountingLedger } from './accounting/rebuild'
+export { createManualEntry, reverseEntry } from './accounting/manualEntries'
+export { closeFiscalYear } from './accounting/close'
+export { setChartTemplate } from './accounting/settings'
+
 // Outreach
 export { sendOutreachEmail } from './outreach'
 
