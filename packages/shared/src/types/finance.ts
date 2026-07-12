@@ -225,6 +225,165 @@ export function assertFinanceInvariant(txn: {
   }
 }
 
+// ─── Monthly report (derived rollup) ──────────────────────────────────────────
+// teams/{teamId}/finance_monthly_reports/{YYYY-MM}. UNLIKE team_weekly_reports
+// (never overwritten — the doc accumulates live increments), finance reports are
+// pure derivations of the journal: the cron ALWAYS overwrites, and regeneration
+// is the correctness mechanism.
+
+export interface FinanceTotals {
+  gross: number
+  stripe_fees: number
+  platform_fees: number
+  net: number
+  count: number
+}
+
+export interface FinanceMonthlyReport {
+  month: string
+  txn_count: number
+  /** Currencies seen this month (uppercase). Almost always ['CHF']. */
+  currencies: string[]
+  /** Primary-currency totals (the most frequent currency this month). */
+  totals: FinanceTotals
+  by_category: Record<FinanceCategory, FinanceTotals>
+  by_source: Record<FinanceTxnSource, FinanceTotals>
+  refunds: { count: number; amount: number } // amount positive minor units
+  disputes: { count: number; withdrawn: number; reinstated: number; fees: number }
+  payouts: { count: number; total: number } // total paid to bank, positive
+  /** Gateway-balance view: what the month's activity produced vs what was paid out. */
+  reconciliation: { net_activity: number; paid_out: number; delta: number }
+  /** Per-currency totals — present only when more than one currency was seen. */
+  by_currency?: Record<string, FinanceTotals>
+  /** Journal-vs-source drift check stamped by the cron (see monthlyFinanceReports). */
+  reconciliation_check?: { sources_count: number; journal_count: number; ok: boolean }
+  generated_at?: Timestamp
+}
+
+/** Pure builder input — the journal rows of one month (mixed types). */
+export interface FinanceReportRow {
+  type: FinanceTxnType
+  source: FinanceTxnSource
+  category: FinanceCategory
+  currency: string
+  gross: number
+  stripe_fee: number
+  platform_fee: number
+  net: number
+  status?: 'recorded' | 'corrected'
+}
+
+const emptyTotals = (): FinanceTotals => ({
+  gross: 0,
+  stripe_fees: 0,
+  platform_fees: 0,
+  net: 0,
+  count: 0,
+})
+
+function addTotals(t: FinanceTotals, row: FinanceReportRow): void {
+  t.gross += row.gross
+  t.stripe_fees += row.stripe_fee
+  t.platform_fees += row.platform_fee
+  t.net += row.net
+  t.count += 1
+}
+
+export const FINANCE_CATEGORIES: FinanceCategory[] = [
+  'membership',
+  'drop_in',
+  'course',
+  'product',
+  'other',
+]
+export const FINANCE_SOURCES: FinanceTxnSource[] = ['connect', 'byo_stripe', 'payrexx', 'manual']
+
+/**
+ * Reduce one month's journal rows into the report doc. Pure — unit-tested with
+ * synthetic rows; the cron only queries + writes. Rows with status 'corrected'
+ * are excluded (their compensating adjustment rows carry the corrected values).
+ */
+export function computeMonthlyFinanceReport(
+  rows: FinanceReportRow[],
+  month: string
+): FinanceMonthlyReport {
+  const active = rows.filter((r) => r.status !== 'corrected')
+
+  const byCategory = Object.fromEntries(
+    FINANCE_CATEGORIES.map((c) => [c, emptyTotals()])
+  ) as Record<FinanceCategory, FinanceTotals>
+  const bySource = Object.fromEntries(FINANCE_SOURCES.map((s) => [s, emptyTotals()])) as Record<
+    FinanceTxnSource,
+    FinanceTotals
+  >
+  const byCurrency: Record<string, FinanceTotals> = {}
+  const totals = emptyTotals()
+  const refunds = { count: 0, amount: 0 }
+  const disputes = { count: 0, withdrawn: 0, reinstated: 0, fees: 0 }
+  const payouts = { count: 0, total: 0 }
+  let netActivity = 0
+
+  // Primary currency = the most frequent one this month.
+  const currencyCounts = new Map<string, number>()
+  for (const r of active) {
+    const c = normalizeCurrency(r.currency)
+    currencyCounts.set(c, (currencyCounts.get(c) ?? 0) + 1)
+  }
+  const currencies = [...currencyCounts.keys()].sort()
+  const primary =
+    [...currencyCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'CHF'
+
+  for (const r of active) {
+    const currency = normalizeCurrency(r.currency)
+    if (!byCurrency[currency]) byCurrency[currency] = emptyTotals()
+    addTotals(byCurrency[currency], r)
+
+    if (r.type === 'payout') {
+      payouts.count += 1
+      payouts.total += -r.net // paid: net negative → positive amount to bank; failed rows subtract
+      continue // payouts are balance movements — not part of activity totals
+    }
+
+    if (currency === primary) {
+      addTotals(totals, r)
+      addTotals(byCategory[r.category] ?? (byCategory[r.category] = emptyTotals()), r)
+      addTotals(bySource[r.source] ?? (bySource[r.source] = emptyTotals()), r)
+      netActivity += r.net
+    }
+
+    if (r.type === 'refund') {
+      refunds.count += 1
+      refunds.amount += -r.gross
+    } else if (r.type === 'dispute') {
+      disputes.count += 1
+      disputes.withdrawn += -r.gross
+      disputes.fees += -r.stripe_fee
+    } else if (r.type === 'dispute_reversal') {
+      disputes.reinstated += r.gross
+      disputes.fees -= r.stripe_fee // fee refunded on a won dispute
+    }
+  }
+
+  const report: FinanceMonthlyReport = {
+    month,
+    txn_count: active.length,
+    currencies,
+    totals,
+    by_category: byCategory,
+    by_source: bySource,
+    refunds,
+    disputes,
+    payouts,
+    reconciliation: {
+      net_activity: netActivity,
+      paid_out: payouts.total,
+      delta: netActivity - payouts.total,
+    },
+  }
+  if (currencies.length > 1) report.by_currency = byCurrency
+  return report
+}
+
 // ─── Row builders (pure — shared by webhooks, backfill, and tests) ────────────
 
 /** Fee breakdown fetched from a charge's balance transaction (all values are
