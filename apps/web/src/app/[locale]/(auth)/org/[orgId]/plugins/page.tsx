@@ -17,12 +17,15 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
-import { Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift, GraduationCap, Trophy, FolderTree } from 'lucide-react'
+import { Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift, GraduationCap, Trophy, FolderTree,
+  Calculator,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 
 const ICON_MAP: Record<string, LucideIcon> = {
+  Calculator,
   Sparkles,
   MessageCircle,
   Globe,

@@ -41,6 +41,7 @@ import {
   Tag,
   TrendingUp,
   Search,
+  Calculator,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -62,6 +63,7 @@ import AssistantLauncher from '@/plugins/ai-assistant/AssistantPanel'
 
 // Icons referenced by string name in plugin manifest navContributions
 const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
+  Calculator,
   GraduationCap,
   Gift,
   Puzzle,

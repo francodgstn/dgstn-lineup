@@ -34,6 +34,7 @@ import {
   GraduationCap, Trophy, FolderTree, Search, Tag, ListPlus, ClipboardList,
   ImageIcon, FileText, CheckCircle2, Coins, Lock, Clock, FlaskConical, Star,
   ChevronDown, Monitor,
+  Calculator,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -48,6 +49,7 @@ import { ConfigPanel as KioskConfigPanel } from '@/plugins/kiosk/ConfigPanel'
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 
 const ICON_MAP: Record<string, LucideIcon> = {
+  Calculator,
   Sparkles,
   MessageCircle,
   Globe,

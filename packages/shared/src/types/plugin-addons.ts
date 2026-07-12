@@ -19,6 +19,9 @@ export interface PluginAddonPrice {
 // were removed here and their manifests drop the `addon` field, so
 // pluginAccessForPlan resolves them to `included` from Coach up.
 export const PLUGIN_ADDONS: Record<string, PluginAddonPrice> = {
+  // Reporting export + double-entry accounting in one plugin. Price is the
+  // 2026-07 launch suggestion — confirm before running scripts/stripe-sync.ts.
+  finance:        { coachPriceMonthly: 12, stripeLookupKey: 'linyup_addon_finance_monthly' },
   website:        { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_website_monthly' },
   'online-courses': { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_online-courses_monthly' },
   products:       { coachPriceMonthly: 8, stripeLookupKey: 'linyup_addon_products_monthly' },
