@@ -584,6 +584,39 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Double-entry accounting (finance plugin). Accounts: owner-editable, but
+      // code/type are immutable and system accounts can't be minted or deleted
+      // from the client. Entries/summaries: Cloud Functions only — corrections
+      // are reversal entries, never edits.
+      match /accounting_accounts/{code} {
+        allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow create: if hasTeamRole(teamId, 'owner')
+          && request.resource.data.system != true
+          && request.resource.data.code == code;
+        allow update: if hasTeamRole(teamId, 'owner')
+          && request.resource.data.code == resource.data.code
+          && request.resource.data.type == resource.data.type
+          && request.resource.data.system == resource.data.system;
+        allow delete: if false; // deactivate instead — entries reference codes
+      }
+      match /accounting_settings/{docId} {
+        allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        // Owner may tune mapping / fiscal config; created & template-switched
+        // only via Cloud Functions (seeding). Guarded fields stay server-owned.
+        allow update: if hasTeamRole(teamId, 'owner')
+          && request.resource.data.chart_template == resource.data.chart_template
+          && request.resource.data.closed_through_fiscal_year == resource.data.closed_through_fiscal_year;
+        allow create, delete: if false;
+      }
+      match /accounting_entries/{entryId} {
+        allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+      match /accounting_period_summaries/{period} {
+        allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
       // Custom event types (team-level; org-level event types live under organizations/{orgId}/event_types)
       match /event_types/{typeId} {
         allow read:   if isTeamMember(teamId);
