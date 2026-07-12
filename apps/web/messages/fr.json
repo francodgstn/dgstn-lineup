@@ -39,6 +39,7 @@
     "searchKeywords": {
       "dashboard": "accueil aperçu",
       "allSettings": "paramètres réglages configuration",
+      "howTo": "aide guides documentation onboarding démarrage tutoriel prise en main",
       "calendar": "calendrier planning séances cours horaires",
       "bookings": "réservations inscriptions présences",
       "contacts": "membres élèves clients personnes",
@@ -70,6 +71,7 @@
       "billing": "facturation forfait abonnement"
     },
     "allSettings": "Tous les paramètres",
+    "howTo": "Guides",
     "teamSettings": "Paramètres de l'équipe",
     "groupTeam": "Paramètres de l'équipe",
     "teamGeneral": "Général",
@@ -157,7 +159,9 @@
     "surfaceForms": "Formulaires",
     "formsDesc": "Formulaires d'inscription et de contact personnalisés.",
     "surfaceDocuments": "Documents",
-    "documentsDesc": "Documents publics : décharges, conditions et politiques."
+    "documentsDesc": "Documents publics : décharges, conditions et politiques.",
+    "surfaceKiosk": "Kiosque",
+    "kioskDesc": "Un écran de check-in sur tablette pour votre accueil – membres et visiteurs s'enregistrent sur place."
   },
   "ShopSettings": {
     "title": "Boutique",
@@ -4162,5 +4166,90 @@
     "reminderAddStep": "Ajouter un rappel",
     "reminderRemoveStep": "Supprimer le rappel",
     "reminderSmsNote": "Les rappels SMS ne sont envoyés qu'entre 08h00 et 21h00."
+  },
+  "HowTo": {
+    "title": "Guides",
+    "subtitle": "Comment Linyup s'articule, et comment mettre votre studio en route.",
+    "fitTitle": "Comment Linyup s'articule",
+    "fitIntro": "Quelques briques essentielles font tourner tout Linyup. Une fois que vous voyez comment elles s’assemblent, le reste coule de source.",
+    "blocks": {
+      "contacts": {
+        "name": "Contacts",
+        "desc": "Tout le monde dans votre univers : prospects, personnes à l'essai et membres. Les personnes autour desquelles tout gravite."
+      },
+      "activities": {
+        "name": "Activités",
+        "desc": "Ce que vous proposez : un type de cours, une discipline ou un service. Le modèle à partir duquel vos séances sont planifiées."
+      },
+      "sessions": {
+        "name": "Séances",
+        "desc": "Des instances planifiées d'une activité dans votre calendrier – un cours précis à un horaire précis."
+      },
+      "bookings": {
+        "name": "Réservations",
+        "desc": "Un contact qui réserve une place dans une séance. Le lien entre une personne et un cours."
+      },
+      "plans": {
+        "name": "Formules",
+        "desc": "Des adhésions récurrentes (abonnements) qui donnent aux membres un accès continu à la réservation."
+      },
+      "surfaces": {
+        "name": "Pages publiques",
+        "desc": "Là où vos contacts vous rencontrent : bio-link, page de réservation, boutique et leur espace personnel."
+      },
+      "automations": {
+        "name": "Automatisations",
+        "desc": "Des règles qui réagissent aux actions des contacts – e-mail de bienvenue, relance après essai, reconquête."
+      },
+      "payments": {
+        "name": "Paiements",
+        "desc": "L'argent des membres vers votre studio via Stripe – abonnements, séances à l'unité et ventes ponctuelles."
+      }
+    },
+    "journeyTitle": "Le parcours du membre",
+    "journey": {
+      "discover": "Découvrir",
+      "lead": "Prospect",
+      "attend": "Participer",
+      "join": "Rejoindre",
+      "retain": "Fidéliser"
+    },
+    "onboardTitle": "Mettre votre studio en route",
+    "onboardIntro": "Vous débutez ? Suivez ces étapes dans l'ordre et vous prendrez des réservations dès l'après-midi.",
+    "steps": {
+      "profile": {
+        "title": "Configurez votre studio",
+        "desc": "Ajoutez votre nom, votre logo et vos lieux pour que tout soit à votre image."
+      },
+      "offer": {
+        "title": "Créez vos activités",
+        "desc": "Ajoutez les types de cours, disciplines ou services que vous proposez."
+      },
+      "plans": {
+        "title": "Définissez vos formules",
+        "desc": "Configurez les adhésions et les tarifs auxquels les membres peuvent souscrire."
+      },
+      "schedule": {
+        "title": "Construisez votre planning",
+        "desc": "Placez vos séances au calendrier, ponctuelles ou récurrentes."
+      },
+      "surfaces": {
+        "title": "Ouvrez vos pages publiques",
+        "desc": "Activez votre page de réservation, votre bio-link et votre boutique pour qu'on vous trouve et vous réserve."
+      },
+      "contacts": {
+        "title": "Ajoutez vos contacts",
+        "desc": "Importez ou invitez vos membres existants pour les intégrer."
+      },
+      "payments": {
+        "title": "Connectez les paiements",
+        "desc": "Reliez Stripe pour accepter abonnements, séances à l'unité et ventes."
+      },
+      "automate": {
+        "title": "Automatisez les relances",
+        "desc": "Activez les automatisations de départ pour que prospects et membres aient de vos nouvelles au bon moment."
+      }
+    },
+    "moreSoon": "D'autres guides arrivent bientôt."
   }
 }

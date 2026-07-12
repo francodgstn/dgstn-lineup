@@ -39,6 +39,7 @@
     "searchKeywords": {
       "dashboard": "home panoramica",
       "allSettings": "impostazioni configurazione preferenze",
+      "howTo": "aiuto guide documentazione onboarding avvio tutorial primi passi",
       "calendar": "calendario orari sessioni corsi agenda",
       "bookings": "prenotazioni iscrizioni presenze",
       "contacts": "membri allievi clienti persone",
@@ -70,6 +71,7 @@
       "billing": "fatturazione piano abbonamento"
     },
     "allSettings": "Tutte le impostazioni",
+    "howTo": "Guide",
     "teamSettings": "Impostazioni team",
     "groupTeam": "Impostazioni team",
     "teamGeneral": "Generale",
@@ -157,7 +159,9 @@
     "surfaceForms": "Moduli",
     "formsDesc": "Moduli di iscrizione e contatto personalizzati.",
     "surfaceDocuments": "Documenti",
-    "documentsDesc": "Documenti pubblici come liberatorie, termini e informative."
+    "documentsDesc": "Documenti pubblici come liberatorie, termini e informative.",
+    "surfaceKiosk": "Kiosk",
+    "kioskDesc": "Uno schermo di check-in su tablet per la reception – membri e walk-in si registrano sul posto."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -4162,5 +4166,90 @@
     "reminderAddStep": "Aggiungi promemoria",
     "reminderRemoveStep": "Rimuovi promemoria",
     "reminderSmsNote": "I promemoria SMS vengono inviati solo tra le 08:00 e le 21:00."
+  },
+  "HowTo": {
+    "title": "Guide",
+    "subtitle": "Come si incastra Linyup e come mettere in moto il tuo studio.",
+    "fitTitle": "Come si incastra Linyup",
+    "fitIntro": "Pochi elementi fondamentali muovono tutto in Linyup. Una volta capito come si collegano, il resto viene da sé.",
+    "blocks": {
+      "contacts": {
+        "name": "Contatti",
+        "desc": "Tutte le persone del tuo mondo: potenziali clienti, chi fa la prova e i membri. Le persone attorno a cui ruota tutto il resto."
+      },
+      "activities": {
+        "name": "Attività",
+        "desc": "Ciò che offri: un tipo di corso, una disciplina o un servizio. Il modello da cui vengono pianificate le sessioni."
+      },
+      "sessions": {
+        "name": "Sessioni",
+        "desc": "Istanze pianificate di un'attività nel calendario: un corso preciso a un orario preciso."
+      },
+      "bookings": {
+        "name": "Prenotazioni",
+        "desc": "Un contatto che prenota un posto in una sessione. Il legame tra una persona e un corso."
+      },
+      "plans": {
+        "name": "Piani",
+        "desc": "Abbonamenti ricorrenti che danno ai membri accesso continuo alle prenotazioni."
+      },
+      "surfaces": {
+        "name": "Pagine pubbliche",
+        "desc": "Dove i contatti ti incontrano: bio-link, pagina di prenotazione, shop e il loro spazio personale."
+      },
+      "automations": {
+        "name": "Automazioni",
+        "desc": "Regole che reagiscono a ciò che fanno i contatti: email di benvenuto, follow-up dopo la prova, riattivazione."
+      },
+      "payments": {
+        "name": "Pagamenti",
+        "desc": "Denaro dai membri al tuo studio tramite Stripe: abbonamenti, ingressi singoli e vendite una tantum."
+      }
+    },
+    "journeyTitle": "Il percorso del membro",
+    "journey": {
+      "discover": "Scoprire",
+      "lead": "Contatto",
+      "attend": "Partecipare",
+      "join": "Iscriversi",
+      "retain": "Fidelizzare"
+    },
+    "onboardTitle": "Mettere in moto il tuo studio",
+    "onboardIntro": "Sei all'inizio? Segui questi passaggi in ordine e prenderai prenotazioni già nel pomeriggio.",
+    "steps": {
+      "profile": {
+        "title": "Configura il tuo studio",
+        "desc": "Aggiungi nome, logo e sedi così tutto avrà la tua identità."
+      },
+      "offer": {
+        "title": "Crea le tue attività",
+        "desc": "Aggiungi i tipi di corso, le discipline o i servizi che proponi."
+      },
+      "plans": {
+        "title": "Definisci i tuoi piani",
+        "desc": "Imposta gli abbonamenti e i prezzi a cui i membri possono iscriversi."
+      },
+      "schedule": {
+        "title": "Costruisci il calendario",
+        "desc": "Metti le tue sessioni in calendario, singole o ricorrenti."
+      },
+      "surfaces": {
+        "title": "Apri le pagine pubbliche",
+        "desc": "Attiva la pagina di prenotazione, il bio-link e lo shop così le persone possono trovarti e prenotare."
+      },
+      "contacts": {
+        "title": "Aggiungi i tuoi contatti",
+        "desc": "Importa o invita i tuoi membri esistenti per portarli a bordo."
+      },
+      "payments": {
+        "title": "Collega i pagamenti",
+        "desc": "Collega Stripe per accettare abbonamenti, ingressi singoli e vendite."
+      },
+      "automate": {
+        "title": "Automatizza i follow-up",
+        "desc": "Attiva le automazioni iniziali così contatti e membri ricevono tue notizie al momento giusto."
+      }
+    },
+    "moreSoon": "Altre guide sono in arrivo."
   }
 }

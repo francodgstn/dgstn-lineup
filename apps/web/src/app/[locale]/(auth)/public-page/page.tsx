@@ -24,7 +24,7 @@ import type { PublicSurface } from '@linyup/shared'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  Globe, Monitor, ShoppingBag, GraduationCap, CalendarCheck, UserPlus,
+  Globe, Monitor, MonitorCheck, ShoppingBag, GraduationCap, CalendarCheck, UserPlus,
   ClipboardList, FileText, ExternalLink, Copy, Check, Plus, Settings2,
 } from 'lucide-react'
 
@@ -188,6 +188,13 @@ export default function PublicPageHub() {
       key: 'booking', icon: CalendarCheck, title: t('surfaceBooking'), desc: t('bookingDesc'),
       live: flags.bookingLive, previewUrl: publicUrl('booking'),
       action: <ManageLink href={'/settings/booking' as Route} label={t('manage')} />,
+    },
+    {
+      key: 'kiosk', icon: MonitorCheck, title: t('surfaceKiosk'), desc: t('kioskDesc'),
+      live: flags.kioskActive, previewUrl: publicUrl('kiosk'),
+      action: flags.kioskActive
+        ? <ManageLink href={'/plugins/kiosk' as Route} label={t('manage')} />
+        : <SetupLink href={pluginSetupHref('kiosk')} label={t('setUp')} />,
     },
     {
       key: 'signup', icon: UserPlus, title: t('surfaceSignup'), desc: t('signupDesc'),

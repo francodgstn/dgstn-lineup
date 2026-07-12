@@ -39,6 +39,7 @@
     "searchKeywords": {
       "dashboard": "home overview start",
       "allSettings": "settings preferences configuration admin",
+      "howTo": "help guides documentation onboarding getting started tutorial how-to",
       "calendar": "schedule sessions classes agenda timetable planner",
       "bookings": "reservations attendance registrations",
       "contacts": "members students clients people customers",
@@ -70,6 +71,7 @@
       "billing": "invoice plan upgrade subscription"
     },
     "allSettings": "All settings",
+    "howTo": "How-to",
     "teamSettings": "Team settings",
     "groupTeam": "Team settings",
     "teamGeneral": "General",
@@ -157,7 +159,9 @@
     "surfaceForms": "Forms",
     "formsDesc": "Custom intake and contact forms visitors can fill in.",
     "surfaceDocuments": "Documents",
-    "documentsDesc": "Public documents like waivers, terms and policies."
+    "documentsDesc": "Public documents like waivers, terms and policies.",
+    "surfaceKiosk": "Kiosk",
+    "kioskDesc": "A tablet check-in screen for your front desk — members and walk-ins sign in on the spot."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -4162,5 +4166,90 @@
     "reminderAddStep": "Add reminder",
     "reminderRemoveStep": "Remove reminder",
     "reminderSmsNote": "SMS reminders are sent between 08:00 and 21:00 only."
+  },
+  "HowTo": {
+    "title": "How-to",
+    "subtitle": "How Linyup fits together, and how to get your studio up and running.",
+    "fitTitle": "How Linyup fits together",
+    "fitIntro": "A few core building blocks power everything in Linyup. Once you see how they connect, the rest falls into place.",
+    "blocks": {
+      "contacts": {
+        "name": "Contacts",
+        "desc": "Everyone in your world — leads, trial-goers and members. The people every other part revolves around."
+      },
+      "activities": {
+        "name": "Activities",
+        "desc": "What you offer: a class type, discipline or service. The template your sessions are scheduled from."
+      },
+      "sessions": {
+        "name": "Sessions",
+        "desc": "Scheduled instances of an activity on your calendar — a specific class at a specific time."
+      },
+      "bookings": {
+        "name": "Bookings",
+        "desc": "A contact reserving a spot in a session. The link between a person and a class."
+      },
+      "plans": {
+        "name": "Plans",
+        "desc": "Recurring memberships (subscriptions) that give members ongoing access to book."
+      },
+      "surfaces": {
+        "name": "Public pages",
+        "desc": "Where contacts meet you: bio-link, booking page, shop and their personal space."
+      },
+      "automations": {
+        "name": "Automations",
+        "desc": "Rules that react to what contacts do — a welcome email, a trial follow-up, a win-back."
+      },
+      "payments": {
+        "name": "Payments",
+        "desc": "Money from members to your studio via Stripe — subscriptions, drop-ins and one-off sales."
+      }
+    },
+    "journeyTitle": "The member journey",
+    "journey": {
+      "discover": "Discover",
+      "lead": "Lead",
+      "attend": "Attend",
+      "join": "Join",
+      "retain": "Retain"
+    },
+    "onboardTitle": "Onboarding your studio",
+    "onboardIntro": "New here? Work through these in order and you'll be taking bookings in an afternoon.",
+    "steps": {
+      "profile": {
+        "title": "Set up your studio",
+        "desc": "Add your name, logo and locations so everything is branded as you."
+      },
+      "offer": {
+        "title": "Create your activities",
+        "desc": "Add the class types, disciplines or services you run."
+      },
+      "plans": {
+        "title": "Define your plans",
+        "desc": "Set up the memberships and pricing members can subscribe to."
+      },
+      "schedule": {
+        "title": "Build your schedule",
+        "desc": "Put your sessions on the calendar, one-off or recurring."
+      },
+      "surfaces": {
+        "title": "Open your public pages",
+        "desc": "Turn on your booking page, bio-link and shop so people can find and book you."
+      },
+      "contacts": {
+        "title": "Add your contacts",
+        "desc": "Import or invite your existing members to bring them on board."
+      },
+      "payments": {
+        "title": "Connect payments",
+        "desc": "Link Stripe to accept subscriptions, drop-ins and sales."
+      },
+      "automate": {
+        "title": "Automate follow-ups",
+        "desc": "Switch on the starter automations so leads and members hear from you at the right time."
+      }
+    },
+    "moreSoon": "More guides are on the way."
   }
 }

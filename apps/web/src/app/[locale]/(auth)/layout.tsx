@@ -41,6 +41,7 @@ import {
   Tag,
   TrendingUp,
   Search,
+  Compass,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -111,6 +112,14 @@ const ALL_SETTINGS_ITEM: NavItem = {
   labelKey: 'allSettings',
   icon: SlidersHorizontal,
   exact: true,
+}
+// How-to — high-level product guides + onboarding workflow. A general utility
+// destination like Settings; always visible, no plan gate.
+const HOW_TO_ITEM: NavItem = {
+  id: 'howTo',
+  href: '/how-to',
+  labelKey: 'howTo',
+  icon: Compass,
 }
 
 // Action-oriented sidebar sections for high-frequency destinations. Lower-frequency
@@ -777,6 +786,12 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   return <p className="px-2 pb-1 text-[11px] font-medium text-muted-foreground/50">{children}</p>
 }
 
+// Expanded-sidebar wrapper for the Shortcuts group — a very light brand-violet
+// gradient panel that gives the section a subtle lift over the flat sidebar
+// (the icon rail keeps the plain hairline divider instead).
+const SHORTCUTS_PANEL =
+  'mt-3 rounded-xl bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent pt-3 pb-1.5'
+
 // How many recently-visited (unpinned) items the Shortcuts group keeps, in
 // addition to the pinned ones.
 const MAX_RECENT_SHORTCUTS = 5
@@ -812,7 +827,7 @@ function ShortcutsNav({
   if (entries.length === 0) {
     if (collapsed) return null
     return (
-      <div className="mt-3 border-t pt-3">
+      <div className={SHORTCUTS_PANEL}>
         <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>
         <p className="px-3 py-1 text-xs leading-relaxed text-muted-foreground/60">
           {t('navShortcutsEmpty')}
@@ -847,7 +862,7 @@ function ShortcutsNav({
   const dropLine = <div className="mx-2 my-0.5 h-0.5 rounded bg-primary/60" />
 
   return (
-    <div className="mt-3 border-t pt-3">
+    <div className={collapsed ? 'mt-3 border-t pt-3' : SHORTCUTS_PANEL}>
       {!collapsed && <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>}
       <div className="space-y-0.5">
         {shown.map((entry, idx) => (
@@ -1135,7 +1150,7 @@ function SidebarContent({
   // The search index: everything in the catalogue plus the two fixed General
   // items (searchable but not pinnable — they're always visible anyway).
   const searchEntries: SearchEntry[] = [
-    ...[DASHBOARD_ITEM, ALL_SETTINGS_ITEM].map((item) => ({
+    ...[DASHBOARD_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
       id: item.id,
       href: item.href,
       label: t(item.labelKey as Parameters<typeof t>[0]),
@@ -1207,6 +1222,7 @@ function SidebarContent({
           <div className="space-y-0.5">
             <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
             <NavLink item={ALL_SETTINGS_ITEM} collapsed={collapsed} onClick={onLinkClick} />
+            <NavLink item={HOW_TO_ITEM} collapsed={collapsed} onClick={onLinkClick} />
           </div>
         </div>
 
