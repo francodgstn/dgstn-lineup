@@ -4870,7 +4870,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   // Register this contact as an open tab (label upgraded once the contact loads).
   // The stored href carries the active sub-tab so reopening lands where you left.
   useRegisterTab({
-    id: `/contacts/${id}`,
     href: `/contacts/${id}?tab=${tab}`,
     label: contact ? `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim() : '',
     entityKind: 'contact',

@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { useOpenTabs } from '@/contexts/OpenTabsContext'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -284,6 +285,25 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
           {saving ? t('saving') : t('save')}
         </Button>
         {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
+      </div>
+    </div>
+  )
+}
+
+// Per-device interface preference: show/hide the navigational tab strip. Stored
+// per-browser (localStorage via OpenTabsContext), not on the team — so it sits
+// apart from the team fields, labelled as a this-device setting.
+function TabBarPreference() {
+  const t = useTranslations('TeamSettings')
+  const { enabled, setEnabled } = useOpenTabs()
+  return (
+    <div className="space-y-3 pt-4 border-t">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium">{t('tabBarTitle')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('tabBarHelp')}</p>
+        </div>
+        <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={t('tabBarTitle')} />
       </div>
     </div>
   )
@@ -2034,6 +2054,7 @@ export default function TeamSettingsPage() {
               <>
                 <GeneralForm team={team} teamId={currentTeamId} />
                 <EngagementThresholdsForm team={team} teamId={currentTeamId} />
+                <TabBarPreference />
               </>
             )}
             {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}

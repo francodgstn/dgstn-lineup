@@ -68,6 +68,20 @@ export function resolveTabRoute(pathname: string): ResolvedTab | null {
 }
 
 /**
+ * Human label for a route that isn't in the tracked set (e.g. Settings, an
+ * Offer page): title-case its last path segment. The active tab follows the
+ * user everywhere, so it needs a readable label for any page.
+ */
+export function fallbackLabelFromPath(pathname: string): string {
+  const segs = normalizeTabPath(pathname).split('/').filter(Boolean)
+  const last = segs[segs.length - 1] ?? 'home'
+  return last
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
+/**
  * The single place the `typedRoutes` cast lives for dynamic tab hrefs. Stored
  * tab targets are entity URLs that aren't statically enumerable, so they can't
  * satisfy the generated `Route` union without a cast.

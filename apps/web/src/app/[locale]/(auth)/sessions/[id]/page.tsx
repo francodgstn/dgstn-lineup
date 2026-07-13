@@ -546,7 +546,6 @@ export default function SessionDetailPage() {
 
   // Register this session as an open tab once loaded (mirrors the header title).
   useRegisterTab({
-    id: `/sessions/${sessionId}`,
     href: `/sessions/${sessionId}`,
     label: session ? (session.activityName ?? formatDate(session.start)) : '',
     entityKind: 'session',

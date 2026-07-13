@@ -444,7 +444,6 @@ export default function EventDetailPage() {
 
   // Register this event as an open tab once loaded (mirrors the header title).
   useRegisterTab({
-    id: `/events/${id}`,
     href: `/events/${id}`,
     label: event?.title ?? '',
     entityKind: 'event',

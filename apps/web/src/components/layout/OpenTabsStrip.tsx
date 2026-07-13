@@ -1,14 +1,27 @@
 'use client'
 
-// Desktop-only horizontal "open pages" tab strip. Mounted once in the (auth)
-// shell so it survives navigation. Tabs are navigational, not live: clicking one
-// re-navigates and the view remounts from the React Query cache (per-entity keys,
-// 60s stale / 5min gc), so reopening is near-instant. Hidden on mobile.
+// Desktop-only "open pages" tab strip (Notion-style). Mounted once in the
+// (auth) shell so it survives navigation. One active tab follows the user as
+// they navigate (label/href update in place); extra tabs are created only by
+// the ＋ button here or ctrl/⌘/middle-click on a row elsewhere. Tabs are
+// navigational: switching re-navigates and the view remounts from the React
+// Query cache. Hidden on mobile.
 
 import { useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { useRouter, usePathname } from '@/i18n/navigation'
-import { MoreHorizontal, Pin, PinOff, X, User, CalendarClock, Ticket, PanelsTopLeft } from 'lucide-react'
+import {
+  Plus,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  X,
+  User,
+  CalendarClock,
+  Ticket,
+  PanelsTopLeft,
+  FileText,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import {
@@ -19,7 +32,13 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { useOpenTabs, type OpenTab } from '@/contexts/OpenTabsContext'
-import { normalizeTabPath, resolveTabRoute, toRoute, type EntityKind } from '@/lib/tab-routes'
+import {
+  normalizeTabPath,
+  resolveTabRoute,
+  fallbackLabelFromPath,
+  toRoute,
+  type EntityKind,
+} from '@/lib/tab-routes'
 
 const KIND_ICON: Record<EntityKind, LucideIcon> = {
   contact: User,
@@ -29,55 +48,66 @@ const KIND_ICON: Record<EntityKind, LucideIcon> = {
 }
 
 export function OpenTabsStrip() {
-  const { tabs, ensureTab, closeTab, closeOthers, pinTab, reorderTabs } = useOpenTabs()
+  const { tabs, activeTabId, hydrated, enabled, reconcileLocation, newTab, switchTab, closeTab, closeOthers, pinTab, reorderTabs } =
+    useOpenTabs()
   const router = useRouter()
   const pathname = usePathname()
   const tNav = useTranslations('Nav')
-  const activeId = normalizeTabPath(pathname)
 
-  // Auto-open a tab for the current route if it's trackable and not already open.
-  // ensureTab never clobbers an existing (richer) label, so returning to an open
-  // contact keeps its name. Entity pages upgrade the fallback via useRegisterTab.
+  // Readable label + kind for any route (tracked section, entity, or fallback).
+  const describe = (path: string): { label: string; entityKind?: EntityKind } => {
+    const r = resolveTabRoute(path)
+    if (r?.labelKey) return { label: tNav(r.labelKey as Parameters<typeof tNav>[0]), entityKind: 'section' }
+    if (r?.kind) {
+      const key = `tabFallback${r.kind[0].toUpperCase()}${r.kind.slice(1)}`
+      return { label: tNav(key as Parameters<typeof tNav>[0]), entityKind: r.kind }
+    }
+    return { label: fallbackLabelFromPath(path) }
+  }
+
+  // URL → active tab. The active tab follows the user; a location already open
+  // in another tab just activates that tab (dedup). Waits for hydration so the
+  // first navigation reconciles against the restored tabs, not empty state.
   useEffect(() => {
-    const resolved = resolveTabRoute(pathname)
-    if (!resolved) return
-    const label = resolved.labelKey
-      ? tNav(resolved.labelKey as Parameters<typeof tNav>[0])
-      : tNav(
-          `tabFallback${resolved.kind[0].toUpperCase()}${resolved.kind.slice(
-            1
-          )}` as Parameters<typeof tNav>[0]
-        )
-    ensureTab({ id: resolved.id, href: pathname, label, entityKind: resolved.kind })
-  }, [pathname, ensureTab, tNav])
+    if (!hydrated || !enabled) return
+    const { label, entityKind } = describe(pathname)
+    reconcileLocation(pathname, label, entityKind)
+    // describe/tNav are stable for a locale; re-run only when the path changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, hydrated, enabled])
 
-  if (tabs.length === 0) return null
+  if (!enabled || tabs.length === 0) return null
 
   const navigate = (href: string) => router.push(toRoute(href))
 
+  const handleSwitch = (tab: OpenTab) => {
+    switchTab(tab.tabId)
+    if (normalizeTabPath(tab.href) !== normalizeTabPath(pathname)) navigate(tab.href)
+  }
+
+  const handleNewTab = () => {
+    newTab('/dashboard', tNav('dashboard'), 'section')
+    navigate('/dashboard')
+  }
+
   const handleClose = (tab: OpenTab) => {
-    const idx = tabs.findIndex((t) => t.id === tab.id)
-    closeTab(tab.id)
-    if (tab.id === activeId) {
-      const neighbour = tabs[idx + 1] ?? tabs[idx - 1]
-      navigate(neighbour ? neighbour.href : '/dashboard')
-    }
+    const idx = tabs.findIndex((t) => t.tabId === tab.tabId)
+    const wasActive = tab.tabId === activeTabId
+    const neighbour = tabs[idx + 1] ?? tabs[idx - 1]
+    closeTab(tab.tabId)
+    if (wasActive) navigate(neighbour ? neighbour.href : '/dashboard')
   }
 
   return (
     <div className="hidden md:block border-b bg-background">
-      <div className="max-w-5xl 2xl:max-w-7xl mx-auto px-4 sm:px-6">
-        <SortableList
-          horizontal
-          ids={tabs.map((t) => t.id)}
-          onReorder={(from, to) => reorderTabs(from, to)}
-        >
+      <div className="px-2">
+        <SortableList horizontal ids={tabs.map((t) => t.tabId)} onReorder={reorderTabs}>
           <div className="flex items-stretch gap-1 overflow-x-auto no-scrollbar -mb-px">
             {tabs.map((tab) => {
-              const Icon = KIND_ICON[tab.entityKind]
-              const isActive = tab.id === activeId
+              const Icon = tab.entityKind ? KIND_ICON[tab.entityKind] : FileText
+              const isActive = tab.tabId === activeTabId
               return (
-                <SortableItem key={tab.id} id={tab.id}>
+                <SortableItem key={tab.tabId} id={tab.tabId}>
                   {({ setNodeRef, style, attributes, listeners, isDragging }) => (
                     <div
                       ref={setNodeRef}
@@ -89,10 +119,10 @@ export function OpenTabsStrip() {
                       } ${isDragging ? 'opacity-60' : ''}`}
                     >
                       {/* Label — also the drag handle (distance-activated, so a
-                          plain click still navigates). */}
+                          plain click still switches). */}
                       <button
                         type="button"
-                        onClick={() => navigate(tab.href)}
+                        onClick={() => handleSwitch(tab)}
                         onAuxClick={(e) => {
                           if (e.button === 1) {
                             e.preventDefault()
@@ -122,7 +152,7 @@ export function OpenTabsStrip() {
                           <MoreHorizontal className="h-3.5 w-3.5" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-44">
-                          <DropdownMenuItem onClick={() => pinTab(tab.id)}>
+                          <DropdownMenuItem onClick={() => pinTab(tab.tabId)}>
                             {tab.pinned ? (
                               <>
                                 <PinOff className="h-4 w-4" /> {tNav('tabUnpin')}
@@ -137,7 +167,7 @@ export function OpenTabsStrip() {
                           <DropdownMenuItem onClick={() => handleClose(tab)}>
                             <X className="h-4 w-4" /> {tNav('tabClose')}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => closeOthers(tab.id)}>
+                          <DropdownMenuItem onClick={() => closeOthers(tab.tabId)}>
                             {tNav('tabCloseOthers')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -161,6 +191,17 @@ export function OpenTabsStrip() {
                 </SortableItem>
               )
             })}
+
+            {/* Explicit branch — the only way (besides ctrl/⌘-click) to add a tab. */}
+            <button
+              type="button"
+              onClick={handleNewTab}
+              aria-label={tNav('tabNew')}
+              title={tNav('tabNew')}
+              className="shrink-0 self-center rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
           </div>
         </SortableList>
       </div>
