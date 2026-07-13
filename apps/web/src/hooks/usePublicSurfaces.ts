@@ -46,6 +46,9 @@ export interface PublicSurfaceFlags {
   formsActive: boolean
   /** ≥1 published form exists (plugin + content) — the /forms surface is live. */
   formsLive: boolean
+  /** `kiosk` plugin installed — the /kiosk check-in surface is live (it reads the
+   *  team's own sessions, so install is the only gate; no published content). */
+  kioskActive: boolean
 }
 
 export interface UsePublicSurfacesResult {
@@ -102,6 +105,7 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
     documentsLive: activeSurfaces?.documents ?? false,
     formsActive: isInstalled('custom-forms'),
     formsLive: activeSurfaces?.forms ?? false,
+    kioskActive: isInstalled('kiosk'),
   }
 
   const defaultSurface: PublicSurface = team?.default_public_surface ?? 'bio-link'

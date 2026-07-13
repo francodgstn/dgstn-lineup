@@ -39,6 +39,7 @@
     "searchKeywords": {
       "dashboard": "start übersicht home",
       "allSettings": "einstellungen konfiguration verwaltung",
+      "howTo": "hilfe anleitung dokumentation onboarding einstieg tutorial erste schritte",
       "calendar": "kalender stundenplan termine kurse sessions",
       "bookings": "reservierungen anmeldungen teilnahme",
       "contacts": "mitglieder schüler kunden personen",
@@ -71,6 +72,7 @@
       "plugin:finance:/plugins/finance": "buchhaltung accounting kontenplan hauptbuch berichte export csv treuhänder bilanz erfolgsrechnung buchungen"
     },
     "allSettings": "Alle Einstellungen",
+    "howTo": "Anleitungen",
     "teamSettings": "Team-Einstellungen",
     "groupTeam": "Team-Einstellungen",
     "teamGeneral": "Allgemein",
@@ -158,7 +160,9 @@
     "surfaceForms": "Formulare",
     "formsDesc": "Individuelle Aufnahme- und Kontaktformulare zum Ausfüllen.",
     "surfaceDocuments": "Dokumente",
-    "documentsDesc": "Öffentliche Dokumente wie Verzichtserklärungen, AGB und Richtlinien."
+    "documentsDesc": "Öffentliche Dokumente wie Verzichtserklärungen, AGB und Richtlinien.",
+    "surfaceKiosk": "Kiosk",
+    "kioskDesc": "Ein Tablet-Check-in für deinen Empfang – Mitglieder und Walk-ins melden sich direkt vor Ort an."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -4319,5 +4323,90 @@
     "downloadCsv": "CSV herunterladen",
     "actionFailed": "Aktion fehlgeschlagen — bitte erneut versuchen.",
     "backToOverview": "Finanzen"
+  },
+  "HowTo": {
+    "title": "Anleitungen",
+    "subtitle": "Wie Linyup zusammenspielt – und wie du dein Studio startklar machst.",
+    "fitTitle": "Wie Linyup zusammenspielt",
+    "fitIntro": "Ein paar zentrale Bausteine treiben alles in Linyup an. Sobald du siehst, wie sie zusammenhängen, ergibt sich der Rest von selbst.",
+    "blocks": {
+      "contacts": {
+        "name": "Kontakte",
+        "desc": "Alle in deinem Umfeld – Interessenten, Probetrainierende und Mitglieder. Die Menschen, um die sich alles andere dreht."
+      },
+      "activities": {
+        "name": "Aktivitäten",
+        "desc": "Was du anbietest: eine Kursart, Disziplin oder Dienstleistung. Die Vorlage, aus der deine Termine geplant werden."
+      },
+      "sessions": {
+        "name": "Termine",
+        "desc": "Geplante Instanzen einer Aktivität im Kalender – ein bestimmter Kurs zu einer bestimmten Zeit."
+      },
+      "bookings": {
+        "name": "Buchungen",
+        "desc": "Ein Kontakt reserviert einen Platz in einem Termin. Die Verbindung zwischen Person und Kurs."
+      },
+      "plans": {
+        "name": "Pläne",
+        "desc": "Wiederkehrende Mitgliedschaften (Abos), die Mitgliedern dauerhaften Zugang zum Buchen geben."
+      },
+      "surfaces": {
+        "name": "Öffentliche Seiten",
+        "desc": "Wo dich Kontakte treffen: Bio-Link, Buchungsseite, Shop und ihr persönlicher Bereich."
+      },
+      "automations": {
+        "name": "Automatisierungen",
+        "desc": "Regeln, die auf das Verhalten von Kontakten reagieren – Willkommens-E-Mail, Probe-Nachfassen, Rückgewinnung."
+      },
+      "payments": {
+        "name": "Zahlungen",
+        "desc": "Geld von Mitgliedern an dein Studio über Stripe – Abos, Drop-ins und einmalige Verkäufe."
+      }
+    },
+    "journeyTitle": "Die Mitglieder-Reise",
+    "journey": {
+      "discover": "Entdecken",
+      "lead": "Interessent",
+      "attend": "Teilnehmen",
+      "join": "Beitreten",
+      "retain": "Halten"
+    },
+    "onboardTitle": "Dein Studio einrichten",
+    "onboardIntro": "Neu hier? Arbeite diese Schritte der Reihe nach durch, und du nimmst schon an einem Nachmittag Buchungen entgegen.",
+    "steps": {
+      "profile": {
+        "title": "Studio einrichten",
+        "desc": "Name, Logo und Standorte hinzufügen, damit alles in deinem Branding erscheint."
+      },
+      "offer": {
+        "title": "Aktivitäten anlegen",
+        "desc": "Füge die Kursarten, Disziplinen oder Dienstleistungen hinzu, die du anbietest."
+      },
+      "plans": {
+        "title": "Pläne festlegen",
+        "desc": "Richte die Mitgliedschaften und Preise ein, die Mitglieder abonnieren können."
+      },
+      "schedule": {
+        "title": "Zeitplan erstellen",
+        "desc": "Setze deine Termine in den Kalender – einmalig oder wiederkehrend."
+      },
+      "surfaces": {
+        "title": "Öffentliche Seiten aktivieren",
+        "desc": "Schalte Buchungsseite, Bio-Link und Shop frei, damit dich Leute finden und buchen können."
+      },
+      "contacts": {
+        "title": "Kontakte hinzufügen",
+        "desc": "Importiere oder lade deine bestehenden Mitglieder ein."
+      },
+      "payments": {
+        "title": "Zahlungen verbinden",
+        "desc": "Verbinde Stripe, um Abos, Drop-ins und Verkäufe anzunehmen."
+      },
+      "automate": {
+        "title": "Nachfassen automatisieren",
+        "desc": "Aktiviere die Start-Automatisierungen, damit Interessenten und Mitglieder zur richtigen Zeit von dir hören."
+      }
+    },
+    "moreSoon": "Weitere Anleitungen folgen in Kürze."
   }
 }
