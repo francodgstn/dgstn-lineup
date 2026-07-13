@@ -73,7 +73,6 @@ export default function KioskSettingsPage() {
 
   const [config, setConfig] = useState<KioskConfig | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [copiedUrl, setCopiedUrl] = useState(false)
   const [copiedPin, setCopiedPin] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [confirmRotate, setConfirmRotate] = useState(false)
@@ -149,17 +148,6 @@ export default function KioskSettingsPage() {
   const kioskUrl = slug
     ? (typeof window !== 'undefined' ? window.location.origin : '') + `/public/${slug}/kiosk`
     : null
-
-  async function copyUrl() {
-    if (!kioskUrl) return
-    try {
-      await navigator.clipboard.writeText(kioskUrl)
-      setCopiedUrl(true)
-      setTimeout(() => setCopiedUrl(false), 1500)
-    } catch {
-      /* clipboard blocked — no-op */
-    }
-  }
 
   async function copyPin() {
     if (!config?.lock.pin) return
@@ -244,7 +232,19 @@ export default function KioskSettingsPage() {
           <Monitor className="h-5 w-5 text-muted-foreground" />
           <div>
             <h1 className="text-2xl font-semibold">{t('title')}</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">{t('subtitle')}</p>
+            {kioskUrl ? (
+              <a
+                href={kioskUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-0.5 flex items-center gap-1 text-sm text-primary hover:underline"
+              >
+                {kioskUrl.replace(/^https?:\/\//, '')}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : (
+              <p className="mt-0.5 text-sm text-muted-foreground">{t('subtitle')}</p>
+            )}
           </div>
         </div>
         <Button
@@ -255,23 +255,6 @@ export default function KioskSettingsPage() {
           {saveMutation.isPending ? t('saving') : t('save')}
         </Button>
       </div>
-
-      {/* Kiosk URL */}
-      {kioskUrl && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-3">
-          <code className="min-w-0 flex-1 truncate text-sm">{kioskUrl.replace(/^https?:\/\//, '')}</code>
-          <Button variant="outline" size="sm" onClick={copyUrl}>
-            {copiedUrl ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            {t('copyUrl')}
-          </Button>
-          <a href={kioskUrl} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" size="sm">
-              <ExternalLink className="h-3.5 w-3.5" />
-              {t('openKiosk')}
-            </Button>
-          </a>
-        </div>
-      )}
 
       {/* Features */}
       <section className="space-y-2 rounded-lg border p-4">
