@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
+import { useOpenTabs } from '@/contexts/OpenTabsContext'
 import {
   collection, query, where, orderBy, getDocs, getDoc, addDoc, updateDoc,
   doc, serverTimestamp, Timestamp, deleteField, onSnapshot, deleteDoc, setDoc,
@@ -1079,8 +1080,13 @@ function ContactRow({
   rankingSystems?: RankingSystem[]
 }) {
   const router = useRouter()
+  const { openInNewTab } = useOpenTabs()
   const t = useTranslations('Contacts')
   const isNew = contact.lead_acknowledged === false
+  const contactHref = `/contacts/${contact.id}`
+  const contactLabel = `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim() || contactHref
+  // ctrl/⌘/middle-click opens the contact in a background tab (keeps the list).
+  const openContactInNewTab = () => openInNewTab(contactHref, contactLabel, 'contact')
   const rankColor = rankingSystems.length > 0
     ? getPrimaryRank(contact, rankingSystems)?.level.color
     : undefined
@@ -1088,7 +1094,20 @@ function ContactRow({
   return (
     <div className="flex items-center border-b last:border-0 hover:bg-muted/50 transition-colors">
       <button
-        onClick={() => router.push(`/contacts/${contact.id}` as Route)}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            openContactInNewTab()
+            return
+          }
+          router.push(contactHref as Route)
+        }}
+        onAuxClick={(e) => {
+          if (e.button === 1) {
+            e.preventDefault()
+            openContactInNewTab()
+          }
+        }}
         className="flex-1 flex items-center gap-3 px-4 py-3 text-left min-w-0"
       >
         {/* Avatar */}
