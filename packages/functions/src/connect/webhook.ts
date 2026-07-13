@@ -597,7 +597,9 @@ async function handleChargeRefunded(
           currency: (charge.currency as string | undefined) ?? (pay.currency as string | undefined),
           kind: (pay.kind as string | undefined) ?? null,
           contactId: (pay.contactId as string | undefined) ?? null,
-          description: (pay.comment as string | undefined) ?? (pay.subscriptionTypeName as string | undefined) ?? null,
+          // "Refund · " prefix so refunds read apart from their charge in the
+          // entries list / CSV (disputes get the same treatment).
+          description: `Refund · ${(pay.comment as string | undefined) ?? (pay.subscriptionTypeName as string | undefined) ?? (pay.productName as string | undefined) ?? (pay.courseName as string | undefined) ?? piId}`,
           occurredAtMs: typeof r.created === 'number' ? r.created * 1000 : Date.now(),
           eventId,
         })

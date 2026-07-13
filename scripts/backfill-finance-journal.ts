@@ -258,6 +258,7 @@ async function backfillConnect(teamId: string, accountId: string | null): Promis
           currency: p.currency as string | undefined,
           kind: (p.kind as string | undefined) ?? null,
           contactId: (p.contactId as string | undefined) ?? null,
+          description: `Refund · ${(p.comment as string | undefined) ?? (p.subscriptionTypeName as string | undefined) ?? (p.productName as string | undefined) ?? (p.courseName as string | undefined) ?? piId}`,
           occurredAtMs: (r.created_at as Timestamp | undefined)?.toMillis() ?? occurredAtMs,
           eventId: 'backfill',
         })
