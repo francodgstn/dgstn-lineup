@@ -99,14 +99,18 @@ export function normalizeKioskConfig(config: Partial<KioskConfig> | undefined | 
 
 /** Strip the private PIN when denormalizing KioskConfig → public_profile.
  *  Pass output of normalizeKioskConfig — never a raw stored config, which may be
- *  empty/partial and would crash on the field reads below. */
+ *  empty/partial and would crash on the field reads below. Optional fields
+ *  (title, walkInActivityIds) are omitted when unset rather than written as
+ *  `undefined`, which the Firestore SDK rejects unless ignoreUndefinedProperties
+ *  is on (it isn't in the seed scripts). */
 export function toKioskPublicConfig(c: KioskConfig): KioskPublicConfig {
-  return {
-    title: c.title,
+  const pub: KioskPublicConfig = {
     features: c.features,
     scheduleView: c.scheduleView,
-    walkInActivityIds: c.walkInActivityIds,
     standby: c.standby,
     lock: { enabled: c.lock.enabled, epoch: c.lock.epoch },
   }
+  if (c.title !== undefined) pub.title = c.title
+  if (c.walkInActivityIds !== undefined) pub.walkInActivityIds = c.walkInActivityIds
+  return pub
 }
