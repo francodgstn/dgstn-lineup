@@ -238,11 +238,11 @@ function PinButton({ id, pinOnly }: { id: string; pinOnly?: boolean }) {
       aria-pressed={pinned}
       className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 transition-all ${
         pinned
-          ? 'text-primary opacity-100'
+          ? 'text-muted-foreground/50 opacity-100 hover:bg-muted hover:text-foreground'
           : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
       }`}
     >
-      <Pin className={`h-3.5 w-3.5 ${pinned ? 'fill-current' : ''}`} />
+      <Pin className="h-3.5 w-3.5" />
     </button>
   )
 }
@@ -481,34 +481,34 @@ function useHiddenSuggestions() {
   return { hidden, dismiss }
 }
 
-// Per-section collapse state for the sidebar nav, persisted in the browser.
-const NAV_COLLAPSED_KEY = 'linyup_nav_collapsed_sections'
-// Sections start collapsed until the user opens one (stored prefs then win) —
-// keyed by NAV_SECTIONS labelKeys.
-const NAV_DEFAULT_COLLAPSED = ['sectionRun', 'sectionOffer', 'sectionGrow']
+// Which Features section is expanded — accordion, so at most one is open at a
+// time. Persisted per-browser; `null` = all collapsed. Defaults to the Run
+// section (the most-used operational area) so the sidebar isn't all headers.
+const NAV_OPEN_SECTION_KEY = 'linyup_nav_open_section'
 
-function useCollapsedSections() {
-  const [collapsed, setCollapsed] = useState<string[]>(NAV_DEFAULT_COLLAPSED)
+function useAccordionSection() {
+  const [open, setOpen] = useState<string | null>('sectionRun')
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(NAV_COLLAPSED_KEY)
-      if (raw) setCollapsed(JSON.parse(raw) as string[])
+      const raw = localStorage.getItem(NAV_OPEN_SECTION_KEY)
+      if (raw !== null) setOpen(raw === '' ? null : raw)
     } catch {
       /* ignore malformed storage */
     }
   }, [])
   const toggle = (key: string) => {
-    setCollapsed((prev) => {
-      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    setOpen((prev) => {
+      // Opening a section closes any other; clicking the open one collapses it.
+      const next = prev === key ? null : key
       try {
-        localStorage.setItem(NAV_COLLAPSED_KEY, JSON.stringify(next))
+        localStorage.setItem(NAV_OPEN_SECTION_KEY, next ?? '')
       } catch {
         /* ignore */
       }
       return next
     })
   }
-  return { collapsed, toggle }
+  return { open, toggle }
 }
 
 /** All plugin nav entries: installed (real links) + recommended-not-installed
@@ -866,7 +866,7 @@ function ShortcutsNav({
   const dropLine = <div className="mx-2 my-0.5 h-0.5 rounded bg-primary/60" />
 
   return (
-    <div className={collapsed ? 'mt-3 border-t pt-3' : SHORTCUTS_PANEL}>
+    <div className={collapsed ? 'mt-3 pt-3' : SHORTCUTS_PANEL}>
       {!collapsed && <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>}
       <div className="space-y-0.5">
         {shown.map((entry, idx) => (
@@ -1086,7 +1086,7 @@ function SidebarContent({
   const unsectionedEntries = pluginEntries.filter(
     (e) => !(e.section && PLUGIN_SECTION_TO_LABEL_KEY[e.section])
   )
-  const { collapsed: collapsedSections, toggle: toggleSection } = useCollapsedSections()
+  const { open: openSection, toggle: toggleSection } = useAccordionSection()
 
   // Whether a main-nav item passes its plan/plugin/org/shop gates — shared by the
   // section render and the pinnable catalogue so the two never disagree.
@@ -1236,7 +1236,7 @@ function SidebarContent({
         {/* Features — the Run / Offer / Grow working areas. Extra top margin on
             the sections: unlike the other macro groups, the first thing here is
             another (section) header, which otherwise sits too close to the label. */}
-        <div className="mt-3 border-t pt-3">
+        <div className="mt-3 pt-3">
           {!collapsed && <GroupLabel>{t('navGroupFeatures')}</GroupLabel>}
           <div className={collapsed ? 'space-y-1' : 'mt-2 space-y-3'}>
             {NAV_SECTIONS.map((section) => {
@@ -1302,7 +1302,7 @@ function SidebarContent({
                 )
               }
 
-              const secCollapsed = collapsedSections.includes(section.labelKey)
+              const secCollapsed = openSection !== section.labelKey
               const header = (
                 <button
                   type="button"
@@ -1316,23 +1316,22 @@ function SidebarContent({
                 </button>
               )
 
-              // Wide + chevron-collapsed: the header becomes a flyout trigger instead of
-              // simply hiding the items.
-              if (secCollapsed) {
-                return (
-                  <div key={section.labelKey}>
-                    <NavFlyout label={label} trigger={header}>
-                      {rows}
-                    </NavFlyout>
-                  </div>
-                )
-              }
-
-              // Wide + expanded: inline list.
+              // Wide sidebar: an inline accordion panel that animates open/closed
+              // (grid-rows 0fr→1fr, so no fixed height needed). Accordion — only
+              // one section is open at a time.
               return (
                 <div key={section.labelKey}>
                   {header}
-                  <div className="space-y-0.5">{rows}</div>
+                  <div
+                    aria-hidden={secCollapsed}
+                    className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                      secCollapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
+                    }`}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="space-y-0.5 pt-0.5">{rows}</div>
+                    </div>
+                  </div>
                 </div>
               )
             })}
