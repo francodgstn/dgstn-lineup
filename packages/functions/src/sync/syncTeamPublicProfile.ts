@@ -10,7 +10,7 @@ import {
   DOCUMENTS_COLLECTION,
   resolveSystemLinkTarget,
   toKioskPublicConfig,
-  DEFAULT_KIOSK_CONFIG,
+  normalizeKioskConfig,
 } from '@linyup/shared'
 import type { PublicSurface, ActivePublicSurfaces, DocumentKind, KioskConfig } from '@linyup/shared'
 import { rebuildTeamPublicCoaches } from './syncTeamCoachesPublicProfile'
@@ -216,10 +216,12 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // when the plugin is active; explicitly delete the field otherwise so a stale
   // config can never linger on a public, world-readable doc after deactivation.
   if (kioskActive) {
-    const kioskCfg = kioskPluginSnap.data()?.config as KioskConfig | undefined
-    publicProfile.kiosk = kioskCfg
-      ? toKioskPublicConfig(kioskCfg)
-      : toKioskPublicConfig(DEFAULT_KIOSK_CONFIG)
+    // A freshly-installed kiosk persists `config: {}`; normalize fills every
+    // field from the defaults so toKioskPublicConfig never dereferences a missing
+    // one (which previously threw and aborted the ENTIRE public-profile sync for
+    // the team, leaving kiosk — and every other surface — stale).
+    const kioskCfg = kioskPluginSnap.data()?.config as Partial<KioskConfig> | undefined
+    publicProfile.kiosk = toKioskPublicConfig(normalizeKioskConfig(kioskCfg))
   } else {
     publicProfile.kiosk = FieldValue.delete()
   }

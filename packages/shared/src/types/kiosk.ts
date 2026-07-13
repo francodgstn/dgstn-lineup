@@ -80,7 +80,26 @@ export const DEFAULT_KIOSK_CONFIG: KioskConfig = {
   lock: { enabled: false, epoch: 0 },
 }
 
-/** Strip the private PIN when denormalizing KioskConfig → public_profile. */
+/** Coerce a stored (possibly empty or partial) config into a complete
+ *  KioskConfig by filling every field from DEFAULT_KIOSK_CONFIG. Freshly
+ *  installed plugins persist `config: {}`, and older saved configs may be
+ *  missing newly-added fields — normalizing keeps toKioskPublicConfig (and the
+ *  admin UI) crash-safe and lets an incomplete config self-heal on the next
+ *  denormalization. */
+export function normalizeKioskConfig(config: Partial<KioskConfig> | undefined | null): KioskConfig {
+  const c = config ?? {}
+  return {
+    ...DEFAULT_KIOSK_CONFIG,
+    ...c,
+    features: { ...DEFAULT_KIOSK_CONFIG.features, ...c.features },
+    standby: { ...DEFAULT_KIOSK_CONFIG.standby, ...c.standby },
+    lock: { ...DEFAULT_KIOSK_CONFIG.lock, ...c.lock },
+  }
+}
+
+/** Strip the private PIN when denormalizing KioskConfig → public_profile.
+ *  Pass output of normalizeKioskConfig — never a raw stored config, which may be
+ *  empty/partial and would crash on the field reads below. */
 export function toKioskPublicConfig(c: KioskConfig): KioskPublicConfig {
   return {
     title: c.title,

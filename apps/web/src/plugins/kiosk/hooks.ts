@@ -7,7 +7,7 @@ import { db, storage } from '@/lib/firebase'
 import {
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
-  DEFAULT_KIOSK_CONFIG,
+  normalizeKioskConfig,
 } from '@linyup/shared'
 import type { KioskConfig, KioskMediaItem } from '@linyup/shared'
 
@@ -25,13 +25,7 @@ export function useKioskConfig(teamId: string | null) {
         doc(db, TEAMS_COLLECTION, teamId!, INSTALLED_PLUGINS_SUBCOLLECTION, 'kiosk')
       )
       const saved = snap.exists() ? (snap.data()?.config as Partial<KioskConfig> | undefined) : undefined
-      return {
-        ...DEFAULT_KIOSK_CONFIG,
-        ...saved,
-        features: { ...DEFAULT_KIOSK_CONFIG.features, ...saved?.features },
-        standby: { ...DEFAULT_KIOSK_CONFIG.standby, ...saved?.standby },
-        lock: { ...DEFAULT_KIOSK_CONFIG.lock, ...saved?.lock },
-      }
+      return normalizeKioskConfig(saved)
     },
   })
 }
