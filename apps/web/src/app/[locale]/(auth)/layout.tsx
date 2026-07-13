@@ -19,6 +19,7 @@ import {
   Wallet,
   ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   ChevronDown,
   Lock,
   Puzzle,
@@ -1335,6 +1336,30 @@ function SidebarContent({
                 </div>
               )
             })}
+
+            {/* Subtle discovery link to the plugin catalogue. Most features are
+                off by default (kept lightweight on purpose, even on Studio), so
+                nudge users to explore without bloating the nav. */}
+            {collapsed ? (
+              <Link
+                href={'/settings/plugins' as Route}
+                onClick={onLinkClick}
+                title={t('explorePlugins')}
+                className="flex items-center justify-center rounded-lg px-2 py-2 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Puzzle className="h-4 w-4 shrink-0" />
+              </Link>
+            ) : (
+              <Link
+                href={'/settings/plugins' as Route}
+                onClick={onLinkClick}
+                className="group/exp mt-1 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground/60 transition-colors hover:text-primary"
+              >
+                <Puzzle className="h-3.5 w-3.5 shrink-0" />
+                <span>{t('explorePlugins')}</span>
+                <ChevronsRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover/exp:translate-x-0.5" />
+              </Link>
+            )}
           </div>
         </div>
 
