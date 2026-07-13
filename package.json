@@ -38,7 +38,8 @@
     "lead:seed": "tsx scripts/seed-lead.ts",
     "sandbox:seed": "tsx scripts/seed-sandbox.ts",
     "sandbox:reset": "tsx scripts/reset-sandbox-db.ts --confirm",
-    "messaging:policy": "tsx scripts/messaging-policy.ts"
+    "messaging:policy": "tsx scripts/messaging-policy.ts",
+    "backfill:finance": "tsx scripts/backfill-finance-journal.ts"
   },
   "devDependencies": {
     "firebase-admin": "^13.0.0",

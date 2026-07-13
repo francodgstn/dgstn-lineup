@@ -172,3 +172,25 @@ export const PAYMENT_EVENTS_SUBCOLLECTION = 'payment_events'
 // Idempotency markers for the Connect webhook (doc id = Stripe event id).
 // Admin-SDK only; clients never read or write it.
 export const CONNECT_WEBHOOK_EVENTS_COLLECTION = 'connect_webhook_events'
+
+// Finance journal — the normalized, immutable money-event log all financial
+// reporting derives from (see types/finance.ts). Written ONLY by Cloud Functions
+// (webhooks + recordManualPayment + the backfill script); managers/owners read.
+// Doc id is deterministic (financeTxnId) for idempotency across retries/backfill.
+export const FINANCE_TRANSACTIONS_SUBCOLLECTION = 'finance_transactions'
+// Derived monthly rollups (doc id = 'YYYY-MM'), regenerated from the journal by
+// the monthlyFinanceReports cron — always overwritten (journal is source of truth).
+export const FINANCE_MONTHLY_REPORTS_SUBCOLLECTION = 'finance_monthly_reports'
+
+// Double-entry accounting (finance plugin — see types/accounting.ts).
+// accounts: doc id = account code, owner-editable (name/active), system rows
+// locked. settings: singleton doc. entries + period summaries: function-written
+// only (corrections are reversal entries, never edits).
+export const ACCOUNTING_ACCOUNTS_SUBCOLLECTION = 'accounting_accounts'
+export const ACCOUNTING_SETTINGS_SUBCOLLECTION = 'accounting_settings'
+export const ACCOUNTING_SETTINGS_DOC = 'config'
+export const ACCOUNTING_ENTRIES_SUBCOLLECTION = 'accounting_entries'
+export const ACCOUNTING_PERIOD_SUMMARIES_SUBCOLLECTION = 'accounting_period_summaries'
+// Entry templates: owner-managed presets for manual entries (+ optional
+// recurring auto-post — see accounting/templates.ts).
+export const ACCOUNTING_ENTRY_TEMPLATES_SUBCOLLECTION = 'accounting_entry_templates'

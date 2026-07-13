@@ -30,7 +30,9 @@ import {
   AssignPaymentDialog,
   type AssignPaymentTarget,
 } from '@/components/payments/AssignPaymentDialog'
+import { ExportFinanceCsvButton } from '@/components/payments/ExportFinanceCsvButton'
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { PaymentsTable } from '@/components/payments/PaymentsTable'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -86,6 +88,7 @@ export default function PaymentsDashboardPage() {
   const { data: subscriptions = [] } = useMemberSubscriptions(teamId)
   const { data: contacts = [] } = useActiveContacts(teamId)
   const refund = useRefundMemberPayment()
+  const { isInstalled } = useInstalledPlugins()
 
   const [refundTarget, setRefundTarget] = useState<UnifiedPaymentRow | null>(null)
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
@@ -148,6 +151,7 @@ export default function PaymentsDashboardPage() {
           <h1 className="text-lg font-semibold">{t('title')}</h1>
         </div>
         <div className="flex items-center gap-2">
+          {teamId && isInstalled('finance') && <ExportFinanceCsvButton teamId={teamId} />}
           {teamId && (
             <Button size="sm" variant="outline" onClick={() => setRecordOpen(true)}>
               <Plus className="h-4 w-4 mr-1" />

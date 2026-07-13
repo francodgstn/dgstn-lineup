@@ -7,6 +7,7 @@ import { runScheduledRules } from './runScheduledRules'
 import { expireAffiliations } from './expireAffiliations'
 import { expirePendingBookings } from './expirePendingBookings'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
+import { materializeRecurringEntries } from './materializeRecurringEntries'
 import { publishMessagingEnv } from '../mail/messagingEnvStatus'
 
 // Booking reminders run HOURLY (not in the 02:00 batch): multi-step schedules
@@ -47,6 +48,8 @@ export const dailyTasks = onSchedule(
       { name: 'expireAffiliations', handler: expireAffiliations },
       { name: 'expirePendingBookings', handler: expirePendingBookings },
       { name: 'purgeProvisionalContacts', handler: purgeProvisionalContacts },
+      // Recurring accounting entry templates (finance plugin) — e.g. monthly rent.
+      { name: 'materializeRecurringEntries', handler: materializeRecurringEntries },
     ]
 
     const results: TaskResult[] = []

@@ -53,6 +53,10 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
   const t = useTranslations('PublicContactUpdate')
+  const tSurfaces = useTranslations('PublicSurfaceLinks')
+  // The team root renders whatever default surface the studio chose (bio-link,
+  // website, shop, …) — label the link accordingly instead of assuming bio-link.
+  const homeSurface = team.default_public_surface ?? 'bio-link'
   const teamName = team.name || slug
   const accentColor = team.bioLinkAccentColor ?? null
   const showBranding = team.showBranding === true
@@ -469,12 +473,21 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
             })}
           </p>
         </div>
-        <a
-          href={`/public/${slug}`}
-          className="inline-block text-sm text-primary hover:underline"
-        >
-          {t('backToBioLink')}
-        </a>
+        <div className="space-y-2">
+          {/* Their personal portal — where membership, bookings and courses live. */}
+          <a
+            href={`/public/${slug}/space`}
+            className="block text-sm font-medium text-primary hover:underline"
+          >
+            {t('openSpace')}
+          </a>
+          <a
+            href={`/public/${slug}`}
+            className="block text-sm text-muted-foreground hover:text-foreground hover:underline"
+          >
+            {t('toSurface', { name: tSurfaces(homeSurface as Parameters<typeof tSurfaces>[0]) })}
+          </a>
+        </div>
       </div>
     </BioLinkShell>
   )

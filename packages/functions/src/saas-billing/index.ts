@@ -167,7 +167,15 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
     return
   }
 
-  const adapter = await getPlatformStripeAdapter()
+  // Verification-only adapter: parseWebhook is pure crypto (HMAC of the raw
+  // body against the signing secret) — no API key needed, so don't fetch
+  // 'stripe-secret-key' here. The old getPlatformStripeAdapter() call sat
+  // OUTSIDE any try/catch, so a missing key 500'd every platform event with
+  // no useful log. Same pattern as handleTeamStripeWebhook.
+  const adapter = StripeAdapter.withSecretKey(
+    { type: 'stripe', publishable_key: '', currency: 'chf' },
+    'sk_webhook_verification_only'
+  )
 
   let event: Awaited<ReturnType<typeof adapter.parseWebhook>>
   try {

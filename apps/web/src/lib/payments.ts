@@ -87,6 +87,20 @@ function connectDefaultLabel(p: MemberPayment): string {
   return p.purpose || 'Payment'
 }
 
+/** Structured line item for a Connect row: the webhook-stamped one when
+ * present, else a label-only fallback derived from kind/names (legacy rows) so
+ * the assign/edit dialog's "What was paid" is never empty for a linked sale. */
+function connectLineItem(p: MemberPayment): PaymentLineItem | null {
+  if (p.line_item) return p.line_item
+  if (p.kind === 'membership') {
+    return { kind: 'subscription', label: p.subscriptionTypeName ?? 'Membership' }
+  }
+  if (p.kind === 'product') return { kind: 'product', label: connectDefaultLabel(p) }
+  if (p.kind === 'course') return { kind: 'course', label: p.courseName ?? 'Course' }
+  if (p.kind === 'drop_in') return { kind: 'drop_in', label: connectDefaultLabel(p) }
+  return null
+}
+
 export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[] {
   return payments.map((p) => ({
     key: `connect:${p.paymentIntentId}`,
@@ -100,7 +114,7 @@ export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[]
     currency: p.currency ?? 'chf',
     status: p.status,
     comment: p.comment ?? null,
-    lineItem: null, // Connect rows are auto-linked by the webhook; editing not needed
+    lineItem: connectLineItem(p),
     paymentMode: null,
     defaultLabel: connectDefaultLabel(p),
     createdAt: (p.created_at as unknown as { toDate?: () => Date }) ?? null,

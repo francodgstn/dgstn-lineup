@@ -28,8 +28,10 @@ import {
   CONTACTS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   PAYMENT_EVENTS_SUBCOLLECTION,
+  buildExternalPaymentTxn,
 } from '@linyup/shared'
 import type { StripeGatewayConfig } from '@linyup/shared'
+import { recordFinanceTransaction } from '../finance/journal'
 
 // Stripe SDK instance used ONLY for webhook signature verification. Verification
 // is pure crypto (HMAC of the raw body against the signing secret) — no API key is
@@ -246,6 +248,27 @@ export const handleTeamStripeWebhook = onRequest({ invoker: 'public' }, async (r
       `[handleTeamStripeWebhook] team=${teamId} ref=${extracted.ref} ${assignmentStatus}` +
         (contactId ? ` contact=${contactId}` : ` email=${extracted.email ?? 'none'}`)
     )
+
+    // Finance journal (core infrastructure, best-effort — a failure never breaks
+    // payment recording; the backfill reconciles). BYO rails are fee-blind.
+    try {
+      await recordFinanceTransaction(
+        buildExternalPaymentTxn({
+          teamId,
+          gateway: 'stripe',
+          gatewayRef: extracted.ref,
+          amount: extracted.amount,
+          currency: extracted.currency,
+          contactId,
+          lineItemKind: extracted.subscriptionTypeId ? 'subscription' : null,
+          description: comment,
+          occurredAtMs: typeof obj.created === 'number' ? obj.created * 1000 : Date.now(),
+          eventId: event.id as string | undefined,
+        })
+      )
+    } catch (err) {
+      console.error(`[handleTeamStripeWebhook] finance journal write failed team=${teamId}:`, err)
+    }
     res.status(200).json({ ok: true, contact_id: contactId, assignment_status: assignmentStatus })
   } catch (err) {
     console.error(`[handleTeamStripeWebhook] processing error team=${teamId}:`, err)

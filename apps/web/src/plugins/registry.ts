@@ -17,6 +17,7 @@ import { customFieldsManifest } from './custom-fields/manifest'
 import { customFormsManifest } from './custom-forms/manifest'
 import { documentsManifest } from './documents/manifest'
 import { kioskManifest } from './kiosk/manifest'
+import { financeManifest } from './finance/manifest'
 
 export const PLUGIN_REGISTRY: PluginManifest[] = [
   aiAssistantManifest,
@@ -33,6 +34,7 @@ export const PLUGIN_REGISTRY: PluginManifest[] = [
   customFormsManifest,
   documentsManifest,
   kioskManifest,
+  financeManifest,
 ]
 
 /** All plugin-contributed event type IDs (built-in type IDs from installed plugins). */

@@ -16,6 +16,7 @@
 //   • CHF only in Phase 1. All monetary amounts are INTEGER minor units (Rappen) — never floats.
 
 import type { Timestamp } from './common'
+import type { PaymentLineItem } from './payment'
 import type { SaasPlan } from './team'
 
 // ─── Onboarding model ───────────────────────────────────────────────────────────
@@ -194,6 +195,15 @@ export interface MemberPayment {
   subscriptionTypeName?: string | null
   /** Set for drop-in (pay-per-class) charges — the booked session. */
   sessionId?: string | null
+  /**
+   * Structured "what was bought", aligned with ExternalPayment.line_item so the
+   * unified payments view + assign/edit dialog treat both rails the same.
+   * Stamped by the webhook from checkout metadata (kind 'membership' →
+   * line-item kind 'subscription'); a manager can adjust it via
+   * updatePaymentRecord. Absent on legacy rows — the UI falls back to a
+   * label-only value derived from kind/names.
+   */
+  line_item?: PaymentLineItem | null
   description?: string
   /**
    * Generic "what was paid" note, aligned with ExternalPayment.comment so the
