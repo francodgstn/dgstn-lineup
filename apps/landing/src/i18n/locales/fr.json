@@ -346,7 +346,8 @@
     "cmpAddon": "Option",
     "cmpLimited": "Limité",
     "cmpAutomationsNote": "Free et Coach : limité à vos modules et options actifs. Studio débloque la suite complète.",
-    "cmpWebsiteNote": "Inclut des sections intégrables — planning, tarifs, activités et plus — à insérer dans votre site existant.",
+    "cmpWebsiteNote": "Inclut des sections intégrables à insérer dans votre site existant.",
+    "cmpSubscriptionsNote": "Options de tarification riches : durée, crédits et récurrence.",
     "cmpSoon": "Bientôt",
     "free": {
       "name": "Free",

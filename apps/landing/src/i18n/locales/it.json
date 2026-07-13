@@ -346,7 +346,8 @@
     "cmpAddon": "Opzione",
     "cmpLimited": "Limitato",
     "cmpAutomationsNote": "Free e Coach: limitato ai moduli e alle opzioni attivi. Studio sblocca la suite completa.",
-    "cmpWebsiteNote": "Include sezioni incorporabili — orario, prezzi, attività e altro — da inserire nel tuo sito esistente.",
+    "cmpWebsiteNote": "Include sezioni incorporabili da inserire nel tuo sito esistente.",
+    "cmpSubscriptionsNote": "Ricche opzioni di prezzo: durata, crediti e ricorrenza.",
     "cmpSoon": "A breve",
     "free": {
       "name": "Free",

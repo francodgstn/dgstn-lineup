@@ -346,7 +346,8 @@
     "cmpAddon": "Add-on",
     "cmpLimited": "Eingeschränkt",
     "cmpAutomationsNote": "Free & Coach: beschränkt auf Ihre aktiven Module & Add-ons. Studio schaltet den vollen Umfang frei.",
-    "cmpWebsiteNote": "Enthält einbettbare Bereiche — Plan, Preise, Aktivitäten und mehr — die du in deine bestehende Website einfügen kannst.",
+    "cmpWebsiteNote": "Enthält einbettbare Bereiche, die du in deine bestehende Website einfügen kannst.",
+    "cmpSubscriptionsNote": "Vielfältige Preisoptionen: Laufzeit, Guthaben und Intervalle.",
     "cmpSoon": "Bald",
     "free": {
       "name": "Free",

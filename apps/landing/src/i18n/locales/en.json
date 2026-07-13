@@ -346,7 +346,8 @@
     "cmpAddon": "Add-on",
     "cmpLimited": "Limited",
     "cmpAutomationsNote": "Free & Coach: limited to your active modules & add-ons. Studio unlocks the full suite.",
-    "cmpWebsiteNote": "Includes embeddable sections — schedule, pricing, activities and more — you can drop into your existing website.",
+    "cmpWebsiteNote": "Includes embeddable sections you can drop into your existing website.",
+    "cmpSubscriptionsNote": "Rich pricing options: duration, credits and recurrence.",
     "cmpSoon": "Soon",
     "free": {
       "name": "Free",
