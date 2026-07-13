@@ -271,6 +271,16 @@
         "title": "Team & Rollen",
         "description": "Coaches einladen, Rechte zuweisen.",
         "detail": "Lade Coaches und Manager mit den richtigen Rechten pro Rolle ein — jeder sieht genau das, was er soll."
+      },
+      "finance": {
+        "title": "Finanzen & Buchhaltung",
+        "description": "Buchhaltungsjournal + Berichte und CSV-Export.",
+        "detail": "Ein schlankes doppeltes Buchhaltungsjournal — Kontenplan, automatische Buchungen für jede Zahlung, manuelle Buchungen, Rohbilanz, Erfolgsrechnung und Bilanz — plus Monatsberichte, die du als CSV für deine Buchhaltung exportierst."
+      },
+      "kiosk": {
+        "title": "Kiosk-Modus",
+        "description": "Mach ein Tablet am Eingang zum Empfangsbildschirm.",
+        "detail": "Ein fester, reduzierter Bildschirm für das Tablet an deinem Eingang: Live-Plan, aktuelle/nächste Klasse, Team-Check-in-QR, Walk-in-Anmeldung und eine Standby-Diashow im Leerlauf."
       }
     }
   },
