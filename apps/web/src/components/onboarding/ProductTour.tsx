@@ -39,7 +39,7 @@ export function ProductTour() {
         if (autoStartedThisSession || profile.onboarding?.tourDone) return
       }
       // Bail if the nav hasn't rendered yet.
-      if (!document.querySelector('[data-tour="nav-activities"]')) return
+      if (!document.querySelector('[data-tour="nav-calendar"]')) return
       autoStartedThisSession = true
 
       const { driver } = await import('driver.js')
@@ -50,50 +50,52 @@ export function ProductTour() {
         nextBtnText: t('tour.next'),
         prevBtnText: t('tour.prev'),
         doneBtnText: t('tour.done'),
-        // Order mirrors the setup flow: activities first (required for scheduling).
+        // A short orientation tour: personalise (theme/language), the base
+        // Schedule surface, then the two power-nav aids (Shortcuts + search),
+        // ending at How-to for deeper guidance.
         steps: [
           { popover: { title: t('tour.welcomeTitle'), description: t('tour.welcomeBody') } },
           {
-            element: '[data-tour="nav-activities"]',
+            element: '[data-tour="theme-lang"]',
             popover: {
-              title: t('tour.activitiesTitle'),
-              description: t('tour.activitiesBody'),
+              title: t('tour.themeLangTitle'),
+              description: t('tour.themeLangBody'),
               side: 'right',
-              align: 'start',
+              align: 'end',
             },
           },
           {
             element: '[data-tour="nav-calendar"]',
             popover: {
-              title: t('tour.calendarTitle'),
-              description: t('tour.calendarBody'),
+              title: t('tour.scheduleTitle'),
+              description: t('tour.scheduleBody'),
               side: 'right',
               align: 'start',
             },
           },
           {
-            element: '[data-tour="nav-contacts"]',
+            element: '[data-tour="nav-shortcuts"]',
             popover: {
-              title: t('tour.contactsTitle'),
-              description: t('tour.contactsBody'),
+              title: t('tour.shortcutsTitle'),
+              description: t('tour.shortcutsBody'),
               side: 'right',
               align: 'start',
             },
           },
           {
-            element: '[data-tour="nav-bioLink"]',
+            element: '[data-tour="nav-search"]',
             popover: {
-              title: t('tour.bioLinkTitle'),
-              description: t('tour.bioLinkBody'),
+              title: t('tour.searchTitle'),
+              description: t('tour.searchBody'),
               side: 'right',
               align: 'start',
             },
           },
           {
-            element: '[data-tour="nav-automations"]',
+            element: '[data-tour="nav-howTo"]',
             popover: {
-              title: t('tour.automationsTitle'),
-              description: t('tour.automationsBody'),
+              title: t('tour.howToTitle'),
+              description: t('tour.howToBody'),
               side: 'right',
               align: 'start',
             },

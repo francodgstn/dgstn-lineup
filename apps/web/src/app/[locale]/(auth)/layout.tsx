@@ -23,6 +23,7 @@ import {
   ChevronDown,
   Lock,
   Puzzle,
+  Monitor,
   Building2,
   Gift,
   GraduationCap,
@@ -76,6 +77,7 @@ const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
   Globe,
   FileText,
   ClipboardList,
+  Monitor,
 }
 
 // ─── nav config ───────────────────────────────────────────────────────────────
@@ -832,7 +834,7 @@ function ShortcutsNav({
   if (entries.length === 0) {
     if (collapsed) return null
     return (
-      <div className={SHORTCUTS_PANEL}>
+      <div data-tour="nav-shortcuts" className={SHORTCUTS_PANEL}>
         <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>
         <p className="px-3 py-1 text-xs leading-relaxed text-muted-foreground/60">
           {t('navShortcutsEmpty')}
@@ -867,7 +869,7 @@ function ShortcutsNav({
   const dropLine = <div className="mx-2 my-0.5 h-0.5 rounded bg-primary/60" />
 
   return (
-    <div className={collapsed ? 'mt-3 pt-3' : SHORTCUTS_PANEL}>
+    <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : SHORTCUTS_PANEL}>
       {!collapsed && <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>}
       <div className="space-y-0.5">
         {shown.map((entry, idx) => (
@@ -977,7 +979,7 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
   }
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} data-tour="nav-search" className="relative">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={query}

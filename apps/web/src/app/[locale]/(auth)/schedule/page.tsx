@@ -73,6 +73,7 @@ import {
   User,
   Repeat2,
   ArrowUpRight,
+  Zap,
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
@@ -961,6 +962,27 @@ export default function CalendarPage() {
                 ))}
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {/* Nudge: sessions hang off activities, so surface activity creation first
+          when the team hasn't defined any yet. */}
+      {!activitiesQ.isLoading && (activitiesQ.data?.length ?? 0) === 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/[0.04] p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Zap className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">{t('noActivitiesTitle')}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{t('noActivitiesBody')}</p>
+            <Link
+              href="/offer/activities"
+              className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              {t('noActivitiesCta')}
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
       )}
 
