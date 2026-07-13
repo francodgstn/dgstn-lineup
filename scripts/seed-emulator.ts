@@ -34,7 +34,7 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099'
 process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080'
 
 import admin from 'firebase-admin'
-import { DEFAULT_PAYMENT_MODES } from '@linyup/shared'
+import { DEFAULT_PAYMENT_MODES, DEFAULT_KIOSK_CONFIG, toKioskPublicConfig } from '@linyup/shared'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
@@ -1746,8 +1746,49 @@ async function seedTeam(opts: {
     }
   }
 
+  // ── kiosk plugin (studio+ only — minPlan studio) ───────────────────────────────
+  if (plan === 'studio' || plan === 'organization') {
+    await seedKiosk(teamId, uid)
+  }
+
   // ── documents plugin (free & up — all plans) ──────────────────────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)
+}
+
+// ── kiosk seed ──────────────────────────────────────────────────────────────────
+
+async function seedKiosk(teamId: string, uid: string) {
+  // Install the Kiosk plugin (studio+) with a configured default so it shows in the
+  // sidebar + admin config. We ALSO denormalize the public subset straight into
+  // public_profile (via toKioskPublicConfig) and flag the surface active, so the
+  // public /kiosk page works from a fresh emulator seed regardless of whether the
+  // syncTeamPublicProfile trigger has re-run. Merge keeps the other surfaces' flags.
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('installed_plugins')
+    .doc('kiosk')
+    .set({
+      pluginId: 'kiosk',
+      teamId,
+      installedAt: ts(daysFromNow(-15)),
+      installedBy: uid,
+      status: 'active',
+      config: DEFAULT_KIOSK_CONFIG,
+    })
+
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('public_profile')
+    .doc(teamId)
+    .set(
+      {
+        active_public_surfaces: { kiosk: true },
+        kiosk: toKioskPublicConfig(DEFAULT_KIOSK_CONFIG),
+      },
+      { merge: true }
+    )
 }
 
 // ── online courses seed ─────────────────────────────────────────────────────────

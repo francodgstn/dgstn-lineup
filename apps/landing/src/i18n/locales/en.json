@@ -271,6 +271,16 @@
         "title": "Team & roles",
         "description": "Invite coaches, assign permissions.",
         "detail": "Invite coaches and managers with the right permissions for each role — everyone sees exactly what they should."
+      },
+      "finance": {
+        "title": "Finance & accounting",
+        "description": "Bookkeeping ledger + reports and CSV export.",
+        "detail": "A lightweight double-entry ledger — chart of accounts, automatic postings for every payment, manual entries, trial balance, P&L and balance sheet — plus monthly financial reports you can export as CSV for your accountant."
+      },
+      "kiosk": {
+        "title": "Kiosk mode",
+        "description": "Turn an entrance tablet into a front-desk screen.",
+        "detail": "A fixed, low-chrome screen for the tablet at your entrance: live schedule, now/next class, a team check-in QR, walk-in signup, and a standby slideshow when idle."
       }
     }
   },
@@ -336,7 +346,8 @@
     "cmpAddon": "Add-on",
     "cmpLimited": "Limited",
     "cmpAutomationsNote": "Free & Coach: limited to your active modules & add-ons. Studio unlocks the full suite.",
-    "cmpWebsiteNote": "Includes embeddable sections — schedule, pricing, activities and more — you can drop into your existing website.",
+    "cmpWebsiteNote": "Includes embeddable sections you can drop into your existing website.",
+    "cmpSubscriptionsNote": "Rich pricing options: duration, credits and recurrence.",
     "cmpSoon": "Soon",
     "free": {
       "name": "Free",

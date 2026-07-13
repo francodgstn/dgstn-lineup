@@ -271,6 +271,16 @@
         "title": "Équipe & rôles",
         "description": "Invitez des coaches, gérez les accès.",
         "detail": "Invitez coaches et gestionnaires avec les bonnes permissions par rôle — chacun voit exactement ce qu'il doit voir."
+      },
+      "finance": {
+        "title": "Finances & comptabilité",
+        "description": "Journal comptable + rapports et export CSV.",
+        "detail": "Un journal en partie double léger — plan comptable, écritures automatiques pour chaque paiement, écritures manuelles, balance, compte de résultat et bilan — plus des rapports mensuels exportables en CSV pour votre comptable."
+      },
+      "kiosk": {
+        "title": "Mode kiosque",
+        "description": "Transformez une tablette d'accueil en écran de comptoir.",
+        "detail": "Un écran fixe et épuré pour la tablette à votre entrée : horaire en direct, cours en cours/à venir, QR de check-in de l'équipe, inscription sur place et un diaporama de veille en cas d'inactivité."
       }
     }
   },
@@ -336,7 +346,8 @@
     "cmpAddon": "Option",
     "cmpLimited": "Limité",
     "cmpAutomationsNote": "Free et Coach : limité à vos modules et options actifs. Studio débloque la suite complète.",
-    "cmpWebsiteNote": "Inclut des sections intégrables — planning, tarifs, activités et plus — à insérer dans votre site existant.",
+    "cmpWebsiteNote": "Inclut des sections intégrables à insérer dans votre site existant.",
+    "cmpSubscriptionsNote": "Options de tarification riches : durée, crédits et récurrence.",
     "cmpSoon": "Bientôt",
     "free": {
       "name": "Free",
