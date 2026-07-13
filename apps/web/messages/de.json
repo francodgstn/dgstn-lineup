@@ -67,7 +67,8 @@
       "plugins": "erweiterungen add-ons marktplatz",
       "managers": "team mitarbeiter benutzer zugriff",
       "roles": "rollen berechtigungen",
-      "billing": "rechnung tarif upgrade abo"
+      "billing": "rechnung tarif upgrade abo",
+      "plugin:finance:/plugins/finance": "buchhaltung accounting kontenplan hauptbuch berichte export csv treuhänder bilanz erfolgsrechnung buchungen"
     },
     "allSettings": "Alle Einstellungen",
     "teamSettings": "Team-Einstellungen",
@@ -4260,6 +4261,7 @@
     "closeYearConfirmBody": "Ertrag und Aufwand werden in den Gewinnvortrag übertragen. Das Stornieren der Abschlussbuchung öffnet das Jahr wieder.",
     "yearClosed": "Geschäftsjahr abgeschlossen.",
     "downloadCsv": "CSV herunterladen",
-    "actionFailed": "Aktion fehlgeschlagen — bitte erneut versuchen."
+    "actionFailed": "Aktion fehlgeschlagen — bitte erneut versuchen.",
+    "backToOverview": "Finanzen"
   }
 }

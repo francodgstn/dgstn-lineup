@@ -370,6 +370,38 @@ async function stampFinanceContact(teamId: string, piId: string, contactId: stri
   }
 }
 
+/**
+ * Structured "what was bought" for the payments dashboard's assign/edit dialog,
+ * mirroring the BYO rail's ExternalPayment.line_item (kind 'membership' maps to
+ * the line-item spelling 'subscription'). Built from checkout metadata; renewal
+ * invoices get theirs stamped by handleInvoice from the subscription doc.
+ */
+function lineItemFromMetadata(md: Record<string, string>): Record<string, unknown> | null {
+  if (md.kind === 'membership' && md.subscriptionTypeId) {
+    return {
+      kind: 'subscription',
+      subscriptionTypeId: md.subscriptionTypeId,
+      priceId: md.priceId ?? null,
+      label: md.subscriptionTypeName ?? null,
+    }
+  }
+  if (md.kind === 'product' && md.productId) {
+    return {
+      kind: 'product',
+      productId: md.productId,
+      variantId: md.variantId ?? null,
+      label: md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? null),
+    }
+  }
+  if (md.kind === 'course' && md.courseId) {
+    return { kind: 'course', courseId: md.courseId, label: md.courseTitle ?? null }
+  }
+  if (md.kind === 'drop_in') {
+    return { kind: 'drop_in', label: md.activityName ?? null }
+  }
+  return null
+}
+
 /** Human "what was paid" label for the finance journal, from checkout metadata. */
 function financeDescription(md: Record<string, string>): string | null {
   if (md.kind === 'product') {
@@ -434,6 +466,9 @@ async function handlePaymentIntent(
             sessionId: md.sessionId ?? null,
           }
         : {}),
+      // Structured "what was bought" — fills the assign/edit dialog's line-item
+      // picker, aligned with the BYO rail.
+      ...(lineItemFromMetadata(md) ? { line_item: lineItemFromMetadata(md) } : {}),
       amount: pi.amount ?? 0,
       currency: pi.currency ?? 'chf',
       application_fee_amount: pi.application_fee_amount ?? 0,
@@ -492,16 +527,39 @@ async function handlePaymentIntent(
   }
 }
 
-async function handleChargeRefunded(team: TeamRef, charge: any, eventId: string): Promise<void> {
+async function handleChargeRefunded(
+  team: TeamRef,
+  charge: any,
+  eventId: string,
+  accountId?: string
+): Promise<void> {
   const piId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id
   if (!piId) return
   const amount: number = charge.amount ?? 0
   const amountRefunded: number = charge.amount_refunded ?? 0
   const appFee: number = charge.application_fee_amount ?? 0
 
+  // The refund list. On current Stripe API versions the charge object in the
+  // webhook payload NO LONGER embeds `refunds` — fetch them from the API when
+  // absent (without this, refunds[] and the finance-journal refund rows were
+  // silently never written even though amount_refunded/status updated).
+  let refundObjects = (charge.refunds?.data ?? []) as any[]
+  if (refundObjects.length === 0 && amountRefunded > 0 && accountId) {
+    try {
+      const stripe = await getConnectStripe()
+      const list: any = await stripe.refunds.list(
+        { payment_intent: piId, limit: 100 },
+        { stripeAccount: accountId }
+      )
+      refundObjects = (list.data ?? []) as any[]
+    } catch (err) {
+      console.error(`[connect] refund list fetch failed (pi=${piId}):`, err)
+    }
+  }
+
   // Proportional application-fee reversal per refund (best-effort: Stripe reverses
   // the fee in proportion to each refund via refund_application_fee).
-  const refunds = ((charge.refunds?.data ?? []) as any[]).map((r) => ({
+  const refunds = refundObjects.map((r) => ({
     refundId: r.id as string,
     amount: (r.amount as number) ?? 0,
     feeReversed: amount > 0 ? Math.round((((r.amount as number) ?? 0) / amount) * appFee) : 0,
@@ -513,7 +571,8 @@ async function handleChargeRefunded(team: TeamRef, charge: any, eventId: string)
   await memberPaymentRef(team.teamId, piId).set(
     {
       amount_refunded: amountRefunded,
-      refunds,
+      // Don't clobber a previously-written list when the fetch fallback failed.
+      ...(refunds.length > 0 ? { refunds } : {}),
       status: fullyRefunded ? 'refunded' : 'partially_refunded',
       last_event_id: eventId,
       updated_at: FieldValue.serverTimestamp(),
@@ -527,7 +586,7 @@ async function handleChargeRefunded(team: TeamRef, charge: any, eventId: string)
   try {
     const paySnap = await memberPaymentRef(team.teamId, piId).get()
     const pay = paySnap.data() ?? {}
-    for (const r of (charge.refunds?.data ?? []) as any[]) {
+    for (const r of refundObjects) {
       await recordFinanceTransaction(
         buildConnectRefundTxn({
           teamId: team.teamId,
@@ -741,6 +800,16 @@ async function handleInvoice(
         kind: 'membership',
         subscriptionTypeName: (s?.subscriptionTypeName as string | undefined) ?? null,
         purpose: 'membership',
+        ...(s?.subscriptionTypeId
+          ? {
+              line_item: {
+                kind: 'subscription',
+                subscriptionTypeId: s.subscriptionTypeId,
+                priceId: (s.priceId as string | undefined) ?? null,
+                label: (s.subscriptionTypeName as string | undefined) ?? null,
+              },
+            }
+          : {}),
       },
       { merge: true }
     )
@@ -896,6 +965,9 @@ async function handleCheckoutCompleted(
           kind: 'membership',
           subscriptionTypeName: md.subscriptionTypeName ?? null,
           purpose: 'membership',
+          ...(lineItemFromMetadata({ ...md, kind: 'membership' })
+            ? { line_item: lineItemFromMetadata({ ...md, kind: 'membership' }) }
+            : {}),
         },
         { merge: true }
       )
@@ -1245,7 +1317,7 @@ export const handleConnectWebhook = onRequest({ invoker: 'public' }, async (req,
           await handlePaymentIntent(team, obj, 'failed', event.id, accountId)
           break
         case 'charge.refunded':
-          await handleChargeRefunded(team, obj, event.id)
+          await handleChargeRefunded(team, obj, event.id, accountId)
           break
         case 'charge.dispute.created':
           await handleDispute(team, obj, 'created', event.id)

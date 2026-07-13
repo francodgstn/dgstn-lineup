@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { httpsCallable } from 'firebase/functions'
-import { signInWithCustomToken, signOut } from 'firebase/auth'
+import { onAuthStateChanged, signInWithCustomToken, signOut } from 'firebase/auth'
 import { functions } from '@/lib/firebase'
 import { auth } from '@/lib/firebase-auth'
 import { usePublicTeam } from './PublicTeamProvider'
@@ -129,13 +129,38 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
   const [codeId, setCodeId] = useState('')
   const [pendingCode, setPendingCode] = useState('')
 
-  // Restore session on mount
+  // Restore session on mount — but only once the UNDERLYING Firebase session is
+  // confirmed. The localStorage flag alone used to flip the UI to "signed in"
+  // even when the Firebase user was gone (e.g. an emulator restart wiped auth
+  // state, or the browser's IndexedDB was cleared while localStorage survived),
+  // and the mismatch only surfaced mid-checkout as a forced re-OTP. Verify the
+  // Firebase user exists AND its contact claim matches the persisted session;
+  // otherwise show signed-out so the user signs in BEFORE starting a purchase.
   useEffect(() => {
     const session = loadSession()
-    if (session) {
-      setContact(session.contact)
-      setStep('authenticated')
-    }
+    if (!session) return
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe()
+      if (!user) {
+        clearSession()
+        return
+      }
+      void user
+        .getIdTokenResult()
+        .then((token) => {
+          if (token.claims.contactId === session.contactId) {
+            setContact(session.contact)
+            setStep('authenticated')
+          } else {
+            clearSession()
+          }
+        })
+        .catch(() => {
+          // Token refresh failed (revoked/stale session) — treat as signed out.
+          clearSession()
+        })
+    })
+    return unsubscribe
   }, [])
 
   const openSignIn = useCallback((options?: { allowRegistration?: boolean }) => {

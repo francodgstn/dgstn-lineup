@@ -67,7 +67,8 @@
       "plugins": "extensions modules marketplace",
       "managers": "équipe collaborateurs utilisateurs accès",
       "roles": "rôles permissions",
-      "billing": "facturation forfait abonnement"
+      "billing": "facturation forfait abonnement",
+      "plugin:finance:/plugins/finance": "comptabilité accounting plan comptable grand livre rapports export csv comptable bilan résultat écritures"
     },
     "allSettings": "Tous les paramètres",
     "teamSettings": "Paramètres de l'équipe",
@@ -4260,6 +4261,7 @@
     "closeYearConfirmBody": "Produits et charges seront reportés en résultats reportés. Extourner l'écriture de clôture rouvre l'exercice.",
     "yearClosed": "Exercice clôturé.",
     "downloadCsv": "Télécharger le CSV",
-    "actionFailed": "Échec de l'action — veuillez réessayer."
+    "actionFailed": "Échec de l'action — veuillez réessayer.",
+    "backToOverview": "Finances"
   }
 }

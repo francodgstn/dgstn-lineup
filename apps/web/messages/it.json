@@ -67,7 +67,8 @@
       "plugins": "estensioni componenti marketplace",
       "managers": "team collaboratori utenti accessi",
       "roles": "ruoli permessi",
-      "billing": "fatturazione piano abbonamento"
+      "billing": "fatturazione piano abbonamento",
+      "plugin:finance:/plugins/finance": "contabilità accounting piano dei conti libro mastro report esportazione csv commercialista bilancio registrazioni"
     },
     "allSettings": "Tutte le impostazioni",
     "teamSettings": "Impostazioni team",
@@ -4260,6 +4261,7 @@
     "closeYearConfirmBody": "Ricavi e costi verranno riportati negli utili portati a nuovo. Stornare la registrazione di chiusura riapre l'esercizio.",
     "yearClosed": "Esercizio chiuso.",
     "downloadCsv": "Scarica CSV",
-    "actionFailed": "Azione non riuscita — riprova."
+    "actionFailed": "Azione non riuscita — riprova.",
+    "backToOverview": "Finanze"
   }
 }

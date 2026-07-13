@@ -67,7 +67,8 @@
       "plugins": "extensions add-ons marketplace features",
       "managers": "team staff users admins access",
       "roles": "permissions access control",
-      "billing": "invoice plan upgrade subscription"
+      "billing": "invoice plan upgrade subscription",
+      "plugin:finance:/plugins/finance": "accounting bookkeeping ledger reports export csv accountant balance sheet profit loss entries chart of accounts"
     },
     "allSettings": "All settings",
     "teamSettings": "Team settings",
@@ -4260,6 +4261,7 @@
     "closeYearConfirmBody": "Revenue and expenses will be rolled into retained earnings. Reversing the close entry reopens the year.",
     "yearClosed": "Fiscal year closed.",
     "downloadCsv": "Download CSV",
-    "actionFailed": "Action failed — please try again."
+    "actionFailed": "Action failed — please try again.",
+    "backToOverview": "Finance"
   }
 }

@@ -8,7 +8,9 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronRight, Download, ListOrdered, Plus, Trash2, Undo2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronRight, Download, ListOrdered, Plus, Trash2, Undo2 } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
+import type { Route } from 'next'
 import { formatMinorUnits, monthKey, type AccountingEntry } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -189,6 +191,13 @@ export default function AccountingEntriesPage() {
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
+      <Link
+        href={'/plugins/finance' as Route}
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        {t('backToOverview')}
+      </Link>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <ListOrdered className="h-5 w-5 text-muted-foreground" />

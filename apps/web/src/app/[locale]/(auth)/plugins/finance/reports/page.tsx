@@ -9,7 +9,9 @@
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { Download, Lock, Table2 } from 'lucide-react'
+import { ArrowLeft, Download, Lock, Table2 } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
+import type { Route } from 'next'
 import {
   computeBalanceSheet,
   computeProfitAndLoss,
@@ -141,6 +143,13 @@ export default function AccountingReportsPage() {
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
+      <Link
+        href={'/plugins/finance' as Route}
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        {t('backToOverview')}
+      </Link>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Table2 className="h-5 w-5 text-muted-foreground" />
