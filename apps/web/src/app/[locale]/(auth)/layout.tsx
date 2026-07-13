@@ -50,6 +50,8 @@ import { planSupportsAffiliations, type SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { NavPinsProvider, useNavPins } from '@/contexts/NavPinsContext'
+import { OpenTabsProvider } from '@/contexts/OpenTabsContext'
+import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -1405,6 +1407,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <NavPinsProvider>
       <UpgradeModalProvider>
+        <OpenTabsProvider>
         <ProductTour />
         <div className="flex bg-background">
           {/* Desktop sidebar — fixed to viewport height, nav scrolls internally */}
@@ -1427,6 +1430,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="flex flex-col flex-1 min-w-0 min-h-screen">
             <AnnouncementBar />
             <MobileHeader onMobileMenu={() => setMobileOpen(true)} />
+            <OpenTabsStrip />
             <main className="flex-1">
               <div className="max-w-5xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-8">
                 <FreeDowngradeBanner />
@@ -1446,6 +1450,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {/* AI assistant — self-gates on the (locked) plugin being installed. */}
           <AssistantLauncher />
         </div>
+        </OpenTabsProvider>
       </UpgradeModalProvider>
     </NavPinsProvider>
   )

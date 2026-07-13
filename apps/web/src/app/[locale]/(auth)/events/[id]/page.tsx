@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -440,6 +441,15 @@ export default function EventDetailPage() {
   })
 
   const event = eventQ.data
+
+  // Register this event as an open tab once loaded (mirrors the header title).
+  useRegisterTab({
+    id: `/events/${id}`,
+    href: `/events/${id}`,
+    label: event?.title ?? '',
+    entityKind: 'event',
+    enabled: !!event,
+  })
 
   // ─── actions ─────────────────────────────────────────────────────────────────
 

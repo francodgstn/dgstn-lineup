@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, use, useMemo, useEffect } from 'react'
+import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useRouter, Link } from '@/i18n/navigation'
@@ -4865,6 +4866,25 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [notesOpen, setNotesOpen] = useState(false)
   const { data: notesCount = 0 } = useContactNotesCount(id)
   const { data: contactAlerts = [] } = useContactAlerts(id)
+
+  // Register this contact as an open tab (label upgraded once the contact loads).
+  // The stored href carries the active sub-tab so reopening lands where you left.
+  useRegisterTab({
+    id: `/contacts/${id}`,
+    href: `/contacts/${id}?tab=${tab}`,
+    label: contact ? `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim() : '',
+    entityKind: 'contact',
+    enabled: !!contact,
+  })
+
+  // Keep ?tab= in the URL in sync (without a Next navigation) so a refresh or
+  // deep-link — and a reopened tab — restores the sub-tab. usePathname is
+  // query-agnostic, so tab-strip active detection is unaffected.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    p.set('tab', tab)
+    window.history.replaceState(null, '', `${window.location.pathname}?${p.toString()}`)
+  }, [tab])
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['contact', id] })

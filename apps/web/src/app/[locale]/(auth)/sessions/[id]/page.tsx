@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, use } from 'react'
+import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -542,6 +543,15 @@ export default function SessionDetailPage() {
   const existingParticipantIds = new Set(participants.map((p) => p.contact).filter(Boolean) as string[])
   const activity = activities.find((a) => a.id === session?.activityId)
   const { accent } = activityPalette(session?.activityId, activity?.color)
+
+  // Register this session as an open tab once loaded (mirrors the header title).
+  useRegisterTab({
+    id: `/sessions/${sessionId}`,
+    href: `/sessions/${sessionId}`,
+    label: session ? (session.activityName ?? formatDate(session.start)) : '',
+    entityKind: 'session',
+    enabled: !!session,
+  })
 
   // ── loading / not found ───────────────────────────────────────────────────────
 
