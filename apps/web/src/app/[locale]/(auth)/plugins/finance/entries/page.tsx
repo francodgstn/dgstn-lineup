@@ -14,6 +14,7 @@ import type { Route } from 'next'
 import { formatMinorUnits, monthKey, type AccountingEntry } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { EntryTemplatesSection } from '@/components/finance/EntryTemplatesSection'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -226,6 +227,9 @@ export default function AccountingEntriesPage() {
           )}
         </div>
       </div>
+
+      {/* Quick-entry templates (rent, utilities, …) — posts via createManualEntry */}
+      <EntryTemplatesSection teamId={teamId} isOwner={isOwner} />
 
       {isLoading ? (
         <Skeleton className="h-40" />

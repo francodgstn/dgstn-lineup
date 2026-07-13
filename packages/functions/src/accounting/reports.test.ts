@@ -4,6 +4,7 @@ import {
   buildClosingEntry,
   buildEntryFromFinanceTxn,
   computeBalanceSheet,
+  computeMonthlySeries,
   computeProfitAndLoss,
   computeTrialBalance,
   resolveAccountName,
@@ -145,5 +146,94 @@ describe('computeBalanceSheet', () => {
     const retained = bs.equity.find((r) => r.code === '2979')!
     assert.equal(retained.amount, 5723)
     assert.equal(bs.total_assets, bs.total_liabilities_equity)
+  })
+})
+
+describe('computeMonthlySeries', () => {
+  // Money accounts as the overview derives them: bank + every clearing account.
+  const money = [
+    settings.mapping.bank_account,
+    ...Object.values(settings.mapping.clearing_by_source),
+  ]
+  // July: a manual rent entry — Dr 6000 (expense) / Cr 1020 (bank) 15.00.
+  const july = [
+    {
+      lines: [
+        { account_code: '6000', debit: 1500, credit: 0 },
+        { account_code: '1020', debit: 0, credit: 1500 },
+      ],
+    },
+  ]
+  const summaries = [
+    { period: '2026-06', totals: totalsOf(june) },
+    { period: '2026-07', totals: totalsOf(july) },
+  ]
+
+  it('computes monthly flows, zero-fills empty months, cumulates cash', () => {
+    const pts = computeMonthlySeries(summaries, accounts, money, [
+      '2026-06',
+      '2026-07',
+      '2026-08',
+    ])
+    assert.equal(pts.length, 3)
+    // June: revenue 6000, expenses 277 (matches the P&L test above); cash =
+    // bank 14000 + clearing 1723 = 15723 (ties to the balance-sheet assets).
+    assert.deepEqual(pts[0], {
+      period: '2026-06',
+      income: 6000,
+      expenses: 277,
+      net: 5723,
+      cash_balance: 15723,
+    })
+    // July: rent only — no income, 1500 expense, cash down by the payment.
+    assert.deepEqual(pts[1], {
+      period: '2026-07',
+      income: 0,
+      expenses: 1500,
+      net: -1500,
+      cash_balance: 14223,
+    })
+    // August: no entries → zero-filled flows, cash carries forward.
+    assert.deepEqual(pts[2], {
+      period: '2026-08',
+      income: 0,
+      expenses: 0,
+      net: 0,
+      cash_balance: 14223,
+    })
+  })
+
+  it('cumulates cash from inception even when the window starts later', () => {
+    const pts = computeMonthlySeries(summaries, accounts, money, ['2026-07'])
+    assert.equal(pts.length, 1)
+    assert.equal(pts[0].cash_balance, 14223) // includes June's cash movements
+  })
+
+  it('closing adjustments keep the close month P&L-neutral, cash raw', () => {
+    const juneTotals = totalsOf(june)
+    const close = buildClosingEntry(2026, juneTotals, accounts, settings, {
+      dateMs: Date.UTC(2026, 11, 31),
+      createdBy: 'u1',
+    })!
+    const withClose = [...summaries, { period: '2026-12', totals: totalsOf([close]) }]
+    const months = ['2026-12']
+
+    // WITHOUT the adjustment the close month shows the whole year reversed…
+    const raw = computeMonthlySeries(withClose, accounts, money, months)
+    assert.equal(raw[0].income, -6000)
+    assert.equal(raw[0].expenses, -277)
+
+    // …WITH it the month is flat, and cash is untouched either way.
+    const adjusted = computeMonthlySeries(withClose, accounts, money, months, [
+      { period: '2026-12', lines: close.lines },
+    ])
+    assert.deepEqual(adjusted[0], {
+      period: '2026-12',
+      income: 0,
+      expenses: 0,
+      net: 0,
+      cash_balance: 14223,
+    })
+    assert.equal(raw[0].cash_balance, adjusted[0].cash_balance)
   })
 })

@@ -94,6 +94,31 @@ export async function upgradeFees(
   })
 }
 
+/**
+ * Heal a degraded charge row once its balance transaction exists. Async payment
+ * methods (TWINT, …) have no balance transaction at payment_intent.succeeded
+ * time, so their row was written with fee_source 'recorded' (Stripe fee 0);
+ * Stripe emits charge.updated the moment balance_transaction is populated —
+ * fetch the authoritative split and upgrade the row in place (which also gives
+ * it the balance_txn_id needed for payout linkage). onFinanceTransactionWrite
+ * re-posts the accounting entry automatically. No-ops when the row is missing
+ * (charge.updated raced ahead of payment_intent.succeeded — the initial write
+ * will then enrich directly) or already authoritative.
+ */
+export async function upgradeChargeFeesIfDegraded(
+  teamId: string,
+  accountId: string,
+  paymentIntentId: string,
+  chargeId: string
+): Promise<boolean> {
+  const txnId = `connect:charge:${paymentIntentId}`
+  const snap = await txnRef(teamId, txnId).get()
+  if (!snap.exists || snap.data()?.fee_source === 'balance_transaction') return false
+  const fees = await retrieveChargeFees(accountId, chargeId)
+  if (!fees) return false
+  return upgradeFees(teamId, txnId, fees)
+}
+
 /** Non-financial metadata linkage: stamp the contact onto an existing charge row
  * (checkout handlers resolve the buyer AFTER payment_intent.succeeded fired).
  * No-op when the row doesn't exist yet — the backfill reconciles from the
@@ -154,7 +179,16 @@ export async function retrieveChargeFees(
       { stripeAccount: accountId }
     )
     const bt: any = charge?.balance_transaction
-    if (!bt || typeof bt !== 'object' || typeof bt.net !== 'number') return null
+    if (!bt || typeof bt !== 'object' || typeof bt.net !== 'number') {
+      // Async payment methods (TWINT, …) have NO balance transaction yet when
+      // payment_intent.succeeded fires — this is expected, not an error. The
+      // charge.updated healer (upgradeChargeFeesIfDegraded) fixes the row once
+      // Stripe populates it. Log so degraded rows are diagnosable.
+      console.warn(
+        `[finance] balance transaction not available yet (charge=${chargeId}) — recording without Stripe fee`
+      )
+      return null
+    }
     let stripeFee = 0
     let applicationFee: number | null = null
     for (const fd of (bt.fee_details ?? []) as any[]) {

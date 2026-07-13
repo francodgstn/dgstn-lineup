@@ -200,3 +200,95 @@ export function computeBalanceSheet(
     total_liabilities_equity: total_liabilities + total_equity + current_result,
   }
 }
+
+// ─── Monthly trend series (overview charts) ───────────────────────────────────
+
+export interface MonthlyTrendPoint {
+  period: string
+  /** Σ revenue credit-surplus this month (minor units). */
+  income: number
+  /** Σ expense debit-surplus this month (minor units). */
+  expenses: number
+  net: number
+  /** Cumulative Σ(debit−credit) over the money accounts from inception. */
+  cash_balance: number
+}
+
+/**
+ * Per-month income / expenses / net + running cash balance for the overview
+ * trend charts. `months` is the ascending display window ('YYYY-MM'); cash
+ * cumulates over ALL summaries from inception, so a 12-month window still shows
+ * the true balance. `closingAdjustments` are the fiscal-year close entries'
+ * lines (source 'closing'): a close zeroes every P&L account in the FY-end
+ * month, which would show the whole year reversed in that month's bars —
+ * subtracting the close's lines restores the real monthly figures. Cash uses
+ * RAW totals (closes never touch money accounts, and the line must keep tying
+ * to the balance sheet).
+ */
+export function computeMonthlySeries(
+  summaries: Array<{ period: string; totals: Record<string, AccountTotals> }>,
+  accounts: ReportAccountRef[],
+  moneyAccountCodes: string[],
+  months: string[],
+  closingAdjustments: Array<{
+    period: string
+    lines: Array<{ account_code: string; debit: number; credit: number }>
+  }> = []
+): MonthlyTrendPoint[] {
+  const byCode = new Map(accounts.map((a) => [a.code, a]))
+  const money = new Set(moneyAccountCodes)
+
+  const adjust = new Map<string, Record<string, AccountTotals>>()
+  for (const c of closingAdjustments) {
+    const m = adjust.get(c.period) ?? {}
+    for (const l of c.lines) {
+      const t = (m[l.account_code] ??= { debit: 0, credit: 0 })
+      t.debit += l.debit
+      t.credit += l.credit
+    }
+    adjust.set(c.period, m)
+  }
+
+  // One pass over all summaries in period order: monthly P&L flows + the cash
+  // delta of each month (cumulated below).
+  const sorted = [...summaries].sort((a, b) => a.period.localeCompare(b.period))
+  const flows = new Map<string, { income: number; expenses: number; cash: number }>()
+  for (const s of sorted) {
+    const adj = adjust.get(s.period)
+    let income = 0
+    let expenses = 0
+    let cash = 0
+    for (const [code, t] of Object.entries(s.totals)) {
+      const a = adj?.[code]
+      const debit = t.debit - (a?.debit ?? 0)
+      const credit = t.credit - (a?.credit ?? 0)
+      const type = byCode.get(code)?.type
+      if (type === 'revenue') income += credit - debit
+      else if (type === 'expense') expenses += debit - credit
+      if (money.has(code)) cash += t.debit - t.credit
+    }
+    flows.set(s.period, { income, expenses, cash })
+  }
+
+  const points: MonthlyTrendPoint[] = []
+  const periods = sorted.map((s) => s.period)
+  let running = 0
+  let i = 0
+  for (const month of months) {
+    while (i < periods.length && periods[i] <= month) {
+      running += flows.get(periods[i])!.cash
+      i += 1
+    }
+    const f = flows.get(month)
+    const income = f?.income ?? 0
+    const expenses = f?.expenses ?? 0
+    points.push({
+      period: month,
+      income,
+      expenses,
+      net: income - expenses,
+      cash_balance: running,
+    })
+  }
+  return points
+}

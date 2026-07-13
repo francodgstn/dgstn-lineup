@@ -616,6 +616,18 @@ service cloud.firestore {
         allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
         allow write: if false;
       }
+      // Entry templates: owner-managed presets for manual entries (+ recurring
+      // auto-post). system flag is server-owned (seeded starters); system
+      // templates are deactivate-only. Posting correctness never depends on
+      // template contents — every post revalidates server-side.
+      match /accounting_entry_templates/{templateId} {
+        allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow create: if hasTeamRole(teamId, 'owner')
+          && request.resource.data.system != true;
+        allow update: if hasTeamRole(teamId, 'owner')
+          && request.resource.data.system == resource.data.system;
+        allow delete: if hasTeamRole(teamId, 'owner') && resource.data.system != true;
+      }
 
       // Custom event types (team-level; org-level event types live under organizations/{orgId}/event_types)
       match /event_types/{typeId} {

@@ -121,6 +121,8 @@ export interface AccountingEntryLine {
  *   'txn:{financeTxnId}'      auto entry for a journal row (replay-safe overwrite)
  *   'txn:{financeTxnId}:rev'  reversal when the journal row was corrected
  *   'manual:{autoId}'         manual entry
+ *   'manual:tpl:{templateId}:{YYYY-MM}'  recurring template auto-post (create-only
+ *                             ⇒ materializer re-runs are no-ops)
  *   'rev:{entryId}'           manual reversal of an entry
  *   'close:{fiscalYear}'      the year-close entry
  */
@@ -150,6 +152,54 @@ export interface AccountingEntry extends Omit<AccountingEntryInput, 'date_ms'> {
   reversed_by?: string | null
   created_at: Timestamp
   rebuild_run_id?: string | null
+}
+
+// ─── Entry templates ──────────────────────────────────────────────────────────
+// Owner-managed presets for common manual entries (rent, utilities, equipment,
+// federation fees, owner loans, …). Deliberately foolproof: ONE amount, exactly
+// TWO accounts (Dr debit_account / Cr credit_account) — always balanced by
+// construction. Stored at teams/{id}/accounting_entry_templates/{id}; starter
+// templates are seeded at install with fixed ids (tpl_rent, …) and system: true.
+// Recurring templates (fixed amount required) are auto-posted by the daily
+// materializer with deterministic entry ids (templateEntryId).
+
+export type EntryTemplateRecurrence = 'none' | 'monthly' | 'yearly'
+
+export interface AccountingEntryTemplate {
+  /** Doc id. Seeded starter templates use fixed ids ('tpl_rent', …). */
+  id: string
+  /** Display name — doubles as the posted entry's description. */
+  name: string
+  debit_account_code: string
+  credit_account_code: string
+  /** Minor units. null = ask at use time; REQUIRED when recurrence !== 'none'
+   * (auto-post needs a fixed amount). */
+  amount_minor: number | null
+  recurrence: EntryTemplateRecurrence
+  /** 1..28 when recurring (clamped — no Feb 29/30 class of bugs). */
+  day_of_month: number | null
+  /** 1..12, yearly only. */
+  month_of_year: number | null
+  /** Materializer sweep key — set only while active + recurring, else null. */
+  next_run_at: Timestamp | null
+  last_posted_period: string | null
+  last_posted_at: Timestamp | null
+  /** Machine code of the last skipped occurrence (e.g. 'closed_fiscal_year',
+   * 'inactive_account:6040') — surfaced in the templates UI; null when healthy. */
+  last_error: string | null
+  active: boolean
+  /** Seeded starter template — not deletable (deactivate instead). */
+  system: boolean
+  created_at: Timestamp
+  updated_at: Timestamp
+  /** uid, or 'system' for seeded templates. */
+  created_by: string
+}
+
+/** Deterministic id for a recurring template's auto-posted entry — one per
+ * template per period; create-only writes make materializer re-runs no-ops. */
+export function templateEntryId(templateId: string, period: string): string {
+  return `manual:tpl:${templateId}:${period}`
 }
 
 // ─── Period summaries ─────────────────────────────────────────────────────────

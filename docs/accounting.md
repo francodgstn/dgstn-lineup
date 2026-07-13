@@ -17,7 +17,7 @@ fiscal-year close (closeFiscalYear) ──────────────�
                                                                                      ↓
                                                     accounting_period_summaries/{YYYY-MM}
                                                                                      ↓
-                                     client-side: trial balance · P&L · balance sheet
+                         client-side: trial balance · P&L · balance sheet · trend charts
 ```
 
 - **Posting engine** (`@linyup/shared` `accounting/posting.ts`, pure): every
@@ -60,6 +60,13 @@ UI-language switches. The posting engine reads account codes exclusively from
 `accounting_settings.mapping` (each template ships its own defaults) — never
 literals — so adding a market is seed data, not engine work.
 
+Each template also seeds accounts for the starter entry templates: utilities
+(ch_kmu 6040 / SKR04 6325 / IT 4110), federation fees (6520 / 6420 / 4620) and
+an owner-loan liability (2400 / 3560 / 2700). Installs that predate an account
+addition pick the new docs up on the next **Rebuild ledger** (or reinstall) —
+`ensureAccountingSeeded` is create-only per doc, so re-runs never clobber a
+studio's edits. The advisor-review caveat below covers these seeds too.
+
 ## Workflows
 
 - **Opening balances** (required for a meaningful balance sheet): one manual
@@ -69,6 +76,20 @@ literals — so adding a market is seed data, not engine work.
   clearing overstates by the gateway's fee. Book the gateway's monthly fee
   statement manually: debit the payment-fees account, credit the gateway's
   clearing account.
+- **Entry templates & recurring entries**: owner-managed presets for common
+  manual entries (`teams/{id}/accounting_entry_templates`, starter set seeded at
+  install: rent, utilities, equipment, federation fees, owner loan in/out).
+  Deliberately foolproof — ONE amount, exactly TWO accounts (Dr X / Cr Y),
+  balanced by construction; "Use" on the entries page posts through the normal
+  `createManualEntry` path. A template with a **fixed amount** can be made
+  **recurring** (monthly/yearly, day 1–28): the `materializeRecurringEntries`
+  daily task (02:00 UTC) auto-posts it with the deterministic id
+  `manual:tpl:{templateId}:{YYYY-MM}` (create-only ⇒ re-runs are no-ops, capped
+  catch-up of 12 occurrences). Occurrences that fail validation (closed fiscal
+  year, deactivated account) are skipped-but-advanced and surfaced on the
+  template as `last_error`; archived teams / uninstalled plugins are skipped
+  without advancing. Pure helpers + starter defs: `@linyup/shared`
+  `accounting/templates.ts`.
 - **Corrections**: reverse the entry (creates the compensating entry), then
   post it correctly. Never edit.
 - **Fiscal-year close**: owner-only, years close **in sequence** starting from

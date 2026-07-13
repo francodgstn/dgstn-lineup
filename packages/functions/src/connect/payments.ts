@@ -24,6 +24,7 @@ import {
   COURSES_COLLECTION,
   TEAMS_COLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
+  CONTACTS_COLLECTION,
   type SubscriptionType,
   type Product,
   type Course,
@@ -429,11 +430,21 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
     }
   }
 
-  // A 'full' purchase lands the buyer on the signup-finalize page (email prefilled) —
-  // the finish-your-profile nudge; the rest return to the shop. The result page only
-  // honours seg=signup on success.
-  const seg = contactMode === 'full' ? 'signup' : 'shop'
-  const emailQuery = contactMode === 'full' && email ? `&email=${encodeURIComponent(email)}` : ''
+  // A 'full' purchase lands the buyer on the signup-finalize page (email prefilled)
+  // — the finish-your-profile nudge — but ONLY if this contact hasn't completed
+  // registration yet (signup_completed_at unset): a returning buyer shouldn't be
+  // asked to register again after every purchase. Everyone else returns to the
+  // shop. The result page only honours seg=signup on success.
+  let seg = 'shop'
+  if (contactMode === 'full') {
+    const contactSnap = await admin
+      .firestore()
+      .collection(CONTACTS_COLLECTION)
+      .doc(session.contactId)
+      .get()
+    if (!contactSnap.data()?.signup_completed_at) seg = 'signup'
+  }
+  const emailQuery = seg === 'signup' && email ? `&email=${encodeURIComponent(email)}` : ''
   const slugQuery = data.slug
     ? `&slug=${encodeURIComponent(data.slug)}&seg=${seg}${emailQuery}`
     : ''

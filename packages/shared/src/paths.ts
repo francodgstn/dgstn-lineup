@@ -191,3 +191,6 @@ export const ACCOUNTING_SETTINGS_SUBCOLLECTION = 'accounting_settings'
 export const ACCOUNTING_SETTINGS_DOC = 'config'
 export const ACCOUNTING_ENTRIES_SUBCOLLECTION = 'accounting_entries'
 export const ACCOUNTING_PERIOD_SUMMARIES_SUBCOLLECTION = 'accounting_period_summaries'
+// Entry templates: owner-managed presets for manual entries (+ optional
+// recurring auto-post — see accounting/templates.ts).
+export const ACCOUNTING_ENTRY_TEMPLATES_SUBCOLLECTION = 'accounting_entry_templates'

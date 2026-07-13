@@ -1924,6 +1924,29 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "accounting_entry_templates",
+      "fieldPath": "next_run_at",
+      "ttl": false,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
       "collectionGroup": "bookings",
       "fieldPath": "booking_token",
       "ttl": false,

@@ -7,6 +7,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -21,18 +22,23 @@ import { db, functions } from '@/lib/firebase'
 import {
   ACCOUNTING_ACCOUNTS_SUBCOLLECTION,
   ACCOUNTING_ENTRIES_SUBCOLLECTION,
+  ACCOUNTING_ENTRY_TEMPLATES_SUBCOLLECTION,
   ACCOUNTING_PERIOD_SUMMARIES_SUBCOLLECTION,
   ACCOUNTING_SETTINGS_DOC,
   ACCOUNTING_SETTINGS_SUBCOLLECTION,
   FINANCE_MONTHLY_REPORTS_SUBCOLLECTION,
   TEAMS_COLLECTION,
+  computeNextRunMs,
 } from '@linyup/shared'
+import { Timestamp } from 'firebase/firestore'
 import type {
   AccountingAccount,
   AccountingEntry,
+  AccountingEntryTemplate,
   AccountingPeriodSummary,
   AccountingSettings,
   ChartTemplateId,
+  EntryTemplateDraft,
   FinanceMonthlyReport,
 } from '@linyup/shared'
 
@@ -44,7 +50,13 @@ export function useAccountingSettings(teamId: string | null) {
     enabled: !!teamId,
     queryFn: async () => {
       const snap = await getDoc(
-        doc(db, TEAMS_COLLECTION, teamId!, ACCOUNTING_SETTINGS_SUBCOLLECTION, ACCOUNTING_SETTINGS_DOC)
+        doc(
+          db,
+          TEAMS_COLLECTION,
+          teamId!,
+          ACCOUNTING_SETTINGS_SUBCOLLECTION,
+          ACCOUNTING_SETTINGS_DOC
+        )
       )
       return snap.exists() ? (snap.data() as AccountingSettings) : null
     },
@@ -102,6 +114,43 @@ export function usePeriodSummaries(teamId: string | null, toPeriod: string | nul
   })
 }
 
+/** Fiscal-year close entries (≤1 per closed year) — the trend charts subtract
+ * their lines so a close doesn't show the whole year reversed in its month. */
+export function useClosingEntries(teamId: string | null) {
+  return useQuery<Array<Pick<AccountingEntry, 'period' | 'lines'>>>({
+    queryKey: ['accounting-closing-entries', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, TEAMS_COLLECTION, teamId!, ACCOUNTING_ENTRIES_SUBCOLLECTION),
+          where('source', '==', 'closing')
+        )
+      )
+      return snap.docs.map((d) => {
+        const e = d.data() as AccountingEntry
+        return { period: e.period, lines: e.lines }
+      })
+    },
+  })
+}
+
+/** The team's entry templates (owner-managed manual-entry presets). */
+export function useEntryTemplates(teamId: string | null) {
+  return useQuery<AccountingEntryTemplate[]>({
+    queryKey: ['accounting-templates', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const snap = await getDocs(
+        collection(db, TEAMS_COLLECTION, teamId!, ACCOUNTING_ENTRY_TEMPLATES_SUBCOLLECTION)
+      )
+      return snap.docs
+        .map((d) => ({ ...(d.data() as AccountingEntryTemplate), id: d.id }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    },
+  })
+}
+
 export function useFinanceMonthlyReport(teamId: string | null, month: string | null) {
   return useQuery<FinanceMonthlyReport | null>({
     queryKey: ['finance-monthly-report', teamId, month],
@@ -139,6 +188,62 @@ export async function saveAccount(
   )
 }
 
+/** Create/update an entry template (rules allow owner; `system` immutable).
+ * Recurring + active templates get their next_run_at computed here — the daily
+ * materializer only sweeps docs with a due timestamp. */
+export async function saveEntryTemplate(
+  teamId: string,
+  tpl: EntryTemplateDraft & { active: boolean },
+  id: string | null,
+  uid: string
+): Promise<string> {
+  const col = collection(db, TEAMS_COLLECTION, teamId, ACCOUNTING_ENTRY_TEMPLATES_SUBCOLLECTION)
+  const ref = id ? doc(col, id) : doc(col)
+  const recurring = tpl.recurrence !== 'none' && tpl.active
+  const nextRunAt = recurring
+    ? Timestamp.fromMillis(
+        computeNextRunMs(
+          tpl.recurrence as 'monthly' | 'yearly',
+          tpl.day_of_month ?? 1,
+          tpl.month_of_year,
+          Date.now()
+        )
+      )
+    : null
+  await setDoc(
+    ref,
+    {
+      id: ref.id,
+      name: tpl.name.trim(),
+      debit_account_code: tpl.debit_account_code,
+      credit_account_code: tpl.credit_account_code,
+      amount_minor: tpl.amount_minor,
+      recurrence: tpl.recurrence,
+      day_of_month: tpl.recurrence === 'none' ? null : (tpl.day_of_month ?? null),
+      month_of_year: tpl.recurrence === 'yearly' ? (tpl.month_of_year ?? null) : null,
+      next_run_at: nextRunAt,
+      active: tpl.active,
+      ...(id
+        ? {}
+        : {
+            system: false,
+            last_posted_period: null,
+            last_posted_at: null,
+            last_error: null,
+            created_at: serverTimestamp(),
+            created_by: uid,
+          }),
+      updated_at: serverTimestamp(),
+    },
+    { merge: true }
+  )
+  return ref.id
+}
+
+export async function deleteEntryTemplate(teamId: string, id: string): Promise<void> {
+  await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, ACCOUNTING_ENTRY_TEMPLATES_SUBCOLLECTION, id))
+}
+
 // ─── Callables ──────────────────────────────────────────────────────────────
 
 export const callRebuildLedger = httpsCallable<
@@ -151,7 +256,12 @@ export const callCreateManualEntry = httpsCallable<
     teamId: string
     dateMs: number
     description: string
-    lines: Array<{ account_code: string; debit: number; credit: number; description?: string | null }>
+    lines: Array<{
+      account_code: string
+      debit: number
+      credit: number
+      description?: string | null
+    }>
   },
   { id: string; period: string }
 >(functions, 'createManualEntry')
@@ -179,5 +289,7 @@ export function useInvalidateAccounting(teamId: string | null) {
     void qc.invalidateQueries({ queryKey: ['accounting-accounts', teamId] })
     void qc.invalidateQueries({ queryKey: ['accounting-entries', teamId] })
     void qc.invalidateQueries({ queryKey: ['accounting-summaries', teamId] })
+    void qc.invalidateQueries({ queryKey: ['accounting-templates', teamId] })
+    void qc.invalidateQueries({ queryKey: ['accounting-closing-entries', teamId] })
   }
 }

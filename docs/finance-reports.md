@@ -24,9 +24,12 @@ payment_events ──(BYO webhooks + recordManualPayment)┤→ teams/{id}/finan
   (exception: `payout` rows are pure balance movements, `net = -amount`).
 - **Fees** — Connect charges are enriched with the charge's balance
   transaction (`fee_source: 'balance_transaction'`): actual Stripe processing
-  fee, application (platform) fee, and net. If the fetch fails the row is
+  fee, application (platform) fee, and net. Async payment methods (TWINT, …)
+  have NO balance transaction yet at `payment_intent.succeeded` — their row is
   written with `fee_source: 'recorded'` (platform fee from our record, Stripe
-  fee 0) and can be upgraded later by the backfill (`--force-fees`).
+  fee 0) and **healed automatically by the `charge.updated` handler** once
+  Stripe populates the balance transaction. Rows that miss the healer (e.g.
+  the event wasn't subscribed) are upgraded by the backfill (`--force-fees`).
 - **Payouts** — `payout.paid` / `payout.failed` events write `payout` rows and
   stamp `payout_id` onto the swept charge rows, so the journal reconciles
   against the studio's bank statement.
@@ -38,9 +41,11 @@ payment_events ──(BYO webhooks + recordManualPayment)┤→ teams/{id}/finan
 
 ## Ops requirements
 
-- **Stripe Connect webhook endpoint must be subscribed to `payout.paid` and
-  `payout.failed`** (in addition to the existing charge/subscription/dispute
-  events). Configure in the Stripe Dashboard → Webhooks → Connect endpoint.
+- **Stripe Connect webhook endpoint must be subscribed to `payout.paid`,
+  `payout.failed`, and `charge.updated`** (in addition to the existing
+  charge/subscription/dispute events). `charge.updated` powers the fee-split
+  healer for async payment methods (TWINT, …). Configure in the Stripe
+  Dashboard → Webhooks → Connect endpoint.
 - Secrets: reuses `stripe-secret-key` (the platform key) for balance-transaction
   and payout reads on connected accounts.
 

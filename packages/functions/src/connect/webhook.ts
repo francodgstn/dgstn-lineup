@@ -52,6 +52,7 @@ import {
   linkFinanceTxnPayout,
   recordFinanceTransaction,
   retrieveChargeFees,
+  upgradeChargeFeesIfDegraded,
 } from '../finance/journal'
 
 // Account/capability events → re-fetch the account (source of truth) and persist.
@@ -665,6 +666,34 @@ async function handleDispute(
     )
   } catch (err) {
     console.error(`[connect] finance journal dispute write failed (dp=${dispute.id}):`, err)
+  }
+}
+
+/**
+ * charge.updated — the fee-enrichment healer. Async payment methods (TWINT, …)
+ * succeed WITHOUT a balance transaction, so their journal row is written with
+ * fee_source 'recorded' (Stripe fee unknown); Stripe emits charge.updated once
+ * balance_transaction is populated — upgrade the row in place then (accounting
+ * re-posts via onFinanceTransactionWrite). Card charges no-op here (already
+ * authoritative from payment_intent.succeeded).
+ * NOTE (ops): the Connect webhook endpoint must be subscribed to charge.updated
+ * — see docs/finance-reports.md.
+ */
+async function handleChargeUpdated(team: TeamRef, charge: any, accountId?: string): Promise<void> {
+  const piId =
+    typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id
+  if (!piId || !accountId || !charge.balance_transaction) return
+  try {
+    const upgraded = await upgradeChargeFeesIfDegraded(
+      team.teamId,
+      accountId,
+      piId,
+      charge.id as string
+    )
+    if (upgraded) console.log(`[finance] fee split upgraded via charge.updated (pi=${piId})`)
+  } catch (err) {
+    // Healing must never fail the webhook — the backfill (--force-fees) reconciles.
+    console.warn(`[finance] charge.updated fee upgrade failed (pi=${piId}):`, err)
   }
 }
 
@@ -1320,6 +1349,9 @@ export const handleConnectWebhook = onRequest({ invoker: 'public' }, async (req,
           break
         case 'charge.refunded':
           await handleChargeRefunded(team, obj, event.id, accountId)
+          break
+        case 'charge.updated':
+          await handleChargeUpdated(team, obj, accountId)
           break
         case 'charge.dispute.created':
           await handleDispute(team, obj, 'created', event.id)

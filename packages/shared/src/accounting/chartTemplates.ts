@@ -1,5 +1,5 @@
 // Chart-of-accounts templates — one per initial market. Each template is pure
-// seed data: ~26 accounts (code, type, localized names) plus its own default
+// seed data: ~29 accounts (code, type, localized names) plus its own default
 // journal-dimension → account mapping. The posting engine is template-agnostic
 // (it reads codes exclusively from AccountingSettings.mapping), so adding a
 // market is a data change, not an engine change.
@@ -62,6 +62,7 @@ const CH_KMU: ChartTemplate = {
     a('2000', 'liability', { de: 'Kreditoren', fr: 'Créanciers', it: 'Debiti verso fornitori', en: 'Accounts payable' }),
     a('2200', 'liability', { de: 'Geschuldete MWST', fr: 'TVA due', it: 'IVA dovuta', en: 'VAT payable' }),
     a('2300', 'liability', { de: 'Passive Rechnungsabgrenzung', fr: 'Passifs de régularisation', it: 'Ratei e risconti passivi', en: 'Deferred income / accrued expenses' }),
+    a('2400', 'liability', { de: 'Darlehen Inhaber', fr: 'Prêt du propriétaire', it: 'Prestito del titolare', en: 'Owner loan' }),
     // Equity
     a('2800', 'equity', { de: 'Eigenkapital', fr: 'Capital propre', it: 'Capitale proprio', en: 'Equity' }),
     a('2979', 'equity', { de: 'Gewinn-/Verlustvortrag', fr: 'Report de bénéfice/perte', it: 'Utili/perdite riportati', en: 'Retained earnings' }),
@@ -75,9 +76,11 @@ const CH_KMU: ChartTemplate = {
     // Expenses
     a('5000', 'expense', { de: 'Personalaufwand', fr: 'Charges de personnel', it: 'Costi del personale', en: 'Personnel expenses' }),
     a('6000', 'expense', { de: 'Raumaufwand / Miete', fr: 'Charges de locaux / loyer', it: 'Costi locali / affitto', en: 'Premises / rent' }),
+    a('6040', 'expense', { de: 'Energie & Nebenkosten', fr: 'Énergie et charges', it: 'Energia e spese accessorie', en: 'Utilities' }),
     a('6100', 'expense', { de: 'Unterhalt & Geräte', fr: 'Entretien & équipement', it: 'Manutenzione e attrezzature', en: 'Maintenance & equipment' }),
     a('6300', 'expense', { de: 'Versicherungen', fr: 'Assurances', it: 'Assicurazioni', en: 'Insurance' }),
     a('6500', 'expense', { de: 'Verwaltungsaufwand', fr: 'Frais d’administration', it: 'Spese amministrative', en: 'Administration' }),
+    a('6520', 'expense', { de: 'Verbandsbeiträge', fr: 'Cotisations aux fédérations', it: 'Quote federazioni', en: 'Federation fees' }),
     a('6570', 'expense', { de: 'Informatik / Software', fr: 'Informatique / logiciels', it: 'Informatica / software', en: 'IT / software' }),
     a('6600', 'expense', { de: 'Werbung & Marketing', fr: 'Publicité & marketing', it: 'Pubblicità e marketing', en: 'Advertising & marketing' }),
     a('6900', 'expense', { de: 'Übriger Betriebsaufwand', fr: 'Autres charges d’exploitation', it: 'Altri costi d’esercizio', en: 'Other operating expenses' }),
@@ -124,6 +127,7 @@ const DE_SKR04: ChartTemplate = {
     a('3300', 'liability', { de: 'Verbindlichkeiten aus Lieferungen und Leistungen', en: 'Accounts payable' }),
     a('3800', 'liability', { de: 'Umsatzsteuer', en: 'VAT payable' }),
     a('3900', 'liability', { de: 'Passive Rechnungsabgrenzung', en: 'Deferred income' }),
+    a('3560', 'liability', { de: 'Darlehen Inhaber/Gesellschafter', en: 'Owner loan' }),
     // Equity
     a('2000', 'equity', { de: 'Eigenkapital', en: 'Equity' }),
     a('2970', 'equity', { de: 'Gewinnvortrag / Verlustvortrag', en: 'Retained earnings' }),
@@ -137,8 +141,10 @@ const DE_SKR04: ChartTemplate = {
     // Expenses
     a('6000', 'expense', { de: 'Löhne und Gehälter', en: 'Personnel expenses' }),
     a('6310', 'expense', { de: 'Miete', en: 'Premises / rent' }),
+    a('6325', 'expense', { de: 'Gas, Strom, Wasser', en: 'Utilities' }),
     a('6470', 'expense', { de: 'Instandhaltung & Geräte', en: 'Maintenance & equipment' }),
     a('6400', 'expense', { de: 'Versicherungen', en: 'Insurance' }),
+    a('6420', 'expense', { de: 'Beiträge (Verbände)', en: 'Federation fees' }),
     a('6800', 'expense', { de: 'Verwaltungsaufwand', en: 'Administration' }),
     a('6837', 'expense', { de: 'EDV / Software', en: 'IT / software' }),
     a('6600', 'expense', { de: 'Werbung & Marketing', en: 'Advertising & marketing' }),
@@ -186,6 +192,7 @@ const IT_STANDARD: ChartTemplate = {
     a('2400', 'liability', { it: 'Debiti verso fornitori', en: 'Accounts payable' }),
     a('2600', 'liability', { it: 'IVA a debito', en: 'VAT payable' }),
     a('2500', 'liability', { it: 'Ratei e risconti passivi', en: 'Deferred income' }),
+    a('2700', 'liability', { it: 'Finanziamento titolare/soci', en: 'Owner loan' }),
     // Equity
     a('2800', 'equity', { it: 'Patrimonio netto', en: 'Equity' }),
     a('2900', 'equity', { it: 'Utili (perdite) portati a nuovo', en: 'Retained earnings' }),
@@ -199,11 +206,13 @@ const IT_STANDARD: ChartTemplate = {
     // Expenses
     a('4000', 'expense', { it: 'Costi del personale', en: 'Personnel expenses' }),
     a('4100', 'expense', { it: 'Affitti e locali', en: 'Premises / rent' }),
+    a('4110', 'expense', { it: 'Utenze (energia, acqua, gas)', en: 'Utilities' }),
     a('4200', 'expense', { it: 'Manutenzioni e attrezzature', en: 'Maintenance & equipment' }),
     a('4300', 'expense', { it: 'Assicurazioni', en: 'Insurance' }),
     a('4400', 'expense', { it: 'Spese amministrative', en: 'Administration' }),
     a('4500', 'expense', { it: 'Software e informatica', en: 'IT / software' }),
     a('4600', 'expense', { it: 'Pubblicità e marketing', en: 'Advertising & marketing' }),
+    a('4620', 'expense', { it: 'Quote associative e federazioni', en: 'Federation fees' }),
     a('4900', 'expense', { it: 'Altri costi d’esercizio', en: 'Other operating expenses' }),
     a('4700', 'expense', { it: 'Commissioni di pagamento (Stripe/Payrexx)', en: 'Payment fees' }),
     a('4710', 'expense', { it: 'Commissioni piattaforma (Linyup)', en: 'Platform fees (Linyup)' }),

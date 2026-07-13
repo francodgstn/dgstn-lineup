@@ -14,6 +14,7 @@ import { formatMinorUnits, monthKey } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { ExportFinanceCsvButton } from '@/components/payments/ExportFinanceCsvButton'
+import { FinanceTrendsSection } from '@/components/finance/FinanceTrendsSection'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -143,6 +144,9 @@ export default function FinanceOverviewPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Trends — income vs expenses, net result, cash balance (last 12 months) */}
+      <FinanceTrendsSection teamId={teamId} />
 
       {/* Accounting subpages */}
       <div className="grid gap-3 sm:grid-cols-3">

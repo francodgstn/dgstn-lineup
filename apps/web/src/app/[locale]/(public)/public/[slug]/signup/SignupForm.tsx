@@ -5,8 +5,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { httpsCallable } from 'firebase/functions'
-import { functions } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { db, functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
+import { CONTACTS_COLLECTION } from '@linyup/shared'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
@@ -59,6 +61,10 @@ export default function SignupForm({ slug }: Props) {
   // itself minted by the same OTP flow, so re-verifying the inbox is pure friction.
   const { isAuthenticated, contact: sessionContact } = usePublicContactAuth()
   const t = useTranslations('PublicSignup')
+  const tSurfaces = useTranslations('PublicSurfaceLinks')
+  // The team root renders whatever default surface the studio chose (bio-link,
+  // website, shop, …) — label the link accordingly instead of assuming bio-link.
+  const homeSurface = team.default_public_surface ?? 'bio-link'
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
   const showBranding = team.showBranding === true
@@ -106,13 +112,33 @@ export default function SignupForm({ slug }: Props) {
   const detailsForm = useForm<DetailsValues>({ resolver: zodResolver(detailsSchema) })
 
   // Signed-in contact → jump straight to the details step with names prefilled
-  // (completeSignup runs against the session, no code needed). Only from the
-  // email/code steps — never yank the user out of an in-progress details form.
+  // (completeSignup runs against the session, no code needed). If their signup is
+  // ALREADY complete (signup_completed_at on their own contact doc — rules allow
+  // self-read), skip the form entirely and land on the success view: don't re-ask
+  // details + consent they already gave (e.g. arriving via a stale post-checkout
+  // link). Only from the email/code steps — never yank the user out of an
+  // in-progress details form.
   useEffect(() => {
     if (!isAuthenticated || !sessionContact) return
-    setStep((s) => (s === 'email' || s === 'code' ? 'details' : s))
-    if (!detailsForm.getValues('firstname')) detailsForm.setValue('firstname', sessionContact.firstname ?? '')
-    if (!detailsForm.getValues('lastname')) detailsForm.setValue('lastname', sessionContact.lastname ?? '')
+    let cancelled = false
+    ;(async () => {
+      try {
+        const snap = await getDoc(doc(db, CONTACTS_COLLECTION, sessionContact.id))
+        if (!cancelled && snap.data()?.signup_completed_at) {
+          setStep((s) => (s === 'email' || s === 'code' ? 'success' : s))
+          return
+        }
+      } catch {
+        /* self-read failed — fall through to the normal details step */
+      }
+      if (cancelled) return
+      setStep((s) => (s === 'email' || s === 'code' ? 'details' : s))
+      if (!detailsForm.getValues('firstname')) detailsForm.setValue('firstname', sessionContact.firstname ?? '')
+      if (!detailsForm.getValues('lastname')) detailsForm.setValue('lastname', sessionContact.lastname ?? '')
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [isAuthenticated, sessionContact, detailsForm])
 
   // ── Email step ─────────────────────────────────────────────────────────────
@@ -518,12 +544,21 @@ export default function SignupForm({ slug }: Props) {
             {t.rich('successBody', { teamName, strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
         </div>
-        <a
-          href={`/public/${slug}`}
-          className="inline-block text-sm text-primary hover:underline"
-        >
-          {t('backToBioLink')}
-        </a>
+        <div className="space-y-2">
+          {/* Their personal portal — where membership, bookings and courses live. */}
+          <a
+            href={`/public/${slug}/space`}
+            className="block text-sm font-medium text-primary hover:underline"
+          >
+            {t('openSpace')}
+          </a>
+          <a
+            href={`/public/${slug}`}
+            className="block text-sm text-muted-foreground hover:text-foreground hover:underline"
+          >
+            {t('toSurface', { name: tSurfaces(homeSurface as Parameters<typeof tSurfaces>[0]) })}
+          </a>
+        </div>
       </div>
     </BioLinkShell>
   )
