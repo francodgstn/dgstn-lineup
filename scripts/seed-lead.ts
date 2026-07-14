@@ -86,6 +86,9 @@ const { values: cli } = parseArgs({
     // Precedence: --connect > STRIPE_CONNECT_TEST_ACCOUNT env > profile field. The
     // account must already be onboarded in Stripe test mode (see connect-test-account.ts).
     connect: { type: 'string' },
+    // Pin the staff-login password instead of generating a random one — use it
+    // when reseeding so the lead's known password keeps working.
+    password: { type: 'string' },
   },
 })
 const LEAD = cli.lead ?? process.env.LEAD
@@ -144,7 +147,7 @@ const STUDENT_SESSION_MS = 30 * 24 * 60 * 60 * 1000 // matches generateAuthToken
 
 // Lead tenants go on the PUBLIC sandbox with real-lead owner logins, so no
 // shared demo password: generate a strong random one per seed run (printed in
-// the summary — note it before the terminal scrolls away). Set LEAD_PASSWORD to
+// the summary — note it before the terminal scrolls away). Pass --password to
 // pin a specific value (e.g. re-running without rotating the lead's password).
 // Unambiguous base58-ish alphabet — no 0/O/1/l/I.
 function generateLeadPassword(): string {
@@ -154,7 +157,7 @@ function generateLeadPassword(): string {
   for (const b of bytes) out += alphabet[b % alphabet.length]
   return out
 }
-const DEMO_PASSWORD = process.env.LEAD_PASSWORD || generateLeadPassword()
+const DEMO_PASSWORD = cli.password || generateLeadPassword()
 
 // ── generic helpers (mirroring seed-sandbox.ts) ─────────────────────────────
 
@@ -2473,8 +2476,8 @@ async function main() {
     `\n✅ Lead tenant seeded — ${profile.contacts.length} contacts, ${sessionCount} sessions\n`
   )
   console.log('   Logins (password: ' + DEMO_PASSWORD + '):')
-  if (!process.env.LEAD_PASSWORD) {
-    console.log('   ⚠ Randomly generated — SAVE IT NOW; every reseed rotates it (pin with LEAD_PASSWORD env).')
+  if (!cli.password) {
+    console.log('   ⚠ Randomly generated — SAVE IT NOW; every reseed rotates it (pin with --password).')
   }
   for (const s of profile.staff) {
     console.log(

@@ -93,7 +93,9 @@ Profile ground rules:
 - **Contacts are always synthetic.** Realistic names and distributions, yes —
   real people, never.
 - The tenant id is `lead-{id}`; staff logins use `{name}@{id}.linyup.com`-style
-  addresses with the shared demo password.
+  addresses. The password is randomly generated per seed run (printed in the
+  summary) — pass `--password <value>` to pin it, e.g. when reseeding without
+  rotating the lead's known password.
 
 ## Assets folder (`scripts/leads/{lead}/assets/`)
 
