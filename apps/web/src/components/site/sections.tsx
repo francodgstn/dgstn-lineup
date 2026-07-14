@@ -53,6 +53,7 @@ import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
 import { usePlaces } from '@/hooks/usePlaces'
 import { ClubsBlock, LocationsBlock, CoachesBlock } from './orgSections'
+import { WeeklyCalendar } from '@/components/schedule/WeeklyCalendar'
 
 export interface RenderCtx {
   palette: SitePalette
@@ -605,7 +606,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
   const [sessions, setSessions] = useState<SessionEntry[]>([])
   const [loading, setLoading] = useState(true)
   // Studio sets the default view; visitors can switch with the toggle below.
-  const [view, setView] = useState<'list' | 'week'>(section.displayMode ?? 'list')
+  const [view, setView] = useState<'list' | 'calendar'>(section.displayMode ?? 'list')
 
   useEffect(() => {
     let alive = true
@@ -708,89 +709,13 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
     </div>
   )
 
-  // A compact session chip used inside the weekly grid columns.
-  const Chip = ({ s }: { s: SessionEntry }) => (
-    <div
-      className="flex items-center gap-1.5 rounded-md border px-2 py-1"
-      style={{ borderColor: palette.border, background: palette.bg }}
-    >
-      <span
-        className="h-3 w-1 shrink-0 rounded-full"
-        style={{ background: s.activityColor || palette.accent }}
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs font-semibold" style={{ color: palette.text }}>
-          {fmtTime(s.start.toDate())}
-        </span>
-        <span className="block truncate text-[11px]" style={{ color: palette.muted }}>
-          {s.activityName ?? 'Session'}
-        </span>
-      </span>
-      <BookButton />
-    </div>
-  )
-
-  // Canonical 7-day week starting today (a weekly calendar is inherently 7 days;
-  // windowDays still governs the list view).
-  const weekStart = new Date()
-  weekStart.setHours(0, 0, 0, 0)
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(weekStart)
-    date.setDate(weekStart.getDate() + i)
-    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
-    return { date, sessions: days.find((d) => d.key === key)?.sessions ?? [] }
-  })
-
-  const WeekView = () => (
-    <>
-      {/* Desktop: full 7-column week (empty days shown as columns). */}
-      <div className="hidden gap-1.5 sm:grid sm:grid-cols-7">
-        {weekDays.map(({ date, sessions: ds }) => (
-          <div key={date.toISOString()} className="flex flex-col gap-1.5">
-            <div className="text-center">
-              <p className="text-xs font-semibold" style={{ color: palette.text }}>
-                {date.toLocaleDateString(undefined, { weekday: 'short' })}
-              </p>
-              <p className="text-[11px]" style={{ color: palette.muted }}>
-                {date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-              </p>
-            </div>
-            {ds.length === 0 ? (
-              <span className="py-2 text-center text-xs" style={{ color: palette.muted }}>
-                —
-              </span>
-            ) : (
-              ds.map((s) => <Chip key={s.id} s={s} />)
-            )}
-          </div>
-        ))}
-      </div>
-      {/* Mobile: stack only the days that have sessions, with the same divider. */}
-      <div className="space-y-3 sm:hidden">
-        {days.length === 0 ? (
-          <p className="text-center text-sm" style={{ color: palette.muted }}>
-            No upcoming sessions.
-          </p>
-        ) : (
-          days.map((g) => (
-            <div key={g.key} className="space-y-1.5">
-              <DayDivider date={g.date} />
-              {g.sessions.map((s) => (
-                <Chip key={s.id} s={s} />
-              ))}
-            </div>
-          ))
-        )}
-      </div>
-    </>
-  )
 
   const ToggleButton = ({
     mode,
     icon: Icon,
     label,
   }: {
-    mode: 'list' | 'week'
+    mode: 'list' | 'calendar'
     icon: typeof List
     label: string
   }) => {
@@ -825,7 +750,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
             style={{ borderColor: palette.border }}
           >
             <ToggleButton mode="list" icon={List} label="List" />
-            <ToggleButton mode="week" icon={CalendarRange} label="Week" />
+            <ToggleButton mode="calendar" icon={CalendarRange} label="Calendar" />
           </div>
         </div>
 
@@ -838,8 +763,12 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
             <p className="text-center text-sm" style={{ color: palette.muted }}>
               No upcoming sessions.
             </p>
-          ) : view === 'week' ? (
-            <WeekView />
+          ) : view === 'calendar' ? (
+            <WeeklyCalendar
+              sessions={visible}
+              accent={palette.accent}
+              bookingHref={section.showBooking ? bookHref : undefined}
+            />
           ) : (
             <ListView />
           )}

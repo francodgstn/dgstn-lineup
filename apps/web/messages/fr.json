@@ -2231,7 +2231,7 @@
     "featureStandby": "Diaporama de veille",
     "featureStandbyHint": "Affiche des photos ou vidéos en boucle après une période d'inactivité du kiosque.",
     "scheduleViewLabel": "Affichage du programme",
-    "scheduleViewWeek": "Semaine",
+    "scheduleViewCalendar": "Calendrier",
     "scheduleViewList": "Liste",
     "standbyTitle": "Diaporama de veille",
     "standbyIdleLabel": "Délai d'inactivité avant la veille (secondes)",

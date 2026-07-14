@@ -2231,7 +2231,7 @@
     "featureStandby": "Standby slideshow",
     "featureStandbyHint": "Show photos or videos on a loop once the kiosk has been idle for a while.",
     "scheduleViewLabel": "Schedule layout",
-    "scheduleViewWeek": "Week",
+    "scheduleViewCalendar": "Calendar",
     "scheduleViewList": "List",
     "standbyTitle": "Standby slideshow",
     "standbyIdleLabel": "Idle time before standby (seconds)",

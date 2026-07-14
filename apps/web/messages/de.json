@@ -2231,7 +2231,7 @@
     "featureStandby": "Standby-Diashow",
     "featureStandbyHint": "Zeigt Fotos oder Videos in Dauerschleife, sobald der Kiosk eine Weile inaktiv war.",
     "scheduleViewLabel": "Stundenplan-Ansicht",
-    "scheduleViewWeek": "Woche",
+    "scheduleViewCalendar": "Kalender",
     "scheduleViewList": "Liste",
     "standbyTitle": "Standby-Diashow",
     "standbyIdleLabel": "Leerlaufzeit bis Standby (Sekunden)",

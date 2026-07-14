@@ -274,7 +274,7 @@ export default function KioskSettingsPage() {
             >
               <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="week">{t('scheduleViewWeek')}</SelectItem>
+                <SelectItem value="calendar">{t('scheduleViewCalendar')}</SelectItem>
                 <SelectItem value="list">{t('scheduleViewList')}</SelectItem>
               </SelectContent>
             </Select>

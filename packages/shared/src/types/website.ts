@@ -112,9 +112,10 @@ export interface ScheduleSection extends SectionBase {
   maxItems?: number
   /** Optional activity filter (activity id). */
   activityId?: string
-  /** Studio's default view. The live site also shows a small list/week toggle.
+  /** Studio's default view. The live site also shows a small List/Calendar toggle.
+   *  'calendar' = weekly time-grid planner (formerly 'week', a chip grid).
    *  Defaults to 'list' when unset. */
-  displayMode?: 'list' | 'week'
+  displayMode?: 'list' | 'calendar'
   /** Show a small "Book" icon on each session row/chip → /booking. Off by default
    *  (the space is tight and it repeats on every session). */
   showBooking?: boolean

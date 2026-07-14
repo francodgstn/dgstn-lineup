@@ -5,6 +5,7 @@
 // Not imported directly: that component is bound to the site palette/preview
 // context, which the kiosk doesn't use (no theming, no booking links).
 import { useTranslations } from 'next-intl'
+import { WeeklyCalendar } from '@/components/schedule/WeeklyCalendar'
 import type { KioskSession } from './useKioskSessions'
 
 interface DayGroup {
@@ -34,7 +35,7 @@ const fmtTime = (d: Date) =>
 interface Props {
   sessions: KioskSession[]
   loading: boolean
-  view: 'week' | 'list'
+  view: 'calendar' | 'list'
 }
 
 export default function KioskSchedule({ sessions, loading, view }: Props) {
@@ -57,7 +58,7 @@ export default function KioskSchedule({ sessions, loading, view }: Props) {
     )
   }
 
-  return view === 'week' ? <WeekGrid sessions={sessions} /> : <DayList sessions={sessions} />
+  return view === 'list' ? <DayList sessions={sessions} /> : <WeeklyCalendar sessions={sessions} />
 }
 
 function DayDivider({ date }: { date: Date }) {
@@ -103,55 +104,3 @@ function DayList({ sessions }: { sessions: KioskSession[] }) {
   )
 }
 
-function Chip({ s }: { s: KioskSession }) {
-  return (
-    <div className="flex items-center gap-1.5 rounded-md border bg-card px-2 py-1.5">
-      <span
-        className="h-4 w-1 shrink-0 rounded-full"
-        style={{ background: s.activityColor || 'var(--primary)' }}
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold tabular-nums">{fmtTime(s.start.toDate())}</span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {s.activityName ?? 'Session'}
-        </span>
-      </span>
-    </div>
-  )
-}
-
-function WeekGrid({ sessions }: { sessions: KioskSession[] }) {
-  const days = groupByDay(sessions)
-  const weekStart = new Date()
-  weekStart.setHours(0, 0, 0, 0)
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(weekStart)
-    date.setDate(weekStart.getDate() + i)
-    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
-    return { date, sessions: days.find((d) => d.key === key)?.sessions ?? [] }
-  })
-
-  return (
-    <div className="grid h-full grid-cols-7 gap-2">
-      {weekDays.map(({ date, sessions: ds }) => (
-        <div key={date.toISOString()} className="flex min-h-0 flex-col gap-2">
-          <div className="text-center">
-            <p className="text-sm font-bold">
-              {date.toLocaleDateString(undefined, { weekday: 'short' })}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-            </p>
-          </div>
-          <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto">
-            {ds.length === 0 ? (
-              <span className="py-2 text-center text-xs text-muted-foreground">—</span>
-            ) : (
-              ds.map((s) => <Chip key={s.id} s={s} />)
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}

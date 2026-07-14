@@ -9,7 +9,9 @@
 //                      denormalized by syncTeamPublicProfile, MINUS the PIN.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type KioskScheduleView = 'week' | 'list'
+// 'calendar' = weekly time-grid planner; 'list' = simple stacked per-day rows.
+// (Formerly 'week', a chip grid — replaced by the calendar.)
+export type KioskScheduleView = 'calendar' | 'list'
 
 export interface KioskMediaItem {
   url: string
@@ -75,7 +77,7 @@ export interface KioskPublicConfig {
 /** Config a freshly-installed kiosk starts from. */
 export const DEFAULT_KIOSK_CONFIG: KioskConfig = {
   features: { schedule: true, nowNext: true, checkinQr: true, walkIn: true, standby: false },
-  scheduleView: 'week',
+  scheduleView: 'calendar',
   standby: { idleSeconds: 90, media: [] },
   lock: { enabled: false, epoch: 0 },
 }

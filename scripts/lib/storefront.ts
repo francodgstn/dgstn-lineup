@@ -303,6 +303,7 @@ export async function seedStoreWebsite(o: StorefrontOpts): Promise<void> {
       heading: 'Upcoming classes',
       source: 'sessions',
       windowDays: 14,
+      displayMode: 'calendar',
       showBooking: true,
     },
     {

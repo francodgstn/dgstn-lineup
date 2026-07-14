@@ -2231,7 +2231,7 @@
     "featureStandby": "Presentazione standby",
     "featureStandbyHint": "Mostra foto o video in loop dopo un periodo di inattività del kiosk.",
     "scheduleViewLabel": "Vista del programma",
-    "scheduleViewWeek": "Settimana",
+    "scheduleViewCalendar": "Calendario",
     "scheduleViewList": "Elenco",
     "standbyTitle": "Presentazione standby",
     "standbyIdleLabel": "Tempo di inattività prima dello standby (secondi)",
