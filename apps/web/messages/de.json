@@ -1007,6 +1007,8 @@
     "roleHint_viewer": "Nur-Lese-Zugriff auf das Studio.",
     "role_viewer": "Betrachter",
     "you": "Sie",
+    "copyEmail": "E-Mail kopieren",
+    "copied": "Kopiert",
     "removeMember": "Mitglied entfernen",
     "removeConfirm": "{name} aus dem Team entfernen?",
     "ownerOnlyNote": "Nur Teaminhaber können Rollen ändern oder Mitglieder entfernen.",

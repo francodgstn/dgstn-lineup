@@ -19,6 +19,8 @@ import {
   CheckCircle2,
   X,
   Lock,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
 import { useCapabilities } from '@/hooks/useCapabilities'
@@ -311,6 +313,32 @@ interface Toast {
   type: 'success' | 'error'
 }
 
+// ----- MemberEmail (with copy button) ---------------------------------------
+
+function MemberEmail({ email }: { email: string }) {
+  const t = useTranslations('TeamMembers')
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="truncate">{email}</span>
+      <button
+        type="button"
+        onClick={() => {
+          navigator.clipboard.writeText(email).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+          })
+        }}
+        title={copied ? t('copied') : t('copyEmail')}
+        aria-label={t('copyEmail')}
+        className="shrink-0 rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground"
+      >
+        {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+      </button>
+    </div>
+  )
+}
+
 // ----- Main page ------------------------------------------------------------
 
 export default function TeamMembersPage() {
@@ -528,6 +556,7 @@ export default function TeamMembersPage() {
                         <span className="text-xs text-muted-foreground">({t('you')})</span>
                       )}
                     </div>
+                    {m.email && <MemberEmail email={m.email} />}
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {t('joinedOn', { date: formatDate(m.joined) })}
                     </div>

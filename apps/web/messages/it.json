@@ -1007,6 +1007,8 @@
     "roleHint_viewer": "Accesso in sola lettura allo studio.",
     "role_viewer": "Osservatore",
     "you": "tu",
+    "copyEmail": "Copia email",
+    "copied": "Copiato",
     "removeMember": "Rimuovi membro",
     "removeConfirm": "Rimuovere {name} dal team?",
     "ownerOnlyNote": "Solo i proprietari possono cambiare i ruoli o rimuovere membri.",

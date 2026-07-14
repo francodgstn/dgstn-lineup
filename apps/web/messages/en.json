@@ -1007,6 +1007,8 @@
     "roleHint_viewer": "Read-only access to the studio.",
     "role_viewer": "Viewer",
     "you": "you",
+    "copyEmail": "Copy email",
+    "copied": "Copied",
     "removeMember": "Remove member",
     "removeConfirm": "Remove {name} from the team?",
     "ownerOnlyNote": "Only team owners can change roles or remove members.",

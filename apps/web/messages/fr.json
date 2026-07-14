@@ -1007,6 +1007,8 @@
     "roleHint_viewer": "Accès en lecture seule au studio.",
     "role_viewer": "Observateur",
     "you": "vous",
+    "copyEmail": "Copier l'e-mail",
+    "copied": "Copié",
     "removeMember": "Retirer le membre",
     "removeConfirm": "Retirer {name} de l'équipe ?",
     "ownerOnlyNote": "Seuls les propriétaires peuvent modifier les rôles ou retirer des membres.",
