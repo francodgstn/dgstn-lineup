@@ -32,7 +32,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { DEFAULT_KIOSK_CONFIG } from '@linyup/shared'
-import type { KioskConfig, KioskScheduleView } from '@linyup/shared'
+import type { KioskConfig, KioskScheduleView, KioskTheme } from '@linyup/shared'
 import { useKioskConfig, saveKioskConfig, uploadKioskMedia } from '@/plugins/kiosk/hooks'
 
 const MAX_IMAGE_MB = 10
@@ -255,6 +255,25 @@ export default function KioskSettingsPage() {
           {saveMutation.isPending ? t('saving') : t('save')}
         </Button>
       </div>
+
+      {/* Appearance */}
+      <section className="space-y-2 rounded-lg border p-4">
+        <h2 className="text-sm font-semibold">{t('appearanceTitle')}</h2>
+        <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+          <Label className="text-xs">{t('themeLabel')}</Label>
+          <Select
+            value={config.theme}
+            onValueChange={(v) => mutate((c) => ({ ...c, theme: v as KioskTheme }))}
+          >
+            <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">{t('themeAuto')}</SelectItem>
+              <SelectItem value="light">{t('themeLight')}</SelectItem>
+              <SelectItem value="dark">{t('themeDark')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </section>
 
       {/* Features */}
       <section className="space-y-2 rounded-lg border p-4">

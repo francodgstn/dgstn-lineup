@@ -47,6 +47,10 @@ const fmtDateTime = (d: Date) =>
     minute: '2-digit',
   })
 
+const fmtTime = (d: Date) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+
+const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+
 // bookSession requires firstname + lastname separately; split the single "Full
 // name" field on the first space (mirrors the common quick-signup convention).
 function splitName(fullName: string): { firstname: string; lastname: string } {
@@ -78,6 +82,25 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
       .filter((s) => s.end.toDate().getTime() > now)
       .filter((s) => !restrict || (s.activityId && walkInActivityIds!.includes(s.activityId)))
   }, [sessions, walkInActivityIds])
+
+  // Group eligible sessions per day for the horizontal day-chip picker.
+  const days = useMemo(() => {
+    const map = new Map<string, { key: string; date: Date; sessions: KioskSession[] }>()
+    for (const s of eligible) {
+      const d = s.start.toDate()
+      const key = dayKey(d)
+      let g = map.get(key)
+      if (!g) {
+        g = { key, date: new Date(d.getFullYear(), d.getMonth(), d.getDate()), sessions: [] }
+        map.set(key, g)
+      }
+      g.sessions.push(s)
+    }
+    return [...map.values()].sort((a, b) => a.date.getTime() - b.date.getTime())
+  }, [eligible])
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  // Fall back to the first (nearest) day when nothing is picked / the pick is stale.
+  const activeDay = days.find((d) => d.key === selectedDay) ?? days[0]
 
   function resetAll() {
     setStep('select')
@@ -165,25 +188,53 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
                 {t('noUpcoming')}
               </div>
             ) : (
-              <div className="space-y-3">
-                {eligible.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      setSelected(s)
-                      setStep('details')
-                    }}
-                    className="flex w-full items-center justify-between gap-4 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
-                  >
-                    <div>
-                      <p className="font-semibold">{s.activityName ?? 'Session'}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {fmtDateTime(s.start.toDate())}
-                      </p>
-                    </div>
-                  </button>
-                ))}
+              <div className="space-y-4">
+                {/* Day picker — horizontally scrollable chips */}
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                  {days.map((g) => {
+                    const isActive = g.key === activeDay?.key
+                    return (
+                      <button
+                        key={g.key}
+                        type="button"
+                        onClick={() => setSelectedDay(g.key)}
+                        className={`flex shrink-0 flex-col items-center rounded-xl border px-4 py-2 transition-colors ${
+                          isActive
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'bg-card text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        <span className="text-xs font-medium uppercase tracking-wide">
+                          {g.date.toLocaleDateString(undefined, { weekday: 'short' })}
+                        </span>
+                        <span className="text-lg font-bold tabular-nums">{g.date.getDate()}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Sessions for the selected day */}
+                <div className="space-y-3">
+                  {activeDay?.sessions.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setSelected(s)
+                        setStep('details')
+                      }}
+                      className="flex w-full items-center justify-between gap-4 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
+                    >
+                      <div>
+                        <p className="font-semibold">{s.activityName ?? 'Session'}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {fmtTime(s.start.toDate())}
+                          {s.location ? ` · ${s.location}` : ''}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

@@ -114,9 +114,12 @@ interface Props {
   accent?: string
   /** When set, each session block links here (e.g. the public booking page). */
   bookingHref?: string
+  /** When set, clicking a block calls this (e.g. the kiosk detail modal). Takes
+   *  precedence over `bookingHref`. */
+  onSelect?: (session: PlannerSession) => void
 }
 
-export function WeeklyCalendar({ sessions, accent, bookingHref }: Props) {
+export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect }: Props) {
   const { weekDays, startHour, endHour } = useMemo(() => {
     const start = new Date()
     start.setHours(0, 0, 0, 0)
@@ -231,6 +234,19 @@ export function WeeklyCalendar({ sessions, accent, bookingHref }: Props) {
                   </>
                 )
                 const cls = 'absolute z-[5] overflow-hidden rounded-md border-l-2 px-1.5 py-0.5 text-left'
+                if (onSelect) {
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => onSelect(s)}
+                      className={`${cls} transition-opacity hover:opacity-80`}
+                      style={style}
+                    >
+                      {inner}
+                    </button>
+                  )
+                }
                 return bookingHref ? (
                   <a key={s.id} href={bookingHref} className={`${cls} transition-opacity hover:opacity-80`} style={style}>
                     {inner}

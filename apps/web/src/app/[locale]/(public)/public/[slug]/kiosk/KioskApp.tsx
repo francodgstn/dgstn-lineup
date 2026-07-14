@@ -6,6 +6,7 @@
 // than re-querying `public_profile` themselves.
 import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { useTheme } from 'next-themes'
 import type { KioskFeatures, KioskStandbyConfig, KioskScheduleView } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { useKioskSessions } from './useKioskSessions'
@@ -27,6 +28,17 @@ export default function KioskApp({ slug }: Props) {
   const { teamId, team } = usePublicTeam()
   const kiosk = team.kiosk
   const isActive = team.active_public_surfaces?.kiosk === true
+
+  // Apply the studio's chosen kiosk theme (light/dark/auto). The kiosk owns the
+  // whole viewport, so driving next-themes for the page is fine — it themes every
+  // descendant, including the fixed WalkIn/Standby/lock overlays. 'auto' follows
+  // the device's system setting.
+  const { setTheme } = useTheme()
+  const kioskTheme = kiosk?.theme
+  useEffect(() => {
+    if (!kioskTheme) return
+    setTheme(kioskTheme === 'auto' ? 'system' : kioskTheme)
+  }, [kioskTheme, setTheme])
 
   // Gate: the kiosk plugin isn't installed/active for this team (or its public
   // config hasn't been denormalized yet) — no lock screen, no data reads.

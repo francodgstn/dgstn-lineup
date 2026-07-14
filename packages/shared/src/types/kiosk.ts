@@ -13,6 +13,9 @@
 // (Formerly 'week', a chip grid — replaced by the calendar.)
 export type KioskScheduleView = 'calendar' | 'list'
 
+// Kiosk appearance: force light/dark, or follow the device's system setting.
+export type KioskTheme = 'light' | 'dark' | 'auto'
+
 export interface KioskMediaItem {
   url: string
   type: 'image' | 'video'
@@ -50,6 +53,7 @@ export interface KioskLockConfig {
 /** PRIVATE config — installed_plugins/kiosk.config (team-member read/owner write). */
 export interface KioskConfig {
   title?: string
+  theme: KioskTheme
   features: KioskFeatures
   scheduleView: KioskScheduleView
   /** Optional: limit walk-in booking to these activity ids (empty ⇒ all). */
@@ -67,6 +71,7 @@ export interface KioskPublicLock {
 /** PUBLIC subset — teams/{teamId}/public_profile.kiosk. No PIN. */
 export interface KioskPublicConfig {
   title?: string
+  theme: KioskTheme
   features: KioskFeatures
   scheduleView: KioskScheduleView
   walkInActivityIds?: string[]
@@ -76,6 +81,7 @@ export interface KioskPublicConfig {
 
 /** Config a freshly-installed kiosk starts from. */
 export const DEFAULT_KIOSK_CONFIG: KioskConfig = {
+  theme: 'auto',
   features: { schedule: true, nowNext: true, checkinQr: true, walkIn: true, standby: false },
   scheduleView: 'calendar',
   standby: { idleSeconds: 90, media: [] },
@@ -107,6 +113,7 @@ export function normalizeKioskConfig(config: Partial<KioskConfig> | undefined | 
  *  is on (it isn't in the seed scripts). */
 export function toKioskPublicConfig(c: KioskConfig): KioskPublicConfig {
   const pub: KioskPublicConfig = {
+    theme: c.theme,
     features: c.features,
     scheduleView: c.scheduleView,
     standby: c.standby,
