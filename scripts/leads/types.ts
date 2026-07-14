@@ -233,7 +233,15 @@ export interface LeadCourseDef {
   key: string
   title: string
   summary: string
-  access: 'free' | 'registered'
+  /** Course access tier (mirrors Course.accessRule.type):
+   *  free = anyone · registered = any signed-in contact · subscription = only
+   *  holders of `accessSubKeys` · purchase = sold one-off in the shop for
+   *  `priceAmount` (and ALSO included free for `accessSubKeys` holders). */
+  access: 'free' | 'registered' | 'subscription' | 'purchase'
+  /** LeadSubscriptionDef.keys that unlock ('subscription') or include ('purchase') it. */
+  accessSubKeys?: string[]
+  /** One-off shop price, major units — required for 'purchase'. */
+  priceAmount?: number
   /** Assets-folder base name for the cover image. */
   coverAsset?: string
   modules: { title: string; lessons: LeadCourseLessonDef[] }[]
@@ -300,9 +308,12 @@ export interface LeadProfile {
   /** How many FUTURE weeks of the weekly grid to materialize as bookable
    *  sessions (default 3). Raise it so a lead trying the system for a while has
    *  a schedule that lasts; the public booking window is derived from it. Keep
-   *  it under ~11 weeks unless the grid is small (the booking query caps the
-   *  number of upcoming sessions it lists). */
+   *  weeks × grid-slots-per-week under ~200 (the booking query fetches the
+   *  first 200 upcoming sessions). */
   scheduleWeeksAhead?: number
+  /** How many weeks of PAST sessions to materialize (default 4) — history for
+   *  reports/attendance. */
+  scheduleWeeksBack?: number
   socialLinks: { platform: string; url: string }[]
   /** Main venue, used on sessions + the site contact section. */
   location: { label: string; address: string; mapsUrl?: string }

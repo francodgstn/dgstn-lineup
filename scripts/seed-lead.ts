@@ -141,7 +141,20 @@ const db = admin.firestore()
 db.settings({ ignoreUndefinedProperties: true })
 
 const STUDENT_SESSION_MS = 30 * 24 * 60 * 60 * 1000 // matches generateAuthToken
-const DEMO_PASSWORD = 'linyup123'
+
+// Lead tenants go on the PUBLIC sandbox with real-lead owner logins, so no
+// shared demo password: generate a strong random one per seed run (printed in
+// the summary — note it before the terminal scrolls away). Set LEAD_PASSWORD to
+// pin a specific value (e.g. re-running without rotating the lead's password).
+// Unambiguous base58-ish alphabet — no 0/O/1/l/I.
+function generateLeadPassword(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+  const bytes = crypto.randomBytes(16)
+  let out = ''
+  for (const b of bytes) out += alphabet[b % alphabet.length]
+  return out
+}
+const DEMO_PASSWORD = process.env.LEAD_PASSWORD || generateLeadPassword()
 
 // ── generic helpers (mirroring seed-sandbox.ts) ─────────────────────────────
 
@@ -519,6 +532,7 @@ async function seedLeadTenant(profile: LeadProfile) {
   // path is recurring `session_series` + the generateRecurringSessions scheduled
   // function, which would roll the window forward on its own.
   const scheduleWeeksAhead = Math.max(1, profile.scheduleWeeksAhead ?? 3)
+  const scheduleWeeksBack = Math.max(0, profile.scheduleWeeksBack ?? 4)
   const bookingWindowMonths = Math.max(2, Math.ceil(scheduleWeeksAhead / 4))
   const staffByKey = new Map(profile.staff.map((s) => [s.key, s]))
   const staffName = (key: string) => {
@@ -1162,8 +1176,9 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
   const sessionDefs: SessionDef[] = []
   const nowDate = now()
-  // 4 weeks of history (for reports/attendance) + `scheduleWeeksAhead` future weeks.
-  for (let week = -4; week <= scheduleWeeksAhead; week++) {
+  // `scheduleWeeksBack` weeks of history (for reports/attendance) +
+  // `scheduleWeeksAhead` future weeks.
+  for (let week = -scheduleWeeksBack; week <= scheduleWeeksAhead; week++) {
     const monday = mondayOfWeeksAgo(-week)
     for (const slot of profile.weeklyGrid) {
       const date = new Date(monday)
@@ -2203,6 +2218,17 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
         lessonCount++
       }
     }
+    // Course access rule (Course.accessRule): 'subscription' unlocks for holders
+    // of the mapped types; 'purchase' sells one-off in the shop for priceAmount
+    // and is ALSO included free for accessSubKeys holders (both optional axes).
+    // (Same id scheme as seedLeadTenant's subIdOf — this runs in a separate fn.)
+    const courseSubIds = (c.accessSubKeys ?? []).map((key) => `${teamId}-sub-${key}`)
+    const accessRule = {
+      type: c.access,
+      ...(courseSubIds.length ? { subscriptionTypeIds: courseSubIds } : {}),
+      ...(c.access === 'purchase' && c.priceAmount != null ? { priceAmount: c.priceAmount } : {}),
+    }
+    const courseOrder = profile.courses.indexOf(c)
     await courseRef.set({
       scope: 'team',
       teamId,
@@ -2210,17 +2236,17 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       slug: courseId,
       summary: c.summary,
       status: 'published',
-      accessRule: { type: c.access },
+      accessRule,
       coverImageUrl,
       moduleCount,
       lessonCount,
-      order: 0,
+      order: courseOrder,
       created_at: ts(daysFromNow(-90)),
       updated_at: ts(daysFromNow(-90)),
       createdBy: uid,
       archived_at: null,
     })
-    // Mirror what syncCoursePublicProfile writes so /space lists the course
+    // Mirror what syncCoursePublicProfile writes so /space + shop list the course
     // even when the trigger isn't deployed on the sandbox.
     await courseRef.collection('public_profile').doc(courseId).set({
       type: 'course',
@@ -2230,10 +2256,12 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       summary: c.summary,
       coverImageUrl,
       accessType: c.access,
-      subscriptionTypeIds: [],
+      subscriptionTypeIds: courseSubIds,
+      priceAmount: c.access === 'purchase' && c.priceAmount != null ? c.priceAmount : null,
+      hideFromShop: false,
       moduleCount,
       lessonCount,
-      order: 0,
+      order: courseOrder,
     })
   }
 
@@ -2445,6 +2473,9 @@ async function main() {
     `\n✅ Lead tenant seeded — ${profile.contacts.length} contacts, ${sessionCount} sessions\n`
   )
   console.log('   Logins (password: ' + DEMO_PASSWORD + '):')
+  if (!process.env.LEAD_PASSWORD) {
+    console.log('   ⚠ Randomly generated — SAVE IT NOW; every reseed rotates it (pin with LEAD_PASSWORD env).')
+  }
   for (const s of profile.staff) {
     console.log(
       `     ${s.role.padEnd(8)} ${`${s.firstname} ${s.lastname}`.trim().padEnd(20)} ${s.email}`
