@@ -19,9 +19,11 @@ import {
   Wallet,
   ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   ChevronDown,
   Lock,
   Puzzle,
+  Monitor,
   Building2,
   Gift,
   GraduationCap,
@@ -75,6 +77,7 @@ const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
   Globe,
   FileText,
   ClipboardList,
+  Monitor,
 }
 
 // ─── nav config ───────────────────────────────────────────────────────────────
@@ -831,7 +834,7 @@ function ShortcutsNav({
   if (entries.length === 0) {
     if (collapsed) return null
     return (
-      <div className={SHORTCUTS_PANEL}>
+      <div data-tour="nav-shortcuts" className={SHORTCUTS_PANEL}>
         <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>
         <p className="px-3 py-1 text-xs leading-relaxed text-muted-foreground/60">
           {t('navShortcutsEmpty')}
@@ -866,7 +869,7 @@ function ShortcutsNav({
   const dropLine = <div className="mx-2 my-0.5 h-0.5 rounded bg-primary/60" />
 
   return (
-    <div className={collapsed ? 'mt-3 pt-3' : SHORTCUTS_PANEL}>
+    <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : SHORTCUTS_PANEL}>
       {!collapsed && <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>}
       <div className="space-y-0.5">
         {shown.map((entry, idx) => (
@@ -976,7 +979,7 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
   }
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} data-tour="nav-search" className="relative">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={query}
@@ -1335,6 +1338,30 @@ function SidebarContent({
                 </div>
               )
             })}
+
+            {/* Subtle discovery link to the plugin catalogue. Most features are
+                off by default (kept lightweight on purpose, even on Studio), so
+                nudge users to explore without bloating the nav. */}
+            {collapsed ? (
+              <Link
+                href={'/settings/plugins' as Route}
+                onClick={onLinkClick}
+                title={t('explorePlugins')}
+                className="flex items-center justify-center rounded-lg px-2 py-2 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Puzzle className="h-4 w-4 shrink-0" />
+              </Link>
+            ) : (
+              <Link
+                href={'/settings/plugins' as Route}
+                onClick={onLinkClick}
+                className="group/exp mt-1 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground/60 transition-colors hover:text-primary"
+              >
+                <Puzzle className="h-3.5 w-3.5 shrink-0" />
+                <span>{t('explorePlugins')}</span>
+                <ChevronsRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover/exp:translate-x-0.5" />
+              </Link>
+            )}
           </div>
         </div>
 

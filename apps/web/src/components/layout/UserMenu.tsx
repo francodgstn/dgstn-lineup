@@ -78,6 +78,7 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
       <div className={`flex gap-1 ${collapsed ? 'flex-col items-center' : 'items-center'}`}>
         <DropdownMenu>
           <DropdownMenuTrigger
+            data-tour="theme-lang"
             aria-label={t('account')}
             title={collapsed ? (user?.email ?? t('account')) : undefined}
             className={`flex items-center gap-2.5 rounded-lg hover:bg-muted transition-colors text-left min-w-0 ${

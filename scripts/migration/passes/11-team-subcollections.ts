@@ -136,6 +136,30 @@ export async function pass11TeamSubcollections(
     }
     console.log(`    ${teamId}: seeded ${CANONICAL_SUBSCRIPTION_TYPES.length} canonical subscription types`)
 
+    // ── Init a shop by default ────────────────────────────────────────────────
+    // Migrated studios land on the studio plan, where the storefront is a core
+    // surface. Install the Products plugin and flag the shop surface live so the
+    // public shop works out of the box. syncTeamPublicProfile also derives shop
+    // from installed_plugins, but setting it here means it's live even before that
+    // recomputes. Merge (not set) on public_profile so the copied HMD profile
+    // fields are preserved; idempotent on re-run.
+    const productsRef = tgt
+      .collection('teams').doc(teamId)
+      .collection('installed_plugins').doc('products')
+    bw.set(productsRef, {
+      pluginId: 'products',
+      teamId,
+      status: 'active',
+      config: {},
+      installedBy: 'migration',
+      installedAt: FieldValue.serverTimestamp(),
+    })
+    const publicProfileRef = tgt
+      .collection('teams').doc(teamId)
+      .collection('public_profile').doc(teamId)
+    bw.merge(publicProfileRef, { active_public_surfaces: { shop: true } })
+    console.log(`    ${teamId}: initialized shop (products plugin + shop surface)`)
+
     await bw.done()
   }
 }
