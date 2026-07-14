@@ -4351,6 +4351,8 @@
   },
   "HowTo": {
     "title": "How-to",
+    "comingSoon": "Coming soon",
+    "comingSoonBody": "Step-by-step guides and setup walkthroughs are on the way.",
     "subtitle": "How Linyup fits together, and how to get your studio up and running.",
     "fitTitle": "How Linyup fits together",
     "fitIntro": "A few core building blocks power everything in Linyup. Once you see how they connect, the rest falls into place.",

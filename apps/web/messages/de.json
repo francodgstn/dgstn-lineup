@@ -4351,6 +4351,8 @@
   },
   "HowTo": {
     "title": "Anleitungen",
+    "comingSoon": "Demnächst verfügbar",
+    "comingSoonBody": "Schritt-für-Schritt-Anleitungen und Einrichtungshilfen sind in Arbeit.",
     "subtitle": "Wie Linyup zusammenspielt – und wie du dein Studio startklar machst.",
     "fitTitle": "Wie Linyup zusammenspielt",
     "fitIntro": "Ein paar zentrale Bausteine treiben alles in Linyup an. Sobald du siehst, wie sie zusammenhängen, ergibt sich der Rest von selbst.",

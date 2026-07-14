@@ -4351,6 +4351,8 @@
   },
   "HowTo": {
     "title": "Guides",
+    "comingSoon": "Bientôt disponible",
+    "comingSoonBody": "Des guides pas à pas et des tutoriels de configuration arrivent bientôt.",
     "subtitle": "Comment Linyup s'articule, et comment mettre votre studio en route.",
     "fitTitle": "Comment Linyup s'articule",
     "fitIntro": "Quelques briques essentielles font tourner tout Linyup. Une fois que vous voyez comment elles s’assemblent, le reste coule de source.",

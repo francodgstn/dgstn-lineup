@@ -4351,6 +4351,8 @@
   },
   "HowTo": {
     "title": "Guide",
+    "comingSoon": "Presto disponibile",
+    "comingSoonBody": "Guide passo passo e tutorial di configurazione sono in arrivo.",
     "subtitle": "Come si incastra Linyup e come mettere in moto il tuo studio.",
     "fitTitle": "Come si incastra Linyup",
     "fitIntro": "Pochi elementi fondamentali muovono tutto in Linyup. Una volta capito come si collegano, il resto viene da sé.",
