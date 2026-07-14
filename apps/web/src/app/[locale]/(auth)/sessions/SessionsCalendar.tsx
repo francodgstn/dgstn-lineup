@@ -565,7 +565,7 @@ export default function SessionsCalendar({
     <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
       {/* ── Calendar pane (right on desktop) — hidden when the week is expanded ── */}
       {!fullWeek && (
-      <div className="lg:order-2 lg:w-72 shrink-0">
+      <div className="lg:order-2 lg:w-72 shrink-0 lg:flex lg:flex-col lg:min-h-0">
         {/* Month navigation */}
         <div className="flex items-center justify-between mb-3 px-0.5">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={prevMonth}>
@@ -616,8 +616,11 @@ export default function SessionsCalendar({
           )
         })}
 
-        {/* Selected-day detail — the day agenda, anchored under the calendar */}
-        <div className="mt-6 pt-4 border-t">
+        {/* Selected-day detail — the day agenda, anchored under the calendar.
+            On desktop it fills the space below the mini-calendar (the column is
+            stretched to the week-grid height by the flex row) and scrolls, so a
+            busy day never grows the page. */}
+        <div className="mt-6 pt-4 border-t lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-3 select-none capitalize">
             {selected.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
@@ -627,7 +630,7 @@ export default function SessionsCalendar({
               <p className="text-sm">{t('emptyDay')}</p>
             </div>
           ) : (
-            <div className="-mx-2 space-y-0.5">
+            <div className="-mx-2 space-y-0.5 max-h-[28rem] overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1">
               {dayEvents.map((e) => (
                 <EventCard key={e.id} event={e} onOpen={openEventPeek} />
               ))}

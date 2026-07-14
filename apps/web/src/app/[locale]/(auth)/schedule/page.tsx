@@ -844,7 +844,9 @@ export default function CalendarPage() {
   // leaving only that coach's teaching schedule. Applies to both calendar + list.
   const coachId = coachFilter === 'mine' ? (user?.uid ?? null) : coachFilter === 'all' ? null : coachFilter
   const filteredSessions = (sessionsQ.data ?? []).filter(
-    (s) => !coachId || s.instructorId === coachId
+    // Group classes store the coach in instructorId; coaching (private-lesson)
+    // sessions store it in coachId — match either so both surface in the filter.
+    (s) => !coachId || s.instructorId === coachId || s.coachId === coachId
   )
   const filteredEvents = coachFilter === 'all' ? (eventsQ.data ?? []) : []
 
