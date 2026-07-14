@@ -1038,6 +1038,11 @@ async function seedLeadTenant(profile: LeadProfile) {
     })
 
   // ── coaching: one availability template + materialized slots per coach ────
+  // Adult students eligible to appear as past private-lesson attendees.
+  const coachingAttendeeIdxs = profile.contacts
+    .map((c, i) => ({ c, i }))
+    .filter((x) => x.c.type === 'student' && !x.c.kid)
+    .map((x) => x.i)
   for (let tplIdx = 0; tplIdx < profile.coaching.templates.length; tplIdx++) {
     const tpl = profile.coaching.templates[tplIdx]
     const coachUid = uidOf(tpl.staffKey)
@@ -1078,10 +1083,11 @@ async function seedLeadTenant(profile: LeadProfile) {
     const [tplHH, tplMM] = tpl.time.split(':').map(Number)
     const coachingDayCap = scheduleWeeksAhead * 7 + 7
     const slotDates: Date[] = []
-    for (let dayOffset = 1; slotDates.length < tpl.slotCount && dayOffset <= coachingDayCap; dayOffset++) {
+    for (let dayOffset = 0; slotDates.length < tpl.slotCount && dayOffset <= coachingDayCap; dayOffset++) {
       const d = daysFromNow(dayOffset)
       if (!tpl.daysOfWeek.includes(d.getDay())) continue
       d.setHours(tplHH, tplMM ?? 0, 0, 0)
+      if (d.getTime() <= now().getTime()) continue // today counts only while still upcoming
       slotDates.push(d)
     }
     for (let i = 0; i < slotDates.length; i++) {
@@ -1138,6 +1144,72 @@ async function seedLeadTenant(profile: LeadProfile) {
             joinedAt: ts(daysFromNow(-2)),
             booking_token: `tok-coaching-${sid}`,
             is_new_contact: false,
+          })
+      }
+    }
+
+    // History: past occurrences over the same window as the group grid, so the
+    // coaching calendar looks lived-in and reports have attendance. Most were
+    // booked (1:1, attended); the rest went unfilled.
+    const pastDates: Date[] = []
+    for (let dayOffset = -scheduleWeeksBack * 7; dayOffset <= 0; dayOffset++) {
+      const d = daysFromNow(dayOffset)
+      if (!tpl.daysOfWeek.includes(d.getDay())) continue
+      d.setHours(tplHH, tplMM ?? 0, 0, 0)
+      if (d.getTime() < now().getTime()) pastDates.push(d)
+    }
+    for (let p = 0; p < pastDates.length; p++) {
+      const base = pastDates[p]
+      const end = minutesOffset(base, tpl.durationMin)
+      const sid = `${teamId}-coaching-${tpl.staffKey}-${tplIdx}-past-${p}`
+      const attendeeIdx = coachingAttendeeIdxs.length
+        ? coachingAttendeeIdxs[Math.floor(seededRand(sid + 'who') * coachingAttendeeIdxs.length)]
+        : -1
+      const attended = attendeeIdx >= 0 && seededRand(sid) < 0.7
+      // No public_profile mirror — like past grid sessions, history is
+      // admin-only (public surfaces list upcoming bookable slots).
+      await db
+        .collection('sessions')
+        .doc(sid)
+        .set({
+          teamId,
+          activityId: coachingActId,
+          activityType: 'coaching',
+          activityName: profile.coaching.activityName,
+          coachId: coachUid,
+          coachName,
+          templateId,
+          start: ts(base),
+          end: ts(end),
+          duration_minutes: tpl.durationMin,
+          max_participants: 1,
+          bookings_count: attended ? 1 : 0,
+          participants_count: attended ? 1 : 0,
+          location: tplPlace.label,
+          locationAddress: tplPlace.address,
+          ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
+          onlineUrl: null,
+          isFreeTrial: tpl.isFreeTrial,
+          status: attended ? 'full' : 'open',
+          allowBooking: false,
+          created_at: ts(daysFromNow(-scheduleWeeksBack * 7 - 7)),
+        })
+      if (attended) {
+        const cs = profile.contacts[attendeeIdx]
+        const contactId = `${teamId}-contact-${attendeeIdx.toString().padStart(3, '0')}`
+        await db
+          .collection('sessions')
+          .doc(sid)
+          .collection('participants')
+          .doc(contactId)
+          .set({
+            contactId,
+            session: sid,
+            firstname: cs.firstname,
+            lastname: cs.lastname,
+            fullname: `${cs.lastname} ${cs.firstname}`,
+            joinedAt: ts(base),
+            checkedInBy: 'seed',
           })
       }
     }
