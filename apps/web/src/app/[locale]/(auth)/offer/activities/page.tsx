@@ -386,44 +386,6 @@ function ActivityDialog({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="act-desc">{t('fieldDescription')}</Label>
-            <textarea
-              id="act-desc"
-              {...register('description')}
-              rows={2}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
-            />
-          </div>
-
-          {/* Auto-confirm — a field, not implied by type. Shown for classes and
-              appointments alike so either kind can require a review step. */}
-          <div className="space-y-1.5 rounded-lg border p-3">
-            <Controller
-              name="autoConfirm"
-              control={control}
-              render={({ field }) => (
-                <label className="flex items-start gap-2 cursor-pointer text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 accent-primary"
-                    checked={field.value}
-                    onChange={(e) => {
-                      setAutoConfirmTouched(true)
-                      field.onChange(e.target.checked)
-                    }}
-                  />
-                  <span>
-                    <span className="font-medium">{t('fieldAutoConfirm')}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {field.value ? t('autoConfirmHintOn') : t('autoConfirmHintOff')}
-                    </span>
-                  </span>
-                </label>
-              )}
-            />
-          </div>
-
           {/* Appointment-only: bookable session lengths + booking cap, side by
               side on wider screens (the chips need room; the cap is one input) */}
           {type === 'appointment' && (
@@ -467,76 +429,119 @@ function ActivityDialog({
             </div>
           )}
 
-          {/* Presentation — cover image beside level + colour on wide screens */}
+          {/* Presentation + description, two columns on wide screens.
+              Left: cover photo, level + colour, auto-confirm. Right: description,
+              stretched to match the left stack's height. On mobile the description
+              comes first (lg:order-*) — it's the more primary field. */}
           <div className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>{t('fieldImage')}</Label>
-            {imagePreview ? (
-              <div className="relative w-full h-32 rounded-lg overflow-hidden border bg-muted">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="" className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={clearImage}
-                  className="absolute top-1.5 right-1.5 rounded-full bg-background/80 p-1 hover:bg-background transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full h-20 rounded-lg border-2 border-dashed border-input hover:border-primary/50 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ImageIcon className="h-5 w-5" />
-                <span className="text-xs">Click to upload</span>
-              </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="hidden"
-            />
-          </div>
+            <div className="flex flex-col space-y-1.5 lg:order-2">
+              <Label htmlFor="act-desc">{t('fieldDescription')}</Label>
+              <textarea
+                id="act-desc"
+                {...register('description')}
+                rows={4}
+                className="w-full flex-1 min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+              />
+            </div>
 
-          <div className="grid grid-cols-2 gap-3 content-start">
-            <div className="space-y-1.5">
-              <Label htmlFor="act-level">{t('fieldLevel')}</Label>
-              <Controller
-                name="level"
-                control={control}
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <span className="flex flex-1 text-left text-sm truncate">
-                        {field.value
-                          ? t(`level_${field.value}` as const)
-                          : <span className="text-muted-foreground">—</span>}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LEVELS.map((l) => (
-                        <SelectItem key={l} value={l}>{t(`level_${l}` as const)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <div className="space-y-4 lg:order-1">
+              <div className="space-y-1.5">
+                <Label>{t('fieldImage')}</Label>
+                {imagePreview ? (
+                  <div className="relative w-full h-32 rounded-lg overflow-hidden border bg-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imagePreview} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      className="absolute top-1.5 right-1.5 rounded-full bg-background/80 p-1 hover:bg-background transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-20 rounded-lg border-2 border-dashed border-input hover:border-primary/50 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ImageIcon className="h-5 w-5" />
+                    <span className="text-xs">Click to upload</span>
+                  </button>
                 )}
-              />
-            </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="act-color">{t('fieldColor')}</Label>
-              <input
-                id="act-color"
-                type="color"
-                {...register('color')}
-                className="h-9 w-full rounded-md border border-input cursor-pointer bg-background p-1"
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="act-level">{t('fieldLevel')}</Label>
+                  <Controller
+                    name="level"
+                    control={control}
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className="w-full">
+                          <span className="flex flex-1 text-left text-sm truncate">
+                            {field.value
+                              ? t(`level_${field.value}` as const)
+                              : <span className="text-muted-foreground">—</span>}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LEVELS.map((l) => (
+                            <SelectItem key={l} value={l}>{t(`level_${l}` as const)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="act-color">{t('fieldColor')}</Label>
+                  <input
+                    id="act-color"
+                    type="color"
+                    {...register('color')}
+                    className="h-9 w-full rounded-md border border-input cursor-pointer bg-background p-1"
+                  />
+                </div>
+              </div>
+
+              {/* Auto-confirm — a field, not implied by type. Shown for classes and
+                  appointments alike so either kind can require a review step. */}
+              <div className="rounded-lg border p-3">
+                <Controller
+                  name="autoConfirm"
+                  control={control}
+                  render={({ field }) => (
+                    <label className="flex items-start gap-2 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 accent-primary"
+                        checked={field.value}
+                        onChange={(e) => {
+                          setAutoConfirmTouched(true)
+                          field.onChange(e.target.checked)
+                        }}
+                      />
+                      <span>
+                        <span className="font-medium">{t('fieldAutoConfirm')}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {field.value ? t('autoConfirmHintOn') : t('autoConfirmHintOff')}
+                        </span>
+                      </span>
+                    </label>
+                  )}
+                />
+              </div>
             </div>
-          </div>
           </div>
 
           <div className="space-y-2">
