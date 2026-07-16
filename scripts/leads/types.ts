@@ -152,27 +152,52 @@ export interface LeadGridSlot {
   upcomingOnly?: boolean
 }
 
-export interface LeadAppointmentTemplate {
+/**
+ * A provider's published free time — the WHEN, and only the when. The WHAT (name,
+ * durations, capacity, access rule) lives on the linked appointment activity, i.e.
+ * `LeadProfile.appointments`.
+ *
+ * NOTHING is pre-generated in either mode: an appointment session exists only once
+ * a client books one. `booked` below is demo dressing, not generated availability.
+ */
+export interface LeadAvailabilityDef {
+  /** Whose time this publishes (LeadStaffDef.key). */
   staffKey: string
-  durationMin: number
-  isFreeTrial: boolean
-  /** Recurrence days (JS getDay convention) + 'HH:MM' start, in the team timezone. */
+  /** The SCHEDULE's admin-facing name — e.g. 'Monday evenings'. NOT the offering
+   *  name (that's `appointments.activityName`). */
+  title: string
+  /** Recurrence days (JS getDay convention: 0=Sun … 6=Sat), in the team timezone. */
   daysOfWeek: number[]
-  time: string
-  /** How many upcoming occurrences of daysOfWeek to materialize as bookable slots. */
-  slotCount: number
-  /** Indices (0-based, chronological) of slots seeded as already booked/full. */
-  bookedSlots: number[]
   /** Where it happens (LeadPlaceDef.key); falls back to LeadProfile.location. */
   placeKey?: string
-  // ── Open-window mode (Calendly-style). When 'open_window', NO slots are
-  // pre-generated (durationMin/time/slotCount/bookedSlots are placeholders);
-  // the coach advertises a daily range clients self-book within. ──
-  mode?: 'fixed_slots' | 'open_window'
+  /** 'range' = a daily window clients self-book a start within, stepped by
+   *  `granularityMinutes` (Calendly-style); 'times' = an explicit list of starts. */
+  mode: 'range' | 'times'
+  /** 'range' mode: the daily bookable range ('HH:MM', team timezone). */
   window?: { start: string; end: string }
-  durationsMinutes?: number[]
+  /** 'range' mode: step between selectable start times (minutes). Default 30. */
   granularityMinutes?: number
+  /** 'times' mode: explicit 'HH:MM' start times. */
+  times?: string[]
+  /** Gap enforced before/after each appointment (minutes). Default 0. */
   bufferMinutes?: number
+  /** Demo realism only: already-booked appointments to materialise against this
+   *  availability, shaped exactly as the `bookAppointment` callable writes them. */
+  booked?: LeadBookedAppointmentDef[]
+}
+
+/** One already-booked appointment (see LeadAvailabilityDef.booked). */
+export interface LeadBookedAppointmentDef {
+  /** 'HH:MM' start — must sit on the availability's grid / times list. */
+  time: string
+  /** Session length; must be one of `appointments.durationsMinutes`. */
+  durationMinutes: number
+  /** Which occurrence of the availability's weekdays to land on (1 = the next one).
+   *  Negative walks backwards into the PAST — history for the calendar + reports. */
+  occurrence: number
+  /** Index into LeadProfile.contacts of the client who booked. Defaults to the
+   *  first adult student. */
+  contactIdx?: number
 }
 
 export interface LeadContactGroupDef {
@@ -385,11 +410,18 @@ export interface LeadProfile {
   gamification: Record<string, unknown>
 
   activities: LeadActivityDef[]
+  /** The 1:1 offering (ONE `type: 'appointment'` activity) + the availability that
+   *  publishes when it can be booked. */
   appointments: {
     activityName: string
     slug: string
     description: string
-    templates: LeadAppointmentTemplate[]
+    /** Assets-folder base name for the cover image (as LeadActivityDef.imageAsset). */
+    imageAsset?: string
+    /** The lengths this offering can be booked at (Activity.durationsMinutes).
+     *  Duration belongs to the offering, never to the availability schedule. */
+    durationsMinutes: number[]
+    availability: LeadAvailabilityDef[]
   }
   subscriptions: LeadSubscriptionDef[]
   weeklyGrid: LeadGridSlot[]

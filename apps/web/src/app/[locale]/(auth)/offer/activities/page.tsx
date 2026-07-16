@@ -31,6 +31,7 @@ import { useActivities } from '@/hooks/useActivities'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SortableList, SortableItem, type SortableRenderProps } from '@/components/ui/sortable'
+import { formatDuration } from '@/components/sessions/SessionFormDialog'
 import { Plus, Pencil, Archive, ImageIcon, X, GripVertical } from 'lucide-react'
 
 // ─── archive confirm dialog ───────────────────────────────────────────────────
@@ -78,6 +79,8 @@ function slugify(name: string): string {
 
 const LEVELS = ['all', 'beginners', 'intermediate', 'advanced'] as const
 const ACTIVITY_TYPES: ActivityType[] = ['class', 'appointment']
+// APPOINTMENT-ONLY: the bookable session lengths an appointment activity offers.
+const APPOINTMENT_DURATION_PRESETS = [15, 30, 45, 60, 90, 120]
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
@@ -95,10 +98,18 @@ const activitySchema = z.object({
   // Drop-in / pay-per-class: an uncovered contact may pay this to book a single session.
   dropInEnabled: z.boolean(),
   dropInPrice: z.string(),
-}).refine(
-  (d) => !d.dropInEnabled || (d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5),
-  { message: 'Enter a drop-in price of at least 0.50', path: ['dropInPrice'] }
-)
+  // APPOINTMENT-ONLY: the session lengths clients choose from, and the booking cap
+  // for a materialised appointment session (1 = true 1:1; >1 = small-group).
+  durationsMinutes: z.array(z.number()),
+  max_participants: z.number().int().min(1).max(50),
+}).superRefine((d, ctx) => {
+  if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5)) {
+    ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: 'Enter a drop-in price of at least 0.50' })
+  }
+  if (d.type === 'appointment' && d.durationsMinutes.length === 0) {
+    ctx.addIssue({ code: 'custom', path: ['durationsMinutes'], message: 'Pick at least one session length' })
+  }
+})
 
 type ActivityFormData = z.infer<typeof activitySchema>
 
@@ -154,16 +165,27 @@ function ActivityDialog({
           subscriptionTypeIds: initialRule.subscriptionTypeIds ?? [],
           dropInEnabled: editing.dropIn?.enabled ?? false,
           dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
+          durationsMinutes: editing.durationsMinutes ?? [],
+          max_participants: editing.max_participants ?? 1,
         }
       : {
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
           type: 'class' as ActivityType, level: 'all',
           color: '#6366f1', accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '',
+          durationsMinutes: [], max_participants: 1,
         },
   })
+  const type = watch('type')
   const accessTier = watch('accessTier')
   const dropInEnabled = watch('dropInEnabled')
+  const durationsMinutes = watch('durationsMinutes') || []
+
+  function toggleDuration(d: number) {
+    setValue('durationsMinutes', durationsMinutes.includes(d)
+      ? durationsMinutes.filter((x) => x !== d)
+      : [...durationsMinutes, d].sort((a, b) => a - b))
+  }
 
   // Inline quick-create: "create or link a subscription to this activity" without
   // leaving the form. Writes a minimal type (pricing is configured later in the
@@ -240,6 +262,12 @@ function ActivityDialog({
           enabled: data.dropInEnabled,
           ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
         },
+        ...(data.type === 'appointment'
+          ? {
+              durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b),
+              max_participants: data.max_participants,
+            }
+          : { durationsMinutes: null, max_participants: null }),
       }
       if (imageFile) {
         const url = await uploadImage(editing.id)
@@ -268,6 +296,12 @@ function ActivityDialog({
           enabled: data.dropInEnabled,
           ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
         },
+        ...(data.type === 'appointment'
+          ? {
+              durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b),
+              max_participants: data.max_participants,
+            }
+          : {}),
         slug: slugify(data.name),
         teamId,
         createdBy: userId,
@@ -360,6 +394,48 @@ function ActivityDialog({
               </p>
             )}
           </div>
+
+          {/* Appointment-only: bookable session lengths + booking cap */}
+          {type === 'appointment' && (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="space-y-1.5">
+                <Label>{t('fieldDurationsMinutes')}</Label>
+                <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {APPOINTMENT_DURATION_PRESETS.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => toggleDuration(d)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                        durationsMinutes.includes(d)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-muted-foreground border-border hover:border-foreground'
+                      }`}
+                    >
+                      {formatDuration(d)}
+                    </button>
+                  ))}
+                </div>
+                {errors.durationsMinutes && (
+                  <p className="text-destructive text-xs">{errors.durationsMinutes.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="act-max-participants">{t('fieldMaxParticipants')}</Label>
+                <Input
+                  id="act-max-participants"
+                  type="number"
+                  min={1}
+                  max={50}
+                  className="w-24"
+                  {...register('max_participants', { valueAsNumber: true })}
+                />
+                <p className="text-xs text-muted-foreground">{t('maxParticipantsHint')}</p>
+              </div>
+            </div>
+          )}
 
           {/* Cover image */}
           <div className="space-y-1.5">

@@ -4,6 +4,21 @@ import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfi
 import { detectPerformanceProfile } from '../utils/performanceProfile';
 import { httpsCallable } from 'firebase/functions';
 
+/**
+ * Can the app BROWSE and BOOK appointment slots?
+ *
+ * TODO(P4 follow-up): rebuild this on the `listAvailability` callable, then flip
+ * the flag back on. Appointments became availability-only: a provider publishes
+ * free time and nothing is materialised until a client books, so there are no
+ * "open slots" for the app to list and the old slot-id booking path has no slot to
+ * point at. The browse/book affordances are gated off rather than deleted — the
+ * replacement is a day → activity → time picker calling `bookAppointment` with
+ * { teamId, providerId, activityId, startMs, durationMinutes, ... }. Viewing the
+ * member's OWN booked appointments (and cancelling them) is unaffected.
+ * The app is unlaunched, so gating this costs nobody a live flow.
+ */
+export const APPOINTMENT_BOOKING_ENABLED: boolean = false;
+
 const DEFAULT_PERFORMANCE_INDICATORS: PerformanceIndicator[] = [
   { key: 'consistency', label: 'Consistency' },
   { key: 'effort', label: 'Effort' },
@@ -1044,6 +1059,16 @@ export const FirestoreService = {
 
   // ── Appointments (backed by sessions with activityType === 'appointment') ────
 
+  /**
+   * The contact's OWN upcoming booked appointments.
+   *
+   * Appointments are availability-only: a provider publishes free time
+   * (`availability` docs) and NOTHING is pre-generated — an appointment session is
+   * created only when someone books. So every session this query returns is
+   * already booked by someone; we keep only the ones booked by THIS contact
+   * (other members' appointments are none of their business, and there are no
+   * "open" slots left to browse).
+   */
   async getUpcomingAppointments(
     teamId: string,
     contactId: string
@@ -1104,25 +1129,32 @@ export const FirestoreService = {
         })
       );
 
-      return results;
+      // Only the contact's own bookings — see the doc comment above.
+      return results.filter((r) => r.bookingStatus === 'booked');
     } catch (error) {
       console.error('Error fetching appointments:', error);
       return [];
     }
   },
 
-  // Book an appointment — delegates to the unified bookSession logic
+  // TODO(P4 follow-up): rebuild appointment BOOKING on the availability-only model.
+  // Appointments are no longer pre-generated as open slots, so there is no slotId to
+  // book against and nothing for the app to browse — this shim is dead and gated off
+  // (see APPOINTMENT_BOOKING_ENABLED). The replacement is a picker driven by the
+  // `listAvailability` callable (day → activity → time), booking through the
+  // `bookAppointment` callable with
+  // { teamId, providerId, activityId, startMs, durationMinutes, ... }. Not feasible
+  // here until that picker exists; the app is unlaunched, so no live flow is lost.
+  // Reference: /public/{slug}/appointments on the web + packages/functions/src/appointments/.
   async bookAppointment(params: {
     teamId: string;
     slotId: string;
     contactId: string;
   }): Promise<{ success: boolean }> {
-    return this.bookSession({
-      teamId: params.teamId,
-      sessionId: params.slotId,
-      contactId: params.contactId,
-      contactDetails: { firstname: '', lastname: '', email: '' }, // contact already known; bookSession handles auth path
-    });
+    void params;
+    throw new Error(
+      'Booking an appointment from the app is temporarily unavailable — please book on the website.'
+    );
   },
 
   // Cancel an appointment booking — delegates to the unified cancelSession logic

@@ -1,32 +1,21 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import {
-  collectionGroup,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-  Timestamp,
-} from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { functions } from '@/lib/firebase'
+import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { WeeklyCalendar, type PlannerSession } from '@/components/schedule/WeeklyCalendar'
 import {
   CalendarClock,
-  CalendarRange,
-  List,
   MapPin,
   Video,
   Clock,
@@ -34,51 +23,46 @@ import {
   Check,
   Lock,
   ChevronRight,
+  ChevronLeft,
   Sparkles,
 } from 'lucide-react'
 
 // ─── types ────────────────────────────────────────────────────────────────────
+// Mirrors the listAvailability callable's contract: availability is the ONLY
+// source of bookable times (nothing is pre-generated any more — an appointment
+// Session exists only once booked). Duration/name/access come from the linked
+// Activity, not the availability window.
 
-interface PublicSlot {
-  id: string // the session ID (parent of the public_profile doc)
-  activityName: string | null
-  providerName: string | null
-  start: number // milliseconds
-  end: number // milliseconds
-  duration_minutes: number
-  max_participants: number
-  bookings_count: number
+interface AvailActivity {
+  activityId: string
+  activityName: string
+  durationsMinutes: number[]
+  accessRule: ActivityAccessRule
   location: string | null
   onlineUrl: string | null
-  isFreeTrial: boolean
-  status: 'open' | 'full' | 'cancelled'
-}
-
-// Availability returned by listAvailability (open-window mode).
-interface AvailCoach {
-  providerId: string
-  providerName: string | null
-  templateId: string
-  title: string
-  location: string | null
-  onlineUrl: string | null
-  isFreeTrial: boolean
-  durations: number[]
   days: { dayMs: number; slotsByDuration: Record<string, number[]> }[]
 }
 
-// What a window time-chip opens the booking modal with.
-interface WindowBooking {
-  templateId: string
+interface AvailCoach {
   providerId: string
   providerName: string | null
-  title: string
+  activities: AvailActivity[]
+}
+
+// What a time chip opens the booking modal with.
+interface WindowBooking {
+  providerId: string
+  providerName: string | null
+  activityId: string
+  activityName: string
   startMs: number
   durationMinutes: number
   isFreeTrial: boolean
   location: string | null
   onlineUrl: string | null
 }
+
+type PickerStep = 'coach' | 'activity' | 'time'
 
 // Args passed to whichever booking callable backs the form.
 type BookArgs =
@@ -101,8 +85,6 @@ function fmtDuration(mins: number): string {
   return m ? `${h}h ${m}m` : `${h}h`
 }
 
-const isSlotFull = (s: PublicSlot) => s.status === 'full' || s.bookings_count >= s.max_participants
-
 // ─── booking form schemas ──────────────────────────────────────────────────────
 
 const bookingSchema = z.object({
@@ -117,9 +99,7 @@ type EmailValues = z.infer<typeof emailSchema>
 const codeSchema = z.object({ code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code') })
 type CodeValues = z.infer<typeof codeSchema>
 
-// ─── booking form (guest / members-only), booking-target-agnostic ─────────────
-// `book` performs the actual booking (bookSession for a fixed slot,
-// bookAppointment for an open-window time) so this form is shared.
+// ─── booking form (guest / members-only) ───────────────────────────────────────
 
 function SlotBookingForm({
   teamId,
@@ -404,59 +384,126 @@ function BookingModal({
   )
 }
 
-// ─── slot row (fixed-slot list view) ───────────────────────────────────────────
+// ─── confirmation screen ──────────────────────────────────────────────────────
 
-function SlotRow({ slot, onSelect }: { slot: PublicSlot; onSelect: (s: PublicSlot) => void }) {
+function ConfirmationScreen({ email }: { email: string }) {
   const t = useTranslations('AppointmentBooking')
-  const full = isSlotFull(slot)
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="max-w-sm w-full text-center space-y-4">
+        <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+          <Check className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <h1 className="text-xl font-bold">{t('confirmedTitle')}</h1>
+        <p className="text-sm text-muted-foreground">{t('confirmedMessage', { email })}</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── funnel building blocks ─────────────────────────────────────────────────────
+
+function EmptyState({ icon: Icon, text, hint }: { icon: typeof CalendarClock; text: string; hint?: string }) {
+  return (
+    <div className="text-center py-12 text-muted-foreground">
+      <Icon className="h-8 w-8 mx-auto mb-3 opacity-40" />
+      <p className="font-medium">{text}</p>
+      {hint && <p className="text-sm mt-1">{hint}</p>}
+    </div>
+  )
+}
+
+function BackRow({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
-      disabled={full}
-      onClick={() => onSelect(slot)}
-      className="w-full rounded-xl border p-4 text-left transition-colors hover:border-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:bg-transparent"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+    >
+      <ChevronLeft className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  )
+}
+
+// Step 1 — pick a coach.
+function CoachCard({ coach, onSelect }: { coach: AvailCoach; onSelect: () => void }) {
+  const t = useTranslations('AppointmentBooking')
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="w-full rounded-xl border p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <User className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-sm truncate">{coach.providerName || t('unnamedCoach')}</p>
+          <p className="text-xs text-muted-foreground truncate">
+            {coach.activities.map((a) => a.activityName).join(' · ')}
+          </p>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </div>
+    </button>
+  )
+}
+
+// Step 2 — pick an activity offered by that coach.
+function ActivityCard({ activity, onSelect }: { activity: AvailActivity; onSelect: () => void }) {
+  const t = useTranslations('AppointmentBooking')
+  const isFreeTrial = resolveActivityAccessRule({ accessRule: activity.accessRule }).type === 'open'
+  const durations = activity.durationsMinutes
+  const durationLabel =
+    durations.length > 1
+      ? `${fmtDuration(Math.min(...durations))} – ${fmtDuration(Math.max(...durations))}`
+      : fmtDuration(durations[0] ?? 60)
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="w-full rounded-xl border p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
     >
       <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold text-sm">{slot.activityName}</p>
-            {!slot.isFreeTrial && (
+            <p className="font-semibold text-sm">{activity.activityName}</p>
+            {!isFreeTrial && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                 <Lock className="h-2.5 w-2.5" />
                 {t('membersOnly')}
               </span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">{fmtDate(slot.start)}</p>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{fmtTime(slot.start)} – {fmtTime(slot.end)}</span>
-            <span>{fmtDuration(slot.duration_minutes)}</span>
-            {slot.providerName && <span className="flex items-center gap-1"><User className="h-3 w-3" />{slot.providerName}</span>}
-            {slot.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{slot.location}</span>}
-            {slot.onlineUrl && <span className="flex items-center gap-1"><Video className="h-3 w-3" />{t('onlineSession')}</span>}
+            <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{durationLabel}</span>
+            {activity.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{activity.location}</span>}
+            {activity.onlineUrl && <span className="flex items-center gap-1"><Video className="h-3 w-3" />{t('onlineSession')}</span>}
           </div>
         </div>
-        <div className="shrink-0 self-center">
-          {full ? (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-medium">{t('full')}</span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">{t('book')}<ChevronRight className="h-3.5 w-3.5" /></span>
-          )}
-        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 self-center text-muted-foreground" />
       </div>
     </button>
   )
 }
 
-// ─── open-window picker (day → duration → time) ────────────────────────────────
-
-function WindowPicker({ coach, onPick }: { coach: AvailCoach; onPick: (startMs: number, durationMinutes: number) => void }) {
+// Step 3 — duration (only if the activity offers more than one) → day → time.
+function TimePicker({
+  coach,
+  activity,
+  onPick,
+}: {
+  coach: AvailCoach
+  activity: AvailActivity
+  onPick: (startMs: number, durationMinutes: number) => void
+}) {
   const t = useTranslations('AppointmentBooking')
-  const [dayMs, setDayMs] = useState<number>(coach.days[0]?.dayMs ?? 0)
-  const [duration, setDuration] = useState<number>(coach.durations[0] ?? 60)
+  const [dayMs, setDayMs] = useState<number>(activity.days[0]?.dayMs ?? 0)
+  const [duration, setDuration] = useState<number>(activity.durationsMinutes[0] ?? 60)
 
-  const day = coach.days.find((d) => d.dayMs === dayMs) ?? coach.days[0]
-  // Days that have any slot for the chosen duration (fall back to any-slot days).
+  const day = activity.days.find((d) => d.dayMs === dayMs) ?? activity.days[0]
   const times = day?.slotsByDuration[String(duration)] ?? []
 
   return (
@@ -466,7 +513,7 @@ function WindowPicker({ coach, onPick }: { coach: AvailCoach; onPick: (startMs: 
           <Sparkles className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold truncate">{coach.title}</p>
+          <p className="text-sm font-semibold truncate">{activity.activityName}</p>
           {coach.providerName && <p className="text-xs text-muted-foreground">{coach.providerName}</p>}
         </div>
       </div>
@@ -475,7 +522,7 @@ function WindowPicker({ coach, onPick }: { coach: AvailCoach; onPick: (startMs: 
       <div className="space-y-1.5">
         <p className="text-xs font-medium text-muted-foreground">{t('pickDay')}</p>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          {coach.days.map((d) => (
+          {activity.days.map((d) => (
             <button
               key={d.dayMs}
               type="button"
@@ -490,12 +537,12 @@ function WindowPicker({ coach, onPick }: { coach: AvailCoach; onPick: (startMs: 
         </div>
       </div>
 
-      {/* Duration */}
-      {coach.durations.length > 1 && (
+      {/* Duration — only shown when the activity offers more than one length. */}
+      {activity.durationsMinutes.length > 1 && (
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-muted-foreground">{t('pickDuration')}</p>
           <div className="flex gap-2 flex-wrap">
-            {coach.durations.map((d) => (
+            {activity.durationsMinutes.map((d) => (
               <button
                 key={d}
                 type="button"
@@ -535,270 +582,137 @@ function WindowPicker({ coach, onPick }: { coach: AvailCoach; onPick: (startMs: 
   )
 }
 
-// ─── confirmation screen ──────────────────────────────────────────────────────
-
-function ConfirmationScreen({ email }: { email: string }) {
-  const t = useTranslations('AppointmentBooking')
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-sm w-full text-center space-y-4">
-        <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-          <Check className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-        </div>
-        <h1 className="text-xl font-bold">{t('confirmedTitle')}</h1>
-        <p className="text-sm text-muted-foreground">{t('confirmedMessage', { email })}</p>
-      </div>
-    </div>
-  )
-}
-
-function ViewToggle({ view, onChange }: { view: 'list' | 'calendar'; onChange: (v: 'list' | 'calendar') => void }) {
-  const t = useTranslations('AppointmentBooking')
-  const btn = (mode: 'list' | 'calendar', Icon: typeof List, label: string) => (
-    <button
-      type="button"
-      onClick={() => onChange(mode)}
-      aria-pressed={view === mode}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-        view === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-      }`}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </button>
-  )
-  return (
-    <div className="inline-flex items-center gap-1 rounded-full border p-1">
-      {btn('calendar', CalendarRange, t('viewCalendar'))}
-      {btn('list', List, t('viewList'))}
-    </div>
-  )
-}
-
 // ─── main component ───────────────────────────────────────────────────────────
+// Coach-first funnel: coach → activity → duration (only if >1) → day → time.
+// Availability is the ONLY source of bookable times — there are no
+// pre-generated appointment sessions any more.
 
 export default function AppointmentPicker({ slug }: { slug: string }) {
   const t = useTranslations('AppointmentBooking')
   const { teamId } = usePublicTeam()
-  const [slots, setSlots] = useState<PublicSlot[] | null>(null)
-  const [windows, setWindows] = useState<AvailCoach[]>([])
+  const [coaches, setCoaches] = useState<AvailCoach[]>([])
   const [loading, setLoading] = useState(true)
   const [confirmed, setConfirmed] = useState<{ email: string } | null>(null)
-  const [selected, setSelected] = useState<PublicSlot | null>(null)
   const [windowBooking, setWindowBooking] = useState<WindowBooking | null>(null)
-  const [view, setView] = useState<'list' | 'calendar'>('calendar')
-  const [coachFilter, setCoachFilter] = useState<string | null>(null)
+  const [step, setStep] = useState<PickerStep>('coach')
+  const [selectedCoach, setSelectedCoach] = useState<AvailCoach | null>(null)
+  const [selectedActivity, setSelectedActivity] = useState<AvailActivity | null>(null)
 
   useEffect(() => {
     let alive = true
     async function load() {
       try {
-        const now = Timestamp.now()
-        const windowEnd = Timestamp.fromMillis(now.toMillis() + 60 * 24 * 60 * 60_000)
-        const slotsQ = query(
-          collectionGroup(db, 'public_profile'),
-          where('teamId', '==', teamId),
-          where('type', '==', 'appointment_session'),
-          where('status', '==', 'open'),
-          where('start', '>=', now),
-          where('start', '<=', windowEnd),
-          orderBy('start', 'asc'),
-          limit(100)
-        )
-        // Fixed slots + open-window availability load in parallel.
         const availFn = httpsCallable<
-          { teamId: string; days: number },
+          { teamId: string; days?: number },
           { coaches: AvailCoach[] }
         >(functions, 'listAvailability')
-        const [slotsSnap, availRes] = await Promise.all([
-          getDocs(slotsQ),
-          availFn({ teamId, days: 60 }).catch(() => ({ data: { coaches: [] } })),
-        ])
+        const res = await availFn({ teamId, days: 60 })
         if (!alive) return
-        setSlots(
-          slotsSnap.docs.map((d) => {
-            const s = d.data()
-            return {
-              id: d.ref.parent.parent!.id,
-              activityName: (s.activityName as string) || null,
-              providerName: (s.providerName as string) || null,
-              start: (s.start as Timestamp).toMillis(),
-              end: (s.end as Timestamp).toMillis(),
-              duration_minutes: (s.duration_minutes as number) || 60,
-              max_participants: (s.max_participants as number) || 1,
-              bookings_count: (s.bookings_count as number) || 0,
-              location: (s.location as string) || null,
-              onlineUrl: (s.onlineUrl as string) || null,
-              isFreeTrial: s.isFreeTrial !== false,
-              status: (s.status as 'open' | 'full' | 'cancelled') || 'open',
-            }
-          })
-        )
-        setWindows(availRes.data.coaches ?? [])
+        setCoaches(res.data.coaches ?? [])
       } catch {
-        if (alive) { setSlots([]); setWindows([]) }
+        if (alive) setCoaches([])
       } finally {
         if (alive) setLoading(false)
       }
     }
-    load()
+    if (teamId) load()
+    else setLoading(false)
     return () => { alive = false }
   }, [teamId])
 
-  const coaches = useMemo(() => {
-    const set = new Set<string>()
-    for (const s of slots ?? []) if (s.providerName) set.add(s.providerName)
-    return [...set].sort()
-  }, [slots])
-
-  const visibleSlots = useMemo(
-    () => (slots ?? []).filter((s) => !coachFilter || s.providerName === coachFilter),
-    [slots, coachFilter]
-  )
-
-  const plannerSessions: PlannerSession[] = useMemo(
-    () =>
-      visibleSlots.map((s) => ({
-        id: s.id,
-        start: { toDate: () => new Date(s.start) },
-        end: { toDate: () => new Date(s.end) },
-        activityName: s.activityName,
-        providerName: s.providerName,
-        location: s.location,
-      })),
-    [visibleSlots]
-  )
-  const byId = useMemo(() => new Map(visibleSlots.map((s) => [s.id, s])), [visibleSlots])
-
   if (confirmed) return <ConfirmationScreen email={confirmed.email} />
 
-  const hasSlots = !!slots && slots.length > 0
-  const hasWindows = windows.length > 0
+  function selectCoach(c: AvailCoach) {
+    setSelectedCoach(c)
+    setSelectedActivity(null)
+    setStep('activity')
+  }
+  function selectActivity(a: AvailActivity) {
+    setSelectedActivity(a)
+    setStep('time')
+  }
+  function backToCoaches() {
+    setStep('coach')
+    setSelectedCoach(null)
+    setSelectedActivity(null)
+  }
+  function backToActivities() {
+    setStep('activity')
+    setSelectedActivity(null)
+  }
+
+  const hasCoaches = coaches.length > 0
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl px-4 py-8 space-y-8">
-        {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-            <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
-          </div>
-          {hasSlots && <ViewToggle view={view} onChange={setView} />}
+      <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
 
         {loading && (
           <div className="space-y-3">
-            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
           </div>
         )}
 
-        {!loading && !teamId && (
-          <div className="text-center py-12 text-muted-foreground">
-            <CalendarClock className="h-8 w-8 mx-auto mb-3 opacity-40" />
-            <p className="font-medium">{t('teamNotFound')}</p>
-          </div>
+        {!loading && !teamId && <EmptyState icon={CalendarClock} text={t('teamNotFound')} />}
+
+        {!loading && teamId && !hasCoaches && (
+          <EmptyState icon={CalendarClock} text={t('noCoaches')} hint={t('noCoachesHint')} />
         )}
 
-        {/* Open-window picker(s) */}
-        {!loading && hasWindows && (
+        {!loading && teamId && hasCoaches && step === 'coach' && (
           <section className="space-y-3">
-            {hasSlots && <h2 className="text-sm font-semibold">{t('windowSectionTitle')}</h2>}
-            {windows.map((coach) => (
-              <WindowPicker
-                key={coach.templateId}
-                coach={coach}
-                onPick={(startMs, durationMinutes) =>
-                  setWindowBooking({
-                    templateId: coach.templateId,
-                    providerId: coach.providerId,
-                    providerName: coach.providerName,
-                    title: coach.title,
-                    startMs,
-                    durationMinutes,
-                    isFreeTrial: coach.isFreeTrial,
-                    location: coach.location,
-                    onlineUrl: coach.onlineUrl,
-                  })
-                }
-              />
+            {coaches.map((c) => (
+              <CoachCard key={c.providerId} coach={c} onSelect={() => selectCoach(c)} />
             ))}
           </section>
         )}
 
-        {/* Fixed slots */}
-        {!loading && teamId && hasSlots && (
+        {!loading && teamId && step === 'activity' && selectedCoach && (
           <section className="space-y-3">
-            {hasWindows && <h2 className="text-sm font-semibold">{t('fixedSectionTitle')}</h2>}
-            {coaches.length > 1 && (
-              <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
-                {[null, ...coaches].map((c) => (
-                  <button
-                    key={c ?? '__all'}
-                    type="button"
-                    onClick={() => setCoachFilter(c)}
-                    className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      coachFilter === c ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {c ?? t('allCoaches')}
-                  </button>
-                ))}
-              </div>
-            )}
-            {view === 'calendar' ? (
-              <WeeklyCalendar
-                sessions={plannerSessions}
-                windowDays={60}
-                onSelect={(s) => {
-                  const slot = byId.get(s.id)
-                  if (slot) setSelected(slot)
-                }}
-              />
+            <BackRow label={t('backToCoaches')} onClick={backToCoaches} />
+            <h2 className="text-sm font-semibold">{selectedCoach.providerName || t('unnamedCoach')}</h2>
+            {selectedCoach.activities.length === 0 ? (
+              <EmptyState icon={CalendarClock} text={t('noCoaches')} hint={t('noCoachesHint')} />
             ) : (
-              <div className="space-y-3">
-                {visibleSlots.map((slot) => (
-                  <SlotRow key={slot.id} slot={slot} onSelect={setSelected} />
-                ))}
-              </div>
+              selectedCoach.activities.map((a) => (
+                <ActivityCard key={a.activityId} activity={a} onSelect={() => selectActivity(a)} />
+              ))
             )}
           </section>
         )}
 
-        {/* Nothing at all */}
-        {!loading && teamId && !hasSlots && !hasWindows && (
-          <div className="text-center py-12 text-muted-foreground">
-            <CalendarClock className="h-8 w-8 mx-auto mb-3 opacity-40" />
-            <p className="font-medium">{t('noSlots')}</p>
-            <p className="text-sm mt-1">{t('noSlotsHint')}</p>
-          </div>
+        {!loading && teamId && step === 'time' && selectedCoach && selectedActivity && (
+          <section className="space-y-3">
+            <BackRow label={t('backToActivities')} onClick={backToActivities} />
+            <TimePicker
+              coach={selectedCoach}
+              activity={selectedActivity}
+              onPick={(startMs, durationMinutes) =>
+                setWindowBooking({
+                  providerId: selectedCoach.providerId,
+                  providerName: selectedCoach.providerName,
+                  activityId: selectedActivity.activityId,
+                  activityName: selectedActivity.activityName,
+                  startMs,
+                  durationMinutes,
+                  isFreeTrial: resolveActivityAccessRule({ accessRule: selectedActivity.accessRule }).type === 'open',
+                  location: selectedActivity.location,
+                  onlineUrl: selectedActivity.onlineUrl,
+                })
+              }
+            />
+          </section>
         )}
       </div>
 
-      {/* Fixed-slot booking */}
-      {selected && teamId && (
-        <BookingModal
-          key={selected.id}
-          title={selected.activityName}
-          isFreeTrial={selected.isFreeTrial}
-          providerName={selected.providerName}
-          location={selected.location}
-          onlineUrl={selected.onlineUrl}
-          dateLine={`${fmtDate(selected.start)} · ${fmtTime(selected.start)} – ${fmtTime(selected.end)} · ${fmtDuration(selected.duration_minutes)}`}
-          teamId={teamId}
-          book={(args) =>
-            httpsCallable(functions, 'bookSession')({ teamId, sessionId: selected.id, ...args }).then(() => undefined)
-          }
-          onBooked={({ email }) => { setSelected(null); setConfirmed({ email }) }}
-          onClose={() => setSelected(null)}
-        />
-      )}
-
-      {/* Open-window booking */}
       {windowBooking && teamId && (
         <BookingModal
-          key={`${windowBooking.templateId}-${windowBooking.startMs}-${windowBooking.durationMinutes}`}
-          title={windowBooking.title}
+          key={`${windowBooking.providerId}-${windowBooking.activityId}-${windowBooking.startMs}-${windowBooking.durationMinutes}`}
+          title={windowBooking.activityName}
           isFreeTrial={windowBooking.isFreeTrial}
           providerName={windowBooking.providerName}
           location={windowBooking.location}
@@ -808,8 +722,8 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
           book={(args) =>
             httpsCallable(functions, 'bookAppointment')({
               teamId,
-              templateId: windowBooking.templateId,
               providerId: windowBooking.providerId,
+              activityId: windowBooking.activityId,
               startMs: windowBooking.startMs,
               durationMinutes: windowBooking.durationMinutes,
               ...args,

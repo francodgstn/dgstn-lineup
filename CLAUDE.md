@@ -81,7 +81,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~15 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Outreach/automation engine** — not started
-- **Coaching (Studio-plan extras)** — the core 1:1 flow is DONE (availability templates, slot generation, public `/coaching` slot picker, shared `bookSession` booking, .ics emails — see `docs/coaching.md`). Still open: mobile app integration, push reminders, session notes, slot waiting list (`docs/product-strategy.md`).
+- **Appointments (1:1)** — DONE: activity-bound, availability-only booking (`listAvailability` + `bookAppointment`, overlap-safe lazy session creation, subscription-gateable, .ics emails, public picker at `/public/{slug}/appointments` — see `docs/appointments.md`). Still open: mobile app integration (browse/book is gated pending a rebuild on `listAvailability`), push reminders, session notes, waiting list (`docs/product-strategy.md`).
 
 ---
 
@@ -230,23 +230,36 @@ nodemailer** and **no stored mail credentials** for anyone. Full docs:
   idempotency + delivery ledger. Secrets: `brevo-api-key`, `brevo-webhook-secret`
   (Secret Manager; emulator env `BREVO_API_KEY` / `BREVO_WEBHOOK_SECRET`).
 
-### Coaching (1:1) vs group classes
+### Appointments (1:1) vs classes
 
-`Activity.type` (`'group_class' | 'coaching'`) is the discriminator; a coaching
-slot IS a `Session` with `activityType: 'coaching'` (+ `coachId`/`coachName`,
-`max_participants`, `bookings_count`, `status`), generated from
-`coach_availability` templates. **Coaching integrates with sessions but books
-through its own flow**: the public `/public/{slug}/coaching` slot picker (per-
-coach cards), NOT the class calendar — booking/site activity cards route there.
-Session mirrors use two `public_profile` discriminators: `type: 'session'`
-(group) vs `type: 'coaching_session'`; activity mirrors carry `activityType` so
-public UIs can tell them apart. Booking goes through the SHARED `bookSession`
-callable (no separate bookCoachSlot): the coaching branch auto-confirms
-(`status: 'confirmed'` + `fullname` on the booking doc) and maintains
-`bookings_count`/`status: 'full'` on the session. Kiosk schedule shows coaching
-slots; walk-in excludes them by default (per-studio `walkInCoaching` kiosk
-setting opts open slots in); drop-in is rejected for coaching.
-Full doc: `docs/coaching.md`.
+Two primitives, not two entities — both are `sessions/{id}` docs:
+
+- **Class** = a seat in a scheduled event. The studio schedules it; it exists on
+  the calendar before anyone books.
+- **Appointment** = a provider's exclusive time. **Nothing exists until booked** —
+  the provider publishes *availability*, and the session is created lazily,
+  overlap-safe, at booking.
+
+`Activity.type` (`'class' | 'appointment'`) picks the scheduling mechanism;
+`Session.activityType` carries it. Mirrors: `type: 'session'` vs
+`'appointment_session'`; activity mirrors carry `activityType` so public UIs route
+appointment cards to the picker.
+
+**The what vs the when.** The `Activity` owns the *what* — `durationsMinutes`,
+`max_participants`, `accessRule`, price. The `availability/{id}` doc owns only the
+*when* — provider, recurrence, `mode: 'range'|'times'`, buffer, and
+**`activityIds`** (which appointment activities are bookable in that window).
+Durations are never stored on availability; they derive from the linked activities.
+Because a window may offer activities of different lengths, a start time is
+indeterminate until the client picks one — **which is why availability can never be
+pre-generated** (the old slot-generation cron was deleted for exactly this reason).
+
+Booking: **`bookAppointment`** is the only appointment path (`bookSession` is
+class-only and rejects them); the client sends no templateId — the server resolves
+the covering availability. `listAvailability` computes free times, coach-first.
+Both callables share the paid-access gate in `booking/access.ts`, so appointments
+are subscription-gateable like any activity. `cancelBooking` handles both kinds.
+Drop-in and kiosk walk-in are class-only. Full doc: `docs/appointments.md`.
 
 ### SaaS plan tiers (Phase 2)
 

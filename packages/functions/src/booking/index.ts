@@ -16,65 +16,18 @@ import {
   buildTeacherNotificationEmail,
   buildVerificationCodeEmail,
 } from './templates'
-import {
-  buildAppointmentConfirmationEmail,
-  buildAppointmentICalAttachment,
-  buildAppointmentProviderNotificationEmail,
-} from '../appointments/templates'
+import { resolveBookingAccessGate } from './access'
 import {
   resolveActivityAccessRule,
   heldSubscriptionTypeIds,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   type ActivityAccessRule,
-  type SubscriptionPrice,
 } from '@linyup/shared'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 const VALID_LANGS: Lang[] = ['en', 'de', 'fr', 'it']
 function isLang(v: unknown): v is Lang {
   return VALID_LANGS.includes(v as Lang)
-}
-
-/**
- * Does HOLDING a subscription of this type grant unmetered (non-credit) access?
- * Used by the booking access gate: credit-pack types must not pass on the
- * membership snapshot alone — their access is metered by credit balance.
- *   • The contact's held price is a non-credit price of this type → true.
- *   • The contact's held price is a credit price of this type      → false.
- *   • Price unknown: true unless EVERY active price carries credits (a
- *     credits-only type can only ever grant metered access).
- */
-async function typeGrantsUnmeteredAccess(
-  teamId: string,
-  subscriptionTypeId: string,
-  contact: FirebaseFirestore.DocumentData
-): Promise<boolean> {
-  try {
-    const snap = await admin
-      .firestore()
-      .collection('teams')
-      .doc(teamId)
-      .collection('subscription_types')
-      .doc(subscriptionTypeId)
-      .get()
-    if (!snap.exists) return true // unknown type — behave as before credits existed
-    const prices = ((snap.data()?.prices as SubscriptionPrice[] | undefined) ?? []).filter(
-      (p) => p.active !== false
-    )
-    if (prices.length === 0 || prices.every((p) => !p.credits)) return true
-    const heldPriceId =
-      contact.subscription_type_id === subscriptionTypeId
-        ? (contact.subscription_price_id as string | undefined)
-        : undefined
-    if (heldPriceId) {
-      const heldPrice = prices.find((p) => p.id === heldPriceId)
-      if (heldPrice) return !heldPrice.credits
-    }
-    // Held price unknown: lenient unless the type is credits-only.
-    return prices.some((p) => !p.credits)
-  } catch {
-    return true // fail open — same behavior as before the credits feature
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -534,6 +487,11 @@ export const bookSession = onCall(async (request) => {
 
   if (sessionData.teamId !== data.teamId)
     throw new HttpsError('permission-denied', 'Session does not belong to this team')
+  // bookSession is class-only — no pre-generated appointment session can exist any
+  // more; a coach's time is materialised lazily by bookAppointment (see appointments/window.ts).
+  if (sessionData.activityType === 'appointment') {
+    throw new HttpsError('failed-precondition', 'Appointments are booked via bookAppointment')
+  }
   if (!sessionData.allowBooking)
     throw new HttpsError('permission-denied', 'Bookings are not allowed for this session')
 
@@ -543,42 +501,12 @@ export const bookSession = onCall(async (request) => {
   }
 
   // Get activity name and access rule (the paid-access gate)
-  const isAppointment = sessionData.activityType === 'appointment'
   let activityName = (sessionData.activityName as string) || 'Session'
   let accessRule: ActivityAccessRule = { type: 'open' }
   // Per-activity confirmation note (overrides the team-wide setting below).
   let activityInstructions: string | null = null
 
-  // Whether THIS booking fills the appointment slot (drives the status flip below).
-  let appointmentSlotWillBeFull = false
-  if (isAppointment) {
-    // Appointments carry the access gate directly on the session doc.
-    accessRule = resolveActivityAccessRule({
-      accessRule: sessionData.accessRule as ActivityAccessRule | undefined,
-      isFreeTrial: sessionData.isFreeTrial as boolean | undefined,
-    })
-    // Check capacity
-    const maxParticipants = (sessionData.max_participants as number) || 1
-    const bookingsCount = (sessionData.bookings_count as number) || 0
-    if (sessionData.status === 'full' || bookingsCount >= maxParticipants) {
-      throw new HttpsError('failed-precondition', 'This appointment slot is fully booked.')
-    }
-    appointmentSlotWillBeFull = bookingsCount + 1 >= maxParticipants
-    if (sessionData.activityId) {
-      try {
-        const actDoc = await admin
-          .firestore()
-          .collection('activities')
-          .doc(sessionData.activityId as string)
-          .get()
-        if (actDoc.exists) {
-          activityInstructions = (actDoc.data()!.confirmationInstructions as string) || null
-        }
-      } catch (_) {
-        /* non-fatal */
-      }
-    }
-  } else if (sessionData.activityId) {
+  if (sessionData.activityId) {
     try {
       const actDoc = await admin
         .firestore()
@@ -606,97 +534,22 @@ export const bookSession = onCall(async (request) => {
       | undefined) || null
   const bookingInstructions = activityInstructions?.trim() || teamInstructions?.trim() || null
 
-  if (!isAppointment) {
-    // Group-class booking cap (optional; enforced against the live reserved count).
-    const maxGroup = sessionData.max_participants as number | undefined
-    if (maxGroup && maxGroup > 0) {
-      const reserved = (sessionData.bio_link_bookings_count as number) || 0
-      if (reserved >= maxGroup) {
-        throw new HttpsError('resource-exhausted', 'This session is fully booked.')
-      }
+  // Group-class booking cap (optional; enforced against the live reserved count).
+  const maxGroup = sessionData.max_participants as number | undefined
+  if (maxGroup && maxGroup > 0) {
+    const reserved = (sessionData.bio_link_bookings_count as number) || 0
+    if (reserved >= maxGroup) {
+      throw new HttpsError('resource-exhausted', 'This session is fully booked.')
     }
   }
 
   // ── Access gate (paid-access axis) ─────────────────────────────────────────
-  // Set when a 'subscription' rule matched a live subscription — stored on the booking.
-  let matchedSubscriptionTypeId: string | null = null
-  // Set when the match came from a lesson-credit pack: one credit of this type is
-  // decremented transactionally with the booking write below.
-  let creditSpendTypeId: string | null = null
-  if (accessRule.type !== 'open') {
-    if (!authenticatedContact) {
-      const msg = isAppointment
-        ? 'This appointment series is for registered members only. Please verify your email.'
-        : 'This session is for registered members only. Please verify your email.'
-      throw new HttpsError('permission-denied', msg)
-    }
-    if (authenticatedContact.acquisition_stage !== 'joined') {
-      const msg = isAppointment
-        ? 'This appointment series is for members only. Trial accounts cannot book.'
-        : 'This session is for members only. Trial accounts cannot book this class.'
-      throw new HttpsError('permission-denied', msg)
-    }
-    if (accessRule.type === 'subscription') {
-      const allowed = accessRule.subscriptionTypeIds ?? []
-      // Coverage = any LIVE subscription the contact holds (fallback: primary snapshot).
-      const held = new Set<string>()
-      const active =
-        (authenticatedContact.active_subscriptions as
-          | Array<{ subscription_type_id?: string }>
-          | undefined) ?? []
-      active.forEach((s) => {
-        if (s.subscription_type_id) held.add(s.subscription_type_id)
-      })
-      if (authenticatedContact.subscription_type_id)
-        held.add(authenticatedContact.subscription_type_id)
-
-      // Lesson-credit balances (denormalised rollup; expiry re-checked on spend).
-      const nowMs = Date.now()
-      const creditTypes = new Set(
-        (
-          (authenticatedContact.credit_summary as
-            | Array<{
-                subscription_type_id: string
-                remaining: number
-                next_expires_at?: Timestamp | null
-              }>
-            | undefined) ?? []
-        )
-          .filter(
-            (e) =>
-              e.remaining > 0 && (!e.next_expires_at || e.next_expires_at.toMillis() > nowMs)
-          )
-          .map((e) => e.subscription_type_id)
-      )
-
-      // 1) Unmetered coverage first — a held subscription whose type isn't
-      //    credits-only never burns credits.
-      for (const id of allowed) {
-        if (!held.has(id)) continue
-        if (await typeGrantsUnmeteredAccess(data.teamId, id, authenticatedContact)) {
-          matchedSubscriptionTypeId = id
-          break
-        }
-      }
-      // 2) Credit coverage — spend one credit (transactionally, at booking write).
-      if (!matchedSubscriptionTypeId) {
-        const creditType = allowed.find((id) => creditTypes.has(id))
-        if (creditType) {
-          matchedSubscriptionTypeId = creditType
-          creditSpendTypeId = creditType
-        }
-      }
-      if (!matchedSubscriptionTypeId) {
-        const heldCreditType = allowed.some((id) => held.has(id))
-        throw new HttpsError(
-          'permission-denied',
-          heldCreditType
-            ? 'No lesson credits remaining on your pack. Purchase a new pack to book this class.'
-            : 'This class requires an active membership you do not currently hold.'
-        )
-      }
-    }
-  }
+  const { matchedSubscriptionTypeId, creditSpendTypeId } = await resolveBookingAccessGate({
+    teamId: data.teamId,
+    accessRule,
+    authenticatedContact,
+    isAppointment: false,
+  })
 
   // Resolve or create contact
   let contactId: string
@@ -830,27 +683,12 @@ export const bookSession = onCall(async (request) => {
     booking_ip: bookingIp,
     authenticated_booking: isAuthenticatedBooking,
     subscription_type_id: subscriptionTypeId,
-    // Appointment bookings are auto-confirmed — a 1:1 slot has no roster-review step.
-    // `status` is what the trackBookings recount trigger counts, and `fullname` is
-    // what the appointment slot dialog displays (AppointmentBooking shape).
-    ...(isAppointment && {
-      status: 'confirmed',
-      fullname: `${sanitized.firstname} ${sanitized.lastname}`.trim(),
-    }),
   }
   const sessionCounterUpdate = {
     has_bookings: true,
     bio_link_bookings_count: FieldValue.increment(1),
     ...(isNewContact && { bio_link_new_contact_bookings_count: FieldValue.increment(1) }),
     last_booking_at: FieldValue.serverTimestamp(),
-    // Appointment capacity bookkeeping: the gate above, the public mirror, and the
-    // appointment page all read `bookings_count`/`status`, so update them with the
-    // booking. The trackBookings trigger later recounts confirmed bookings and
-    // overwrites with exact values (self-healing under races/cancellations).
-    ...(isAppointment && {
-      bookings_count: FieldValue.increment(1),
-      ...(appointmentSlotWillBeFull && { status: 'full' }),
-    }),
   }
   const bookingRef = admin
     .firestore()
@@ -979,162 +817,67 @@ export const bookSession = onCall(async (request) => {
   const sessionStart: Date = sessionData.start.toDate()
   const sessionEnd: Date = sessionData.end.toDate()
 
-  if (isAppointment) {
-    // ── Appointment session: personalised confirmation + .ics + coach notification ─
-    const providerId = sessionData.providerId as string | null
-    const providerName = (sessionData.providerName as string) || 'Your coach'
-    let coachEmail: string | null = null
-    let coachFirstname = 'Coach'
-    if (providerId) {
-      const [, coachDoc] = await to(admin.firestore().collection('users').doc(providerId).get())
-      if (coachDoc?.exists) {
-        coachEmail = coachDoc.get('email') || null
-        coachFirstname = coachDoc.get('firstname') || 'Coach'
-      }
+  try {
+    const confirmEmail = buildBookingConfirmationEmail({
+      firstname: sanitized.firstname,
+      teamName,
+      activityName,
+      sessionStart,
+      sessionEnd,
+      locationName: sessionData.location || null,
+      manageBookingUrl,
+      instructions: bookingInstructions,
+      lang,
+    })
+    const subjects: Record<Lang, string> = {
+      en: `Booking Confirmed – ${activityName}`,
+      de: `Buchung bestätigt – ${activityName}`,
+      fr: `Réservation confirmée – ${activityName}`,
+      it: `Prenotazione confermata – ${activityName}`,
     }
-
-    const cancelUrl = manageBookingUrl // reuse manage-booking URL for cancellation
-    try {
-      const email = buildAppointmentConfirmationEmail({
-        firstname: sanitized.firstname,
-        teamName,
-        slotTitle: activityName,
-        providerName,
-        start: sessionStart,
-        end: sessionEnd,
-        location: sessionData.location || null,
-        onlineUrl: sessionData.onlineUrl || null,
-        cancelUrl: cancelUrl || null,
-        instructions: bookingInstructions,
-        lang,
+    if (confirmationEnabled) {
+      await sendEmail({
+        to: sanitized.email,
+        subject: subjects[lang],
+        html: confirmEmail.html,
+        text: confirmEmail.text,
+        teamId: data.teamId,
       })
-      const ical = buildAppointmentICalAttachment({
-        bookingId: `${data.sessionId}-${contactId}`,
-        slotTitle: activityName,
-        start: sessionStart,
-        end: sessionEnd,
-        location: sessionData.location || null,
-        providerName,
-        coachEmail: coachEmail || 'noreply@linyup.com',
-        clientName: `${sanitized.firstname} ${sanitized.lastname}`,
-        clientEmail: sanitized.email,
-      })
-      const subjects: Record<Lang, string> = {
-        en: `Appointment Confirmed – ${activityName}`,
-        de: `Termin bestätigt – ${activityName}`,
-        fr: `Rendez-vous confirmé – ${activityName}`,
-        it: `Appuntamento confermato – ${activityName}`,
-      }
-      if (confirmationEnabled)
-        await sendEmail({
-          to: sanitized.email,
-          subject: subjects[lang],
-          html: email.html,
-          text: email.text,
-          teamId: data.teamId,
-          attachments: [
-            { filename: ical.filename, content: ical.content, contentType: ical.contentType },
-          ],
-        })
-    } catch (err) {
-      console.error('Error sending appointment confirmation email:', err)
+      console.log(`Confirmation email sent to ${sanitized.email}`)
     }
+  } catch (err) {
+    console.error('Error sending confirmation email:', err)
+  }
 
-    // Coach notification
-    if (coachEmail) {
-      try {
-        const notif = buildAppointmentProviderNotificationEmail({
-          coachFirstname,
-          clientName: `${sanitized.firstname} ${sanitized.lastname}`,
-          clientEmail: sanitized.email,
-          clientPhone: sanitized.phone || null,
-          slotTitle: activityName,
-          start: sessionStart,
-          end: sessionEnd,
-          notes: null,
-          lang,
-        })
-        const subjects: Record<Lang, string> = {
-          en: `New appointment: ${sanitized.firstname} ${sanitized.lastname}`,
-          de: `Neuer Termin: ${sanitized.firstname} ${sanitized.lastname}`,
-          fr: `Nouveau rendez-vous : ${sanitized.firstname} ${sanitized.lastname}`,
-          it: `Nuovo appuntamento: ${sanitized.firstname} ${sanitized.lastname}`,
-        }
-        await sendEmail({
-          to: coachEmail,
-          subject: subjects[lang],
-          html: notif.html,
-          text: notif.text,
-          teamId: data.teamId,
-        })
-      } catch (err) {
-        console.error('Error sending appointment coach notification email:', err)
-      }
-    }
-  } else {
-    // ── Regular group-class session ─────────────────────────────────────────────
+  // Send notification to owner
+  if (ownerEmail) {
     try {
-      const confirmEmail = buildBookingConfirmationEmail({
-        firstname: sanitized.firstname,
-        teamName,
+      const notifEmail = buildTeacherNotificationEmail({
+        teamOwnerFirstname: ownerFirstname,
+        contactName: `${sanitized.firstname} ${sanitized.lastname}`,
+        contactEmail: sanitized.email,
+        contactPhone: sanitized.phone,
         activityName,
         sessionStart,
         sessionEnd,
-        locationName: sessionData.location || null,
-        manageBookingUrl,
-        instructions: bookingInstructions,
         lang,
       })
       const subjects: Record<Lang, string> = {
-        en: `Booking Confirmed – ${activityName}`,
-        de: `Buchung bestätigt – ${activityName}`,
-        fr: `Réservation confirmée – ${activityName}`,
-        it: `Prenotazione confermata – ${activityName}`,
+        en: `New Booking: ${sanitized.firstname} ${sanitized.lastname}`,
+        de: `Neue Buchung: ${sanitized.firstname} ${sanitized.lastname}`,
+        fr: `Nouvelle réservation : ${sanitized.firstname} ${sanitized.lastname}`,
+        it: `Nuova prenotazione: ${sanitized.firstname} ${sanitized.lastname}`,
       }
-      if (confirmationEnabled) {
-        await sendEmail({
-          to: sanitized.email,
-          subject: subjects[lang],
-          html: confirmEmail.html,
-          text: confirmEmail.text,
-          teamId: data.teamId,
-        })
-        console.log(`Confirmation email sent to ${sanitized.email}`)
-      }
+      await sendEmail({
+        to: ownerEmail,
+        subject: subjects[lang],
+        html: notifEmail.html,
+        text: notifEmail.text,
+        teamId: data.teamId,
+      })
+      console.log(`Owner notification sent to ${ownerEmail}`)
     } catch (err) {
-      console.error('Error sending confirmation email:', err)
-    }
-
-    // Send notification to owner
-    if (ownerEmail) {
-      try {
-        const notifEmail = buildTeacherNotificationEmail({
-          teamOwnerFirstname: ownerFirstname,
-          contactName: `${sanitized.firstname} ${sanitized.lastname}`,
-          contactEmail: sanitized.email,
-          contactPhone: sanitized.phone,
-          activityName,
-          sessionStart,
-          sessionEnd,
-          lang,
-        })
-        const subjects: Record<Lang, string> = {
-          en: `New Booking: ${sanitized.firstname} ${sanitized.lastname}`,
-          de: `Neue Buchung: ${sanitized.firstname} ${sanitized.lastname}`,
-          fr: `Nouvelle réservation : ${sanitized.firstname} ${sanitized.lastname}`,
-          it: `Nuova prenotazione: ${sanitized.firstname} ${sanitized.lastname}`,
-        }
-        await sendEmail({
-          to: ownerEmail,
-          subject: subjects[lang],
-          html: notifEmail.html,
-          text: notifEmail.text,
-          teamId: data.teamId,
-        })
-        console.log(`Owner notification sent to ${ownerEmail}`)
-      } catch (err) {
-        console.error('Error sending owner notification:', err)
-      }
+      console.error('Error sending owner notification:', err)
     }
   }
 

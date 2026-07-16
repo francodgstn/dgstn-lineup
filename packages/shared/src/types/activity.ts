@@ -46,6 +46,16 @@ export interface Activity {
   providerId?: string
   /** Denormalised provider display name. */
   providerName?: string
+  /** APPOINTMENT-ONLY. The session lengths a client may book this offering at,
+   *  e.g. [30, 60, 90]. Duration belongs to the *what* (the activity), not to the
+   *  *when* (the availability schedule): a "Technique Assessment" is 60 minutes
+   *  wherever it is offered. An availability window's selectable start times are
+   *  derived from these — they are never configured on the availability doc.
+   *  Classes don't use this (their length is per-session, from start/end). */
+  durationsMinutes?: number[]
+  /** APPOINTMENT-ONLY. Booking cap for a materialised appointment session.
+   *  Defaults to 1 (a true 1:1); >1 allows small-group coaching. */
+  max_participants?: number
   base_score?: number | null
   /** Legacy trial toggle. Superseded by `accessRule` but kept in sync
    *  (`isFreeTrial = accessRule.type === 'open'`) for existing queries. */

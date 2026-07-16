@@ -64,6 +64,11 @@ import {
 import { buildStorefrontPageLinks } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
 import { linkConnectAccount } from './lib/connect'
+import {
+  appointmentOccurrences,
+  buildAppointmentSessionDocs,
+  buildAppointmentBookingDoc,
+} from './lib/appointments'
 import type {
   LeadProfile,
   LeadContactDef,
@@ -683,7 +688,7 @@ async function seedLeadTenant(profile: LeadProfile) {
     ctaUrl: null,
     ctaLabel: null,
     showActivityDescription: true,
-    // Lead tenants seed appointment templates + slots (profile.appointments).
+    // Lead tenants seed an appointment activity + availability (profile.appointments).
     appointmentsEnabled: true,
   }
 
@@ -1011,6 +1016,9 @@ async function seedLeadTenant(profile: LeadProfile) {
         base_score: a.base_score,
         type: 'class',
         isActive: true,
+        // Also on the raw doc (not just the public mirror) — the manager
+        // activities list reads Activity.image_url.
+        ...(imageUrl ? { image_url: imageUrl } : {}),
         created_at: ts(daysFromNow(-200)),
       })
     await db
@@ -1035,8 +1043,16 @@ async function seedLeadTenant(profile: LeadProfile) {
       })
   }
 
+  // The WHAT of an appointment: name, bookable lengths, capacity, access rule.
+  // The availability docs below publish only the WHEN.
   const appointmentActId = `${teamId}-act-appointment`
-  const headCoachName = staffName(profile.appointments.templates[0]?.staffKey ?? owner.key)
+  const headCoachName = staffName(profile.appointments.availability[0]?.staffKey ?? owner.key)
+  const appointmentImageUrl = profile.appointments.imageAsset
+    ? await uploadAsset(
+        profile.appointments.imageAsset,
+        `teams/${teamId}/activities/${appointmentActId}/cover`
+      )
+    : null
   await db
     .collection('activities')
     .doc(appointmentActId)
@@ -1047,11 +1063,14 @@ async function seedLeadTenant(profile: LeadProfile) {
       color: profile.accentColor,
       description: profile.appointments.description,
       type: 'appointment',
-      providerId: uidOf(profile.appointments.templates[0]?.staffKey ?? owner.key),
+      providerId: uidOf(profile.appointments.availability[0]?.staffKey ?? owner.key),
       providerName: headCoachName,
       level: 'all',
+      durationsMinutes: profile.appointments.durationsMinutes,
+      max_participants: 1,
       isFreeTrial: true,
       isActive: true,
+      ...(appointmentImageUrl ? { image_url: appointmentImageUrl } : {}),
       created_at: ts(daysFromNow(-180)),
     })
   await db
@@ -1068,25 +1087,24 @@ async function seedLeadTenant(profile: LeadProfile) {
       slug: profile.appointments.slug,
       color: profile.accentColor,
       description: profile.appointments.description,
-      image_url: null,
+      image_url: appointmentImageUrl,
       isFreeTrial: true,
       level: 'all',
     })
 
-  // ── appointments: one availability template + materialized slots per coach ────
-  // Adult students eligible to appear as past private-lesson attendees.
-  const appointmentAttendeeIdxs = profile.contacts
-    .map((c, i) => ({ c, i }))
-    .filter((x) => x.c.type === 'student' && !x.c.kid)
-    .map((x) => x.i)
-  for (let tplIdx = 0; tplIdx < profile.appointments.templates.length; tplIdx++) {
-    const tpl = profile.appointments.templates[tplIdx]
-    const providerUid = uidOf(tpl.staffKey)
-    const providerName = staffName(tpl.staffKey)
-    // Index-suffixed so one coach can hold several availability templates.
-    const templateId = `${teamId}-tpl-${tpl.staffKey}-${tplIdx}`
-    const tplPlace = resolvePlace(tpl.placeKey)
-    const isWindow = tpl.mode === 'open_window'
+  // ── appointments: availability docs + a few already-BOOKED sessions ───────────
+  // Availability publishes only WHEN each coach is free; it generates NOTHING.
+  // An appointment session exists only once a client books one, so the only
+  // sessions seeded here are the profile's `booked` entries — shaped exactly as
+  // the `bookAppointment` callable writes them.
+  const firstAdultIdx = profile.contacts.findIndex((c) => c.type === 'student' && !c.kid)
+  for (let tplIdx = 0; tplIdx < profile.appointments.availability.length; tplIdx++) {
+    const av = profile.appointments.availability[tplIdx]
+    const providerUid = uidOf(av.staffKey)
+    const providerName = staffName(av.staffKey)
+    // Index-suffixed so one coach can hold several availabilities.
+    const templateId = `${teamId}-tpl-${av.staffKey}-${tplIdx}`
+    const tplPlace = resolvePlace(av.placeKey)
     await db
       .collection('availability')
       .doc(templateId)
@@ -1094,169 +1112,86 @@ async function seedLeadTenant(profile: LeadProfile) {
         teamId,
         providerId: providerUid,
         providerName,
-        activityId: appointmentActId,
-        title: profile.appointments.activityName,
+        // The SCHEDULE's name — the offering's name lives on the activity.
+        title: av.title,
         description: profile.appointments.description,
-        duration_minutes: isWindow ? (tpl.durationsMinutes?.[0] ?? tpl.durationMin) : tpl.durationMin,
-        max_participants: 1,
-        isFreeTrial: tpl.isFreeTrial,
+        activityIds: [appointmentActId],
         location: tplPlace.label,
         ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
         onlineUrl: null,
         status: 'active',
-        // Reconciled to the shared Availability shape (daysOfWeek + start/end date).
+        mode: av.mode,
+        ...(av.mode === 'range'
+          ? { window: av.window, granularityMinutes: av.granularityMinutes ?? 30 }
+          : { times: av.times ?? [] }),
+        bufferMinutes: av.bufferMinutes ?? 0,
         recurrence: {
-          daysOfWeek: tpl.daysOfWeek,
-          time: isWindow ? (tpl.window?.start ?? tpl.time) : tpl.time,
+          daysOfWeek: av.daysOfWeek,
           startDate: ts(daysFromNow(-40)),
           endDate: null,
         },
-        mode: tpl.mode ?? 'fixed_slots',
-        ...(isWindow
-          ? {
-              window: tpl.window,
-              durationsMinutes: tpl.durationsMinutes,
-              granularityMinutes: tpl.granularityMinutes ?? 15,
-              bufferMinutes: tpl.bufferMinutes ?? 0,
-            }
-          : {}),
         created_at: ts(daysFromNow(-40)),
+        createdBy: providerUid,
       })
 
-    // Open windows pre-generate NOTHING — sessions are created lazily at booking.
-    if (isWindow) continue
+    for (const b of av.booked ?? []) {
+      const past = b.occurrence < 0
+      const dates = appointmentOccurrences({
+        daysOfWeek: av.daysOfWeek,
+        time: b.time,
+        count: Math.abs(b.occurrence),
+        direction: past ? -1 : 1,
+        maxDayspan: (past ? scheduleWeeksBack : scheduleWeeksAhead) * 7 + 14,
+      })
+      const start = dates[dates.length - 1]
+      if (!start) continue
 
-    // Materialize the next N occurrences of the template's recurrence days so
-    // the bookable slots match the advertised weekdays regardless of run date.
-    // The day cap follows the schedule horizon so a larger slotCount can reach out.
-    const [tplHH, tplMM] = tpl.time.split(':').map(Number)
-    const appointmentDayCap = scheduleWeeksAhead * 7 + 7
-    const slotDates: Date[] = []
-    for (let dayOffset = 0; slotDates.length < tpl.slotCount && dayOffset <= appointmentDayCap; dayOffset++) {
-      const d = daysFromNow(dayOffset)
-      if (!tpl.daysOfWeek.includes(d.getDay())) continue
-      d.setHours(tplHH, tplMM ?? 0, 0, 0)
-      if (d.getTime() <= now().getTime()) continue // today counts only while still upcoming
-      slotDates.push(d)
-    }
-    for (let i = 0; i < slotDates.length; i++) {
-      const base = slotDates[i]
-      const end = minutesOffset(base, tpl.durationMin)
-      const sid = `${teamId}-appointment-${tpl.staffKey}-${tplIdx}-${i}`
-      const isFull = tpl.bookedSlots.includes(i)
-      const status = isFull ? 'full' : 'open'
-      const common = {
+      const contactIdx = b.contactIdx ?? firstAdultIdx
+      const client = profile.contacts[contactIdx]
+      if (!client) continue
+      const contactId = `${teamId}-contact-${contactIdx.toString().padStart(3, '0')}`
+      const clientEmail = `${slugEmail(client)}.${teamId}@example.com`
+
+      const { id: sid, session, publicProfile } = buildAppointmentSessionDocs({
         teamId,
-        activityType: 'appointment',
+        templateId,
+        activityId: appointmentActId,
         activityName: profile.appointments.activityName,
+        accessRule: { type: 'open' },
+        isFreeTrial: true,
+        maxParticipants: 1,
         providerId: providerUid,
         providerName,
-        templateId,
-        start: ts(base),
-        end: ts(end),
-        duration_minutes: tpl.durationMin,
-        max_participants: 1,
-        bookings_count: isFull ? 1 : 0,
+        start,
+        durationMinutes: b.durationMinutes,
         location: tplPlace.label,
-        locationAddress: tplPlace.address,
-        ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
-        onlineUrl: null,
-        isFreeTrial: tpl.isFreeTrial,
-        status,
-        allowBooking: true,
-      }
+        extra: {
+          locationAddress: tplPlace.address,
+          ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
+        },
+        past,
+        createdAt: daysFromNow(past ? -scheduleWeeksBack * 7 - 7 : -7),
+      })
+      await db.collection('sessions').doc(sid).set(session)
+      await db.collection('sessions').doc(sid).collection('public_profile').doc(sid).set(publicProfile)
       await db
         .collection('sessions')
         .doc(sid)
-        .set({ ...common, activityId: appointmentActId, created_at: ts(daysFromNow(-7)) })
-      await db
-        .collection('sessions')
-        .doc(sid)
-        .collection('public_profile')
-        .doc(sid)
-        .set({ type: 'appointment_session', ...common })
-      if (isFull) {
-        const booked = profile.contacts.find((c) => c.type === 'student' && !c.kid)!
-        await db
-          .collection('sessions')
-          .doc(sid)
-          .collection('bookings')
-          .doc(`${sid}-booking`)
-          .set({
+        .collection('bookings')
+        .doc(contactId)
+        .set(
+          buildAppointmentBookingDoc({
             teamId,
-            contactId: `${teamId}-contact-${profile.contacts.indexOf(booked).toString().padStart(3, '0')}`,
-            session: sid,
-            email: `${slugEmail(booked)}.${teamId}@example.com`,
-            firstname: booked.firstname,
-            lastname: booked.lastname,
-            fullname: `${booked.firstname} ${booked.lastname}`,
-            status: 'confirmed',
-            joinedAt: ts(daysFromNow(-2)),
-            booking_token: `tok-appointment-${sid}`,
-            is_new_contact: false,
+            sessionId: sid,
+            contactId,
+            firstname: client.firstname,
+            lastname: client.lastname,
+            email: clientEmail,
+            bookedAt: daysFromNow(past ? -scheduleWeeksBack * 7 : -2),
           })
-      }
-    }
-
-    // History: past occurrences over the same window as the group grid, so the
-    // appointment calendar looks lived-in and reports have attendance. Most were
-    // booked (1:1, attended); the rest went unfilled.
-    const pastDates: Date[] = []
-    for (let dayOffset = -scheduleWeeksBack * 7; dayOffset <= 0; dayOffset++) {
-      const d = daysFromNow(dayOffset)
-      if (!tpl.daysOfWeek.includes(d.getDay())) continue
-      d.setHours(tplHH, tplMM ?? 0, 0, 0)
-      if (d.getTime() < now().getTime()) pastDates.push(d)
-    }
-    for (let p = 0; p < pastDates.length; p++) {
-      const base = pastDates[p]
-      const end = minutesOffset(base, tpl.durationMin)
-      const sid = `${teamId}-appointment-${tpl.staffKey}-${tplIdx}-past-${p}`
-      const attendeeIdx = appointmentAttendeeIdxs.length
-        ? appointmentAttendeeIdxs[Math.floor(seededRand(sid + 'who') * appointmentAttendeeIdxs.length)]
-        : -1
-      const attended = attendeeIdx >= 0 && seededRand(sid) < 0.7
-      const pastCommon = {
-        teamId,
-        activityType: 'appointment',
-        activityName: profile.appointments.activityName,
-        providerId: providerUid,
-        providerName,
-        templateId,
-        start: ts(base),
-        end: ts(end),
-        duration_minutes: tpl.durationMin,
-        max_participants: 1,
-        bookings_count: attended ? 1 : 0,
-        location: tplPlace.label,
-        locationAddress: tplPlace.address,
-        ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
-        onlineUrl: null,
-        isFreeTrial: tpl.isFreeTrial,
-        status: attended ? 'full' : 'open',
-      }
-      await db
-        .collection('sessions')
-        .doc(sid)
-        .set({
-          ...pastCommon,
-          activityId: appointmentActId,
-          participants_count: attended ? 1 : 0,
-          allowBooking: false,
-          created_at: ts(daysFromNow(-scheduleWeeksBack * 7 - 7)),
-        })
-      // Public mirror — the live syncSessionPublicProfile keeps appointment sessions
-      // mirrored (allowBooking: true) unless cancelled, past ones included; the
-      // public weekly timetable shows them muted.
-      await db
-        .collection('sessions')
-        .doc(sid)
-        .collection('public_profile')
-        .doc(sid)
-        .set({ type: 'appointment_session', ...pastCommon, allowBooking: true })
-      if (attended) {
-        const cs = profile.contacts[attendeeIdx]
-        const contactId = `${teamId}-contact-${attendeeIdx.toString().padStart(3, '0')}`
+        )
+      // Past appointments were attended — reports read the participants subcollection.
+      if (past) {
         await db
           .collection('sessions')
           .doc(sid)
@@ -1265,10 +1200,10 @@ async function seedLeadTenant(profile: LeadProfile) {
           .set({
             contactId,
             session: sid,
-            firstname: cs.firstname,
-            lastname: cs.lastname,
-            fullname: `${cs.lastname} ${cs.firstname}`,
-            joinedAt: ts(base),
+            firstname: client.firstname,
+            lastname: client.lastname,
+            fullname: `${client.lastname} ${client.firstname}`,
+            joinedAt: ts(start),
             checkedInBy: 'seed',
           })
       }

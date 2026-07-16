@@ -1,11 +1,15 @@
 /* eslint-disable no-console */
-// Open availability windows (Calendly-style). A coach advertises a daily time
-// range + allowed durations; clients pick a start. Unlike fixed-slot templates,
-// NOTHING is pre-generated — availability is computed on the fly here, and a
-// Session is created lazily, overlap-safe, at booking time.
+// Appointments are ACTIVITY-BOUND and AVAILABILITY-ONLY. A coach publishes an
+// `Availability` (the *when* — a daily range or explicit times, Calendly-style)
+// linked to one or more `type: 'appointment'` Activities (the *what* — name,
+// duration(s), capacity, access rule). Nothing is ever pre-generated: a start
+// time is indeterminate until the client picks an activity, so free time is
+// computed on the fly here, and a Session is created lazily, overlap-safe, at
+// booking time.
 //
-//  • listAvailability  — public: free start times per coach/day/duration.
-//  • bookAppointment    — public: overlap-checked create-session + book.
+//  • listAvailability — public: free start times per coach/activity/day/duration.
+//  • bookAppointment  — public: resolves the covering availability server-side,
+//    runs the shared paid-access gate, then overlap-checked create-session + book.
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
@@ -17,7 +21,17 @@ import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
 import { resolveSingleContact } from '../utils/contacts'
 import { canCreateContact } from '../utils/contactCap'
-import { AVAILABILITY_COLLECTION, type SaasPlan } from '@linyup/shared'
+import { resolveBookingAccessGate } from '../booking/access'
+import {
+  AVAILABILITY_COLLECTION,
+  ACTIVITIES_COLLECTION,
+  CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
+  resolveActivityAccessRule,
+  type Activity,
+  type ActivityAccessRule,
+  type Availability,
+  type SaasPlan,
+} from '@linyup/shared'
 import { getDatePartsInTz, localTimeToUtc } from './index'
 import {
   buildAppointmentConfirmationEmail,
@@ -39,26 +53,9 @@ const parseHHMM = (s: unknown): [number, number] => {
   return [Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0]
 }
 
-interface WindowTemplate {
+// A provider's published free time — the *when*. `id` is the Firestore doc id.
+interface WindowTemplate extends Availability {
   id: string
-  teamId: string
-  providerId: string
-  providerName: string
-  title: string
-  status: string
-  mode?: string
-  isFreeTrial?: boolean
-  location?: string | null
-  onlineUrl?: string | null
-  window?: { start: string; end: string }
-  durationsMinutes?: number[]
-  granularityMinutes?: number
-  bufferMinutes?: number
-  recurrence?: {
-    daysOfWeek?: number[]
-    startDate?: Timestamp
-    endDate?: Timestamp | null
-  }
 }
 
 interface BusyInterval {
@@ -72,10 +69,105 @@ function conflicts(startMs: number, durMs: number, busy: BusyInterval[], bufferM
   return busy.some((b) => startMs < b.end + bufferMs && endMs > b.start - bufferMs)
 }
 
+// Loaded/derived shape of a `type: 'appointment'` activity — the *what*.
+interface ActivityInfo {
+  id: string
+  name: string
+  durationsMinutes: number[]
+  accessRule: ActivityAccessRule
+}
+
+function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
+  const durationsMinutes = (a.durationsMinutes && a.durationsMinutes.length ? a.durationsMinutes : [60]).filter(
+    (x) => x > 0
+  )
+  if (!durationsMinutes.length) return null
+  return {
+    id,
+    name: a.name || 'Appointment',
+    durationsMinutes,
+    accessRule: resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial }),
+  }
+}
+
+// Enumerate candidate starts for (template, activity durations) across
+// [nowMs, toMs], merging into a per-day, per-duration accumulator so several
+// availabilities offering the SAME activity combine into one listing.
+function accumulateCandidates(
+  tpl: WindowTemplate,
+  durations: number[],
+  busy: BusyInterval[],
+  nowMs: number,
+  toMs: number,
+  daysMap: Map<number, Record<string, Set<number>>>
+): void {
+  const bufferMs = (tpl.bufferMinutes || 0) * 60_000
+  const daysOfWeek = tpl.recurrence?.daysOfWeek ?? []
+  const startDate = tpl.recurrence?.startDate ? tpl.recurrence.startDate.toMillis() : 0
+  const endDate = tpl.recurrence?.endDate ? tpl.recurrence.endDate.toMillis() : Infinity
+
+  let gran = 0
+  let winStartHM: [number, number] | null = null
+  let winEndHM: [number, number] | null = null
+  if (tpl.mode === 'range') {
+    if (!tpl.window) return
+    winStartHM = parseHHMM(tpl.window.start)
+    winEndHM = parseHHMM(tpl.window.end)
+    gran = (tpl.granularityMinutes || 15) * 60_000
+  }
+
+  const cursor = new Date(nowMs)
+  cursor.setUTCHours(0, 0, 0, 0)
+  while (cursor.getTime() <= toMs) {
+    const { year, month, day, dayOfWeek } = getDatePartsInTz(cursor)
+    const dayMidnight = localTimeToUtc(year, month, day, 0, 0).getTime()
+    if (daysOfWeek.includes(dayOfWeek) && dayMidnight >= startDate - DAY_MS && dayMidnight <= endDate) {
+      for (const dur of durations) {
+        const durMs = dur * 60_000
+        const starts: number[] = []
+        if (tpl.mode === 'times') {
+          for (const hhmm of tpl.times ?? []) {
+            const [h, m] = parseHHMM(hhmm)
+            const s = localTimeToUtc(year, month, day, h, m).getTime()
+            if (s <= nowMs) continue
+            // 'times' mode: no window bound — just don't spill past end of day.
+            if (s + durMs > dayMidnight + DAY_MS) continue
+            if (conflicts(s, durMs, busy, bufferMs)) continue
+            starts.push(s)
+          }
+        } else if (winStartHM && winEndHM) {
+          const winStart = localTimeToUtc(year, month, day, winStartHM[0], winStartHM[1]).getTime()
+          const winEnd = localTimeToUtc(year, month, day, winEndHM[0], winEndHM[1]).getTime()
+          for (let s = winStart; s + durMs <= winEnd; s += gran) {
+            if (s <= nowMs) continue
+            if (conflicts(s, durMs, busy, bufferMs)) continue
+            starts.push(s)
+          }
+        }
+        if (starts.length) {
+          let byDur = daysMap.get(dayMidnight)
+          if (!byDur) {
+            byDur = {}
+            daysMap.set(dayMidnight, byDur)
+          }
+          const set = byDur[String(dur)] ?? (byDur[String(dur)] = new Set<number>())
+          for (const s of starts) set.add(s)
+        }
+      }
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+}
+
 // ─── listAvailability (public) ─────────────────────────────────────────────────
 
 export const listAvailability = onCall(async (request) => {
-  const data = request.data as { teamId?: string; providerId?: string; days?: number }
+  const data = request.data as {
+    teamId?: string
+    providerId?: string
+    activityId?: string
+    days?: number
+  }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
 
   const rangeDays = Math.min(Math.max(Math.floor(data.days ?? DEFAULT_RANGE_DAYS), 1), MAX_RANGE_DAYS)
@@ -83,22 +175,52 @@ export const listAvailability = onCall(async (request) => {
   const nowMs = Date.now()
   const toMs = nowMs + rangeDays * DAY_MS
 
+  // Both 'range' and 'times' modes are live — no mode filter here any more.
   const snap = await db
     .collection(AVAILABILITY_COLLECTION)
     .where('teamId', '==', data.teamId)
     .where('status', '==', 'active')
     .get()
-  const templates: WindowTemplate[] = snap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<WindowTemplate, 'id'>) }))
-    .filter((t) => t.mode === 'open_window' && (!data.providerId || t.providerId === data.providerId))
+  let templates: WindowTemplate[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Availability) }))
+  if (data.providerId) templates = templates.filter((t) => t.providerId === data.providerId)
   if (templates.length === 0) return { coaches: [] }
 
-  // Group templates by provider so a provider's booked sessions are queried once.
+  // Batch-load the union of referenced activities; keep only bookable appointment offerings.
+  const activityIds = new Set<string>()
+  for (const t of templates) for (const id of t.activityIds ?? []) activityIds.add(id)
+  const activityDocs = await Promise.all(
+    [...activityIds].map((id) => db.collection(ACTIVITIES_COLLECTION).doc(id).get())
+  )
+  const activityMap = new Map<string, ActivityInfo>()
+  for (const doc of activityDocs) {
+    if (!doc.exists) continue
+    const a = doc.data() as Activity
+    if (a.type !== 'appointment' || a.teamId !== data.teamId) continue
+    if (data.activityId && doc.id !== data.activityId) continue
+    const info = toActivityInfo(doc.id, a)
+    if (info) activityMap.set(doc.id, info)
+  }
+  if (activityMap.size === 0) return { coaches: [] }
+
+  // Group templates by provider so a provider's busy sessions are queried once.
   const byProvider = new Map<string, WindowTemplate[]>()
   for (const t of templates) {
+    const offersBookable = (t.activityIds ?? []).some((id) => activityMap.has(id))
+    if (!offersBookable) continue
     const arr = byProvider.get(t.providerId)
     if (arr) arr.push(t)
     else byProvider.set(t.providerId, [t])
+  }
+  if (byProvider.size === 0) return { coaches: [] }
+
+  interface ActivityAccumulator {
+    activityId: string
+    activityName: string
+    durationsMinutes: number[]
+    accessRule: ActivityAccessRule
+    location: string | null
+    onlineUrl: string | null
+    daysMap: Map<number, Record<string, Set<number>>>
   }
 
   const coaches: unknown[] = []
@@ -116,58 +238,58 @@ export const listAvailability = onCall(async (request) => {
       .filter((s) => s.status !== 'cancelled')
       .map((s) => ({ start: (s.start as Timestamp).toMillis(), end: (s.end as Timestamp).toMillis() }))
 
+    // GROUP BY (provider, activity) — merge days across a provider's several
+    // availabilities that offer the same activity (e.g. "Saturday mornings" AND
+    // "Weekday evenings" both offering the same 60' session).
+    const activityAcc = new Map<string, ActivityAccumulator>()
     for (const tpl of providerTemplates) {
-      const durations = (tpl.durationsMinutes ?? []).filter((x) => x > 0)
-      if (!tpl.window || durations.length === 0) continue
-      const gran = (tpl.granularityMinutes || 15) * 60_000
-      const bufferMs = (tpl.bufferMinutes || 0) * 60_000
-      const [wsH, wsM] = parseHHMM(tpl.window.start)
-      const [weH, weM] = parseHHMM(tpl.window.end)
-      const daysOfWeek = tpl.recurrence?.daysOfWeek ?? []
-      const startDate = tpl.recurrence?.startDate ? tpl.recurrence.startDate.toMillis() : 0
-      const endDate = tpl.recurrence?.endDate ? tpl.recurrence.endDate.toMillis() : Infinity
-
-      const days: { dayMs: number; slotsByDuration: Record<string, number[]> }[] = []
-      const cursor = new Date(nowMs)
-      cursor.setUTCHours(0, 0, 0, 0)
-      while (cursor.getTime() <= toMs) {
-        const { year, month, day, dayOfWeek } = getDatePartsInTz(cursor)
-        const dayMidnight = localTimeToUtc(year, month, day, 0, 0).getTime()
-        if (
-          daysOfWeek.includes(dayOfWeek) &&
-          dayMidnight >= startDate - DAY_MS &&
-          dayMidnight <= endDate
-        ) {
-          const winStart = localTimeToUtc(year, month, day, wsH, wsM).getTime()
-          const winEnd = localTimeToUtc(year, month, day, weH, weM).getTime()
-          const slotsByDuration: Record<string, number[]> = {}
-          for (const dur of durations) {
-            const durMs = dur * 60_000
-            const starts: number[] = []
-            for (let s = winStart; s + durMs <= winEnd; s += gran) {
-              if (s <= nowMs) continue
-              if (!conflicts(s, durMs, busy, bufferMs)) starts.push(s)
-            }
-            if (starts.length) slotsByDuration[String(dur)] = starts
+      const offered = (tpl.activityIds ?? []).filter((id) => activityMap.has(id))
+      for (const activityId of offered) {
+        const info = activityMap.get(activityId)!
+        let acc = activityAcc.get(activityId)
+        if (!acc) {
+          // Location/onlineUrl: take them from the first contributing availability.
+          // Edge case: differing locations across schedules show the first —
+          // booking always resolves the real one from the matched availability.
+          acc = {
+            activityId,
+            activityName: info.name,
+            durationsMinutes: info.durationsMinutes,
+            accessRule: info.accessRule,
+            location: tpl.location ?? null,
+            onlineUrl: tpl.onlineUrl ?? null,
+            daysMap: new Map(),
           }
-          if (Object.keys(slotsByDuration).length) days.push({ dayMs: dayMidnight, slotsByDuration })
+          activityAcc.set(activityId, acc)
         }
-        cursor.setUTCDate(cursor.getUTCDate() + 1)
+        accumulateCandidates(tpl, info.durationsMinutes, busy, nowMs, toMs, acc.daysMap)
       }
+    }
 
+    const activities: unknown[] = []
+    for (const acc of activityAcc.values()) {
+      const days = [...acc.daysMap.entries()]
+        .map(([dayMs, byDur]) => ({
+          dayMs,
+          slotsByDuration: Object.fromEntries(
+            Object.entries(byDur).map(([dur, set]) => [dur, [...set].sort((a, b) => a - b)])
+          ),
+        }))
+        .sort((a, b) => a.dayMs - b.dayMs)
       if (days.length) {
-        coaches.push({
-          providerId,
-          providerName: tpl.providerName,
-          templateId: tpl.id,
-          title: tpl.title,
-          location: tpl.location ?? null,
-          onlineUrl: tpl.onlineUrl ?? null,
-          isFreeTrial: tpl.isFreeTrial !== false,
-          durations,
+        activities.push({
+          activityId: acc.activityId,
+          activityName: acc.activityName,
+          durationsMinutes: acc.durationsMinutes,
+          accessRule: acc.accessRule,
+          location: acc.location,
+          onlineUrl: acc.onlineUrl,
           days,
         })
       }
+    }
+    if (activities.length) {
+      coaches.push({ providerId, providerName: providerTemplates[0].providerName, activities })
     }
   }
 
@@ -281,13 +403,41 @@ async function sendAppointmentBookingEmails(p: {
   }
 }
 
+// Does availability `tpl` (offering `activityId`, already pre-filtered by the
+// caller) cover this exact start for a booking of length `durMs`?
+function availabilityCoversStart(tpl: WindowTemplate, startMsVal: number, durMs: number): boolean {
+  const { year, month, day, dayOfWeek } = getDatePartsInTz(new Date(startMsVal))
+  if (!(tpl.recurrence?.daysOfWeek ?? []).includes(dayOfWeek)) return false
+  const sd = tpl.recurrence?.startDate ? tpl.recurrence.startDate.toMillis() : 0
+  const ed = tpl.recurrence?.endDate ? tpl.recurrence.endDate.toMillis() : Infinity
+  if (startMsVal < sd || startMsVal > ed + DAY_MS) return false
+
+  if (tpl.mode === 'times') {
+    return (tpl.times ?? []).some((hhmm) => {
+      const [h, m] = parseHHMM(hhmm)
+      return localTimeToUtc(year, month, day, h, m).getTime() === startMsVal
+    })
+  }
+
+  // 'range' mode
+  if (!tpl.window) return false
+  const [wsH, wsM] = parseHHMM(tpl.window.start)
+  const [weH, weM] = parseHHMM(tpl.window.end)
+  const winStart = localTimeToUtc(year, month, day, wsH, wsM).getTime()
+  const winEnd = localTimeToUtc(year, month, day, weH, weM).getTime()
+  const gran = (tpl.granularityMinutes || 15) * 60_000
+  if (startMsVal < winStart || startMsVal + durMs > winEnd) return false
+  if ((startMsVal - winStart) % gran !== 0) return false
+  return true
+}
+
 // ─── bookAppointment (public) ───────────────────────────────────────────────────
 
 export const bookAppointment = onCall(async (request) => {
   const data = request.data as {
     teamId?: string
-    templateId?: string
     providerId?: string
+    activityId?: string
     startMs?: number
     durationMinutes?: number
     contactDetails?: { firstname: string; lastname: string; email: string; phone?: string }
@@ -296,11 +446,15 @@ export const bookAppointment = onCall(async (request) => {
   }
   if (
     !data?.teamId ||
-    !data?.templateId ||
+    !data?.providerId ||
+    !data?.activityId ||
     typeof data.startMs !== 'number' ||
     typeof data.durationMinutes !== 'number'
   ) {
-    throw new HttpsError('invalid-argument', 'teamId, templateId, startMs and durationMinutes are required')
+    throw new HttpsError(
+      'invalid-argument',
+      'teamId, providerId, activityId, startMs and durationMinutes are required'
+    )
   }
 
   const db = admin.firestore()
@@ -309,45 +463,41 @@ export const bookAppointment = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'Cannot book a time in the past')
   }
   const durationMinutes = data.durationMinutes
-  const end = new Date(start.getTime() + durationMinutes * 60_000)
+  const durationMs = durationMinutes * 60_000
+  const end = new Date(start.getTime() + durationMs)
 
-  // ── Load + validate the window template ──
-  const tplDoc = await db.collection(AVAILABILITY_COLLECTION).doc(data.templateId).get()
-  if (!tplDoc.exists) throw new HttpsError('not-found', 'Availability not found')
-  const tpl = tplDoc.data() as WindowTemplate
-  if (tpl.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Team mismatch')
-  if (tpl.status !== 'active' || tpl.mode !== 'open_window' || !tpl.window)
-    throw new HttpsError('failed-precondition', 'This availability is not open for booking')
-  const providerId = tpl.providerId
-  if (data.providerId && data.providerId !== providerId)
-    throw new HttpsError('invalid-argument', 'Coach mismatch')
-
-  // Validate the chosen start against the advertised window.
-  const { year, month, day, dayOfWeek } = getDatePartsInTz(start)
-  if (!(tpl.recurrence?.daysOfWeek ?? []).includes(dayOfWeek))
-    throw new HttpsError('failed-precondition', 'Not an available day')
-  const [wsH, wsM] = parseHHMM(tpl.window.start)
-  const [weH, weM] = parseHHMM(tpl.window.end)
-  const winStart = localTimeToUtc(year, month, day, wsH, wsM).getTime()
-  const winEnd = localTimeToUtc(year, month, day, weH, weM).getTime()
-  const gran = (tpl.granularityMinutes || 15) * 60_000
-  if (start.getTime() < winStart || end.getTime() > winEnd)
-    throw new HttpsError('failed-precondition', 'Chosen time is outside the availability window')
-  if ((start.getTime() - winStart) % gran !== 0)
-    throw new HttpsError('failed-precondition', 'Chosen time is not on the booking grid')
-  if (!(tpl.durationsMinutes ?? []).includes(durationMinutes))
+  // ── Load + validate the activity (the *what*: name, duration, capacity, access) ──
+  const actDoc = await db.collection(ACTIVITIES_COLLECTION).doc(data.activityId).get()
+  if (!actDoc.exists) throw new HttpsError('not-found', 'Activity not found')
+  const activity = actDoc.data() as Activity
+  if (activity.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Team mismatch')
+  if (activity.type !== 'appointment')
+    throw new HttpsError('failed-precondition', 'This activity does not support appointment booking')
+  const allowedDurations =
+    activity.durationsMinutes && activity.durationsMinutes.length ? activity.durationsMinutes : [60]
+  if (!allowedDurations.includes(durationMinutes))
     throw new HttpsError('failed-precondition', 'Duration is not offered')
-  const sd = tpl.recurrence?.startDate ? tpl.recurrence.startDate.toMillis() : 0
-  const ed = tpl.recurrence?.endDate ? tpl.recurrence.endDate.toMillis() : Infinity
-  if (start.getTime() < sd || start.getTime() > ed + DAY_MS)
-    throw new HttpsError('failed-precondition', 'This availability is not active for that date')
 
-  const isFreeTrial = tpl.isFreeTrial !== false
-  const authenticated = !!data.authenticatedContactId
-  if (!isFreeTrial && !authenticated)
-    throw new HttpsError('permission-denied', 'This time is for registered members only.')
+  // ── Resolve the availability (the *when*) that covers this start ──
+  const providerId = data.providerId
+  const tplSnap = await db
+    .collection(AVAILABILITY_COLLECTION)
+    .where('teamId', '==', data.teamId)
+    .where('providerId', '==', providerId)
+    .where('status', '==', 'active')
+    .get()
+  const templates: WindowTemplate[] = tplSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Availability) }))
+  const tpl = templates.find(
+    (t) =>
+      (t.activityIds ?? []).includes(data.activityId as string) &&
+      availabilityCoversStart(t, start.getTime(), durationMs)
+  )
+  if (!tpl) {
+    throw new HttpsError('failed-precondition', 'This time is no longer available. Please pick another.')
+  }
+  const providerName = tpl.providerName
 
-  // ── Team + resolve/create the contact ──
+  // ── Team ──
   const team = await getTeam(data.teamId)
   if (!team) throw new HttpsError('not-found', 'Team not found')
   const teamName = (team as { name?: string }).name || 'Our Team'
@@ -355,8 +505,9 @@ export const bookAppointment = onCall(async (request) => {
   const plan = ((team as { plan?: SaasPlan }).plan || 'free') as SaasPlan
   const lang = asLang((team as { language?: string }).language)
 
-  let contactId: string
-  let isNewContact = false
+  // ── Resolve/validate the caller's contact details ──
+  const authenticated = !!data.authenticatedContactId
+  let authenticatedContactFull: (admin.firestore.DocumentData & { id: string }) | null = null
   let sanitized: { firstname: string; lastname: string; email: string; phone: string | null }
 
   if (authenticated) {
@@ -381,7 +532,7 @@ export const bookAppointment = onCall(async (request) => {
     if (!cDoc.exists) throw new HttpsError('not-found', 'Contact not found')
     const c = cDoc.data()!
     if (c.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Contact team mismatch')
-    contactId = data.authenticatedContactId as string
+    authenticatedContactFull = { id: data.authenticatedContactId as string, ...c }
     sanitized = {
       firstname: c.firstname || '',
       lastname: c.lastname || '',
@@ -400,6 +551,27 @@ export const bookAppointment = onCall(async (request) => {
       email: cd.email.toLowerCase().trim(),
       phone: cd.phone?.trim() || null,
     }
+  }
+
+  // ── Access gate (paid-access axis) — shared with bookSession, see booking/access.ts.
+  // Guests booking a 'members'/'subscription' activity are refused here.
+  const accessRule = resolveActivityAccessRule({
+    accessRule: activity.accessRule,
+    isFreeTrial: activity.isFreeTrial,
+  })
+  const { matchedSubscriptionTypeId, creditSpendTypeId } = await resolveBookingAccessGate({
+    teamId: data.teamId,
+    accessRule,
+    authenticatedContact: authenticatedContactFull,
+    isAppointment: true,
+  })
+
+  // ── Resolve/create the contact (only reached unauthenticated for 'open' activities) ──
+  let contactId: string
+  let isNewContact = false
+  if (authenticated) {
+    contactId = data.authenticatedContactId as string
+  } else {
     const match = await resolveSingleContact(data.teamId, sanitized.email)
     if (match.contactId) {
       contactId = match.contactId
@@ -437,18 +609,22 @@ export const bookAppointment = onCall(async (request) => {
 
   const sessionDoc = {
     teamId: data.teamId,
-    templateId: data.templateId,
+    templateId: tpl.id,
     origin: 'window',
     activityType: 'appointment',
-    activityName: tpl.title,
+    // The session INHERITS FROM THE ACTIVITY: name/access/capacity come from the
+    // offering the client picked, not the schedule — exactly like a class.
+    activityId: data.activityId,
+    activityName: activity.name,
+    accessRule,
     providerId,
-    providerName: tpl.providerName,
-    isFreeTrial,
+    providerName,
     start: Timestamp.fromDate(start),
     end: Timestamp.fromDate(end),
     duration_minutes: durationMinutes,
-    max_participants: 1,
+    max_participants: activity.max_participants ?? 1,
     bookings_count: 1,
+    // Location/onlineUrl come from the matched availability (the *when*).
     location: tpl.location ?? null,
     onlineUrl: tpl.onlineUrl ?? null,
     allowBooking: true,
@@ -471,6 +647,7 @@ export const bookAppointment = onCall(async (request) => {
     is_new_contact: isNewContact,
     booking_token: bookingToken,
     authenticated_booking: authenticated,
+    subscription_type_id: matchedSubscriptionTypeId,
     status: 'confirmed',
     fullname: `${sanitized.firstname} ${sanitized.lastname}`,
   }
@@ -497,8 +674,56 @@ export const bookAppointment = onCall(async (request) => {
         throw new HttpsError('failed-precondition', 'This time overlaps another appointment.')
       }
     }
+
+    // Credit-pack coverage: spend one credit atomically with the booking write,
+    // inside the SAME transaction as the overlap check (all reads before writes).
+    // FIFO across the contact's usable grants (soonest expiry first, then oldest).
+    let grant: { ref: FirebaseFirestore.DocumentReference; credits_used: number } | null = null
+    if (creditSpendTypeId) {
+      const grantsQuery = db
+        .collection('contacts')
+        .doc(contactId)
+        .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
+        .where('teamId', '==', data.teamId)
+        .where('subscription_type_id', '==', creditSpendTypeId)
+      const grantsSnap = await tx.get(grantsQuery)
+      const nowMsTx = Date.now()
+      const usable = grantsSnap.docs
+        .map((d) => {
+          const g = d.data()
+          return {
+            ref: d.ref,
+            credits_total: (g.credits_total as number) ?? 0,
+            credits_used: (g.credits_used as number) ?? 0,
+            expires_at: (g.expires_at as Timestamp | null) ?? null,
+            created_at: (g.created_at as Timestamp | null) ?? null,
+          }
+        })
+        .filter(
+          (g) => g.credits_used < g.credits_total && (!g.expires_at || g.expires_at.toMillis() > nowMsTx)
+        )
+        .sort((a, b) => {
+          const ax = a.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
+          const bx = b.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
+          if (ax !== bx) return ax - bx
+          return (a.created_at?.toMillis() ?? 0) - (b.created_at?.toMillis() ?? 0)
+        })
+      const picked = usable[0]
+      if (!picked) {
+        throw new HttpsError(
+          'permission-denied',
+          'No lesson credits remaining on your pack. Purchase a new pack to book this class.'
+        )
+      }
+      grant = { ref: picked.ref, credits_used: picked.credits_used }
+    }
+
+    if (grant) tx.update(grant.ref, { credits_used: grant.credits_used + 1 })
     tx.set(sessionRef, sessionDoc)
-    tx.set(sessionRef.collection('bookings').doc(contactId), bookingDoc)
+    tx.set(sessionRef.collection('bookings').doc(contactId), {
+      ...bookingDoc,
+      ...(grant && { credit_grant_id: grant.ref.id, credit_spent: 1 }),
+    })
   })
 
   if (!isNewContact) {
@@ -518,9 +743,9 @@ export const bookAppointment = onCall(async (request) => {
     teamId: data.teamId,
     teamName,
     lang,
-    activityName: tpl.title,
+    activityName: activity.name,
     providerId,
-    providerName: tpl.providerName,
+    providerName,
     start,
     end,
     location: tpl.location ?? null,

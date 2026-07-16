@@ -36,8 +36,6 @@ interface Props {
   teamId: string
   sessions: KioskSession[]
   walkInActivityIds?: string[]
-  /** Studio opt-in: offer OPEN 1:1 appointment slots for last-second walk-in booking. */
-  walkInCoaching?: boolean
 }
 
 const fmtDateTime = (d: Date) =>
@@ -62,7 +60,7 @@ function splitName(fullName: string): { firstname: string; lastname: string } {
   return { firstname: trimmed.slice(0, idx), lastname: trimmed.slice(idx + 1) }
 }
 
-export default function WalkIn({ teamId, sessions, walkInActivityIds, walkInCoaching }: Props) {
+export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
   const t = useTranslations('Kiosk')
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>('select')
@@ -81,17 +79,13 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds, walkInCoac
     const now = Date.now()
     const restrict = walkInActivityIds && walkInActivityIds.length > 0
     return sessions
+      // Appointments are availability-only and exist only once booked — there is
+      // no such thing as an open, walk-in-able appointment slot any more. Only
+      // group classes are eligible for walk-in registration.
+      .filter((s) => s.type !== 'appointment_session')
       .filter((s) => s.end.toDate().getTime() > now)
-      .filter((s) =>
-        s.type === 'appointment_session'
-          ? // 1:1 slots are booked ahead by default; the studio can opt in to
-            // last-second kiosk bookings (open slots only). The group-class
-            // activity allowlist doesn't apply — appointment mirrors carry no
-            // activityId; the walkInCoaching toggle IS the appointment gate.
-            walkInCoaching === true && s.status !== 'full' && s.status !== 'cancelled'
-          : !restrict || (s.activityId && walkInActivityIds!.includes(s.activityId))
-      )
-  }, [sessions, walkInActivityIds, walkInCoaching])
+      .filter((s) => !restrict || (s.activityId && walkInActivityIds!.includes(s.activityId)))
+  }, [sessions, walkInActivityIds])
 
   // Group eligible sessions per day for the horizontal day-chip picker.
   const days = useMemo(() => {

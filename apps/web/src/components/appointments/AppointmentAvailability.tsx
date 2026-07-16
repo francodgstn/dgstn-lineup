@@ -4,8 +4,10 @@
 // so it can mount as modals on the Schedule page (an appointment is booked/scheduled
 // as a session — there is no separate appointments page any more).
 //
-//   • AppointmentAvailabilityDialog — manage recurring availability templates
-//     (fixed slots + open windows): list, create, edit, pause/resume.
+//   • AppointmentAvailabilityDialog — manage recurring availability schedules (the
+//     *when*: a time range or a list of explicit times, linked to one or more
+//     type === 'appointment' activities that own the *what* — duration, capacity,
+//     access): list, create, edit, pause/resume.
 //   • AppointmentDetail — a booked appointment session's bookings roster + cancel,
 //     opened from the Schedule calendar when an appointment slot is clicked.
 
@@ -30,13 +32,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
+  ACTIVITIES_COLLECTION,
   AVAILABILITY_COLLECTION,
   SESSIONS_COLLECTION,
   TEAMS_COLLECTION,
   TEAM_MEMBERS_SUBCOLLECTION,
 } from '@linyup/shared'
-import type { Availability, AppointmentBooking, Session } from '@linyup/shared'
-import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock } from 'lucide-react'
+import type { Availability, AppointmentBooking, Session, Activity } from '@linyup/shared'
+import { useActivities } from '@/hooks/useActivities'
+import { formatDuration } from '@/components/sessions/SessionFormDialog'
+import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock, X } from 'lucide-react'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -50,14 +55,8 @@ function formatSlotTime(ts: { toDate(): Date }): string {
   return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function formatDuration(mins: number): string {
-  if (mins < 60) return `${mins}m`
-  const h = Math.floor(mins / 60), m = mins % 60
-  return m ? `${h}h ${m}m` : `${h}h`
-}
-
-function formatDaysTime(rec: Availability['recurrence']): string {
-  return `${rec.daysOfWeek.map((d) => DAY_LABELS[d]).join(', ')} · ${rec.time}`
+function formatDaysOfWeek(daysOfWeek: number[]): string {
+  return daysOfWeek.map((d) => DAY_LABELS[d]).join(', ')
 }
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
@@ -123,44 +122,43 @@ function StatusBadge({ status }: { status: string }) {
 // ─── template form schema ─────────────────────────────────────────────────────
 
 const HHMM = /^\d{2}:\d{2}$/
-const DURATION_PRESETS = [30, 45, 60, 90, 120]
 const GRANULARITY_OPTIONS = [10, 15, 20, 30]
 
 const templateSchema = z
   .object({
     title: z.string().min(1, 'Required').max(80),
     providerId: z.string().min(1, 'Required'),
-    // 'fixed_slots' = exact recurring times; 'open_window' = a daily range clients self-book within.
-    mode: z.enum(['fixed_slots', 'open_window']),
-    duration_minutes: z.number().int().min(15).max(480),
-    max_participants: z.number().int().min(1).max(50),
+    // The type === 'appointment' activities bookable within this schedule.
+    activityIds: z.array(z.string()).min(1, 'Select at least one appointment offering'),
+    // 'range' = a daily window clients self-book within; 'times' = an explicit list
+    // of start times. Both are lazy — no Session is ever pre-generated.
+    mode: z.enum(['range', 'times']),
     location: z.string().max(120).optional(),
     onlineUrl: z.string().url('Enter a valid URL').optional().or(z.literal('')),
-    isFreeTrial: z.boolean(),
     daysOfWeek: z.array(z.number()).min(1, 'Select at least one day'),
-    time: z.string().optional().or(z.literal('')), // fixed_slots only
     startDate: z.string().min(1, 'Required'),
     endDate: z.string().optional(),
-    // open_window only:
+    // 'range' mode only:
     windowStart: z.string().optional().or(z.literal('')),
     windowEnd: z.string().optional().or(z.literal('')),
-    durationsMinutes: z.array(z.number()).optional(),
     granularityMinutes: z.number().int().optional(),
+    // 'times' mode only:
+    times: z.array(z.string()).optional(),
     bufferMinutes: z.number().int().min(0).max(120).optional(),
   })
   .superRefine((v, ctx) => {
-    if (v.mode === 'fixed_slots') {
-      if (!HHMM.test(v.time || ''))
-        ctx.addIssue({ code: 'custom', path: ['time'], message: 'Enter HH:MM' })
-    } else {
+    if (v.mode === 'range') {
       if (!HHMM.test(v.windowStart || ''))
         ctx.addIssue({ code: 'custom', path: ['windowStart'], message: 'Enter HH:MM' })
       if (!HHMM.test(v.windowEnd || ''))
         ctx.addIssue({ code: 'custom', path: ['windowEnd'], message: 'Enter HH:MM' })
       if (v.windowStart && v.windowEnd && v.windowStart >= v.windowEnd)
         ctx.addIssue({ code: 'custom', path: ['windowEnd'], message: 'End must be after start' })
-      if (!v.durationsMinutes || v.durationsMinutes.length === 0)
-        ctx.addIssue({ code: 'custom', path: ['durationsMinutes'], message: 'Pick at least one duration' })
+    } else {
+      if (!v.times || v.times.length === 0)
+        ctx.addIssue({ code: 'custom', path: ['times'], message: 'Add at least one start time' })
+      else if (v.times.some((tm) => !HHMM.test(tm)))
+        ctx.addIssue({ code: 'custom', path: ['times'], message: 'Enter valid HH:MM times' })
     }
   })
 type TemplateFormValues = z.infer<typeof templateSchema>
@@ -168,7 +166,7 @@ type TemplateFormValues = z.infer<typeof templateSchema>
 // ─── template dialog ──────────────────────────────────────────────────────────
 
 function TemplateDialog({
-  open, onOpenChange, editing, teamId, userId, members, onSaved,
+  open, onOpenChange, editing, teamId, userId, members, activities, onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -176,41 +174,43 @@ function TemplateDialog({
   teamId: string
   userId: string
   members: MemberOption[]
+  /** The team's type === 'appointment' activities — class activities are not linkable. */
+  activities: Activity[]
   onSaved: () => void
 }) {
   const t = useTranslations('Appointments')
+  const tActivities = useTranslations('Activities')
+  const qc = useQueryClient()
+  const [creatingActivity, setCreatingActivity] = useState(false)
   const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting }, reset } =
     useForm<TemplateFormValues>({
       resolver: zodResolver(templateSchema),
       defaultValues: editing ? {
         title: editing.title,
         providerId: editing.providerId,
-        mode: editing.mode ?? 'fixed_slots',
-        duration_minutes: editing.duration_minutes,
-        max_participants: editing.max_participants,
+        activityIds: editing.activityIds ?? [],
+        mode: editing.mode ?? 'range',
         location: editing.location || '',
         onlineUrl: editing.onlineUrl || '',
-        isFreeTrial: editing.isFreeTrial !== false,
         daysOfWeek: editing.recurrence.daysOfWeek,
-        time: editing.recurrence.time,
         startDate: editing.recurrence.startDate.toDate().toISOString().split('T')[0],
         endDate: editing.recurrence.endDate?.toDate().toISOString().split('T')[0] || '',
-        windowStart: editing.window?.start ?? '17:00',
-        windowEnd: editing.window?.end ?? '21:00',
-        durationsMinutes: editing.durationsMinutes ?? [60],
+        windowStart: editing.window?.start ?? '09:00',
+        windowEnd: editing.window?.end ?? '17:00',
         granularityMinutes: editing.granularityMinutes ?? 15,
+        times: editing.times ?? [],
         bufferMinutes: editing.bufferMinutes ?? 0,
       } : {
-        title: '', providerId: userId, mode: 'fixed_slots', duration_minutes: 60, max_participants: 1,
-        location: '', onlineUrl: '', isFreeTrial: true, daysOfWeek: [], time: '09:00',
+        title: '', providerId: userId, activityIds: [], mode: 'range',
+        location: '', onlineUrl: '', daysOfWeek: [],
         startDate: new Date().toISOString().split('T')[0], endDate: '',
-        windowStart: '17:00', windowEnd: '21:00', durationsMinutes: [60], granularityMinutes: 15, bufferMinutes: 0,
+        windowStart: '09:00', windowEnd: '17:00', granularityMinutes: 15, times: [], bufferMinutes: 0,
       },
     })
 
   const mode = watch('mode')
   const selectedDays = watch('daysOfWeek') || []
-  const selectedDurations = watch('durationsMinutes') || []
+  const timesList = watch('times') || []
 
   function toggleDay(day: number) {
     setValue('daysOfWeek', selectedDays.includes(day)
@@ -218,38 +218,76 @@ function TemplateDialog({
       : [...selectedDays, day].sort((a, b) => a - b))
   }
 
-  function toggleDuration(d: number) {
-    setValue('durationsMinutes', selectedDurations.includes(d)
-      ? selectedDurations.filter((x) => x !== d)
-      : [...selectedDurations, d].sort((a, b) => a - b))
+  function addTime() {
+    setValue('times', [...timesList, '09:00'])
+  }
+
+  function updateTime(idx: number, value: string) {
+    const next = [...timesList]
+    next[idx] = value
+    setValue('times', next)
+  }
+
+  function removeTime(idx: number) {
+    setValue('times', timesList.filter((_, i) => i !== idx))
+  }
+
+  // Empty-state affordance: a schedule can't link to "no offering", so when the
+  // team has no appointment-type activity yet, create a real general one and
+  // auto-select it — this is what makes appointments listable on the site and
+  // gateable by subscription, exactly like classes.
+  async function createGeneralActivity() {
+    if (creatingActivity) return
+    setCreatingActivity(true)
+    try {
+      const ref = await addDoc(collection(db, ACTIVITIES_COLLECTION), {
+        name: tActivities('type_appointment'),
+        description: '',
+        prerequisites: '',
+        confirmationInstructions: '',
+        type: 'appointment' as const,
+        level: 'all' as const,
+        color: '#6366f1',
+        isFreeTrial: true,
+        accessRule: { type: 'open' as const },
+        dropIn: { enabled: false },
+        durationsMinutes: [60],
+        max_participants: 1,
+        slug: 'appointment',
+        teamId,
+        createdBy: userId,
+        isActive: true,
+        order: activities.length,
+        created_at: serverTimestamp(),
+      })
+      await qc.invalidateQueries({ queryKey: ['activities'] })
+      setValue('activityIds', [ref.id])
+    } finally {
+      setCreatingActivity(false)
+    }
   }
 
   async function onSubmit(data: TemplateFormValues) {
     const member = members.find((m) => m.id === data.providerId)
-    const isWindow = data.mode === 'open_window'
-    const durations = (data.durationsMinutes ?? []).slice().sort((a, b) => a - b)
+    const isRange = data.mode === 'range'
     const recurrence = {
       daysOfWeek: data.daysOfWeek,
-      // Windows have no single slot time; store the window start so existing
-      // recurrence-based summaries stay meaningful.
-      time: isWindow ? data.windowStart || '00:00' : data.time || '09:00',
       startDate: Timestamp.fromDate(new Date(data.startDate)),
       endDate: data.endDate ? Timestamp.fromDate(new Date(data.endDate)) : null,
     }
     const payload = {
       teamId, providerId: data.providerId, providerName: member?.name || data.providerId,
       title: data.title,
-      duration_minutes: isWindow ? (durations[0] ?? 60) : data.duration_minutes,
-      max_participants: isWindow ? 1 : data.max_participants,
+      activityIds: data.activityIds,
       location: data.location || null, onlineUrl: data.onlineUrl || null,
-      isFreeTrial: data.isFreeTrial,
       recurrence,
       mode: data.mode,
-      // Window config (cleared when a template is switched back to fixed slots).
-      window: isWindow ? { start: data.windowStart, end: data.windowEnd } : null,
-      durationsMinutes: isWindow ? durations : null,
-      granularityMinutes: isWindow ? data.granularityMinutes ?? 15 : null,
-      bufferMinutes: isWindow ? data.bufferMinutes ?? 0 : null,
+      // Range config (cleared when a schedule is switched to explicit times).
+      window: isRange ? { start: data.windowStart, end: data.windowEnd } : null,
+      granularityMinutes: isRange ? data.granularityMinutes ?? 15 : null,
+      // Times config (cleared when a schedule is switched to a range).
+      times: isRange ? null : [...(data.times ?? [])].sort(),
+      bufferMinutes: data.bufferMinutes ?? 0,
     }
     if (editing) {
       await updateDoc(doc(db, AVAILABILITY_COLLECTION, editing.id), { ...payload, updated_at: serverTimestamp() })
@@ -272,6 +310,7 @@ function TemplateDialog({
           <div className="space-y-1.5">
             <Label htmlFor="title">{t('fieldTitle')}</Label>
             <Input id="title" placeholder={t('fieldTitlePlaceholder')} {...register('title')} />
+            <p className="text-xs text-muted-foreground">{t('fieldTitleHint')}</p>
             {errors.title && <p className="text-destructive text-xs">{errors.title.message}</p>}
           </div>
 
@@ -292,37 +331,78 @@ function TemplateDialog({
             {errors.providerId && <p className="text-destructive text-xs">{errors.providerId.message}</p>}
           </div>
 
-          {/* Availability mode */}
+          {/* Linked appointment offerings — the *what*; duration/capacity/access live on the activity. */}
+          <div className="space-y-1.5">
+            <Label>{t('fieldActivities')}</Label>
+            <p className="text-xs text-muted-foreground">{t('fieldActivitiesHint')}</p>
+            {activities.length === 0 ? (
+              <div className="rounded-md border border-dashed p-3 space-y-2">
+                <p className="text-xs text-muted-foreground">{t('noAppointmentActivitiesHint')}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={creatingActivity}
+                  onClick={() => void createGeneralActivity()}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  {creatingActivity ? t('creatingActivity') : t('createGeneralActivity')}
+                </Button>
+              </div>
+            ) : (
+              <Controller
+                control={control}
+                name="activityIds"
+                render={({ field }) => (
+                  <div className="space-y-1.5 rounded-md border p-3">
+                    {activities.map((a) => (
+                      <label key={a.id} className="flex items-start gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 accent-primary"
+                          checked={field.value.includes(a.id)}
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.checked
+                                ? [...field.value, a.id]
+                                : field.value.filter((id: string) => id !== a.id),
+                            )
+                          }
+                        />
+                        <span>
+                          <span className="font-medium">{a.name}</span>
+                          {a.durationsMinutes && a.durationsMinutes.length > 0 && (
+                            <span className="block text-xs text-muted-foreground">
+                              {a.durationsMinutes.map(formatDuration).join(' / ')}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              />
+            )}
+            {errors.activityIds && <p className="text-destructive text-xs">{errors.activityIds.message}</p>}
+          </div>
+
+          {/* Availability mode — both are lazy, nothing is pre-generated. */}
           <div className="space-y-1.5">
             <Label>{t('fieldMode')}</Label>
             <Controller name="mode" control={control} render={({ field }) => (
               <div className="grid grid-cols-2 gap-2">
-                {(['fixed_slots', 'open_window'] as const).map((m) => (
+                {(['range', 'times'] as const).map((m) => (
                   <button key={m} type="button" onClick={() => field.onChange(m)}
                     className={`rounded-lg border p-2.5 text-left transition-colors ${field.value === m ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'}`}>
-                    <span className="block text-sm font-medium">{t(m === 'fixed_slots' ? 'modeFixedSlots' : 'modeOpenWindow')}</span>
-                    <span className="block text-xs text-muted-foreground">{t(m === 'fixed_slots' ? 'modeFixedSlotsHint' : 'modeOpenWindowHint')}</span>
+                    <span className="block text-sm font-medium">{t(m === 'range' ? 'modeRange' : 'modeTimes')}</span>
+                    <span className="block text-xs text-muted-foreground">{t(m === 'range' ? 'modeRangeHint' : 'modeTimesHint')}</span>
                   </button>
                 ))}
               </div>
             )} />
           </div>
 
-          {mode === 'fixed_slots' ? (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="duration_minutes">{t('fieldDuration')}</Label>
-                <Input id="duration_minutes" type="number" min={15} max={480} step={15}
-                  {...register('duration_minutes', { valueAsNumber: true })} />
-                {errors.duration_minutes && <p className="text-destructive text-xs">{errors.duration_minutes.message}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="max_participants">{t('fieldMaxParticipants')}</Label>
-                <Input id="max_participants" type="number" min={1} max={50}
-                  {...register('max_participants', { valueAsNumber: true })} />
-              </div>
-            </div>
-          ) : (
+          {mode === 'range' ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -339,18 +419,6 @@ function TemplateDialog({
                   )} />
                   {errors.windowEnd && <p className="text-destructive text-xs">{errors.windowEnd.message}</p>}
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t('fieldDurations')}</Label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {DURATION_PRESETS.map((d) => (
-                    <button key={d} type="button" onClick={() => toggleDuration(d)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${selectedDurations.includes(d) ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-foreground'}`}>
-                      {formatDuration(d)}
-                    </button>
-                  ))}
-                </div>
-                {errors.durationsMinutes && <p className="text-destructive text-xs">{errors.durationsMinutes.message}</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -371,6 +439,36 @@ function TemplateDialog({
                 </div>
               </div>
             </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>{t('fieldTimes')}</Label>
+                <div className="space-y-2">
+                  {timesList.map((time, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <TimePicker value={time} onChange={(v) => updateTime(idx, v)} />
+                      <button
+                        type="button"
+                        onClick={() => removeTime(idx)}
+                        className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors"
+                        aria-label={t('removeTime')}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" onClick={addTime}>
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />{t('addTime')}
+                  </Button>
+                </div>
+                {errors.times && <p className="text-destructive text-xs">{errors.times.message}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="bufferMinutes">{t('fieldBuffer')}</Label>
+                <Input id="bufferMinutes" type="number" min={0} max={120} step={5}
+                  {...register('bufferMinutes', { valueAsNumber: true })} />
+              </div>
+            </div>
           )}
 
           <div className="space-y-1.5">
@@ -382,21 +480,6 @@ function TemplateDialog({
             <Label htmlFor="onlineUrl">{t('fieldOnlineUrl')}</Label>
             <Input id="onlineUrl" placeholder="https://meet.google.com/…" {...register('onlineUrl')} />
             {errors.onlineUrl && <p className="text-destructive text-xs">{errors.onlineUrl.message}</p>}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Controller name="isFreeTrial" control={control} render={({ field }) => (
-              <input
-                type="checkbox"
-                id="isFreeTrial"
-                checked={field.value}
-                onChange={field.onChange}
-                className="accent-primary"
-              />
-            )} />
-            <Label htmlFor="isFreeTrial" className="cursor-pointer">
-              {t('fieldFreeTrial')}
-            </Label>
           </div>
 
           <div className="space-y-3 rounded-lg border p-3">
@@ -419,19 +502,6 @@ function TemplateDialog({
               {errors.daysOfWeek && <p className="text-destructive text-xs">{errors.daysOfWeek.message}</p>}
             </div>
 
-            {mode === 'fixed_slots' && (
-              <div className="space-y-1.5">
-                <Label>{t('fieldTime')}</Label>
-                <Controller
-                  name="time"
-                  control={control}
-                  render={({ field }) => (
-                    <TimePicker value={field.value || ''} onChange={field.onChange} />
-                  )}
-                />
-                {errors.time && <p className="text-destructive text-xs">{errors.time.message}</p>}
-              </div>
-            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t('fieldStartDate')}</Label>
@@ -601,6 +671,10 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
   const qc = useQueryClient()
   const templatesQ = useTemplates(open ? teamId : null)
   const membersQ = useTeamMemberOptions(open ? teamId : null)
+  const activitiesQ = useActivities(open ? teamId : null)
+  const activities = activitiesQ.data ?? []
+  const appointmentActivities = activities.filter((a) => a.type === 'appointment')
+  const activityNameById = new Map(activities.map((a) => [a.id, a.name]))
   const [templateDialog, setTemplateDialog] = useState<{ open: boolean; editing: (Availability & { id: string }) | null }>({ open: false, editing: null })
 
   async function toggleTemplateStatus(tmpl: Availability & { id: string }) {
@@ -653,21 +727,17 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-sm">{tmpl.title}</p>
                       <StatusBadge status={tmpl.status} />
-                      {tmpl.mode === 'open_window' && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                          {t('modeOpenWindow')}
-                        </span>
-                      )}
-                      {tmpl.isFreeTrial === false && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                          {t('membersOnly')}
-                        </span>
-                      )}
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                        {t(tmpl.mode === 'range' ? 'modeRange' : 'modeTimes')}
+                      </span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                      {tmpl.mode === 'open_window' && tmpl.window
-                        ? `${tmpl.recurrence.daysOfWeek.map((d) => DAY_LABELS[d]).join(', ')} · ${tmpl.window.start}–${tmpl.window.end} · ${(tmpl.durationsMinutes ?? []).map(formatDuration).join(' / ')}`
-                        : `${formatDaysTime(tmpl.recurrence)} · ${formatDuration(tmpl.duration_minutes)}`}
+                      {(tmpl.activityIds ?? []).map((id) => activityNameById.get(id) ?? id).join(', ')}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {tmpl.mode === 'range' && tmpl.window
+                        ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
+                        : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">{tmpl.providerName}</p>
                     {tmpl.location && (
@@ -706,6 +776,7 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
         teamId={teamId}
         userId={userId}
         members={membersQ.data || []}
+        activities={appointmentActivities}
         onSaved={invalidateAll}
       />
     </>

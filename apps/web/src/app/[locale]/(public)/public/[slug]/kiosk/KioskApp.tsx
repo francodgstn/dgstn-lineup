@@ -74,7 +74,6 @@ export default function KioskApp({ slug }: Props) {
           scheduleView={kiosk.scheduleView}
           features={kiosk.features}
           walkInActivityIds={kiosk.walkInActivityIds}
-          walkInCoaching={kiosk.walkInCoaching}
           standby={kiosk.standby}
         />
       </KioskLock>
@@ -91,7 +90,6 @@ interface ShellProps {
   scheduleView: KioskScheduleView
   features: KioskFeatures
   walkInActivityIds?: string[]
-  walkInCoaching?: boolean
   standby: KioskStandbyConfig
 }
 
@@ -104,7 +102,6 @@ function KioskShell({
   scheduleView,
   features,
   walkInActivityIds,
-  walkInCoaching,
   standby,
 }: ShellProps) {
   const t = useTranslations('Kiosk')
@@ -154,7 +151,6 @@ function KioskShell({
           teamId={teamId}
           sessions={sessions}
           walkInActivityIds={walkInActivityIds}
-          walkInCoaching={walkInCoaching}
         />
       )}
 

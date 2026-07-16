@@ -117,13 +117,11 @@ export { dailyTasks, bookingRemindersHourly } from './dailyTasks'
 export { verifyContactCode, completeSignup } from './auth/completeSignup'
 export { loginContactWithCode } from './auth/loginContactWithCode'
 
-// Appointments (1:1 slots) — booking/cancellation handled by bookSession/cancelBooking.
-// Open-window availability (Calendly-style) adds its own list + book callables.
-export {
-  generateCoachSlots,
-  generateCoachSlotsScheduled,
-  onCoachAvailabilityWritten,
-} from './appointments'
+// Appointments (1:1 slots) — activity-bound, availability-only. Nothing is
+// pre-generated: listAvailability computes free starts on the fly and
+// bookAppointment materialises a Session lazily (overlap-safe) at booking
+// time; the paid-access gate is shared with bookSession via booking/access.ts.
+// Cancellation is handled by the shared cancelBooking callable.
 export { listAvailability, bookAppointment } from './appointments/window'
 
 // SaaS billing (Linyup's own platform subscriptions — Stripe)

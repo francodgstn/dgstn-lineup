@@ -30,7 +30,7 @@ import {
   Snackbar,
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
-import { FirestoreService } from '../services/firestore';
+import { APPOINTMENT_BOOKING_ENABLED, FirestoreService } from '../services/firestore';
 import { Contact, SessionPublicProfile, TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus } from '../types';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { formatDateValue, formatResidence, formatGender } from '../utils/profileUtils';
@@ -216,6 +216,8 @@ export const ProfileScreen: React.FC = () => {
       }
 
       if (contact.teamId && loadedProfile?.appointmentsEnabled) {
+        // The contact's OWN booked appointments — availability-only means there are
+        // no open slots to browse (see APPOINTMENT_BOOKING_ENABLED).
         const slots = await FirestoreService.getUpcomingAppointments(contact.teamId, contact.id);
         setAppointments(slots);
       } else {
@@ -452,7 +454,13 @@ export const ProfileScreen: React.FC = () => {
           }}
         />
 
-        {teamProfile?.appointmentsEnabled && appointments.some(s => s.bookingStatus === 'available') && (
+        {/* TODO(P4 follow-up): never renders — appointments are availability-only, so
+            no slot is ever 'available' and the promo is gated off inside the card
+            (APPOINTMENT_BOOKING_ENABLED in services/firestore.ts). Kept wired up so
+            restoring it is a one-line flip once the listAvailability-driven picker
+            (day → activity → time) exists. The member's OWN booked appointments still
+            render in the TRAIN tab below. */}
+        {teamProfile?.appointmentsEnabled && APPOINTMENT_BOOKING_ENABLED && appointments.some(s => s.bookingStatus === 'available') && (
           <AppointmentsDashboardCard
             slots={appointments}
             contact={contact}

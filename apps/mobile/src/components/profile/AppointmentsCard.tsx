@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Alert } from 'react-native';
 import { Card, Text, useTheme, Button, ActivityIndicator } from 'react-native-paper';
 import { AppointmentWithStatus, Contact } from '../../types';
-import { FirestoreService } from '../../services/firestore';
+import { APPOINTMENT_BOOKING_ENABLED, FirestoreService } from '../../services/firestore';
 
 interface AppointmentsCardProps {
   slots: AppointmentWithStatus[];
@@ -107,6 +107,11 @@ export const AppointmentsCard: React.FC<AppointmentsCardProps> = ({ slots, conta
           const isBooked = slot.bookingStatus === 'booked';
           const isFull = slot.bookingStatus === 'full';
           const isCancelled = slot.bookingStatus === 'cancelled';
+          // TODO(P4 follow-up): appointments are availability-only — no open slot
+          // ever exists, so `slots` only holds the member's own bookings and the
+          // Book affordance is gated off. Restore it with the listAvailability
+          // picker (see APPOINTMENT_BOOKING_ENABLED in services/firestore.ts).
+          const isAvailable = APPOINTMENT_BOOKING_ENABLED && slot.bookingStatus === 'available';
 
           return (
             <View key={slot.id} style={styles.slotRow}>
@@ -151,7 +156,7 @@ export const AppointmentsCard: React.FC<AppointmentsCardProps> = ({ slots, conta
                   <Text variant="bodySmall" style={{ color: theme.colors.error }}>
                     Cancelled
                   </Text>
-                ) : (
+                ) : isAvailable ? (
                   <Button
                     mode="contained"
                     compact
@@ -161,7 +166,7 @@ export const AppointmentsCard: React.FC<AppointmentsCardProps> = ({ slots, conta
                   >
                     Book
                   </Button>
-                )}
+                ) : null}
               </View>
             </View>
           );

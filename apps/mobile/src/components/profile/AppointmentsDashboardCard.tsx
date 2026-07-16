@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppointmentWithStatus, Contact } from '../../types';
-import { FirestoreService } from '../../services/firestore';
+import { APPOINTMENT_BOOKING_ENABLED, FirestoreService } from '../../services/firestore';
 
 interface Props {
   slots: AppointmentWithStatus[];
@@ -12,12 +12,24 @@ interface Props {
   onViewMore?: () => void;
 }
 
+/**
+ * "Next bookable slot" promo for the dashboard.
+ *
+ * TODO(P4 follow-up): dead under the availability-only model and gated off (not
+ * deleted). Providers now publish availability and nothing is materialised until a
+ * client books, so no slot is ever 'available' to promote here. Rebuild this as a
+ * "book with your coach" entry point into a listAvailability-driven picker (day →
+ * activity → time), then drop the guard — see APPOINTMENT_BOOKING_ENABLED in
+ * services/firestore.ts. The app is unlaunched, so nothing live is lost meanwhile.
+ */
 export const AppointmentsDashboardCard: React.FC<Props> = ({ slots, contact, onRefresh, onViewMore }) => {
   const theme = useTheme();
   const [selectedSlot, setSelectedSlot] = useState<AppointmentWithStatus | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const nextSlot = slots.find(s => s.bookingStatus === 'available');
+  const nextSlot = APPOINTMENT_BOOKING_ENABLED
+    ? slots.find(s => s.bookingStatus === 'available')
+    : undefined;
   if (!nextSlot) return null;
 
   const closeModal = () => setSelectedSlot(null);

@@ -578,8 +578,6 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
 
 interface SessionEntry {
   id: string
-  /** Public-mirror kind: 'session' (group class) or 'appointment_session'. */
-  type?: string
   activityName?: string
   activityColor?: string
   activityId?: string
@@ -637,14 +635,17 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
     let alive = true
     const windowEnd = new Date()
     windowEnd.setDate(windowEnd.getDate() + (section.windowDays ?? 7))
-    // Group classes AND appointment slots — private lessons are part of the weekly
-    // schedule too. `in` runs on the same (teamId,type,allowBooking,start) index.
-    // The lower bound is Monday of the CURRENT week (not "now"): the calendar
-    // doubles as a timetable, showing this week's already-run sessions muted.
+    // Classes only — appointments are availability-only now (a Session exists only
+    // once booked), so the only appointment_session mirrors that exist are
+    // ALREADY-BOOKED appointments. Listing them here as bookable would be wrong;
+    // appointment ACTIVITIES still surface via the Activities block, routing to
+    // the dedicated /appointments picker. The lower bound is Monday of the
+    // CURRENT week (not "now"): the calendar doubles as a timetable, showing
+    // this week's already-run sessions muted.
     const q = query(
       collectionGroup(db, 'public_profile'),
       where('teamId', '==', teamId),
-      where('type', 'in', ['session', 'appointment_session']),
+      where('type', '==', 'session'),
       where('allowBooking', '==', true),
       where('start', '>=', Timestamp.fromDate(mondayOfCurrentWeek())),
       orderBy('start', 'asc'),
@@ -670,10 +671,9 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
     }
   }, [teamId, section.windowDays, section.activityId])
 
+  // Classes only now — see the query above. Appointments book via their own
+  // dedicated flow, routed to from the Activities block instead.
   const bookHref = preview ? undefined : `/public/${slug}/booking`
-  // Appointment slots book through the appointments page, not the class-booking flow.
-  const hrefFor = (s: SessionEntry) =>
-    preview ? undefined : s.type === 'appointment_session' ? `/public/${slug}/appointments` : bookHref
 
   // Daily list covers today onward (today's finished sessions render muted);
   // the calendar additionally shows the current week's past days as a timetable.
@@ -852,7 +852,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
             s={selected}
             palette={palette}
             preview={preview}
-            bookHref={section.showBooking && !isPastSession(selected) ? hrefFor(selected) : undefined}
+            bookHref={section.showBooking && !isPastSession(selected) ? bookHref : undefined}
             onClose={() => setSelected(null)}
           />
         )}

@@ -49,6 +49,11 @@ import {
   seedStoreCourses,
 } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
+import {
+  appointmentOccurrences,
+  buildAppointmentSessionDocs,
+  buildAppointmentBookingDoc,
+} from './lib/appointments'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // On the emulator, write into the namespace the web app + emulator use
@@ -1539,7 +1544,7 @@ async function seedDemoTeam(profile: SectorProfile) {
     ctaUrl: null,
     ctaLabel: null,
     showActivityDescription: true,
-    // Every sandbox team seeds an appointment activity + slots.
+    // Every sandbox team seeds an appointment activity + availability.
     appointmentsEnabled: true,
   }
 
@@ -1752,7 +1757,10 @@ async function seedDemoTeam(profile: SectorProfile) {
       })
   }
 
+  // The WHAT of an appointment: name, bookable lengths, capacity, access rule.
+  // The availability below only publishes the WHEN.
   const appointmentActId = `${teamId}-act-appointment`
+  const appointmentDurations = [30, 60]
   await db
     .collection('activities')
     .doc(appointmentActId)
@@ -1765,6 +1773,8 @@ async function seedDemoTeam(profile: SectorProfile) {
       providerId: uid,
       providerName: ownerName,
       level: 'all',
+      durationsMinutes: appointmentDurations,
+      max_participants: 1,
       isFreeTrial: true,
       isActive: true,
       created_at: ts(daysFromNow(-180)),
@@ -1787,8 +1797,11 @@ async function seedDemoTeam(profile: SectorProfile) {
       level: 'all',
     })
 
-  // ── availability template + appointment sessions ───────────────────────
+  // ── availability (the WHEN — publishes free time, generates nothing) ────
+  // 'range' mode: a daily window clients self-book a start within, on the
+  // `granularityMinutes` grid, at one of the activity's durations.
   const appointmentTemplateId = `${teamId}-tpl-appointment`
+  const appointmentDays = [1, 3] // Mon + Wed
   await db
     .collection('availability')
     .doc(appointmentTemplateId)
@@ -1796,110 +1809,77 @@ async function seedDemoTeam(profile: SectorProfile) {
       teamId,
       providerId: uid,
       providerName: ownerName,
-      activityId: appointmentActId,
-      title: appointmentName,
+      // The SCHEDULE's name — the offering's name lives on the activity.
+      title: 'Weekday mornings',
       description: `One-on-one ${appointmentName.toLowerCase()}.`,
-      duration_minutes: 60,
-      max_participants: 1,
-      isFreeTrial: true,
+      activityIds: [appointmentActId],
       location: locations[0],
       onlineUrl: null,
       status: 'active',
-      mode: 'fixed_slots',
-      recurrence: { daysOfWeek: [1, 3], time: '08:00', startDate: ts(daysFromNow(-40)), endDate: null },
+      mode: 'range',
+      window: { start: '08:00', end: '11:00' },
+      granularityMinutes: 30,
+      bufferMinutes: 0,
+      recurrence: { daysOfWeek: appointmentDays, startDate: ts(daysFromNow(-40)), endDate: null },
       created_at: ts(daysFromNow(-40)),
+      createdBy: uid,
     })
 
-  const appointmentSlotDefs = [
-    { dayOffset: 1, hour: 8, bookings: 0 },
-    { dayOffset: 3, hour: 8, bookings: 1 },
-    { dayOffset: 8, hour: 8, bookings: 0 },
-    { dayOffset: 10, hour: 8, bookings: 1 },
-    { dayOffset: 15, hour: 8, bookings: 0 },
-    { dayOffset: 17, hour: 8, bookings: 0 },
-  ]
+  // ── booked appointments ─────────────────────────────────────────────────
+  // Availability pre-generates NOTHING — a session exists only once someone
+  // books. These mirror what `bookAppointment` writes.
   const bookedContact = {
     id: `${teamId}-contact-000`,
     firstname: CONTACT_POOL[0].firstname,
     lastname: CONTACT_POOL[0].lastname,
     email: `${slugEmail(CONTACT_POOL[0])}.${teamId}@example.com`,
   }
-  for (let i = 0; i < appointmentSlotDefs.length; i++) {
-    const slotDef = appointmentSlotDefs[i]
-    const base = daysFromNow(slotDef.dayOffset)
-    base.setHours(slotDef.hour, 0, 0, 0)
-    const end = hoursOffset(base, 1)
-    const sid = `${teamId}-appointment-session-${i}`
-    const isFull = slotDef.bookings >= 1
-    const status = isFull ? 'full' : 'open'
-
+  const bookedAppointments = [
+    ...appointmentOccurrences({ daysOfWeek: appointmentDays, time: '08:00', count: 1 }).map(
+      (start) => ({ start, durationMinutes: 60, past: false })
+    ),
+    ...appointmentOccurrences({ daysOfWeek: appointmentDays, time: '09:30', count: 1, fromDayOffset: 7 }).map(
+      (start) => ({ start, durationMinutes: 30, past: false })
+    ),
+    ...appointmentOccurrences({ daysOfWeek: appointmentDays, time: '08:00', count: 1, direction: -1 }).map(
+      (start) => ({ start, durationMinutes: 60, past: true })
+    ),
+  ]
+  for (const apt of bookedAppointments) {
+    const { id: sid, session, publicProfile } = buildAppointmentSessionDocs({
+      teamId,
+      templateId: appointmentTemplateId,
+      activityId: appointmentActId,
+      activityName: appointmentName,
+      accessRule: { type: 'open' },
+      isFreeTrial: true,
+      maxParticipants: 1,
+      providerId: uid,
+      providerName: ownerName,
+      start: apt.start,
+      durationMinutes: apt.durationMinutes,
+      location: locations[0],
+      past: apt.past,
+      createdAt: daysFromNow(-7),
+    })
+    await db.collection('sessions').doc(sid).set(session)
+    await db.collection('sessions').doc(sid).collection('public_profile').doc(sid).set(publicProfile)
     await db
       .collection('sessions')
       .doc(sid)
-      .set({
-        teamId,
-        activityType: 'appointment',
-        activityId: appointmentActId,
-        activityName: appointmentName,
-        templateId: appointmentTemplateId,
-        providerId: uid,
-        providerName: ownerName,
-        isFreeTrial: true,
-        start: ts(base),
-        end: ts(end),
-        duration_minutes: 60,
-        max_participants: 1,
-        bookings_count: slotDef.bookings,
-        location: locations[0],
-        onlineUrl: null,
-        allowBooking: true,
-        status,
-        created_at: ts(daysFromNow(-7)),
-      })
-    await db
-      .collection('sessions')
-      .doc(sid)
-      .collection('public_profile')
-      .doc(sid)
-      .set({
-        type: 'appointment_session',
-        teamId,
-        activityType: 'appointment',
-        activityName: appointmentName,
-        providerId: uid,
-        providerName: ownerName,
-        templateId: appointmentTemplateId,
-        start: ts(base),
-        end: ts(end),
-        duration_minutes: 60,
-        location: locations[0],
-        onlineUrl: null,
-        max_participants: 1,
-        bookings_count: slotDef.bookings,
-        isFreeTrial: true,
-        status,
-        allowBooking: true,
-      })
-    if (isFull) {
-      await db
-        .collection('sessions')
-        .doc(sid)
-        .collection('bookings')
-        .doc(`${sid}-booking`)
-        .set({
+      .collection('bookings')
+      .doc(bookedContact.id)
+      .set(
+        buildAppointmentBookingDoc({
           teamId,
+          sessionId: sid,
           contactId: bookedContact.id,
-          session: sid,
-          email: bookedContact.email,
           firstname: bookedContact.firstname,
           lastname: bookedContact.lastname,
-          fullname: `${bookedContact.firstname} ${bookedContact.lastname}`,
-          status: 'confirmed',
-          joinedAt: ts(daysFromNow(-2)),
-          booking_token: `tok-appointment-${teamId}-${i}`,
-          is_new_contact: false,
+          email: bookedContact.email,
+          bookedAt: daysFromNow(-2),
         })
-    }
+      )
   }
 
   // ── subscription types ────────────────────────────────────────────────────

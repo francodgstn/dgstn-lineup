@@ -2,49 +2,61 @@ import type { Timestamp } from './common'
 
 export interface AvailabilityRecurrence {
   daysOfWeek: number[]  // 0 = Sun … 6 = Sat
-  time: string          // 'HH:MM' in Europe/Zurich — the slot time (fixed_slots)
+  /** The window/times are live only within these dates. */
   startDate: Timestamp
   endDate?: Timestamp | null
 }
 
-/** How a provider advertises availability:
- *  - 'fixed_slots' (default): exact recurring times → pre-generated Session slots.
- *  - 'open_window': a daily time range the client self-books within (Calendly-style);
- *    NO slots are pre-generated — a Session is created lazily at booking time. */
-export type AvailabilityMode = 'fixed_slots' | 'open_window'
+/** How a provider advertises free time. BOTH modes are lazy — no Session is ever
+ *  pre-generated; one is created (overlap-safe) only when a client books.
+ *  - 'range': a daily time range the client self-books within (Calendly-style),
+ *    stepped by `granularityMinutes`.
+ *  - 'times': an explicit list of start times per day.
+ *  Which *durations* are offered is NOT stored here — it derives from the linked
+ *  activities' `durationsMinutes` (see `activityIds`). */
+export type AvailabilityMode = 'range' | 'times'
 
-/** Daily bookable time range (open_window mode), Europe/Zurich, 'HH:MM'. */
+/** Daily bookable time range ('range' mode), Europe/Zurich, 'HH:MM'. */
 export interface AvailabilityWindow {
   start: string
   end: string
 }
 
+/** A provider's published free time — the *when*, and only the when.
+ *
+ *  The *what* lives on the linked activities (`activityIds`): they own the name,
+ *  duration, capacity, price and access rule. A materialised appointment session
+ *  inherits `activityId`/`activityName`/`accessRule`/`max_participants` from the
+ *  activity the client picked, which is what makes appointments listable on the
+ *  website and gateable by subscription — exactly like classes.
+ *
+ *  NOTE: because one availability may offer several activities of differing
+ *  lengths, a start time is *indeterminate* until the client picks an activity —
+ *  which is why availability can never be pre-materialised into slots. */
 export interface Availability {
   teamId: string
   /** UID of the provider whose time this availability publishes. */
   providerId: string
   /** Denormalised provider display name. */
   providerName: string
+  /** The SCHEDULE's admin-facing name — e.g. "Saturday mornings", "Weekday
+   *  evenings". NOT the name of the offering (that's the activity's). */
   title: string
   description?: string
-  isFreeTrial?: boolean
-  /** fixed_slots: the slot length. open_window: the default/first offered duration. */
-  duration_minutes: number
-  max_participants: number
+  /** The `type: 'appointment'` activities bookable within this availability.
+   *  At least one; class activities are not linkable. */
+  activityIds: string[]
   location?: string
   onlineUrl?: string
   recurrence: AvailabilityRecurrence
   status: 'active' | 'paused' | 'archived'
-  /** Defaults to 'fixed_slots' when unset (existing templates). */
-  mode?: AvailabilityMode
-  // ── open_window fields (mode === 'open_window'); recurrence.daysOfWeek +
-  // startDate/endDate still say WHICH days and for how long the window is live. ──
-  /** The daily bookable range clients pick a start within. */
+  mode: AvailabilityMode
+  /** 'range' mode: the daily bookable range clients pick a start within. */
   window?: AvailabilityWindow
-  /** Session lengths the client may choose (minutes), e.g. [30, 60, 90]. */
-  durationsMinutes?: number[]
-  /** Step between selectable start times (minutes), provider-set. */
+  /** 'range' mode: step between selectable start times (minutes), provider-set. */
   granularityMinutes?: number
+  /** 'times' mode: explicit start times ('HH:MM', Europe/Zurich). */
+  times?: string[]
   /** Gap enforced before/after each appointment (minutes). Default 0. */
   bufferMinutes?: number
   created_at?: Timestamp

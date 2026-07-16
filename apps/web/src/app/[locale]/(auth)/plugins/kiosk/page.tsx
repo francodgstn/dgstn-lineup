@@ -317,18 +317,6 @@ export default function KioskSettingsPage() {
           checked={config.features.walkIn}
           onChange={(v) => toggleFeature('walkIn', v)}
         />
-        {config.features.walkIn && (
-          <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2">
-            <div className="min-w-0">
-              <Label className="text-xs">{t('walkInCoachingLabel')}</Label>
-              <p className="text-xs text-muted-foreground">{t('walkInCoachingHint')}</p>
-            </div>
-            <Switch
-              checked={config.walkInCoaching}
-              onCheckedChange={(v) => mutate((c) => ({ ...c, walkInCoaching: v }))}
-            />
-          </div>
-        )}
         <FeatureRow
           label={t('featureStandby')}
           hint={t('featureStandbyHint')}

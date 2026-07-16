@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { AppointmentWithStatus, Contact } from '../../types';
-import { FirestoreService } from '../../services/firestore';
+import { APPOINTMENT_BOOKING_ENABLED, FirestoreService } from '../../services/firestore';
 
 interface Props {
   slots: AppointmentWithStatus[];
@@ -77,14 +77,21 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
     }
   };
 
-  const availableCount = slots.filter(s => s.bookingStatus === 'available').length;
+  // TODO(P4 follow-up): with APPOINTMENT_BOOKING_ENABLED off there are no
+  // 'available' slots to advertise — availability-only means nothing exists until a
+  // client books, so `slots` is the member's OWN booked appointments and this
+  // carousel is a read/cancel surface. Restore the browse+book affordance once the
+  // listAvailability-driven picker lands (see the flag's comment).
+  const availableCount = APPOINTMENT_BOOKING_ENABLED
+    ? slots.filter(s => s.bookingStatus === 'available').length
+    : 0;
   const bookedCount = slots.filter(s => s.bookingStatus === 'booked').length;
 
   const renderCard = ({ item: slot }: { item: AppointmentWithStatus }) => {
     const slotIsBooked = slot.bookingStatus === 'booked';
     const isFull = slot.bookingStatus === 'full';
     const isCancelled = slot.bookingStatus === 'cancelled';
-    const isAvailable = slot.bookingStatus === 'available';
+    const isAvailable = APPOINTMENT_BOOKING_ENABLED && slot.bookingStatus === 'available';
 
     const day = slot.start.getDate();
     const month = slot.start.toLocaleString('default', { month: 'short' }).toUpperCase();
@@ -132,12 +139,12 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
             <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Full</Text>
           ) : isCancelled ? (
             <Text style={{ color: theme.colors.error, fontSize: 10 }}>Cancelled</Text>
-          ) : (
+          ) : isAvailable ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
               <Icon source="calendar-plus" size={12} color={theme.colors.primary} />
               <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 10 }}>Book</Text>
             </View>
-          )}
+          ) : null}
         </View>
       </Pressable>
     );
@@ -148,9 +155,12 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
   const formatTime = (d: Date) =>
     d.toLocaleTimeString('default', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+  const title = APPOINTMENT_BOOKING_ENABLED ? 'Book an appointment' : 'Your appointments';
   const subtitle = bookedCount > 0
     ? `You have ${bookedCount} booked appointment${bookedCount > 1 ? 's' : ''}${availableCount > 0 ? ` · ${availableCount} more available` : ''}.`
-    : `${availableCount} slot${availableCount !== 1 ? 's' : ''} available to book with your coach.`;
+    : APPOINTMENT_BOOKING_ENABLED
+      ? `${availableCount} slot${availableCount !== 1 ? 's' : ''} available to book with your coach.`
+      : 'Book a session with your coach on the website — it will show up here.';
 
   return (
     <>
@@ -162,7 +172,7 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <Text variant="titleSmall" style={{ color: theme.colors.onPrimaryContainer, fontWeight: '800' }}>
-              Book an appointment
+              {title}
             </Text>
             <Text variant="bodySmall" style={{ color: theme.colors.primary, opacity: 0.85, lineHeight: 16 }}>
               {subtitle}
@@ -248,12 +258,16 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
                   </Button>
                 </View>
               </>
-            ) : (
+            ) : APPOINTMENT_BOOKING_ENABLED ? (
               <View style={styles.actions}>
                 <Button mode="text" onPress={closeModal} style={{ flex: 1 }} disabled={loading}>Not now</Button>
                 <Button mode="contained" style={{ flex: 1 }} onPress={confirmBook} loading={loading} disabled={loading}>
                   Book it
                 </Button>
+              </View>
+            ) : (
+              <View style={styles.actions}>
+                <Button mode="text" onPress={closeModal} style={{ flex: 1 }}>Close</Button>
               </View>
             )}
           </Pressable>

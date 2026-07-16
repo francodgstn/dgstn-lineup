@@ -1,13 +1,11 @@
 /* eslint-disable no-console */
-import * as admin from 'firebase-admin'
-import { Timestamp, FieldValue } from 'firebase-admin/firestore'
-import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { onSchedule } from 'firebase-functions/v2/scheduler'
-import { onDocumentWritten } from 'firebase-functions/v2/firestore'
-import { AVAILABILITY_COLLECTION } from '@linyup/shared'
+// Appointments (1:1 slots) are ACTIVITY-BOUND and AVAILABILITY-ONLY: a coach
+// publishes an `Availability` doc (the *when*), and a Session is materialised
+// lazily — overlap-safe — only when a client books via `bookAppointment`
+// (see ./window.ts). Nothing is pre-generated; there is no daily/on-write
+// slot-generation job any more.
 
-// Email templates are still used by bookSession when activityType === 'appointment'
-// They are exported so booking/index.ts can import them.
+// Email templates are used by bookAppointment (./window.ts).
 export {
   buildAppointmentConfirmationEmail,
   buildAppointmentICalAttachment,
@@ -16,9 +14,10 @@ export {
 } from './templates'
 
 export const TIMEZONE = 'Europe/Zurich'
-const GENERATION_WINDOW_DAYS = 28
 
-// ─── timezone helper ──────────────────────────────────────────────────────────
+// ─── timezone helpers ──────────────────────────────────────────────────────
+// Used by ./window.ts (listAvailability + bookAppointment) to enumerate and
+// validate candidate start times in Europe/Zurich local time.
 
 export function getDatePartsInTz(date: Date): { year: number; month: number; day: number; dayOfWeek: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -41,195 +40,3 @@ export function localTimeToUtc(year: number, month: number, day: number, hour: n
     - Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
   return new Date(utcGuess.getTime() + diffMs)
 }
-
-// ─── slot occurrence generator ────────────────────────────────────────────────
-
-interface AvailabilityDoc {
-  teamId: string
-  providerId: string
-  providerName: string
-  title: string
-  description?: string | null
-  isFreeTrial?: boolean
-  status: 'active' | 'paused' | 'archived'
-  duration_minutes: number
-  max_participants: number
-  location?: string | null
-  onlineUrl?: string | null
-  recurrence: {
-    daysOfWeek: number[]
-    time: string
-    startDate: Timestamp
-    endDate?: Timestamp | null
-  }
-  // Open-window mode (see Availability): no pre-generation — sessions are
-  // created lazily at booking time by bookAppointment.
-  mode?: 'fixed_slots' | 'open_window'
-  window?: { start: string; end: string }
-  durationsMinutes?: number[]
-  granularityMinutes?: number
-  bufferMinutes?: number
-}
-
-function generateOccurrences(
-  template: AvailabilityDoc,
-  from: Date,
-  to: Date,
-): { start: Date; end: Date }[] {
-  const [hour, minute] = template.recurrence.time.split(':').map(Number)
-  const validFrom = template.recurrence.startDate.toDate()
-  const validUntil = template.recurrence.endDate?.toDate() ?? null
-
-  const results: { start: Date; end: Date }[] = []
-  const cursor = new Date(Math.max(from.getTime(), validFrom.getTime()))
-  cursor.setUTCHours(0, 0, 0, 0)
-
-  while (cursor <= to) {
-    if (validUntil && cursor > validUntil) break
-    const { year, month, day, dayOfWeek } = getDatePartsInTz(cursor)
-    if (template.recurrence.daysOfWeek.includes(dayOfWeek)) {
-      const start = localTimeToUtc(year, month, day, hour, minute)
-      if (start > new Date()) {
-        const end = new Date(start.getTime() + template.duration_minutes * 60_000)
-        results.push({ start, end })
-      }
-    }
-    cursor.setUTCDate(cursor.getUTCDate() + 1)
-  }
-
-  return results
-}
-
-// ─── core generation logic ────────────────────────────────────────────────────
-// Appointment sessions are written to the `sessions` collection with activityType='appointment'.
-// They are publicly exposed via sessions/{id}/public_profile (synced by syncSessionPublicProfile).
-// Booking is handled by bookSession; cancellation by cancelBooking.
-
-async function generateSlotsForTemplate(
-  templateId: string,
-  template: AvailabilityDoc,
-): Promise<{ created: number; skipped: number }> {
-  // Open-window templates advertise a range, not fixed times — never pre-generate.
-  if (template.mode === 'open_window') return { created: 0, skipped: 0 }
-
-  const db = admin.firestore()
-  const now = new Date()
-  const windowEnd = new Date(now.getTime() + GENERATION_WINDOW_DAYS * 24 * 60 * 60_000)
-  const occurrences = generateOccurrences(template, now, windowEnd)
-
-  let created = 0
-  let skipped = 0
-
-  for (const occ of occurrences) {
-    const startTs = Timestamp.fromDate(occ.start)
-    // Dedup: check sessions collection for existing appointment session from this template+start
-    const existing = await db.collection('sessions')
-      .where('templateId', '==', templateId)
-      .where('start', '==', startTs)
-      .limit(1)
-      .get()
-
-    if (!existing.empty) { skipped++; continue }
-
-    await db.collection('sessions').add({
-      teamId: template.teamId,
-      templateId,
-      activityType: 'appointment',
-      activityName: template.title,
-      providerId: template.providerId,
-      providerName: template.providerName,
-      isFreeTrial: template.isFreeTrial !== false,
-      start: startTs,
-      end: Timestamp.fromDate(occ.end),
-      duration_minutes: template.duration_minutes,
-      max_participants: template.max_participants,
-      bookings_count: 0,
-      location: template.location ?? null,
-      onlineUrl: template.onlineUrl ?? null,
-      allowBooking: true,
-      status: 'open',
-      created_at: FieldValue.serverTimestamp(),
-    })
-    created++
-  }
-
-  return { created, skipped }
-}
-
-async function runGenerationForTeam(teamId: string): Promise<{ created: number; skipped: number }> {
-  const db = admin.firestore()
-  const snap = await db.collection(AVAILABILITY_COLLECTION)
-    .where('teamId', '==', teamId)
-    .where('status', '==', 'active')
-    .get()
-
-  let created = 0
-  let skipped = 0
-  for (const doc of snap.docs) {
-    const result = await generateSlotsForTemplate(doc.id, doc.data() as AvailabilityDoc)
-    created += result.created
-    skipped += result.skipped
-  }
-  return { created, skipped }
-}
-
-async function runGenerationAll(): Promise<{ created: number; skipped: number }> {
-  const db = admin.firestore()
-  const snap = await db.collection(AVAILABILITY_COLLECTION).where('status', '==', 'active').get()
-
-  let created = 0
-  let skipped = 0
-  for (const doc of snap.docs) {
-    const result = await generateSlotsForTemplate(doc.id, doc.data() as AvailabilityDoc)
-    created += result.created
-    skipped += result.skipped
-  }
-  return { created, skipped }
-}
-
-// ─── generateCoachSlotsScheduled ─────────────────────────────────────────────
-
-export const generateCoachSlotsScheduled = onSchedule(
-  { schedule: '0 2 * * *', timeZone: TIMEZONE },
-  async () => {
-    const result = await runGenerationAll()
-    console.log(`generateCoachSlots (scheduled): created=${result.created} skipped=${result.skipped}`)
-  },
-)
-
-// ─── generateCoachSlots (callable) ───────────────────────────────────────────
-
-export const generateCoachSlots = onCall(async (request) => {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
-
-  const { teamId } = request.data as { teamId?: string }
-  if (!teamId) throw new HttpsError('invalid-argument', 'teamId is required')
-
-  const memberDoc = await admin.firestore()
-    .collection('teams').doc(teamId)
-    .collection('team_members').doc(request.auth.uid)
-    .get()
-  if (!memberDoc.exists) throw new HttpsError('permission-denied', 'Not a team member')
-
-  const result = await runGenerationForTeam(teamId)
-  console.log(`generateCoachSlots (manual) teamId=${teamId}: created=${result.created} skipped=${result.skipped}`)
-  return result
-})
-
-// ─── onCoachAvailabilityWritten — auto-generate sessions on template save ─────
-
-export const onCoachAvailabilityWritten = onDocumentWritten(
-  `${AVAILABILITY_COLLECTION}/{templateId}`,
-  async (event) => {
-    const after = event.data?.after
-    if (!after?.exists) return  // deleted — nothing to generate
-    const template = after.data() as AvailabilityDoc
-    if (template.status !== 'active') return  // paused or archived
-    try {
-      const result = await generateSlotsForTemplate(event.params.templateId, template)
-      console.log(`onCoachAvailabilityWritten templateId=${event.params.templateId}: created=${result.created} skipped=${result.skipped}`)
-    } catch (err) {
-      console.error('onCoachAvailabilityWritten: slot generation failed', err)
-    }
-  },
-)

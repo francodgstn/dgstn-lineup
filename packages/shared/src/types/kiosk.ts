@@ -58,11 +58,6 @@ export interface KioskConfig {
   scheduleView: KioskScheduleView
   /** Optional: limit walk-in booking to these GROUP-CLASS activity ids (empty ⇒ all). */
   walkInActivityIds?: string[]
-  /** Let visitors book an OPEN 1:1 coaching slot from the walk-in flow
-   *  ("last-second booking"). Off by default — coaching is booked ahead via the
-   *  public coaching page. Independent of `walkInActivityIds`, which only
-   *  governs group classes (coaching mirrors carry no activityId). */
-  walkInCoaching: boolean
   standby: KioskStandbyConfig
   lock: KioskLockConfig
 }
@@ -80,7 +75,6 @@ export interface KioskPublicConfig {
   features: KioskFeatures
   scheduleView: KioskScheduleView
   walkInActivityIds?: string[]
-  walkInCoaching: boolean
   standby: KioskStandbyConfig
   lock: KioskPublicLock
 }
@@ -90,7 +84,6 @@ export const DEFAULT_KIOSK_CONFIG: KioskConfig = {
   theme: 'auto',
   features: { schedule: true, nowNext: true, checkinQr: true, walkIn: true, standby: false },
   scheduleView: 'calendar',
-  walkInCoaching: false,
   standby: { idleSeconds: 90, media: [] },
   lock: { enabled: false, epoch: 0 },
 }
@@ -123,7 +116,6 @@ export function toKioskPublicConfig(c: KioskConfig): KioskPublicConfig {
     theme: c.theme,
     features: c.features,
     scheduleView: c.scheduleView,
-    walkInCoaching: c.walkInCoaching,
     standby: c.standby,
     lock: { enabled: c.lock.enabled, epoch: c.lock.epoch },
   }
