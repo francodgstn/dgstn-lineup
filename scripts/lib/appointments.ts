@@ -67,6 +67,10 @@ export interface SeedAppointmentInput {
   accessRule: SeedAccessRule
   isFreeTrial: boolean
   maxParticipants: number
+  /** Denormalised from the activity's `autoConfirm` (see resolveAutoConfirm).
+   *  Defaults to true — an appointment's booking takes the provider's time on the
+   *  spot, which is why the booking doc below is written `status: 'confirmed'`. */
+  autoConfirm?: boolean
   providerId: string
   providerName: string
   start: Date
@@ -113,13 +117,16 @@ export function buildAppointmentSessionDocs(input: SeedAppointmentInput): {
     end: tsOf(end),
     duration_minutes: input.durationMinutes,
     max_participants: input.maxParticipants,
+    // ONE counter for both kinds: bookings HOLDING CAPACITY (status neither
+    // 'cancelled' nor 'no_show'). The separate bio-link counter classes used to
+    // count into was merged into this one (2026-07).
     bookings_count: 1,
+    autoConfirm: input.autoConfirm ?? true,
     location: input.location ?? null,
     onlineUrl: input.onlineUrl ?? null,
     allowBooking: !input.past,
     status: 'full',
     has_bookings: true,
-    bio_link_bookings_count: 1,
     ...(input.past ? { participants_count: 1 } : {}),
     last_booking_at: tsOf(input.createdAt ?? input.start),
     created_at: tsOf(input.createdAt ?? input.start),
@@ -154,7 +161,9 @@ export function buildAppointmentSessionDocs(input: SeedAppointmentInput): {
   return { id, session, publicProfile }
 }
 
-/** The `confirmed` booking doc bookAppointment writes at sessions/{id}/bookings/{contactId}. */
+/** The `confirmed` booking doc bookAppointment writes at sessions/{id}/bookings/{contactId}.
+ *  `status: 'confirmed'` + `fullname` are what auto-confirm looks like on the wire;
+ *  a class booking, by contrast, carries no confirmed status until check-in. */
 export function buildAppointmentBookingDoc(p: {
   teamId: string
   sessionId: string

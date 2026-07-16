@@ -1244,7 +1244,7 @@ async function handleDropInCheckout(
     .set(
       {
         has_bookings: true,
-        bio_link_bookings_count: FieldValue.increment(1),
+        bookings_count: FieldValue.increment(1),
         last_booking_at: FieldValue.serverTimestamp(),
       },
       { merge: true }

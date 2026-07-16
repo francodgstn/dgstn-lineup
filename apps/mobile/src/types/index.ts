@@ -139,8 +139,11 @@ export interface Appointment {
   start: Date;
   end: Date;
   max_participants: number;
+  /** Bookings holding capacity — the single counter both kinds use (an absent
+   *  booking status = pending = holds a seat). */
   bookings_count: number;
   location?: string | null;
+  /** Absent on the wire when nobody has booked yet — normalised to 'open' on read. */
   status: 'open' | 'full' | 'cancelled';
 }
 

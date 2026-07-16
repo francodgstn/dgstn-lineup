@@ -83,28 +83,35 @@ export const trackBookings = onDocumentWritten(
     const teamId = (session.teamId || session.teacher) as string | undefined
     if (!teamId) return
 
-    // ── Appointment session: maintain bookings_count and status ──────────────
-    if (session.activityType === 'appointment') {
-      const [, confirmedSnap] = await to(
-        db
-          .collection('sessions')
-          .doc(sessionId)
-          .collection('bookings')
-          .where('status', '==', 'confirmed')
-          .get()
+    // ── Every session: maintain bookings_count and status — self-healing ─────
+    // recount, run for classes and appointments alike. A booking HOLDS
+    // CAPACITY unless it's 'cancelled', 'no_show', or 'rebooked' away to
+    // another session; an ABSENT status is pending and still holds a seat
+    // (fetch + count in memory — Firestore has no "!=" set query for this).
+    const [, bookingsSnap] = await to(
+      db.collection('sessions').doc(sessionId).collection('bookings').get()
+    )
+    if (bookingsSnap) {
+      const NON_HOLDING = new Set(['cancelled', 'no_show', 'rebooked'])
+      const count = bookingsSnap.docs.reduce((n, d) => {
+        const status = d.data().status as string | undefined
+        return status && NON_HOLDING.has(status) ? n : n + 1
+      }, 0)
+      // Classes may have no cap (max_participants unset) — never flip those to
+      // 'full'. Appointments always carry a cap (defaults to 1 at booking time).
+      const maxParticipants = session.max_participants as number | undefined
+      const newStatus =
+        session.status === 'cancelled'
+          ? 'cancelled'
+          : maxParticipants && count >= maxParticipants
+            ? 'full'
+            : 'open'
+      await to(
+        db.collection('sessions').doc(sessionId).update({
+          bookings_count: count,
+          status: newStatus,
+        })
       )
-      if (confirmedSnap) {
-        const count = confirmedSnap.size
-        const maxParticipants = (session.max_participants as number) || 1
-        const newStatus =
-          session.status === 'cancelled' ? 'cancelled' : count >= maxParticipants ? 'full' : 'open'
-        await to(
-          db.collection('sessions').doc(sessionId).update({
-            bookings_count: count,
-            status: newStatus,
-          })
-        )
-      }
     }
 
     const contactFullname =

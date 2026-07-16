@@ -1097,8 +1097,12 @@ export const FirestoreService = {
           start: data.start?.toDate?.() || new Date(),
           end: data.end?.toDate?.() || new Date(),
           max_participants: data.max_participants || 1,
+          // ONE counter for classes and appointments alike: bookings HOLDING
+          // CAPACITY (status neither 'cancelled' nor 'no_show'). The separate
+          // bio-link counter classes used to count into was merged into this one.
           bookings_count: data.bookings_count || 0,
           location: data.location || null,
+          // An absent status means nobody has booked yet → 'open'.
           status: data.status || 'open',
         } as Appointment;
       });

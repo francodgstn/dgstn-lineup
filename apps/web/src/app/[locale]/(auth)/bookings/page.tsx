@@ -306,7 +306,7 @@ function useBookingAction(teamId: string | null) {
         })
         // Adjust session counters
         batch.update(sessionRef, {
-          bio_link_bookings_count: increment(-1),
+          bookings_count: increment(-1),
           conversions_count: increment(1),
         })
         if (booking.contact) {
@@ -325,7 +325,7 @@ function useBookingAction(teamId: string | null) {
         batch.delete(participantRef)
         // Undo session counters
         batch.update(sessionRef, {
-          bio_link_bookings_count: increment(1),
+          bookings_count: increment(1),
           conversions_count: increment(-1),
         })
         if (booking.contact) {
@@ -337,7 +337,7 @@ function useBookingAction(teamId: string | null) {
         batch.update(bookingRef, { status: 'no_show', no_show_at: serverTimestamp() })
         const wasPending = !booking.status || booking.status === 'pending'
         if (wasPending) {
-          batch.update(sessionRef, { bio_link_bookings_count: increment(-1) })
+          batch.update(sessionRef, { bookings_count: increment(-1) })
           if (booking.contact) {
             batch.update(doc(db, 'contacts', booking.contact), {
               pending_bookings_count: increment(-1),
@@ -352,7 +352,7 @@ function useBookingAction(teamId: string | null) {
         })
         const wasPending = !booking.status || booking.status === 'pending'
         if (wasPending) {
-          batch.update(sessionRef, { bio_link_bookings_count: increment(-1) })
+          batch.update(sessionRef, { bookings_count: increment(-1) })
           if (booking.contact) {
             batch.update(doc(db, 'contacts', booking.contact), {
               pending_bookings_count: increment(-1),

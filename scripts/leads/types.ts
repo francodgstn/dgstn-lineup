@@ -153,9 +153,37 @@ export interface LeadGridSlot {
 }
 
 /**
+ * One appointment OFFERING — the WHAT. Seeded as an `Activity` with
+ * `type: 'appointment'`; the availability docs that link to it publish only the WHEN.
+ *
+ * A lead may have SEVERAL: a free 30-min intro call and a paid 60-min 1:1 are two
+ * offerings (different lengths, different access rules), not one activity with two
+ * durations — the duration list can't carry a free-vs-paid distinction.
+ */
+export interface LeadAppointmentDef {
+  /** id suffix → `{teamId}-act-appointment-{key}`; referenced by
+   *  LeadAvailabilityDef.activityKeys and LeadBookedAppointmentDef.activityKey. */
+  key: string
+  activityName: string
+  slug: string
+  description: string
+  /** Assets-folder base name for the cover image (as LeadActivityDef.imageAsset). */
+  imageAsset?: string
+  /** The lengths this offering can be booked at (Activity.durationsMinutes).
+   *  Duration belongs to the offering, never to the availability schedule. */
+  durationsMinutes: number[]
+  /** Activity.max_participants — 1 (a true 1:1) unless set. */
+  maxParticipants?: number
+  /** Paid-access gate (Activity.accessRule). Defaults to 'open'. */
+  accessTier?: 'open' | 'members' | 'subscription'
+  /** For accessTier 'subscription': LeadSubscriptionDef.keys that grant access. */
+  accessSubKeys?: string[]
+}
+
+/**
  * A provider's published free time — the WHEN, and only the when. The WHAT (name,
- * durations, capacity, access rule) lives on the linked appointment activity, i.e.
- * `LeadProfile.appointments`.
+ * durations, capacity, access rule) lives on the linked appointment activities, i.e.
+ * `LeadProfile.appointments.activities`.
  *
  * NOTHING is pre-generated in either mode: an appointment session exists only once
  * a client books one. `booked` below is demo dressing, not generated availability.
@@ -164,8 +192,12 @@ export interface LeadAvailabilityDef {
   /** Whose time this publishes (LeadStaffDef.key). */
   staffKey: string
   /** The SCHEDULE's admin-facing name — e.g. 'Monday evenings'. NOT the offering
-   *  name (that's `appointments.activityName`). */
+   *  name (that's `appointments.activities[].activityName`). */
   title: string
+  /** Which offerings are bookable in this window (LeadAppointmentDef.keys) →
+   *  the availability doc's `activityIds`. Defaults to ALL of them. One window may
+   *  list several — that is what the multi-activity model is for. */
+  activityKeys?: string[]
   /** Recurrence days (JS getDay convention: 0=Sun … 6=Sat), in the team timezone. */
   daysOfWeek: number[]
   /** Where it happens (LeadPlaceDef.key); falls back to LeadProfile.location. */
@@ -190,7 +222,10 @@ export interface LeadAvailabilityDef {
 export interface LeadBookedAppointmentDef {
   /** 'HH:MM' start — must sit on the availability's grid / times list. */
   time: string
-  /** Session length; must be one of `appointments.durationsMinutes`. */
+  /** Which offering was booked (LeadAppointmentDef.key). Defaults to the first
+   *  activity the availability links to. */
+  activityKey?: string
+  /** Session length; must be one of the booked activity's `durationsMinutes`. */
   durationMinutes: number
   /** Which occurrence of the availability's weekdays to land on (1 = the next one).
    *  Negative walks backwards into the PAST — history for the calendar + reports. */
@@ -410,17 +445,11 @@ export interface LeadProfile {
   gamification: Record<string, unknown>
 
   activities: LeadActivityDef[]
-  /** The 1:1 offering (ONE `type: 'appointment'` activity) + the availability that
-   *  publishes when it can be booked. */
+  /** The 1:1 offerings (each a `type: 'appointment'` activity — the WHAT) + the
+   *  availability schedules that publish when they can be booked (the WHEN). A
+   *  schedule links to one or more offerings via `activityKeys`. */
   appointments: {
-    activityName: string
-    slug: string
-    description: string
-    /** Assets-folder base name for the cover image (as LeadActivityDef.imageAsset). */
-    imageAsset?: string
-    /** The lengths this offering can be booked at (Activity.durationsMinutes).
-     *  Duration belongs to the offering, never to the availability schedule. */
-    durationsMinutes: number[]
+    activities: LeadAppointmentDef[]
     availability: LeadAvailabilityDef[]
   }
   subscriptions: LeadSubscriptionDef[]

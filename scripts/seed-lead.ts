@@ -69,6 +69,7 @@ import {
   buildAppointmentSessionDocs,
   buildAppointmentBookingDoc,
 } from './lib/appointments'
+import type { SeedAccessRule } from './lib/appointments'
 import type {
   LeadProfile,
   LeadContactDef,
@@ -688,7 +689,7 @@ async function seedLeadTenant(profile: LeadProfile) {
     ctaUrl: null,
     ctaLabel: null,
     showActivityDescription: true,
-    // Lead tenants seed an appointment activity + availability (profile.appointments).
+    // Lead tenants seed appointment activities + availability (profile.appointments).
     appointmentsEnabled: true,
   }
 
@@ -1015,6 +1016,10 @@ async function seedLeadTenant(profile: LeadProfile) {
         dropIn,
         base_score: a.base_score,
         type: 'class',
+        // Classes don't auto-confirm: a booking holds a seat but stays
+        // unconfirmed until check-in. Written explicitly (it's the 'class'
+        // default in resolveAutoConfirm) so the seed exercises the field.
+        autoConfirm: false,
         isActive: true,
         // Also on the raw doc (not just the public mirror) — the manager
         // activities list reads Activity.image_url.
@@ -1043,54 +1048,76 @@ async function seedLeadTenant(profile: LeadProfile) {
       })
   }
 
-  // The WHAT of an appointment: name, bookable lengths, capacity, access rule.
-  // The availability docs below publish only the WHEN.
-  const appointmentActId = `${teamId}-act-appointment`
-  const headCoachName = staffName(profile.appointments.availability[0]?.staffKey ?? owner.key)
-  const appointmentImageUrl = profile.appointments.imageAsset
-    ? await uploadAsset(
-        profile.appointments.imageAsset,
-        `teams/${teamId}/activities/${appointmentActId}/cover`
-      )
-    : null
-  await db
-    .collection('activities')
-    .doc(appointmentActId)
-    .set({
-      teamId,
-      name: profile.appointments.activityName,
-      slug: profile.appointments.slug,
-      color: profile.accentColor,
-      description: profile.appointments.description,
-      type: 'appointment',
-      providerId: uidOf(profile.appointments.availability[0]?.staffKey ?? owner.key),
-      providerName: headCoachName,
-      level: 'all',
-      durationsMinutes: profile.appointments.durationsMinutes,
-      max_participants: 1,
-      isFreeTrial: true,
-      isActive: true,
-      ...(appointmentImageUrl ? { image_url: appointmentImageUrl } : {}),
-      created_at: ts(daysFromNow(-180)),
-    })
-  await db
-    .collection('activities')
-    .doc(appointmentActId)
-    .collection('public_profile')
-    .doc(appointmentActId)
-    .set({
-      type: 'activity',
-      // Routes the public booking/site cards to the appointment flow.
-      activityType: 'appointment',
-      teamId,
-      name: profile.appointments.activityName,
-      slug: profile.appointments.slug,
-      color: profile.accentColor,
-      description: profile.appointments.description,
-      image_url: appointmentImageUrl,
-      isFreeTrial: true,
-      level: 'all',
-    })
+  // ── appointment activities (the WHAT) ────────────────────────────────────────
+  // Each is an offering: its name, the lengths it can be booked at, its capacity
+  // and its access rule. A lead may publish several (e.g. a free intro call and a
+  // paid 1:1) — they differ by access rule, which a single duration list cannot
+  // express. The availability docs below publish only the WHEN and link to them.
+  const aptActIdOf = (key: string) => `${teamId}-act-appointment-${key}`
+  // The provider is whoever's schedule first offers it (owner as a fallback).
+  const aptProviderKeyOf = (key: string) =>
+    profile.appointments.availability.find((av) =>
+      (av.activityKeys ?? profile.appointments.activities.map((a) => a.key)).includes(key)
+    )?.staffKey ?? owner.key
+  const aptDefOf = (key: string) => profile.appointments.activities.find((a) => a.key === key)
+
+  for (const apt of profile.appointments.activities) {
+    const aptActId = aptActIdOf(apt.key)
+    const providerKey = aptProviderKeyOf(apt.key)
+    const imageUrl = apt.imageAsset
+      ? await uploadAsset(apt.imageAsset, `teams/${teamId}/activities/${aptActId}/cover`)
+      : null
+    // Same paid-access gate as a class; isFreeTrial stays in sync (legacy queries).
+    const accessRule = {
+      type: apt.accessTier ?? 'open',
+      ...(apt.accessTier === 'subscription'
+        ? { subscriptionTypeIds: (apt.accessSubKeys ?? []).map(subIdOf) }
+        : {}),
+    }
+    await db
+      .collection('activities')
+      .doc(aptActId)
+      .set({
+        teamId,
+        name: apt.activityName,
+        slug: apt.slug,
+        color: profile.accentColor,
+        description: apt.description,
+        type: 'appointment',
+        providerId: uidOf(providerKey),
+        providerName: staffName(providerKey),
+        level: 'all',
+        durationsMinutes: apt.durationsMinutes,
+        max_participants: apt.maxParticipants ?? 1,
+        // A 1:1 slot has no roster-review step — the time is taken the moment
+        // it's booked, so the booking is written 'confirmed' on the spot.
+        autoConfirm: true,
+        isFreeTrial: accessRule.type === 'open',
+        accessRule,
+        isActive: true,
+        ...(imageUrl ? { image_url: imageUrl } : {}),
+        created_at: ts(daysFromNow(-180)),
+      })
+    await db
+      .collection('activities')
+      .doc(aptActId)
+      .collection('public_profile')
+      .doc(aptActId)
+      .set({
+        type: 'activity',
+        // Routes the public booking/site cards to the appointment flow.
+        activityType: 'appointment',
+        teamId,
+        name: apt.activityName,
+        slug: apt.slug,
+        color: profile.accentColor,
+        description: apt.description,
+        image_url: imageUrl,
+        isFreeTrial: accessRule.type === 'open',
+        accessRule,
+        level: 'all',
+      })
+  }
 
   // ── appointments: availability docs + a few already-BOOKED sessions ───────────
   // Availability publishes only WHEN each coach is free; it generates NOTHING.
@@ -1105,6 +1132,10 @@ async function seedLeadTenant(profile: LeadProfile) {
     // Index-suffixed so one coach can hold several availabilities.
     const templateId = `${teamId}-tpl-${av.staffKey}-${tplIdx}`
     const tplPlace = resolvePlace(av.placeKey)
+    // The offerings bookable in this window — all of them unless narrowed. The
+    // availability carries ONLY these ids: no durations, no capacity, no access
+    // rule (those are the activity's), and no isFreeTrial.
+    const avActivityKeys = av.activityKeys ?? profile.appointments.activities.map((a) => a.key)
     await db
       .collection('availability')
       .doc(templateId)
@@ -1114,8 +1145,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         providerName,
         // The SCHEDULE's name — the offering's name lives on the activity.
         title: av.title,
-        description: profile.appointments.description,
-        activityIds: [appointmentActId],
+        description: aptDefOf(avActivityKeys[0])?.description ?? '',
+        activityIds: avActivityKeys.map(aptActIdOf),
         location: tplPlace.label,
         ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
         onlineUrl: null,
@@ -1152,14 +1183,26 @@ async function seedLeadTenant(profile: LeadProfile) {
       const contactId = `${teamId}-contact-${contactIdx.toString().padStart(3, '0')}`
       const clientEmail = `${slugEmail(client)}.${teamId}@example.com`
 
+      // Which offering was booked — the session INHERITS the activity's name,
+      // access rule and capacity, exactly as bookAppointment does.
+      const bookedApt = aptDefOf(b.activityKey ?? avActivityKeys[0])
+      if (!bookedApt) continue
+      const bookedAccessRule = {
+        type: bookedApt.accessTier ?? 'open',
+        ...(bookedApt.accessTier === 'subscription'
+          ? { subscriptionTypeIds: (bookedApt.accessSubKeys ?? []).map(subIdOf) }
+          : {}),
+      } as SeedAccessRule
+
       const { id: sid, session, publicProfile } = buildAppointmentSessionDocs({
         teamId,
         templateId,
-        activityId: appointmentActId,
-        activityName: profile.appointments.activityName,
-        accessRule: { type: 'open' },
-        isFreeTrial: true,
-        maxParticipants: 1,
+        activityId: aptActIdOf(bookedApt.key),
+        activityName: bookedApt.activityName,
+        accessRule: bookedAccessRule,
+        isFreeTrial: bookedAccessRule.type === 'open',
+        maxParticipants: bookedApt.maxParticipants ?? 1,
+        autoConfirm: true,
         providerId: providerUid,
         providerName,
         start,
@@ -1299,6 +1342,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         providerId: uidOf(s.staffKey),
         ...(a.capacity != null ? { max_participants: a.capacity } : {}),
         allowBooking: s.allowBooking,
+        // Denormalised from the activity — classes confirm at check-in.
+        autoConfirm: false,
         participants_count: 0,
         created_at: ts(daysFromNow(-200)),
         createdBy: uid,

@@ -68,7 +68,7 @@ export async function markNoShowBookings(): Promise<{
       }
 
       batch.update(sessionDoc.ref, {
-        bio_link_bookings_count: FieldValue.increment(-pendingDocs.length),
+        bookings_count: FieldValue.increment(-pendingDocs.length),
       })
 
       await batch.commit()

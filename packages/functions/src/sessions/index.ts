@@ -868,7 +868,7 @@ export const selfCheckIn = onCall(async (request) => {
     if (!bStatus || bStatus === 'pending') {
       batch.update(bookingRef, { status: 'confirmed', confirmed_at: FieldValue.serverTimestamp() })
       batch.update(sessionRef, {
-        bio_link_bookings_count: FieldValue.increment(-1),
+        bookings_count: FieldValue.increment(-1),
         conversions_count: FieldValue.increment(1),
       })
       batch.update(db.collection('contacts').doc(contactId), {

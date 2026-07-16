@@ -218,7 +218,7 @@ export const checkInContact = onCall(async (request) => {
       confirmed_at: FieldValue.serverTimestamp(),
     })
     batch.update(sessionRef, {
-      bio_link_bookings_count: FieldValue.increment(-1),
+      bookings_count: FieldValue.increment(-1),
       conversions_count: FieldValue.increment(1),
     })
     batch.update(contactRef, { pending_bookings_count: FieldValue.increment(-1) })

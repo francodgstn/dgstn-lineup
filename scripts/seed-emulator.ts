@@ -678,7 +678,17 @@ async function seedTeam(opts: {
     await db
       .collection('activities')
       .doc(a.id)
-      .set({ ...a, teamId, isActive: true, created_at: ts(daysFromNow(-100)) })
+      .set({
+        ...a,
+        teamId,
+        // Classes don't auto-confirm: a booking holds a seat but stays
+        // unconfirmed until the studio checks the contact in. Written
+        // explicitly (it's what resolveAutoConfirm defaults to for 'class')
+        // so the seed data exercises the field.
+        autoConfirm: false,
+        isActive: true,
+        created_at: ts(daysFromNow(-100)),
+      })
     await db.collection('activities').doc(a.id).collection('public_profile').doc(a.id).set({
       type: 'activity',
       activityType: 'class',
@@ -713,6 +723,9 @@ async function seedTeam(opts: {
       level: 'all',
       durationsMinutes: appointmentDurations,
       max_participants: 1,
+      // A 1:1 slot has no roster-review step — the time is taken the moment it's
+      // booked, so the booking is written 'confirmed' on the spot.
+      autoConfirm: true,
       isFreeTrial: true,
       isActive: true,
       created_at: ts(daysFromNow(-90)),
@@ -930,6 +943,8 @@ async function seedTeam(opts: {
         providerName: s.instructor ?? null,
         locationAddress: s.locationAddress ?? null,
         allowBooking: s.allowBooking,
+        // Denormalised from the activity — classes confirm at check-in.
+        autoConfirm: false,
         participants_count: 0,
         created_at: ts(daysFromNow(-100)),
         createdBy: uid,

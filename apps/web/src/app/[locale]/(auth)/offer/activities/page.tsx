@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
@@ -24,7 +24,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule } from '@linyup/shared'
+import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
 import type { Activity, ActivityLevel, ActivityType } from '@linyup/shared'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
@@ -98,6 +98,9 @@ const activitySchema = z.object({
   // Drop-in / pay-per-class: an uncovered contact may pay this to book a single session.
   dropInEnabled: z.boolean(),
   dropInPrice: z.string(),
+  // Does a booking for this activity confirm itself, or wait on studio review?
+  // Not implied by `type` — shown for classes and appointments alike.
+  autoConfirm: z.boolean(),
   // APPOINTMENT-ONLY: the session lengths clients choose from, and the booking cap
   // for a materialised appointment session (1 = true 1:1; >1 = small-group).
   durationsMinutes: z.array(z.number()),
@@ -167,6 +170,7 @@ function ActivityDialog({
           dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
           durationsMinutes: editing.durationsMinutes ?? [],
           max_participants: editing.max_participants ?? 1,
+          autoConfirm: resolveAutoConfirm(editing),
         }
       : {
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
@@ -174,6 +178,7 @@ function ActivityDialog({
           color: '#6366f1', accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '',
           durationsMinutes: [], max_participants: 1,
+          autoConfirm: resolveAutoConfirm({ type: 'class' }),
         },
   })
   const type = watch('type')
@@ -186,6 +191,18 @@ function ActivityDialog({
       ? durationsMinutes.filter((x) => x !== d)
       : [...durationsMinutes, d].sort((a, b) => a - b))
   }
+
+  // Re-default autoConfirm when the studio flips the type — but only while the
+  // toggle hasn't been touched by hand, so an explicit override survives a type
+  // change. `prevTypeRef` guards the mount-time run (editing already carries the
+  // resolved value in defaultValues; don't clobber an explicit override on open).
+  const [autoConfirmTouched, setAutoConfirmTouched] = useState(false)
+  const prevTypeRef = useRef(type)
+  useEffect(() => {
+    if (prevTypeRef.current === type) return
+    prevTypeRef.current = type
+    if (!autoConfirmTouched) setValue('autoConfirm', resolveAutoConfirm({ type }))
+  }, [type, autoConfirmTouched, setValue])
 
   // Inline quick-create: "create or link a subscription to this activity" without
   // leaving the form. Writes a minimal type (pricing is configured later in the
@@ -262,6 +279,7 @@ function ActivityDialog({
           enabled: data.dropInEnabled,
           ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
         },
+        autoConfirm: data.autoConfirm,
         ...(data.type === 'appointment'
           ? {
               durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b),
@@ -296,6 +314,7 @@ function ActivityDialog({
           enabled: data.dropInEnabled,
           ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
         },
+        autoConfirm: data.autoConfirm,
         ...(data.type === 'appointment'
           ? {
               durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b),
@@ -393,6 +412,34 @@ function ActivityDialog({
                 {t('typeChangeWarning')}
               </p>
             )}
+          </div>
+
+          {/* Auto-confirm — a field, not implied by type. Shown for classes and
+              appointments alike so either kind can require a review step. */}
+          <div className="space-y-1.5 rounded-lg border p-3">
+            <Controller
+              name="autoConfirm"
+              control={control}
+              render={({ field }) => (
+                <label className="flex items-start gap-2 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-primary"
+                    checked={field.value}
+                    onChange={(e) => {
+                      setAutoConfirmTouched(true)
+                      field.onChange(e.target.checked)
+                    }}
+                  />
+                  <span>
+                    <span className="font-medium">{t('fieldAutoConfirm')}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {field.value ? t('autoConfirmHintOn') : t('autoConfirmHintOff')}
+                    </span>
+                  </span>
+                </label>
+              )}
+            />
           </div>
 
           {/* Appointment-only: bookable session lengths + booking cap */}

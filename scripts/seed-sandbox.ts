@@ -1735,6 +1735,10 @@ async function seedDemoTeam(profile: SectorProfile) {
         isFreeTrial: a.isFreeTrial,
         base_score: a.base_score,
         type: 'class',
+        // Classes don't auto-confirm: a booking holds a seat but stays
+        // unconfirmed until check-in. Written explicitly (it's the 'class'
+        // default in resolveAutoConfirm) so the seed exercises the field.
+        autoConfirm: false,
         isActive: true,
         created_at: ts(daysFromNow(-200)),
       })
@@ -1775,6 +1779,9 @@ async function seedDemoTeam(profile: SectorProfile) {
       level: 'all',
       durationsMinutes: appointmentDurations,
       max_participants: 1,
+      // A 1:1 slot has no roster-review step — the time is taken the moment it's
+      // booked, so the booking is written 'confirmed' on the spot.
+      autoConfirm: true,
       isFreeTrial: true,
       isActive: true,
       created_at: ts(daysFromNow(-180)),
@@ -1978,6 +1985,8 @@ async function seedDemoTeam(profile: SectorProfile) {
         providerName: s.instructor,
         locationAddress: '12 Studio Lane',
         allowBooking: s.allowBooking,
+        // Denormalised from the activity — classes confirm at check-in.
+        autoConfirm: false,
         participants_count: 0,
         created_at: ts(daysFromNow(-200)),
         createdBy: uid,

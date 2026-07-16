@@ -18,7 +18,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { usePlaces } from '@/hooks/usePlaces'
 import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { useAuth } from '@/contexts/AuthContext'
-import { SESSIONS_COLLECTION } from '@linyup/shared'
+import { SESSIONS_COLLECTION, resolveAutoConfirm } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
 import { Loader2, Repeat2 } from 'lucide-react'
 
@@ -402,6 +402,10 @@ export function SessionFormDialog({
       activityId:     values.activityId || null,
       activityName:   activityEntry?.name ?? null,
       activityType:   values.activityType,
+      // Denormalised from the picked activity so the booking callable can read it
+      // off the session without a second lookup. Falls back to the kind default
+      // when no activity is picked yet.
+      autoConfirm:    resolveAutoConfirm(activityEntry ?? { type: values.activityType }),
       location:       values.location || null,
       placeId:        values.placeId || null,
       roomId:         values.roomId || null,
@@ -429,6 +433,7 @@ export function SessionFormDialog({
           activityId: values.activityId || null,
           activityName: activityEntry?.name ?? null,
           activityType: values.activityType,
+          autoConfirm: resolveAutoConfirm(activityEntry ?? { type: values.activityType }),
           location: values.location || null,
           placeId: values.placeId || null,
           roomId: values.roomId || null,
@@ -504,6 +509,7 @@ export function SessionFormDialog({
         activityId:     values.activityId || null,
         activityName:   activityEntry?.name ?? null,
         activityType:   values.activityType,
+        autoConfirm:    resolveAutoConfirm(activityEntry ?? { type: values.activityType }),
         start:          startDate.toISOString(),
         end:            endDate.toISOString(),
         duration:       values.duration,

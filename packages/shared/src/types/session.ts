@@ -35,19 +35,33 @@ export interface Session {
   /** When booking is allowed, mark it as required (no drop-ins) — surfaces a
    *  "Booking required" chip in the public booking flow. Class-only in UI. */
   bookingMandatory?: boolean
-  // ── Appointment-specific fields (only populated when activityType === 'appointment') ──
-  /** Back-link to the availability template this appointment was booked from. */
-  templateId?: string
-  /** Hard booking cap for appointment sessions. */
+  // ── Booking state — BOTH kinds. Not implied by activityType. ──
+  /** Hard booking cap (seats for a class, 1 for a typical 1:1 appointment). */
   max_participants?: number
-  /** Active booking count — maintained by trigger or set at migration time. */
+  /** Bookings currently HOLDING CAPACITY — i.e. every booking whose status is
+   *  neither 'cancelled' nor 'no_show' (an absent status = pending = holds a
+   *  seat). One counter for classes and appointments alike; `trackBookings` is
+   *  the authoritative recount and self-heals races.
+   *  History: classes used to count into a separate `bio_link_bookings_count`
+   *  while appointments used this one — merged 2026-07. */
   bookings_count?: number
+  /** Capacity state, derived from bookings_count vs max_participants (plus
+   *  explicit cancellation). Treat an ABSENT value as 'open' — a session that
+   *  nobody has booked yet may not carry one. */
+  status?: 'open' | 'full' | 'cancelled'
+  /** Denormalised from Activity.autoConfirm. When true a booking is written
+   *  `status: 'confirmed'` immediately (the client's slot is theirs); when false
+   *  it stays unconfirmed until the studio confirms/checks them in. Defaults by
+   *  kind (appointments true, classes false) but is a FIELD, not a type rule —
+   *  a class may auto-confirm and an appointment may require approval. */
+  autoConfirm?: boolean
+  // ── Appointment-specific fields (only populated when activityType === 'appointment') ──
+  /** Back-link to the availability doc this appointment was booked from. */
+  templateId?: string
   /** Subset of bookings_count where is_new_contact === true. */
   trial_bookings_count?: number
-  /** Free trial flag — if false, members only (type !== 'trial'). */
+  /** Legacy free-trial flag. Superseded by the activity's `accessRule`. */
   isFreeTrial?: boolean
-  /** Booking status for appointment sessions; 'open' | 'full' | 'cancelled'. */
-  status?: 'open' | 'full' | 'cancelled'
 }
 
 export interface SessionPublicProfile {

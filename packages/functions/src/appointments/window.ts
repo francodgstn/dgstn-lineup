@@ -27,6 +27,7 @@ import {
   ACTIVITIES_COLLECTION,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   resolveActivityAccessRule,
+  resolveAutoConfirm,
   type Activity,
   type ActivityAccessRule,
   type Availability,
@@ -478,6 +479,11 @@ export const bookAppointment = onCall(async (request) => {
   if (!allowedDurations.includes(durationMinutes))
     throw new HttpsError('failed-precondition', 'Duration is not offered')
 
+  // Does a booking here confirm itself on the spot, or does the studio decide?
+  // Denormalised onto the created session below so cancellation/booking logic
+  // never needs to re-fetch the activity.
+  const autoConfirm = resolveAutoConfirm({ autoConfirm: activity.autoConfirm, type: activity.type })
+
   // ── Resolve the availability (the *when*) that covers this start ──
   const providerId = data.providerId
   const tplSnap = await db
@@ -617,6 +623,8 @@ export const bookAppointment = onCall(async (request) => {
     activityId: data.activityId,
     activityName: activity.name,
     accessRule,
+    // Denormalised from the activity — see `autoConfirm` above.
+    autoConfirm,
     providerId,
     providerName,
     start: Timestamp.fromDate(start),
@@ -630,7 +638,6 @@ export const bookAppointment = onCall(async (request) => {
     allowBooking: true,
     status: 'full',
     has_bookings: true,
-    bio_link_bookings_count: 1,
     last_booking_at: FieldValue.serverTimestamp(),
     created_at: FieldValue.serverTimestamp(),
   }
@@ -648,8 +655,14 @@ export const bookAppointment = onCall(async (request) => {
     booking_token: bookingToken,
     authenticated_booking: authenticated,
     subscription_type_id: matchedSubscriptionTypeId,
-    status: 'confirmed',
-    fullname: `${sanitized.firstname} ${sanitized.lastname}`,
+    // The slot is taken the moment it's booked either way (bookings_count: 1
+    // above, unconditionally) — only the booking's own status differs by
+    // autoConfirm; a non-auto-confirm appointment still holds capacity but
+    // stays unconfirmed until the studio confirms it.
+    ...(autoConfirm && {
+      status: 'confirmed' as const,
+      fullname: `${sanitized.firstname} ${sanitized.lastname}`,
+    }),
   }
 
   await db.runTransaction(async (tx) => {

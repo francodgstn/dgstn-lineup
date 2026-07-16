@@ -68,7 +68,7 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
       providerName: data.providerName || null,
       providerId: data.providerId || null,
       max_participants: data.max_participants || null,
-      bookings_count: data.bio_link_bookings_count || 0,
+      bookings_count: data.bookings_count || 0,
       bookingMandatory: data.bookingMandatory === true,
     }
     await afterRef.collection('public_profile').doc(sessionId).set(publicProfile)

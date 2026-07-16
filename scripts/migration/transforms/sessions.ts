@@ -20,10 +20,11 @@ export function transformSession(
     delete out.instructorName
   }
   delete out.id // let Firestore doc ID be the canonical id; avoid collisions in web app spread
-  // HMD's legacy source field is `portal_bookings_count` (the bio-link rename does
-  // NOT apply here — this reads the immutable hmd-lineup export schema). Map it to
-  // our `bookings_count` (pass06 overwrites with the real subcollection count) and
-  // drop it; the new `bio_link_bookings_count` field is forward-only, not migrated.
+  // HMD's legacy source field is `portal_bookings_count` (this reads the immutable
+  // hmd-lineup export schema). Map it to `bookings_count` — the single counter both
+  // classes and appointments use for bookings HOLDING CAPACITY (status neither
+  // 'cancelled' nor 'no_show') — and drop the source field. pass06 overwrites the
+  // value with the real subcollection count anyway.
   if (out.bookings_count == null)
     out.bookings_count = (out.portal_bookings_count as number | undefined) ?? 0
   delete out.portal_bookings_count

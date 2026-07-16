@@ -19,9 +19,11 @@ import {
 import { resolveBookingAccessGate } from './access'
 import {
   resolveActivityAccessRule,
+  resolveAutoConfirm,
   heldSubscriptionTypeIds,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   type ActivityAccessRule,
+  type ActivityType,
 } from '@linyup/shared'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
@@ -505,6 +507,8 @@ export const bookSession = onCall(async (request) => {
   let accessRule: ActivityAccessRule = { type: 'open' }
   // Per-activity confirmation note (overrides the team-wide setting below).
   let activityInstructions: string | null = null
+  let activityAutoConfirm: boolean | undefined
+  let activityTypeVal: ActivityType | undefined
 
   if (sessionData.activityId) {
     try {
@@ -521,11 +525,22 @@ export const bookSession = onCall(async (request) => {
           isFreeTrial: actData.isFreeTrial as boolean | undefined,
         })
         activityInstructions = (actData.confirmationInstructions as string) || null
+        activityAutoConfirm = actData.autoConfirm as boolean | undefined
+        activityTypeVal = actData.type as ActivityType | undefined
       }
     } catch (_) {
       /* non-fatal */
     }
   }
+
+  // Does this booking confirm itself on the spot? The session's own field wins
+  // (denormalised by whoever created it); otherwise fall back through the
+  // parent activity — resolveAutoConfirm's by-kind default (class => false)
+  // applies when neither is set.
+  const autoConfirm =
+    typeof sessionData.autoConfirm === 'boolean'
+      ? (sessionData.autoConfirm as boolean)
+      : resolveAutoConfirm({ autoConfirm: activityAutoConfirm, type: activityTypeVal })
 
   // Studio note appended to the confirmation email: activity override ?? team default.
   const teamInstructions =
@@ -537,7 +552,7 @@ export const bookSession = onCall(async (request) => {
   // Group-class booking cap (optional; enforced against the live reserved count).
   const maxGroup = sessionData.max_participants as number | undefined
   if (maxGroup && maxGroup > 0) {
-    const reserved = (sessionData.bio_link_bookings_count as number) || 0
+    const reserved = (sessionData.bookings_count as number) || 0
     if (reserved >= maxGroup) {
       throw new HttpsError('resource-exhausted', 'This session is fully booked.')
     }
@@ -683,10 +698,17 @@ export const bookSession = onCall(async (request) => {
     booking_ip: bookingIp,
     authenticated_booking: isAuthenticatedBooking,
     subscription_type_id: subscriptionTypeId,
+    // Auto-confirming sessions write the confirmed status immediately (the
+    // client's slot is theirs); otherwise leave status unset — pending, still
+    // holds capacity — until the studio confirms/checks the client in.
+    ...(autoConfirm && {
+      status: 'confirmed' as const,
+      fullname: `${sanitized.firstname} ${sanitized.lastname}`,
+    }),
   }
   const sessionCounterUpdate = {
     has_bookings: true,
-    bio_link_bookings_count: FieldValue.increment(1),
+    bookings_count: FieldValue.increment(1),
     ...(isNewContact && { bio_link_new_contact_bookings_count: FieldValue.increment(1) }),
     last_booking_at: FieldValue.serverTimestamp(),
   }
@@ -938,10 +960,38 @@ export const cancelBooking = onCall(async (request) => {
   const session = sessionDoc.data()!
   const isAppointment = session.activityType === 'appointment'
 
-  // Appointment bookings are auto-confirmed at booking time, so 'confirmed' is their
-  // normal (still cancellable) state. For group classes 'confirmed' means the
-  // studio checked the person in — those stay locked.
-  const cancellableStatuses = isAppointment
+  // Resolve the parent activity once — used both for the cancellable-status
+  // re-key below (session-level autoConfirm, else the activity's) and for the
+  // activity name shown in the cancellation email.
+  let activityName = 'Session'
+  let activityAutoConfirm: boolean | undefined
+  let activityTypeVal: ActivityType | undefined
+  if (session.activityId) {
+    const [actErr, actDoc] = await to(
+      db
+        .collection('activities')
+        .doc(session.activityId as string)
+        .get()
+    )
+    if (!actErr && actDoc && actDoc.exists) {
+      const actData = actDoc.data()!
+      activityName = (actData.name as string) || 'Session'
+      activityAutoConfirm = actData.autoConfirm as boolean | undefined
+      activityTypeVal = actData.type as ActivityType | undefined
+    }
+  }
+  const sessionAutoConfirm =
+    typeof session.autoConfirm === 'boolean'
+      ? (session.autoConfirm as boolean)
+      : resolveAutoConfirm({
+          autoConfirm: activityAutoConfirm,
+          type: activityTypeVal ?? (isAppointment ? 'appointment' : 'class'),
+        })
+
+  // A session that auto-confirms treats 'confirmed' as the normal (still
+  // cancellable) booked state; one that doesn't uses 'confirmed' to mean the
+  // studio checked the client in — that stays locked.
+  const cancellableStatuses = sessionAutoConfirm
     ? ['pending', 'no_show', 'confirmed']
     : ['pending', 'no_show']
   if (booking.status && !cancellableStatuses.includes(booking.status as string)) {
@@ -970,18 +1020,6 @@ export const cancelBooking = onCall(async (request) => {
     ctaUrl = (team.settings?.trialBookingCtaUrl as string) || null
   }
 
-  let activityName = 'Session'
-  if (session.activityId) {
-    const [actErr, actDoc] = await to(
-      db
-        .collection('activities')
-        .doc(session.activityId as string)
-        .get()
-    )
-    if (!actErr && actDoc && actDoc.exists)
-      activityName = (actDoc.data()?.name as string) || 'Session'
-  }
-
   // Transaction (not a batch) so a spent lesson credit is refunded atomically
   // with the cancellation. Refund floors at 0 and applies even if the grant has
   // expired meanwhile — the swimmer paid for a lesson they now didn't take.
@@ -1003,12 +1041,11 @@ export const cancelBooking = onCall(async (request) => {
       cancelled_at: FieldValue.serverTimestamp(),
     })
     tx.update(db.collection('sessions').doc(sessionId), {
-      bio_link_bookings_count: FieldValue.increment(-1),
+      bookings_count: FieldValue.increment(-1),
       // Release the appointment slot. A window-created session only existed for this
       // booking, so cancel it (unpublishes via the sync gate) — its time returns
       // to the coach's open window. A fixed slot reopens for the next client.
       ...(isAppointment && {
-        bookings_count: FieldValue.increment(-1),
         ...(session.origin === 'window'
           ? { status: 'cancelled', allowBooking: false }
           : session.status === 'full'
@@ -1291,7 +1328,7 @@ export const rebookSession = onCall(async (request) => {
     rebooked_at: FieldValue.serverTimestamp(),
   })
   batch.update(db.collection('sessions').doc(oldSessionId), {
-    bio_link_bookings_count: FieldValue.increment(-1),
+    bookings_count: FieldValue.increment(-1),
   })
   batch.set(newBookingRef, {
     firstname: booking.firstname,
@@ -1310,7 +1347,7 @@ export const rebookSession = onCall(async (request) => {
   })
   batch.update(db.collection('sessions').doc(newSessionId), {
     has_bookings: true,
-    bio_link_bookings_count: FieldValue.increment(1),
+    bookings_count: FieldValue.increment(1),
     last_booking_at: FieldValue.serverTimestamp(),
   })
   await batch.commit()

@@ -31,6 +31,19 @@ export function resolveActivityAccessRule(a: {
   return { type: a.isFreeTrial === false ? 'members' : 'open' }
 }
 
+/** Does a booking for this offering confirm itself? Falls back to the kind's
+ *  default when the field is unset: appointments auto-confirm (a 1:1 slot has no
+ *  roster-review step — the time is taken the moment it's booked), classes don't
+ *  (the studio confirms via check-in). Keep this the single source of truth so
+ *  the booking callables, the seeds, and the UI agree. */
+export function resolveAutoConfirm(a: {
+  autoConfirm?: boolean
+  type?: ActivityType
+}): boolean {
+  if (typeof a.autoConfirm === 'boolean') return a.autoConfirm
+  return a.type === 'appointment'
+}
+
 export interface Activity {
   id: string
   teamId: string
@@ -56,6 +69,14 @@ export interface Activity {
   /** APPOINTMENT-ONLY. Booking cap for a materialised appointment session.
    *  Defaults to 1 (a true 1:1); >1 allows small-group coaching. */
   max_participants?: number
+  /** Does a booking confirm itself, or does the studio decide?
+   *  - `true`  → the booking is written `status: 'confirmed'` on the spot.
+   *  - `false` → it stays unconfirmed until the studio confirms/checks them in.
+   *  Defaults by kind when unset (appointment → true, class → false) via
+   *  `resolveAutoConfirm`, but it is a FIELD, not a type rule: a class may
+   *  auto-confirm, and an appointment may require approval. Denormalised onto
+   *  each Session at booking time. */
+  autoConfirm?: boolean
   base_score?: number | null
   /** Legacy trial toggle. Superseded by `accessRule` but kept in sync
    *  (`isFreeTrial = accessRule.type === 'open'`) for existing queries. */

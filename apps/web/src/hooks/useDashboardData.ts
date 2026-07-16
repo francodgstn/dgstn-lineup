@@ -43,7 +43,7 @@ export interface SessionDoc {
   start: { toDate(): Date }
   end?: { toDate(): Date }
   participants_count?: number
-  bio_link_bookings_count?: number
+  bookings_count?: number
   bio_link_new_contact_bookings_count?: number
   cancelled_at?: { toDate(): Date } | null
 }
