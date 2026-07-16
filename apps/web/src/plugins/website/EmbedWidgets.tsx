@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import {
   Select,
   SelectContent,
@@ -267,11 +268,11 @@ export function EmbedWidgets({
                         </div>
                         <div className="space-y-1.5">
                           <Label className="text-xs">Accent color</Label>
-                          <input
-                            type="color"
-                            value={wdg.theme?.accentColor ?? brandAccent ?? '#6366f1'}
-                            onChange={(e) => patchTheme(wdg.id, { accentColor: e.target.value })}
-                            className="h-9 w-full cursor-pointer rounded-md border bg-background p-1"
+                          <ColorPicker
+                            value={wdg.theme?.accentColor ?? brandAccent ?? DEFAULT_ACCENT}
+                            onChange={(hex) => patchTheme(wdg.id, { accentColor: hex })}
+                            className="h-9 w-full"
+                            aria-label="Accent color"
                           />
                         </div>
                         <label className="flex items-end justify-between gap-2 pb-1.5">

@@ -1,4 +1,5 @@
 import type { WebsiteSection, WebsiteSectionType, SiteDraft, SiteMeta } from '@linyup/shared'
+import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
 
 // ─── section library (for the "Add section" menu) ──────────────────────────────
 // icon names map to lucide icons resolved in the builder via the shared DynamicIcon.
@@ -67,7 +68,7 @@ export function emptyDraft(team: {
   const meta: SiteMeta = {
     title: team.name,
     theme: 'light',
-    accentColor: team.bioLinkAccentColor || '#6366f1',
+    accentColor: team.bioLinkAccentColor || DEFAULT_ACCENT,
     font: 'sans',
     header: { showNav: true, ctaLabel: 'Book now', ctaAction: 'booking' },
     footer: { showSocial: true },

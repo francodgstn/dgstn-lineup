@@ -51,6 +51,7 @@
     "posthog-js": "^1.376.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
+    "react-colorful": "^5.8.0",
     "react-day-picker": "^10.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.2",

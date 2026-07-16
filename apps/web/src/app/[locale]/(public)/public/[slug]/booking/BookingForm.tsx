@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/select'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
+import { COLOR_PRESETS } from '@/lib/colors'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -148,16 +149,7 @@ function sessionDuration(
 }
 
 function activityGradient(name: string): string {
-  const colors = [
-    '#6366f1',
-    '#3b82f6',
-    '#10b981',
-    '#f59e0b',
-    '#ef4444',
-    '#8b5cf6',
-    '#ec4899',
-    '#14b8a6',
-  ]
+  const colors = COLOR_PRESETS
   const i = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length
   return `linear-gradient(135deg, ${colors[i]}, ${colors[(i + 2) % colors.length]})`
 }

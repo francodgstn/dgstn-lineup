@@ -47,6 +47,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Globe, GripVertical } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
+import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { SubscriptionAutomationsSection } from '@/components/subscriptions/SubscriptionAutomationsSection'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
@@ -517,7 +518,7 @@ function SubTypeDialog({
                     />
                     <span
                       className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                      style={{ background: a.color || '#6366f1' }}
+                      style={{ background: a.color || DEFAULT_ACCENT }}
                     />
                     {a.name}
                   </label>

@@ -36,23 +36,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { DynamicIcon } from '@/components/ui/icon-picker'
+import { ColorPicker } from '@/components/ui/color-picker'
 import { ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 import type { OrgSiteDraft, OrgSiteSection, OrgSiteSectionType, OrgSiteTeamRef, SiteMeta } from '@linyup/shared'
 import WebsiteRenderer, { type RenderableSite } from '@/components/site/WebsiteRenderer'
 import { OrgSectionEditor } from './OrgSectionEditor'
 import { useOrgSiteDraft, saveOrgSiteDraft, publishOrgSite, unpublishOrgSite } from './hooks'
 import { ORG_SECTION_LIBRARY, newOrgSection, emptyOrgDraft } from './defaults'
-
-const ACCENT_PRESETS = [
-  '#6366f1',
-  '#3b82f6',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
-]
 
 const MAX_SECTIONS = 12
 
@@ -138,27 +128,11 @@ function AppearancePanel({
 
       <div className="space-y-2">
         <Label className="text-xs">Accent color</Label>
-        <div className="flex flex-wrap items-center gap-2.5">
-          {ACCENT_PRESETS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => onChange({ accentColor: c })}
-              className="h-7 w-7 rounded-full transition-all"
-              style={{
-                background: c,
-                outline: meta.accentColor === c ? `2px solid ${c}` : 'none',
-                outlineOffset: 2,
-              }}
-            />
-          ))}
-          <input
-            type="color"
-            value={meta.accentColor}
-            onChange={(e) => onChange({ accentColor: e.target.value })}
-            className="h-7 w-7 cursor-pointer rounded-full border bg-background p-0.5"
-          />
-        </div>
+        <ColorPicker
+          value={meta.accentColor}
+          onChange={(hex) => onChange({ accentColor: hex })}
+          aria-label="Accent color"
+        />
       </div>
 
       <div className="space-y-3 rounded-lg border p-3">

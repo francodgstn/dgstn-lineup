@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import {
   ACTIVITIES_COLLECTION,
   AVAILABILITY_COLLECTION,
@@ -252,7 +253,7 @@ function TemplateDialog({
         confirmationInstructions: '',
         type: 'appointment' as const,
         level: 'all' as const,
-        color: '#6366f1',
+        color: DEFAULT_ACCENT,
         isFreeTrial: true,
         accessRule: { type: 'open' as const },
         dropIn: { enabled: false },

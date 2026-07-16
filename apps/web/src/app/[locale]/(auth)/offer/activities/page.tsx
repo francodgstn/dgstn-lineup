@@ -29,6 +29,7 @@ import type { Activity, ActivityLevel, ActivityType } from '@linyup/shared'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SortableList, SortableItem, type SortableRenderProps } from '@/components/ui/sortable'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
@@ -175,7 +176,7 @@ function ActivityDialog({
       : {
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
           type: 'class' as ActivityType, level: 'all',
-          color: '#6366f1', accessTier: 'open', subscriptionTypeIds: [],
+          color: DEFAULT_ACCENT, accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '',
           durationsMinutes: [], max_participants: 1,
           autoConfirm: resolveAutoConfirm({ type: 'class' }),
@@ -446,11 +447,17 @@ function ActivityDialog({
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="act-color">{t('fieldColor')}</Label>
-              <input
-                id="act-color"
-                type="color"
-                {...register('color')}
-                className="h-9 w-14 rounded-md border border-input cursor-pointer bg-background p-1"
+              <Controller
+                name="color"
+                control={control}
+                render={({ field }) => (
+                  <ColorPicker
+                    id="act-color"
+                    value={field.value}
+                    onChange={field.onChange}
+                    aria-label={t('fieldColor')}
+                  />
+                )}
               />
             </div>
 

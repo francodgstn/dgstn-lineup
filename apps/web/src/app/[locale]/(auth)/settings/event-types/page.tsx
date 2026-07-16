@@ -20,6 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { Plus, Pencil, Trash2, Lock, Package } from 'lucide-react'
 import {
   TEAMS_COLLECTION, EVENT_TYPES_SUBCOLLECTION,
@@ -139,7 +140,7 @@ function EventTypeFormDialog({
   const t = useTranslations('EventTypesSettings')
   const [name, setName] = useState(initial?.name ?? '')
   const [icon, setIcon] = useState(initial?.icon ?? 'Calendar')
-  const [color, setColor] = useState(initial?.color ?? '#6366F1')
+  const [color, setColor] = useState(initial?.color ?? DEFAULT_ACCENT)
   const [fields, setFields] = useState<EventTypeField[]>(initial?.checkin_fields ?? [])
   const [busy, setBusy] = useState(false)
 
@@ -170,10 +171,7 @@ function EventTypeFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>{t('form.color')}</Label>
-            <div className="flex items-center gap-2">
-              <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-              <span className="text-sm text-muted-foreground">{color}</span>
-            </div>
+            <ColorPicker value={color} onChange={setColor} className="w-8 h-8" aria-label={t('form.color')} />
           </div>
           <div className="space-y-2">
             <Label>{t('form.checkinFields')}</Label>

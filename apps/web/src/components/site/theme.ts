@@ -1,4 +1,5 @@
 import type { SiteMeta, SiteCta, SiteFont } from '@linyup/shared'
+import { DEFAULT_ACCENT } from '@/lib/colors'
 
 // Shared theming for the Website plugin renderer (public site + builder preview).
 
@@ -21,7 +22,7 @@ export function buildPalette(
   systemDark: boolean
 ): SitePalette {
   const isDark = meta.theme === 'dark' || (meta.theme === 'auto' && systemDark)
-  const accent = meta.accentColor || '#6366f1'
+  const accent = meta.accentColor || DEFAULT_ACCENT
   const base = isDark
     ? {
         isDark,

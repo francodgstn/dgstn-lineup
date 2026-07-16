@@ -21,6 +21,7 @@ import { DynamicIcon } from '@/components/ui/icon-picker'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { SYSTEM_LINK_META } from '@linyup/shared'
 import type { TeamLink, SocialLink, BioLinkTheme, BioLinkBackground, PublicMainAddress } from '@linyup/shared'
+import { DEFAULT_ACCENT } from '@/lib/colors'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
   const textScheme = getTextColor(bg, isDark)
   const onDark = textScheme === 'light'
 
-  const accent = team.bioLinkAccentColor ?? '#6366f1'
+  const accent = team.bioLinkAccentColor ?? DEFAULT_ACCENT
 
   const textMain = onDark ? '#f9fafb' : '#111827'
   const textMuted = onDark ? 'rgba(249,250,251,0.65)' : '#6b7280'

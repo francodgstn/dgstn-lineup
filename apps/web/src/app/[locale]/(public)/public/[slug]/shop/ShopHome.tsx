@@ -20,6 +20,7 @@ import { formatCurrency } from '@/lib/format'
 import { resolveProductPrice, type CheckoutContactMode } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
+import { DEFAULT_ACCENT } from '@/lib/colors'
 
 interface PlanPrice {
   id?: string
@@ -263,7 +264,7 @@ export default function ShopHome({
   const bg = team?.bioLinkBackground
   const bgStyle = resolveBackground(bg, isDark)
   const onDark = getTextColor(bg, isDark) === 'light'
-  const accent = team?.bioLinkAccentColor ?? '#6366f1'
+  const accent = team?.bioLinkAccentColor ?? DEFAULT_ACCENT
   const textMain = onDark ? '#f9fafb' : '#111827'
   const textMuted = onDark ? 'rgba(249,250,251,0.65)' : '#6b7280'
   const cardBg = onDark ? 'rgba(255,255,255,0.08)' : '#ffffff'

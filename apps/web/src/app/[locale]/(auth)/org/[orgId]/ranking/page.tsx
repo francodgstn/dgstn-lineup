@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ColorPicker } from '@/components/ui/color-picker'
 import { Plus, Pencil, Trash2, Shield } from 'lucide-react'
 import type { RankingSystem, RankLevel } from '@linyup/shared'
 import { RANK_PRESETS } from '@/lib/rank-presets'
@@ -143,11 +144,10 @@ function RankSystemDialog({
             </div>
             {form.levels.map((l, i) => (
               <div key={i} className="flex items-center gap-2">
-                <input
-                  type="color"
+                <ColorPicker
                   value={l.color ?? '#6b7280'}
-                  onChange={(e) => setLevel(i, 'color', e.target.value)}
-                  className="h-8 w-8 rounded cursor-pointer border"
+                  onChange={(hex) => setLevel(i, 'color', hex)}
+                  className="h-8 w-8"
                 />
                 <Input
                   value={l.label}

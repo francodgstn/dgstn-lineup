@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { usePublicTeam } from '../PublicTeamProvider'
+import { DEFAULT_ACCENT } from '@/lib/colors'
 
 // Branding/theme for the contact Portal, derived from the team's bio-link styling.
 // Lifted out of SpaceHome so the portal shell and every module render identically.
@@ -36,7 +37,7 @@ export function useSpaceTheme(): SpaceTheme {
   const bg = team?.bioLinkBackground
   const bgStyle = resolveBackground(bg, isDark)
   const onDark = getTextColor(bg, isDark) === 'light'
-  const accent = team?.bioLinkAccentColor ?? '#6366f1'
+  const accent = team?.bioLinkAccentColor ?? DEFAULT_ACCENT
 
   return {
     team,

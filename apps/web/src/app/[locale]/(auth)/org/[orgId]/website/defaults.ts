@@ -2,6 +2,7 @@ import type { OrgSiteSection, OrgSiteSectionType, OrgSiteDraft, SiteMeta } from 
 // Client-only unique id generator — shared verbatim with the team site builder
 // (React key + image path segment + anchor). Not org/team-specific.
 import { newSectionId } from '@/plugins/website/defaults'
+import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
 
 // ─── section library (for the "Add section" menu) ──────────────────────────────
 // Org sites only ever offer presentational sections (hero/content/gallery/contact,
@@ -58,7 +59,7 @@ export function emptyOrgDraft(org: { id: string; name: string; slug?: string }):
   const meta: SiteMeta = {
     title: org.name,
     theme: 'light',
-    accentColor: '#6366f1',
+    accentColor: DEFAULT_ACCENT,
     font: 'sans',
     header: { showNav: true },
     footer: { showSocial: true },

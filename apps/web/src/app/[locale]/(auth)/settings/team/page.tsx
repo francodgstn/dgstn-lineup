@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useOpenTabs } from '@/contexts/OpenTabsContext'
+import { ColorPicker } from '@/components/ui/color-picker'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -884,11 +885,10 @@ function RankSystemDialog({
                     <span className="text-xs text-muted-foreground w-5 text-right shrink-0">
                       {level.value}
                     </span>
-                    <input
-                      type="color"
+                    <ColorPicker
                       value={level.color ?? '#9CA3AF'}
-                      onChange={(e) => updateLevel(idx, { color: e.target.value })}
-                      className="h-7 w-7 rounded border border-input cursor-pointer shrink-0 p-0.5"
+                      onChange={(hex) => updateLevel(idx, { color: hex })}
+                      className="h-7 w-7 shrink-0"
                     />
                     <Input
                       value={level.label}

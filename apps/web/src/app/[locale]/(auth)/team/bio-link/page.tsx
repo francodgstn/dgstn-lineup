@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { IconPicker, DynamicIcon } from '@/components/ui/icon-picker'
+import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -45,19 +46,6 @@ import {
   EyeOff,
 } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
-
-// ─── constants ────────────────────────────────────────────────────────────────
-
-const ACCENT_PRESETS = [
-  '#6366f1',
-  '#3b82f6',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
-]
 
 // ─── form schema ─────────────────────────────────────────────────────────────
 
@@ -262,40 +250,18 @@ function AppearanceTab({
       {/* Accent color */}
       <div className="space-y-2">
         <p className="text-sm font-medium">{t('accentColor')}</p>
-        <div className="flex items-center gap-3 flex-wrap">
-          {ACCENT_PRESETS.map((c) => (
-            <Controller
-              key={c}
-              control={control}
-              name="accentColor"
-              render={({ field }) => (
-                <button
-                  type="button"
-                  onClick={() => field.onChange(c)}
-                  className="h-7 w-7 rounded-full ring-offset-2 transition-all"
-                  style={{
-                    background: c,
-                    outline: field.value === c ? `2px solid ${c}` : 'none',
-                    outlineOffset: 2,
-                  }}
-                />
-              )}
+        <Controller
+          control={control}
+          name="accentColor"
+          render={({ field }) => (
+            <ColorPicker
+              value={field.value}
+              onChange={field.onChange}
+              className="h-7 w-7 rounded-full"
+              aria-label={t('accentColor')}
             />
-          ))}
-          <Controller
-            control={control}
-            name="accentColor"
-            render={({ field }) => (
-              <input
-                type="color"
-                value={field.value}
-                onChange={(e) => field.onChange(e.target.value)}
-                className="h-7 w-7 rounded-full border cursor-pointer bg-background p-0.5"
-                title="Custom color"
-              />
-            )}
-          />
-        </div>
+          )}
+        />
       </div>
 
       {/* Background */}
@@ -330,12 +296,7 @@ function AppearanceTab({
               control={control}
               name="bgColor"
               render={({ field }) => (
-                <input
-                  type="color"
-                  value={field.value}
-                  onChange={(e) => field.onChange(e.target.value)}
-                  className="h-9 w-16 rounded-md border cursor-pointer bg-background p-1"
-                />
+                <ColorPicker value={field.value} onChange={field.onChange} className="h-9 w-16" />
               )}
             />
             <Controller
@@ -1001,7 +962,7 @@ function getDefaults(team: Team | null): FormData {
     bioLinkTheme: (['light', 'dark', 'auto'] as const).includes(team?.bioLinkTheme as never)
       ? (team!.bioLinkTheme as FormData['bioLinkTheme'])
       : 'light',
-    accentColor: typeof team?.bioLinkAccentColor === 'string' ? team.bioLinkAccentColor : '#6366f1',
+    accentColor: typeof team?.bioLinkAccentColor === 'string' ? team.bioLinkAccentColor : DEFAULT_ACCENT,
     bgType: team?.bioLinkBackground?.type === 'gradient' ? 'gradient' : 'solid',
     bgColor:
       typeof team?.bioLinkBackground?.color === 'string' ? team.bioLinkBackground.color : '#ffffff',
