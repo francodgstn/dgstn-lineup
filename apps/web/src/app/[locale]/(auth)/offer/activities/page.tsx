@@ -394,12 +394,15 @@ function ActivityDialog({
             )}
           </div>
 
-          {/* Metadata — cover 30% / description 70% on wide screens */}
+          {/* Metadata — cover 30% / description 70% on wide screens. The grid
+              stretches both columns to the taller one (the description), and the
+              cover is flex-1 inside its column so it grows to match rather than
+              leaving dead space beside the textarea. */}
           <div className="grid gap-4 lg:grid-cols-[3fr_7fr]">
-            <div className="space-y-1.5">
+            <div className="flex flex-col space-y-1.5">
               <Label>{t('fieldImage')}</Label>
               {imagePreview ? (
-                <div className="relative w-full h-32 rounded-lg overflow-hidden border bg-muted">
+                <div className="relative w-full flex-1 min-h-32 rounded-lg overflow-hidden border bg-muted">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={imagePreview} alt="" className="w-full h-full object-cover" />
                   <button
@@ -414,7 +417,7 @@ function ActivityDialog({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-32 rounded-lg border-2 border-dashed border-input hover:border-primary/50 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                  className="w-full flex-1 min-h-32 rounded-lg border-2 border-dashed border-input hover:border-primary/50 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <ImageIcon className="h-5 w-5" />
                   <span className="text-xs">Click to upload</span>
@@ -434,19 +437,19 @@ function ActivityDialog({
               <textarea
                 id="act-desc"
                 {...register('description')}
-                rows={7}
+                rows={6}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
               />
             </div>
           </div>
 
-          {/* Colour · level · auto-confirm. Colour only ever needs a swatch, so
-              it takes a fixed narrow column and the other two share the rest.
-              items-end keeps all three controls on one baseline despite the
-              checkbox having no label above it. */}
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="act-color">{t('fieldColor')}</Label>
+          {/* The scattered per-activity settings, gathered into one outlined
+              group: label (+ hint) on the left, control on the right, one per
+              row. Session lengths and the booking cap only apply to
+              appointments, so they join the group only for that kind. */}
+          <div className="divide-y rounded-lg border">
+            <div className="flex items-center justify-between gap-4 p-3">
+              <Label htmlFor="act-color" className="font-medium">{t('fieldColor')}</Label>
               <Controller
                 name="color"
                 control={control}
@@ -461,14 +464,14 @@ function ActivityDialog({
               />
             </div>
 
-            <div className="flex-1 min-w-40 space-y-1.5">
-              <Label htmlFor="act-level">{t('fieldLevel')}</Label>
+            <div className="flex items-center justify-between gap-4 p-3">
+              <Label htmlFor="act-level" className="font-medium">{t('fieldLevel')}</Label>
               <Controller
                 name="level"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-44">
                       <span className="flex flex-1 text-left text-sm truncate">
                         {field.value
                           ? t(`level_${field.value}` as const)
@@ -485,13 +488,13 @@ function ActivityDialog({
               />
             </div>
 
-            {/* A field, not implied by type: either kind may require a review
-                step. The label says it — no hint needed. */}
+            {/* A field, not implied by type: either kind may require a review step. */}
             <Controller
               name="autoConfirm"
               control={control}
               render={({ field }) => (
-                <label className="flex h-9 flex-1 min-w-56 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-sm">
+                <label className="flex cursor-pointer items-center justify-between gap-4 p-3">
+                  <span className="text-sm font-medium">{t('fieldAutoConfirm')}</span>
                   <input
                     type="checkbox"
                     className="accent-primary shrink-0"
@@ -501,56 +504,57 @@ function ActivityDialog({
                       field.onChange(e.target.checked)
                     }}
                   />
-                  <span className="truncate">{t('fieldAutoConfirm')}</span>
                 </label>
               )}
             />
-          </div>
 
-          {/* Appointment-only: bookable session lengths + booking cap, side by
-              side on wider screens (the chips need room; the cap is one input).
-              Sits directly above the access rule — length and price/who-can-book
-              are the terms that define an appointment offering. */}
-          {type === 'appointment' && (
-            <div className="rounded-lg border p-3 grid gap-4 sm:grid-cols-[1fr_9rem]">
-              <div className="space-y-1.5">
-                <Label>{t('fieldDurationsMinutes')}</Label>
-                <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
-                <div className="flex gap-1.5 flex-wrap">
-                  {APPOINTMENT_DURATION_PRESETS.map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => toggleDuration(d)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                        durationsMinutes.includes(d)
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background text-muted-foreground border-border hover:border-foreground'
-                      }`}
-                    >
-                      {formatDuration(d)}
-                    </button>
-                  ))}
+            {type === 'appointment' && (
+              <>
+                <div className="flex items-center justify-between gap-4 p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{t('fieldDurationsMinutes')}</p>
+                    <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
+                    {errors.durationsMinutes && (
+                      <p className="text-destructive text-xs">{errors.durationsMinutes.message}</p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                    {APPOINTMENT_DURATION_PRESETS.map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => toggleDuration(d)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                          durationsMinutes.includes(d)
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground border-border hover:border-foreground'
+                        }`}
+                      >
+                        {formatDuration(d)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                {errors.durationsMinutes && (
-                  <p className="text-destructive text-xs">{errors.durationsMinutes.message}</p>
-                )}
-              </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="act-max-participants">{t('fieldMaxParticipants')}</Label>
-                <Input
-                  id="act-max-participants"
-                  type="number"
-                  min={1}
-                  max={50}
-                  className="w-24"
-                  {...register('max_participants', { valueAsNumber: true })}
-                />
-                <p className="text-xs text-muted-foreground">{t('maxParticipantsHint')}</p>
-              </div>
-            </div>
-          )}
+                <div className="flex items-center justify-between gap-4 p-3">
+                  <div className="min-w-0">
+                    <Label htmlFor="act-max-participants" className="font-medium">
+                      {t('fieldMaxParticipants')}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">{t('maxParticipantsHint')}</p>
+                  </div>
+                  <Input
+                    id="act-max-participants"
+                    type="number"
+                    min={1}
+                    max={50}
+                    className="w-20 shrink-0"
+                    {...register('max_participants', { valueAsNumber: true })}
+                  />
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="space-y-2">
             <Label>{t('accessLabel')}</Label>
