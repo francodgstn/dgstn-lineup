@@ -16,7 +16,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react'
-import type { Session, Activity, Event } from '@linyup/shared'
+import type { Session, Activity, Event, Availability } from '@linyup/shared'
 import { SessionPeekSheet } from '@/components/sessions/SessionPeekSheet'
 import { EventPeekSheet } from '@/components/events/EventPeekSheet'
 
@@ -382,12 +382,96 @@ function layoutDaySessions(
   return placed
 }
 
+// ─── availability bands (Calendly-style "free time" background) ──────────────
+//
+// Not a slot computation — just the RAW published window/times from
+// `availability` docs, expanded over the visible dates. Booked appointments
+// already render as solid session blocks on top of these, so "free vs taken"
+// reads correctly for free. Callers filter to a single provider + active
+// status before passing `availability` in — this component doesn't re-derive
+// that scoping (see schedule/page.tsx).
+
+interface RawAvailabilityBand {
+  key: string
+  title: string
+  startMin: number
+  endMin: number
+}
+
+interface PositionedAvailabilityBand {
+  key: string
+  title: string
+  top: number
+  height: number
+}
+
+/** Shortest duration among the availability's linked activities — a 'times'
+ *  entry has no length of its own, so the band uses the shortest bookable
+ *  duration (the most conservative "at least this free"). Falls back to
+ *  30min if no linked activity resolves a duration. */
+function shortestActivityDuration(activityIds: string[] | undefined, activities: Activity[]): number {
+  const durations = (activityIds ?? [])
+    .flatMap((id) => activities.find((a) => a.id === id)?.durationsMinutes ?? [])
+    .filter((d) => d > 0)
+  return durations.length ? Math.min(...durations) : 30
+}
+
+/** Expand one day's active availability schedules into raw (unpositioned)
+ *  bands. `daysOfWeek` uses the same 0=Sun…6=Sat convention as `Date#getDay()`,
+ *  so no remapping is needed. Times are 'HH:MM' Europe/Zurich, read as local
+ *  wall-clock minutes — the same convention the grid already uses for session
+ *  start/end (both derive from `Date#getHours()/getMinutes()`). */
+function expandAvailabilityForDay(
+  day: Date,
+  availability: (Availability & { id: string })[],
+  activities: Activity[]
+): RawAvailabilityBand[] {
+  const weekday = day.getDay()
+  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate())
+  const bands: RawAvailabilityBand[] = []
+
+  for (const a of availability) {
+    if (!a.recurrence.daysOfWeek.includes(weekday)) continue
+    const start = a.recurrence.startDate.toDate()
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+    if (dayStart < startDay) continue
+    if (a.recurrence.endDate) {
+      const end = a.recurrence.endDate.toDate()
+      const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+      if (dayStart > endDay) continue
+    }
+
+    if (a.mode === 'range' && a.window) {
+      const [sh, sm] = a.window.start.split(':').map(Number)
+      const [eh, em] = a.window.end.split(':').map(Number)
+      if (Number.isFinite(sh) && Number.isFinite(sm) && Number.isFinite(eh) && Number.isFinite(em)) {
+        bands.push({ key: `${a.id}-range`, title: a.title, startMin: sh * 60 + sm, endMin: eh * 60 + em })
+      }
+    } else if (a.mode === 'times' && a.times?.length) {
+      const duration = shortestActivityDuration(a.activityIds, activities)
+      for (const time of a.times) {
+        const [h, m] = time.split(':').map(Number)
+        if (!Number.isFinite(h) || !Number.isFinite(m)) continue
+        const startMin = h * 60 + m
+        bands.push({ key: `${a.id}-${time}`, title: a.title, startMin, endMin: startMin + duration })
+      }
+    }
+  }
+  return bands
+}
+
 // ─── SessionsCalendar ─────────────────────────────────────────────────────────
 
 interface SessionsCalendarProps {
   sessions: Session[]
   activities: Activity[]
   events?: Event[]
+  /** Active, single-provider-scoped availability to render as translucent
+   *  "free time" bands behind the week grid's session blocks. Pass an empty
+   *  array (or omit) to render none — the caller (schedule/page.tsx) decides
+   *  eligibility (single coach in scope + type filter includes appointments);
+   *  this component just expands+positions whatever it's given. */
+  availability?: (Availability & { id: string })[]
   onEdit: (s: Session) => void
   onDelete: (s: Session) => void
   onEventEdit?: (e: Event) => void
@@ -401,6 +485,7 @@ export default function SessionsCalendar({
   sessions,
   activities,
   events = [],
+  availability = [],
   onEdit,
   onDelete,
   onEventEdit,
@@ -493,6 +578,13 @@ export default function SessionsCalendar({
   const weekGrid = useMemo(() => {
     let startHour = 8
     let endHour = 20
+
+    // Raw (unpositioned) availability bands per day — computed before the
+    // final hour range so a published window outside the session-derived
+    // range (e.g. an early-morning slot with no bookings yet) still stretches
+    // the grid to show it in full.
+    const dayRawBands = weekDays.map((day) => expandAvailabilityForDay(day, availability, activities))
+
     for (const d of weekDays) {
       for (const s of sessionsByDate.get(dateKey(d)) ?? []) {
         const st = (s.start as { toDate(): Date }).toDate()
@@ -503,13 +595,33 @@ export default function SessionsCalendar({
         endHour = Math.max(endHour, Math.min(endH, 24))
       }
     }
-    const days = weekDays.map((day) => ({
+    for (const dayBands of dayRawBands) {
+      for (const b of dayBands) {
+        startHour = Math.min(startHour, Math.floor(b.startMin / 60))
+        endHour = Math.max(endHour, Math.min(Math.ceil(b.endMin / 60), 24))
+      }
+    }
+
+    // Positioned with the exact same formula `layoutDaySessions` uses for
+    // session blocks (top = (minutesSinceRangeStart / 60) * HOUR_PX), so a
+    // band's top edge lines up exactly with a session block at the same
+    // clock time.
+    const rangeStartMin = startHour * 60
+    const days = weekDays.map((day, i) => ({
       day,
       events: eventsByDate.get(dateKey(day)) ?? [],
       blocks: layoutDaySessions(sessionsByDate.get(dateKey(day)) ?? [], startHour, endHour),
+      bands: dayRawBands[i].map(
+        (b): PositionedAvailabilityBand => ({
+          key: b.key,
+          title: b.title,
+          top: ((b.startMin - rangeStartMin) / 60) * HOUR_PX,
+          height: Math.max(((b.endMin - b.startMin) / 60) * HOUR_PX, 6),
+        })
+      ),
     }))
     return { startHour, endHour, days, hasEvents: days.some((d) => d.events.length > 0) }
-  }, [weekDays, sessionsByDate, eventsByDate])
+  }, [weekDays, sessionsByDate, eventsByDate, availability, activities])
 
   const gridHeight = (weekGrid.endHour - weekGrid.startHour) * HOUR_PX
   const hourCount = weekGrid.endHour - weekGrid.startHour
@@ -772,7 +884,7 @@ export default function SessionsCalendar({
                 </div>
 
                 {/* Day columns */}
-                {weekGrid.days.map(({ day, blocks }) => {
+                {weekGrid.days.map(({ day, blocks, bands }) => {
                   const isToday = sameDay(day, today)
                   const isSelected = sameDay(day, selected)
                   const now = new Date()
@@ -795,6 +907,24 @@ export default function SessionsCalendar({
                           className="absolute inset-x-0 border-t border-border/60"
                           style={{ top: i * HOUR_PX }}
                         />
+                      ))}
+
+                      {/* Availability bands — the RAW published free time (single-provider
+                          scope only, see schedule/page.tsx), rendered translucent behind
+                          the session blocks so booked-vs-free reads at a glance. */}
+                      {bands.map((band) => (
+                        <div
+                          key={band.key}
+                          aria-hidden="true"
+                          className="absolute inset-x-0.5 z-[2] overflow-hidden rounded-sm border border-dashed border-primary/25 bg-primary/[0.06] pointer-events-none"
+                          style={{ top: band.top, height: band.height }}
+                        >
+                          {band.height >= 16 && (
+                            <p className="truncate px-1 pt-0.5 text-[9px] font-medium leading-tight text-primary/70">
+                              {band.title}
+                            </p>
+                          )}
+                        </div>
                       ))}
 
                       {/* Now indicator */}

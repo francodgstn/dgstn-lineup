@@ -339,7 +339,10 @@ function ActivityDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-md">
+      {/* Field-rich form (name/description/prereqs/instructions/type/durations/
+          access/drop-in/media) — give it room on bigger screens, and scroll
+          rather than overflow the viewport on short ones. */}
+      <DialogContent className="sm:max-w-lg lg:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? t('editActivity') : t('newActivity')}</DialogTitle>
         </DialogHeader>

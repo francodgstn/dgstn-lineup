@@ -2,18 +2,22 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { AppointmentWithStatus, Contact } from '../../types';
-import { APPOINTMENT_BOOKING_ENABLED, FirestoreService } from '../../services/firestore';
+import { FirestoreService } from '../../services/firestore';
 
 interface Props {
   slots: AppointmentWithStatus[];
   contact?: Contact | null;
   onRefresh?: () => void;
   open?: boolean;
+  /** Opens the coach → activity → duration → day → time booking funnel
+   *  (`AppointmentBookingModal`). `slots` here is only the member's OWN
+   *  bookings — browsing/booking new times lives in that separate funnel. */
+  onBookNew: () => void;
 }
 
 const CARD_WIDTH = 108;
 
-export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefresh, open }) => {
+export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefresh, open, onBookNew }) => {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<AppointmentWithStatus | null>(null);
@@ -47,21 +51,6 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
 
   const closeModal = () => setSelectedSlot(null);
 
-  const confirmBook = async () => {
-    if (!selectedSlot || !contact?.id || !contact?.teamId) return;
-    setLoading(true);
-    try {
-      await FirestoreService.bookAppointment({ teamId: contact.teamId!, slotId: selectedSlot.id, contactId: contact.id });
-      closeModal();
-      Alert.alert('Confirmed', 'Your appointment has been booked!');
-      onRefresh?.();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to book. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const confirmCancel = async () => {
     if (!selectedSlot || !contact?.id) return;
     setLoading(true);
@@ -77,21 +66,17 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
     }
   };
 
-  // TODO(P4 follow-up): with APPOINTMENT_BOOKING_ENABLED off there are no
-  // 'available' slots to advertise — availability-only means nothing exists until a
-  // client books, so `slots` is the member's OWN booked appointments and this
-  // carousel is a read/cancel surface. Restore the browse+book affordance once the
-  // listAvailability-driven picker lands (see the flag's comment).
-  const availableCount = APPOINTMENT_BOOKING_ENABLED
-    ? slots.filter(s => s.bookingStatus === 'available').length
-    : 0;
-  const bookedCount = slots.filter(s => s.bookingStatus === 'booked').length;
+  // `slots` is always the member's OWN confirmed bookings (see
+  // FirestoreService.getUpcomingAppointments) — browsing new/open times isn't
+  // a thing under the availability-only model, so there is no 'available'
+  // status here to advertise. Booking a NEW time opens the separate
+  // AppointmentBookingModal funnel via `onBookNew`.
+  const bookedCount = slots.filter((s) => s.bookingStatus === 'booked').length;
 
   const renderCard = ({ item: slot }: { item: AppointmentWithStatus }) => {
     const slotIsBooked = slot.bookingStatus === 'booked';
     const isFull = slot.bookingStatus === 'full';
     const isCancelled = slot.bookingStatus === 'cancelled';
-    const isAvailable = APPOINTMENT_BOOKING_ENABLED && slot.bookingStatus === 'available';
 
     const day = slot.start.getDate();
     const month = slot.start.toLocaleString('default', { month: 'short' }).toUpperCase();
@@ -111,7 +96,7 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
 
     return (
       <Pressable
-        onPress={(isAvailable || slotIsBooked) ? () => setSelectedSlot(slot) : undefined}
+        onPress={slotIsBooked ? () => setSelectedSlot(slot) : undefined}
         style={({ pressed }) => [
           styles.card,
           { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant, opacity: pressed ? 0.85 : 1 }
@@ -139,28 +124,37 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
             <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Full</Text>
           ) : isCancelled ? (
             <Text style={{ color: theme.colors.error, fontSize: 10 }}>Cancelled</Text>
-          ) : isAvailable ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-              <Icon source="calendar-plus" size={12} color={theme.colors.primary} />
-              <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 10 }}>Book</Text>
-            </View>
           ) : null}
         </View>
       </Pressable>
     );
   };
 
+  const renderBookNewCard = () => (
+    <Pressable
+      onPress={onBookNew}
+      style={({ pressed }) => [
+        styles.card,
+        styles.bookNewCard,
+        { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryContainer, opacity: pressed ? 0.85 : 1 },
+      ]}
+    >
+      <Icon source="calendar-plus" size={24} color={theme.colors.primary} />
+      <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: 12, marginTop: 6, textAlign: 'center' }}>
+        Book new
+      </Text>
+    </Pressable>
+  );
+
   const formatFullDate = (d: Date) =>
     d.toLocaleDateString('default', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const formatTime = (d: Date) =>
     d.toLocaleTimeString('default', { hour: '2-digit', minute: '2-digit', hour12: false });
 
-  const title = APPOINTMENT_BOOKING_ENABLED ? 'Book an appointment' : 'Your appointments';
+  const title = bookedCount > 0 ? 'Your appointments' : 'Book an appointment';
   const subtitle = bookedCount > 0
-    ? `You have ${bookedCount} booked appointment${bookedCount > 1 ? 's' : ''}${availableCount > 0 ? ` · ${availableCount} more available` : ''}.`
-    : APPOINTMENT_BOOKING_ENABLED
-      ? `${availableCount} slot${availableCount !== 1 ? 's' : ''} available to book with your coach.`
-      : 'Book a session with your coach on the website — it will show up here.';
+    ? `You have ${bookedCount} booked appointment${bookedCount > 1 ? 's' : ''}.`
+    : 'Find a time with your coach.';
 
   return (
     <>
@@ -194,10 +188,11 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
+          ListFooterComponent={renderBookNewCard}
         />
       </Animated.View>
 
-      {/* Booking invite modal */}
+      {/* Existing-booking detail modal (view/cancel) */}
       <Modal visible={!!selectedSlot} transparent animationType="fade" onRequestClose={closeModal}>
         <Pressable style={styles.backdrop} onPress={closeModal}>
           <Pressable style={[styles.sheet, { backgroundColor: theme.colors.surface }]} onPress={() => {}}>
@@ -258,13 +253,6 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
                   </Button>
                 </View>
               </>
-            ) : APPOINTMENT_BOOKING_ENABLED ? (
-              <View style={styles.actions}>
-                <Button mode="text" onPress={closeModal} style={{ flex: 1 }} disabled={loading}>Not now</Button>
-                <Button mode="contained" style={{ flex: 1 }} onPress={confirmBook} loading={loading} disabled={loading}>
-                  Book it
-                </Button>
-              </View>
             ) : (
               <View style={styles.actions}>
                 <Button mode="text" onPress={closeModal} style={{ flex: 1 }}>Close</Button>
@@ -283,6 +271,7 @@ const styles = StyleSheet.create({
   introIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   list: { paddingTop: 10, paddingBottom: 4 },
   card: { width: CARD_WIDTH, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
+  bookNewCard: { alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', padding: 10 },
   dateHeader: { alignItems: 'center', paddingVertical: 10 },
   monthText: { fontSize: 10, fontWeight: '700', letterSpacing: 1 },
   dayText: { fontSize: 26, fontWeight: '900', lineHeight: 30 },

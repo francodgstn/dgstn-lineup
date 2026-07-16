@@ -61,7 +61,12 @@ function formatDaysOfWeek(daysOfWeek: number[]): string {
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
-function useTemplates(teamId: string | null) {
+// Exported so other Schedule surfaces (the calendar's availability bands) can
+// reuse the same query instead of re-reading the collection — see
+// SessionsCalendar.tsx. Callers that only want live schedules should filter
+// the result to `status === 'active'` themselves ('paused' is kept here so
+// the manager dialog can still list/resume them).
+export function useAvailabilityTemplates(teamId: string | null) {
   return useQuery<(Availability & { id: string })[]>({
     queryKey: ['coachAvailability', teamId],
     enabled: !!teamId,
@@ -669,7 +674,7 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
 }) {
   const t = useTranslations('Appointments')
   const qc = useQueryClient()
-  const templatesQ = useTemplates(open ? teamId : null)
+  const templatesQ = useAvailabilityTemplates(open ? teamId : null)
   const membersQ = useTeamMemberOptions(open ? teamId : null)
   const activitiesQ = useActivities(open ? teamId : null)
   const activities = activitiesQ.data ?? []

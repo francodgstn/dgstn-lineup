@@ -34,6 +34,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import dynamic from 'next/dynamic'
+import { useAvailabilityTemplates } from '@/components/appointments/AppointmentAvailability'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -827,6 +828,7 @@ export default function CalendarPage() {
   const eventsQ = useAllEvents(currentTeamId, orgId)
   const { data: members = [] } = useTeamMembers(currentTeamId)
   const { pickable: coachRoster } = useCoaches(currentTeamId)
+  const availabilityQ = useAvailabilityTemplates(currentTeamId)
 
   const invalidateSessions = () => qc.invalidateQueries({ queryKey: ['sessions'] })
   const invalidateEvents = () => qc.invalidateQueries({ queryKey: ['events'] })
@@ -866,6 +868,22 @@ export default function CalendarPage() {
   // class/appointment type filter is active, shown for 'all' and 'events'.
   const filteredEvents =
     coachFilter === 'all' && (filter === 'all' || filter === 'events') ? (eventsQ.data ?? []) : []
+
+  // Availability bands (Calendly-style "free time" behind the week grid) — only
+  // when the type filter includes appointments AND a single provider is in
+  // scope, so several coaches' windows never overlap into noise. The calendar
+  // component itself has no idea about these filters; it just expands+draws
+  // whatever it's handed.
+  const bandsTypeEligible = filter !== 'classes' && filter !== 'events'
+  const activeAvailability = availabilityQ.data?.filter((a) => a.status === 'active') ?? []
+  const bandAvailability =
+    bandsTypeEligible && providerId
+      ? activeAvailability.filter((a) => a.providerId === providerId)
+      : []
+  // Unobtrusive nudge for the 'all coaches' case, where bands are intentionally
+  // suppressed — only worth showing when there's actually something to see.
+  const showAllCoachesBandHint =
+    bandsTypeEligible && coachFilter === 'all' && coachRoster.length > 1 && activeAvailability.length > 0
 
   const allItems: ListItem[] = [
     ...filteredSessions.map((s) => ({ kind: 'session' as const, data: s })),
@@ -1007,6 +1025,13 @@ export default function CalendarPage() {
         )}
       </div>
 
+      {/* Unobtrusive nudge — availability bands (published free time behind the
+          week grid) are suppressed for "all coaches" to avoid overlapping-band
+          noise; point people at the single-coach filters instead. */}
+      {view === 'calendar' && showAllCoachesBandHint && (
+        <p className="-mt-1 text-xs italic text-muted-foreground">{t('availabilityBandsAllHint')}</p>
+      )}
+
       {/* Nudge: sessions hang off activities, so surface activity creation first
           when the team hasn't defined any yet. */}
       {!activitiesQ.isLoading && (activitiesQ.data?.length ?? 0) === 0 && (
@@ -1034,6 +1059,7 @@ export default function CalendarPage() {
           sessions={filteredSessions}
           activities={activitiesQ.data ?? []}
           events={filteredEvents}
+          availability={bandAvailability}
           onEdit={(s) =>
             s.activityType === 'appointment'
               ? setAppointmentSlot(s)

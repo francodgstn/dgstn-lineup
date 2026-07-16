@@ -30,7 +30,7 @@ import {
   Snackbar,
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
-import { APPOINTMENT_BOOKING_ENABLED, FirestoreService } from '../services/firestore';
+import { FirestoreService } from '../services/firestore';
 import { Contact, SessionPublicProfile, TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus } from '../types';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { formatDateValue, formatResidence, formatGender } from '../utils/profileUtils';
@@ -45,6 +45,7 @@ import { ProfileUpdateModal } from '../components/profile/ProfileUpdateModal';
 import { SessionAgendaCard } from '../components/profile/SessionAgendaCard';
 import { AppointmentsCarousel } from '../components/profile/AppointmentsCarousel';
 import { AppointmentsDashboardCard } from '../components/profile/AppointmentsDashboardCard';
+import { AppointmentBookingModal } from '../components/profile/AppointmentBookingModal';
 import { AlertsCard } from '../components/AlertsCard';
 import { BadgesCard } from '../components/profile/BadgesCard';
 import { SocialActionsCard } from '../components/profile/SocialActionsCard';
@@ -134,7 +135,7 @@ export const ProfileScreen: React.FC = () => {
   const [agendaSessions, setAgendaSessions] = useState<SessionWithStatus[]>([]);
   const [appointments, setAppointments] = useState<AppointmentWithStatus[]>([]);
   const [appointmentsCollapsed, setAppointmentsCollapsed] = useState(false);
-  const [appointmentsCarouselOpen, setAppointmentsCarouselOpen] = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
   const [alerts, setAlerts] = useState<ContactAlert[]>([]);
   const [gamificationSettings, setGamificationSettings] = useState<GamificationSettings | null>(null);
   const [rewardedCount, setRewardedCount] = useState(0);
@@ -216,8 +217,9 @@ export const ProfileScreen: React.FC = () => {
       }
 
       if (contact.teamId && loadedProfile?.appointmentsEnabled) {
-        // The contact's OWN booked appointments — availability-only means there are
-        // no open slots to browse (see APPOINTMENT_BOOKING_ENABLED).
+        // The contact's OWN booked appointments. Browsing/booking NEW times is a
+        // separate flow (AppointmentBookingModal, built on listAvailability) —
+        // availability-only means there are no pre-existing "open slots" here.
         const slots = await FirestoreService.getUpcomingAppointments(contact.teamId, contact.id);
         setAppointments(slots);
       } else {
@@ -454,24 +456,10 @@ export const ProfileScreen: React.FC = () => {
           }}
         />
 
-        {/* TODO(P4 follow-up): never renders — appointments are availability-only, so
-            no slot is ever 'available' and the promo is gated off inside the card
-            (APPOINTMENT_BOOKING_ENABLED in services/firestore.ts). Kept wired up so
-            restoring it is a one-line flip once the listAvailability-driven picker
-            (day → activity → time) exists. The member's OWN booked appointments still
-            render in the TRAIN tab below. */}
-        {teamProfile?.appointmentsEnabled && APPOINTMENT_BOOKING_ENABLED && appointments.some(s => s.bookingStatus === 'available') && (
+        {teamProfile?.appointmentsEnabled && (
           <AppointmentsDashboardCard
-            slots={appointments}
             contact={contact}
-            onRefresh={loadData}
-            onViewMore={() => {
-            scrollRef.current?.scrollTo({ y: 0, animated: false });
-            setAppointmentsCollapsed(false);
-            setAppointmentsCarouselOpen(true);
-            setCurrentTab('TRAIN');
-            setTimeout(() => setAppointmentsCarouselOpen(false), 600);
-          }}
+            onOpenBooking={() => setShowBookingModal(true)}
           />
         )}
 
@@ -930,7 +918,7 @@ export const ProfileScreen: React.FC = () => {
 
         <PerformanceProfileSection contactId={contact.id} teamId={contact.teamId || ''} />
 
-        {teamProfile?.appointmentsEnabled && appointments.length > 0 && (
+        {teamProfile?.appointmentsEnabled && (
           <View>
             <TouchableRipple
               onPress={() => {
@@ -949,7 +937,7 @@ export const ProfileScreen: React.FC = () => {
                 slots={appointments}
                 contact={contact}
                 onRefresh={loadData}
-                open={appointmentsCarouselOpen}
+                onBookNew={() => setShowBookingModal(true)}
               />
             )}
           </View>
@@ -1062,6 +1050,17 @@ export const ProfileScreen: React.FC = () => {
         loading={checkInLoading}
         onSelect={handleSessionPicked}
         onClose={() => { setShowSessionPicker(false); setPendingTeamSlug(null); }}
+      />
+
+      <AppointmentBookingModal
+        visible={showBookingModal}
+        teamId={contact.teamId}
+        contact={contact}
+        onClose={() => setShowBookingModal(false)}
+        onBooked={() => {
+          setShowBookingModal(false);
+          loadData();
+        }}
       />
 
       <Snackbar

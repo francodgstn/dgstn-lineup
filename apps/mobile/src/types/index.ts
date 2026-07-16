@@ -153,6 +153,45 @@ export interface AppointmentWithStatus extends Appointment {
   bookingStatus: AppointmentBookingStatus;
 }
 
+// ── Appointment availability (browse/book funnel) ──────────────────────────
+// Mirrors the `listAvailability` callable's contract
+// (packages/functions/src/appointments/window.ts). Availability is the ONLY
+// source of bookable times — nothing is pre-generated; a Session is created
+// lazily, overlap-safe, at booking time via `bookAppointment`.
+
+/** Who may book an activity — the paid-access axis. Mirrors
+ *  @linyup/shared's ActivityAccessTier (mobile has no dependency on that
+ *  package, so this is a structural copy — keep in sync). */
+export type ActivityAccessTier = 'open' | 'members' | 'subscription';
+
+export interface ActivityAccessRule {
+  type: ActivityAccessTier;
+  /** For 'subscription': the team subscription_type ids that grant access. */
+  subscriptionTypeIds?: string[];
+}
+
+export interface AvailabilityDay {
+  dayMs: number;
+  /** Free start times (epoch ms), keyed by duration in minutes (as a string). */
+  slotsByDuration: Record<string, number[]>;
+}
+
+export interface AvailabilityActivity {
+  activityId: string;
+  activityName: string;
+  durationsMinutes: number[];
+  accessRule: ActivityAccessRule;
+  location: string | null;
+  onlineUrl: string | null;
+  days: AvailabilityDay[];
+}
+
+export interface AvailabilityCoach {
+  providerId: string;
+  providerName: string | null;
+  activities: AvailabilityActivity[];
+}
+
 export interface ReferralInfo {
   code: string;
   referralUrl: string;

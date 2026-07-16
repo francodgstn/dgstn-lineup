@@ -22,6 +22,7 @@ import { to } from '../utils/async'
 import { resolveSingleContact } from '../utils/contacts'
 import { canCreateContact } from '../utils/contactCap'
 import { resolveBookingAccessGate } from '../booking/access'
+import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import {
   AVAILABILITY_COLLECTION,
   ACTIVITIES_COLLECTION,
@@ -512,11 +513,39 @@ export const bookAppointment = onCall(async (request) => {
   const lang = asLang((team as { language?: string }).language)
 
   // ── Resolve/validate the caller's contact details ──
-  const authenticated = !!data.authenticatedContactId
+  // Three ways a caller can identify themselves, checked in trust order:
+  //   1. Contact session (signed-in mobile/web contact) — the custom-token claims
+  //      { contactId, teamId, sessionExpires } minted by `buildContactSession`,
+  //      which `httpsCallable` attaches to `request.auth` automatically once the
+  //      client is signed in. This is the ONLY trustworthy source of a caller's
+  //      contactId on a public callable (see utils/contactSession.ts) — reused
+  //      here from the same helper `createDropInCheckout`/`requestContactUpdate`/
+  //      `switchActiveContact` use, so the app never needs to type an emailed
+  //      code to book something it's already authenticated for.
+  //   2. authenticatedContactId + verificationCodeId — the public picker's
+  //      passwordless email-OTP flow for an anonymous (no Firebase Auth) caller.
+  //   3. Guest contactDetails — brand-new/unmatched contact, no verification
+  //      (only reachable for 'open' activities; the access gate below refuses
+  //      guests on 'members'/'subscription' activities).
+  const contactSession = optionalContactSessionFromRequest(request)
+  const sessionAuthenticated = !!contactSession && contactSession.teamId === data.teamId
+  const authenticated = sessionAuthenticated || !!data.authenticatedContactId
   let authenticatedContactFull: (admin.firestore.DocumentData & { id: string }) | null = null
   let sanitized: { firstname: string; lastname: string; email: string; phone: string | null }
 
-  if (authenticated) {
+  if (sessionAuthenticated) {
+    const cDoc = await db.collection('contacts').doc(contactSession!.contactId).get()
+    if (!cDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+    const c = cDoc.data()!
+    if (c.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Contact team mismatch')
+    authenticatedContactFull = { id: contactSession!.contactId, ...c }
+    sanitized = {
+      firstname: c.firstname || '',
+      lastname: c.lastname || '',
+      email: (c.email || '').toLowerCase().trim(),
+      phone: c.phone || null,
+    }
+  } else if (authenticated) {
     if (data.verificationCodeId) {
       const codeDoc = await db
         .collection('booking_verification_codes')
@@ -576,7 +605,7 @@ export const bookAppointment = onCall(async (request) => {
   let contactId: string
   let isNewContact = false
   if (authenticated) {
-    contactId = data.authenticatedContactId as string
+    contactId = authenticatedContactFull!.id
   } else {
     const match = await resolveSingleContact(data.teamId, sanitized.email)
     if (match.contactId) {

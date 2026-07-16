@@ -1,23 +1,8 @@
 import { db, getFunctions } from '../config/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit } from 'firebase/firestore';
-import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus } from '../types';
+import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus, AvailabilityCoach } from '../types';
 import { detectPerformanceProfile } from '../utils/performanceProfile';
 import { httpsCallable } from 'firebase/functions';
-
-/**
- * Can the app BROWSE and BOOK appointment slots?
- *
- * TODO(P4 follow-up): rebuild this on the `listAvailability` callable, then flip
- * the flag back on. Appointments became availability-only: a provider publishes
- * free time and nothing is materialised until a client books, so there are no
- * "open slots" for the app to list and the old slot-id booking path has no slot to
- * point at. The browse/book affordances are gated off rather than deleted — the
- * replacement is a day → activity → time picker calling `bookAppointment` with
- * { teamId, providerId, activityId, startMs, durationMinutes, ... }. Viewing the
- * member's OWN booked appointments (and cancelling them) is unaffected.
- * The app is unlaunched, so gating this costs nobody a live flow.
- */
-export const APPOINTMENT_BOOKING_ENABLED: boolean = false;
 
 const DEFAULT_PERFORMANCE_INDICATORS: PerformanceIndicator[] = [
   { key: 'consistency', label: 'Consistency' },
@@ -1141,24 +1126,38 @@ export const FirestoreService = {
     }
   },
 
-  // TODO(P4 follow-up): rebuild appointment BOOKING on the availability-only model.
-  // Appointments are no longer pre-generated as open slots, so there is no slotId to
-  // book against and nothing for the app to browse — this shim is dead and gated off
-  // (see APPOINTMENT_BOOKING_ENABLED). The replacement is a picker driven by the
-  // `listAvailability` callable (day → activity → time), booking through the
-  // `bookAppointment` callable with
-  // { teamId, providerId, activityId, startMs, durationMinutes, ... }. Not feasible
-  // here until that picker exists; the app is unlaunched, so no live flow is lost.
-  // Reference: /public/{slug}/appointments on the web + packages/functions/src/appointments/.
+  /**
+   * The team's PUBLISHED availability — the *when* — grouped coach-first, with
+   * each coach's bookable `type: 'appointment'` activities and their free start
+   * times per day/duration. Pure read, no writes; mirrors the public web picker
+   * at /public/{slug}/appointments. See `listAvailability` in
+   * packages/functions/src/appointments/window.ts.
+   */
+  async listAppointmentAvailability(teamId: string, days: number = 60): Promise<AvailabilityCoach[]> {
+    const listAvailabilityFn = httpsCallable(getFunctions(), 'listAvailability');
+    const result = await listAvailabilityFn({ teamId, days });
+    return (result.data as { coaches: AvailabilityCoach[] })?.coaches ?? [];
+  },
+
+  /**
+   * Book a specific start time from published availability. The caller's
+   * identity comes from the signed-in contact SESSION — the custom-token claims
+   * (contactId/teamId/sessionExpires) that `httpsCallable` automatically attaches
+   * as `request.auth` once the student is signed in (see AuthContext). No OTP /
+   * email step is needed: `bookAppointment` trusts `request.auth.token.contactId`
+   * as a first-class authenticated path (see
+   * packages/functions/src/appointments/window.ts).
+   */
   async bookAppointment(params: {
     teamId: string;
-    slotId: string;
-    contactId: string;
+    providerId: string;
+    activityId: string;
+    startMs: number;
+    durationMinutes: number;
   }): Promise<{ success: boolean }> {
-    void params;
-    throw new Error(
-      'Booking an appointment from the app is temporarily unavailable — please book on the website.'
-    );
+    const bookAppointmentFn = httpsCallable(getFunctions(), 'bookAppointment');
+    const result = await bookAppointmentFn(params);
+    return result.data as { success: boolean };
   },
 
   // Cancel an appointment booking — delegates to the unified cancelSession logic
