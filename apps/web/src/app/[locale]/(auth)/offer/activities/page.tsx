@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SortableList, SortableItem, type SortableRenderProps } from '@/components/ui/sortable'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
-import { Plus, Pencil, Archive, ImageIcon, X, GripVertical } from 'lucide-react'
+import { Plus, Pencil, Archive, ImageIcon, X, GripVertical, ChevronDown, ChevronRight } from 'lucide-react'
 
 // ─── archive confirm dialog ───────────────────────────────────────────────────
 
@@ -812,20 +812,84 @@ export default function ActivitiesPage() {
     setArchiving(null)
   }
 
-  // Drag-and-drop reorder. Persists `order = position` for the whole list in one
-  // batch (normalising any docs that never had an explicit order). Mirrors the
-  // subscription-types manager; the list is already sorted by compareActivities.
-  async function reorder(from: number, to: number) {
+  // The admin list is split into Classes and Appointments. Legacy docs without a
+  // type count as classes, matching the model's default.
+  const classActivities = activities.filter((a) => a.type !== 'appointment')
+  const appointmentActivities = activities.filter((a) => a.type === 'appointment')
+  const [collapsed, setCollapsed] = useState<{ classes: boolean; appointments: boolean }>({
+    classes: false,
+    appointments: false,
+  })
+
+  // Drag-and-drop reorder, scoped to one section. The moved section's items are
+  // permuted among the GLOBAL positions they already occupy, so the other
+  // section's ordering (and any interleaving on public surfaces, which sort the
+  // full list) is untouched. Persists `order = global index` for the whole list
+  // in one batch, normalising docs that never had an explicit order.
+  async function reorderSection(section: Activity[], from: number, to: number) {
     if (from === to || !currentTeamId) return
-    const next = [...activities]
-    const [moved] = next.splice(from, 1)
-    next.splice(to, 0, moved)
+    const nextSection = [...section]
+    const [moved] = nextSection.splice(from, 1)
+    nextSection.splice(to, 0, moved)
+    const inSection = new Set(section.map((a) => a.id))
+    let si = 0
+    const full = activities.map((a) => (inSection.has(a.id) ? nextSection[si++] : a))
     const batch = writeBatch(db)
-    next.forEach((a, i) => {
+    full.forEach((a, i) => {
       if (a.order !== i) batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), { order: i })
     })
     await batch.commit()
     await qc.invalidateQueries({ queryKey: ['activities'] })
+  }
+
+  function renderSection(
+    key: 'classes' | 'appointments',
+    label: string,
+    items: Activity[],
+  ) {
+    const isCollapsed = collapsed[key]
+    return (
+      <section className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => ({ ...c, [key]: !c[key] }))}
+          className="flex w-full items-center gap-1.5 text-left"
+          aria-expanded={!isCollapsed}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+          )}
+          <span className="text-sm font-semibold">{label}</span>
+          <span className="text-xs text-muted-foreground">({items.length})</span>
+        </button>
+        {!isCollapsed &&
+          (items.length === 0 ? (
+            <p className="pl-6 text-sm text-muted-foreground">{t('sectionEmpty')}</p>
+          ) : (
+            <SortableList
+              ids={items.map((a) => a.id)}
+              onReorder={(from, to) => reorderSection(items, from, to)}
+            >
+              <div className="space-y-2">
+                {items.map((a) => (
+                  <SortableItem key={a.id} id={a.id}>
+                    {(sortable) => (
+                      <ActivityCard
+                        activity={a}
+                        onEdit={() => openEdit(a)}
+                        onArchive={() => setArchiving(a)}
+                        sortable={sortable}
+                      />
+                    )}
+                  </SortableItem>
+                ))}
+              </div>
+            </SortableList>
+          ))}
+      </section>
+    )
   }
 
   return (
@@ -855,22 +919,10 @@ export default function ActivitiesPage() {
           </button>
         </div>
       ) : (
-        <SortableList ids={activities.map((a) => a.id)} onReorder={reorder}>
-          <div className="space-y-2">
-            {activities.map((a) => (
-              <SortableItem key={a.id} id={a.id}>
-                {(sortable) => (
-                  <ActivityCard
-                    activity={a}
-                    onEdit={() => openEdit(a)}
-                    onArchive={() => setArchiving(a)}
-                    sortable={sortable}
-                  />
-                )}
-              </SortableItem>
-            ))}
-          </div>
-        </SortableList>
+        <div className="space-y-5">
+          {renderSection('classes', t('sectionClasses'), classActivities)}
+          {renderSection('appointments', t('sectionAppointments'), appointmentActivities)}
+        </div>
       )}
 
       {currentTeamId && user && (

@@ -1179,7 +1179,10 @@
     "reorder": "Réorganiser",
     "quickCreateSubPlaceholder": "Nom du nouvel abonnement…",
     "quickCreateSubButton": "Créer",
-    "quickCreateSubHint": "Crée un abonnement de base lié à cette activité. Les tarifs peuvent être ajoutés plus tard dans les réglages des abonnements."
+    "quickCreateSubHint": "Crée un abonnement de base lié à cette activité. Les tarifs peuvent être ajoutés plus tard dans les réglages des abonnements.",
+    "sectionClasses": "Cours",
+    "sectionAppointments": "Rendez-vous",
+    "sectionEmpty": "Rien ici pour l’instant."
   },
   "TeamSettings": {
     "title": "Paramètres de l'équipe",

@@ -1179,7 +1179,10 @@
     "reorder": "Neu anordnen",
     "quickCreateSubPlaceholder": "Name des neuen Abos…",
     "quickCreateSubButton": "Erstellen",
-    "quickCreateSubHint": "Erstellt ein einfaches Abo, das mit dieser Aktivität verknüpft ist. Preise können später in den Abo-Einstellungen ergänzt werden."
+    "quickCreateSubHint": "Erstellt ein einfaches Abo, das mit dieser Aktivität verknüpft ist. Preise können später in den Abo-Einstellungen ergänzt werden.",
+    "sectionClasses": "Kurse",
+    "sectionAppointments": "Termine",
+    "sectionEmpty": "Noch nichts hier."
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",

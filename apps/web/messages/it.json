@@ -1179,7 +1179,10 @@
     "reorder": "Riordina",
     "quickCreateSubPlaceholder": "Nome del nuovo abbonamento…",
     "quickCreateSubButton": "Crea",
-    "quickCreateSubHint": "Crea un abbonamento di base collegato a questa attività. I prezzi possono essere aggiunti in seguito nelle impostazioni degli abbonamenti."
+    "quickCreateSubHint": "Crea un abbonamento di base collegato a questa attività. I prezzi possono essere aggiunti in seguito nelle impostazioni degli abbonamenti.",
+    "sectionClasses": "Corsi",
+    "sectionAppointments": "Appuntamenti",
+    "sectionEmpty": "Ancora niente qui."
   },
   "TeamSettings": {
     "title": "Impostazioni del team",

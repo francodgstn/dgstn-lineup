@@ -1179,7 +1179,10 @@
     "reorder": "Reorder",
     "quickCreateSubPlaceholder": "New subscription name…",
     "quickCreateSubButton": "Create",
-    "quickCreateSubHint": "Creates a basic subscription linked to this activity. Pricing can be added later in the subscription settings."
+    "quickCreateSubHint": "Creates a basic subscription linked to this activity. Pricing can be added later in the subscription settings.",
+    "sectionClasses": "Classes",
+    "sectionAppointments": "Appointments",
+    "sectionEmpty": "Nothing here yet."
   },
   "TeamSettings": {
     "title": "Team settings",
