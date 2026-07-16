@@ -31,7 +31,7 @@ import {
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
 import { FirestoreService } from '../services/firestore';
-import { Contact, SessionPublicProfile, TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, CoachSlotWithStatus } from '../types';
+import { Contact, SessionPublicProfile, TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus } from '../types';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { formatDateValue, formatResidence, formatGender } from '../utils/profileUtils';
 
@@ -43,8 +43,8 @@ import { TrainingActivity } from '../components/TrainingActivity';
 import { ProfileModals } from '../components/profile/ProfileModals';
 import { ProfileUpdateModal } from '../components/profile/ProfileUpdateModal';
 import { SessionAgendaCard } from '../components/profile/SessionAgendaCard';
-import { CoachSlotsCarousel } from '../components/profile/CoachSlotsCarousel';
-import { CoachingDashboardCard } from '../components/profile/CoachingDashboardCard';
+import { AppointmentsCarousel } from '../components/profile/AppointmentsCarousel';
+import { AppointmentsDashboardCard } from '../components/profile/AppointmentsDashboardCard';
 import { AlertsCard } from '../components/AlertsCard';
 import { BadgesCard } from '../components/profile/BadgesCard';
 import { SocialActionsCard } from '../components/profile/SocialActionsCard';
@@ -132,9 +132,9 @@ export const ProfileScreen: React.FC = () => {
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
   const [lbSort, setLbSort] = useState<'points' | 'streak' | 'best_streak'>('points');
   const [agendaSessions, setAgendaSessions] = useState<SessionWithStatus[]>([]);
-  const [coachSlots, setCoachSlots] = useState<CoachSlotWithStatus[]>([]);
-  const [coachingCollapsed, setCoachingCollapsed] = useState(false);
-  const [coachCarouselOpen, setCoachCarouselOpen] = useState(false);
+  const [appointments, setAppointments] = useState<AppointmentWithStatus[]>([]);
+  const [appointmentsCollapsed, setAppointmentsCollapsed] = useState(false);
+  const [appointmentsCarouselOpen, setAppointmentsCarouselOpen] = useState(false);
   const [alerts, setAlerts] = useState<ContactAlert[]>([]);
   const [gamificationSettings, setGamificationSettings] = useState<GamificationSettings | null>(null);
   const [rewardedCount, setRewardedCount] = useState(0);
@@ -215,11 +215,11 @@ export const ProfileScreen: React.FC = () => {
         setRewardedCount(stats.rewarded_count);
       }
 
-      if (contact.teamId && loadedProfile?.coachingEnabled) {
-        const slots = await FirestoreService.getUpcomingCoachSlots(contact.teamId, contact.id);
-        setCoachSlots(slots);
+      if (contact.teamId && loadedProfile?.appointmentsEnabled) {
+        const slots = await FirestoreService.getUpcomingAppointments(contact.teamId, contact.id);
+        setAppointments(slots);
       } else {
-        setCoachSlots([]);
+        setAppointments([]);
       }
     } catch (error) {
       console.error('Error loading profile data:', error);
@@ -452,17 +452,17 @@ export const ProfileScreen: React.FC = () => {
           }}
         />
 
-        {teamProfile?.coachingEnabled && coachSlots.some(s => s.bookingStatus === 'available') && (
-          <CoachingDashboardCard
-            slots={coachSlots}
+        {teamProfile?.appointmentsEnabled && appointments.some(s => s.bookingStatus === 'available') && (
+          <AppointmentsDashboardCard
+            slots={appointments}
             contact={contact}
             onRefresh={loadData}
             onViewMore={() => {
             scrollRef.current?.scrollTo({ y: 0, animated: false });
-            setCoachingCollapsed(false);
-            setCoachCarouselOpen(true);
+            setAppointmentsCollapsed(false);
+            setAppointmentsCarouselOpen(true);
             setCurrentTab('TRAIN');
-            setTimeout(() => setCoachCarouselOpen(false), 600);
+            setTimeout(() => setAppointmentsCarouselOpen(false), 600);
           }}
           />
         )}
@@ -922,26 +922,26 @@ export const ProfileScreen: React.FC = () => {
 
         <PerformanceProfileSection contactId={contact.id} teamId={contact.teamId || ''} />
 
-        {teamProfile?.coachingEnabled && coachSlots.length > 0 && (
+        {teamProfile?.appointmentsEnabled && appointments.length > 0 && (
           <View>
             <TouchableRipple
               onPress={() => {
                 LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setCoachingCollapsed(c => !c);
+                setAppointmentsCollapsed(c => !c);
               }}
               borderless
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}>
-                <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface, marginBottom: 0 }]}>Coaching</Text>
-                <Icon source={coachingCollapsed ? 'chevron-down' : 'chevron-up'} size={20} color={theme.colors.onSurfaceVariant} />
+                <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface, marginBottom: 0 }]}>Appointments</Text>
+                <Icon source={appointmentsCollapsed ? 'chevron-down' : 'chevron-up'} size={20} color={theme.colors.onSurfaceVariant} />
               </View>
             </TouchableRipple>
-            {!coachingCollapsed && (
-              <CoachSlotsCarousel
-                slots={coachSlots}
+            {!appointmentsCollapsed && (
+              <AppointmentsCarousel
+                slots={appointments}
                 contact={contact}
                 onRefresh={loadData}
-                open={coachCarouselOpen}
+                open={appointmentsCarouselOpen}
               />
             )}
           </View>

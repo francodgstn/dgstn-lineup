@@ -49,7 +49,7 @@ export function newSection(type: WebsiteSectionType): WebsiteSection {
     case 'pricing':
       return { id, type, source: 'subscriptions' }
     case 'schedule':
-      return { id, type, source: 'sessions', windowDays: 7 }
+      return { id, type, source: 'sessions', windowDays: 7, displayMode: 'calendar' }
     case 'contact':
       return { id, type, showSocial: true }
     case 'places':

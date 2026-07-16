@@ -35,26 +35,36 @@ export const emulatorProxy =
       }
     : null
 
-// Cache the Firestore instance across HMR / module re-evaluation —
-// initializeFirestore throws if called twice for the same app.
-const globalForFirebase = globalThis as { _lineupDb?: Firestore }
-
+// Firestore instance. With emulators, initializeFirestore is needed for the
+// custom host; it throws if the app already has one (HMR re-evaluates this
+// module while the firebase/app registry persists) — fall back to the existing
+// instance then.
+//
+// NEVER cache the instance on globalThis: the Next server evaluates this module
+// once per bundle realm (server components vs route handlers vs generateMetadata),
+// and an instance created in one realm fails another realm's instanceof checks
+// inside collection()/query() with `invalid-argument` — which broke every
+// server-side read (e.g. the public site's metadata resolved to "Site not found").
 function createDb(): Firestore {
   if (!useEmulators) return getFirestore(app)
-  if (emulatorProxy) {
-    return initializeFirestore(app, {
-      host: emulatorProxy.host,
-      ssl: emulatorProxy.ssl,
-      // Long-polling survives the dev-server proxy hop; WebChannel streaming
-      // does not.
-      experimentalForceLongPolling: true,
-    })
+  try {
+    if (emulatorProxy) {
+      return initializeFirestore(app, {
+        host: emulatorProxy.host,
+        ssl: emulatorProxy.ssl,
+        // Long-polling survives the dev-server proxy hop; WebChannel streaming
+        // does not.
+        experimentalForceLongPolling: true,
+      })
+    }
+    return initializeFirestore(app, { host: 'localhost:8080', ssl: false })
+  } catch {
+    // Already initialized for this app in this realm (HMR re-run).
+    return getFirestore(app)
   }
-  return initializeFirestore(app, { host: 'localhost:8080', ssl: false })
 }
 
-export const db =
-  globalForFirebase._lineupDb ?? (globalForFirebase._lineupDb = createDb())
+export const db = createDb()
 export const storage = getStorage(app)
 export const functions = getFunctions(app, 'europe-west6')
 

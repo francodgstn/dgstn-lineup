@@ -81,7 +81,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~15 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Outreach/automation engine** — not started
-- **Coaching page** — stub only; needs full implementation (see `docs/product-strategy.md` for scope). Coach plan: availability templates + bio-link-based slot booking + .ics emails. Studio plan: mobile app integration + push reminders. Source: `C:\git\hmd\hmd-lineup\functions\src\{bookCoachSlot,cancelCoachBooking,generateCoachSlots,trackCoachBookings}\` and `src\routes\CoachSlots\`
+- **Coaching (Studio-plan extras)** — the core 1:1 flow is DONE (availability templates, slot generation, public `/coaching` slot picker, shared `bookSession` booking, .ics emails — see `docs/coaching.md`). Still open: mobile app integration, push reminders, session notes, slot waiting list (`docs/product-strategy.md`).
 
 ---
 
@@ -229,6 +229,24 @@ nodemailer** and **no stored mail credentials** for anyone. Full docs:
   bounce/block/spam so dead addresses are skipped; `mail_sends/*` is the
   idempotency + delivery ledger. Secrets: `brevo-api-key`, `brevo-webhook-secret`
   (Secret Manager; emulator env `BREVO_API_KEY` / `BREVO_WEBHOOK_SECRET`).
+
+### Coaching (1:1) vs group classes
+
+`Activity.type` (`'group_class' | 'coaching'`) is the discriminator; a coaching
+slot IS a `Session` with `activityType: 'coaching'` (+ `coachId`/`coachName`,
+`max_participants`, `bookings_count`, `status`), generated from
+`coach_availability` templates. **Coaching integrates with sessions but books
+through its own flow**: the public `/public/{slug}/coaching` slot picker (per-
+coach cards), NOT the class calendar — booking/site activity cards route there.
+Session mirrors use two `public_profile` discriminators: `type: 'session'`
+(group) vs `type: 'coaching_session'`; activity mirrors carry `activityType` so
+public UIs can tell them apart. Booking goes through the SHARED `bookSession`
+callable (no separate bookCoachSlot): the coaching branch auto-confirms
+(`status: 'confirmed'` + `fullname` on the booking doc) and maintains
+`bookings_count`/`status: 'full'` on the session. Kiosk schedule shows coaching
+slots; walk-in excludes them by default (per-studio `walkInCoaching` kiosk
+setting opts open slots in); drop-in is rejected for coaching.
+Full doc: `docs/coaching.md`.
 
 ### SaaS plan tiers (Phase 2)
 

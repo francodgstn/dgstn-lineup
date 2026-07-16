@@ -117,12 +117,14 @@ export { dailyTasks, bookingRemindersHourly } from './dailyTasks'
 export { verifyContactCode, completeSignup } from './auth/completeSignup'
 export { loginContactWithCode } from './auth/loginContactWithCode'
 
-// Coaching (1:1 slots) — booking/cancellation handled by bookSession/cancelBooking
+// Appointments (1:1 slots) — booking/cancellation handled by bookSession/cancelBooking.
+// Open-window availability (Calendly-style) adds its own list + book callables.
 export {
   generateCoachSlots,
   generateCoachSlotsScheduled,
   onCoachAvailabilityWritten,
-} from './coaching'
+} from './appointments'
+export { listAvailability, bookAppointment } from './appointments/window'
 
 // SaaS billing (Linyup's own platform subscriptions — Stripe)
 export {

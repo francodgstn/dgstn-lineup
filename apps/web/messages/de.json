@@ -118,7 +118,7 @@
     "documents": "Dokumente",
     "events": "Veranstaltungen",
     "bookings": "Buchungen",
-    "coaching": "Coaching",
+    "appointments": "Termine",
     "gamification": "Gamification",
     "automations": "Automatisierungen",
     "managers": "Team",
@@ -799,8 +799,8 @@
     "fieldEnd": "Ende",
     "fieldNotes": "Notizen",
     "fieldType": "Typ",
-    "type_group_class": "Gruppentraining",
-    "type_coaching": "Coaching",
+    "type_class": "Kurs",
+    "type_appointment": "Termin",
     "typeAutoSet": "Automatisch aus der Aktivität übernommen — kann bei Bedarf überschrieben werden.",
     "fieldAllowBooking": "Online-Buchung erlauben",
     "locationPlaceholder": "Halle, Dojo…",
@@ -812,7 +812,7 @@
     "emptyUpcoming": "Keine bevorstehenden Einheiten.",
     "emptyPast": "Keine vergangenen Einheiten.",
     "fieldDuration": "Dauer",
-    "fieldInstructor": "Trainer/in",
+    "fieldInstructor": "Coach",
     "instructorPlaceholder": "Name (optional)",
     "fieldRepeat": "Einheit wiederholen",
     "repeatFrequency": "Wiederholt sich",
@@ -855,13 +855,18 @@
     "updatingSeries": "Sitzungen werden aktualisiert…",
     "seriesUpdated": "{count, plural, one {# Sitzung aktualisiert} other {# Sitzungen aktualisiert}}",
     "deleting": "Wird gelöscht…",
-    "instructorNone": "Kein/e Trainer/in",
+    "instructorNone": "Kein Coach",
     "fieldMaxParticipants": "Max. Teilnehmer",
     "maxParticipantsPlaceholder": "Kein Limit",
     "optional": "optional",
     "fieldBookingMandatory": "Buchung erforderlich",
     "bookingMandatoryHint": "Teilnehmende müssen im Voraus buchen – kein spontaner Einstieg.",
-    "bookingRequiredChip": "Buchung erforderlich"
+    "bookingRequiredChip": "Buchung erforderlich",
+    "sectionBasics": "Grunddaten",
+    "sectionSchedule": "Zeitplan",
+    "sectionLocation": "Ort",
+    "sectionBooking": "Kapazität & Buchung",
+    "durationMinutes": "Min."
   },
   "Calendar": {
     "title": "Zeitplan",
@@ -875,6 +880,8 @@
     "tabPast": "Vergangen",
     "filterAll": "Alle",
     "filterSessions": "Einheiten",
+    "filterClasses": "Kurse",
+    "filterAppointments": "Termine",
     "filterEvents": "Veranstaltungen",
     "filterActivity": "Alle Aktivitäten",
     "emptyUpcoming": "Nichts geplant.",
@@ -905,9 +912,10 @@
     "peekDelete": "Löschen",
     "monthSummary": "Monatsübersicht",
     "monthGroupClasses": "Gruppentrainings",
-    "monthCoaching": "Coachings",
+    "monthCoaching": "Termine",
     "monthEvents": "Veranstaltungen",
-    "openDetail": "Details öffnen"
+    "openDetail": "Details öffnen",
+    "manageAppointments": "Termin-Verfügbarkeit"
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -1128,8 +1136,8 @@
     "fieldColor": "Farbe",
     "fieldImage": "Titelbild",
     "fieldType": "Typ",
-    "type_group_class": "Gruppentraining",
-    "type_coaching": "Coaching",
+    "type_class": "Kurs",
+    "type_appointment": "Termin",
     "typeChangeWarning": "Bevorstehende Einheiten werden automatisch aktualisiert. Vergangene Einheiten bleiben unverändert, um die Historie zu erhalten.",
     "fieldFreeTrial": "Als Schnupperstunde buchbar",
     "level_all": "Alle Niveaus",
@@ -1570,8 +1578,8 @@
     "saving": "Wird gespeichert…",
     "saved": "Gespeichert"
   },
-  "Coaching": {
-    "title": "Coaching",
+  "Appointments": {
+    "title": "Termine",
     "subtitle": "1:1-Verfügbarkeit und Termine verwalten",
     "tabSlots": "Kommende Slots",
     "tabTemplates": "Verfügbarkeit",
@@ -1617,10 +1625,23 @@
     "fieldStartDate": "Startdatum",
     "fieldEndDate": "Enddatum (optional)",
     "tabSchedules": "Zeitpläne",
-    "fieldFreeTrial": "Offen für alle (kostenlose Probestunde / öffentlich)"
+    "fieldFreeTrial": "Offen für alle (kostenlose Probestunde / öffentlich)",
+    "fieldMode": "Verfügbarkeitstyp",
+    "modeFixedSlots": "Feste Slots",
+    "modeFixedSlotsHint": "Exakte wiederkehrende Zeiten",
+    "modeOpenWindow": "Offenes Zeitfenster",
+    "modeOpenWindowHint": "Kunden wählen eine Zeit im Bereich",
+    "fieldWindowStart": "Fenster-Beginn",
+    "fieldWindowEnd": "Fenster-Ende",
+    "fieldDurations": "Sitzungsdauern",
+    "fieldGranularity": "Zeitschritt",
+    "fieldBuffer": "Puffer (Min.)",
+    "membersOnly": "Nur Mitglieder",
+    "manageAvailabilityTitle": "Termin-Verfügbarkeit",
+    "manageAvailabilityHint": "Wiederkehrende Vorlagen, die deine buchbaren 1:1-Slots erzeugen."
   },
-  "CoachingBioLink": {
-    "title": "Sitzung buchen",
+  "AppointmentBooking": {
+    "title": "Termin buchen",
     "subtitle": "Wähle einen passenden Termin",
     "teamNotFound": "Diese Seite ist nicht verfügbar",
     "noSlots": "Keine Sitzungen verfügbar",
@@ -1641,9 +1662,35 @@
     "confirmedMessage": "Eine Bestätigungs-E-Mail mit Kalendereinladung wurde an {email} gesendet.",
     "errorAlreadyBooked": "Diese E-Mail ist bereits für diesen Slot gebucht.",
     "errorSlotUnavailable": "Dieser Slot ist nicht mehr verfügbar.",
-    "errorGeneric": "Etwas ist schiefgelaufen. Bitte erneut versuchen."
+    "errorGeneric": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
+    "viewList": "Liste",
+    "viewCalendar": "Kalender",
+    "allCoaches": "Alle Coaches",
+    "membersOnly": "Nur Mitglieder",
+    "membersVerifyPrompt": "Dieser Slot ist nur für registrierte Mitglieder. Gib deine E-Mail zur Bestätigung ein.",
+    "sendCode": "Bestätigungscode senden",
+    "sending": "Senden…",
+    "codeSentTo": "Wir haben einen 6-stelligen Code an {email} gesendet",
+    "fieldCode": "Bestätigungscode",
+    "resendIn": "Erneut senden in {seconds}s",
+    "resend": "Nicht erhalten? Erneut senden",
+    "back": "Zurück",
+    "verifying": "Wird geprüft…",
+    "confirmBooking": "Buchung bestätigen",
+    "membersNoAccount": "Kein registriertes Konto für diese E-Mail gefunden. Bitte kontaktiere deinen Coach, um beizutreten.",
+    "errorSendCode": "Code konnte nicht gesendet werden. Bitte versuche es erneut.",
+    "errorNoAccount": "Dein Konto konnte nicht ermittelt werden. Bitte versuche es erneut.",
+    "membersOnlyError": "Nur für Mitglieder. Bitte kontaktiere deinen Coach.",
+    "errorIncorrectCode": "Falscher Code. Bitte versuche es erneut.",
+    "errorResendCode": "Code konnte nicht erneut gesendet werden.",
+    "windowSectionTitle": "Wähle deine Zeit",
+    "fixedSectionTitle": "Feste Termine",
+    "pickDay": "Tag wählen",
+    "pickDuration": "Dauer wählen",
+    "pickTime": "Zeit wählen",
+    "noTimesThisDay": "An diesem Tag keine Zeiten frei."
   },
-  "CoachingCancel": {
+  "AppointmentCancel": {
     "title": "Termin absagen",
     "message": "Möchtest du diesen Termin wirklich absagen?",
     "confirm": "Ja, absagen",
@@ -1712,7 +1759,7 @@
     "rowSessions": "Lektionen",
     "rowBookings": "Buchungen",
     "rowBioLink": "Bio-Link",
-    "rowCoaching": "1:1-Coaching & Termine",
+    "rowAppointments": "1:1-Termine",
     "rowCheckins": "Check-ins",
     "rowMemberships": "Abonnements",
     "rowPayments": "Zahlungen",
@@ -2172,6 +2219,8 @@
     "embedScriptNote": "Die <script>-Zeile muss pro Seite nur einmal eingefügt werden, auch bei mehreren Einbettungen.",
     "addSection": "Abschnitt hinzufügen",
     "showInMenu": "Im Navigationsmenü anzeigen",
+    "menuLabel": "Menübeschriftung",
+    "menuLabelHint": "Wird im Navigationsmenü angezeigt. Leer lassen, um die Abschnittsüberschrift zu verwenden.",
     "toggleVisible": "Auf der Website ein-/ausblenden",
     "saveDraft": "Entwurf speichern",
     "saving": "Speichern…",
@@ -2236,6 +2285,8 @@
     "featureCheckinQrHint": "Zeigt den Check-in-QR-Code deines Teams, damit Mitglieder sich per Smartphone einchecken können.",
     "featureWalkIn": "Spontananmeldung",
     "featureWalkInHint": "Lass Neuankömmlinge sich direkt am Kiosk anmelden.",
+    "walkInCoachingLabel": "1:1-Coaching-Slots anbieten",
+    "walkInCoachingHint": "Freie Coaching-Slots für Last-Minute-Buchungen anbieten. Aus = Coaching wird nur im Voraus gebucht.",
     "featureStandby": "Standby-Diashow",
     "featureStandbyHint": "Zeigt Fotos oder Videos in Dauerschleife, sobald der Kiosk eine Weile inaktiv war.",
     "scheduleViewLabel": "Stundenplan-Ansicht",
@@ -2471,8 +2522,8 @@
       "welcomeBody": "Hier ist eine kurze Tour durch die wichtigsten Funktionen. Du kannst sie jederzeit über das Kontomenü erneut starten.",
       "themeLangTitle": "Mach es zu deinem",
       "themeLangBody": "Öffne das Kontomenü, um die Sprache zu wechseln oder zwischen hellem und dunklem Modus umzuschalten.",
-      "scheduleTitle": "Zeitplan",
-      "scheduleBody": "Deine Basis – plane Kurse und Einzeltrainings und sieh Buchungen in der Listen- oder Kalenderansicht. Noch keine Aktivität? Du wirst gebeten, zuerst eine anzulegen.",
+      "featuresTitle": "Deine Arbeitsbereiche",
+      "featuresBody": "Hier liegt dein Tagesgeschäft — Kalender, Kontakte, Zahlungen sowie dein Angebot und dein Wachstum. Öffne einen Bereich, um seine Seiten zu sehen.",
       "shortcutsTitle": "Shortcuts",
       "shortcutsBody": "Geöffnete Seiten erscheinen hier. Fahre über eine Zeile und klicke die Pinnadel, um deine meistgenutzten oben zu behalten.",
       "searchTitle": "Schnellsuche",
@@ -3231,6 +3282,7 @@
     "badgeMembersOnly": "Nur für Mitglieder",
     "badgeFreeTrial": "Kostenlose Schnupperstunde",
     "badgeNoOpenSessions": "Keine offenen Einheiten",
+    "badgeAppointment": "1:1-Termin",
     "prerequisitesLabel": "Voraussetzungen:",
     "titleSessionsFallback": "Einheiten",
     "pickDateTimeSubtitle": "Wählen Sie ein Datum und eine Uhrzeit.",
@@ -3458,8 +3510,8 @@
     "toggleShowActivityDescriptionDesc": "Den Beschreibungstext der Aktivität auf dem Auswahlbildschirm anzeigen.",
     "toggleShowFitnessAppLabel": "Fitness-App-Feld anzeigen",
     "toggleShowFitnessAppDesc": "Neue Gäste fragen, über welche Fitness-App sie kommen (z. B. Fitpass, ClassPass).",
-    "toggleCoachingEnabledLabel": "Coaching-Termine anzeigen",
-    "toggleCoachingEnabledDesc": "Coaching-Termine im öffentlichen Buchungsablauf anzeigen.",
+    "toggleAppointmentsEnabledLabel": "Terminbuchung anzeigen",
+    "toggleAppointmentsEnabledDesc": "Terminbuchung im öffentlichen Buchungsablauf anzeigen.",
     "ctaTitle": "CTA-Button (optional)",
     "ctaSubtitle": "Wird auf dem Bestätigungsbildschirm nach einer erfolgreichen Buchung angezeigt.",
     "ctaUrlLabel": "Button-URL",
@@ -4352,90 +4404,166 @@
     "backToOverview": "Finanzen"
   },
   "HowTo": {
-    "title": "Anleitungen",
-    "comingSoon": "Demnächst verfügbar",
-    "comingSoonBody": "Schritt-für-Schritt-Anleitungen und Einrichtungshilfen sind in Arbeit.",
-    "subtitle": "Wie Linyup zusammenspielt – und wie du dein Studio startklar machst.",
-    "fitTitle": "Wie Linyup zusammenspielt",
-    "fitIntro": "Ein paar zentrale Bausteine treiben alles in Linyup an. Sobald du siehst, wie sie zusammenhängen, ergibt sich der Rest von selbst.",
-    "blocks": {
-      "contacts": {
-        "name": "Kontakte",
-        "desc": "Alle in deinem Umfeld – Interessenten, Probetrainierende und Mitglieder. Die Menschen, um die sich alles andere dreht."
-      },
+    "title": "How-to",
+    "subtitle": "Wie Linyup zusammenspielt — und wie dein Studio startklar wird.",
+    "conceptsTitle": "Kernkonzepte",
+    "conceptsIntro": "Vier Bausteine treiben alles in Linyup an. Tippe auf einen Block in der Karte — oder auf eine Karte darunter —, um zu sehen, was er tut und wie er verknüpft ist.",
+    "diagramAria": "Karte, wie die Kernkonzepte von Linyup zusammenhängen",
+    "diagramHint": "Wische durch die Karte — tippe auf einen Block für mehr.",
+    "termsLabel": "Schlüsselbegriffe",
+    "seeInApp": "In der App ansehen",
+    "edges": {
+      "scheduledAs": "geplant als",
+      "unlocks": "schalten frei",
+      "hold": "haben",
+      "book": "buchen",
+      "bringIn": "bringen"
+    },
+    "concepts": {
       "activities": {
-        "name": "Aktivitäten",
-        "desc": "Was du anbietest: eine Kursart, Disziplin oder Dienstleistung. Die Vorlage, aus der deine Termine geplant werden."
+        "label": "Aktivitäten",
+        "shortLabel": "Aktivitäten",
+        "tagline": "Was dein Studio anbietet",
+        "body": "Aktivitäten sind der Katalog deines Angebots — jede Kursart, Disziplin oder Dienstleistung ist eine Aktivität. Gruppenkurse werden als Sessions in den Kalender geplant; Coaching-Aktivitäten erzeugen buchbare 1:1-Slots aus der Verfügbarkeit eines Coachs. Eine Aktivität trägt auch ihre Zugangsregel: offen für alle, nur Mitglieder oder bestimmten Abos vorbehalten.",
+        "terms": [
+          "Gruppenkurs — eine Aktivität, die als buchbare Kalender-Sessions geplant wird",
+          "Coaching — eine Aktivität als 1:1-Slots, erzeugt aus der Verfügbarkeit",
+          "Event — ein eigenes Format für Einmaliges wie Camps, Workshops oder Prüfungen",
+          "Zugangsstufe — wer buchen darf: offen, Mitglieder oder bestimmte Abos"
+        ],
+        "links": {
+          "manage": "Deine Aktivitäten ansehen"
+        }
       },
       "sessions": {
-        "name": "Termine",
-        "desc": "Geplante Instanzen einer Aktivität im Kalender – ein bestimmter Kurs zu einer bestimmten Zeit."
+        "label": "Sessions",
+        "shortLabel": "Sessions",
+        "tagline": "Wann etwas tatsächlich stattfindet",
+        "body": "Eine Session ist eine konkrete Instanz einer Aktivität im Kalender — der Dienstag-19-Uhr-Kurs, nicht der Kurs im Allgemeinen. Gruppen-Sessions kommen aus deinem Stundenplan, Coaching-Slots werden aus der wöchentlichen Verfügbarkeit jedes Coachs erzeugt und über einen eigenen Ablauf gebucht, Events decken Einmaliges wie Camps oder Gurtprüfungen ab. Buchungen verbinden Personen mit Sessions: ein Kontakt, ein Platz, ein Termin.",
+        "terms": [
+          "Session — ein geplantes Vorkommen einer Aktivität",
+          "Verfügbarkeitsvorlage — das Wochenmuster, aus dem Coaching-Slots entstehen",
+          "Event — eine eigenständige Veranstaltung mit eigener Anmeldung",
+          "Buchung — der reservierte Platz eines Kontakts in einer Session"
+        ],
+        "links": {
+          "schedule": "Kalender öffnen",
+          "appointments": "Termine"
+        }
       },
-      "bookings": {
-        "name": "Buchungen",
-        "desc": "Ein Kontakt reserviert einen Platz in einem Termin. Die Verbindung zwischen Person und Kurs."
-      },
-      "plans": {
-        "name": "Pläne",
-        "desc": "Wiederkehrende Mitgliedschaften (Abos), die Mitgliedern dauerhaften Zugang zum Buchen geben."
-      },
-      "surfaces": {
-        "name": "Öffentliche Seiten",
-        "desc": "Wo dich Kontakte treffen: Bio-Link, Buchungsseite, Shop und ihr persönlicher Bereich."
-      },
-      "automations": {
-        "name": "Automatisierungen",
-        "desc": "Regeln, die auf das Verhalten von Kontakten reagieren – Willkommens-E-Mail, Probe-Nachfassen, Rückgewinnung."
-      },
-      "payments": {
-        "name": "Zahlungen",
-        "desc": "Geld von Mitgliedern an dein Studio über Stripe – Abos, Drop-ins und einmalige Verkäufe."
-      }
-    },
-    "journeyTitle": "Die Mitglieder-Reise",
-    "journey": {
-      "discover": "Entdecken",
-      "lead": "Interessent",
-      "attend": "Teilnehmen",
-      "join": "Beitreten",
-      "retain": "Halten"
-    },
-    "onboardTitle": "Dein Studio einrichten",
-    "onboardIntro": "Neu hier? Arbeite diese Schritte der Reihe nach durch, und du nimmst schon an einem Nachmittag Buchungen entgegen.",
-    "steps": {
-      "profile": {
-        "title": "Studio einrichten",
-        "desc": "Name, Logo und Standorte hinzufügen, damit alles in deinem Branding erscheint."
-      },
-      "offer": {
-        "title": "Aktivitäten anlegen",
-        "desc": "Füge die Kursarten, Disziplinen oder Dienstleistungen hinzu, die du anbietest."
-      },
-      "plans": {
-        "title": "Pläne festlegen",
-        "desc": "Richte die Mitgliedschaften und Preise ein, die Mitglieder abonnieren können."
-      },
-      "schedule": {
-        "title": "Zeitplan erstellen",
-        "desc": "Setze deine Termine in den Kalender – einmalig oder wiederkehrend."
-      },
-      "surfaces": {
-        "title": "Öffentliche Seiten aktivieren",
-        "desc": "Schalte Buchungsseite, Bio-Link und Shop frei, damit dich Leute finden und buchen können."
+      "subscriptions": {
+        "label": "Abos & Zugehörigkeiten",
+        "shortLabel": "Abos",
+        "tagline": "Laufender Zugang und Zugehörigkeit",
+        "body": "Abos sind die wiederkehrenden Pläne, die deine Mitglieder bezahlen — und sie können mehr als abrechnen: Ein Plan kann genau die Aktivitäten freischalten, die er abdeckt. Zugehörigkeiten erfassen das Dazugehören ohne Geld: ob jemand aktives Mitglied, im Probetraining oder Alumni ist. Zusammen beantworten sie zwei verschiedene Fragen zu einer Person: worauf hat sie Zugriff, und wie gehört sie dazu.",
+        "terms": [
+          "Plan — ein Abotyp mit Preis und Abrechnungszyklus",
+          "Zugangssteuerung — eine Aktivität kann ein passendes Abo voraussetzen",
+          "Zugehörigkeit — ein Mitgliedsstatus unabhängig von Zahlungen"
+        ],
+        "links": {
+          "plans": "Deine Pläne",
+          "affiliations": "Zugehörigkeiten"
+        }
       },
       "contacts": {
-        "title": "Kontakte hinzufügen",
-        "desc": "Importiere oder lade deine bestehenden Mitglieder ein."
-      },
-      "payments": {
-        "title": "Zahlungen verbinden",
-        "desc": "Verbinde Stripe, um Abos, Drop-ins und Verkäufe anzunehmen."
-      },
-      "automate": {
-        "title": "Nachfassen automatisieren",
-        "desc": "Aktiviere die Start-Automatisierungen, damit Interessenten und Mitglieder zur richtigen Zeit von dir hören."
+        "label": "Kontakte",
+        "shortLabel": "Kontakte",
+        "tagline": "Alle, die dein Studio kennt",
+        "body": "Kontakte sind die Menschen-Seite von Linyup — Leads, Probetrainierende, Mitglieder und Alumni stehen in einer Liste. Alles andere hängt am Kontakt: die Abos, die er hält, sein Zugehörigkeitsstatus und die gebuchten Sessions. Bucht oder registriert sich jemand über eine deiner öffentlichen Seiten, wird der Kontakt automatisch angelegt oder zugeordnet.",
+        "terms": [
+          "Kontakt — die Akte einer Person, vom ersten Kontakt bis zum langjährigen Mitglied",
+          "Abo-Inhaber — ein Kontakt mit aktivem Plan",
+          "Zugehörigkeitsstatus — wie ein Kontakt dazugehört (Mitglied, Probe, Alumni)"
+        ],
+        "links": {
+          "open": "Kontakte öffnen"
+        }
       }
     },
-    "moreSoon": "Weitere Anleitungen folgen in Kürze."
+    "publicPages": {
+      "title": "Öffentliche Seiten",
+      "intro": "Öffentliche Seiten sind die Oberflächen, die man ohne Login sieht — von dort kommen deine neuen Kontakte und Buchungen. Jede ist optional und wird bei Bedarf aktiviert, du zeigst also nur, was dein Studio nutzt.",
+      "openLink": "In der App öffnen",
+      "surfaces": {
+        "bioLink": {
+          "name": "Bio-Link",
+          "desc": "Deine Link-in-Bio-Startseite — eine kurze URL, die Buchungslink, Social-Media und wichtige Aktionen bündelt. Das Einfachste zum Teilen auf Instagram oder in der Bio."
+        },
+        "website": {
+          "name": "Website",
+          "desc": "Eine vollständigere Studio-Website, die du aus Blöcken baust — Hero, Zeitplan, Preise, Galerie und mehr — unter deiner öffentlichen Adresse. Aktiviere sie, wenn ein Bio-Link nicht reicht."
+        },
+        "booking": {
+          "name": "Buchungsseite",
+          "desc": "Der öffentliche Kalender, aus dem jeder buchen kann. Besucher wählen Kurs und Zeit, geben ihre Daten ein, und Kontakt plus Buchung entstehen automatisch."
+        },
+        "shop": {
+          "name": "Shop",
+          "desc": "Ein Schaufenster für dein Angebot — Abos, Produkte und Kurse — damit man ohne Hin und Her kaufen kann. Erscheint, sobald du etwas zu verkaufen hast."
+        },
+        "space": {
+          "name": "Mitgliederbereich",
+          "desc": "Der eingeloggte Bereich deiner Mitglieder: Abo, Buchungen, Profil und die Kurse, die sie öffnen können. Ihre Basis zwischen den Besuchen."
+        },
+        "appointments": {
+          "name": "Termine",
+          "desc": "Die Slot-Auswahl pro Coach für Einzelstunden, erzeugt aus der Verfügbarkeit jedes Coachs. Getrennt von der Kurs-Buchungsseite, damit Privatstunden sauber buchen."
+        },
+        "kiosk": {
+          "name": "Kiosk",
+          "desc": "Ein fester, schlichter Bildschirm für ein Eingangs-Tablet: heutiger Zeitplan, Check-in-QR und Walk-in-Anmeldung. Was Mitglieder und Spontanbesucher an der Tür sehen."
+        }
+      }
+    },
+    "faqTitle": "Fragen, die anfangs alle stellen",
+    "faqIntro": "Das ist Alex, mit einem kleinen Kampfsportstudio. Sechs typische Anfangsfragen — beantwortet so, wie sie bei Alex ablaufen.",
+    "faq": {
+      "q1": {
+        "q": "Kann ich Buchungen auf bestimmte Kurse beschränken?",
+        "a": "Alex verkauft einen Einsteiger-Plan, der genau zwei Kursarten abdecken soll. In Linyup ist das eine Zugangsregel an der Aktivität, nicht an der Person: Alex stellt beide Einsteiger-Aktivitäten so ein, dass sie ein passendes Abo voraussetzen, und lässt das offene Training für alle offen. Wer den Einsteiger-Plan hat, kann diese zwei Kurse buchen — alles andere lehnt höflich ab."
+      },
+      "q2": {
+        "q": "Was ist der Unterschied zwischen Aktivität und Session?",
+        "a": "Alex legt 'Judo Grundlagen' einmal an — das ist die Aktivität, die Vorlage. Im Kalender stehen dann viele Sessions davon: Montag 18 Uhr, Mittwoch 19 Uhr, Woche für Woche. Ändert Alex Beschreibung oder Zugangsregel der Aktivität, folgen alle künftigen Sessions; einen verregneten Montag abzusagen betrifft nur diese eine Session."
+      },
+      "q3": {
+        "q": "Wie landen Probetrainierende in meiner Kontaktliste?",
+        "a": "Alex teilt den Bio-Link des Studios auf Instagram. Jemand tippt darauf, wählt auf der Buchungsseite die Probe-Session am Donnerstag und gibt seinen Namen ein — Linyup erstellt Kontakt und Buchung in einem Schritt. Am nächsten Morgen findet Alex die Person in den Kontakten, als frischen Lead markiert, mit der Probebuchung bereits dran."
+      },
+      "q4": {
+        "q": "Braucht jedes Mitglied ein bezahltes Abo?",
+        "a": "In Alex' Studio gibt es zahlende Erwachsene, Kinder mit Papierrechnung und einen pensionierten Mitgründer, der für immer gratis trainiert. Nur die Erwachsenen haben Abos in Linyup. Die anderen bekommen trotzdem eine Zugehörigkeit — Mitglied —, gehören also dazu, erscheinen in den richtigen Listen und können Mitglieder-Kurse buchen, ganz ohne Abrechnung."
+      },
+      "q5": {
+        "q": "Wie unterscheidet sich Coaching von Gruppenkursen?",
+        "a": "Alex' Cheftrainerin bietet private Technikstunden an. Statt Slots von Hand in den Kalender zu setzen, legt Alex eine Coaching-Aktivität an und die Trainerin definiert eine wöchentliche Verfügbarkeitsvorlage. Linyup erzeugt daraus buchbare Slots, und Klienten wählen ihre Zeit über die Coaching-Seite — der Gruppenkalender bleibt unberührt."
+      },
+      "q6": {
+        "q": "Was, wenn ich nur einige öffentliche Seiten will?",
+        "a": "Alex will einen Bio-Link und eine Buchungsseite, aber noch keinen Shop. Öffentliche Oberflächen sind Plugins: Alex aktiviert die zwei wichtigen und lässt den Rest aus. Monate später, als das erste Merch eintrifft, fügt das Shop-Plugin ihn einfach hinzu — an den bestehenden Seiten ändert sich nichts."
+      }
+    },
+    "utilitiesTitle": "Weiter geht's",
+    "utilities": {
+      "tour": {
+        "title": "Geführte Tour wiederholen",
+        "body": "Geh die wichtigsten Bereiche der App noch einmal Schritt für Schritt durch.",
+        "action": "Tour starten"
+      },
+      "checklist": {
+        "title": "Einrichtungs-Checkliste",
+        "body": "Der Einrichtungsfortschritt deines Studios, gelesen aus deinen echten Daten.",
+        "allDone": "Alles bereit — dein Studio ist startklar."
+      },
+      "tips": {
+        "title": "Tipps & Tricks"
+      },
+      "plugins": {
+        "title": "Plugins entdecken",
+        "body": "Optionale Oberflächen und Funktionen — aktiviere nur, was dein Studio nutzt.",
+        "action": "Plugins durchstöbern"
+      }
+    }
   }
 }

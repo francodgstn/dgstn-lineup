@@ -145,7 +145,7 @@ export async function sendBookingReminders(): Promise<{
       skipped++
       continue
     }
-    // Cancelled sessions (coaching status or exception flag) get no reminders.
+    // Cancelled sessions (appointment status or exception flag) get no reminders.
     if (sessionData.status === 'cancelled') {
       skipped++
       continue

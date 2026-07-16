@@ -112,6 +112,7 @@ function SelectContent({
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
+        data-slot="select-positioner"
         side={side}
         sideOffset={sideOffset}
         align={align}

@@ -152,7 +152,7 @@ export interface LeadGridSlot {
   upcomingOnly?: boolean
 }
 
-export interface LeadCoachingTemplate {
+export interface LeadAppointmentTemplate {
   staffKey: string
   durationMin: number
   isFreeTrial: boolean
@@ -165,6 +165,14 @@ export interface LeadCoachingTemplate {
   bookedSlots: number[]
   /** Where it happens (LeadPlaceDef.key); falls back to LeadProfile.location. */
   placeKey?: string
+  // ── Open-window mode (Calendly-style). When 'open_window', NO slots are
+  // pre-generated (durationMin/time/slotCount/bookedSlots are placeholders);
+  // the coach advertises a daily range clients self-book within. ──
+  mode?: 'fixed_slots' | 'open_window'
+  window?: { start: string; end: string }
+  durationsMinutes?: number[]
+  granularityMinutes?: number
+  bufferMinutes?: number
 }
 
 export interface LeadContactDef {
@@ -361,11 +369,11 @@ export interface LeadProfile {
   gamification: Record<string, unknown>
 
   activities: LeadActivityDef[]
-  coaching: {
+  appointments: {
     activityName: string
     slug: string
     description: string
-    templates: LeadCoachingTemplate[]
+    templates: LeadAppointmentTemplate[]
   }
   subscriptions: LeadSubscriptionDef[]
   weeklyGrid: LeadGridSlot[]

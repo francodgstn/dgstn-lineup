@@ -12,10 +12,10 @@
  *   org@linyup.com    / linyup123  →  plan: organization (active)
  *
  *   Per team:
- *   - 4 group-class activities + 1 coaching activity (type='coaching')
- *   - 36 group-class sessions (past + upcoming) + 6 coaching sessions (open/full mix)
- *   - 1 coach_availability template per team
- *   - 18 contacts, 3 events, 4 group bookings + 2 coaching bookings
+ *   - 4 group-class activities + 1 appointment activity (type='appointment')
+ *   - 36 group-class sessions (past + upcoming) + 6 appointment sessions (open/full mix)
+ *   - 1 availability template per team
+ *   - 18 contacts, 3 events, 4 group bookings + 2 appointment bookings
  *   - Past-session participants, weekly reports, goals
  *
  *   Studio tier only:
@@ -624,7 +624,7 @@ async function seedTeam(opts: {
       color: accentColor,
       level: 'all',
       isFreeTrial: true,
-      type: 'group_class' as const,
+      type: 'class' as const,
       accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
     },
     {
@@ -634,7 +634,7 @@ async function seedTeam(opts: {
       color: '#dc2626',
       level: 'intermediate',
       isFreeTrial: false,
-      type: 'group_class' as const,
+      type: 'class' as const,
       accessRule: { type: 'subscription', subscriptionTypeIds: mmaSubIds } as {
         type: string
         subscriptionTypeIds?: string[]
@@ -647,7 +647,7 @@ async function seedTeam(opts: {
       color: '#ea580c',
       level: 'all',
       isFreeTrial: true,
-      type: 'group_class' as const,
+      type: 'class' as const,
       accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
     },
     {
@@ -657,7 +657,7 @@ async function seedTeam(opts: {
       color: '#059669',
       level: 'all',
       isFreeTrial: true,
-      type: 'group_class' as const,
+      type: 'class' as const,
       accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
     },
   ]
@@ -668,6 +668,7 @@ async function seedTeam(opts: {
       .set({ ...a, teamId, isActive: true, created_at: ts(daysFromNow(-100)) })
     await db.collection('activities').doc(a.id).collection('public_profile').doc(a.id).set({
       type: 'activity',
+      activityType: 'class',
       teamId,
       name: a.name,
       slug: a.slug,
@@ -679,18 +680,18 @@ async function seedTeam(opts: {
     })
   }
 
-  // ── coaching activity ────────────────────────────────────────────────────────
-  const coachingActId = `${teamId}-act-coaching`
-  const coachingActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
+  // ── appointment activity ────────────────────────────────────────────────────────
+  const appointmentActId = `${teamId}-act-appointment`
+  const appointmentActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
   await db
     .collection('activities')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .set({
       teamId,
-      name: coachingActName,
+      name: appointmentActName,
       slug: '1on1-coaching',
       color: accentColor,
-      type: 'coaching',
+      type: 'appointment',
       coachId: uid,
       coachName: displayName,
       level: 'all',
@@ -700,13 +701,15 @@ async function seedTeam(opts: {
     })
   await db
     .collection('activities')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .collection('public_profile')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .set({
       type: 'activity',
+      // Routes the public booking/site cards to the appointment flow.
+      activityType: 'appointment',
       teamId,
-      name: coachingActName,
+      name: appointmentActName,
       slug: '1on1-coaching',
       color: accentColor,
       image_url: null,
@@ -715,16 +718,16 @@ async function seedTeam(opts: {
     })
 
   // ── coach availability template ──────────────────────────────────────────────
-  const coachingTemplateId = `${teamId}-tpl-coaching`
+  const appointmentTemplateId = `${teamId}-tpl-appointment`
   await db
-    .collection('coach_availability')
-    .doc(coachingTemplateId)
+    .collection('availability')
+    .doc(appointmentTemplateId)
     .set({
       teamId,
       coachId: uid,
       coachName: displayName,
-      activityId: coachingActId,
-      title: coachingActName,
+      activityId: appointmentActId,
+      title: appointmentActName,
       description: 'One-on-one coaching session.',
       duration_minutes: 60,
       max_participants: 1,
@@ -732,19 +735,19 @@ async function seedTeam(opts: {
       location: 'Dojo A',
       onlineUrl: null,
       status: 'active',
+      mode: 'fixed_slots',
       recurrence: {
-        type: 'weekly',
-        days: [1, 3], // Mon + Wed
+        daysOfWeek: [1, 3], // Mon + Wed
         time: '08:00',
-        timezone: 'Europe/Zurich',
+        startDate: ts(daysFromNow(-30)),
+        endDate: null,
       },
-      window_days: 30,
       created_at: ts(daysFromNow(-30)),
     })
 
-  // ── coaching sessions (generated as if onCoachAvailabilityWritten ran) ───────
+  // ── appointment sessions (generated as if onCoachAvailabilityWritten ran) ───────
   // Mix of open and full slots to represent a realistic schedule.
-  const coachingSlotDefs = [
+  const appointmentSlotDefs = [
     { dayOffset: 1, hour: 8, bookings: 0 }, // open
     { dayOffset: 3, hour: 8, bookings: 1 }, // full (1/1)
     { dayOffset: 8, hour: 8, bookings: 0 }, // open
@@ -760,12 +763,12 @@ async function seedTeam(opts: {
     email: `luca.ferrari.${teamId}@email.com`,
   }
 
-  for (let i = 0; i < coachingSlotDefs.length; i++) {
-    const slotDef = coachingSlotDefs[i]
+  for (let i = 0; i < appointmentSlotDefs.length; i++) {
+    const slotDef = appointmentSlotDefs[i]
     const base = daysFromNow(slotDef.dayOffset)
     base.setHours(slotDef.hour, 0, 0, 0)
     const end = hoursOffset(base, 1)
-    const sid = `${teamId}-coaching-session-${i}`
+    const sid = `${teamId}-appointment-session-${i}`
     const isFull = slotDef.bookings >= 1
     const status = isFull ? 'full' : 'open'
 
@@ -774,10 +777,10 @@ async function seedTeam(opts: {
       .doc(sid)
       .set({
         teamId,
-        activityType: 'coaching',
-        activityId: coachingActId,
-        activityName: coachingActName,
-        templateId: coachingTemplateId,
+        activityType: 'appointment',
+        activityId: appointmentActId,
+        activityName: appointmentActName,
+        templateId: appointmentTemplateId,
         coachId: uid,
         coachName: displayName,
         isFreeTrial: true,
@@ -800,13 +803,13 @@ async function seedTeam(opts: {
       .collection('public_profile')
       .doc(sid)
       .set({
-        type: 'coaching_session',
+        type: 'appointment_session',
         teamId,
-        activityType: 'coaching',
-        activityName: coachingActName,
+        activityType: 'appointment',
+        activityName: appointmentActName,
         coachId: uid,
         coachName: displayName,
-        templateId: coachingTemplateId,
+        templateId: appointmentTemplateId,
         start: ts(base),
         end: ts(end),
         duration_minutes: 60,
@@ -834,9 +837,10 @@ async function seedTeam(opts: {
           email: bookedContact.email,
           firstname: bookedContact.firstname,
           lastname: bookedContact.lastname,
+          fullname: `${bookedContact.firstname} ${bookedContact.lastname}`,
           status: 'confirmed',
           joinedAt: ts(daysFromNow(-2)),
-          booking_token: `tok-coaching-${teamId}-${i}`,
+          booking_token: `tok-appointment-${teamId}-${i}`,
           is_new_contact: false,
         })
     }
@@ -1415,7 +1419,7 @@ async function seedTeam(opts: {
     }
   }
 
-  // ── goals & tasks (coaching data) ────────────────────────────────────────────
+  // ── goals & tasks (appointment data) ────────────────────────────────────────────
   const goalDefs = [
     {
       title: 'Improve guard passing',
@@ -2524,6 +2528,7 @@ async function seedFreeTeam() {
     })
   await db.collection('activities').doc(actId).collection('public_profile').doc(actId).set({
     type: 'activity',
+    activityType: 'class',
     teamId,
     name: 'Vinyasa Flow',
     slug: 'vinyasa-flow',

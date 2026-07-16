@@ -20,7 +20,7 @@ export async function pass03Activities(
       const data = transformActivity(d.data() as Record<string, unknown>)
       activityMap.set(d.id, {
         name: String(data.name ?? ''),
-        type: String(data.type ?? 'group_class'),
+        type: String(data.type ?? 'class'),
       })
       const tgtRef = tgt.collection('activities').doc(d.id)
       if (!cfg.dryRun) {

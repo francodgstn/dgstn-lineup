@@ -152,6 +152,9 @@ function sanitizeSection(raw: unknown): WebsiteSection | null {
   // Nav membership is common to every section type. Stored only when explicitly
   // hidden; absence means "visible" (the renderer defaults showInNav to true).
   if (d.showInNav === false) section.showInNav = false
+  // Optional terse nav label (falls back to the heading in the renderer).
+  const menuLabel = optStr(d.menuLabel, 120)
+  if (menuLabel) section.menuLabel = menuLabel
   return section
 }
 
@@ -194,7 +197,7 @@ function buildSection(d: Dict, id: string, type: string): WebsiteSection | null 
         windowDays: num(d.windowDays, 1, 60, 7),
         maxItems: num(d.maxItems, 0, 50, 0) || undefined,
         activityId: optStr(d.activityId, 64),
-        displayMode: d.displayMode === 'calendar' ? 'calendar' : 'list',
+        displayMode: d.displayMode === 'list' ? 'list' : 'calendar',
         showBooking: bool(d.showBooking),
       }) as unknown as WebsiteSection
     }

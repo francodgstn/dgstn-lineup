@@ -6,7 +6,6 @@
 // than re-querying `public_profile` themselves.
 import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { useTheme } from 'next-themes'
 import type { KioskFeatures, KioskStandbyConfig, KioskScheduleView } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { useKioskSessions } from './useKioskSessions'
@@ -29,43 +28,57 @@ export default function KioskApp({ slug }: Props) {
   const kiosk = team.kiosk
   const isActive = team.active_public_surfaces?.kiosk === true
 
-  // Apply the studio's chosen kiosk theme (light/dark/auto). The kiosk owns the
-  // whole viewport, so driving next-themes for the page is fine — it themes every
-  // descendant, including the fixed WalkIn/Standby/lock overlays. 'auto' follows
-  // the device's system setting.
-  const { setTheme } = useTheme()
-  const kioskTheme = kiosk?.theme
+  // Apply the studio's chosen kiosk theme (light/dark/auto) scoped to the kiosk's
+  // OWN container — NOT via global next-themes. That store (+ the `.dark` class on
+  // <html>) is shared with the studio owner's admin dashboard, so driving it here
+  // would flip their dashboard theme too and leave it stuck. Instead we stamp the
+  // `.light`/`.dark` class on the kiosk root: those classes redefine the CSS vars
+  // for every descendant, including the inline WalkIn/Standby/lock overlays and the
+  // session-detail modal (none of which portal out of the kiosk tree). 'auto'
+  // follows the device's system setting via matchMedia.
+  const kioskTheme = kiosk?.theme ?? 'light'
+  const [systemDark, setSystemDark] = useState(false)
   useEffect(() => {
-    if (!kioskTheme) return
-    setTheme(kioskTheme === 'auto' ? 'system' : kioskTheme)
-  }, [kioskTheme, setTheme])
+    if (kioskTheme !== 'auto' || typeof window === 'undefined') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    setSystemDark(mq.matches)
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [kioskTheme])
+  const themeClass = kioskTheme === 'dark' || (kioskTheme === 'auto' && systemDark) ? 'dark' : 'light'
 
   // Gate: the kiosk plugin isn't installed/active for this team (or its public
   // config hasn't been denormalized yet) — no lock screen, no data reads.
   if (!isActive || !kiosk) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background px-6 text-center">
-        <p className="text-lg font-semibold text-muted-foreground">
-          {t('notAvailable')}
-        </p>
+      <div className={themeClass}>
+        <div className="fixed inset-0 flex items-center justify-center bg-background px-6 text-center">
+          <p className="text-lg font-semibold text-muted-foreground">
+            {t('notAvailable')}
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
-    <KioskLock slug={slug} teamId={teamId} lock={kiosk.lock}>
-      <KioskShell
-        slug={slug}
-        teamId={teamId}
-        teamName={team.name}
-        logoUrl={team.profileImage}
-        title={kiosk.title || team.name}
-        scheduleView={kiosk.scheduleView}
-        features={kiosk.features}
-        walkInActivityIds={kiosk.walkInActivityIds}
-        standby={kiosk.standby}
-      />
-    </KioskLock>
+    <div className={themeClass}>
+      <KioskLock slug={slug} teamId={teamId} lock={kiosk.lock}>
+        <KioskShell
+          slug={slug}
+          teamId={teamId}
+          teamName={team.name}
+          logoUrl={team.profileImage}
+          title={kiosk.title || team.name}
+          scheduleView={kiosk.scheduleView}
+          features={kiosk.features}
+          walkInActivityIds={kiosk.walkInActivityIds}
+          walkInCoaching={kiosk.walkInCoaching}
+          standby={kiosk.standby}
+        />
+      </KioskLock>
+    </div>
   )
 }
 
@@ -78,6 +91,7 @@ interface ShellProps {
   scheduleView: KioskScheduleView
   features: KioskFeatures
   walkInActivityIds?: string[]
+  walkInCoaching?: boolean
   standby: KioskStandbyConfig
 }
 
@@ -90,6 +104,7 @@ function KioskShell({
   scheduleView,
   features,
   walkInActivityIds,
+  walkInCoaching,
   standby,
 }: ShellProps) {
   const t = useTranslations('Kiosk')
@@ -139,6 +154,7 @@ function KioskShell({
           teamId={teamId}
           sessions={sessions}
           walkInActivityIds={walkInActivityIds}
+          walkInCoaching={walkInCoaching}
         />
       )}
 

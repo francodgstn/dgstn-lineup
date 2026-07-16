@@ -132,7 +132,7 @@ async function run() {
     for (const d of snap.docs) {
       activityMap.set(d.id, {
         name: String(d.data().name ?? ''),
-        type: String(d.data().type ?? 'group_class'),
+        type: String(d.data().type ?? 'class'),
       })
     }
   }

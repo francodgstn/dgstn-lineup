@@ -1239,7 +1239,7 @@ function SidebarContent({
         {/* Features — the Run / Offer / Grow working areas. Extra top margin on
             the sections: unlike the other macro groups, the first thing here is
             another (section) header, which otherwise sits too close to the label. */}
-        <div className="mt-3 pt-3">
+        <div className="mt-3 pt-3" data-tour="nav-features">
           {!collapsed && <GroupLabel>{t('navGroupFeatures')}</GroupLabel>}
           <div className={collapsed ? 'space-y-1' : 'mt-2 space-y-3'}>
             {NAV_SECTIONS.map((section) => {

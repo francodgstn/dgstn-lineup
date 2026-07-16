@@ -242,8 +242,8 @@
         "description": "Spot churn risk before it happens.",
         "detail": "Let AI flag contacts at risk of leaving and even draft the perfect message to win them back before they're gone."
       },
-      "coaching": {
-        "title": "1:1 Coaching",
+      "appointments": {
+        "title": "1:1 Appointments",
         "description": "Bookable 1:1 appointments.",
         "detail": "Publish availability slots clients book themselves from your bio link — with .ics calendar invites, reminders and buffer times. Your personal-trainer hook."
       },
@@ -332,7 +332,7 @@
     "cmpUiLanguagesNote": "English · Deutsch · Français · Italiano",
     "cmpBranding": "Remove Linyup branding",
     "cmpMigration": "Free data migration (launch offer)",
-    "cmpCoaching": "1:1 coaching & appointments",
+    "cmpAppointments": "Appointments",
     "cmpGoals": "Goals & progress",
     "cmpProducts": "Products shop",
     "cmpForms": "Forms",

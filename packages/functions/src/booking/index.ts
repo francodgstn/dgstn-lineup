@@ -17,10 +17,10 @@ import {
   buildVerificationCodeEmail,
 } from './templates'
 import {
-  buildCoachingConfirmationEmail,
-  buildCoachingICalAttachment,
-  buildCoachNotificationEmail,
-} from '../coaching/templates'
+  buildAppointmentConfirmationEmail,
+  buildAppointmentICalAttachment,
+  buildAppointmentProviderNotificationEmail,
+} from '../appointments/templates'
 import {
   resolveActivityAccessRule,
   heldSubscriptionTypeIds,
@@ -543,14 +543,16 @@ export const bookSession = onCall(async (request) => {
   }
 
   // Get activity name and access rule (the paid-access gate)
-  const isCoachingSession = sessionData.activityType === 'coaching'
+  const isAppointment = sessionData.activityType === 'appointment'
   let activityName = (sessionData.activityName as string) || 'Session'
   let accessRule: ActivityAccessRule = { type: 'open' }
   // Per-activity confirmation note (overrides the team-wide setting below).
   let activityInstructions: string | null = null
 
-  if (isCoachingSession) {
-    // Coaching carries the access gate directly on the session doc.
+  // Whether THIS booking fills the appointment slot (drives the status flip below).
+  let appointmentSlotWillBeFull = false
+  if (isAppointment) {
+    // Appointments carry the access gate directly on the session doc.
     accessRule = resolveActivityAccessRule({
       accessRule: sessionData.accessRule as ActivityAccessRule | undefined,
       isFreeTrial: sessionData.isFreeTrial as boolean | undefined,
@@ -559,8 +561,9 @@ export const bookSession = onCall(async (request) => {
     const maxParticipants = (sessionData.max_participants as number) || 1
     const bookingsCount = (sessionData.bookings_count as number) || 0
     if (sessionData.status === 'full' || bookingsCount >= maxParticipants) {
-      throw new HttpsError('failed-precondition', 'This coaching slot is fully booked.')
+      throw new HttpsError('failed-precondition', 'This appointment slot is fully booked.')
     }
+    appointmentSlotWillBeFull = bookingsCount + 1 >= maxParticipants
     if (sessionData.activityId) {
       try {
         const actDoc = await admin
@@ -603,7 +606,7 @@ export const bookSession = onCall(async (request) => {
       | undefined) || null
   const bookingInstructions = activityInstructions?.trim() || teamInstructions?.trim() || null
 
-  if (!isCoachingSession) {
+  if (!isAppointment) {
     // Group-class booking cap (optional; enforced against the live reserved count).
     const maxGroup = sessionData.max_participants as number | undefined
     if (maxGroup && maxGroup > 0) {
@@ -622,14 +625,14 @@ export const bookSession = onCall(async (request) => {
   let creditSpendTypeId: string | null = null
   if (accessRule.type !== 'open') {
     if (!authenticatedContact) {
-      const msg = isCoachingSession
-        ? 'This coaching series is for registered members only. Please verify your email.'
+      const msg = isAppointment
+        ? 'This appointment series is for registered members only. Please verify your email.'
         : 'This session is for registered members only. Please verify your email.'
       throw new HttpsError('permission-denied', msg)
     }
     if (authenticatedContact.acquisition_stage !== 'joined') {
-      const msg = isCoachingSession
-        ? 'This coaching series is for members only. Trial accounts cannot book.'
+      const msg = isAppointment
+        ? 'This appointment series is for members only. Trial accounts cannot book.'
         : 'This session is for members only. Trial accounts cannot book this class.'
       throw new HttpsError('permission-denied', msg)
     }
@@ -827,12 +830,27 @@ export const bookSession = onCall(async (request) => {
     booking_ip: bookingIp,
     authenticated_booking: isAuthenticatedBooking,
     subscription_type_id: subscriptionTypeId,
+    // Appointment bookings are auto-confirmed — a 1:1 slot has no roster-review step.
+    // `status` is what the trackBookings recount trigger counts, and `fullname` is
+    // what the appointment slot dialog displays (AppointmentBooking shape).
+    ...(isAppointment && {
+      status: 'confirmed',
+      fullname: `${sanitized.firstname} ${sanitized.lastname}`.trim(),
+    }),
   }
   const sessionCounterUpdate = {
     has_bookings: true,
     bio_link_bookings_count: FieldValue.increment(1),
     ...(isNewContact && { bio_link_new_contact_bookings_count: FieldValue.increment(1) }),
     last_booking_at: FieldValue.serverTimestamp(),
+    // Appointment capacity bookkeeping: the gate above, the public mirror, and the
+    // appointment page all read `bookings_count`/`status`, so update them with the
+    // booking. The trackBookings trigger later recounts confirmed bookings and
+    // overwrites with exact values (self-healing under races/cancellations).
+    ...(isAppointment && {
+      bookings_count: FieldValue.increment(1),
+      ...(appointmentSlotWillBeFull && { status: 'full' }),
+    }),
   }
   const bookingRef = admin
     .firestore()
@@ -961,8 +979,8 @@ export const bookSession = onCall(async (request) => {
   const sessionStart: Date = sessionData.start.toDate()
   const sessionEnd: Date = sessionData.end.toDate()
 
-  if (isCoachingSession) {
-    // ── Coaching session: personalised confirmation + .ics + coach notification ─
+  if (isAppointment) {
+    // ── Appointment session: personalised confirmation + .ics + coach notification ─
     const coachId = sessionData.coachId as string | null
     const coachName = (sessionData.coachName as string) || 'Your coach'
     let coachEmail: string | null = null
@@ -977,7 +995,7 @@ export const bookSession = onCall(async (request) => {
 
     const cancelUrl = manageBookingUrl // reuse manage-booking URL for cancellation
     try {
-      const email = buildCoachingConfirmationEmail({
+      const email = buildAppointmentConfirmationEmail({
         firstname: sanitized.firstname,
         teamName,
         slotTitle: activityName,
@@ -990,7 +1008,7 @@ export const bookSession = onCall(async (request) => {
         instructions: bookingInstructions,
         lang,
       })
-      const ical = buildCoachingICalAttachment({
+      const ical = buildAppointmentICalAttachment({
         bookingId: `${data.sessionId}-${contactId}`,
         slotTitle: activityName,
         start: sessionStart,
@@ -1019,13 +1037,13 @@ export const bookSession = onCall(async (request) => {
           ],
         })
     } catch (err) {
-      console.error('Error sending coaching confirmation email:', err)
+      console.error('Error sending appointment confirmation email:', err)
     }
 
     // Coach notification
     if (coachEmail) {
       try {
-        const notif = buildCoachNotificationEmail({
+        const notif = buildAppointmentProviderNotificationEmail({
           coachFirstname,
           clientName: `${sanitized.firstname} ${sanitized.lastname}`,
           clientEmail: sanitized.email,
@@ -1050,7 +1068,7 @@ export const bookSession = onCall(async (request) => {
           teamId: data.teamId,
         })
       } catch (err) {
-        console.error('Error sending coaching coach notification email:', err)
+        console.error('Error sending appointment coach notification email:', err)
       }
     }
   } else {
@@ -1166,14 +1184,6 @@ export const cancelBooking = onCall(async (request) => {
   const bookingDoc = bookingsSnapshot.docs[0]
   const booking = bookingDoc.data()
 
-  const cancellableStatuses = ['pending', 'no_show']
-  if (booking.status && !cancellableStatuses.includes(booking.status as string)) {
-    throw new HttpsError(
-      'failed-precondition',
-      'This booking has already been cancelled or confirmed.'
-    )
-  }
-
   const pathParts = bookingDoc.ref.path.split('/')
   const sessionId = pathParts[1]
   const contactId = booking.contact as string | undefined
@@ -1183,6 +1193,21 @@ export const cancelBooking = onCall(async (request) => {
     throw new HttpsError('not-found', 'Session no longer exists.')
 
   const session = sessionDoc.data()!
+  const isAppointment = session.activityType === 'appointment'
+
+  // Appointment bookings are auto-confirmed at booking time, so 'confirmed' is their
+  // normal (still cancellable) state. For group classes 'confirmed' means the
+  // studio checked the person in — those stay locked.
+  const cancellableStatuses = isAppointment
+    ? ['pending', 'no_show', 'confirmed']
+    : ['pending', 'no_show']
+  if (booking.status && !cancellableStatuses.includes(booking.status as string)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'This booking has already been cancelled or confirmed.'
+    )
+  }
+
   const sessionStart = (session.start as Timestamp).toDate()
   if (sessionStart < new Date())
     throw new HttpsError('failed-precondition', 'Cannot cancel a booking for a past session.')
@@ -1236,6 +1261,17 @@ export const cancelBooking = onCall(async (request) => {
     })
     tx.update(db.collection('sessions').doc(sessionId), {
       bio_link_bookings_count: FieldValue.increment(-1),
+      // Release the appointment slot. A window-created session only existed for this
+      // booking, so cancel it (unpublishes via the sync gate) — its time returns
+      // to the coach's open window. A fixed slot reopens for the next client.
+      ...(isAppointment && {
+        bookings_count: FieldValue.increment(-1),
+        ...(session.origin === 'window'
+          ? { status: 'cancelled', allowBooking: false }
+          : session.status === 'full'
+            ? { status: 'open' }
+            : {}),
+      }),
     })
     if (contactId) {
       tx.update(db.collection('contacts').doc(contactId), {
@@ -1248,7 +1284,9 @@ export const cancelBooking = onCall(async (request) => {
   })
 
   const rebookUrl = teamSlug
-    ? `${getHostingUrl()}/public/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`
+    ? isAppointment
+      ? `${getHostingUrl()}/public/${teamSlug}/appointments`
+      : `${getHostingUrl()}/public/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`
     : null
 
   const sessionEnd = (session.end as Timestamp).toDate()

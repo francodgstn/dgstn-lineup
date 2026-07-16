@@ -344,7 +344,7 @@ export interface BookingSettings {
   showFitnessAppField?: boolean
   ctaUrl?: string | null
   ctaLabel?: string | null
-  coachingEnabled?: boolean
+  appointmentsEnabled?: boolean
 }
 
 /** A coach as exposed on the world-readable team public_profile (opt-in). */

@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
-import { CoachSlotWithStatus, Contact } from '../../types';
+import { AppointmentWithStatus, Contact } from '../../types';
 import { FirestoreService } from '../../services/firestore';
 
 interface Props {
-  slots: CoachSlotWithStatus[];
+  slots: AppointmentWithStatus[];
   contact?: Contact | null;
   onRefresh?: () => void;
   open?: boolean;
@@ -13,10 +13,10 @@ interface Props {
 
 const CARD_WIDTH = 108;
 
-export const CoachSlotsCarousel: React.FC<Props> = ({ slots, contact, onRefresh, open }) => {
+export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefresh, open }) => {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<CoachSlotWithStatus | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<AppointmentWithStatus | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -51,7 +51,7 @@ export const CoachSlotsCarousel: React.FC<Props> = ({ slots, contact, onRefresh,
     if (!selectedSlot || !contact?.id || !contact?.teamId) return;
     setLoading(true);
     try {
-      await FirestoreService.bookCoachSlot({ teamId: contact.teamId!, slotId: selectedSlot.id, contactId: contact.id });
+      await FirestoreService.bookAppointment({ teamId: contact.teamId!, slotId: selectedSlot.id, contactId: contact.id });
       closeModal();
       Alert.alert('Confirmed', 'Your appointment has been booked!');
       onRefresh?.();
@@ -66,7 +66,7 @@ export const CoachSlotsCarousel: React.FC<Props> = ({ slots, contact, onRefresh,
     if (!selectedSlot || !contact?.id) return;
     setLoading(true);
     try {
-      await FirestoreService.cancelCoachBooking({ slotId: selectedSlot.id, contactId: contact.id });
+      await FirestoreService.cancelAppointment({ slotId: selectedSlot.id, contactId: contact.id });
       closeModal();
       Alert.alert('Cancelled', 'Your booking has been cancelled.');
       onRefresh?.();
@@ -80,7 +80,7 @@ export const CoachSlotsCarousel: React.FC<Props> = ({ slots, contact, onRefresh,
   const availableCount = slots.filter(s => s.bookingStatus === 'available').length;
   const bookedCount = slots.filter(s => s.bookingStatus === 'booked').length;
 
-  const renderCard = ({ item: slot }: { item: CoachSlotWithStatus }) => {
+  const renderCard = ({ item: slot }: { item: AppointmentWithStatus }) => {
     const slotIsBooked = slot.bookingStatus === 'booked';
     const isFull = slot.bookingStatus === 'full';
     const isCancelled = slot.bookingStatus === 'cancelled';
@@ -162,7 +162,7 @@ export const CoachSlotsCarousel: React.FC<Props> = ({ slots, contact, onRefresh,
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <Text variant="titleSmall" style={{ color: theme.colors.onPrimaryContainer, fontWeight: '800' }}>
-              Book a coaching session
+              Book an appointment
             </Text>
             <Text variant="bodySmall" style={{ color: theme.colors.primary, opacity: 0.85, lineHeight: 16 }}>
               {subtitle}

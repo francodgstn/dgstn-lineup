@@ -355,7 +355,7 @@ function ScheduleFields({ s, onChange }: { s: ScheduleSection; onChange: (p: Pat
       </div>
       <Field label="Default view">
         {/* Visitors can still switch List ↔ Calendar on the live site; this sets the default. */}
-        <Select value={s.displayMode ?? 'list'} onValueChange={(v) => onChange({ displayMode: v as ScheduleSection['displayMode'] })}>
+        <Select value={s.displayMode ?? 'calendar'} onValueChange={(v) => onChange({ displayMode: v as ScheduleSection['displayMode'] })}>
           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="list">List</SelectItem>

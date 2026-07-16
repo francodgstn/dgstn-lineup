@@ -27,8 +27,8 @@
  *                  · Titan Striking Lab        — 18 contacts (owned by 2nd coach)
  *
  *   Per team (where the plan allows the feature):
- *   - activities (group classes + 1 coaching) + public_profile
- *   - coach_availability template + generated coaching sessions (open/full mix)
+ *   - activities (group classes + 1 appointment) + public_profile
+ *   - availability template + generated appointment sessions (open/full mix)
  *   - subscription types (2-6 per team, internal + aggregator)
  *   - sessions: 4 past weeks + 4 upcoming weeks, with attendance + bookings
  *   - contacts with: identity, membership status, subscription, rank, notes,
@@ -933,7 +933,7 @@ async function seedTeam(opts: TeamSeed) {
     await parent.collection(AFFILIATION_TYPES_SUBCOLLECTION).doc(at.id).set(at)
   }
 
-  // ── activities (group classes + coaching) ─────────────────────────────────────
+  // ── activities (group classes + appointments) ─────────────────────────────────────
   const activities = [
     {
       id: `${teamId}-act-bjj`,
@@ -942,7 +942,7 @@ async function seedTeam(opts: TeamSeed) {
       color: accentColor,
       level: 'all',
       isFreeTrial: true,
-      type: 'group_class' as const,
+      type: 'class' as const,
       base_score: 12,
       description:
         'Gi grappling from fundamentals to advanced — positions, escapes and submissions.',
@@ -955,7 +955,7 @@ async function seedTeam(opts: TeamSeed) {
       color: '#dc2626',
       level: 'intermediate',
       isFreeTrial: false,
-      type: 'group_class' as const,
+      type: 'class' as const,
       base_score: 15,
       description: 'Striking-to-grappling transitions and cage craft for experienced athletes.',
       // Showcases the activity↔subscription link (see seed-emulator.ts).
@@ -974,7 +974,7 @@ async function seedTeam(opts: TeamSeed) {
       color: '#ea580c',
       level: 'all',
       isFreeTrial: true,
-      type: 'group_class' as const,
+      type: 'class' as const,
       base_score: 10,
       description: 'Pad work, combinations and conditioning — a serious workout for every level.',
       accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
@@ -986,7 +986,7 @@ async function seedTeam(opts: TeamSeed) {
       color: '#059669',
       level: 'all',
       isFreeTrial: true,
-      type: 'group_class' as const,
+      type: 'class' as const,
       base_score: 8,
       description: 'Recovery-focused mobility and breath work to keep you on the mats.',
       accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
@@ -999,6 +999,7 @@ async function seedTeam(opts: TeamSeed) {
       .set({ ...a, teamId, isActive: true, created_at: ts(daysFromNow(-200)) })
     await db.collection('activities').doc(a.id).collection('public_profile').doc(a.id).set({
       type: 'activity',
+      activityType: 'class',
       teamId,
       name: a.name,
       slug: a.slug,
@@ -1011,20 +1012,20 @@ async function seedTeam(opts: TeamSeed) {
     })
   }
 
-  const coachingActId = `${teamId}-act-coaching`
-  const coachingActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
-  const coachingActDescription =
+  const appointmentActId = `${teamId}-act-appointment`
+  const appointmentActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
+  const appointmentActDescription =
     'One-on-one session tailored to your goals — technique, strategy and conditioning.'
   await db
     .collection('activities')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .set({
       teamId,
-      name: coachingActName,
+      name: appointmentActName,
       slug: '1on1-coaching',
       color: accentColor,
-      description: coachingActDescription,
-      type: 'coaching',
+      description: appointmentActDescription,
+      type: 'appointment',
       coachId: uid,
       coachName: displayName,
       level: 'all',
@@ -1034,32 +1035,34 @@ async function seedTeam(opts: TeamSeed) {
     })
   await db
     .collection('activities')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .collection('public_profile')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .set({
       type: 'activity',
+      // Routes the public booking/site cards to the appointment flow.
+      activityType: 'appointment',
       teamId,
-      name: coachingActName,
+      name: appointmentActName,
       slug: '1on1-coaching',
       color: accentColor,
-      description: coachingActDescription,
+      description: appointmentActDescription,
       image_url: null,
       isFreeTrial: true,
       level: 'all',
     })
 
-  // ── coach availability template + coaching sessions ───────────────────────────
-  const coachingTemplateId = `${teamId}-tpl-coaching`
+  // ── coach availability template + appointment sessions ───────────────────────────
+  const appointmentTemplateId = `${teamId}-tpl-appointment`
   await db
-    .collection('coach_availability')
-    .doc(coachingTemplateId)
+    .collection('availability')
+    .doc(appointmentTemplateId)
     .set({
       teamId,
       coachId: uid,
       coachName: displayName,
-      activityId: coachingActId,
-      title: coachingActName,
+      activityId: appointmentActId,
+      title: appointmentActName,
       description: 'One-on-one coaching session.',
       duration_minutes: 60,
       max_participants: 1,
@@ -1067,12 +1070,12 @@ async function seedTeam(opts: TeamSeed) {
       location: 'Dojo A',
       onlineUrl: null,
       status: 'active',
-      recurrence: { type: 'weekly', days: [1, 3], time: '08:00', timezone: 'Europe/Zurich' },
-      window_days: 30,
+      mode: 'fixed_slots',
+      recurrence: { daysOfWeek: [1, 3], time: '08:00', startDate: ts(daysFromNow(-40)), endDate: null },
       created_at: ts(daysFromNow(-40)),
     })
 
-  const coachingSlotDefs = [
+  const appointmentSlotDefs = [
     { dayOffset: 1, hour: 8, bookings: 0 },
     { dayOffset: 3, hour: 8, bookings: 1 },
     { dayOffset: 8, hour: 8, bookings: 0 },
@@ -1086,12 +1089,12 @@ async function seedTeam(opts: TeamSeed) {
     lastname: CONTACT_POOL[0].lastname,
     email: `${slugEmail(CONTACT_POOL[0])}.${teamId}@example.com`,
   }
-  for (let i = 0; i < coachingSlotDefs.length; i++) {
-    const slotDef = coachingSlotDefs[i]
+  for (let i = 0; i < appointmentSlotDefs.length; i++) {
+    const slotDef = appointmentSlotDefs[i]
     const base = daysFromNow(slotDef.dayOffset)
     base.setHours(slotDef.hour, 0, 0, 0)
     const end = hoursOffset(base, 1)
-    const sid = `${teamId}-coaching-session-${i}`
+    const sid = `${teamId}-appointment-session-${i}`
     const isFull = slotDef.bookings >= 1
     const status = isFull ? 'full' : 'open'
 
@@ -1100,10 +1103,10 @@ async function seedTeam(opts: TeamSeed) {
       .doc(sid)
       .set({
         teamId,
-        activityType: 'coaching',
-        activityId: coachingActId,
-        activityName: coachingActName,
-        templateId: coachingTemplateId,
+        activityType: 'appointment',
+        activityId: appointmentActId,
+        activityName: appointmentActName,
+        templateId: appointmentTemplateId,
         coachId: uid,
         coachName: displayName,
         isFreeTrial: true,
@@ -1124,13 +1127,13 @@ async function seedTeam(opts: TeamSeed) {
       .collection('public_profile')
       .doc(sid)
       .set({
-        type: 'coaching_session',
+        type: 'appointment_session',
         teamId,
-        activityType: 'coaching',
-        activityName: coachingActName,
+        activityType: 'appointment',
+        activityName: appointmentActName,
         coachId: uid,
         coachName: displayName,
-        templateId: coachingTemplateId,
+        templateId: appointmentTemplateId,
         start: ts(base),
         end: ts(end),
         duration_minutes: 60,
@@ -1155,9 +1158,10 @@ async function seedTeam(opts: TeamSeed) {
           email: bookedContact.email,
           firstname: bookedContact.firstname,
           lastname: bookedContact.lastname,
+          fullname: `${bookedContact.firstname} ${bookedContact.lastname}`,
           status: 'confirmed',
           joinedAt: ts(daysFromNow(-2)),
-          booking_token: `tok-coaching-${teamId}-${i}`,
+          booking_token: `tok-appointment-${teamId}-${i}`,
           is_new_contact: false,
         })
     }

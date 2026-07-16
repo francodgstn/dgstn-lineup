@@ -13,7 +13,7 @@ export const RESERVED_SLUGS: readonly string[] = [
   'membership-signup',
   'trial-booking',
   'contact-update',
-  'coaching',
+  'appointments',
   'manage-booking',
   'space',
   'site',

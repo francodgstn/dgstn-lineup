@@ -53,6 +53,7 @@ import {
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import type { SiteDraft, SiteMeta, WebsiteSection, WebsiteSectionType } from '@linyup/shared'
 import WebsiteRenderer, { type RenderableSite } from '@/components/site/WebsiteRenderer'
+import { sectionNavLabel } from '@/components/site/sections'
 import { SectionEditor } from '@/plugins/website/SectionEditor'
 import { useSiteDraft, saveSiteDraft, publishSite, unpublishSite } from '@/plugins/website/hooks'
 import { EmbedWidgets } from '@/plugins/website/EmbedWidgets'
@@ -582,13 +583,30 @@ export default function WebsiteBuilderPage() {
                                 onChange={(patch) => updateSection(s.id, patch)}
                               />
                               {s.type !== 'hero' && (
-                                <label className="flex items-center justify-between rounded-lg border p-3">
-                                  <span className="text-sm">{t('showInMenu')}</span>
-                                  <Switch
-                                    checked={s.showInNav !== false}
-                                    onCheckedChange={(v) => updateSection(s.id, { showInNav: v })}
-                                  />
-                                </label>
+                                <>
+                                  <label className="flex items-center justify-between rounded-lg border p-3">
+                                    <span className="text-sm">{t('showInMenu')}</span>
+                                    <Switch
+                                      checked={s.showInNav !== false}
+                                      onCheckedChange={(v) => updateSection(s.id, { showInNav: v })}
+                                    />
+                                  </label>
+                                  {s.showInNav !== false && (
+                                    <div className="space-y-1.5">
+                                      <Label className="text-sm">{t('menuLabel')}</Label>
+                                      <Input
+                                        value={s.menuLabel ?? ''}
+                                        onChange={(e) =>
+                                          updateSection(s.id, { menuLabel: e.target.value || undefined })
+                                        }
+                                        placeholder={sectionNavLabel(s)}
+                                        maxLength={120}
+                                        className="h-9"
+                                      />
+                                      <p className="text-xs text-muted-foreground">{t('menuLabelHint')}</p>
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </div>
                           )}

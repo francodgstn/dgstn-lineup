@@ -118,7 +118,7 @@
     "documents": "Documenti",
     "events": "Eventi",
     "bookings": "Prenotazioni",
-    "coaching": "Coaching",
+    "appointments": "Appuntamenti",
     "gamification": "Gamification",
     "automations": "Automazioni",
     "managers": "Team",
@@ -799,8 +799,8 @@
     "fieldEnd": "Fine",
     "fieldNotes": "Note",
     "fieldType": "Tipo",
-    "type_group_class": "Lezione collettiva",
-    "type_coaching": "Coaching",
+    "type_class": "Corso",
+    "type_appointment": "Appuntamento",
     "typeAutoSet": "Impostato automaticamente dall'attività — puoi modificarlo se necessario.",
     "fieldAllowBooking": "Consenti prenotazione online",
     "locationPlaceholder": "Palestra, dojo…",
@@ -812,7 +812,7 @@
     "emptyUpcoming": "Nessuna sessione in arrivo.",
     "emptyPast": "Nessuna sessione passata.",
     "fieldDuration": "Durata",
-    "fieldInstructor": "Istruttore",
+    "fieldInstructor": "Coach",
     "instructorPlaceholder": "Nome (opzionale)",
     "fieldRepeat": "Ripeti questa sessione",
     "repeatFrequency": "Ripete",
@@ -855,13 +855,18 @@
     "updatingSeries": "Aggiornamento sessioni…",
     "seriesUpdated": "{count, plural, one {# sessione aggiornata} other {# sessioni aggiornate}}",
     "deleting": "Eliminazione…",
-    "instructorNone": "Nessun istruttore",
+    "instructorNone": "Nessun coach",
     "fieldMaxParticipants": "Partecipanti max.",
     "maxParticipantsPlaceholder": "Nessun limite",
     "optional": "facoltativo",
     "fieldBookingMandatory": "Prenotazione obbligatoria",
     "bookingMandatoryHint": "I partecipanti devono prenotare in anticipo — nessun accesso spontaneo.",
-    "bookingRequiredChip": "Prenotazione obbligatoria"
+    "bookingRequiredChip": "Prenotazione obbligatoria",
+    "sectionBasics": "Informazioni",
+    "sectionSchedule": "Orario",
+    "sectionLocation": "Luogo",
+    "sectionBooking": "Capacità e prenotazione",
+    "durationMinutes": "min"
   },
   "Calendar": {
     "title": "Programma",
@@ -875,6 +880,8 @@
     "tabPast": "Passato",
     "filterAll": "Tutti",
     "filterSessions": "Sessioni",
+    "filterClasses": "Corsi",
+    "filterAppointments": "Appuntamenti",
     "filterEvents": "Eventi",
     "filterActivity": "Tutte le attività",
     "emptyUpcoming": "Niente in programma.",
@@ -905,9 +912,10 @@
     "peekDelete": "Elimina",
     "monthSummary": "Panoramica del mese",
     "monthGroupClasses": "Lezioni collettive",
-    "monthCoaching": "Sessioni di coaching",
+    "monthCoaching": "Appuntamenti",
     "monthEvents": "Eventi",
-    "openDetail": "Apri i dettagli"
+    "openDetail": "Apri i dettagli",
+    "manageAppointments": "Disponibilità appuntamenti"
   },
   "Events": {
     "title": "Eventi",
@@ -1128,8 +1136,8 @@
     "fieldColor": "Colore",
     "fieldImage": "Immagine di copertina",
     "fieldType": "Tipo",
-    "type_group_class": "Lezione collettiva",
-    "type_coaching": "Coaching",
+    "type_class": "Corso",
+    "type_appointment": "Appuntamento",
     "typeChangeWarning": "Le sessioni future verranno aggiornate automaticamente. Le sessioni passate rimangono invariate per preservare la cronologia.",
     "fieldFreeTrial": "Disponibile come prenotazione di prova",
     "level_all": "Tutti i livelli",
@@ -1570,8 +1578,8 @@
     "saving": "Salvataggio…",
     "saved": "Salvato"
   },
-  "Coaching": {
-    "title": "Coaching",
+  "Appointments": {
+    "title": "Appuntamenti",
     "subtitle": "Gestisci le disponibilità e gli appuntamenti individuali",
     "tabSlots": "Slot imminenti",
     "tabTemplates": "Disponibilità",
@@ -1617,10 +1625,23 @@
     "fieldStartDate": "Data di inizio",
     "fieldEndDate": "Data di fine (opzionale)",
     "tabSchedules": "Programmi",
-    "fieldFreeTrial": "Aperto a tutti (prova gratuita / pubblico)"
+    "fieldFreeTrial": "Aperto a tutti (prova gratuita / pubblico)",
+    "fieldMode": "Tipo di disponibilità",
+    "modeFixedSlots": "Slot fissi",
+    "modeFixedSlotsHint": "Orari fissi ricorrenti",
+    "modeOpenWindow": "Finestra aperta",
+    "modeOpenWindowHint": "Il cliente sceglie in una fascia",
+    "fieldWindowStart": "Inizio finestra",
+    "fieldWindowEnd": "Fine finestra",
+    "fieldDurations": "Durate sessione",
+    "fieldGranularity": "Intervallo",
+    "fieldBuffer": "Margine (min)",
+    "membersOnly": "Solo membri",
+    "manageAvailabilityTitle": "Disponibilità appuntamenti",
+    "manageAvailabilityHint": "Modelli ricorrenti che generano i tuoi slot 1:1 prenotabili."
   },
-  "CoachingBioLink": {
-    "title": "Prenota una sessione",
+  "AppointmentBooking": {
+    "title": "Prenota un appuntamento",
     "subtitle": "Scegli un orario che ti conviene",
     "teamNotFound": "Questa pagina non è disponibile",
     "noSlots": "Nessuna sessione disponibile",
@@ -1641,9 +1662,35 @@
     "confirmedMessage": "Un'email di conferma con invito al calendario è stata inviata a {email}.",
     "errorAlreadyBooked": "Questa email è già prenotata per questo slot.",
     "errorSlotUnavailable": "Questo slot non è più disponibile.",
-    "errorGeneric": "Qualcosa è andato storto. Riprova."
+    "errorGeneric": "Qualcosa è andato storto. Riprova.",
+    "viewList": "Elenco",
+    "viewCalendar": "Calendario",
+    "allCoaches": "Tutti i coach",
+    "membersOnly": "Solo membri",
+    "membersVerifyPrompt": "Questo slot è riservato ai membri registrati. Inserisci la tua email per verificare.",
+    "sendCode": "Invia codice di verifica",
+    "sending": "Invio…",
+    "codeSentTo": "Abbiamo inviato un codice di 6 cifre a {email}",
+    "fieldCode": "Codice di verifica",
+    "resendIn": "Rinvia tra {seconds}s",
+    "resend": "Non ricevuto? Rinvia",
+    "back": "Indietro",
+    "verifying": "Verifica…",
+    "confirmBooking": "Conferma prenotazione",
+    "membersNoAccount": "Nessun account registrato per questa email. Contatta il tuo coach per iscriverti.",
+    "errorSendCode": "Invio del codice non riuscito. Riprova.",
+    "errorNoAccount": "Impossibile identificare il tuo account. Riprova.",
+    "membersOnlyError": "Solo membri. Contatta il tuo coach.",
+    "errorIncorrectCode": "Codice errato. Riprova.",
+    "errorResendCode": "Rinvio del codice non riuscito.",
+    "windowSectionTitle": "Scegli il tuo orario",
+    "fixedSectionTitle": "Sessioni in programma",
+    "pickDay": "Scegli un giorno",
+    "pickDuration": "Scegli una durata",
+    "pickTime": "Scegli un orario",
+    "noTimesThisDay": "Nessun orario disponibile in questo giorno."
   },
-  "CoachingCancel": {
+  "AppointmentCancel": {
     "title": "Annulla appuntamento",
     "message": "Vuoi davvero annullare questo appuntamento?",
     "confirm": "Sì, annulla",
@@ -1712,7 +1759,7 @@
     "rowSessions": "Sessioni",
     "rowBookings": "Prenotazioni",
     "rowBioLink": "Bio link",
-    "rowCoaching": "Coaching 1:1 e appuntamenti",
+    "rowAppointments": "Appuntamenti 1:1",
     "rowCheckins": "Check-in",
     "rowMemberships": "Abbonamenti",
     "rowPayments": "Pagamenti",
@@ -2172,6 +2219,8 @@
     "embedScriptNote": "La riga <script> va aggiunta una sola volta per pagina, anche con più incorporazioni.",
     "addSection": "Aggiungi sezione",
     "showInMenu": "Mostra nel menu di navigazione",
+    "menuLabel": "Etichetta del menu",
+    "menuLabelHint": "Mostrata nel menu di navigazione. Lascia vuoto per usare il titolo della sezione.",
     "toggleVisible": "Mostra / nascondi sul sito",
     "saveDraft": "Salva bozza",
     "saving": "Salvataggio…",
@@ -2236,6 +2285,8 @@
     "featureCheckinQrHint": "Mostra il codice QR di check-in del tuo team, così i membri possono fare il check-in con lo smartphone.",
     "featureWalkIn": "Iscrizione al volo",
     "featureWalkInHint": "Lascia che i nuovi arrivati si iscrivano direttamente dal kiosk.",
+    "walkInCoachingLabel": "Includi gli slot di coaching 1:1",
+    "walkInCoachingHint": "Offri gli slot di coaching liberi per prenotazioni last minute. Off = il coaching si prenota solo in anticipo.",
     "featureStandby": "Presentazione standby",
     "featureStandbyHint": "Mostra foto o video in loop dopo un periodo di inattività del kiosk.",
     "scheduleViewLabel": "Vista del programma",
@@ -2471,8 +2522,8 @@
       "welcomeBody": "Ecco un breve tour delle funzioni essenziali. Puoi rivederlo quando vuoi dal menu account.",
       "themeLangTitle": "Rendilo tuo",
       "themeLangBody": "Apri il menu account per cambiare lingua o passare tra modalità chiara e scura.",
-      "scheduleTitle": "Programma",
-      "scheduleBody": "La tua base — pianifica lezioni e sessioni individuali e vedi le prenotazioni in elenco o nel calendario. Nessuna attività ancora? Ti verrà chiesto di crearne una prima.",
+      "featuresTitle": "Le tue aree di lavoro",
+      "featuresBody": "Qui trovi tutto il lavoro quotidiano — calendario, contatti, pagamenti, oltre a ciò che vendi e come cresci. Apri una sezione per vedere le sue pagine.",
       "shortcutsTitle": "Scorciatoie",
       "shortcutsBody": "Le pagine che apri compaiono qui. Passa su una riga e clicca la puntina per tenere in alto quelle che usi di più.",
       "searchTitle": "Ricerca rapida",
@@ -3231,6 +3282,7 @@
     "badgeMembersOnly": "Solo per membri",
     "badgeFreeTrial": "Prova gratuita",
     "badgeNoOpenSessions": "Nessuna sessione aperta",
+    "badgeAppointment": "Appuntamento 1:1",
     "prerequisitesLabel": "Prerequisiti:",
     "titleSessionsFallback": "Sessioni",
     "pickDateTimeSubtitle": "Scegli una data e una fascia oraria.",
@@ -3458,8 +3510,8 @@
     "toggleShowActivityDescriptionDesc": "Mostra il testo di descrizione dell'attività nella schermata di selezione attività.",
     "toggleShowFitnessAppLabel": "Mostra campo app fitness",
     "toggleShowFitnessAppDesc": "Chiedi ai nuovi ospiti da quale app fitness provengono (es. Fitpass, ClassPass).",
-    "toggleCoachingEnabledLabel": "Mostra slot di coaching",
-    "toggleCoachingEnabledDesc": "Mostra gli slot di coaching nel flusso di prenotazione pubblico.",
+    "toggleAppointmentsEnabledLabel": "Mostra appuntamenti",
+    "toggleAppointmentsEnabledDesc": "Mostra la prenotazione di appuntamenti nel flusso di prenotazione pubblico.",
     "ctaTitle": "Pulsante CTA (facoltativo)",
     "ctaSubtitle": "Mostrato nella schermata di conferma dopo una prenotazione riuscita.",
     "ctaUrlLabel": "URL del pulsante",
@@ -4352,90 +4404,166 @@
     "backToOverview": "Finanze"
   },
   "HowTo": {
-    "title": "Guide",
-    "comingSoon": "Presto disponibile",
-    "comingSoonBody": "Guide passo passo e tutorial di configurazione sono in arrivo.",
-    "subtitle": "Come si incastra Linyup e come mettere in moto il tuo studio.",
-    "fitTitle": "Come si incastra Linyup",
-    "fitIntro": "Pochi elementi fondamentali muovono tutto in Linyup. Una volta capito come si collegano, il resto viene da sé.",
-    "blocks": {
-      "contacts": {
-        "name": "Contatti",
-        "desc": "Tutte le persone del tuo mondo: potenziali clienti, chi fa la prova e i membri. Le persone attorno a cui ruota tutto il resto."
-      },
+    "title": "Guida",
+    "subtitle": "Come si incastra Linyup, e come avviare il tuo studio.",
+    "conceptsTitle": "Concetti chiave",
+    "conceptsIntro": "Quattro mattoni fanno funzionare tutto Linyup. Tocca un blocco sulla mappa — o una scheda qui sotto — per vedere cosa fa e come si collega.",
+    "diagramAria": "Mappa dei collegamenti tra i concetti chiave di Linyup",
+    "diagramHint": "Scorri la mappa — tocca un blocco per saperne di più.",
+    "termsLabel": "Termini chiave",
+    "seeInApp": "Vedi nell'app",
+    "edges": {
+      "scheduledAs": "pianificate come",
+      "unlocks": "sbloccano",
+      "hold": "hanno",
+      "book": "prenotano",
+      "bringIn": "portano"
+    },
+    "concepts": {
       "activities": {
-        "name": "Attività",
-        "desc": "Ciò che offri: un tipo di corso, una disciplina o un servizio. Il modello da cui vengono pianificate le sessioni."
+        "label": "Attività",
+        "shortLabel": "Attività",
+        "tagline": "Cosa offre il tuo studio",
+        "body": "Le attività sono il catalogo della tua offerta — ogni tipo di corso, disciplina o servizio è un'attività. I corsi di gruppo vengono pianificati a calendario come sessioni; le attività di coaching generano slot individuali prenotabili dalle disponibilità di un coach. Un'attività porta anche la sua regola di accesso: aperta a tutti, solo membri o riservata a specifici abbonamenti.",
+        "terms": [
+          "Corso di gruppo — un'attività pianificata come sessioni prenotabili a calendario",
+          "Coaching — un'attività offerta come slot 1:1 generati dalle disponibilità",
+          "Evento — un formato a parte per gli appuntamenti unici: camp, workshop, esami",
+          "Livello di accesso — chi può prenotare: aperto, membri o abbonamenti specifici"
+        ],
+        "links": {
+          "manage": "Sfoglia le tue attività"
+        }
       },
       "sessions": {
-        "name": "Sessioni",
-        "desc": "Istanze pianificate di un'attività nel calendario: un corso preciso a un orario preciso."
+        "label": "Sessioni",
+        "shortLabel": "Sessioni",
+        "tagline": "Quando le cose accadono davvero",
+        "body": "Una sessione è un'istanza concreta di un'attività a calendario — il corso del martedì alle 19, non il corso in generale. Le sessioni di gruppo nascono dal tuo planning, gli slot di coaching vengono generati dalle disponibilità settimanali di ogni coach e si prenotano con un percorso dedicato, gli eventi coprono gli appuntamenti unici come camp o esami di cintura. Le prenotazioni collegano le persone alle sessioni: un contatto, un posto, un orario.",
+        "terms": [
+          "Sessione — una singola occorrenza pianificata di un'attività",
+          "Modello di disponibilità — lo schema settimanale da cui nascono gli slot di coaching",
+          "Evento — un appuntamento autonomo con la propria iscrizione",
+          "Prenotazione — il posto riservato di un contatto in una sessione"
+        ],
+        "links": {
+          "schedule": "Apri il calendario",
+          "appointments": "Appuntamenti"
+        }
       },
-      "bookings": {
-        "name": "Prenotazioni",
-        "desc": "Un contatto che prenota un posto in una sessione. Il legame tra una persona e un corso."
-      },
-      "plans": {
-        "name": "Piani",
-        "desc": "Abbonamenti ricorrenti che danno ai membri accesso continuo alle prenotazioni."
-      },
-      "surfaces": {
-        "name": "Pagine pubbliche",
-        "desc": "Dove i contatti ti incontrano: bio-link, pagina di prenotazione, shop e il loro spazio personale."
-      },
-      "automations": {
-        "name": "Automazioni",
-        "desc": "Regole che reagiscono a ciò che fanno i contatti: email di benvenuto, follow-up dopo la prova, riattivazione."
-      },
-      "payments": {
-        "name": "Pagamenti",
-        "desc": "Denaro dai membri al tuo studio tramite Stripe: abbonamenti, ingressi singoli e vendite una tantum."
-      }
-    },
-    "journeyTitle": "Il percorso del membro",
-    "journey": {
-      "discover": "Scoprire",
-      "lead": "Contatto",
-      "attend": "Partecipare",
-      "join": "Iscriversi",
-      "retain": "Fidelizzare"
-    },
-    "onboardTitle": "Mettere in moto il tuo studio",
-    "onboardIntro": "Sei all'inizio? Segui questi passaggi in ordine e prenderai prenotazioni già nel pomeriggio.",
-    "steps": {
-      "profile": {
-        "title": "Configura il tuo studio",
-        "desc": "Aggiungi nome, logo e sedi così tutto avrà la tua identità."
-      },
-      "offer": {
-        "title": "Crea le tue attività",
-        "desc": "Aggiungi i tipi di corso, le discipline o i servizi che proponi."
-      },
-      "plans": {
-        "title": "Definisci i tuoi piani",
-        "desc": "Imposta gli abbonamenti e i prezzi a cui i membri possono iscriversi."
-      },
-      "schedule": {
-        "title": "Costruisci il calendario",
-        "desc": "Metti le tue sessioni in calendario, singole o ricorrenti."
-      },
-      "surfaces": {
-        "title": "Apri le pagine pubbliche",
-        "desc": "Attiva la pagina di prenotazione, il bio-link e lo shop così le persone possono trovarti e prenotare."
+      "subscriptions": {
+        "label": "Abbonamenti & affiliazioni",
+        "shortLabel": "Abbonamenti",
+        "tagline": "Accesso continuativo e appartenenza",
+        "body": "Gli abbonamenti sono i piani ricorrenti che i tuoi membri pagano — e fanno più che fatturare: un piano può sbloccare esattamente le attività che copre. Le affiliazioni tracciano l'appartenenza senza denaro: membro attivo, in prova o alumni. Insieme rispondono a due domande diverse su una persona: a cosa può accedere, e come appartiene allo studio.",
+        "terms": [
+          "Piano — un tipo di abbonamento con prezzo e ciclo di fatturazione",
+          "Accesso condizionato — un'attività può richiedere un abbonamento che la copre",
+          "Affiliazione — uno stato di appartenenza indipendente dal pagamento"
+        ],
+        "links": {
+          "plans": "I tuoi piani",
+          "affiliations": "Affiliazioni"
+        }
       },
       "contacts": {
-        "title": "Aggiungi i tuoi contatti",
-        "desc": "Importa o invita i tuoi membri esistenti per portarli a bordo."
-      },
-      "payments": {
-        "title": "Collega i pagamenti",
-        "desc": "Collega Stripe per accettare abbonamenti, ingressi singoli e vendite."
-      },
-      "automate": {
-        "title": "Automatizza i follow-up",
-        "desc": "Attiva le automazioni iniziali così contatti e membri ricevono tue notizie al momento giusto."
+        "label": "Contatti",
+        "shortLabel": "Contatti",
+        "tagline": "Tutte le persone che il tuo studio conosce",
+        "body": "I contatti sono il lato umano di Linyup — lead, persone in prova, membri e alumni vivono in un'unica lista. Tutto il resto si aggancia a un contatto: gli abbonamenti che possiede, il suo stato di affiliazione e le sessioni prenotate. Quando qualcuno prenota o si iscrive da una delle tue pagine pubbliche, il contatto viene creato o abbinato automaticamente.",
+        "terms": [
+          "Contatto — la scheda di una persona, dal primo contatto al membro di lunga data",
+          "Titolare di abbonamento — un contatto con un piano attivo",
+          "Stato di affiliazione — come un contatto appartiene (membro, prova, alumni)"
+        ],
+        "links": {
+          "open": "Apri i contatti"
+        }
       }
     },
-    "moreSoon": "Altre guide sono in arrivo."
+    "publicPages": {
+      "title": "Pagine pubbliche",
+      "intro": "Le pagine pubbliche sono le superfici visibili senza login — è da lì che arrivano i tuoi nuovi contatti e prenotazioni. Ognuna è opzionale e si attiva quando serve: esponi solo ciò che il tuo studio usa.",
+      "openLink": "Apri nell'app",
+      "surfaces": {
+        "bioLink": {
+          "name": "Bio-link",
+          "desc": "La tua pagina « link in bio » — un URL breve che raccoglie link di prenotazione, social e azioni principali. La cosa più semplice da condividere su Instagram o in bio."
+        },
+        "website": {
+          "name": "Sito web",
+          "desc": "Un sito dello studio più completo, costruito a blocchi — hero, calendario, prezzi, galleria e altro — al tuo indirizzo pubblico. Attivalo quando un bio-link non basta."
+        },
+        "booking": {
+          "name": "Pagina di prenotazione",
+          "desc": "Il calendario pubblico da cui chiunque può prenotare. Il visitatore sceglie corso e orario, inserisce i dati, e contatto più prenotazione compaiono automaticamente."
+        },
+        "shop": {
+          "name": "Shop",
+          "desc": "Una vetrina che raccoglie ciò che vendi — abbonamenti, prodotti e corsi — per acquistare senza scambi. Compare appena hai qualcosa da vendere."
+        },
+        "space": {
+          "name": "Spazio membri",
+          "desc": "L'area riservata dei tuoi membri: abbonamento, prenotazioni, profilo e i corsi che possono aprire. Il loro punto di riferimento tra una visita e l'altra."
+        },
+        "appointments": {
+          "name": "Appuntamenti",
+          "desc": "Il selettore di slot per coach per le sessioni individuali, generato dalle disponibilità di ogni coach. Separato dalla pagina di prenotazione dei corsi per prenotazioni pulite."
+        },
+        "kiosk": {
+          "name": "Kiosk",
+          "desc": "Uno schermo fisso ed essenziale per un tablet all'ingresso: calendario del giorno, QR di check-in e iscrizione in loco. Ciò che vedono membri e visitatori alla porta."
+        }
+      }
+    },
+    "faqTitle": "Le domande che tutti fanno all'inizio",
+    "faqIntro": "Ecco Alex, che gestisce una piccola palestra di arti marziali. Sei domande tipiche dei primi giorni, raccontate come succedono ad Alex.",
+    "faq": {
+      "q1": {
+        "q": "Posso permettere di prenotare solo certi corsi?",
+        "a": "Alex vende un piano Principianti che deve coprire esattamente due tipi di corso. In Linyup è una regola di accesso sull'attività, non sulla persona: Alex imposta le due attività per principianti perché richiedano un abbonamento che le copre, e lascia l'allenamento libero aperto a tutti. Chi ha il piano Principianti può prenotare quei due corsi — tutto il resto rifiuta gentilmente."
+      },
+      "q2": {
+        "q": "Che differenza c'è tra un'attività e una sessione?",
+        "a": "Alex crea 'Judo Fondamentali' una sola volta — quella è l'attività, il modello. Il calendario contiene poi tante sessioni: lunedì 18, mercoledì 19, settimana dopo settimana. Quando Alex cambia descrizione o regola di accesso dell'attività, tutte le sessioni future la seguono; annullare un lunedì di pioggia tocca solo quella singola sessione."
+      },
+      "q3": {
+        "q": "Come finiscono nei miei contatti i visitatori di prova?",
+        "a": "Alex condivide il bio-link della palestra su Instagram. Un visitatore lo tocca, sceglie la sessione di prova di giovedì sulla pagina di prenotazione e inserisce il suo nome — Linyup crea contatto e prenotazione in un colpo solo. La mattina dopo Alex lo trova nei contatti, segnato come nuovo lead, con la prenotazione di prova già collegata."
+      },
+      "q4": {
+        "q": "Ogni membro deve avere un abbonamento a pagamento?",
+        "a": "Nella palestra di Alex ci sono adulti paganti, bambini fatturati su carta e un cofondatore in pensione che si allena gratis a vita. Solo gli adulti hanno abbonamenti in Linyup. Gli altri ricevono comunque un'affiliazione — membro — così appartengono, compaiono nelle liste giuste e possono prenotare i corsi riservati ai membri, senza alcuna fatturazione."
+      },
+      "q5": {
+        "q": "In cosa il coaching è diverso dai corsi di gruppo?",
+        "a": "La head coach di Alex offre lezioni tecniche private. Invece di mettere gli slot a mano sul calendario, Alex crea un'attività di coaching e la coach definisce un modello di disponibilità settimanale. Linyup ne genera slot prenotabili, e i clienti scelgono l'orario dalla pagina di coaching — il calendario di gruppo resta intatto."
+      },
+      "q6": {
+        "q": "E se voglio solo alcune pagine pubbliche?",
+        "a": "Alex vuole un bio-link e una pagina di prenotazione, ma ancora nessuno shop. Le superfici pubbliche sono plugin: Alex attiva le due che contano e lascia spento il resto. Mesi dopo, all'arrivo del primo merchandising, attivare il plugin shop lo aggiunge e basta — le pagine esistenti non cambiano."
+      }
+    },
+    "utilitiesTitle": "Per continuare",
+    "utilities": {
+      "tour": {
+        "title": "Rivedi il tour guidato",
+        "body": "Ripercorri le aree principali dell'app, passo dopo passo.",
+        "action": "Avvia il tour"
+      },
+      "checklist": {
+        "title": "Checklist di configurazione",
+        "body": "L'avanzamento della configurazione del tuo studio, letto dai tuoi dati reali.",
+        "allDone": "Tutto pronto — il tuo studio è operativo."
+      },
+      "tips": {
+        "title": "Suggerimenti & trucchi"
+      },
+      "plugins": {
+        "title": "Esplora i plugin",
+        "body": "Superfici e funzioni opzionali — attiva solo ciò che il tuo studio usa.",
+        "action": "Sfoglia i plugin"
+      }
+    }
   }
 }

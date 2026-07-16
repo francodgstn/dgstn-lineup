@@ -10,7 +10,7 @@ import { useSpaceTheme } from './space/useSpaceTheme'
 import SignInDialog from './space/SignInDialog'
 
 // Shared sign-in control for public surfaces that lack their own auth chrome
-// (bio-link, booking, signup, documents, shop, coaching …). Space has its own
+// (bio-link, booking, signup, documents, shop, appointments …). Space has its own
 // header control and the full website (/site) has its own design, so both opt out.
 // The entrance-tablet kiosk (/kiosk) is a fixed, low-chrome surface with no contact
 // auth at all (it uses a separate device-pairing session — see kiosk/KioskLock.tsx),

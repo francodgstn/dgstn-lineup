@@ -19,7 +19,7 @@ import {
   COURSES_COLLECTION,
   FORMS_COLLECTION,
   DOCUMENTS_COLLECTION,
-  COACH_AVAILABILITY_COLLECTION,
+  AVAILABILITY_COLLECTION,
   REFERRAL_CODES_COLLECTION,
   REFERRALS_COLLECTION,
   CONNECT_ACCOUNTS_COLLECTION,
@@ -94,7 +94,7 @@ export const TENANT_DATA_COLLECTIONS: TenantCollection[] = [
   { collection: COURSES_COLLECTION, match: { by: 'field', field: 'teamId' } },
   { collection: FORMS_COLLECTION, match: { by: 'field', field: 'teamId' } },
   { collection: DOCUMENTS_COLLECTION, match: { by: 'field', field: 'teamId' } },
-  { collection: COACH_AVAILABILITY_COLLECTION, match: { by: 'field', field: 'teamId' } },
+  { collection: AVAILABILITY_COLLECTION, match: { by: 'field', field: 'teamId' } },
   // referrals key the team via `team_id`; referral_codes via `teamId`.
   { collection: REFERRALS_COLLECTION, match: { by: 'field', field: 'team_id' } },
   { collection: REFERRAL_CODES_COLLECTION, match: { by: 'field', field: 'teamId' } },
@@ -147,8 +147,8 @@ export const PLATFORM_COLLECTIONS: string[] = [
 ]
 
 /**
- * Defined-but-retired top-level collections. `coach_slots` was removed — coaching
- * sessions now live in `sessions` (activityType === 'coaching'). Listed so the
+ * Defined-but-retired top-level collections. `coach_slots` was removed —
+ * appointment sessions now live in `sessions` (activityType === 'appointment'). Listed so the
  * completeness test stays green without misclassifying dead data as live.
  */
 export const RETIRED_TOP_LEVEL_COLLECTIONS: string[] = [COACH_SLOTS_COLLECTION]

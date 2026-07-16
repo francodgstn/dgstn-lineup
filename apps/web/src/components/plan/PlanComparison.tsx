@@ -52,7 +52,7 @@ const GROUPS: { heading: string; rows: CmpRow[] }[] = [
       { label: 'rowSessions', values: [true, true, true, true] },
       { label: 'rowBookings', values: [true, true, true, true] },
       { label: 'rowBioLink', values: [true, true, true, true] },
-      { label: 'rowCoaching', values: [true, true, true, true] },
+      { label: 'rowAppointments', values: [true, true, true, true] },
       { label: 'rowCheckins', values: [true, true, true, true] },
       { label: 'rowMemberships', values: [true, true, true, true] },
       { label: 'rowPayments', values: [true, true, true, true] },

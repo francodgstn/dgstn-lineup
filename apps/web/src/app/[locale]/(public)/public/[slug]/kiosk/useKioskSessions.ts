@@ -23,12 +23,17 @@ import { db } from '@/lib/firebase'
 
 export interface KioskSession {
   id: string
+  /** Public-mirror kind: 'session' (group class) or 'appointment_session'. */
+  type?: string
   activityId?: string
   activityName?: string
   activityColor?: string
   start: Timestamp
   end: Timestamp
   location?: string
+  coachName?: string
+  /** Appointment slots only: 'open' | 'full' | 'cancelled' — walk-in offers open ones. */
+  status?: string
 }
 
 const REFRESH_MS = 5 * 60 * 1000 // 5 minutes — plenty fresh for a wall display
@@ -43,10 +48,12 @@ export function useKioskSessions(teamId: string) {
     function load() {
       const startOfToday = new Date()
       startOfToday.setHours(0, 0, 0, 0)
+      // Group classes AND appointment slots — the front desk sees private lessons
+      // too. `in` runs on the same (teamId,type,allowBooking,start) index.
       const q = query(
         collectionGroup(db, 'public_profile'),
         where('teamId', '==', teamId),
-        where('type', '==', 'session'),
+        where('type', 'in', ['session', 'appointment_session']),
         where('allowBooking', '==', true),
         where('start', '>=', Timestamp.fromDate(startOfToday)),
         orderBy('start', 'asc'),

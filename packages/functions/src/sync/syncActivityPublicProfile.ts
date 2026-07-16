@@ -18,6 +18,9 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
   const publicProfile = {
     type: 'activity',
     teamId: data.teamId,
+    // Session category ('class' | 'appointment') so public UIs can route
+    // appointment activities to the appointment flow instead of the class slot picker.
+    activityType: data.type === 'appointment' ? 'appointment' : 'class',
     name: data.name || '',
     description: data.description || '',
     slug: data.slug || '',

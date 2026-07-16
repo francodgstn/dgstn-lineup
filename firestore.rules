@@ -957,8 +957,8 @@ service cloud.firestore {
       }
     }
 
-    // Coach Availability Templates (recurring slot patterns defined by managers)
-    match /coach_availability/{templateId} {
+    // Availability Templates (recurring patterns defining a provider's bookable time)
+    match /availability/{templateId} {
       // GET: resource.data is available
       allow get: if isAuthed() && isTeamMember(resource.data.teamId);
       // LIST: resource.data is not reliably available for query rules — use currentTeam
@@ -968,8 +968,8 @@ service cloud.firestore {
       allow delete: if false; // soft delete only
     }
 
-    // Coach Slots collection removed — coaching sessions now live in `sessions`
-    // with activityType === 'coaching'. Public access via sessions/{id}/public_profile.
+    // Coach Slots collection removed — appointment sessions now live in `sessions`
+    // with activityType === 'appointment'. Public access via sessions/{id}/public_profile.
 
     // Session Series (recurring sessions)
     match /session_series/{seriesId} {

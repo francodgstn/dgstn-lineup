@@ -83,8 +83,8 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   if ((sessionData.start as Timestamp).toMillis() < Date.now()) {
     throw new HttpsError('failed-precondition', 'Cannot book sessions in the past')
   }
-  if (sessionData.activityType === 'coaching') {
-    throw new HttpsError('failed-precondition', 'Drop-in is not available for coaching sessions')
+  if (sessionData.activityType === 'appointment') {
+    throw new HttpsError('failed-precondition', 'Drop-in is not available for appointment sessions')
   }
 
   // Resolve the activity → drop-in config + access rule.

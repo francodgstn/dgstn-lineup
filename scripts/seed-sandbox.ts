@@ -500,7 +500,7 @@ interface SectorProfile {
   portalGradient: string // BIO_LINK_GRADIENTS key (apps/web/src/lib/bioLink.ts)
   instructors: string[] // [owner, assistant]
   activities: ActivityDef[] // 4–5 group classes
-  coachingName: string
+  appointmentName: string
   rankingSystem: { id: string; name: string; levels: RankLevel[] } | null
   subscriptions: SubDef[]
   locations: string[]
@@ -539,7 +539,7 @@ const SECTOR_PROFILES: SectorProfile[] = [
     description:
       'BJJ and no-gi grappling for all levels — from your first class to the competition team.',
     portalGradient: 'night',
-    coachingName: 'Private Lesson',
+    appointmentName: 'Private Lesson',
     activities: [
       {
         name: 'BJJ Fundamentals',
@@ -687,7 +687,7 @@ const SECTOR_PROFILES: SectorProfile[] = [
     description:
       'Coached functional fitness — daily WODs, Olympic lifting and engine work for every level.',
     portalGradient: 'royal',
-    coachingName: 'Personal Training',
+    appointmentName: 'Personal Training',
     activities: [
       {
         name: 'WOD',
@@ -844,7 +844,7 @@ const SECTOR_PROFILES: SectorProfile[] = [
     description:
       'Group clinics, junior pathways and competitive match play across our three courts.',
     portalGradient: 'forest',
-    coachingName: 'Private Coaching',
+    appointmentName: 'Private Coaching',
     activities: [
       {
         name: 'Group Clinic',
@@ -995,7 +995,7 @@ const SECTOR_PROFILES: SectorProfile[] = [
     description:
       'A calm space for vinyasa, yin and meditation — every body, every level, every day.',
     portalGradient: 'sunset',
-    coachingName: 'Private Session',
+    appointmentName: 'Private Session',
     activities: [
       {
         name: 'Vinyasa Flow',
@@ -1143,7 +1143,7 @@ const SECTOR_PROFILES: SectorProfile[] = [
     description:
       'Reformer and mat pilates in small, focused groups — strength, posture and control.',
     portalGradient: 'ocean',
-    coachingName: 'Private Reformer',
+    appointmentName: 'Private Reformer',
     activities: [
       {
         name: 'Reformer Flow',
@@ -1299,7 +1299,7 @@ const SECTOR_PROFILES: SectorProfile[] = [
     description:
       'Ballet, contemporary and hip-hop for kids and adults — from first steps to the showcase stage.',
     portalGradient: 'warm',
-    coachingName: 'Private Lesson',
+    appointmentName: 'Private Lesson',
     activities: [
       {
         name: 'Ballet',
@@ -1453,7 +1453,7 @@ async function seedDemoTeam(profile: SectorProfile) {
     portalGradient,
     instructors,
     activities,
-    coachingName,
+    appointmentName,
     rankingSystem,
     subscriptions,
     locations,
@@ -1707,7 +1707,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       .set(at)
   }
 
-  // ── activities (group classes + coaching) ─────────────────────────────────
+  // ── activities (classes + appointments) ─────────────────────────────────
   const actIds = activities.map((_, i) => `${teamId}-act-${i}`)
   for (let i = 0; i < activities.length; i++) {
     const a = activities[i]
@@ -1723,7 +1723,7 @@ async function seedDemoTeam(profile: SectorProfile) {
         description: a.description,
         isFreeTrial: a.isFreeTrial,
         base_score: a.base_score,
-        type: 'group_class',
+        type: 'class',
         isActive: true,
         created_at: ts(daysFromNow(-200)),
       })
@@ -1734,6 +1734,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       .doc(actIds[i])
       .set({
         type: 'activity',
+        activityType: 'class',
         teamId,
         name: a.name,
         slug: a.slug,
@@ -1745,16 +1746,16 @@ async function seedDemoTeam(profile: SectorProfile) {
       })
   }
 
-  const coachingActId = `${teamId}-act-coaching`
+  const appointmentActId = `${teamId}-act-appointment`
   await db
     .collection('activities')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .set({
       teamId,
-      name: coachingName,
+      name: appointmentName,
       slug: 'private-coaching',
       color: accentColor,
-      type: 'coaching',
+      type: 'appointment',
       coachId: uid,
       coachName: ownerName,
       level: 'all',
@@ -1764,13 +1765,15 @@ async function seedDemoTeam(profile: SectorProfile) {
     })
   await db
     .collection('activities')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .collection('public_profile')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .set({
       type: 'activity',
+      // Routes the public booking/site cards to the appointment flow.
+      activityType: 'appointment',
       teamId,
-      name: coachingName,
+      name: appointmentName,
       slug: 'private-coaching',
       color: accentColor,
       image_url: null,
@@ -1778,30 +1781,30 @@ async function seedDemoTeam(profile: SectorProfile) {
       level: 'all',
     })
 
-  // ── coach availability template + coaching sessions ───────────────────────
-  const coachingTemplateId = `${teamId}-tpl-coaching`
+  // ── availability template + appointment sessions ───────────────────────
+  const appointmentTemplateId = `${teamId}-tpl-appointment`
   await db
-    .collection('coach_availability')
-    .doc(coachingTemplateId)
+    .collection('availability')
+    .doc(appointmentTemplateId)
     .set({
       teamId,
       coachId: uid,
       coachName: ownerName,
-      activityId: coachingActId,
-      title: coachingName,
-      description: `One-on-one ${coachingName.toLowerCase()}.`,
+      activityId: appointmentActId,
+      title: appointmentName,
+      description: `One-on-one ${appointmentName.toLowerCase()}.`,
       duration_minutes: 60,
       max_participants: 1,
       isFreeTrial: true,
       location: locations[0],
       onlineUrl: null,
       status: 'active',
-      recurrence: { type: 'weekly', days: [1, 3], time: '08:00', timezone: 'Europe/Zurich' },
-      window_days: 30,
+      mode: 'fixed_slots',
+      recurrence: { daysOfWeek: [1, 3], time: '08:00', startDate: ts(daysFromNow(-40)), endDate: null },
       created_at: ts(daysFromNow(-40)),
     })
 
-  const coachingSlotDefs = [
+  const appointmentSlotDefs = [
     { dayOffset: 1, hour: 8, bookings: 0 },
     { dayOffset: 3, hour: 8, bookings: 1 },
     { dayOffset: 8, hour: 8, bookings: 0 },
@@ -1815,12 +1818,12 @@ async function seedDemoTeam(profile: SectorProfile) {
     lastname: CONTACT_POOL[0].lastname,
     email: `${slugEmail(CONTACT_POOL[0])}.${teamId}@example.com`,
   }
-  for (let i = 0; i < coachingSlotDefs.length; i++) {
-    const slotDef = coachingSlotDefs[i]
+  for (let i = 0; i < appointmentSlotDefs.length; i++) {
+    const slotDef = appointmentSlotDefs[i]
     const base = daysFromNow(slotDef.dayOffset)
     base.setHours(slotDef.hour, 0, 0, 0)
     const end = hoursOffset(base, 1)
-    const sid = `${teamId}-coaching-session-${i}`
+    const sid = `${teamId}-appointment-session-${i}`
     const isFull = slotDef.bookings >= 1
     const status = isFull ? 'full' : 'open'
 
@@ -1829,10 +1832,10 @@ async function seedDemoTeam(profile: SectorProfile) {
       .doc(sid)
       .set({
         teamId,
-        activityType: 'coaching',
-        activityId: coachingActId,
-        activityName: coachingName,
-        templateId: coachingTemplateId,
+        activityType: 'appointment',
+        activityId: appointmentActId,
+        activityName: appointmentName,
+        templateId: appointmentTemplateId,
         coachId: uid,
         coachName: ownerName,
         isFreeTrial: true,
@@ -1853,13 +1856,13 @@ async function seedDemoTeam(profile: SectorProfile) {
       .collection('public_profile')
       .doc(sid)
       .set({
-        type: 'coaching_session',
+        type: 'appointment_session',
         teamId,
-        activityType: 'coaching',
-        activityName: coachingName,
+        activityType: 'appointment',
+        activityName: appointmentName,
         coachId: uid,
         coachName: ownerName,
-        templateId: coachingTemplateId,
+        templateId: appointmentTemplateId,
         start: ts(base),
         end: ts(end),
         duration_minutes: 60,
@@ -1884,9 +1887,10 @@ async function seedDemoTeam(profile: SectorProfile) {
           email: bookedContact.email,
           firstname: bookedContact.firstname,
           lastname: bookedContact.lastname,
+          fullname: `${bookedContact.firstname} ${bookedContact.lastname}`,
           status: 'confirmed',
           joinedAt: ts(daysFromNow(-2)),
-          booking_token: `tok-coaching-${teamId}-${i}`,
+          booking_token: `tok-appointment-${teamId}-${i}`,
           is_new_contact: false,
         })
     }
@@ -2857,6 +2861,7 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       id: `${teamId}-sec-about`,
       type: 'content',
       heading: `About ${teamName}`,
+      menuLabel: 'About',
       imageSide: 'left',
       body: `<p>${description}</p><p>Our coaches welcome every level — drop in for a free trial class, find your rhythm, and become part of a community that keeps showing up. Sessions run throughout the week at ${locations[0]}.</p>`,
     },
@@ -2864,13 +2869,16 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
       id: `${teamId}-sec-schedule`,
       type: 'schedule',
       heading: 'Upcoming classes',
+      menuLabel: 'Schedule',
       source: 'sessions',
       windowDays: 14,
+      displayMode: 'calendar',
     },
     {
       id: `${teamId}-sec-contact`,
       type: 'contact',
       heading: 'Visit us',
+      menuLabel: 'Contact',
       address: '12 Studio Lane, 8001 Zürich',
       phone: '+41 44 123 45 67',
       email: `${teamSlug}@linyup.com`,
@@ -3277,10 +3285,10 @@ async function seedWeeklyReports(teamId: string) {
     const ramp = 0.62 + 0.38 * progress
     const factor = Math.min(1.05, Math.max(0.5, ramp + (seededRand(seed + 'n') - 0.5) * 0.08))
 
-    const coaching = 1 + Math.floor(seededRand(seed + 'co') * 2) // 1–2
+    const appointments = 1 + Math.floor(seededRand(seed + 'co') * 2) // 1–2
     const group = 5 + Math.floor(seededRand(seed + 'gp') * 2) // 5–6
     const bookings = 1 + Math.round(progress * 4) + Math.floor(seededRand(seed + 'bk') * 2) // grows 1→6
-    const bkCoaching = Math.min(bookings, Math.floor(seededRand(seed + 'bc') * 2))
+    const bkAppointments = Math.min(bookings, Math.floor(seededRand(seed + 'bc') * 2))
 
     await db
       .collection('teams')
@@ -3297,10 +3305,10 @@ async function seedWeeklyReports(teamId: string) {
         contacts_count_by_affiliation_type: scaleMap(byAffiliationType, factor),
         contacts_with_active_subscription: Math.round(withSubscription * factor),
         contacts_count_by_subscription_type: scaleMap(bySub, factor),
-        sessions_count: group + coaching,
-        sessions_count_by_type: { group_class: group, coaching },
+        sessions_count: group + appointments,
+        sessions_count_by_type: { class: group, appointment: appointments },
         bookings_count: bookings,
-        bookings_count_by_type: { group_class: bookings - bkCoaching, coaching: bkCoaching },
+        bookings_count_by_type: { class: bookings - bkAppointments, appointment: bkAppointments },
         trial_conversions_count:
           seededRand(seed + 'cv') < 0.25 + progress * 0.4
             ? 1 + Math.floor(seededRand(seed + 'cv2') * 2)

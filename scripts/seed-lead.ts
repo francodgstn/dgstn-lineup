@@ -438,7 +438,7 @@ const TENANT_FIELD_COLLECTIONS: { collection: string; field: string }[] = [
   { collection: 'courses', field: 'teamId' },
   { collection: 'forms', field: 'teamId' },
   { collection: 'documents', field: 'teamId' },
-  { collection: 'coach_availability', field: 'teamId' },
+  { collection: 'availability', field: 'teamId' },
   { collection: 'referrals', field: 'team_id' },
   { collection: 'referral_codes', field: 'teamId' },
   { collection: 'connect_accounts', field: 'teamId' },
@@ -940,7 +940,7 @@ async function seedLeadTenant(profile: LeadProfile) {
       .set(at)
   }
 
-  // ── activities (group classes + coaching) ─────────────────────────────────
+  // ── activities (group classes + appointments) ─────────────────────────────────
   const actIds = profile.activities.map((_, i) => `${teamId}-act-${i}`)
   const actImageUrls: (string | null)[] = []
   for (let i = 0; i < profile.activities.length; i++) {
@@ -976,7 +976,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         accessRule,
         dropIn,
         base_score: a.base_score,
-        type: 'group_class',
+        type: 'class',
         isActive: true,
         created_at: ts(daysFromNow(-200)),
       })
@@ -987,6 +987,7 @@ async function seedLeadTenant(profile: LeadProfile) {
       .doc(actIds[i])
       .set({
         type: 'activity',
+        activityType: 'class',
         teamId,
         name: a.name,
         slug: a.slug,
@@ -1001,19 +1002,19 @@ async function seedLeadTenant(profile: LeadProfile) {
       })
   }
 
-  const coachingActId = `${teamId}-act-coaching`
-  const headCoachName = staffName(profile.coaching.templates[0]?.staffKey ?? owner.key)
+  const appointmentActId = `${teamId}-act-appointment`
+  const headCoachName = staffName(profile.appointments.templates[0]?.staffKey ?? owner.key)
   await db
     .collection('activities')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .set({
       teamId,
-      name: profile.coaching.activityName,
-      slug: profile.coaching.slug,
+      name: profile.appointments.activityName,
+      slug: profile.appointments.slug,
       color: profile.accentColor,
-      description: profile.coaching.description,
-      type: 'coaching',
-      coachId: uidOf(profile.coaching.templates[0]?.staffKey ?? owner.key),
+      description: profile.appointments.description,
+      type: 'appointment',
+      coachId: uidOf(profile.appointments.templates[0]?.staffKey ?? owner.key),
       coachName: headCoachName,
       level: 'all',
       isFreeTrial: true,
@@ -1022,68 +1023,83 @@ async function seedLeadTenant(profile: LeadProfile) {
     })
   await db
     .collection('activities')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .collection('public_profile')
-    .doc(coachingActId)
+    .doc(appointmentActId)
     .set({
       type: 'activity',
+      // Routes the public booking/site cards to the appointment flow.
+      activityType: 'appointment',
       teamId,
-      name: profile.coaching.activityName,
-      slug: profile.coaching.slug,
+      name: profile.appointments.activityName,
+      slug: profile.appointments.slug,
       color: profile.accentColor,
-      description: profile.coaching.description,
+      description: profile.appointments.description,
       image_url: null,
       isFreeTrial: true,
       level: 'all',
     })
 
-  // ── coaching: one availability template + materialized slots per coach ────
+  // ── appointments: one availability template + materialized slots per coach ────
   // Adult students eligible to appear as past private-lesson attendees.
-  const coachingAttendeeIdxs = profile.contacts
+  const appointmentAttendeeIdxs = profile.contacts
     .map((c, i) => ({ c, i }))
     .filter((x) => x.c.type === 'student' && !x.c.kid)
     .map((x) => x.i)
-  for (let tplIdx = 0; tplIdx < profile.coaching.templates.length; tplIdx++) {
-    const tpl = profile.coaching.templates[tplIdx]
+  for (let tplIdx = 0; tplIdx < profile.appointments.templates.length; tplIdx++) {
+    const tpl = profile.appointments.templates[tplIdx]
     const coachUid = uidOf(tpl.staffKey)
     const coachName = staffName(tpl.staffKey)
     // Index-suffixed so one coach can hold several availability templates.
     const templateId = `${teamId}-tpl-${tpl.staffKey}-${tplIdx}`
     const tplPlace = resolvePlace(tpl.placeKey)
+    const isWindow = tpl.mode === 'open_window'
     await db
-      .collection('coach_availability')
+      .collection('availability')
       .doc(templateId)
       .set({
         teamId,
         coachId: coachUid,
         coachName,
-        activityId: coachingActId,
-        title: profile.coaching.activityName,
-        description: profile.coaching.description,
-        duration_minutes: tpl.durationMin,
+        activityId: appointmentActId,
+        title: profile.appointments.activityName,
+        description: profile.appointments.description,
+        duration_minutes: isWindow ? (tpl.durationsMinutes?.[0] ?? tpl.durationMin) : tpl.durationMin,
         max_participants: 1,
         isFreeTrial: tpl.isFreeTrial,
         location: tplPlace.label,
         ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
         onlineUrl: null,
         status: 'active',
+        // Reconciled to the shared Availability shape (daysOfWeek + start/end date).
         recurrence: {
-          type: 'weekly',
-          days: tpl.daysOfWeek,
-          time: tpl.time,
-          timezone: profile.timezone,
+          daysOfWeek: tpl.daysOfWeek,
+          time: isWindow ? (tpl.window?.start ?? tpl.time) : tpl.time,
+          startDate: ts(daysFromNow(-40)),
+          endDate: null,
         },
-        window_days: 30,
+        mode: tpl.mode ?? 'fixed_slots',
+        ...(isWindow
+          ? {
+              window: tpl.window,
+              durationsMinutes: tpl.durationsMinutes,
+              granularityMinutes: tpl.granularityMinutes ?? 15,
+              bufferMinutes: tpl.bufferMinutes ?? 0,
+            }
+          : {}),
         created_at: ts(daysFromNow(-40)),
       })
+
+    // Open windows pre-generate NOTHING — sessions are created lazily at booking.
+    if (isWindow) continue
 
     // Materialize the next N occurrences of the template's recurrence days so
     // the bookable slots match the advertised weekdays regardless of run date.
     // The day cap follows the schedule horizon so a larger slotCount can reach out.
     const [tplHH, tplMM] = tpl.time.split(':').map(Number)
-    const coachingDayCap = scheduleWeeksAhead * 7 + 7
+    const appointmentDayCap = scheduleWeeksAhead * 7 + 7
     const slotDates: Date[] = []
-    for (let dayOffset = 0; slotDates.length < tpl.slotCount && dayOffset <= coachingDayCap; dayOffset++) {
+    for (let dayOffset = 0; slotDates.length < tpl.slotCount && dayOffset <= appointmentDayCap; dayOffset++) {
       const d = daysFromNow(dayOffset)
       if (!tpl.daysOfWeek.includes(d.getDay())) continue
       d.setHours(tplHH, tplMM ?? 0, 0, 0)
@@ -1093,13 +1109,13 @@ async function seedLeadTenant(profile: LeadProfile) {
     for (let i = 0; i < slotDates.length; i++) {
       const base = slotDates[i]
       const end = minutesOffset(base, tpl.durationMin)
-      const sid = `${teamId}-coaching-${tpl.staffKey}-${tplIdx}-${i}`
+      const sid = `${teamId}-appointment-${tpl.staffKey}-${tplIdx}-${i}`
       const isFull = tpl.bookedSlots.includes(i)
       const status = isFull ? 'full' : 'open'
       const common = {
         teamId,
-        activityType: 'coaching',
-        activityName: profile.coaching.activityName,
+        activityType: 'appointment',
+        activityName: profile.appointments.activityName,
         coachId: coachUid,
         coachName,
         templateId,
@@ -1119,13 +1135,13 @@ async function seedLeadTenant(profile: LeadProfile) {
       await db
         .collection('sessions')
         .doc(sid)
-        .set({ ...common, activityId: coachingActId, created_at: ts(daysFromNow(-7)) })
+        .set({ ...common, activityId: appointmentActId, created_at: ts(daysFromNow(-7)) })
       await db
         .collection('sessions')
         .doc(sid)
         .collection('public_profile')
         .doc(sid)
-        .set({ type: 'coaching_session', ...common })
+        .set({ type: 'appointment_session', ...common })
       if (isFull) {
         const booked = profile.contacts.find((c) => c.type === 'student' && !c.kid)!
         await db
@@ -1140,16 +1156,17 @@ async function seedLeadTenant(profile: LeadProfile) {
             email: `${slugEmail(booked)}.${teamId}@example.com`,
             firstname: booked.firstname,
             lastname: booked.lastname,
+            fullname: `${booked.firstname} ${booked.lastname}`,
             status: 'confirmed',
             joinedAt: ts(daysFromNow(-2)),
-            booking_token: `tok-coaching-${sid}`,
+            booking_token: `tok-appointment-${sid}`,
             is_new_contact: false,
           })
       }
     }
 
     // History: past occurrences over the same window as the group grid, so the
-    // coaching calendar looks lived-in and reports have attendance. Most were
+    // appointment calendar looks lived-in and reports have attendance. Most were
     // booked (1:1, attended); the rest went unfilled.
     const pastDates: Date[] = []
     for (let dayOffset = -scheduleWeeksBack * 7; dayOffset <= 0; dayOffset++) {
@@ -1161,39 +1178,49 @@ async function seedLeadTenant(profile: LeadProfile) {
     for (let p = 0; p < pastDates.length; p++) {
       const base = pastDates[p]
       const end = minutesOffset(base, tpl.durationMin)
-      const sid = `${teamId}-coaching-${tpl.staffKey}-${tplIdx}-past-${p}`
-      const attendeeIdx = coachingAttendeeIdxs.length
-        ? coachingAttendeeIdxs[Math.floor(seededRand(sid + 'who') * coachingAttendeeIdxs.length)]
+      const sid = `${teamId}-appointment-${tpl.staffKey}-${tplIdx}-past-${p}`
+      const attendeeIdx = appointmentAttendeeIdxs.length
+        ? appointmentAttendeeIdxs[Math.floor(seededRand(sid + 'who') * appointmentAttendeeIdxs.length)]
         : -1
       const attended = attendeeIdx >= 0 && seededRand(sid) < 0.7
-      // No public_profile mirror — like past grid sessions, history is
-      // admin-only (public surfaces list upcoming bookable slots).
+      const pastCommon = {
+        teamId,
+        activityType: 'appointment',
+        activityName: profile.appointments.activityName,
+        coachId: coachUid,
+        coachName,
+        templateId,
+        start: ts(base),
+        end: ts(end),
+        duration_minutes: tpl.durationMin,
+        max_participants: 1,
+        bookings_count: attended ? 1 : 0,
+        location: tplPlace.label,
+        locationAddress: tplPlace.address,
+        ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
+        onlineUrl: null,
+        isFreeTrial: tpl.isFreeTrial,
+        status: attended ? 'full' : 'open',
+      }
       await db
         .collection('sessions')
         .doc(sid)
         .set({
-          teamId,
-          activityId: coachingActId,
-          activityType: 'coaching',
-          activityName: profile.coaching.activityName,
-          coachId: coachUid,
-          coachName,
-          templateId,
-          start: ts(base),
-          end: ts(end),
-          duration_minutes: tpl.durationMin,
-          max_participants: 1,
-          bookings_count: attended ? 1 : 0,
+          ...pastCommon,
+          activityId: appointmentActId,
           participants_count: attended ? 1 : 0,
-          location: tplPlace.label,
-          locationAddress: tplPlace.address,
-          ...(tplPlace.placeId ? { placeId: tplPlace.placeId } : {}),
-          onlineUrl: null,
-          isFreeTrial: tpl.isFreeTrial,
-          status: attended ? 'full' : 'open',
           allowBooking: false,
           created_at: ts(daysFromNow(-scheduleWeeksBack * 7 - 7)),
         })
+      // Public mirror — the live syncSessionPublicProfile keeps appointment sessions
+      // mirrored (allowBooking: true) unless cancelled, past ones included; the
+      // public weekly timetable shows them muted.
+      await db
+        .collection('sessions')
+        .doc(sid)
+        .collection('public_profile')
+        .doc(sid)
+        .set({ type: 'appointment_session', ...pastCommon, allowBooking: true })
       if (attended) {
         const cs = profile.contacts[attendeeIdx]
         const contactId = `${teamId}-contact-${attendeeIdx.toString().padStart(3, '0')}`
@@ -1267,7 +1294,11 @@ async function seedLeadTenant(profile: LeadProfile) {
         actIdx: slot.activityIdx,
         staffKey: slot.staffKey,
         placeKey: slot.placeKey,
-        allowBooking: !isPast,
+        // Stays true after the session passes — matches production, where nothing
+        // flips it off, so past sessions keep their public mirror and the public
+        // weekly calendar can show the current week as a timetable. Public
+        // booking queries bound on `start`, so nothing past is ever bookable.
+        allowBooking: true,
         isPast,
       })
     }
@@ -1304,34 +1335,34 @@ async function seedLeadTenant(profile: LeadProfile) {
         created_at: ts(daysFromNow(-200)),
         createdBy: uid,
       })
-    if (s.allowBooking) {
-      await db
-        .collection('sessions')
-        .doc(id)
-        .collection('public_profile')
-        .doc(id)
-        .set({
-          type: 'session',
-          teamId,
-          activityId: actIds[s.actIdx],
-          activityName: a.name,
-          activityColor: a.color,
-          activitySlug: a.slug,
-          activityIsFreeTrial: a.isFreeTrial,
-          activityLevel: a.level,
-          activityImage: actImageUrls[s.actIdx],
-          start: ts(s.date),
-          end: ts(s.end),
-          location: place.label,
-          instructorName,
-          locationAddress: place.address,
-          locationMapsUrl: place.mapsUrl,
-          capacity: a.capacity,
-          participants_count: 0,
-          allowBooking: true,
-          slug: null,
-        })
-    }
+    // Mirror every session — past included, so the public timetable sees them
+    // (the live syncSessionPublicProfile function would produce the same).
+    await db
+      .collection('sessions')
+      .doc(id)
+      .collection('public_profile')
+      .doc(id)
+      .set({
+        type: 'session',
+        teamId,
+        activityId: actIds[s.actIdx],
+        activityName: a.name,
+        activityColor: a.color,
+        activitySlug: a.slug,
+        activityIsFreeTrial: a.isFreeTrial,
+        activityLevel: a.level,
+        activityImage: actImageUrls[s.actIdx],
+        start: ts(s.date),
+        end: ts(s.end),
+        location: place.label,
+        instructorName,
+        locationAddress: place.address,
+        locationMapsUrl: place.mapsUrl,
+        capacity: a.capacity,
+        participants_count: 0,
+        allowBooking: true,
+        slug: null,
+      })
   }
 
   // ── contacts ───────────────────────────────────────────────────────────────
@@ -2459,10 +2490,10 @@ async function seedWeeklyReports(profile: LeadProfile, teamId: string) {
     const ramp = 0.62 + 0.38 * progress
     const factor = Math.min(1.05, Math.max(0.5, ramp + (seededRand(seed + 'n') - 0.5) * 0.08))
 
-    const coaching = 1 + Math.floor(seededRand(seed + 'co') * 2)
+    const appointment = 1 + Math.floor(seededRand(seed + 'co') * 2)
     const group = profile.weeklyGrid.length + Math.floor(seededRand(seed + 'gp') * 2) - 1
     const bookings = 1 + Math.round(progress * 4) + Math.floor(seededRand(seed + 'bk') * 2)
-    const bkCoaching = Math.min(bookings, Math.floor(seededRand(seed + 'bc') * 2))
+    const bkAppointment = Math.min(bookings, Math.floor(seededRand(seed + 'bc') * 2))
 
     await db
       .collection('teams')
@@ -2479,10 +2510,10 @@ async function seedWeeklyReports(profile: LeadProfile, teamId: string) {
         contacts_count_by_affiliation_type: scaleMap(byAffiliationType, factor),
         contacts_with_active_subscription: Math.round(withSubscription * factor),
         contacts_count_by_subscription_type: scaleMap(bySub, factor),
-        sessions_count: group + coaching,
-        sessions_count_by_type: { group_class: group, coaching },
+        sessions_count: group + appointment,
+        sessions_count_by_type: { class: group, appointment },
         bookings_count: bookings,
-        bookings_count_by_type: { group_class: bookings - bkCoaching, coaching: bkCoaching },
+        bookings_count_by_type: { class: bookings - bkAppointment, appointment: bkAppointment },
         trial_conversions_count:
           seededRand(seed + 'cv') < 0.25 + progress * 0.4
             ? 1 + Math.floor(seededRand(seed + 'cv2') * 2)
@@ -2567,7 +2598,7 @@ async function main() {
     )
   }
   console.log(
-    `\n   Public surfaces: /public/${profile.slug} (bio-link · site · booking · shop · space · coaching)`
+    `\n   Public surfaces: /public/${profile.slug} (bio-link · site · booking · shop · space · appointments)`
   )
   if (profile.notes?.length) {
     console.log('\n   ⚠ Notes:')

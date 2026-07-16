@@ -23,8 +23,8 @@ export const onActivityTypeChange = onDocumentUpdated(
     const before = event.data!.before.data()
     const after  = event.data!.after.data()
 
-    const typeBefore = (before.type ?? 'group_class') as string
-    const typeAfter  = (after.type  ?? 'group_class') as string
+    const typeBefore = (before.type ?? 'class') as string
+    const typeAfter  = (after.type  ?? 'class') as string
 
     // No-op unless type actually changed
     if (typeBefore === typeAfter) return

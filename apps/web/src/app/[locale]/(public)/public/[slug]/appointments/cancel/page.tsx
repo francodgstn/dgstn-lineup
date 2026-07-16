@@ -12,8 +12,8 @@ export const dynamic = 'force-dynamic'
 
 type State = 'idle' | 'cancelling' | 'done' | 'error'
 
-export default function CoachingCancelPage() {
-  const t = useTranslations('CoachingCancel')
+export default function AppointmentCancelPage() {
+  const t = useTranslations('AppointmentCancel')
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
 
@@ -28,7 +28,9 @@ export default function CoachingCancelPage() {
     if (!token) return
     setState('cancelling')
     try {
-      const fn = httpsCallable(functions, 'cancelCoachBooking')
+      // Shared cancellation callable (there is no separate appointment one) —
+      // token-based, releases the appointment slot and emails the confirmation.
+      const fn = httpsCallable(functions, 'cancelBooking')
       await fn({ token })
       setState('done')
     } catch (err) {

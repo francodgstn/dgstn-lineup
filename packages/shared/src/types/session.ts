@@ -5,7 +5,7 @@ export interface Session {
   teamId: string
   activityId?: string
   activityName?: string
-  /** Denormalised from the linked Activity.type — 'group_class' | 'coaching'. Default group_class. */
+  /** Denormalised from the linked Activity.type — 'class' | 'appointment'. Default class. */
   activityType?: string
   start: Timestamp
   end: Timestamp
@@ -32,14 +32,14 @@ export interface Session {
   /** When booking is allowed, mark it as required (no drop-ins) — surfaces a
    *  "Booking required" chip in the public booking flow. Group-class only in UI. */
   bookingMandatory?: boolean
-  // ── Coaching-specific fields (only populated when activityType === 'coaching') ──
-  /** Back-link to the coach_availability template that generated this session. */
+  // ── Appointment-specific fields (only populated when activityType === 'appointment') ──
+  /** Back-link to the availability template this appointment was booked from. */
   templateId?: string
-  /** UID of the assigned coach. */
+  /** UID of the assigned provider. */
   coachId?: string
-  /** Display name of the assigned coach. */
+  /** Display name of the assigned provider. */
   coachName?: string
-  /** Hard booking cap for coaching sessions. */
+  /** Hard booking cap for appointment sessions. */
   max_participants?: number
   /** Active booking count — maintained by trigger or set at migration time. */
   bookings_count?: number
@@ -47,7 +47,7 @@ export interface Session {
   trial_bookings_count?: number
   /** Free trial flag — if false, members only (type !== 'trial'). */
   isFreeTrial?: boolean
-  /** Booking status for coaching sessions; 'open' | 'full' | 'cancelled'. */
+  /** Booking status for appointment sessions; 'open' | 'full' | 'cancelled'. */
   status?: 'open' | 'full' | 'cancelled'
 }
 
@@ -64,7 +64,7 @@ export interface SessionPublicProfile {
   location?: string
   onlineUrl?: string
   instructorName?: string
-  /** Denormalised instructor/coach uid (group-class sessions). */
+  /** Denormalised instructor/coach uid (class sessions). */
   instructorId?: string
   locationAddress?: string
   locationMapsUrl?: string
@@ -73,7 +73,7 @@ export interface SessionPublicProfile {
   activityImage?: string | null
   activityLevel?: string
   activityIsFreeTrial?: boolean
-  // Coaching-specific public fields
+  // Appointment-specific public fields
   coachId?: string
   coachName?: string
   max_participants?: number

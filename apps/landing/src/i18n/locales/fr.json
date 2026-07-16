@@ -242,8 +242,8 @@
         "description": "Anticipez le risque de désabonnement.",
         "detail": "Laissez l'IA repérer les contacts à risque de départ et rédiger le message idéal pour les reconquérir à temps."
       },
-      "coaching": {
-        "title": "Coaching 1:1",
+      "appointments": {
+        "title": "Rendez-vous 1:1",
         "description": "Rendez-vous individuels réservables.",
         "detail": "Publiez des créneaux de disponibilité que vos clients réservent eux-mêmes depuis votre bio-link — avec invitations .ics, rappels et temps tampon. Votre atout coach personnel."
       },
@@ -332,7 +332,7 @@
     "cmpUiLanguagesNote": "English · Deutsch · Français · Italiano",
     "cmpBranding": "Retirer la marque Linyup",
     "cmpMigration": "Migration de données offerte (offre de lancement)",
-    "cmpCoaching": "Coaching 1:1 & rendez-vous",
+    "cmpAppointments": "Rendez-vous",
     "cmpGoals": "Objectifs & progression",
     "cmpProducts": "Boutique de produits",
     "cmpForms": "Formulaires",

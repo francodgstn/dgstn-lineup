@@ -39,6 +39,11 @@ export interface SiteImage {
 interface SectionBase {
   /** Stable id (used as React key, image upload path segment, anchor target). */
   id: string
+  /** Short label shown for this section in the nav menu. When unset, the nav
+   *  falls back to the section's heading (or a type default). Lets a studio keep
+   *  a long on-page title while the menu stays terse (e.g. heading "Our weekly
+   *  schedule" → menu "Schedule"). */
+  menuLabel?: string
   /** Whether this section shows as an item in the site's navigation menu.
    *  Defaults to visible (true) when unset; the hero is never listed. */
   showInNav?: boolean
@@ -114,7 +119,7 @@ export interface ScheduleSection extends SectionBase {
   activityId?: string
   /** Studio's default view. The live site also shows a small List/Calendar toggle.
    *  'calendar' = weekly time-grid planner (formerly 'week', a chip grid).
-   *  Defaults to 'list' when unset. */
+   *  Defaults to 'calendar' when unset. */
   displayMode?: 'list' | 'calendar'
   /** Show a small "Book" icon on each session row/chip → /booking. Off by default
    *  (the space is tight and it repeats on every session). */

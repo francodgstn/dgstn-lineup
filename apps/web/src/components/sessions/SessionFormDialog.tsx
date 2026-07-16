@@ -12,7 +12,6 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DateTimePicker } from '@/components/ui/date-picker'
-import { Slider } from '@/components/ui/slider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
@@ -44,6 +43,60 @@ function defaultStart(): Date {
   const d = new Date()
   d.setHours(d.getHours() + 1, 0, 0, 0)
   return d
+}
+
+// ─── duration picker (preset chips + free minutes input) ───────────────────────
+// Replaces the old slider — imprecise, and its thumb rendered poorly inside a
+// scrolling dialog.
+
+const DURATION_PRESETS = [30, 45, 60, 75, 90, 120]
+
+function DurationPicker({ value, onChange, minutesLabel }: {
+  value: number
+  onChange: (v: number) => void
+  minutesLabel: string
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {DURATION_PRESETS.map((m) => (
+        <button
+          key={m}
+          type="button"
+          onClick={() => onChange(m)}
+          aria-pressed={value === m}
+          className={`h-9 rounded-md border px-2.5 text-sm transition-colors ${
+            value === m
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          {formatDuration(m)}
+        </button>
+      ))}
+      <div className="flex h-9 items-center gap-1.5 rounded-md border border-input bg-background pl-2.5 pr-3 focus-within:ring-2 focus-within:ring-ring">
+        <input
+          type="number"
+          min={15}
+          max={480}
+          step={5}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value) || 0)}
+          onBlur={(e) => onChange(Math.max(15, Math.min(480, Math.round(Number(e.target.value) || 60))))}
+          aria-label={minutesLabel}
+          className="w-12 bg-transparent text-right text-sm focus:outline-none"
+        />
+        <span className="text-xs text-muted-foreground">{minutesLabel}</span>
+      </div>
+    </div>
+  )
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </h3>
+  )
 }
 
 type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
@@ -93,11 +146,11 @@ function getPreviewDates(pattern: RecurrencePattern, startDate: Date, count = 5)
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
-const SESSION_TYPES = ['group_class', 'coaching'] as const
+const SESSION_TYPES = ['class', 'appointment'] as const
 
 const sessionSchema = z.object({
   activityId:      z.string().optional(),
-  activityType:    z.enum(SESSION_TYPES).default('group_class'),
+  activityType:    z.enum(SESSION_TYPES).default('class'),
   start:           z.date({ required_error: 'Required' }),
   duration:        z.number().min(15).max(480),
   location:        z.string().max(120).optional(),
@@ -235,8 +288,8 @@ function ResponsiveModal({ open, onOpenChange, title, children }: {
   if (isDesktop) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl p-0 gap-0 max-h-[92vh] flex flex-col overflow-hidden">
-          <DialogHeader className="px-5 py-4 border-b flex-shrink-0">
+        <DialogContent className="sm:max-w-3xl p-0 gap-0 max-h-[92vh] flex flex-col overflow-hidden">
+          <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
           {children}
@@ -287,14 +340,17 @@ export function SessionFormDialog({
       resolver: zodResolver(sessionSchema),
       defaultValues: {
         activityId:      editing?.activityId ?? '',
-        activityType:    (editing?.activityType as typeof SESSION_TYPES[number]) ?? 'group_class',
+        activityType:    (editing?.activityType as typeof SESSION_TYPES[number]) ?? 'class',
         start:           editing?.start?.toDate() ?? defaultStart(),
         duration:        deriveDefaultDuration(editing),
         location:        editing?.location ?? '',
         placeId:         editing?.placeId ?? '',
         roomId:          editing?.roomId ?? '',
-        instructorId:    editing?.instructorId ?? '',
-        instructorName:  editing?.instructorName ?? '',
+        // Appointment sessions carry the coach in coachId/coachName (group classes
+        // use instructorId/instructorName) — read either so the picker never
+        // shows an empty coach on a private-lesson slot.
+        instructorId:    editing?.instructorId ?? editing?.coachId ?? '',
+        instructorName:  editing?.instructorName ?? editing?.coachName ?? '',
         maxParticipants: editing?.max_participants != null ? String(editing.max_participants) : '',
         notes:           editing?.notes ?? '',
         allowBooking:    editing?.allowBooking ?? false,
@@ -354,6 +410,11 @@ export function SessionFormDialog({
       roomId:         values.roomId || null,
       instructorId:   values.instructorId || null,
       instructorName: values.instructorName || null,
+      // Appointment sessions are read via coachId/coachName (public mirror, kiosk,
+      // coach filter) — keep them in sync with the picked coach.
+      ...(values.activityType === 'appointment'
+        ? { coachId: values.instructorId || null, coachName: values.instructorName || null }
+        : {}),
       max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
       notes:          values.notes || null,
       allowBooking:   values.allowBooking ?? false,
@@ -385,6 +446,9 @@ export function SessionFormDialog({
           bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
           instructorName: values.instructorName || null,
           instructorId: values.instructorId || null,
+          ...(values.activityType === 'appointment'
+            ? { coachId: values.instructorId || null, coachName: values.instructorName || null }
+            : {}),
           max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
         },
         recurrence: {
@@ -457,6 +521,9 @@ export function SessionFormDialog({
         location:       values.location || null,
         instructorId:   values.instructorId || null,
         instructorName: values.instructorName || null,
+        ...(values.activityType === 'appointment'
+          ? { coachId: values.instructorId || null, coachName: values.instructorName || null }
+          : {}),
         max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
         notes:          values.notes || null,
         allowBooking:   values.allowBooking ?? false,
@@ -492,7 +559,7 @@ export function SessionFormDialog({
       ) : scopeStep ? (
         // ── edit-scope chooser ──
         <div className="flex flex-col flex-1 min-h-0">
-          <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
+          <div className="overflow-y-auto flex-1 px-6 py-4 space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Repeat2 className="h-4 w-4 text-primary" />
               {t('editScopeTitle')}
@@ -511,7 +578,7 @@ export function SessionFormDialog({
               ))}
             </div>
           </div>
-          <div className="border-t bg-muted/30 px-5 py-3 flex justify-end gap-2 flex-shrink-0">
+          <div className="border-t bg-muted/30 px-6 py-3 flex justify-end gap-2 flex-shrink-0">
             <button type="button" onClick={() => setScopeStep(false)}
               className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
               {t('cancel')}
@@ -525,7 +592,7 @@ export function SessionFormDialog({
       ) : (
         // ── main form ──
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
-          <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+          <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
             {isSeries && (
               <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary">
                 <Repeat2 className="h-3.5 w-3.5 shrink-0" />
@@ -533,196 +600,107 @@ export function SessionFormDialog({
               </div>
             )}
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium">{t('fieldActivity')}</label>
-              <Controller name="activityId" control={control} render={({ field }) => (
-                <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
-                  <SelectTrigger className="w-full">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value && field.value !== '__none__'
-                        ? activities.find(a => a.id === field.value)?.name ?? field.value
-                        : <span className="text-muted-foreground">—</span>}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">—</SelectItem>
-                    {activities.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )} />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">{t('fieldType')}</label>
-                <Controller name="activityType" control={control} render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+            {/* ── Basics: what is taught and by whom ── */}
+            <section className="space-y-3">
+              <SectionLabel>{t('sectionBasics')}</SectionLabel>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{t('fieldActivity')}</label>
+                <Controller name="activityId" control={control} render={({ field }) => (
+                  <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
                     <SelectTrigger className="w-full">
                       <span className="flex flex-1 text-left text-sm truncate">
-                        {t(`type_${field.value}` as Parameters<typeof t>[0])}
+                        {field.value && field.value !== '__none__'
+                          ? activities.find(a => a.id === field.value)?.name ?? field.value
+                          : <span className="text-muted-foreground">—</span>}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
-                      {SESSION_TYPES.map(tp => (
-                        <SelectItem key={tp} value={tp}>{t(`type_${tp}` as Parameters<typeof t>[0])}</SelectItem>
-                      ))}
+                      <SelectItem value="__none__">—</SelectItem>
+                      {activities.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )} />
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">{t('fieldInstructor')}</label>
-                <Controller name="instructorId" control={control} render={({ field }) => (
-                  <Select
-                    value={field.value || '__none__'}
-                    onValueChange={(v) => {
-                      if (v === '__none__') {
-                        field.onChange('')
-                        setValue('instructorName', '')
-                      } else {
-                        field.onChange(v)
-                        const c = coaches.find((m) => m.userId === v)
-                        setValue('instructorName', c ? coachLabel(c) : '')
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <span className="flex flex-1 text-left text-sm truncate">
-                        {instructorLabel ?? <span className="text-muted-foreground">{t('instructorNone')}</span>}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">{t('instructorNone')}</SelectItem>
-                      {coaches.map((m) => (
-                        <SelectItem key={m.userId} value={m.userId}>{coachLabel(m)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">{t('fieldStart')}</label>
-                <Controller name="start" control={control} render={({ field }) => (
-                  <DateTimePicker value={field.value} onChange={field.onChange} />
-                )} />
-                {errors.start && <p className="text-xs text-destructive">{errors.start.message}</p>}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  {t('fieldDuration')}
-                  <span className="ml-2 font-normal text-muted-foreground">{formatDuration(watchedDuration ?? 60)}</span>
-                </label>
-                <Controller name="duration" control={control} render={({ field }) => (
-                  <div className="pt-3 px-1">
-                    <Slider min={15} max={240} step={15} value={[field.value]}
-                      onValueChange={val => field.onChange(Array.isArray(val) ? val[0] : val)} />
-                    <div className="flex justify-between mt-1">
-                      {[30, 60, 90, 120].map(m => (
-                        <button key={m} type="button" onClick={() => field.onChange(m)}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                          {formatDuration(m)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )} />
-              </div>
-            </div>
-
-            {places.length > 0 && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">{t('fieldPlace')}</label>
-                  <Controller name="placeId" control={control} render={({ field }) => (
-                    <Select
-                      value={field.value || '__none'}
-                      onValueChange={(v) => { field.onChange(v === '__none' ? '' : v); setValue('roomId', '') }}
-                    >
-                      <SelectTrigger><SelectValue placeholder={t('placeNone')} /></SelectTrigger>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">{t('fieldType')}</label>
+                  <Controller name="activityType" control={control} render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className="w-full">
+                        <span className="flex flex-1 text-left text-sm truncate">
+                          {t(`type_${field.value}` as Parameters<typeof t>[0])}
+                        </span>
+                      </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none">{t('placeNone')}</SelectItem>
-                        {places.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}{p.scope === 'org' ? ' · org' : ''}
-                          </SelectItem>
+                        {SESSION_TYPES.map(tp => (
+                          <SelectItem key={tp} value={tp}>{t(`type_${tp}` as Parameters<typeof t>[0])}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   )} />
                 </div>
-                {placeRooms.length > 0 && (
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">{t('fieldRoom')}</label>
-                    <Controller name="roomId" control={control} render={({ field }) => (
-                      <Select value={field.value || '__none'} onValueChange={(v) => field.onChange(v === '__none' ? '' : v)}>
-                        <SelectTrigger><SelectValue placeholder={t('roomNone')} /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">{t('roomNone')}</SelectItem>
-                          {placeRooms.map((r) => (
-                            <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )} />
-                  </div>
-                )}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">{t('fieldInstructor')}</label>
+                  <Controller name="instructorId" control={control} render={({ field }) => (
+                    <Select
+                      value={field.value || '__none__'}
+                      onValueChange={(v) => {
+                        if (v === '__none__') {
+                          field.onChange('')
+                          setValue('instructorName', '')
+                        } else {
+                          field.onChange(v)
+                          const c = coaches.find((m) => m.userId === v)
+                          setValue('instructorName', c ? coachLabel(c) : '')
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <span className="flex flex-1 text-left text-sm truncate">
+                          {instructorLabel ?? <span className="text-muted-foreground">{t('instructorNone')}</span>}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">{t('instructorNone')}</SelectItem>
+                        {coaches.map((m) => (
+                          <SelectItem key={m.userId} value={m.userId}>{coachLabel(m)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )} />
+                </div>
               </div>
-            )}
+            </section>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">{t('fieldLocation')}</label>
-                <input type="text" {...register('location')} placeholder={t('locationPlaceholder')}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            <div className="border-t" />
+
+            {/* ── Schedule: when it happens (and how often) ── */}
+            <section className="space-y-3">
+              <SectionLabel>{t('sectionSchedule')}</SectionLabel>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">{t('fieldStart')}</label>
+                  <Controller name="start" control={control} render={({ field }) => (
+                    <DateTimePicker value={field.value} onChange={field.onChange} />
+                  )} />
+                  {errors.start && <p className="text-xs text-destructive">{errors.start.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">
+                    {t('fieldDuration')}
+                    <span className="ml-2 font-normal text-muted-foreground">{formatDuration(watchedDuration ?? 60)}</span>
+                  </label>
+                  <Controller name="duration" control={control} render={({ field }) => (
+                    <DurationPicker value={field.value} onChange={field.onChange} minutesLabel={t('durationMinutes')} />
+                  )} />
+                  {errors.duration && <p className="text-xs text-destructive">{errors.duration.message}</p>}
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  {t('fieldMaxParticipants')}
-                  <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
-                </label>
-                <input type="number" min={1} step={1} inputMode="numeric"
-                  {...register('maxParticipants')} placeholder={t('maxParticipantsPlaceholder')}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-              </div>
-            </div>
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium">{t('fieldNotes')}</label>
-              <textarea {...register('notes')} rows={2}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Controller name="allowBooking" control={control} render={({ field }) => (
-                <input type="checkbox" id="sess-allowBooking" checked={field.value ?? false}
-                  onChange={field.onChange} className="h-4 w-4 rounded border-input accent-primary" />
-              )} />
-              <label htmlFor="sess-allowBooking" className="text-sm">{t('fieldAllowBooking')}</label>
-            </div>
-
-            {/* Booking-required — a refinement of allowBooking; only relevant once
-                booking is offered. Drives the "Booking required" chip in the public flow. */}
-            {watchedAllowBooking && (
-              <div className="flex items-start gap-3 pl-7">
-                <Controller name="bookingMandatory" control={control} render={({ field }) => (
-                  <input type="checkbox" id="sess-bookingMandatory" checked={field.value ?? false}
-                    onChange={field.onChange} className="mt-0.5 h-4 w-4 rounded border-input accent-primary" />
-                )} />
-                <label htmlFor="sess-bookingMandatory" className="text-sm">
-                  {t('fieldBookingMandatory')}
-                  <span className="block text-xs text-muted-foreground">{t('bookingMandatoryHint')}</span>
-                </label>
-              </div>
-            )}
-
-            {/* Recurrence — new sessions only */}
-            {!editing && (
-              <>
-                <div className="border-t pt-4">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              {/* Recurrence — new sessions only */}
+              {!editing && (
+                <>
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none pt-1">
                     <div role="checkbox" aria-checked={isRecurring}
                       onClick={() => handleRecurringToggle(!isRecurring)}
                       className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
@@ -737,15 +715,130 @@ export function SessionFormDialog({
                       {t('fieldRepeat')}
                     </span>
                   </label>
+                  {isRecurring && (
+                    <RecurrencePanel value={recurrence} onChange={setRecurrence} startDate={watchedStart} />
+                  )}
+                </>
+              )}
+            </section>
+
+            <div className="border-t" />
+
+            {/* ── Location: place/room from the team's venues + free-text label ── */}
+            <section className="space-y-3">
+              <SectionLabel>{t('sectionLocation')}</SectionLabel>
+              {places.length > 0 && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">{t('fieldPlace')}</label>
+                    <Controller name="placeId" control={control} render={({ field }) => (
+                      <Select
+                        value={field.value || '__none'}
+                        onValueChange={(v) => { field.onChange(v === '__none' ? '' : v); setValue('roomId', '') }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <span className="flex flex-1 text-left text-sm truncate">
+                            {field.value
+                              ? places.find((p) => p.id === field.value)?.name ?? field.value
+                              : <span className="text-muted-foreground">{t('placeNone')}</span>}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">{t('placeNone')}</SelectItem>
+                          {places.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}{p.scope === 'org' ? ' · org' : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )} />
+                  </div>
+                  {placeRooms.length > 0 && (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">{t('fieldRoom')}</label>
+                      <Controller name="roomId" control={control} render={({ field }) => (
+                        <Select value={field.value || '__none'} onValueChange={(v) => field.onChange(v === '__none' ? '' : v)}>
+                          <SelectTrigger className="w-full">
+                            <span className="flex flex-1 text-left text-sm truncate">
+                              {field.value
+                                ? placeRooms.find((r) => r.id === field.value)?.name ?? field.value
+                                : <span className="text-muted-foreground">{t('roomNone')}</span>}
+                            </span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">{t('roomNone')}</SelectItem>
+                            {placeRooms.map((r) => (
+                              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )} />
+                    </div>
+                  )}
                 </div>
-                {isRecurring && (
-                  <RecurrencePanel value={recurrence} onChange={setRecurrence} startDate={watchedStart} />
-                )}
-              </>
-            )}
+              )}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">
+                  {t('fieldLocation')}
+                  <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
+                </label>
+                <input type="text" {...register('location')} placeholder={t('locationPlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+            </section>
+
+            <div className="border-t" />
+
+            {/* ── Capacity & booking ── */}
+            <section className="space-y-3">
+              <SectionLabel>{t('sectionBooking')}</SectionLabel>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">
+                    {t('fieldMaxParticipants')}
+                    <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
+                  </label>
+                  <input type="number" min={1} step={1} inputMode="numeric"
+                    {...register('maxParticipants')} placeholder={t('maxParticipantsPlaceholder')}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div className="space-y-3 sm:pt-7">
+                  <div className="flex items-center gap-3">
+                    <Controller name="allowBooking" control={control} render={({ field }) => (
+                      <input type="checkbox" id="sess-allowBooking" checked={field.value ?? false}
+                        onChange={field.onChange} className="h-4 w-4 rounded border-input accent-primary" />
+                    )} />
+                    <label htmlFor="sess-allowBooking" className="text-sm">{t('fieldAllowBooking')}</label>
+                  </div>
+                  {/* Booking-required — a refinement of allowBooking; only relevant once
+                      booking is offered. Drives the "Booking required" chip in the public flow. */}
+                  {watchedAllowBooking && (
+                    <div className="flex items-start gap-3 pl-7">
+                      <Controller name="bookingMandatory" control={control} render={({ field }) => (
+                        <input type="checkbox" id="sess-bookingMandatory" checked={field.value ?? false}
+                          onChange={field.onChange} className="mt-0.5 h-4 w-4 rounded border-input accent-primary" />
+                      )} />
+                      <label htmlFor="sess-bookingMandatory" className="text-sm">
+                        {t('fieldBookingMandatory')}
+                        <span className="block text-xs text-muted-foreground">{t('bookingMandatoryHint')}</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">
+                  {t('fieldNotes')}
+                  <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
+                </label>
+                <textarea {...register('notes')} rows={2}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+              </div>
+            </section>
           </div>
 
-          <div className="border-t bg-muted/30 px-5 py-3 flex justify-end gap-2 flex-shrink-0">
+          <div className="border-t bg-muted/30 px-6 py-3 flex justify-end gap-2 flex-shrink-0">
             <button type="button" onClick={close}
               className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
               {t('cancel')}

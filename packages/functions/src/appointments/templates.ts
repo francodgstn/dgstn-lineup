@@ -69,7 +69,7 @@ interface ConfirmParams {
   lang?: Lang
 }
 
-export function buildCoachingConfirmationEmail(params: ConfirmParams) {
+export function buildAppointmentConfirmationEmail(params: ConfirmParams) {
   const { firstname, teamName, slotTitle, coachName, start, end, location, onlineUrl, cancelUrl, instructions, lang = 'en' } = params
   const dateStr = formatDateTime(start, lang)
   const endTime = formatTime(end, lang)
@@ -141,7 +141,7 @@ export function buildCoachingConfirmationEmail(params: ConfirmParams) {
   return buildEmailTemplate({ title: titles[lang], body })
 }
 
-export function buildCoachingICalAttachment(params: {
+export function buildAppointmentICalAttachment(params: {
   bookingId: string
   slotTitle: string
   start: Date
@@ -153,7 +153,7 @@ export function buildCoachingICalAttachment(params: {
   clientEmail: string
 }): { filename: string; content: string; contentType: string } {
   const ical = buildICalEvent({
-    uid: `coaching-${params.bookingId}@linyup.com`,
+    uid: `appointment-${params.bookingId}@linyup.com`,
     title: params.slotTitle,
     start: params.start,
     end: params.end,
@@ -178,7 +178,7 @@ interface CoachNotifParams {
   lang?: Lang
 }
 
-export function buildCoachNotificationEmail(params: CoachNotifParams) {
+export function buildAppointmentProviderNotificationEmail(params: CoachNotifParams) {
   const { coachFirstname, clientName, clientEmail, clientPhone, slotTitle, start, end, notes, lang = 'en' } = params
   const dateStr = formatDateTime(start, lang)
   const endTime = formatTime(end, lang)
@@ -234,7 +234,7 @@ interface CancelParams {
   lang?: Lang
 }
 
-export function buildCoachingCancellationEmail(params: CancelParams) {
+export function buildAppointmentCancellationEmail(params: CancelParams) {
   const { firstname, teamName, slotTitle, start, lang = 'en' } = params
   const dateStr = formatDateTime(start, lang)
 

@@ -1,9 +1,6 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
-import { collection, query, where, limit, getDocs } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
 import { SITE_PUBLISHED_COLLECTION } from '@linyup/shared'
-import type { PublishedSite } from '@linyup/shared'
 import PublicSite from './PublicSite'
 
 // Public website route. Full-bleed (no app/bio-link chrome) and reads only the
@@ -15,17 +12,65 @@ interface Props {
   params: Promise<{ slug: string }>
 }
 
-// Resolve a published site by slug from the fully-public site_published
-// collection. No auth and no restricted data, so the modular client SDK runs
-// fine in this server (generateMetadata) context. Mirrors the single read the
-// client PublicSite component performs.
-async function fetchPublishedSite(slug: string): Promise<PublishedSite | null> {
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+const USE_EMULATORS = process.env.NEXT_PUBLIC_USE_EMULATORS === 'true'
+
+// Resolve the published site's public SEO fields by slug via the Firestore REST
+// API. Deliberately NOT the web SDK: inside the Next server runtime the SDK's
+// streamed query responses come back empty (fetch-stream buffering), which made
+// every page title fall back to "Site not found". A single unauthenticated REST
+// read (rules: public) is dependency-free and works in any server runtime.
+interface RestValue {
+  stringValue?: string
+  mapValue?: { fields?: Record<string, RestValue> }
+}
+const str = (v?: RestValue) => v?.stringValue
+const map = (v?: RestValue) => v?.mapValue?.fields ?? {}
+
+async function fetchSiteMeta(slug: string) {
   try {
-    const snap = await getDocs(
-      query(collection(db, SITE_PUBLISHED_COLLECTION), where('slug', '==', slug), limit(1))
-    )
-    return snap.empty ? null : (snap.docs[0].data() as PublishedSite)
-  } catch {
+    const base = USE_EMULATORS
+      ? `http://${process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080'}/v1`
+      : 'https://firestore.googleapis.com/v1'
+    const key = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+    const url =
+      `${base}/projects/${PROJECT_ID}/databases/(default)/documents:runQuery` +
+      (!USE_EMULATORS && key ? `?key=${key}` : '')
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: SITE_PUBLISHED_COLLECTION }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: 'slug' },
+              op: 'EQUAL',
+              value: { stringValue: slug },
+            },
+          },
+          limit: 1,
+        },
+      }),
+      cache: 'no-store',
+    })
+    if (!res.ok) throw new Error(`runQuery HTTP ${res.status}`)
+    const rows = (await res.json()) as { document?: { fields?: Record<string, RestValue> } }[]
+    const fields = rows.find((r) => r.document)?.document?.fields
+    if (!fields) return null
+    const meta = map(fields.meta)
+    const seo = map(meta.seo)
+    return {
+      name: str(fields.name),
+      title: str(meta.title),
+      seoTitle: str(seo.title),
+      description: str(seo.description),
+      ogImageUrl: str(seo.ogImageUrl),
+    }
+  } catch (e) {
+    // Metadata falls back to the generic title, but never silently — a broken
+    // server-side read otherwise masquerades as a missing site.
+    console.error('[public-site] metadata fetch failed:', e)
     return null
   }
 }
@@ -34,7 +79,7 @@ async function fetchPublishedSite(slug: string): Promise<PublishedSite | null> {
 // meta.seo (the client renderer never touches the document head).
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
-  const site = await fetchPublishedSite(slug)
+  const site = await fetchSiteMeta(slug)
 
   if (!site) {
     return { title: 'Site not found' }
@@ -47,10 +92,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const proto = h.get('x-forwarded-proto') ?? 'https'
   const url = host ? `${proto}://${host}/public/${slug}/site` : undefined
 
-  const { seo } = site.meta
-  const title = seo?.title || site.meta.title || site.name
-  const description = seo?.description
-  const ogImageUrl = seo?.ogImageUrl
+  const title = site.seoTitle || site.title || site.name || slug
+  const description = site.description
+  const ogImageUrl = site.ogImageUrl
 
   return {
     title,

@@ -4,7 +4,7 @@
 // WeeklyCalendar (time-grid planner). Tapping any session opens a detail modal.
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { Clock, MapPin, X } from 'lucide-react'
+import { Clock, MapPin, User, X } from 'lucide-react'
 import { WeeklyCalendar, type PlannerSession } from '@/components/schedule/WeeklyCalendar'
 import type { KioskSession } from './useKioskSessions'
 
@@ -97,7 +97,10 @@ function SessionRow({ s, onSelect }: { s: KioskSession; onSelect: (s: KioskSessi
         style={{ background: s.activityColor || 'var(--primary)' }}
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-semibold">{s.activityName ?? 'Session'}</p>
+        <p className="truncate text-base font-semibold">
+          {s.activityName ?? 'Session'}
+          {s.coachName ? ` · ${s.coachName}` : ''}
+        </p>
         {s.location && <p className="truncate text-sm text-muted-foreground">{s.location}</p>}
       </div>
       <p className="shrink-0 text-base font-semibold tabular-nums">{fmtTime(s.start.toDate())}</p>
@@ -169,6 +172,12 @@ function SessionModal({
               {end ? ` – ${fmtTime(end)}` : ''}
             </span>
           </div>
+          {s.coachName && (
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span>{s.coachName}</span>
+            </div>
+          )}
           {s.location && (
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />

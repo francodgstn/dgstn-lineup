@@ -36,6 +36,8 @@ interface Props {
   teamId: string
   sessions: KioskSession[]
   walkInActivityIds?: string[]
+  /** Studio opt-in: offer OPEN 1:1 appointment slots for last-second walk-in booking. */
+  walkInCoaching?: boolean
 }
 
 const fmtDateTime = (d: Date) =>
@@ -60,7 +62,7 @@ function splitName(fullName: string): { firstname: string; lastname: string } {
   return { firstname: trimmed.slice(0, idx), lastname: trimmed.slice(idx + 1) }
 }
 
-export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
+export default function WalkIn({ teamId, sessions, walkInActivityIds, walkInCoaching }: Props) {
   const t = useTranslations('Kiosk')
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>('select')
@@ -80,8 +82,16 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
     const restrict = walkInActivityIds && walkInActivityIds.length > 0
     return sessions
       .filter((s) => s.end.toDate().getTime() > now)
-      .filter((s) => !restrict || (s.activityId && walkInActivityIds!.includes(s.activityId)))
-  }, [sessions, walkInActivityIds])
+      .filter((s) =>
+        s.type === 'appointment_session'
+          ? // 1:1 slots are booked ahead by default; the studio can opt in to
+            // last-second kiosk bookings (open slots only). The group-class
+            // activity allowlist doesn't apply — appointment mirrors carry no
+            // activityId; the walkInCoaching toggle IS the appointment gate.
+            walkInCoaching === true && s.status !== 'full' && s.status !== 'cancelled'
+          : !restrict || (s.activityId && walkInActivityIds!.includes(s.activityId))
+      )
+  }, [sessions, walkInActivityIds, walkInCoaching])
 
   // Group eligible sessions per day for the horizontal day-chip picker.
   const days = useMemo(() => {
@@ -226,7 +236,10 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
                       className="flex w-full items-center justify-between gap-4 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
                     >
                       <div>
-                        <p className="font-semibold">{s.activityName ?? 'Session'}</p>
+                        <p className="font-semibold">
+                          {s.activityName ?? 'Session'}
+                          {s.coachName ? ` · ${s.coachName}` : ''}
+                        </p>
                         <p className="text-sm text-muted-foreground">
                           {fmtTime(s.start.toDate())}
                           {s.location ? ` · ${s.location}` : ''}
@@ -245,7 +258,9 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
             <div>
               <h1 className="text-2xl font-bold">{t('walkInTitle')}</h1>
               <p className="mt-1 text-muted-foreground">
-                {selected.activityName ?? 'Session'} · {fmtDateTime(selected.start.toDate())}
+                {selected.activityName ?? 'Session'}
+                {selected.coachName ? ` · ${selected.coachName}` : ''} ·{' '}
+                {fmtDateTime(selected.start.toDate())}
               </p>
             </div>
 

@@ -7,9 +7,12 @@
 // schedule section (components/site/sections.tsx) and the kiosk (KioskSchedule).
 //
 // The container scrolls horizontally on narrow screens; the hour axis sticks to
-// the left so it stays visible. Rolling 7-day window starting today.
+// the left so it stays visible. Shows the CURRENT week (Monday-anchored — a
+// future team setting can drive `weekStartsOn`), pageable forward while the
+// data window lasts.
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 /** Firestore-Timestamp-like — the public session mirror provides `{ toDate() }`. */
 interface TimestampLike {
@@ -23,6 +26,11 @@ export interface PlannerSession {
   activityName?: string | null
   activityColor?: string | null
   location?: string | null
+  /** Coach running the slot (appointment sessions) — distinguishes parallel slots. */
+  coachName?: string | null
+  /** Per-session link target; takes precedence over the shared `bookingHref`
+   *  (e.g. appointment slots link to the appointments page, classes to booking). */
+  href?: string
 }
 
 const HOUR_PX = 48
@@ -117,12 +125,45 @@ interface Props {
   /** When set, clicking a block calls this (e.g. the kiosk detail modal). Takes
    *  precedence over `bookingHref`. */
   onSelect?: (session: PlannerSession) => void
+  /** How many days ahead the schedule covers — bounds how many weeks the visitor
+   *  can page forward. Defaults to 7 (a single week, no navigation shown). */
+  windowDays?: number
 }
 
-export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect }: Props) {
+/** Midnight Monday of the week containing `d`. */
+function mondayOf(d: Date): Date {
+  const m = new Date(d)
+  m.setHours(0, 0, 0, 0)
+  m.setDate(m.getDate() - ((m.getDay() + 6) % 7))
+  return m
+}
+
+export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, windowDays = 7 }: Props) {
+  // Weeks the visitor can page through: from the current (Monday-anchored) week
+  // up to the week containing the end of the section's data window.
+  const weekMs = 7 * 24 * 60 * 60 * 1000
+  const maxOffset = useMemo(() => {
+    const last = new Date()
+    last.setDate(last.getDate() + windowDays)
+    return Math.max(0, Math.floor((last.getTime() - mondayOf(new Date()).getTime()) / weekMs))
+  }, [windowDays, weekMs])
+  // Land on the first week that actually has a session — for sparse/future
+  // schedules (e.g. appointment slots starting next week) the current week is often
+  // empty, and showing an empty grid reads as "nothing here". Near-term
+  // schedules resolve to offset 0 (this week), unchanged.
+  const initialOffset = useMemo(() => {
+    let earliest = Infinity
+    for (const s of sessions) earliest = Math.min(earliest, s.start.toDate().getTime())
+    if (!isFinite(earliest)) return 0
+    const off = Math.floor((earliest - mondayOf(new Date()).getTime()) / weekMs)
+    return Math.max(0, Math.min(off, maxOffset))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const [weekOffset, setWeekOffset] = useState(initialOffset)
+
   const { weekDays, startHour, endHour } = useMemo(() => {
-    const start = new Date()
-    start.setHours(0, 0, 0, 0)
+    const start = mondayOf(new Date())
+    start.setDate(start.getDate() + weekOffset * 7)
 
     const byDay = new Map<string, PlannerSession[]>()
     let sh = 8
@@ -143,7 +184,7 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect }: Prop
       return { date, blocks: layoutDay(byDay.get(dateKey(date)) ?? [], sh, eh) }
     })
     return { weekDays: days, startHour: sh, endHour: eh }
-  }, [sessions])
+  }, [sessions, weekOffset])
 
   const hourCount = endHour - startHour
   const gridHeight = hourCount * HOUR_PX
@@ -152,7 +193,35 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect }: Prop
   const nowTop = ((now.getHours() * 60 + now.getMinutes()) / 60 - startHour) * HOUR_PX
 
   return (
-    <div className="overflow-x-auto">
+    <div>
+      {maxOffset > 0 && (
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setWeekOffset((o) => Math.max(0, o - 1))}
+            disabled={weekOffset === 0}
+            aria-label="Previous week"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="text-sm font-medium tabular-nums">
+            {weekDays[0].date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+            {' – '}
+            {weekDays[6].date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setWeekOffset((o) => Math.min(maxOffset, o + 1))}
+            disabled={weekOffset >= maxOffset}
+            aria-label="Next week"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      <div className="overflow-x-auto">
       {/* Day headers */}
       <div className="grid" style={GRID_COLS}>
         <div className="sticky left-0 z-20 border-b bg-background" />
@@ -219,27 +288,34 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect }: Prop
                   backgroundColor: `${color}1F`,
                   borderLeftColor: color,
                 }
+                const name = s.activityName ?? 'Session'
+                // Coach in the title distinguishes parallel slots (e.g. three
+                // "Private Lesson" columns at the same hour, one per coach).
+                const label = s.coachName ? `${name} · ${s.coachName}` : name
+                const timeRange = `${fmtTime(s.start.toDate())}${s.end ? ` – ${fmtTime(s.end.toDate())}` : ''}`
+                // Narrow parallel columns truncate hard — the tooltip carries it all.
+                const tooltip = [label, timeRange, s.location].filter(Boolean).join(' · ')
+                // Already-run sessions stay on the grid (timetable) but muted.
+                const ended = (s.end ?? s.start).toDate().getTime() < now.getTime()
                 const inner = (
                   <>
-                    <p className="truncate text-[11px] font-medium leading-tight">{s.activityName ?? 'Session'}</p>
+                    <p className="truncate text-[11px] font-medium leading-tight">{label}</p>
                     {height >= 34 && (
-                      <p className="truncate text-[10px] text-muted-foreground">
-                        {fmtTime(s.start.toDate())}
-                        {s.end ? ` – ${fmtTime(s.end.toDate())}` : ''}
-                      </p>
+                      <p className="truncate text-[10px] text-muted-foreground">{timeRange}</p>
                     )}
                     {height >= 52 && s.location && (
                       <p className="truncate text-[10px] text-muted-foreground">{s.location}</p>
                     )}
                   </>
                 )
-                const cls = 'absolute z-[5] overflow-hidden rounded-md border-l-2 px-1.5 py-0.5 text-left'
+                const cls = `absolute z-[5] overflow-hidden rounded-md border-l-2 px-1.5 py-0.5 text-left${ended ? ' opacity-45' : ''}`
                 if (onSelect) {
                   return (
                     <button
                       key={s.id}
                       type="button"
                       onClick={() => onSelect(s)}
+                      title={tooltip}
                       className={`${cls} transition-opacity hover:opacity-80`}
                       style={style}
                     >
@@ -247,12 +323,13 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect }: Prop
                     </button>
                   )
                 }
-                return bookingHref ? (
-                  <a key={s.id} href={bookingHref} className={`${cls} transition-opacity hover:opacity-80`} style={style}>
+                const href = s.href ?? bookingHref
+                return href ? (
+                  <a key={s.id} href={href} title={tooltip} className={`${cls} transition-opacity hover:opacity-80`} style={style}>
                     {inner}
                   </a>
                 ) : (
-                  <div key={s.id} className={cls} style={style}>
+                  <div key={s.id} title={tooltip} className={cls} style={style}>
                     {inner}
                   </div>
                 )
@@ -260,6 +337,7 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect }: Prop
             </div>
           )
         })}
+      </div>
       </div>
     </div>
   )

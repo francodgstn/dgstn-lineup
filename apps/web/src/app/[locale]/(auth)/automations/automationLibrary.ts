@@ -22,7 +22,7 @@ import { TRIAL_CLEANUP_RULE, TRIAL_CLEANUP_RULE_KEY } from '@linyup/shared'
 // Types
 // ---------------------------------------------------------------------------
 
-export type LibraryCategory = 'trial' | 'retention' | 'milestones' | 'coaching' | 'admin'
+export type LibraryCategory = 'trial' | 'retention' | 'milestones' | 'appointment' | 'admin'
 export type SupportedLanguage = 'en' | 'de' | 'fr' | 'it'
 
 export interface TemplateContent {
@@ -71,7 +71,7 @@ export const CATEGORY_META: Record<
   trial: { label: 'Trial Conversion', icon: UserPlus, color: 'text-blue-500' },
   retention: { label: 'Retention', icon: RefreshCw, color: 'text-green-500' },
   milestones: { label: 'Milestones', icon: Trophy, color: 'text-amber-500' },
-  coaching: { label: 'Coaching', icon: CalendarCheck, color: 'text-purple-500' },
+  appointment: { label: 'Appointments', icon: CalendarCheck, color: 'text-purple-500' },
   admin: { label: 'Internal / Admin', icon: Settings2, color: 'text-slate-500' },
 }
 
@@ -953,14 +953,14 @@ Il team {{teamName}}`,
     },
   },
 
-  // ── COACHING ──────────────────────────────────────────────────────────────
+  // ── APPOINTMENT ───────────────────────────────────────────────────────────
 
   {
     library_key: 'lib_session_feedback',
-    category: 'coaching',
+    category: 'appointment',
     name: 'Post-session feedback request',
     description: 'Sends a feedback request to participants 60 minutes after a session ends.',
-    tags: ['feedback', 'review', 'session', 'coaching'],
+    tags: ['feedback', 'review', 'session', 'appointment'],
     requires_plan: 'studio',
     template: {
       name: 'How was your session?',

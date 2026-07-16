@@ -415,12 +415,12 @@ export default function SessionDetailPage() {
   })
 
   // Subscription gate of this session's activity. Mirrors bookSession's resolution
-  // order: a coaching session's own denormalised rule is authoritative (per-slot
+  // order: an appointment session's own denormalised rule is authoritative (per-slot
   // overrides); group classes read the linked activity. null/empty = not gated.
   const gateActivity = (activitiesQ.data ?? []).find((a) => a.id === sessionQ.data?.activityId)
   const sessionRule = (sessionQ.data as { accessRule?: Parameters<typeof resolveActivityAccessRule>[0]['accessRule'] } | null | undefined)?.accessRule
-  const isCoachingSession = sessionQ.data?.activityType === 'coaching'
-  const accessRule = isCoachingSession
+  const isAppointmentSession = sessionQ.data?.activityType === 'appointment'
+  const accessRule = isAppointmentSession
     ? sessionQ.data
       ? resolveActivityAccessRule({ accessRule: sessionRule, isFreeTrial: sessionQ.data.isFreeTrial })
       : null

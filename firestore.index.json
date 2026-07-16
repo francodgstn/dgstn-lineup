@@ -502,7 +502,7 @@
       "density": "SPARSE_ALL"
     },
     {
-      "collectionGroup": "coach_availability",
+      "collectionGroup": "availability",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -517,7 +517,7 @@
       "density": "SPARSE_ALL"
     },
     {
-      "collectionGroup": "coach_availability",
+      "collectionGroup": "availability",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -583,6 +583,25 @@
       "fields": [
         {
           "fieldPath": "templateId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "start",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "coachId",
           "order": "ASCENDING"
         },
         {

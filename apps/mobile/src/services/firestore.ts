@@ -1,6 +1,6 @@
 import { db, getFunctions } from '../config/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit } from 'firebase/firestore';
-import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, PerformanceCheckin, PerformanceIndicator, CoachSlot, CoachSlotWithStatus } from '../types';
+import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus } from '../types';
 import { detectPerformanceProfile } from '../utils/performanceProfile';
 import { httpsCallable } from 'firebase/functions';
 
@@ -145,7 +145,7 @@ export const FirestoreService = {
         socialLinks: profileData.socialLinks || [],
         profileImage: profileData.profileImage,
         referralEnabled: profileData.referral_enabled ?? false,
-        coachingEnabled: profileData.coaching_enabled ?? false,
+        appointmentsEnabled: profileData.appointments_enabled ?? false,
       } as TeamPublicProfile;
     } catch (error) {
       console.error('Error fetching team public profile:', error);
@@ -1040,18 +1040,18 @@ export const FirestoreService = {
     }
   },
 
-  // ── Coach slots (now backed by sessions with activityType === 'coaching') ────
+  // ── Appointments (backed by sessions with activityType === 'appointment') ────
 
-  async getUpcomingCoachSlots(
+  async getUpcomingAppointments(
     teamId: string,
     contactId: string
-  ): Promise<CoachSlotWithStatus[]> {
+  ): Promise<AppointmentWithStatus[]> {
     try {
       const now = Timestamp.now();
       const slotsQuery = query(
         collection(db, 'sessions'),
         where('teamId', '==', teamId),
-        where('activityType', '==', 'coaching'),
+        where('activityType', '==', 'appointment'),
         where('start', '>=', now),
         orderBy('start', 'asc'),
         limit(20)
@@ -1073,13 +1073,13 @@ export const FirestoreService = {
           bookings_count: data.bookings_count || 0,
           location: data.location || null,
           status: data.status || 'open',
-        } as CoachSlot;
+        } as Appointment;
       });
 
       // For each slot check if the contact has a confirmed/pending booking
-      const results: CoachSlotWithStatus[] = await Promise.all(
+      const results: AppointmentWithStatus[] = await Promise.all(
         slots.map(async (slot) => {
-          let bookingStatus: CoachSlotWithStatus['bookingStatus'] = 'available';
+          let bookingStatus: AppointmentWithStatus['bookingStatus'] = 'available';
           if (slot.status === 'cancelled') {
             bookingStatus = 'cancelled';
           } else {
@@ -1104,13 +1104,13 @@ export const FirestoreService = {
 
       return results;
     } catch (error) {
-      console.error('Error fetching coach slots:', error);
+      console.error('Error fetching appointments:', error);
       return [];
     }
   },
 
-  // Book a coaching session — delegates to the unified bookSession logic
-  async bookCoachSlot(params: {
+  // Book an appointment — delegates to the unified bookSession logic
+  async bookAppointment(params: {
     teamId: string;
     slotId: string;
     contactId: string;
@@ -1123,8 +1123,8 @@ export const FirestoreService = {
     });
   },
 
-  // Cancel a coaching booking — delegates to the unified cancelSession logic
-  async cancelCoachBooking(params: {
+  // Cancel an appointment booking — delegates to the unified cancelSession logic
+  async cancelAppointment(params: {
     slotId: string;
     contactId: string;
   }): Promise<{ success: boolean }> {

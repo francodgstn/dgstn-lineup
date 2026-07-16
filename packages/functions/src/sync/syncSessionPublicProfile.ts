@@ -1,6 +1,6 @@
 // Keeps sessions/{sessionId}/public_profile/{sessionId} in sync.
 // Regular sessions: synced when allowBooking === true.
-// Coaching sessions (activityType === 'coaching'): always synced when status !== 'cancelled'.
+// Appointment sessions (activityType === 'appointment'): always synced when status !== 'cancelled'.
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import type { Timestamp } from 'firebase-admin/firestore'
 import { resolveActivityAccessRule } from '@linyup/shared'
@@ -11,25 +11,25 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
   const afterRef = event.data!.after.ref
 
   const data = event.data!.after.exists ? event.data!.after.data()! : null
-  const isCoaching = data?.activityType === 'coaching'
+  const isAppointment = data?.activityType === 'appointment'
 
   // Remove public profile when:
   // - session deleted
   // - regular session with allowBooking disabled
-  // - coaching session explicitly cancelled
-  const shouldBePublic = data && (isCoaching ? data.status !== 'cancelled' : data.allowBooking === true)
+  // - appointment session explicitly cancelled
+  const shouldBePublic = data && (isAppointment ? data.status !== 'cancelled' : data.allowBooking === true)
 
   if (!shouldBePublic) {
     await afterRef.collection('public_profile').doc(sessionId).delete()
     return
   }
 
-  if (isCoaching) {
-    // Coaching session — public profile includes slot-specific fields
+  if (isAppointment) {
+    // Appointment session — public profile includes slot-specific fields
     const publicProfile = {
-      type: 'coaching_session',
+      type: 'appointment_session',
       teamId: data.teamId,
-      activityType: 'coaching',
+      activityType: 'appointment',
       activityName: data.activityName || null,
       coachId: data.coachId || null,
       coachName: data.coachName || null,
@@ -42,7 +42,7 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
       max_participants: data.max_participants || null,
       bookings_count: data.bookings_count || 0,
       isFreeTrial: data.isFreeTrial !== false,
-      // Coaching carries its own access gate on the session doc.
+      // Appointments carry their own access gate on the session doc.
       accessRule: resolveActivityAccessRule({ accessRule: data.accessRule, isFreeTrial: data.isFreeTrial }),
       status: data.status || 'open',
       allowBooking: true,
@@ -50,11 +50,11 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
     }
     await afterRef.collection('public_profile').doc(sessionId).set(publicProfile)
   } else {
-    // Regular group-class session
+    // Regular class session
     const publicProfile = {
       type: 'session',
       teamId: data.teamId,
-      activityType: data.activityType || 'group_class',
+      activityType: data.activityType || 'class',
       activityId: data.activityId || null,
       activityName: data.activityName || null,
       activityColor: data.activityColor || null,

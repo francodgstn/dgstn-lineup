@@ -1,7 +1,7 @@
 'use client'
 
 // Booking confirmation note — a studio-authored plain-text block appended to
-// every booking confirmation email (group classes + coaching) as a highlighted
+// every booking confirmation email (group classes + appointments) as a highlighted
 // "Important" box. Ideal for waivers, gear rules, arrival instructions.
 // Per-activity overrides live in the activity editor; this is the team-wide
 // default (teams/{id}.settings.bookingConfirmationInstructions).

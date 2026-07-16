@@ -58,6 +58,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -65,6 +66,7 @@ import {
   ChevronDown,
   CalendarDays,
   CalendarRange,
+  CalendarClock,
   List,
   MapPin,
   Users,
@@ -79,6 +81,7 @@ import { Link } from '@/i18n/navigation'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
+import { AppointmentAvailabilityDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -86,7 +89,9 @@ const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), {
 
 type CalendarView = 'calendar' | 'list'
 type TimeTab = 'upcoming' | 'past'
-type ItemFilter = 'all' | 'sessions' | 'events'
+// Shared type filter, applied to both calendar + list. 'classes' = group
+// classes; 'appointment' = 1:1 appointment sessions (activityType === 'appointment').
+type ItemFilter = 'all' | 'classes' | 'appointment' | 'events'
 type ListItem = { kind: 'session'; data: Session } | { kind: 'event'; data: Event }
 
 interface MemberDoc {
@@ -647,7 +652,7 @@ function ListItemRow({
                   )}
                 </Link>
                 <Badge variant="secondary" className="text-xs shrink-0">
-                  {tS(`type_${s.activityType ?? 'group_class'}` as Parameters<typeof tS>[0])}
+                  {tS(`type_${s.activityType ?? 'class'}` as Parameters<typeof tS>[0])}
                 </Badge>
                 {s.seriesId && <Repeat2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                 {s.bookingMandatory && (
@@ -812,6 +817,10 @@ export default function CalendarPage() {
     open: false,
     editing: null,
   })
+  // Appointments, folded into the schedule: an availability-manager modal (from
+  // "+ New entry") and a bookings-roster modal (clicking an appointment slot).
+  const [availabilityOpen, setAvailabilityOpen] = useState(false)
+  const [appointmentSlot, setAppointmentSlot] = useState<Session | null>(null)
 
   const sessionsQ = useAllSessions(currentTeamId, viewYear, viewMonth)
   const activitiesQ = useActivities(currentTeamId)
@@ -843,12 +852,20 @@ export default function CalendarPage() {
   // Events aren't coach-scoped, so a specific-coach filter hides them entirely,
   // leaving only that coach's teaching schedule. Applies to both calendar + list.
   const coachId = coachFilter === 'mine' ? (user?.uid ?? null) : coachFilter === 'all' ? null : coachFilter
-  const filteredSessions = (sessionsQ.data ?? []).filter(
-    // Group classes store the coach in instructorId; coaching (private-lesson)
+  const isAppointment = (s: Session) => s.activityType === 'appointment'
+  const filteredSessions = (sessionsQ.data ?? []).filter((s) => {
+    // Group classes store the coach in instructorId; appointment (private-lesson)
     // sessions store it in coachId — match either so both surface in the filter.
-    (s) => !coachId || s.instructorId === coachId || s.coachId === coachId
-  )
-  const filteredEvents = coachFilter === 'all' ? (eventsQ.data ?? []) : []
+    if (coachId && s.instructorId !== coachId && s.coachId !== coachId) return false
+    if (filter === 'events') return false
+    if (filter === 'classes' && isAppointment(s)) return false
+    if (filter === 'appointment' && !isAppointment(s)) return false
+    return true
+  })
+  // Events aren't coach- or appointment-scoped; hidden when a coach or a
+  // class/appointment type filter is active, shown for 'all' and 'events'.
+  const filteredEvents =
+    coachFilter === 'all' && (filter === 'all' || filter === 'events') ? (eventsQ.data ?? []) : []
 
   const allItems: ListItem[] = [
     ...filteredSessions.map((s) => ({ kind: 'session' as const, data: s })),
@@ -856,11 +873,8 @@ export default function CalendarPage() {
   ]
   const listItems = allItems
     .filter((item) => (tab === 'upcoming' ? getItemMs(item) >= nowMs : getItemMs(item) < nowMs))
-    .filter(
-      (item) =>
-        filter === 'all' ||
-        (filter === 'sessions' ? item.kind === 'session' : item.kind === 'event')
-    )
+    // Type/coach filtering is already applied to filteredSessions/filteredEvents;
+    // here we only narrow further by the optional activity sub-filter.
     .filter(
       (item) =>
         !activityFilter ||
@@ -881,7 +895,8 @@ export default function CalendarPage() {
   ]
   const FILTERS: { key: ItemFilter; label: string }[] = [
     { key: 'all', label: t('filterAll') },
-    { key: 'sessions', label: t('filterSessions') },
+    { key: 'classes', label: t('filterClasses') },
+    { key: 'appointment', label: t('filterAppointments') },
     { key: 'events', label: t('filterEvents') },
   ]
 
@@ -938,34 +953,59 @@ export default function CalendarPage() {
                   <CalendarRange className="h-4 w-4 mr-2" />
                   {t('newEvent')}
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setAvailabilityOpen(true)}>
+                  <CalendarClock className="h-4 w-4 mr-2" />
+                  {t('manageAppointments')}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
         </div>
       </div>
 
-      {/* Coach filter — shared by calendar + list, only when >1 coach on roster */}
-      {coachRoster.length > 1 && (
-        <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground shrink-0" />
-          <Select value={coachFilter} onValueChange={(v) => setCoachFilter(v ?? 'all')}>
-            <SelectTrigger className="h-8 text-xs w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('coachAll')}</SelectItem>
-              <SelectItem value="mine">{t('coachMine')}</SelectItem>
-              {coachRoster
-                .filter((c) => c.userId !== user?.uid)
-                .map((c) => (
-                  <SelectItem key={c.userId} value={c.userId}>
-                    {coachLabel(c)}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+      {/* Filters — shared by calendar + list (type always; coach when >1) */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex gap-1">
+          {FILTERS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => {
+                setFilter(key)
+                if (key !== 'classes') setActivityFilter(null)
+              }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                filter === key
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      )}
+        {coachRoster.length > 1 && (
+          <div className="flex items-center gap-2">
+            <User className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Select value={coachFilter} onValueChange={(v) => setCoachFilter(v ?? 'all')}>
+              <SelectTrigger className="h-8 text-xs w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('coachAll')}</SelectItem>
+                <SelectItem value="mine">{t('coachMine')}</SelectItem>
+                {coachRoster
+                  .filter((c) => c.userId !== user?.uid)
+                  .map((c) => (
+                    <SelectItem key={c.userId} value={c.userId}>
+                      {coachLabel(c)}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
 
       {/* Nudge: sessions hang off activities, so surface activity creation first
           when the team hasn't defined any yet. */}
@@ -994,7 +1034,11 @@ export default function CalendarPage() {
           sessions={filteredSessions}
           activities={activitiesQ.data ?? []}
           events={filteredEvents}
-          onEdit={(s) => setSessionDialog({ open: true, editing: s })}
+          onEdit={(s) =>
+            s.activityType === 'appointment'
+              ? setAppointmentSlot(s)
+              : setSessionDialog({ open: true, editing: s })
+          }
           onDelete={handleDeleteSession}
           onEventEdit={(e) => setEventDialog({ open: true, editing: e })}
           onEventDelete={handleDeleteEvent}
@@ -1027,27 +1071,10 @@ export default function CalendarPage() {
             ))}
           </div>
 
-          {/* Filter row */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex gap-1">
-              {FILTERS.map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => {
-                    setFilter(key)
-                    if (key !== 'sessions') setActivityFilter(null)
-                  }}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                    filter === key
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {filter === 'sessions' && (activitiesQ.data?.length ?? 0) > 0 && (
+          {/* Activity sub-filter — only when narrowing to group classes.
+              The type/coach chips live in the shared filter row above. */}
+          {filter === 'classes' && (activitiesQ.data?.length ?? 0) > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={activityFilter ?? '__all__'}
                 onValueChange={(v) => setActivityFilter(v === '__all__' ? null : v)}
@@ -1069,8 +1096,8 @@ export default function CalendarPage() {
                   ))}
                 </SelectContent>
               </Select>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Combined list */}
           <div className="rounded-xl border overflow-hidden bg-card">
@@ -1114,7 +1141,9 @@ export default function CalendarPage() {
                         activities={activitiesQ.data ?? []}
                         onEdit={() => {
                           if (item.kind === 'session')
-                            setSessionDialog({ open: true, editing: item.data })
+                            item.data.activityType === 'appointment'
+                              ? setAppointmentSlot(item.data)
+                              : setSessionDialog({ open: true, editing: item.data })
                           else setEventDialog({ open: true, editing: item.data })
                         }}
                         onDelete={() => {
@@ -1145,6 +1174,11 @@ export default function CalendarPage() {
               <DropdownMenuItem onClick={() => setEventDialog({ open: true, editing: null })}>
                 <CalendarRange className="h-4 w-4 mr-2" />
                 {t('newEvent')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setAvailabilityOpen(true)}>
+                <CalendarClock className="h-4 w-4 mr-2" />
+                {t('manageAppointments')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1186,6 +1220,22 @@ export default function CalendarPage() {
             isOrgAdmin={isOrgAdmin}
             onClose={() => setEventDialog({ open: false, editing: null })}
             onSaved={invalidateEvents}
+          />
+          {/* Appointment availability manager (fixed slots + open windows) */}
+          <AppointmentAvailabilityDialog
+            open={availabilityOpen}
+            onOpenChange={setAvailabilityOpen}
+            teamId={currentTeamId}
+            userId={user.uid}
+          />
+          {/* Appointment slot detail — bookings roster + cancel */}
+          <AppointmentDetail
+            slot={appointmentSlot}
+            onClose={() => setAppointmentSlot(null)}
+            onCancelled={() => {
+              setAppointmentSlot(null)
+              invalidateSessions()
+            }}
           />
         </>
       )}

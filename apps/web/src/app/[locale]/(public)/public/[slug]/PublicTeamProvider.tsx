@@ -18,7 +18,7 @@ interface PublicTeamContextValue {
 const PublicTeamContext = createContext<PublicTeamContextValue | null>(null)
 
 // Consumed by every team-root surface (bio-link, booking, signup, contact-update,
-// coaching, space, …) instead of each one re-querying public_profile itself.
+// appointments, space, …) instead of each one re-querying public_profile itself.
 export function usePublicTeam() {
   const ctx = useContext(PublicTeamContext)
   if (!ctx) throw new Error('usePublicTeam must be used within PublicTeamProvider')

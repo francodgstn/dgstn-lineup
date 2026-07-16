@@ -2,8 +2,10 @@ import type { Timestamp } from './common'
 
 export type ActivityLevel = 'all' | 'beginners' | 'intermediate' | 'advanced'
 
-/** Top-level category that determines the session model and booking flow. */
-export type ActivityType = 'group_class' | 'coaching'
+/** Top-level category that determines the session model and booking flow.
+ *  'class' = a scheduled event with seats; 'appointment' = a provider's exclusive
+ *  time booked from published availability (was 'coaching'). */
+export type ActivityType = 'class' | 'appointment'
 
 // Who may book an activity — the paid-access axis (mirrors CourseAccessRule).
 //  - 'open'         → anyone; a newcomer/guest booking creates a trial contact
@@ -38,9 +40,9 @@ export interface Activity {
   slug: string
   color?: string
   level?: ActivityLevel
-  /** Session category — default 'group_class'. 'coaching' uses 1:1 slot model. */
+  /** Session category — default 'class'. 'appointment' uses the availability model. */
   type?: ActivityType
-  /** Assigned coach uid — populated when type === 'coaching'. */
+  /** Assigned provider uid — populated when type === 'appointment'. */
   coachId?: string
   /** Denormalised coach display name. */
   coachName?: string

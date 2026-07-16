@@ -4,22 +4,23 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
+import { AVAILABILITY_COLLECTION } from '@linyup/shared'
 
-// Email templates are still used by bookSession when activityType === 'coaching'
+// Email templates are still used by bookSession when activityType === 'appointment'
 // They are exported so booking/index.ts can import them.
 export {
-  buildCoachingConfirmationEmail,
-  buildCoachingICalAttachment,
-  buildCoachNotificationEmail,
-  buildCoachingCancellationEmail,
+  buildAppointmentConfirmationEmail,
+  buildAppointmentICalAttachment,
+  buildAppointmentProviderNotificationEmail,
+  buildAppointmentCancellationEmail,
 } from './templates'
 
-const TIMEZONE = 'Europe/Zurich'
+export const TIMEZONE = 'Europe/Zurich'
 const GENERATION_WINDOW_DAYS = 28
 
 // ─── timezone helper ──────────────────────────────────────────────────────────
 
-function getDatePartsInTz(date: Date): { year: number; month: number; day: number; dayOfWeek: number } {
+export function getDatePartsInTz(date: Date): { year: number; month: number; day: number; dayOfWeek: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: TIMEZONE, year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'narrow',
   }).formatToParts(date)
@@ -29,7 +30,7 @@ function getDatePartsInTz(date: Date): { year: number; month: number; day: numbe
   return { year: y, month: m, day: d, dayOfWeek: localNoon.getUTCDay() }
 }
 
-function localTimeToUtc(year: number, month: number, day: number, hour: number, minute: number): Date {
+export function localTimeToUtc(year: number, month: number, day: number, hour: number, minute: number): Date {
   const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: TIMEZONE, year: 'numeric', month: 'numeric', day: 'numeric',
@@ -61,6 +62,13 @@ interface AvailabilityDoc {
     startDate: Timestamp
     endDate?: Timestamp | null
   }
+  // Open-window mode (see Availability): no pre-generation — sessions are
+  // created lazily at booking time by bookAppointment.
+  mode?: 'fixed_slots' | 'open_window'
+  window?: { start: string; end: string }
+  durationsMinutes?: number[]
+  granularityMinutes?: number
+  bufferMinutes?: number
 }
 
 function generateOccurrences(
@@ -93,7 +101,7 @@ function generateOccurrences(
 }
 
 // ─── core generation logic ────────────────────────────────────────────────────
-// Coaching sessions are written to the `sessions` collection with activityType='coaching'.
+// Appointment sessions are written to the `sessions` collection with activityType='appointment'.
 // They are publicly exposed via sessions/{id}/public_profile (synced by syncSessionPublicProfile).
 // Booking is handled by bookSession; cancellation by cancelBooking.
 
@@ -101,6 +109,9 @@ async function generateSlotsForTemplate(
   templateId: string,
   template: AvailabilityDoc,
 ): Promise<{ created: number; skipped: number }> {
+  // Open-window templates advertise a range, not fixed times — never pre-generate.
+  if (template.mode === 'open_window') return { created: 0, skipped: 0 }
+
   const db = admin.firestore()
   const now = new Date()
   const windowEnd = new Date(now.getTime() + GENERATION_WINDOW_DAYS * 24 * 60 * 60_000)
@@ -111,7 +122,7 @@ async function generateSlotsForTemplate(
 
   for (const occ of occurrences) {
     const startTs = Timestamp.fromDate(occ.start)
-    // Dedup: check sessions collection for existing coaching session from this template+start
+    // Dedup: check sessions collection for existing appointment session from this template+start
     const existing = await db.collection('sessions')
       .where('templateId', '==', templateId)
       .where('start', '==', startTs)
@@ -123,7 +134,7 @@ async function generateSlotsForTemplate(
     await db.collection('sessions').add({
       teamId: template.teamId,
       templateId,
-      activityType: 'coaching',
+      activityType: 'appointment',
       activityName: template.title,
       coachId: template.coachId,
       coachName: template.coachName,
@@ -147,7 +158,7 @@ async function generateSlotsForTemplate(
 
 async function runGenerationForTeam(teamId: string): Promise<{ created: number; skipped: number }> {
   const db = admin.firestore()
-  const snap = await db.collection('coach_availability')
+  const snap = await db.collection(AVAILABILITY_COLLECTION)
     .where('teamId', '==', teamId)
     .where('status', '==', 'active')
     .get()
@@ -164,7 +175,7 @@ async function runGenerationForTeam(teamId: string): Promise<{ created: number; 
 
 async function runGenerationAll(): Promise<{ created: number; skipped: number }> {
   const db = admin.firestore()
-  const snap = await db.collection('coach_availability').where('status', '==', 'active').get()
+  const snap = await db.collection(AVAILABILITY_COLLECTION).where('status', '==', 'active').get()
 
   let created = 0
   let skipped = 0
@@ -208,7 +219,7 @@ export const generateCoachSlots = onCall(async (request) => {
 // ─── onCoachAvailabilityWritten — auto-generate sessions on template save ─────
 
 export const onCoachAvailabilityWritten = onDocumentWritten(
-  'coach_availability/{templateId}',
+  `${AVAILABILITY_COLLECTION}/{templateId}`,
   async (event) => {
     const after = event.data?.after
     if (!after?.exists) return  // deleted — nothing to generate

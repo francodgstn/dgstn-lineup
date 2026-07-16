@@ -13,7 +13,7 @@
 import * as admin from 'firebase-admin'
 
 export type SystemEmailKey =
-  | 'booking_confirmation' // group-class + coaching appointment confirmations
+  | 'booking_confirmation' // class + appointment confirmations
   | 'session_cancellation' // session cancelled/changed notices to booked members
   | 'contact_update_review' // outcome email for a contact's data-update request
 

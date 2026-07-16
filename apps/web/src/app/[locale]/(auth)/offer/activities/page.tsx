@@ -77,7 +77,7 @@ function slugify(name: string): string {
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const LEVELS = ['all', 'beginners', 'intermediate', 'advanced'] as const
-const ACTIVITY_TYPES: ActivityType[] = ['group_class', 'coaching']
+const ACTIVITY_TYPES: ActivityType[] = ['class', 'appointment']
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
@@ -86,7 +86,7 @@ const activitySchema = z.object({
   description: z.string().max(500).optional(),
   prerequisites: z.string().max(300).optional(),
   confirmationInstructions: z.string().max(2000).optional(),
-  type: z.enum(['group_class', 'coaching'] as const).default('group_class'),
+  type: z.enum(['class', 'appointment'] as const).default('class'),
   level: z.enum(LEVELS),
   color: z.string().optional(),
   // Paid-access gate (supersedes the legacy isFreeTrial toggle; 'open' === free trial).
@@ -147,7 +147,7 @@ function ActivityDialog({
           description: editing.description ?? '',
           prerequisites: editing.prerequisites ?? '',
           confirmationInstructions: editing.confirmationInstructions ?? '',
-          type: (editing.type ?? 'group_class') as ActivityType,
+          type: (editing.type ?? 'class') as ActivityType,
           level: editing.level ?? 'all',
           color: editing.color ?? '',
           accessTier: initialRule.type,
@@ -157,7 +157,7 @@ function ActivityDialog({
         }
       : {
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
-          type: 'group_class' as ActivityType, level: 'all',
+          type: 'class' as ActivityType, level: 'all',
           color: '#6366f1', accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '',
         },
@@ -354,7 +354,7 @@ function ActivityDialog({
                 </Select>
               )}
             />
-            {editing && watch('type') !== (editing.type ?? 'group_class') && (
+            {editing && watch('type') !== (editing.type ?? 'class') && (
               <p className="text-xs text-muted-foreground">
                 {t('typeChangeWarning')}
               </p>
@@ -597,8 +597,8 @@ function ActivityCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-medium text-sm">{activity.name}</p>
-          {activity.type === 'coaching' && (
-            <Badge variant="secondary" className="text-xs">{t('type_coaching')}</Badge>
+          {activity.type === 'appointment' && (
+            <Badge variant="secondary" className="text-xs">{t('type_appointment')}</Badge>
           )}
           {(() => {
             const raw = activity.level

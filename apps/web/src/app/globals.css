@@ -55,7 +55,8 @@
 
 /* ─── Light mode ──────────────────────────────────────────────────────────── */
 @layer base {
-  :root {
+  :root,
+  .light {
     /* Brand violet — matches landing design system */
     --primary:            oklch(0.556 0.237 292);
     --primary-foreground: oklch(0.985 0.003 288);
@@ -291,4 +292,23 @@
      Firefox (scrollbar-width) too, which the webkit rules above don't reach. */
   .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+/* ─── Product tour (driver.js) ──────────────────────────────────────────────
+   driver.js marks <body> with `.driver-active` and applies
+   `.driver-active * { pointer-events: none }` plus an overlay at z-index 10000,
+   dimming everything but the highlighted element. The account menu (theme +
+   language — tour step 2) is portalled to <body>, so it lands outside the
+   highlight and would be unclickable and behind the overlay. Re-enable pointer
+   events on the menu/select popups and lift their positioner above the overlay
+   (but below the driver popover at z-index 1e9, so Next/Back stay clickable). */
+.driver-active [data-slot='dropdown-menu-content'],
+.driver-active [data-slot='dropdown-menu-content'] *,
+.driver-active [data-slot='select-content'],
+.driver-active [data-slot='select-content'] * {
+  pointer-events: auto !important;
+}
+.driver-active [data-slot='dropdown-menu-positioner'],
+.driver-active [data-slot='select-positioner'] {
+  z-index: 100000 !important;
 }

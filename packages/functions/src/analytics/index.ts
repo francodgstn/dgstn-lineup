@@ -83,8 +83,8 @@ export const trackBookings = onDocumentWritten(
     const teamId = (session.teamId || session.teacher) as string | undefined
     if (!teamId) return
 
-    // ── Coaching session: maintain bookings_count and status ─────────────────
-    if (session.activityType === 'coaching') {
+    // ── Appointment session: maintain bookings_count and status ──────────────
+    if (session.activityType === 'appointment') {
       const [, confirmedSnap] = await to(
         db
           .collection('sessions')
@@ -114,11 +114,11 @@ export const trackBookings = onDocumentWritten(
     const sessionDateLabel = sessionStart
       ? format(sessionStart.toDate(), DATE_FORMAT)
       : 'unknown date'
-    const isCoaching = session.activityType === 'coaching'
+    const isAppointment = session.activityType === 'appointment'
 
     const descMap: Record<string, string> = {
-      booking_created: `${contactFullname} booked a ${isCoaching ? 'coaching session' : 'session'} on ${sessionDateLabel}.`,
-      booking_confirmed: `${contactFullname} confirmed for ${isCoaching ? 'coaching session' : 'session'} on ${sessionDateLabel}.`,
+      booking_created: `${contactFullname} booked a ${isAppointment ? 'appointment session' : 'session'} on ${sessionDateLabel}.`,
+      booking_confirmed: `${contactFullname} confirmed for ${isAppointment ? 'appointment session' : 'session'} on ${sessionDateLabel}.`,
       booking_cancelled: `Booking for ${contactFullname} on ${sessionDateLabel} was cancelled.`,
       booking_rebooked: `${contactFullname} rebooked from session on ${sessionDateLabel}.`,
     }
@@ -131,7 +131,7 @@ export const trackBookings = onDocumentWritten(
         contact_lastname: bookingData.lastname,
         session_date: sessionStart ?? null,
         session_id: sessionId,
-        activity_type: session.activityType || 'group_class',
+        activity_type: session.activityType || 'class',
         from_bio_link: bookingData.fromBioLink === true,
         authenticated_booking: bookingData.authenticated_booking === true,
       },
@@ -160,7 +160,7 @@ export const trackSessions = onDocumentWritten('sessions/{sessionId}', async (ev
   if (!month) return
 
   const activityType =
-    ((newData?.activityType || oldData?.activityType) as string | undefined) || 'group_class'
+    ((newData?.activityType || oldData?.activityType) as string | undefined) || 'class'
 
   // Upsert a monthly session counter for the team — total + per-type breakdown
   const counterRef = db.collection('teams').doc(teamId).collection('session_counts').doc(month)
@@ -547,11 +547,11 @@ export const weeklyReports = onSchedule(
         )
         const sessions_count = sessionsSnap?.size ?? 0
 
-        // Per-type breakdown: group_class vs coaching (and any future types)
+        // Per-type breakdown: class vs appointment (and any future types)
         const sessions_count_by_type: Record<string, number> = {}
         if (sessionsSnap) {
           for (const s of sessionsSnap.docs) {
-            const t = (s.data().activityType as string | undefined) || 'group_class'
+            const t = (s.data().activityType as string | undefined) || 'class'
             sessions_count_by_type[t] = (sessions_count_by_type[t] ?? 0) + 1
           }
         }
@@ -577,7 +577,7 @@ export const weeklyReports = onSchedule(
             if (!sessionTypeCache[sessionRef.id]) {
               const [, sDoc] = await to(sessionRef.get())
               sessionTypeCache[sessionRef.id] =
-                (sDoc?.data()?.activityType as string | undefined) || 'group_class'
+                (sDoc?.data()?.activityType as string | undefined) || 'class'
             }
             const t = sessionTypeCache[sessionRef.id]
             bookings_count_by_type[t] = (bookings_count_by_type[t] ?? 0) + 1

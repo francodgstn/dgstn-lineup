@@ -45,6 +45,8 @@ interface ActivityProfile {
   id: string
   name: string
   slug: string
+  /** Session category — 'appointment' activities route to the appointment flow. */
+  activityType?: string
   description?: string
   image?: string | null
   color?: string
@@ -523,6 +525,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               id: d.id,
               name: data.name || '',
               slug: data.slug || '',
+              activityType: data.activityType ?? undefined,
               description: data.description ?? undefined,
               image: data.image_url ?? null,
               color: data.color ?? undefined,
@@ -562,6 +565,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         // Determine initial step / auto-select
         if (preSelectedActivitySlug) {
           const matched = actList.find((a) => a.slug === preSelectedActivitySlug)
+          if (matched?.activityType === 'appointment') {
+            // Appointments have their own booking flow (per-coach slot picker) —
+            // the class calendar can't render 1:1 slots, so hand the visitor over.
+            window.location.replace(`/public/${slug}/appointments`)
+            return
+          }
           if (matched) {
             setSelectedActivity(matched)
             setStep('sessions')
@@ -958,9 +967,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
         <div className="space-y-3">
           {activities.map((a) => {
-            const hasSessions = sessions.some(
-              (s) => s.activityId === a.id || s.activitySlug === a.slug
-            )
+            // Appointment activities book through their own flow (per-coach slot
+            // picker on /appointments) — the card stays enabled and hands over.
+            const isAppointment = a.activityType === 'appointment'
+            const hasSessions =
+              isAppointment ||
+              sessions.some((s) => s.activityId === a.id || s.activitySlug === a.slug)
             const bg = a.image
               ? `url("${a.image}")`
               : a.color
@@ -971,6 +983,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                 key={a.id}
                 onClick={() => {
                   if (!hasSessions) return
+                  if (isAppointment) {
+                    window.location.assign(`/public/${slug}/appointments`)
+                    return
+                  }
                   setSelectedActivity(a)
                   setStep('sessions')
                 }}
@@ -1010,6 +1026,11 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                         </span>
                       ) : null
                     })()}
+                    {isAppointment && (
+                      <span className="rounded-full bg-primary/10 text-primary text-xs px-2 py-0.5 font-medium">
+                        {t('badgeAppointment')}
+                      </span>
+                    )}
                     {a.level && (
                       <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
                         {a.level}

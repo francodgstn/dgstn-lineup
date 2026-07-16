@@ -2,19 +2,19 @@ import React, { useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CoachSlotWithStatus, Contact } from '../../types';
+import { AppointmentWithStatus, Contact } from '../../types';
 import { FirestoreService } from '../../services/firestore';
 
 interface Props {
-  slots: CoachSlotWithStatus[];
+  slots: AppointmentWithStatus[];
   contact?: Contact | null;
   onRefresh?: () => void;
   onViewMore?: () => void;
 }
 
-export const CoachingDashboardCard: React.FC<Props> = ({ slots, contact, onRefresh, onViewMore }) => {
+export const AppointmentsDashboardCard: React.FC<Props> = ({ slots, contact, onRefresh, onViewMore }) => {
   const theme = useTheme();
-  const [selectedSlot, setSelectedSlot] = useState<CoachSlotWithStatus | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<AppointmentWithStatus | null>(null);
   const [loading, setLoading] = useState(false);
 
   const nextSlot = slots.find(s => s.bookingStatus === 'available');
@@ -26,7 +26,7 @@ export const CoachingDashboardCard: React.FC<Props> = ({ slots, contact, onRefre
     if (!selectedSlot || !contact?.id || !contact?.teamId) return;
     setLoading(true);
     try {
-      await FirestoreService.bookCoachSlot({ teamId: contact.teamId!, slotId: selectedSlot.id, contactId: contact.id });
+      await FirestoreService.bookAppointment({ teamId: contact.teamId!, slotId: selectedSlot.id, contactId: contact.id });
       closeModal();
       Alert.alert('Confirmed', 'Your appointment has been booked!');
       onRefresh?.();
@@ -68,7 +68,7 @@ export const CoachingDashboardCard: React.FC<Props> = ({ slots, contact, onRefre
               <View style={[styles.iconBadge, { backgroundColor: theme.dark ? 'rgba(147,197,253,0.15)' : 'rgba(59,130,246,0.12)' }]}>
                 <Icon source="whistle" size={14} color={accentColor} />
               </View>
-              <Text style={[styles.sectionLabel, { color: subtleText }]}>COACHING</Text>
+              <Text style={[styles.sectionLabel, { color: subtleText }]}>APPOINTMENTS</Text>
             </View>
 
             {/* Date block */}

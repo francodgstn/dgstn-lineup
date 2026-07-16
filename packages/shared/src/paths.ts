@@ -109,7 +109,7 @@ export const SESSION_SERIES_COLLECTION = 'session_series'
 export const REFERRALS_COLLECTION = 'referrals'
 export const REFERRAL_CODES_COLLECTION = 'referral_codes'
 
-export const COACH_AVAILABILITY_COLLECTION = 'coach_availability'
+export const AVAILABILITY_COLLECTION = 'availability'
 export const COACH_SLOTS_COLLECTION = 'coach_slots'
 export const COACH_SLOT_BOOKINGS_SUBCOLLECTION = 'bookings'
 

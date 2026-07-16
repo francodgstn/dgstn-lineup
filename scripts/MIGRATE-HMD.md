@@ -137,7 +137,7 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | Global `checkins` (event check-ins) | Migrated from the top-level `checkins` collection where `event.id == eventId`; doc IDs preserved; `completed_checkins_count` set on each event doc |
 | `referrals` | Copied as-is |
 | Team subcollections | Copied from source; **canonical subscription types are seeded** (see below) |
-| `coach_availability` / `coach_slots` | **Skipped** — coaching was preview-only; configure fresh |
+| `coach_availability` / `coach_slots` | **Skipped** — appointments were preview-only; configure fresh |
 | Session-level `checkins` | **Skipped** — session-level checkins (docs without `event.id`) are not migrated; the new schema is event-level only |
 | `saas_subscriptions` | **Not migrated** — create one per team manually after migration |
 | `courses` (Online Courses) | **Not migrated** — net-new in Linyup; create courses in-app post-migration |

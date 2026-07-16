@@ -50,8 +50,8 @@ export function ProductTour() {
         nextBtnText: t('tour.next'),
         prevBtnText: t('tour.prev'),
         doneBtnText: t('tour.done'),
-        // A short orientation tour: personalise (theme/language), the base
-        // Schedule surface, then the two power-nav aids (Shortcuts + search),
+        // A short orientation tour: personalise (theme/language), the Features
+        // working areas, then the two power-nav aids (Shortcuts + search),
         // ending at How-to for deeper guidance.
         steps: [
           { popover: { title: t('tour.welcomeTitle'), description: t('tour.welcomeBody') } },
@@ -65,10 +65,10 @@ export function ProductTour() {
             },
           },
           {
-            element: '[data-tour="nav-calendar"]',
+            element: '[data-tour="nav-features"]',
             popover: {
-              title: t('tour.scheduleTitle'),
-              description: t('tour.scheduleBody'),
+              title: t('tour.featuresTitle'),
+              description: t('tour.featuresBody'),
               side: 'right',
               align: 'start',
             },

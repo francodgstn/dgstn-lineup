@@ -41,7 +41,7 @@ function createBookingSchema(t: ReturnType<typeof useTranslations>) {
     showFitnessAppField: z.boolean(),
     ctaUrl: createSafeUrlSchema(t),
     ctaLabel: z.string().optional(),
-    coachingEnabled: z.boolean().optional(),
+    appointmentsEnabled: z.boolean().optional(),
   })
 }
 
@@ -81,7 +81,7 @@ function getDefaults(team: Team | null): FormData {
       showFitnessAppField: rawBooking.showFitnessAppField === true,
       ctaUrl: typeof rawBooking.ctaUrl === 'string' ? rawBooking.ctaUrl : '',
       ctaLabel: typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
-      coachingEnabled: rawBooking.coachingEnabled === true,
+      appointmentsEnabled: rawBooking.appointmentsEnabled === true,
     },
   }
 }
@@ -252,9 +252,9 @@ function BookingForm({
             desc: t('toggleShowFitnessAppDesc'),
           },
           {
-            name: 'booking.coachingEnabled' as const,
-            label: t('toggleCoachingEnabledLabel'),
-            desc: t('toggleCoachingEnabledDesc'),
+            name: 'booking.appointmentsEnabled' as const,
+            label: t('toggleAppointmentsEnabledLabel'),
+            desc: t('toggleAppointmentsEnabledDesc'),
           },
         ] as const
       ).map(({ name, label, desc }) => (
@@ -355,7 +355,7 @@ export default function BookingSettingsPage() {
       showFitnessAppField: data.booking.showFitnessAppField,
       ctaUrl: data.booking.ctaUrl || null,
       ctaLabel: data.booking.ctaLabel || null,
-      coachingEnabled: data.booking.coachingEnabled ?? false,
+      appointmentsEnabled: data.booking.appointmentsEnabled ?? false,
     }
     try {
       // ① public_profile is the source of truth (team-member writable). Must succeed.

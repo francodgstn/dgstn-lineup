@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import {
   collectionGroup,
   query,
@@ -33,6 +33,8 @@ import {
   CalendarRange,
   List,
   ArrowRight,
+  User,
+  X,
 } from 'lucide-react'
 import type {
   WebsiteSection,
@@ -275,6 +277,8 @@ interface ActivityEntry {
   id: string
   name: string
   slug: string
+  /** Session category — 'appointment' activities book via the appointment flow. */
+  activityType?: string
   description?: string
   color?: string
   imageUrl?: string
@@ -305,6 +309,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               id: d.id,
               name: (data.name as string) || '',
               slug: (data.slug as string) || '',
+              activityType: (data.activityType as string) || undefined,
               description: (data.description as string) || undefined,
               color: (data.color as string) || undefined,
               imageUrl: (data.image_url as string) || undefined,
@@ -355,10 +360,14 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
             </p>
           ) : (
             activities.map((a) => {
-              const href =
-                section.showBooking && a.slug
-                  ? `/public/${slug}/booking/${a.slug}`
-                  : undefined
+              // Appointments book via their own flow (per-coach slot picker).
+              const href = !section.showBooking
+                ? undefined
+                : a.activityType === 'appointment'
+                  ? `/public/${slug}/appointments`
+                  : a.slug
+                    ? `/public/${slug}/booking/${a.slug}`
+                    : undefined
               return (
                 <div
                   key={a.id}
@@ -569,12 +578,15 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
 
 interface SessionEntry {
   id: string
+  /** Public-mirror kind: 'session' (group class) or 'appointment_session'. */
+  type?: string
   activityName?: string
   activityColor?: string
   activityId?: string
   start: Timestamp
   end?: Timestamp
   location?: string
+  coachName?: string
 }
 
 // Group sorted sessions into ordered per-day buckets (used by the list dividers).
@@ -601,25 +613,42 @@ function groupByDay(sessions: SessionEntry[]): DayGroup[] {
 const fmtTime = (d: Date) =>
   d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 
+/** Midnight Monday of the current week — the timetable's lower bound. */
+function mondayOfCurrentWeek(): Date {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return d
+}
+
+const isPastSession = (s: SessionEntry) =>
+  (s.end ?? s.start).toDate().getTime() < Date.now()
+
 function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: RenderCtx }) {
   const { palette, slug, teamId, preview } = ctx
   const [sessions, setSessions] = useState<SessionEntry[]>([])
   const [loading, setLoading] = useState(true)
   // Studio sets the default view; visitors can switch with the toggle below.
-  const [view, setView] = useState<'list' | 'calendar'>(section.displayMode ?? 'list')
+  const [view, setView] = useState<'list' | 'calendar'>(section.displayMode ?? 'calendar')
+  const [selected, setSelected] = useState<SessionEntry | null>(null)
+  const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
     const windowEnd = new Date()
     windowEnd.setDate(windowEnd.getDate() + (section.windowDays ?? 7))
+    // Group classes AND appointment slots — private lessons are part of the weekly
+    // schedule too. `in` runs on the same (teamId,type,allowBooking,start) index.
+    // The lower bound is Monday of the CURRENT week (not "now"): the calendar
+    // doubles as a timetable, showing this week's already-run sessions muted.
     const q = query(
       collectionGroup(db, 'public_profile'),
       where('teamId', '==', teamId),
-      where('type', '==', 'session'),
+      where('type', 'in', ['session', 'appointment_session']),
       where('allowBooking', '==', true),
-      where('start', '>=', Timestamp.now()),
+      where('start', '>=', Timestamp.fromDate(mondayOfCurrentWeek())),
       orderBy('start', 'asc'),
-      limit(50)
+      limit(200)
     )
     getDocs(q)
       .then((snap) => {
@@ -641,47 +670,69 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
     }
   }, [teamId, section.windowDays, section.activityId])
 
-  // Cap how many sessions are listed (0/unset = show all in the window).
-  const visible = section.maxItems ? sessions.slice(0, section.maxItems) : sessions
-  const days = groupByDay(visible)
   const bookHref = preview ? undefined : `/public/${slug}/booking`
+  // Appointment slots book through the appointments page, not the class-booking flow.
+  const hrefFor = (s: SessionEntry) =>
+    preview ? undefined : s.type === 'appointment_session' ? `/public/${slug}/appointments` : bookHref
 
-  // Small reserve affordance on a single session — deliberately understated.
-  const BookButton = () =>
-    section.showBooking ? (
-      <a
-        {...linkProps(bookHref, preview)}
-        aria-label="Book"
-        title="Book"
-        className="shrink-0 rounded-full p-1.5 transition-opacity hover:opacity-70"
-        style={{ color: palette.accent }}
-      >
-        <CalendarPlus className="h-4 w-4" />
-      </a>
-    ) : null
+  // Daily list covers today onward (today's finished sessions render muted);
+  // the calendar additionally shows the current week's past days as a timetable.
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const listDays = groupByDay(sessions.filter((s) => s.start.toDate() >= startOfToday))
+  const activeDay = listDays.find((g) => g.key === activeDayKey) ?? listDays[0]
+  const today = new Date()
+  const isToday = (d: Date) =>
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
 
-  // Subtle day label + hairline used by the list view (and the mobile week view).
-  const DayDivider = ({ date }: { date: Date }) => (
-    <div className="flex items-center gap-3 pt-3 first:pt-0">
-      <span
-        className="text-xs font-semibold uppercase tracking-wide"
-        style={{ color: palette.muted }}
-      >
-        {date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}
-      </span>
-      <span className="h-px flex-1" style={{ background: palette.border }} />
-    </div>
-  )
-
-  const ListView = () => (
-    <div className="space-y-2.5">
-      {days.map((g) => (
-        <div key={g.key} className="space-y-2.5">
-          <DayDivider date={g.date} />
-          {g.sessions.map((s) => (
-            <div
+  // Kiosk-style daily list: selectable day chips on top, that day's sessions
+  // below — a full multi-day list is unwieldy on a website.
+  const DailyList = () => (
+    <div className="space-y-4">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {listDays.map((g) => {
+          const active = g.key === activeDay?.key
+          return (
+            <button
+              key={g.key}
+              type="button"
+              onClick={() => setActiveDayKey(g.key)}
+              aria-pressed={active}
+              className="flex min-w-[3.75rem] shrink-0 flex-col items-center rounded-xl border px-3 py-2 transition-colors"
+              style={
+                active
+                  ? { background: palette.accent, borderColor: palette.accent, color: palette.onAccent }
+                  : { background: palette.bg, borderColor: palette.border, color: palette.text }
+              }
+            >
+              <span
+                className="text-[11px] font-semibold uppercase tracking-wide"
+                style={active ? undefined : { color: palette.muted }}
+              >
+                {isToday(g.date)
+                  ? 'Today'
+                  : g.date.toLocaleDateString(undefined, { weekday: 'short' })}
+              </span>
+              <span className="text-base font-bold tabular-nums">{g.date.getDate()}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="space-y-2.5">
+        {/* Optional per-day cap (0/unset = all of the day). */}
+        {(section.maxItems
+          ? (activeDay?.sessions ?? []).slice(0, section.maxItems)
+          : (activeDay?.sessions ?? [])
+        ).map((s) => {
+          const past = isPastSession(s)
+          return (
+            <button
               key={s.id}
-              className="flex items-center gap-4 rounded-xl border px-4 py-3"
+              type="button"
+              onClick={() => setSelected(s)}
+              className={`flex w-full items-center gap-4 rounded-xl border px-4 py-3 text-left transition-opacity hover:opacity-80 ${past ? 'opacity-50' : ''}`}
               style={{ borderColor: palette.border, background: palette.bg }}
             >
               <div
@@ -691,6 +742,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate" style={{ color: palette.text }}>
                   {s.activityName ?? 'Session'}
+                  {s.coachName ? ` · ${s.coachName}` : ''}
                 </p>
                 {s.location && (
                   <p className="text-xs" style={{ color: palette.muted }}>
@@ -698,14 +750,13 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
                   </p>
                 )}
               </div>
-              <p className="text-sm shrink-0" style={{ color: palette.text }}>
+              <p className="text-sm shrink-0 tabular-nums" style={{ color: palette.text }}>
                 {fmtTime(s.start.toDate())}
               </p>
-              <BookButton />
-            </div>
-          ))}
-        </div>
-      ))}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 
@@ -741,7 +792,8 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
 
   return (
     <section id={section.id} className="py-20" style={{ background: palette.surface }}>
-      <div className="mx-auto max-w-3xl px-6">
+      {/* Calendar view needs room for the 7-day grid; list view stays a tidy reading width. */}
+      <div className={`mx-auto px-6 ${view === 'calendar' ? 'max-w-5xl' : 'max-w-3xl'}`}>
         <Heading text={section.heading ?? 'Schedule'} palette={palette} />
 
         <div className="mt-4 flex justify-center">
@@ -749,7 +801,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
             className="inline-flex items-center gap-1 rounded-full border p-1"
             style={{ borderColor: palette.border }}
           >
-            <ToggleButton mode="list" icon={List} label="List" />
+            <ToggleButton mode="list" icon={List} label="Daily list" />
             <ToggleButton mode="calendar" icon={CalendarRange} label="Calendar" />
           </div>
         </div>
@@ -759,20 +811,51 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
             <p className="text-center text-sm" style={{ color: palette.muted }}>
               Loading…
             </p>
-          ) : visible.length === 0 ? (
+          ) : sessions.length === 0 ? (
             <p className="text-center text-sm" style={{ color: palette.muted }}>
               No upcoming sessions.
             </p>
           ) : view === 'calendar' ? (
-            <WeeklyCalendar
-              sessions={visible}
-              accent={palette.accent}
-              bookingHref={section.showBooking ? bookHref : undefined}
-            />
+            // WeeklyCalendar is shared with the kiosk and styles its chrome with
+            // app theme tokens (bg-background, border, muted…). On the public site
+            // those must follow the studio's palette, not the viewer's app light/
+            // dark mode — otherwise the hour axis renders dark on a light site.
+            // Remapping the CSS vars here (they cascade via @theme inline) pins the
+            // calendar to the site palette regardless of the global theme.
+            <div
+              style={
+                {
+                  '--background': palette.surface,
+                  '--foreground': palette.text,
+                  '--muted': palette.border,
+                  '--muted-foreground': palette.muted,
+                  '--border': palette.border,
+                  '--primary': palette.accent,
+                  color: palette.text,
+                } as CSSProperties
+              }
+            >
+              <WeeklyCalendar
+                sessions={sessions}
+                accent={palette.accent}
+                windowDays={section.windowDays ?? 7}
+                onSelect={(s) => setSelected(s as SessionEntry)}
+              />
+            </div>
           ) : (
-            <ListView />
+            <DailyList />
           )}
         </div>
+
+        {selected && (
+          <SessionDetailModal
+            s={selected}
+            palette={palette}
+            preview={preview}
+            bookHref={section.showBooking && !isPastSession(selected) ? hrefFor(selected) : undefined}
+            onClose={() => setSelected(null)}
+          />
+        )}
 
         <div className="mt-8 text-center">
           <a
@@ -786,6 +869,94 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
         </div>
       </div>
     </section>
+  )
+}
+
+// Palette-styled session detail (the calendar/list blocks only fit minimal
+// info) — mirrors the kiosk's modal, plus a Book CTA when booking is offered.
+function SessionDetailModal({
+  s,
+  palette,
+  preview,
+  bookHref,
+  onClose,
+}: {
+  s: SessionEntry
+  palette: SitePalette
+  preview: boolean
+  bookHref?: string
+  onClose: () => void
+}) {
+  const start = s.start.toDate()
+  const end = s.end?.toDate()
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border p-6 shadow-xl"
+        style={{ background: palette.bg, borderColor: palette.border, color: palette.text }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className="mt-1 h-12 w-1.5 shrink-0 rounded-full"
+            style={{ background: s.activityColor || palette.accent }}
+          />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-xl font-bold">{s.activityName ?? 'Session'}</h3>
+            <p className="mt-1 text-sm capitalize" style={{ color: palette.muted }}>
+              {start.toLocaleDateString(undefined, {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              })}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 rounded-lg p-1.5 transition-opacity hover:opacity-70"
+            style={{ color: palette.muted }}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 space-y-2 text-sm">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 shrink-0" style={{ color: palette.muted }} />
+            <span className="font-medium tabular-nums">
+              {fmtTime(start)}
+              {end ? ` – ${fmtTime(end)}` : ''}
+            </span>
+          </div>
+          {s.coachName && (
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 shrink-0" style={{ color: palette.muted }} />
+              <span>{s.coachName}</span>
+            </div>
+          )}
+          {s.location && (
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 shrink-0" style={{ color: palette.muted }} />
+              <span>{s.location}</span>
+            </div>
+          )}
+        </div>
+        {bookHref && (
+          <a
+            {...linkProps(bookHref, preview)}
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
+            style={{ background: palette.accent, color: palette.onAccent }}
+          >
+            <CalendarPlus className="h-4 w-4" />
+            Book
+          </a>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -979,8 +1150,12 @@ export function SectionBlock({
   }
 }
 
-/** Default nav label per section type (used when a section has no heading). */
+/** Nav-menu label for a section: an explicit `menuLabel` wins, otherwise fall
+ *  back to the section heading (or a type default). Keeps the menu terse while
+ *  the on-page title can stay long. */
 export function sectionNavLabel(section: WebsiteSection | OrgSiteSection): string {
+  const menuLabel = (section as { menuLabel?: string }).menuLabel?.trim()
+  if (menuLabel) return menuLabel
   switch (section.type) {
     case 'content':
     case 'about':

@@ -23,7 +23,7 @@ export function transformSession(
   const actId = out.activityId as string | undefined
   const act = actId ? activityMap.get(actId) : undefined
   out.activityName = act?.name ?? null
-  out.activityType = act?.type ?? 'group_class'
+  out.activityType = act?.type ?? 'class'
 
   // New fields
   out.allowBooking = !!(src.portal_bookings_count ?? false)

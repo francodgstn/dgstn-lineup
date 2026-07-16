@@ -8,7 +8,7 @@ export function transformActivity(src: Record<string, unknown>): Record<string, 
   delete out.is_paid  // not in new schema
 
   out.slug            = out.slug            ?? slugify(String(src.name ?? ''))
-  out.type            = out.type            ?? 'group_class'
+  out.type            = out.type            ?? 'class'
   out.isActive        = out.archived_at     ? false : (out.isActive ?? true)
   out.level           = out.level           ?? 'all'
   out.alternativeName = out.alternativeName ?? null

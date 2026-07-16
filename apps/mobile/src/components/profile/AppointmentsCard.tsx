@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Alert } from 'react-native';
 import { Card, Text, useTheme, Button, ActivityIndicator } from 'react-native-paper';
-import { CoachSlotWithStatus, Contact } from '../../types';
+import { AppointmentWithStatus, Contact } from '../../types';
 import { FirestoreService } from '../../services/firestore';
 
-interface CoachSlotsCardProps {
-  slots: CoachSlotWithStatus[];
+interface AppointmentsCardProps {
+  slots: AppointmentWithStatus[];
   contact?: Contact | null;
   onRefresh?: () => void;
 }
@@ -29,11 +29,11 @@ function formatSlotTime(start: Date, end: Date): string {
   return `${dateStr}  ${startTime}–${endTime}`;
 }
 
-export const CoachSlotsCard: React.FC<CoachSlotsCardProps> = ({ slots, contact, onRefresh }) => {
+export const AppointmentsCard: React.FC<AppointmentsCardProps> = ({ slots, contact, onRefresh }) => {
   const theme = useTheme();
   const [loadingSlotId, setLoadingSlotId] = useState<string | null>(null);
 
-  const handleBook = async (slot: CoachSlotWithStatus) => {
+  const handleBook = async (slot: AppointmentWithStatus) => {
     if (!contact?.id || !contact?.teamId) {
       Alert.alert('Error', 'Missing contact details.');
       return;
@@ -48,7 +48,7 @@ export const CoachSlotsCard: React.FC<CoachSlotsCardProps> = ({ slots, contact, 
           onPress: async () => {
             setLoadingSlotId(slot.id);
             try {
-              await FirestoreService.bookCoachSlot({
+              await FirestoreService.bookAppointment({
                 teamId: contact.teamId!,
                 slotId: slot.id,
                 contactId: contact.id,
@@ -66,7 +66,7 @@ export const CoachSlotsCard: React.FC<CoachSlotsCardProps> = ({ slots, contact, 
     );
   };
 
-  const handleCancel = async (slot: CoachSlotWithStatus) => {
+  const handleCancel = async (slot: AppointmentWithStatus) => {
     if (!contact?.id) return;
     Alert.alert(
       'Cancel appointment',
@@ -79,7 +79,7 @@ export const CoachSlotsCard: React.FC<CoachSlotsCardProps> = ({ slots, contact, 
           onPress: async () => {
             setLoadingSlotId(slot.id);
             try {
-              await FirestoreService.cancelCoachBooking({
+              await FirestoreService.cancelAppointment({
                 slotId: slot.id,
                 contactId: contact.id,
               });
@@ -100,7 +100,7 @@ export const CoachSlotsCard: React.FC<CoachSlotsCardProps> = ({ slots, contact, 
 
   return (
     <Card style={styles.card}>
-      <Card.Title title="Coaching" titleVariant="titleMedium" />
+      <Card.Title title="Appointments" titleVariant="titleMedium" />
       <Card.Content>
         {slots.map((slot) => {
           const isLoading = loadingSlotId === slot.id;

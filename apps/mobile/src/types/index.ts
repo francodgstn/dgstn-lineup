@@ -122,13 +122,13 @@ export interface TeamPublicProfile {
   socialLinks?: TeamSocialLink[];
   profileImage?: string;
   referralEnabled?: boolean;
-  coachingEnabled?: boolean;
+  appointmentsEnabled?: boolean;
   legalLinks?: TeamLegalLinks;
   coaches?: TeamCoach[];
 }
 
-// CoachSlot now maps to a Session with activityType === 'coaching'
-export interface CoachSlot {
+// Appointment now maps to a Session with activityType === 'appointment'
+export interface Appointment {
   id: string;
   teamId: string;
   templateId: string | null;
@@ -144,10 +144,10 @@ export interface CoachSlot {
   status: 'open' | 'full' | 'cancelled';
 }
 
-export type CoachSlotBookingStatus = 'booked' | 'available' | 'full' | 'cancelled';
+export type AppointmentBookingStatus = 'booked' | 'available' | 'full' | 'cancelled';
 
-export interface CoachSlotWithStatus extends CoachSlot {
-  bookingStatus: CoachSlotBookingStatus;
+export interface AppointmentWithStatus extends Appointment {
+  bookingStatus: AppointmentBookingStatus;
 }
 
 export interface ReferralInfo {

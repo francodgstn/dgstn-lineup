@@ -242,8 +242,8 @@
         "description": "Individua il rischio di abbandono in anticipo.",
         "detail": "Lascia che l'AI individui i contatti a rischio abbandono e prepari il messaggio giusto per riconquistarli in tempo."
       },
-      "coaching": {
-        "title": "Coaching 1:1",
+      "appointments": {
+        "title": "Appuntamenti 1:1",
         "description": "Appuntamenti individuali prenotabili.",
         "detail": "Pubblica slot di disponibilità che i clienti prenotano da soli dal tuo bio-link — con inviti .ics, promemoria e tempi cuscinetto. Il tuo asso da personal trainer."
       },
@@ -332,7 +332,7 @@
     "cmpUiLanguagesNote": "English · Deutsch · Français · Italiano",
     "cmpBranding": "Rimuovi il marchio Linyup",
     "cmpMigration": "Migrazione dati gratuita (offerta di lancio)",
-    "cmpCoaching": "Coaching 1:1 e appuntamenti",
+    "cmpAppointments": "Appuntamenti",
     "cmpGoals": "Obiettivi e progressi",
     "cmpProducts": "Negozio prodotti",
     "cmpForms": "Moduli",
