@@ -386,49 +386,6 @@ function ActivityDialog({
             </div>
           </div>
 
-          {/* Appointment-only: bookable session lengths + booking cap, side by
-              side on wider screens (the chips need room; the cap is one input) */}
-          {type === 'appointment' && (
-            <div className="rounded-lg border p-3 grid gap-4 sm:grid-cols-[1fr_9rem]">
-              <div className="space-y-1.5">
-                <Label>{t('fieldDurationsMinutes')}</Label>
-                <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
-                <div className="flex gap-1.5 flex-wrap">
-                  {APPOINTMENT_DURATION_PRESETS.map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => toggleDuration(d)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                        durationsMinutes.includes(d)
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background text-muted-foreground border-border hover:border-foreground'
-                      }`}
-                    >
-                      {formatDuration(d)}
-                    </button>
-                  ))}
-                </div>
-                {errors.durationsMinutes && (
-                  <p className="text-destructive text-xs">{errors.durationsMinutes.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="act-max-participants">{t('fieldMaxParticipants')}</Label>
-                <Input
-                  id="act-max-participants"
-                  type="number"
-                  min={1}
-                  max={50}
-                  className="w-24"
-                  {...register('max_participants', { valueAsNumber: true })}
-                />
-                <p className="text-xs text-muted-foreground">{t('maxParticipantsHint')}</p>
-              </div>
-            </div>
-          )}
-
           {/* Presentation + description, two columns on wide screens.
               Left: cover photo, level + colour, auto-confirm. Right: description,
               stretched to match the left stack's height. On mobile the description
@@ -543,6 +500,51 @@ function ActivityDialog({
               </div>
             </div>
           </div>
+
+          {/* Appointment-only: bookable session lengths + booking cap, side by
+              side on wider screens (the chips need room; the cap is one input).
+              Sits directly above the access rule — length and price/who-can-book
+              are the terms that define an appointment offering. */}
+          {type === 'appointment' && (
+            <div className="rounded-lg border p-3 grid gap-4 sm:grid-cols-[1fr_9rem]">
+              <div className="space-y-1.5">
+                <Label>{t('fieldDurationsMinutes')}</Label>
+                <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {APPOINTMENT_DURATION_PRESETS.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => toggleDuration(d)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                        durationsMinutes.includes(d)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-muted-foreground border-border hover:border-foreground'
+                      }`}
+                    >
+                      {formatDuration(d)}
+                    </button>
+                  ))}
+                </div>
+                {errors.durationsMinutes && (
+                  <p className="text-destructive text-xs">{errors.durationsMinutes.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="act-max-participants">{t('fieldMaxParticipants')}</Label>
+                <Input
+                  id="act-max-participants"
+                  type="number"
+                  min={1}
+                  max={50}
+                  className="w-24"
+                  {...register('max_participants', { valueAsNumber: true })}
+                />
+                <p className="text-xs text-muted-foreground">{t('maxParticipantsHint')}</p>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>{t('accessLabel')}</Label>
