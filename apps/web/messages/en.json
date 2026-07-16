@@ -1136,7 +1136,6 @@
     "fieldLevel": "Level",
     "fieldColor": "Color",
     "fieldImage": "Cover image",
-    "fieldType": "Type",
     "type_class": "Class",
     "type_appointment": "Appointment",
     "typeChangeWarning": "Upcoming sessions will be updated automatically. Past sessions are kept as-is to preserve history.",
@@ -1180,7 +1179,10 @@
     "quickCreateSubHint": "Creates a basic subscription linked to this activity. Pricing can be added later in the subscription settings.",
     "sectionClasses": "Classes",
     "sectionAppointments": "Appointments",
-    "sectionEmpty": "Nothing here yet."
+    "sectionEmpty": "Nothing here yet.",
+    "fieldOfferAs": "Offer as",
+    "type_class_desc": "You put it on the calendar; people book a seat.",
+    "type_appointment_desc": "People pick a time from your availability."
   },
   "TeamSettings": {
     "title": "Team settings",

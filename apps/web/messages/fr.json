@@ -1136,7 +1136,6 @@
     "fieldLevel": "Niveau",
     "fieldColor": "Couleur",
     "fieldImage": "Image de couverture",
-    "fieldType": "Type",
     "type_class": "Cours",
     "type_appointment": "Rendez-vous",
     "typeChangeWarning": "Les séances à venir seront mises à jour automatiquement. Les séances passées sont conservées telles quelles pour préserver l'historique.",
@@ -1180,7 +1179,10 @@
     "quickCreateSubHint": "Crée un abonnement de base lié à cette activité. Les tarifs peuvent être ajoutés plus tard dans les réglages des abonnements.",
     "sectionClasses": "Cours",
     "sectionAppointments": "Rendez-vous",
-    "sectionEmpty": "Rien ici pour l’instant."
+    "sectionEmpty": "Rien ici pour l’instant.",
+    "fieldOfferAs": "Proposer comme",
+    "type_class_desc": "Vous le planifiez ; les gens réservent une place.",
+    "type_appointment_desc": "Les gens choisissent un créneau dans vos disponibilités."
   },
   "TeamSettings": {
     "title": "Paramètres de l'équipe",

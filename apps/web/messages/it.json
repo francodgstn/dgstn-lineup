@@ -1136,7 +1136,6 @@
     "fieldLevel": "Livello",
     "fieldColor": "Colore",
     "fieldImage": "Immagine di copertina",
-    "fieldType": "Tipo",
     "type_class": "Corso",
     "type_appointment": "Appuntamento",
     "typeChangeWarning": "Le sessioni future verranno aggiornate automaticamente. Le sessioni passate rimangono invariate per preservare la cronologia.",
@@ -1180,7 +1179,10 @@
     "quickCreateSubHint": "Crea un abbonamento di base collegato a questa attività. I prezzi possono essere aggiunti in seguito nelle impostazioni degli abbonamenti.",
     "sectionClasses": "Corsi",
     "sectionAppointments": "Appuntamenti",
-    "sectionEmpty": "Ancora niente qui."
+    "sectionEmpty": "Ancora niente qui.",
+    "fieldOfferAs": "Offri come",
+    "type_class_desc": "Lo pianifichi tu; le persone prenotano un posto.",
+    "type_appointment_desc": "Le persone scelgono un orario dalla tua disponibilità."
   },
   "TeamSettings": {
     "title": "Impostazioni del team",

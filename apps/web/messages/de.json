@@ -1136,7 +1136,6 @@
     "fieldLevel": "Niveau",
     "fieldColor": "Farbe",
     "fieldImage": "Titelbild",
-    "fieldType": "Typ",
     "type_class": "Kurs",
     "type_appointment": "Termin",
     "typeChangeWarning": "Bevorstehende Einheiten werden automatisch aktualisiert. Vergangene Einheiten bleiben unverändert, um die Historie zu erhalten.",
@@ -1180,7 +1179,10 @@
     "quickCreateSubHint": "Erstellt ein einfaches Abo, das mit dieser Aktivität verknüpft ist. Preise können später in den Abo-Einstellungen ergänzt werden.",
     "sectionClasses": "Kurse",
     "sectionAppointments": "Termine",
-    "sectionEmpty": "Noch nichts hier."
+    "sectionEmpty": "Noch nichts hier.",
+    "fieldOfferAs": "Anbieten als",
+    "type_class_desc": "Du planst ihn; Leute buchen einen Platz.",
+    "type_appointment_desc": "Leute wählen eine Zeit aus deiner Verfügbarkeit."
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",

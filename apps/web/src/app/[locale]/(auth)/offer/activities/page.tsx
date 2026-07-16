@@ -348,42 +348,49 @@ function ActivityDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-          {/* Identity — name + kind first; the kind drives the rest of the form */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="act-name">{t('fieldName')}</Label>
-              <Input id="act-name" {...register('name')} autoFocus />
-              {errors.name && <p className="text-destructive text-xs">{errors.name.message}</p>}
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="act-name">{t('fieldName')}</Label>
+            <Input id="act-name" {...register('name')} autoFocus />
+            {errors.name && <p className="text-destructive text-xs">{errors.name.message}</p>}
+          </div>
 
-            <div className="space-y-1.5">
-              <Label>{t('fieldType')}</Label>
-              <Controller
-                name="type"
-                control={control}
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <span className="flex flex-1 text-left text-sm truncate">
-                        {field.value
-                          ? t(`type_${field.value}` as const)
-                          : <span className="text-muted-foreground">—</span>}
+          {/* "Offer as" — a card switcher rather than a select, because the kind
+              drives the whole form and the one-liners carry the entire
+              class-vs-appointment distinction: who chooses the time. Same pattern
+              as the availability form's mode toggle and the access tiers below. */}
+          <div className="space-y-1.5">
+            <Label>{t('fieldOfferAs')}</Label>
+            <Controller
+              name="type"
+              control={control}
+              render={({ field }) => (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {ACTIVITY_TYPES.map((tp) => (
+                    <button
+                      key={tp}
+                      type="button"
+                      onClick={() => field.onChange(tp)}
+                      aria-pressed={field.value === tp}
+                      className={`rounded-lg border p-2.5 text-left transition-colors ${
+                        field.value === tp
+                          ? 'border-primary bg-primary/5'
+                          : 'hover:border-foreground/30'
+                      }`}
+                    >
+                      <span className="block text-sm font-medium">{t(`type_${tp}` as const)}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {t(`type_${tp}_desc` as const)}
                       </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ACTIVITY_TYPES.map((tp) => (
-                        <SelectItem key={tp} value={tp}>{t(`type_${tp}` as const)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {editing && watch('type') !== (editing.type ?? 'class') && (
-                <p className="text-xs text-muted-foreground">
-                  {t('typeChangeWarning')}
-                </p>
+                    </button>
+                  ))}
+                </div>
               )}
-            </div>
+            />
+            {editing && watch('type') !== (editing.type ?? 'class') && (
+              <p className="text-xs text-muted-foreground">
+                {t('typeChangeWarning')}
+              </p>
+            )}
           </div>
 
           {/* Metadata — cover 30% / description 70% on wide screens */}
