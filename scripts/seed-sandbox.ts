@@ -2579,7 +2579,7 @@ async function seedDemoTeam(profile: SectorProfile) {
     updated_by: 'seed-sandbox',
   })
 
-  // ── student auth user (custom-token identity matching generateAuthToken) ───
+  // ── student auth user (contact-session identity matching buildContactSession) ───
   const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
   const studentContactId = contactIds[studentIdx]
   const studentUid = `contact:${teamId}:${studentContactId}`
@@ -2592,16 +2592,6 @@ async function seedDemoTeam(profile: SectorProfile) {
     password: DEMO_PASSWORD,
     claims: { contactId: studentContactId, teamId, sessionExpires, email: studentEmail },
   })
-  await db
-    .collection('auth_tokens')
-    .doc(`${teamId}-seed-student`)
-    .set({
-      contactId: studentContactId,
-      teamId,
-      createdBy: uid,
-      sessionExpires,
-      created_at: ts(now()),
-    })
 
   console.log(
     `   ✓ ${teamName} (${profile.sector}) — ${contactCount} contacts, ${sessionDefs.length} sessions`

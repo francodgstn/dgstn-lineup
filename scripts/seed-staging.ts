@@ -1946,7 +1946,7 @@ async function seedTeam(opts: TeamSeed) {
   }
   // org member teams are billed through the org subscription (handled in seedOrg)
 
-  // ── student auth user (custom-token identity matching generateAuthToken) ──────
+  // ── student auth user (contact-session identity matching buildContactSession) ──────
   const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
   const studentContactId = contactIds[studentIdx]
   const studentUid = `contact:${teamId}:${studentContactId}`
@@ -1963,16 +1963,6 @@ async function seedTeam(opts: TeamSeed) {
       email: `${slugEmail(pool[studentIdx])}.${teamId}@example.com`,
     },
   })
-  await db
-    .collection('auth_tokens')
-    .doc(`${teamId}-seed-student`)
-    .set({
-      contactId: studentContactId,
-      teamId,
-      createdBy: uid,
-      sessionExpires,
-      created_at: ts(now()),
-    })
 
   // ── documents (all plans — minPlan 'free') ──────────────────────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)

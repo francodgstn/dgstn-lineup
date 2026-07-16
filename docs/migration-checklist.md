@@ -46,7 +46,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `sendContactVerificationCode`
 - ✅ `verifyContactCode`
 - ✅ `completeSignup`
-- ✅ `validateAuthToken`
+- ~~`validateAuthToken`~~ — deleted 2026-07-17. Read a snake_case `auth_tokens` shape (`type`/`team_id`/`contact_id`) that no writer in the repo ever produced, so every call could only return `not-found` or "type mismatch". The whole `auth_tokens` mechanism went with it (incl. `requestContactUpdate`'s `authToken` mode and the rules block); contacts authenticate with their contact session.
 - ✅ `generateApiKey`
 
 ### Sync Triggers
