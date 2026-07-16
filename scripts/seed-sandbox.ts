@@ -1529,6 +1529,19 @@ async function seedDemoTeam(profile: SectorProfile) {
   // courses, website), so the bio-link surfaces all of them.
   const portalLinks = buildStorefrontPageLinks()
   const bioLinkBackground = { type: 'gradient', color: portalGradient }
+  // Booking settings — seeded to BOTH the public_profile (read by the public
+  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
+  // admin Settings → Booking form).
+  const bookingSettings = {
+    flowType: 'activity-first',
+    windowMonths: 2,
+    showPhone: true,
+    ctaUrl: null,
+    ctaLabel: null,
+    showActivityDescription: true,
+    // Every sandbox team seeds an appointment activity + slots.
+    appointmentsEnabled: true,
+  }
 
   await db
     .collection('teams')
@@ -1548,7 +1561,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       // Standalone Studio demo teams enable the affiliation axis (team-local 'club').
       affiliations_enabled: true,
       ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],
-      settings: { gamification: gamificationSettings, teamEmail: email },
+      settings: { gamification: gamificationSettings, teamEmail: email, booking: bookingSettings },
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
       bioLinkBackground,
@@ -1597,14 +1610,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       bioLinkBackground,
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
       links: portalLinks,
-      bookingSettings: {
-        flowType: 'activity-first',
-        windowMonths: 2,
-        showPhone: true,
-        ctaUrl: null,
-        ctaLabel: null,
-        showActivityDescription: true,
-      },
+      bookingSettings,
       default_currency: 'CHF',
       aggregator_subscription_types: publicSubTypes,
       membershipRequiredFields: null,

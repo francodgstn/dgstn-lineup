@@ -144,8 +144,10 @@ export const FirestoreService = {
         links: profileData.links || [],
         socialLinks: profileData.socialLinks || [],
         profileImage: profileData.profileImage,
-        referralEnabled: profileData.referral_enabled ?? false,
-        appointmentsEnabled: profileData.appointments_enabled ?? false,
+        referralEnabled: profileData.referralEnabled ?? false,
+        // The appointments toggle lives in bookingSettings (written by the admin
+        // Settings → Booking page) — there is no top-level flag on this doc.
+        appointmentsEnabled: profileData.bookingSettings?.appointmentsEnabled ?? false,
       } as TeamPublicProfile;
     } catch (error) {
       console.error('Error fetching team public profile:', error);

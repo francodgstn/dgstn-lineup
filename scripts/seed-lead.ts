@@ -672,6 +672,21 @@ async function seedLeadTenant(profile: LeadProfile) {
     `teams/${teamId}/portal/hero`
   )
 
+  // Booking settings — seeded to BOTH the public_profile (read by the public
+  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
+  // admin Settings → Booking form).
+  const bookingSettings = {
+    flowType: 'activity-first',
+    // Cover the materialized future window so the booking page shows it all.
+    windowMonths: bookingWindowMonths,
+    showPhone: true,
+    ctaUrl: null,
+    ctaLabel: null,
+    showActivityDescription: true,
+    // Lead tenants seed appointment templates + slots (profile.appointments).
+    appointmentsEnabled: true,
+  }
+
   await db
     .collection('teams')
     .doc(teamId)
@@ -692,6 +707,7 @@ async function seedLeadTenant(profile: LeadProfile) {
       settings: {
         gamification: profile.gamification,
         teamEmail: profile.contactEmail,
+        booking: bookingSettings,
         ...(profile.bookingConfirmationInstructions
           ? { bookingConfirmationInstructions: profile.bookingConfirmationInstructions }
           : {}),
@@ -878,15 +894,7 @@ async function seedLeadTenant(profile: LeadProfile) {
       bioLinkBackground,
       socialLinks: profile.socialLinks,
       links: portalLinks,
-      bookingSettings: {
-        flowType: 'activity-first',
-        // Cover the materialized future window so the booking page shows it all.
-        windowMonths: bookingWindowMonths,
-        showPhone: true,
-        ctaUrl: null,
-        ctaLabel: null,
-        showActivityDescription: true,
-      },
+      bookingSettings,
       showBranding: false, // studio plan carries no "Powered by Linyup" badge
       default_currency: profile.currency,
       default_public_surface: 'bio-link',

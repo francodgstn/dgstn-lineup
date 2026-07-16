@@ -804,6 +804,19 @@ async function seedTeam(opts: TeamSeed) {
   // lighter link set; studio/org teams surface the full storefront.
   const portalLinks = plan === 'coach' ? buildBasicPageLinks() : buildStorefrontPageLinks()
   const bioLinkBackground = { type: 'gradient', color: portalGradient }
+  // Booking settings — seeded to BOTH the public_profile (read by the public
+  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
+  // admin Settings → Booking form).
+  const bookingSettings = {
+    flowType: 'activity-first',
+    windowMonths: 2,
+    showPhone: true,
+    ctaUrl: null,
+    ctaLabel: null,
+    showActivityDescription: true,
+    // Every staging team seeds an appointment activity + sessions.
+    appointmentsEnabled: true,
+  }
   await db
     .collection('teams')
     .doc(teamId)
@@ -822,7 +835,7 @@ async function seedTeam(opts: TeamSeed) {
       ...(orgId
         ? { org_id: orgId, organization_ids: [orgId], ranking_systems: [] }
         : { ranking_systems: rankingSystemDefs }),
-      settings: { gamification: gamificationSettings, teamEmail: email },
+      settings: { gamification: gamificationSettings, teamEmail: email, booking: bookingSettings },
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
       bioLinkBackground,
@@ -848,14 +861,7 @@ async function seedTeam(opts: TeamSeed) {
       bioLinkBackground,
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
       links: portalLinks,
-      bookingSettings: {
-        flowType: 'activity-first',
-        windowMonths: 2,
-        showPhone: true,
-        ctaUrl: null,
-        ctaLabel: null,
-        showActivityDescription: true,
-      },
+      bookingSettings,
       membershipRequiredFields: null,
       membershipOptionalFields: null,
       updated_at: ts(now()),

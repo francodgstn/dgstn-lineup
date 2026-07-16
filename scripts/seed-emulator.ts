@@ -502,6 +502,19 @@ async function seedTeam(opts: {
   // Auth user
   await auth.createUser({ uid, email, password: 'linyup123', displayName, emailVerified: true })
 
+  // Booking settings — seeded to BOTH the public_profile (read by the public
+  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
+  // admin Settings → Booking form).
+  const bookingSettings = {
+    flowType: 'activity-first',
+    windowMonths: 2,
+    showPhone: true,
+    ctaUrl: null,
+    ctaLabel: null,
+    // Every plan-tier demo team seeds an appointment activity + sessions.
+    appointmentsEnabled: true,
+  }
+
   // Team doc
   const trialEndsAt = plan === 'coach' ? ts(daysFromNow(14)) : undefined
   await db
@@ -522,7 +535,7 @@ async function seedTeam(opts: {
       ...(affiliationsEnabled ? { affiliations_enabled: true } : {}),
       ...(teamOrgId ? { organization_ids: [teamOrgId] } : {}),
       ranking_systems: rankingSystemDefs,
-      settings: { gamification: gamificationSettings },
+      settings: { gamification: gamificationSettings, booking: bookingSettings },
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
@@ -551,13 +564,7 @@ async function seedTeam(opts: {
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
       socialLinks: [{ platform: 'instagram', url: `https://instagram.com/${teamSlug}` }],
       links: plan === 'coach' ? buildBasicPageLinks() : buildStorefrontPageLinks(),
-      bookingSettings: {
-        flowType: 'activity-first',
-        windowMonths: 2,
-        showPhone: true,
-        ctaUrl: null,
-        ctaLabel: null,
-      },
+      bookingSettings,
       showBranding: false, // paid plans carry no "Powered by Linyup" badge
       default_currency: 'CHF',
       aggregator_subscription_types: publicSubTypes,
