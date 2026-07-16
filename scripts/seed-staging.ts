@@ -1026,8 +1026,8 @@ async function seedTeam(opts: TeamSeed) {
       color: accentColor,
       description: appointmentActDescription,
       type: 'appointment',
-      coachId: uid,
-      coachName: displayName,
+      providerId: uid,
+      providerName: displayName,
       level: 'all',
       isFreeTrial: true,
       isActive: true,
@@ -1059,8 +1059,8 @@ async function seedTeam(opts: TeamSeed) {
     .doc(appointmentTemplateId)
     .set({
       teamId,
-      coachId: uid,
-      coachName: displayName,
+      providerId: uid,
+      providerName: displayName,
       activityId: appointmentActId,
       title: appointmentActName,
       description: 'One-on-one coaching session.',
@@ -1107,8 +1107,8 @@ async function seedTeam(opts: TeamSeed) {
         activityId: appointmentActId,
         activityName: appointmentActName,
         templateId: appointmentTemplateId,
-        coachId: uid,
-        coachName: displayName,
+        providerId: uid,
+        providerName: displayName,
         isFreeTrial: true,
         start: ts(base),
         end: ts(end),
@@ -1131,8 +1131,8 @@ async function seedTeam(opts: TeamSeed) {
         teamId,
         activityType: 'appointment',
         activityName: appointmentActName,
-        coachId: uid,
-        coachName: displayName,
+        providerId: uid,
+        providerName: displayName,
         templateId: appointmentTemplateId,
         start: ts(base),
         end: ts(end),
@@ -1266,7 +1266,7 @@ async function seedTeam(opts: TeamSeed) {
         start: ts(base),
         end: ts(end),
         location: s.location,
-        instructor: s.instructor ?? null,
+        providerName: s.instructor ?? null,
         locationAddress: '123 Fighter St',
         allowBooking: s.allowBooking,
         participants_count: 0,
@@ -1292,7 +1292,7 @@ async function seedTeam(opts: TeamSeed) {
           start: ts(base),
           end: ts(end),
           location: s.location,
-          instructorName: s.instructor ?? null,
+          providerName: s.instructor ?? null,
           locationAddress: '123 Fighter St',
           locationMapsUrl: null,
           capacity: null,
@@ -2020,7 +2020,7 @@ async function seedTeam(opts: TeamSeed) {
       for (const c of coachContacts.docs) await c.ref.update({ assigned_coach_ids: [coachUid] })
       const coachSessions = await db.collection('sessions').where('teamId', '==', teamId).limit(3).get()
       for (const s of coachSessions.docs)
-        await s.ref.update({ coachId: coachUid, instructorId: coachUid, coachName: coaches[0].displayName })
+        await s.ref.update({ providerId: coachUid, providerName: coaches[0].displayName })
     }
   }
 

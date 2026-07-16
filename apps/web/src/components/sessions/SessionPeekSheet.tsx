@@ -171,10 +171,10 @@ export function SessionPeekSheet({ sessionId, onClose, activities, onEdit, onDel
                     <span className="truncate">{session.location}</span>
                   </div>
                 )}
-                {(session.instructorName || session.coachName) && (
+                {session.providerName && (
                   <div className="flex items-center gap-2">
                     <User className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{session.instructorName ?? session.coachName}</span>
+                    <span className="truncate">{session.providerName}</span>
                   </div>
                 )}
               </div>

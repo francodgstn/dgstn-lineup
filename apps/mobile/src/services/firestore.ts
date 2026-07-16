@@ -358,7 +358,7 @@ export const FirestoreService = {
             locationName: data.locationName,
             locationAddress: data.locationAddress,
             locationMapsUrl: data.locationMapsUrl,
-            instructorName: data.instructorName,
+            providerName: data.providerName,
             allowBooking: data.allowBooking,
           } as SessionPublicProfile;
         })
@@ -410,7 +410,7 @@ export const FirestoreService = {
               locationName: data.locationName,
               locationAddress: data.locationAddress,
               locationMapsUrl: data.locationMapsUrl,
-              instructorName: data.instructorName,
+              providerName: data.providerName,
               allowBooking: data.allowBooking,
             } as SessionPublicProfile
           };
@@ -473,7 +473,7 @@ export const FirestoreService = {
             locationName: data.locationName,
             locationAddress: data.locationAddress,
             locationMapsUrl: data.locationMapsUrl,
-            instructorName: data.instructorName,
+            providerName: data.providerName,
             allowBooking: data.allowBooking,
           } as SessionPublicProfile;
         });
@@ -743,7 +743,7 @@ export const FirestoreService = {
               locationName: data.locationName,
               locationAddress: data.locationAddress,
               locationMapsUrl: data.locationMapsUrl,
-              instructorName: data.instructorName,
+              providerName: data.providerName,
               allowBooking: data.allowBooking,
             } as SessionPublicProfile
           };
@@ -1064,8 +1064,8 @@ export const FirestoreService = {
           id: d.id,
           teamId: data.teamId,
           templateId: data.templateId || null,
-          coachId: data.coachId || '',
-          coachName: data.coachName || '',
+          providerId: data.providerId || '',
+          providerName: data.providerName || '',
           activityName: data.activityName || '',
           start: data.start?.toDate?.() || new Date(),
           end: data.end?.toDate?.() || new Date(),

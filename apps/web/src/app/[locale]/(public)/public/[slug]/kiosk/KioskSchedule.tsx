@@ -99,7 +99,7 @@ function SessionRow({ s, onSelect }: { s: KioskSession; onSelect: (s: KioskSessi
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold">
           {s.activityName ?? 'Session'}
-          {s.coachName ? ` · ${s.coachName}` : ''}
+          {s.providerName ? ` · ${s.providerName}` : ''}
         </p>
         {s.location && <p className="truncate text-sm text-muted-foreground">{s.location}</p>}
       </div>
@@ -172,10 +172,10 @@ function SessionModal({
               {end ? ` – ${fmtTime(end)}` : ''}
             </span>
           </div>
-          {s.coachName && (
+          {s.providerName && (
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span>{s.coachName}</span>
+              <span>{s.providerName}</span>
             </div>
           )}
           {s.location && (

@@ -21,8 +21,10 @@ export interface AvailabilityWindow {
 
 export interface Availability {
   teamId: string
-  coachId: string
-  coachName: string
+  /** UID of the provider whose time this availability publishes. */
+  providerId: string
+  /** Denormalised provider display name. */
+  providerName: string
   title: string
   description?: string
   isFreeTrial?: boolean

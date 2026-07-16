@@ -238,7 +238,7 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds, walkInCoac
                       <div>
                         <p className="font-semibold">
                           {s.activityName ?? 'Session'}
-                          {s.coachName ? ` · ${s.coachName}` : ''}
+                          {s.providerName ? ` · ${s.providerName}` : ''}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {fmtTime(s.start.toDate())}
@@ -259,7 +259,7 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds, walkInCoac
               <h1 className="text-2xl font-bold">{t('walkInTitle')}</h1>
               <p className="mt-1 text-muted-foreground">
                 {selected.activityName ?? 'Session'}
-                {selected.coachName ? ` · ${selected.coachName}` : ''} ·{' '}
+                {selected.providerName ? ` · ${selected.providerName}` : ''} ·{' '}
                 {fmtDateTime(selected.start.toDate())}
               </p>
             </div>

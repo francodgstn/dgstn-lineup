@@ -203,11 +203,11 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
             <Text variant="headlineSmall" style={[styles.modalTitle, { color: theme.colors.onSurface }]}>
               {selectedSlot?.activityName}
             </Text>
-            {selectedSlot?.coachName ? (
+            {selectedSlot?.providerName ? (
               <View style={styles.coachRow}>
                 <Icon source="account-circle" size={16} color={theme.colors.onSurfaceVariant} />
                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6 }}>
-                  with <Text style={{ fontWeight: '700', color: theme.colors.onSurface }}>{selectedSlot.coachName}</Text>
+                  with <Text style={{ fontWeight: '700', color: theme.colors.onSurface }}>{selectedSlot.providerName}</Text>
                 </Text>
               </View>
             ) : null}

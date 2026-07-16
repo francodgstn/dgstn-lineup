@@ -117,9 +117,9 @@ export const AppointmentsCard: React.FC<AppointmentsCardProps> = ({ slots, conta
                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                   {formatSlotTime(slot.start, slot.end)}
                 </Text>
-                {slot.coachName ? (
+                {slot.providerName ? (
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {slot.coachName}
+                    {slot.providerName}
                   </Text>
                 ) : null}
                 {slot.location ? (

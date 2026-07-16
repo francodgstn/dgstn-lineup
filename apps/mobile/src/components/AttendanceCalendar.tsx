@@ -343,7 +343,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
                                       </Text>
                                       <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                                           {session.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                          {session.instructorName ? ` · ${session.instructorName}` : ''}
+                                          {session.providerName ? ` · ${session.providerName}` : ''}
                                       </Text>
                                   </View>
                                   {isSessionLoading ? (

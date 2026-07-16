@@ -696,10 +696,10 @@ function ListItemRow({
                 {s.location}
               </span>
             )}
-            {s.instructorName && (
+            {s.providerName && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <User className="h-3 w-3 shrink-0" />
-                {s.instructorName}
+                {s.providerName}
               </span>
             )}
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -851,12 +851,12 @@ export default function CalendarPage() {
   // Coach filter — narrows sessions to a single instructor (or the current user).
   // Events aren't coach-scoped, so a specific-coach filter hides them entirely,
   // leaving only that coach's teaching schedule. Applies to both calendar + list.
-  const coachId = coachFilter === 'mine' ? (user?.uid ?? null) : coachFilter === 'all' ? null : coachFilter
+  const providerId = coachFilter === 'mine' ? (user?.uid ?? null) : coachFilter === 'all' ? null : coachFilter
   const isAppointment = (s: Session) => s.activityType === 'appointment'
   const filteredSessions = (sessionsQ.data ?? []).filter((s) => {
-    // Group classes store the coach in instructorId; appointment (private-lesson)
-    // sessions store it in coachId — match either so both surface in the filter.
-    if (coachId && s.instructorId !== coachId && s.coachId !== coachId) return false
+    // Group classes and appointment (private-lesson) sessions both store the
+    // running provider in providerId.
+    if (providerId && s.providerId !== providerId) return false
     if (filter === 'events') return false
     if (filter === 'classes' && isAppointment(s)) return false
     if (filter === 'appointment' && !isAppointment(s)) return false

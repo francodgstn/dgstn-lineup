@@ -601,7 +601,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "coachId",
+          "fieldPath": "providerId",
           "order": "ASCENDING"
         },
         {

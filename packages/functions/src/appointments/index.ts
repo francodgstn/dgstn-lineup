@@ -46,8 +46,8 @@ export function localTimeToUtc(year: number, month: number, day: number, hour: n
 
 interface AvailabilityDoc {
   teamId: string
-  coachId: string
-  coachName: string
+  providerId: string
+  providerName: string
   title: string
   description?: string | null
   isFreeTrial?: boolean
@@ -136,8 +136,8 @@ async function generateSlotsForTemplate(
       templateId,
       activityType: 'appointment',
       activityName: template.title,
-      coachId: template.coachId,
-      coachName: template.coachName,
+      providerId: template.providerId,
+      providerName: template.providerName,
       isFreeTrial: template.isFreeTrial !== false,
       start: startTs,
       end: Timestamp.fromDate(occ.end),

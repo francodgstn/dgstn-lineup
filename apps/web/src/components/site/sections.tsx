@@ -586,7 +586,7 @@ interface SessionEntry {
   start: Timestamp
   end?: Timestamp
   location?: string
-  coachName?: string
+  providerName?: string
 }
 
 // Group sorted sessions into ordered per-day buckets (used by the list dividers).
@@ -742,7 +742,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate" style={{ color: palette.text }}>
                   {s.activityName ?? 'Session'}
-                  {s.coachName ? ` · ${s.coachName}` : ''}
+                  {s.providerName ? ` · ${s.providerName}` : ''}
                 </p>
                 {s.location && (
                   <p className="text-xs" style={{ color: palette.muted }}>
@@ -932,10 +932,10 @@ function SessionDetailModal({
               {end ? ` – ${fmtTime(end)}` : ''}
             </span>
           </div>
-          {s.coachName && (
+          {s.providerName && (
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 shrink-0" style={{ color: palette.muted }} />
-              <span>{s.coachName}</span>
+              <span>{s.providerName}</span>
             </div>
           )}
           {s.location && (

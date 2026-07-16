@@ -26,19 +26,18 @@ export interface Session {
   seriesId?: string
   isException?: boolean
   exceptionType?: 'modified' | 'cancelled' | null
-  instructorName?: string
-  /** UID of the assigned instructor/coach (picked from the team's coach roster). */
-  instructorId?: string
+  /** UID of the person who runs this session — class instructor or appointment
+   *  provider (picked from the team's coach roster). Replaces the former
+   *  instructorId/coachId split. */
+  providerId?: string
+  /** Denormalised display name of the provider. */
+  providerName?: string
   /** When booking is allowed, mark it as required (no drop-ins) — surfaces a
-   *  "Booking required" chip in the public booking flow. Group-class only in UI. */
+   *  "Booking required" chip in the public booking flow. Class-only in UI. */
   bookingMandatory?: boolean
   // ── Appointment-specific fields (only populated when activityType === 'appointment') ──
   /** Back-link to the availability template this appointment was booked from. */
   templateId?: string
-  /** UID of the assigned provider. */
-  coachId?: string
-  /** Display name of the assigned provider. */
-  coachName?: string
   /** Hard booking cap for appointment sessions. */
   max_participants?: number
   /** Active booking count — maintained by trigger or set at migration time. */
@@ -63,9 +62,9 @@ export interface SessionPublicProfile {
   bookingMandatory?: boolean
   location?: string
   onlineUrl?: string
-  instructorName?: string
-  /** Denormalised instructor/coach uid (class sessions). */
-  instructorId?: string
+  /** UID + display name of the provider (class instructor or appointment provider). */
+  providerId?: string
+  providerName?: string
   locationAddress?: string
   locationMapsUrl?: string
   activitySlug?: string
@@ -74,8 +73,6 @@ export interface SessionPublicProfile {
   activityLevel?: string
   activityIsFreeTrial?: boolean
   // Appointment-specific public fields
-  coachId?: string
-  coachName?: string
   max_participants?: number
   bookings_count?: number
   isFreeTrial?: boolean

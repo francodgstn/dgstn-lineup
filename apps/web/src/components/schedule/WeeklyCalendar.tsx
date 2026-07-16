@@ -26,8 +26,8 @@ export interface PlannerSession {
   activityName?: string | null
   activityColor?: string | null
   location?: string | null
-  /** Coach running the slot (appointment sessions) — distinguishes parallel slots. */
-  coachName?: string | null
+  /** Provider running the slot (appointment sessions) — distinguishes parallel slots. */
+  providerName?: string | null
   /** Per-session link target; takes precedence over the shared `bookingHref`
    *  (e.g. appointment slots link to the appointments page, classes to booking). */
   href?: string
@@ -289,9 +289,9 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
                   borderLeftColor: color,
                 }
                 const name = s.activityName ?? 'Session'
-                // Coach in the title distinguishes parallel slots (e.g. three
-                // "Private Lesson" columns at the same hour, one per coach).
-                const label = s.coachName ? `${name} · ${s.coachName}` : name
+                // Provider in the title distinguishes parallel slots (e.g. three
+                // "Private Lesson" columns at the same hour, one per provider).
+                const label = s.providerName ? `${name} · ${s.providerName}` : name
                 const timeRange = `${fmtTime(s.start.toDate())}${s.end ? ` – ${fmtTime(s.end.toDate())}` : ''}`
                 // Narrow parallel columns truncate hard — the tooltip carries it all.
                 const tooltip = [label, timeRange, s.location].filter(Boolean).join(' · ')

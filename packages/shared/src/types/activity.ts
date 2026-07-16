@@ -43,9 +43,9 @@ export interface Activity {
   /** Session category — default 'class'. 'appointment' uses the availability model. */
   type?: ActivityType
   /** Assigned provider uid — populated when type === 'appointment'. */
-  coachId?: string
-  /** Denormalised coach display name. */
-  coachName?: string
+  providerId?: string
+  /** Denormalised provider display name. */
+  providerName?: string
   base_score?: number | null
   /** Legacy trial toggle. Superseded by `accessRule` but kept in sync
    *  (`isFreeTrial = accessRule.type === 'open'`) for existing queries. */

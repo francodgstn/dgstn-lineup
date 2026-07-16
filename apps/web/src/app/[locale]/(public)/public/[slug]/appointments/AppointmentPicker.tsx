@@ -42,7 +42,7 @@ import {
 interface PublicSlot {
   id: string // the session ID (parent of the public_profile doc)
   activityName: string | null
-  coachName: string | null
+  providerName: string | null
   start: number // milliseconds
   end: number // milliseconds
   duration_minutes: number
@@ -56,8 +56,8 @@ interface PublicSlot {
 
 // Availability returned by listAvailability (open-window mode).
 interface AvailCoach {
-  coachId: string
-  coachName: string | null
+  providerId: string
+  providerName: string | null
   templateId: string
   title: string
   location: string | null
@@ -70,8 +70,8 @@ interface AvailCoach {
 // What a window time-chip opens the booking modal with.
 interface WindowBooking {
   templateId: string
-  coachId: string
-  coachName: string | null
+  providerId: string
+  providerName: string | null
   title: string
   startMs: number
   durationMinutes: number
@@ -351,7 +351,7 @@ function SlotBookingForm({
 function BookingModal({
   title,
   isFreeTrial,
-  coachName,
+  providerName,
   location,
   onlineUrl,
   dateLine,
@@ -362,7 +362,7 @@ function BookingModal({
 }: {
   title: string | null
   isFreeTrial: boolean
-  coachName: string | null
+  providerName: string | null
   location: string | null
   onlineUrl: string | null
   dateLine: string
@@ -387,8 +387,8 @@ function BookingModal({
           </DialogTitle>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             <span>{dateLine}</span>
-            {coachName && (
-              <span className="flex items-center gap-1"><User className="h-3 w-3" />{coachName}</span>
+            {providerName && (
+              <span className="flex items-center gap-1"><User className="h-3 w-3" />{providerName}</span>
             )}
             {location && (
               <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{location}</span>
@@ -431,7 +431,7 @@ function SlotRow({ slot, onSelect }: { slot: PublicSlot; onSelect: (s: PublicSlo
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{fmtTime(slot.start)} – {fmtTime(slot.end)}</span>
             <span>{fmtDuration(slot.duration_minutes)}</span>
-            {slot.coachName && <span className="flex items-center gap-1"><User className="h-3 w-3" />{slot.coachName}</span>}
+            {slot.providerName && <span className="flex items-center gap-1"><User className="h-3 w-3" />{slot.providerName}</span>}
             {slot.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{slot.location}</span>}
             {slot.onlineUrl && <span className="flex items-center gap-1"><Video className="h-3 w-3" />{t('onlineSession')}</span>}
           </div>
@@ -467,7 +467,7 @@ function WindowPicker({ coach, onPick }: { coach: AvailCoach; onPick: (startMs: 
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold truncate">{coach.title}</p>
-          {coach.coachName && <p className="text-xs text-muted-foreground">{coach.coachName}</p>}
+          {coach.providerName && <p className="text-xs text-muted-foreground">{coach.providerName}</p>}
         </div>
       </div>
 
@@ -621,7 +621,7 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
             return {
               id: d.ref.parent.parent!.id,
               activityName: (s.activityName as string) || null,
-              coachName: (s.coachName as string) || null,
+              providerName: (s.providerName as string) || null,
               start: (s.start as Timestamp).toMillis(),
               end: (s.end as Timestamp).toMillis(),
               duration_minutes: (s.duration_minutes as number) || 60,
@@ -647,12 +647,12 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
 
   const coaches = useMemo(() => {
     const set = new Set<string>()
-    for (const s of slots ?? []) if (s.coachName) set.add(s.coachName)
+    for (const s of slots ?? []) if (s.providerName) set.add(s.providerName)
     return [...set].sort()
   }, [slots])
 
   const visibleSlots = useMemo(
-    () => (slots ?? []).filter((s) => !coachFilter || s.coachName === coachFilter),
+    () => (slots ?? []).filter((s) => !coachFilter || s.providerName === coachFilter),
     [slots, coachFilter]
   )
 
@@ -663,7 +663,7 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
         start: { toDate: () => new Date(s.start) },
         end: { toDate: () => new Date(s.end) },
         activityName: s.activityName,
-        coachName: s.coachName,
+        providerName: s.providerName,
         location: s.location,
       })),
     [visibleSlots]
@@ -711,8 +711,8 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
                 onPick={(startMs, durationMinutes) =>
                   setWindowBooking({
                     templateId: coach.templateId,
-                    coachId: coach.coachId,
-                    coachName: coach.coachName,
+                    providerId: coach.providerId,
+                    providerName: coach.providerName,
                     title: coach.title,
                     startMs,
                     durationMinutes,
@@ -781,7 +781,7 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
           key={selected.id}
           title={selected.activityName}
           isFreeTrial={selected.isFreeTrial}
-          coachName={selected.coachName}
+          providerName={selected.providerName}
           location={selected.location}
           onlineUrl={selected.onlineUrl}
           dateLine={`${fmtDate(selected.start)} · ${fmtTime(selected.start)} – ${fmtTime(selected.end)} · ${fmtDuration(selected.duration_minutes)}`}
@@ -800,7 +800,7 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
           key={`${windowBooking.templateId}-${windowBooking.startMs}-${windowBooking.durationMinutes}`}
           title={windowBooking.title}
           isFreeTrial={windowBooking.isFreeTrial}
-          coachName={windowBooking.coachName}
+          providerName={windowBooking.providerName}
           location={windowBooking.location}
           onlineUrl={windowBooking.onlineUrl}
           dateLine={`${fmtDate(windowBooking.startMs)} · ${fmtTime(windowBooking.startMs)} – ${fmtTime(windowBooking.startMs + windowBooking.durationMinutes * 60_000)} · ${fmtDuration(windowBooking.durationMinutes)}`}
@@ -809,7 +809,7 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
             httpsCallable(functions, 'bookAppointment')({
               teamId,
               templateId: windowBooking.templateId,
-              coachId: windowBooking.coachId,
+              providerId: windowBooking.providerId,
               startMs: windowBooking.startMs,
               durationMinutes: windowBooking.durationMinutes,
               ...args,

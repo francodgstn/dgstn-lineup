@@ -981,12 +981,12 @@ export const bookSession = onCall(async (request) => {
 
   if (isAppointment) {
     // ── Appointment session: personalised confirmation + .ics + coach notification ─
-    const coachId = sessionData.coachId as string | null
-    const coachName = (sessionData.coachName as string) || 'Your coach'
+    const providerId = sessionData.providerId as string | null
+    const providerName = (sessionData.providerName as string) || 'Your coach'
     let coachEmail: string | null = null
     let coachFirstname = 'Coach'
-    if (coachId) {
-      const [, coachDoc] = await to(admin.firestore().collection('users').doc(coachId).get())
+    if (providerId) {
+      const [, coachDoc] = await to(admin.firestore().collection('users').doc(providerId).get())
       if (coachDoc?.exists) {
         coachEmail = coachDoc.get('email') || null
         coachFirstname = coachDoc.get('firstname') || 'Coach'
@@ -999,7 +999,7 @@ export const bookSession = onCall(async (request) => {
         firstname: sanitized.firstname,
         teamName,
         slotTitle: activityName,
-        coachName,
+        providerName,
         start: sessionStart,
         end: sessionEnd,
         location: sessionData.location || null,
@@ -1014,7 +1014,7 @@ export const bookSession = onCall(async (request) => {
         start: sessionStart,
         end: sessionEnd,
         location: sessionData.location || null,
-        coachName,
+        providerName,
         coachEmail: coachEmail || 'noreply@linyup.com',
         clientName: `${sanitized.firstname} ${sanitized.lastname}`,
         clientEmail: sanitized.email,

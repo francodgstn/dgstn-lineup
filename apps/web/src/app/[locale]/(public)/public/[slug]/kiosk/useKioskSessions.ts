@@ -31,7 +31,7 @@ export interface KioskSession {
   start: Timestamp
   end: Timestamp
   location?: string
-  coachName?: string
+  providerName?: string
   /** Appointment slots only: 'open' | 'full' | 'cancelled' — walk-in offers open ones. */
   status?: string
 }

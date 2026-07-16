@@ -71,7 +71,7 @@ interface SessionProfile {
   start: Timestamp
   end: Timestamp
   location?: string
-  instructorName?: string
+  providerName?: string
   locationAddress?: string
   locationMapsUrl?: string
   allowBooking: boolean
@@ -379,9 +379,9 @@ function StickyBar({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-sm truncate">{activity.name}</p>
-        {session?.instructorName && (
+        {session?.providerName && (
           <p className="text-xs text-muted-foreground italic">
-            {t('withInstructor', { name: session.instructorName })}
+            {t('withInstructor', { name: session.providerName })}
           </p>
         )}
         {session && (
@@ -1152,8 +1152,8 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                           {formatTime(s.start)} – {formatTime(s.end)}
                         </p>
                         <div className="flex flex-wrap gap-x-3 mt-0.5">
-                          {s.instructorName && (
-                            <p className="text-xs text-muted-foreground">{s.instructorName}</p>
+                          {s.providerName && (
+                            <p className="text-xs text-muted-foreground">{s.providerName}</p>
                           )}
                           {s.location && (
                             <p className="text-xs text-muted-foreground">{s.location}</p>
@@ -1611,10 +1611,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                 <span className="font-medium text-foreground">{t('labelTime')}</span>
                 {formatTime(confirmedSession.start)} – {formatTime(confirmedSession.end)}
               </p>
-              {confirmedSession.instructorName && (
+              {confirmedSession.providerName && (
                 <p>
                   <span className="font-medium text-foreground">{t('labelInstructor')}</span>
-                  {confirmedSession.instructorName}
+                  {confirmedSession.providerName}
                 </p>
               )}
               {confirmedSession.location && (

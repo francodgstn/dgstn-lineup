@@ -156,8 +156,8 @@ const sessionSchema = z.object({
   location:        z.string().max(120).optional(),
   placeId:         z.string().optional(),
   roomId:          z.string().optional(),
-  instructorId:    z.string().optional(),
-  instructorName:  z.string().max(120).optional(),
+  providerId:      z.string().optional(),
+  providerName:    z.string().max(120).optional(),
   // Optional cap; kept as text and coerced to a number on save (empty ⇒ no cap).
   maxParticipants: z.string().max(6).optional(),
   notes:           z.string().max(2000).optional(),
@@ -346,11 +346,8 @@ export function SessionFormDialog({
         location:        editing?.location ?? '',
         placeId:         editing?.placeId ?? '',
         roomId:          editing?.roomId ?? '',
-        // Appointment sessions carry the coach in coachId/coachName (group classes
-        // use instructorId/instructorName) — read either so the picker never
-        // shows an empty coach on a private-lesson slot.
-        instructorId:    editing?.instructorId ?? editing?.coachId ?? '',
-        instructorName:  editing?.instructorName ?? editing?.coachName ?? '',
+        providerId:      editing?.providerId ?? '',
+        providerName:    editing?.providerName ?? '',
         maxParticipants: editing?.max_participants != null ? String(editing.max_participants) : '',
         notes:           editing?.notes ?? '',
         allowBooking:    editing?.allowBooking ?? false,
@@ -361,7 +358,7 @@ export function SessionFormDialog({
   const watchedActivityId  = watch('activityId')
   const watchedStart       = watch('start')
   const watchedPlaceId     = watch('placeId')
-  const watchedInstructorId = watch('instructorId')
+  const watchedProviderId  = watch('providerId')
   const watchedAllowBooking = watch('allowBooking')
 
   const { team } = useAuth()
@@ -372,9 +369,9 @@ export function SessionFormDialog({
 
   // Trigger label for the instructor picker: matched coach → legacy typed name → placeholder.
   const instructorLabel = (() => {
-    const c = coaches.find((m) => m.userId === watchedInstructorId)
+    const c = coaches.find((m) => m.userId === watchedProviderId)
     if (c) return coachLabel(c)
-    return watch('instructorName') || null
+    return watch('providerName') || null
   })()
 
   useEffect(() => {
@@ -408,13 +405,8 @@ export function SessionFormDialog({
       location:       values.location || null,
       placeId:        values.placeId || null,
       roomId:         values.roomId || null,
-      instructorId:   values.instructorId || null,
-      instructorName: values.instructorName || null,
-      // Appointment sessions are read via coachId/coachName (public mirror, kiosk,
-      // coach filter) — keep them in sync with the picked coach.
-      ...(values.activityType === 'appointment'
-        ? { coachId: values.instructorId || null, coachName: values.instructorName || null }
-        : {}),
+      providerId:     values.providerId || null,
+      providerName:   values.providerName || null,
       max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
       notes:          values.notes || null,
       allowBooking:   values.allowBooking ?? false,
@@ -444,11 +436,8 @@ export function SessionFormDialog({
           duration: values.duration,
           allowBooking: values.allowBooking ?? false,
           bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
-          instructorName: values.instructorName || null,
-          instructorId: values.instructorId || null,
-          ...(values.activityType === 'appointment'
-            ? { coachId: values.instructorId || null, coachName: values.instructorName || null }
-            : {}),
+          providerName: values.providerName || null,
+          providerId: values.providerId || null,
           max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
         },
         recurrence: {
@@ -519,11 +508,8 @@ export function SessionFormDialog({
         end:            endDate.toISOString(),
         duration:       values.duration,
         location:       values.location || null,
-        instructorId:   values.instructorId || null,
-        instructorName: values.instructorName || null,
-        ...(values.activityType === 'appointment'
-          ? { coachId: values.instructorId || null, coachName: values.instructorName || null }
-          : {}),
+        providerId:     values.providerId || null,
+        providerName:   values.providerName || null,
         max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
         notes:          values.notes || null,
         allowBooking:   values.allowBooking ?? false,
@@ -641,17 +627,17 @@ export function SessionFormDialog({
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">{t('fieldInstructor')}</label>
-                  <Controller name="instructorId" control={control} render={({ field }) => (
+                  <Controller name="providerId" control={control} render={({ field }) => (
                     <Select
                       value={field.value || '__none__'}
                       onValueChange={(v) => {
                         if (v === '__none__') {
                           field.onChange('')
-                          setValue('instructorName', '')
+                          setValue('providerName', '')
                         } else {
                           field.onChange(v)
                           const c = coaches.find((m) => m.userId === v)
-                          setValue('instructorName', c ? coachLabel(c) : '')
+                          setValue('providerName', c ? coachLabel(c) : '')
                         }
                       }}
                     >

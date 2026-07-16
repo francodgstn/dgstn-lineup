@@ -42,8 +42,8 @@ const parseHHMM = (s: unknown): [number, number] => {
 interface WindowTemplate {
   id: string
   teamId: string
-  coachId: string
-  coachName: string
+  providerId: string
+  providerName: string
   title: string
   status: string
   mode?: string
@@ -75,7 +75,7 @@ function conflicts(startMs: number, durMs: number, busy: BusyInterval[], bufferM
 // ─── listAvailability (public) ─────────────────────────────────────────────────
 
 export const listAvailability = onCall(async (request) => {
-  const data = request.data as { teamId?: string; coachId?: string; days?: number }
+  const data = request.data as { teamId?: string; providerId?: string; days?: number }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
 
   const rangeDays = Math.min(Math.max(Math.floor(data.days ?? DEFAULT_RANGE_DAYS), 1), MAX_RANGE_DAYS)
@@ -90,24 +90,24 @@ export const listAvailability = onCall(async (request) => {
     .get()
   const templates: WindowTemplate[] = snap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<WindowTemplate, 'id'>) }))
-    .filter((t) => t.mode === 'open_window' && (!data.coachId || t.coachId === data.coachId))
+    .filter((t) => t.mode === 'open_window' && (!data.providerId || t.providerId === data.providerId))
   if (templates.length === 0) return { coaches: [] }
 
-  // Group templates by coach so a coach's booked sessions are queried once.
-  const byCoach = new Map<string, WindowTemplate[]>()
+  // Group templates by provider so a provider's booked sessions are queried once.
+  const byProvider = new Map<string, WindowTemplate[]>()
   for (const t of templates) {
-    const arr = byCoach.get(t.coachId)
+    const arr = byProvider.get(t.providerId)
     if (arr) arr.push(t)
-    else byCoach.set(t.coachId, [t])
+    else byProvider.set(t.providerId, [t])
   }
 
   const coaches: unknown[] = []
-  for (const [coachId, coachTemplates] of byCoach) {
-    // Busy = this coach's non-cancelled sessions overlapping the range.
+  for (const [providerId, providerTemplates] of byProvider) {
+    // Busy = this provider's non-cancelled sessions overlapping the range.
     const busySnap = await db
       .collection('sessions')
       .where('teamId', '==', data.teamId)
-      .where('coachId', '==', coachId)
+      .where('providerId', '==', providerId)
       .where('start', '>=', Timestamp.fromMillis(nowMs - MAX_SESSION_MS))
       .where('start', '<=', Timestamp.fromMillis(toMs))
       .get()
@@ -116,7 +116,7 @@ export const listAvailability = onCall(async (request) => {
       .filter((s) => s.status !== 'cancelled')
       .map((s) => ({ start: (s.start as Timestamp).toMillis(), end: (s.end as Timestamp).toMillis() }))
 
-    for (const tpl of coachTemplates) {
+    for (const tpl of providerTemplates) {
       const durations = (tpl.durationsMinutes ?? []).filter((x) => x > 0)
       if (!tpl.window || durations.length === 0) continue
       const gran = (tpl.granularityMinutes || 15) * 60_000
@@ -157,8 +157,8 @@ export const listAvailability = onCall(async (request) => {
 
       if (days.length) {
         coaches.push({
-          coachId,
-          coachName: tpl.coachName,
+          providerId,
+          providerName: tpl.providerName,
           templateId: tpl.id,
           title: tpl.title,
           location: tpl.location ?? null,
@@ -181,8 +181,8 @@ async function sendAppointmentBookingEmails(p: {
   teamName: string
   lang: Lang
   activityName: string
-  coachId: string | null
-  coachName: string
+  providerId: string | null
+  providerName: string
   start: Date
   end: Date
   location: string | null
@@ -193,8 +193,8 @@ async function sendAppointmentBookingEmails(p: {
 }): Promise<void> {
   let coachEmail: string | null = null
   let coachFirstname = 'Coach'
-  if (p.coachId) {
-    const [, coachDoc] = await to(admin.firestore().collection('users').doc(p.coachId).get())
+  if (p.providerId) {
+    const [, coachDoc] = await to(admin.firestore().collection('users').doc(p.providerId).get())
     if (coachDoc?.exists) {
       coachEmail = coachDoc.get('email') || null
       coachFirstname = coachDoc.get('firstname') || 'Coach'
@@ -208,7 +208,7 @@ async function sendAppointmentBookingEmails(p: {
         firstname: p.client.firstname,
         teamName: p.teamName,
         slotTitle: p.activityName,
-        coachName: p.coachName,
+        providerName: p.providerName,
         start: p.start,
         end: p.end,
         location: p.location,
@@ -223,7 +223,7 @@ async function sendAppointmentBookingEmails(p: {
         start: p.start,
         end: p.end,
         location: p.location,
-        coachName: p.coachName,
+        providerName: p.providerName,
         coachEmail: coachEmail || 'noreply@linyup.com',
         clientName: `${p.client.firstname} ${p.client.lastname}`,
         clientEmail: p.client.email,
@@ -287,7 +287,7 @@ export const bookAppointment = onCall(async (request) => {
   const data = request.data as {
     teamId?: string
     templateId?: string
-    coachId?: string
+    providerId?: string
     startMs?: number
     durationMinutes?: number
     contactDetails?: { firstname: string; lastname: string; email: string; phone?: string }
@@ -318,8 +318,8 @@ export const bookAppointment = onCall(async (request) => {
   if (tpl.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Team mismatch')
   if (tpl.status !== 'active' || tpl.mode !== 'open_window' || !tpl.window)
     throw new HttpsError('failed-precondition', 'This availability is not open for booking')
-  const coachId = tpl.coachId
-  if (data.coachId && data.coachId !== coachId)
+  const providerId = tpl.providerId
+  if (data.providerId && data.providerId !== providerId)
     throw new HttpsError('invalid-argument', 'Coach mismatch')
 
   // Validate the chosen start against the advertised window.
@@ -432,7 +432,7 @@ export const bookAppointment = onCall(async (request) => {
   // query inside the tx catches overlapping different starts. A previously
   // cancelled session at the same id is reusable (its time is free again).
   const bufferMs = (tpl.bufferMinutes || 0) * 60_000
-  const sessionRef = db.collection('sessions').doc(`apt_${coachId}_${start.getTime()}`)
+  const sessionRef = db.collection('sessions').doc(`apt_${providerId}_${start.getTime()}`)
   const bookingToken = generateSecureToken()
 
   const sessionDoc = {
@@ -441,8 +441,8 @@ export const bookAppointment = onCall(async (request) => {
     origin: 'window',
     activityType: 'appointment',
     activityName: tpl.title,
-    coachId,
-    coachName: tpl.coachName,
+    providerId,
+    providerName: tpl.providerName,
     isFreeTrial,
     start: Timestamp.fromDate(start),
     end: Timestamp.fromDate(end),
@@ -483,7 +483,7 @@ export const bookAppointment = onCall(async (request) => {
     const overlapQ = db
       .collection('sessions')
       .where('teamId', '==', data.teamId)
-      .where('coachId', '==', coachId)
+      .where('providerId', '==', providerId)
       .where('start', '>=', Timestamp.fromMillis(start.getTime() - MAX_SESSION_MS))
       .where('start', '<=', Timestamp.fromMillis(end.getTime() + bufferMs))
     const overlapSnap = await tx.get(overlapQ)
@@ -519,8 +519,8 @@ export const bookAppointment = onCall(async (request) => {
     teamName,
     lang,
     activityName: tpl.title,
-    coachId,
-    coachName: tpl.coachName,
+    providerId,
+    providerName: tpl.providerName,
     start,
     end,
     location: tpl.location ?? null,

@@ -9,6 +9,16 @@ export function transformSession(
     out.activityId = out.activity_id
     delete out.activity_id
   }
+  // HMD's instructorId/instructorName → the unified providerId/providerName
+  // (dgstn-lineup merged the instructor/coach split into a single provider field).
+  if ('instructorId' in out) {
+    out.providerId = out.instructorId
+    delete out.instructorId
+  }
+  if ('instructorName' in out) {
+    out.providerName = out.instructorName
+    delete out.instructorName
+  }
   delete out.id // let Firestore doc ID be the canonical id; avoid collisions in web app spread
   // HMD's legacy source field is `portal_bookings_count` (the bio-link rename does
   // NOT apply here — this reads the immutable hmd-lineup export schema). Map it to

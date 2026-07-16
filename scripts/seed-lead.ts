@@ -1014,8 +1014,8 @@ async function seedLeadTenant(profile: LeadProfile) {
       color: profile.accentColor,
       description: profile.appointments.description,
       type: 'appointment',
-      coachId: uidOf(profile.appointments.templates[0]?.staffKey ?? owner.key),
-      coachName: headCoachName,
+      providerId: uidOf(profile.appointments.templates[0]?.staffKey ?? owner.key),
+      providerName: headCoachName,
       level: 'all',
       isFreeTrial: true,
       isActive: true,
@@ -1048,8 +1048,8 @@ async function seedLeadTenant(profile: LeadProfile) {
     .map((x) => x.i)
   for (let tplIdx = 0; tplIdx < profile.appointments.templates.length; tplIdx++) {
     const tpl = profile.appointments.templates[tplIdx]
-    const coachUid = uidOf(tpl.staffKey)
-    const coachName = staffName(tpl.staffKey)
+    const providerUid = uidOf(tpl.staffKey)
+    const providerName = staffName(tpl.staffKey)
     // Index-suffixed so one coach can hold several availability templates.
     const templateId = `${teamId}-tpl-${tpl.staffKey}-${tplIdx}`
     const tplPlace = resolvePlace(tpl.placeKey)
@@ -1059,8 +1059,8 @@ async function seedLeadTenant(profile: LeadProfile) {
       .doc(templateId)
       .set({
         teamId,
-        coachId: coachUid,
-        coachName,
+        providerId: providerUid,
+        providerName,
         activityId: appointmentActId,
         title: profile.appointments.activityName,
         description: profile.appointments.description,
@@ -1116,8 +1116,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         teamId,
         activityType: 'appointment',
         activityName: profile.appointments.activityName,
-        coachId: coachUid,
-        coachName,
+        providerId: providerUid,
+        providerName,
         templateId,
         start: ts(base),
         end: ts(end),
@@ -1187,8 +1187,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         teamId,
         activityType: 'appointment',
         activityName: profile.appointments.activityName,
-        coachId: coachUid,
-        coachName,
+        providerId: providerUid,
+        providerName,
         templateId,
         start: ts(base),
         end: ts(end),
@@ -1312,7 +1312,7 @@ async function seedLeadTenant(profile: LeadProfile) {
     const a = profile.activities[s.actIdx]
     const id = `${teamId}-session-${i.toString().padStart(3, '0')}`
     sessionIds.push(id)
-    const instructorName = staffName(s.staffKey)
+    const providerName = staffName(s.staffKey)
     const place = resolvePlace(s.placeKey)
 
     await db
@@ -1327,8 +1327,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         location: place.label,
         locationAddress: place.address,
         ...(place.placeId ? { placeId: place.placeId } : {}),
-        instructorName,
-        instructorId: uidOf(s.staffKey),
+        providerName,
+        providerId: uidOf(s.staffKey),
         ...(a.capacity != null ? { max_participants: a.capacity } : {}),
         allowBooking: s.allowBooking,
         participants_count: 0,
@@ -1355,7 +1355,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         start: ts(s.date),
         end: ts(s.end),
         location: place.label,
-        instructorName,
+        providerName,
         locationAddress: place.address,
         locationMapsUrl: place.mapsUrl,
         capacity: a.capacity,

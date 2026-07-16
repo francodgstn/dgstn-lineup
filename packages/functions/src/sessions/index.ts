@@ -90,8 +90,8 @@ export const generateRecurringSessions = onCall(async (request) => {
         tags: seriesData.template?.tags ?? [],
         notes: seriesData.template?.notes ?? '',
         allowBooking: seriesData.template?.allowBooking ?? false,
-        instructorName: seriesData.template?.instructorName ?? null,
-        instructorId: seriesData.template?.instructorId ?? null,
+        providerName: seriesData.template?.providerName ?? null,
+        providerId: seriesData.template?.providerId ?? null,
         max_participants: seriesData.template?.max_participants ?? null,
         bookingMandatory: seriesData.template?.bookingMandatory ?? false,
         teamId,
@@ -398,8 +398,8 @@ export const updateRecurringSession = onCall(async (request) => {
     'activityId',
     'activityName',
     'activityType',
-    'instructorName',
-    'instructorId',
+    'providerName',
+    'providerId',
     'allowBooking',
     'max_participants',
     'bookingMandatory',
@@ -522,10 +522,10 @@ export const updateRecurringSession = onCall(async (request) => {
   if (updates.notes !== undefined) seriesUpdates['template.notes'] = updates.notes
   if (updates.allowBooking !== undefined)
     seriesUpdates['template.allowBooking'] = updates.allowBooking
-  if (updates.instructorName !== undefined)
-    seriesUpdates['template.instructorName'] = updates.instructorName
-  if (updates.instructorId !== undefined)
-    seriesUpdates['template.instructorId'] = updates.instructorId
+  if (updates.providerName !== undefined)
+    seriesUpdates['template.providerName'] = updates.providerName
+  if (updates.providerId !== undefined)
+    seriesUpdates['template.providerId'] = updates.providerId
   if (updates.max_participants !== undefined)
     seriesUpdates['template.max_participants'] = updates.max_participants
   if (updates.bookingMandatory !== undefined)
@@ -661,12 +661,12 @@ export const updateRecurringSession = onCall(async (request) => {
         allowBooking:
           ((seriesUpdates['template.allowBooking'] ??
             seriesData.template?.allowBooking) as boolean) ?? false,
-        instructorName:
-          ((seriesUpdates['template.instructorName'] ?? seriesData.template?.instructorName) as
+        providerName:
+          ((seriesUpdates['template.providerName'] ?? seriesData.template?.providerName) as
             | string
             | null) ?? null,
-        instructorId:
-          ((seriesUpdates['template.instructorId'] ?? seriesData.template?.instructorId) as
+        providerId:
+          ((seriesUpdates['template.providerId'] ?? seriesData.template?.providerId) as
             | string
             | null) ?? null,
         max_participants:

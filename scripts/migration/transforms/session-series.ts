@@ -1,5 +1,23 @@
 export function transformSessionSeries(src: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...src }
+
+  // HMD's nested template.instructorId/instructorName → the unified
+  // template.providerId/providerName (read by editSessionSeries when
+  // materializing future occurrences).
+  const tpl = src.template as Record<string, unknown> | undefined
+  if (tpl) {
+    const mappedTpl: Record<string, unknown> = { ...tpl }
+    if ('instructorId' in mappedTpl) {
+      mappedTpl.providerId = mappedTpl.instructorId
+      delete mappedTpl.instructorId
+    }
+    if ('instructorName' in mappedTpl) {
+      mappedTpl.providerName = mappedTpl.instructorName
+      delete mappedTpl.instructorName
+    }
+    out.template = mappedTpl
+  }
+
   const rec = src.recurrence as Record<string, unknown> | undefined
   if (rec) {
     const mapped: Record<string, unknown> = { ...rec }

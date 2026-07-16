@@ -692,8 +692,8 @@ async function seedTeam(opts: {
       slug: '1on1-coaching',
       color: accentColor,
       type: 'appointment',
-      coachId: uid,
-      coachName: displayName,
+      providerId: uid,
+      providerName: displayName,
       level: 'all',
       isFreeTrial: true,
       isActive: true,
@@ -724,8 +724,8 @@ async function seedTeam(opts: {
     .doc(appointmentTemplateId)
     .set({
       teamId,
-      coachId: uid,
-      coachName: displayName,
+      providerId: uid,
+      providerName: displayName,
       activityId: appointmentActId,
       title: appointmentActName,
       description: 'One-on-one coaching session.',
@@ -781,8 +781,8 @@ async function seedTeam(opts: {
         activityId: appointmentActId,
         activityName: appointmentActName,
         templateId: appointmentTemplateId,
-        coachId: uid,
-        coachName: displayName,
+        providerId: uid,
+        providerName: displayName,
         isFreeTrial: true,
         start: ts(base),
         end: ts(end),
@@ -807,8 +807,8 @@ async function seedTeam(opts: {
         teamId,
         activityType: 'appointment',
         activityName: appointmentActName,
-        coachId: uid,
-        coachName: displayName,
+        providerId: uid,
+        providerName: displayName,
         templateId: appointmentTemplateId,
         start: ts(base),
         end: ts(end),
@@ -947,7 +947,7 @@ async function seedTeam(opts: {
         start: ts(base),
         end: ts(end),
         location: s.location,
-        instructor: s.instructor ?? null,
+        providerName: s.instructor ?? null,
         locationAddress: s.locationAddress ?? null,
         allowBooking: s.allowBooking,
         participants_count: 0,
@@ -973,7 +973,7 @@ async function seedTeam(opts: {
           start: ts(base),
           end: ts(end),
           location: s.location,
-          instructorName: s.instructor ?? null,
+          providerName: s.instructor ?? null,
           locationAddress: s.locationAddress ?? null,
           locationMapsUrl: null,
           capacity: null,
@@ -2654,7 +2654,7 @@ async function seedStudioCoach() {
   // Give the coach a couple of their own sessions to manage.
   const sessionsSnap = await db.collection('sessions').where('teamId', '==', teamId).limit(3).get()
   for (const s of sessionsSnap.docs) {
-    await s.ref.update({ coachId: uid, instructorId: uid, coachName: displayName })
+    await s.ref.update({ providerId: uid, providerName: displayName })
   }
 
   console.log(

@@ -132,8 +132,8 @@ export interface Appointment {
   id: string;
   teamId: string;
   templateId: string | null;
-  coachId: string;
-  coachName: string;
+  providerId: string;
+  providerName: string;
   activityName: string;
   description?: string;
   start: Date;
@@ -180,7 +180,7 @@ export interface SessionPublicProfile {
   locationName?: string;
   locationAddress?: string;
   locationMapsUrl?: string;
-  instructorName?: string;
+  providerName?: string;
   allowBooking?: boolean;
 }
 

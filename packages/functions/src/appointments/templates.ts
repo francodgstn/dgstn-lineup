@@ -58,7 +58,7 @@ interface ConfirmParams {
   firstname: string
   teamName: string
   slotTitle: string
-  coachName: string
+  providerName: string
   start: Date
   end: Date
   location?: string | null
@@ -70,7 +70,7 @@ interface ConfirmParams {
 }
 
 export function buildAppointmentConfirmationEmail(params: ConfirmParams) {
-  const { firstname, teamName, slotTitle, coachName, start, end, location, onlineUrl, cancelUrl, instructions, lang = 'en' } = params
+  const { firstname, teamName, slotTitle, providerName, start, end, location, onlineUrl, cancelUrl, instructions, lang = 'en' } = params
   const dateStr = formatDateTime(start, lang)
   const endTime = formatTime(end, lang)
 
@@ -87,7 +87,7 @@ export function buildAppointmentConfirmationEmail(params: ConfirmParams) {
     en: [
       `Your appointment with <strong>${teamName}</strong> has been confirmed.`,
       `<strong>Session:</strong> ${slotTitle}`,
-      `<strong>Coach:</strong> ${coachName}`,
+      `<strong>Coach:</strong> ${providerName}`,
       `<strong>Date:</strong> ${dateStr} – ${endTime}`,
       location ? `<strong>Location:</strong> ${location}` : '',
       onlineUrl ? `<strong>Online:</strong> <a href="${onlineUrl}">${onlineUrl}</a>` : '',
@@ -96,7 +96,7 @@ export function buildAppointmentConfirmationEmail(params: ConfirmParams) {
     de: [
       `Ihr Termin bei <strong>${teamName}</strong> wurde bestätigt.`,
       `<strong>Sitzung:</strong> ${slotTitle}`,
-      `<strong>Coach:</strong> ${coachName}`,
+      `<strong>Coach:</strong> ${providerName}`,
       `<strong>Datum:</strong> ${dateStr} – ${endTime}`,
       location ? `<strong>Ort:</strong> ${location}` : '',
       onlineUrl ? `<strong>Online:</strong> <a href="${onlineUrl}">${onlineUrl}</a>` : '',
@@ -105,7 +105,7 @@ export function buildAppointmentConfirmationEmail(params: ConfirmParams) {
     fr: [
       `Votre rendez-vous avec <strong>${teamName}</strong> a été confirmé.`,
       `<strong>Séance :</strong> ${slotTitle}`,
-      `<strong>Coach :</strong> ${coachName}`,
+      `<strong>Coach :</strong> ${providerName}`,
       `<strong>Date :</strong> ${dateStr} – ${endTime}`,
       location ? `<strong>Lieu :</strong> ${location}` : '',
       onlineUrl ? `<strong>En ligne :</strong> <a href="${onlineUrl}">${onlineUrl}</a>` : '',
@@ -114,7 +114,7 @@ export function buildAppointmentConfirmationEmail(params: ConfirmParams) {
     it: [
       `Il tuo appuntamento con <strong>${teamName}</strong> è stato confermato.`,
       `<strong>Sessione:</strong> ${slotTitle}`,
-      `<strong>Coach:</strong> ${coachName}`,
+      `<strong>Coach:</strong> ${providerName}`,
       `<strong>Data:</strong> ${dateStr} – ${endTime}`,
       location ? `<strong>Luogo:</strong> ${location}` : '',
       onlineUrl ? `<strong>Online:</strong> <a href="${onlineUrl}">${onlineUrl}</a>` : '',
@@ -147,7 +147,7 @@ export function buildAppointmentICalAttachment(params: {
   start: Date
   end: Date
   location?: string | null
-  coachName: string
+  providerName: string
   coachEmail: string
   clientName: string
   clientEmail: string
@@ -158,7 +158,7 @@ export function buildAppointmentICalAttachment(params: {
     start: params.start,
     end: params.end,
     location: params.location,
-    organizer: { name: params.coachName, email: params.coachEmail },
+    organizer: { name: params.providerName, email: params.coachEmail },
     attendee: { name: params.clientName, email: params.clientEmail },
   })
   return { filename: 'appointment.ics', content: ical, contentType: 'text/calendar; charset=utf-8; method=REQUEST' }

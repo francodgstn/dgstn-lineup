@@ -135,8 +135,7 @@ service cloud.firestore {
     }
 
     function callerOwnsSession(sessionRes) {
-      return sessionRes.data.get('coachId', null) == request.auth.uid
-             || sessionRes.data.get('instructorId', null) == request.auth.uid
+      return sessionRes.data.get('providerId', null) == request.auth.uid
              || sessionRes.data.get('createdBy', null) == request.auth.uid;
     }
 
@@ -900,7 +899,7 @@ service cloud.firestore {
     match /sessions/{session} {
       // Create: Must belong to user's team and cannot directly set location/tags.
       // Requires the schedule.manage capability (viewers are read-only). Own-scoped
-      // members (coach) may only create sessions they run (coachId / instructorId /
+      // members (coach) may only create sessions they run (providerId /
       // createdBy == uid) — they manage their own schedule.
     	allow create: if (belongsToUserTeam(request.resource) || hasRole('admin'))
                        && (hasRole('admin')

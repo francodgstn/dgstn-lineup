@@ -74,9 +74,9 @@ export const SessionsAgenda: React.FC<SessionsAgendaProps> = ({
                 <Text variant="bodyLarge" style={[styles.agendaItemTitle, { color: theme.colors.onSurface }]}>
                   {formatTime(session.start)} - {session.activityName || 'Session'} ({getDurationText(session.start, session.end)})
                 </Text>
-                {session.instructorName ? (
+                {session.providerName ? (
                   <Text variant="bodySmall" style={[styles.agendaItemSubtitle, { color: theme.colors.onSurfaceVariant }]}>
-                    with {session.instructorName}
+                    with {session.providerName}
                   </Text>
                 ) : null}
                 {session.locationName ? (

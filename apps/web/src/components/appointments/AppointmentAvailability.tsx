@@ -129,7 +129,7 @@ const GRANULARITY_OPTIONS = [10, 15, 20, 30]
 const templateSchema = z
   .object({
     title: z.string().min(1, 'Required').max(80),
-    coachId: z.string().min(1, 'Required'),
+    providerId: z.string().min(1, 'Required'),
     // 'fixed_slots' = exact recurring times; 'open_window' = a daily range clients self-book within.
     mode: z.enum(['fixed_slots', 'open_window']),
     duration_minutes: z.number().int().min(15).max(480),
@@ -184,7 +184,7 @@ function TemplateDialog({
       resolver: zodResolver(templateSchema),
       defaultValues: editing ? {
         title: editing.title,
-        coachId: editing.coachId,
+        providerId: editing.providerId,
         mode: editing.mode ?? 'fixed_slots',
         duration_minutes: editing.duration_minutes,
         max_participants: editing.max_participants,
@@ -201,7 +201,7 @@ function TemplateDialog({
         granularityMinutes: editing.granularityMinutes ?? 15,
         bufferMinutes: editing.bufferMinutes ?? 0,
       } : {
-        title: '', coachId: userId, mode: 'fixed_slots', duration_minutes: 60, max_participants: 1,
+        title: '', providerId: userId, mode: 'fixed_slots', duration_minutes: 60, max_participants: 1,
         location: '', onlineUrl: '', isFreeTrial: true, daysOfWeek: [], time: '09:00',
         startDate: new Date().toISOString().split('T')[0], endDate: '',
         windowStart: '17:00', windowEnd: '21:00', durationsMinutes: [60], granularityMinutes: 15, bufferMinutes: 0,
@@ -225,7 +225,7 @@ function TemplateDialog({
   }
 
   async function onSubmit(data: TemplateFormValues) {
-    const member = members.find((m) => m.id === data.coachId)
+    const member = members.find((m) => m.id === data.providerId)
     const isWindow = data.mode === 'open_window'
     const durations = (data.durationsMinutes ?? []).slice().sort((a, b) => a - b)
     const recurrence = {
@@ -237,7 +237,7 @@ function TemplateDialog({
       endDate: data.endDate ? Timestamp.fromDate(new Date(data.endDate)) : null,
     }
     const payload = {
-      teamId, coachId: data.coachId, coachName: member?.name || data.coachId,
+      teamId, providerId: data.providerId, providerName: member?.name || data.providerId,
       title: data.title,
       duration_minutes: isWindow ? (durations[0] ?? 60) : data.duration_minutes,
       max_participants: isWindow ? 1 : data.max_participants,
@@ -277,7 +277,7 @@ function TemplateDialog({
 
           <div className="space-y-1.5">
             <Label>{t('fieldCoach')}</Label>
-            <Controller name="coachId" control={control} render={({ field }) => (
+            <Controller name="providerId" control={control} render={({ field }) => (
               <Select value={field.value} onValueChange={field.onChange}>
                 <SelectTrigger className="w-full">
                   <span className="flex flex-1 text-left text-sm truncate">
@@ -289,7 +289,7 @@ function TemplateDialog({
                 </SelectContent>
               </Select>
             )} />
-            {errors.coachId && <p className="text-destructive text-xs">{errors.coachId.message}</p>}
+            {errors.providerId && <p className="text-destructive text-xs">{errors.providerId.message}</p>}
           </div>
 
           {/* Availability mode */}
@@ -526,7 +526,7 @@ export function AppointmentDetail({ slot, onClose, onCancelled }: {
             <div className="space-y-1 text-sm">
               <p className="text-muted-foreground">{formatSlotDate(slot.start)}</p>
               <p className="font-medium">{formatSlotTime(slot.start)} – {formatSlotTime(slot.end)}</p>
-              <p className="text-muted-foreground">{slot.coachName} · {formatDuration(slot.duration_minutes ?? 60)}</p>
+              <p className="text-muted-foreground">{slot.providerName} · {formatDuration(slot.duration_minutes ?? 60)}</p>
               {slot.location && <p className="flex items-center gap-1 text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{slot.location}</p>}
               {slot.onlineUrl && <p className="flex items-center gap-1 text-muted-foreground"><Video className="h-3.5 w-3.5" />{t('onlineSession')}</p>}
             </div>
@@ -669,7 +669,7 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
                         ? `${tmpl.recurrence.daysOfWeek.map((d) => DAY_LABELS[d]).join(', ')} · ${tmpl.window.start}–${tmpl.window.end} · ${(tmpl.durationsMinutes ?? []).map(formatDuration).join(' / ')}`
                         : `${formatDaysTime(tmpl.recurrence)} · ${formatDuration(tmpl.duration_minutes)}`}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{tmpl.coachName}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{tmpl.providerName}</p>
                     {tmpl.location && (
                       <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                         <MapPin className="h-3 w-3" />{tmpl.location}
