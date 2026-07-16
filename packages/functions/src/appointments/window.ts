@@ -668,7 +668,9 @@ export const bookAppointment = onCall(async (request) => {
     start: Timestamp.fromDate(start),
     end: Timestamp.fromDate(end),
     duration_minutes: durationMinutes,
-    max_participants: activity.max_participants ?? 1,
+    // An appointment is a provider's exclusive time — one booking per slot, by
+    // definition. trackBookings reads this to drive the 'full' flip.
+    max_participants: 1,
     bookings_count: 1,
     // Location/onlineUrl come from the matched availability (the *when*).
     location: tpl.location ?? null,

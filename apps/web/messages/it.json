@@ -1143,8 +1143,6 @@
     "fieldFreeTrial": "Disponibile come prenotazione di prova",
     "fieldDurationsMinutes": "Durate sessione",
     "durationsMinutesHint": "Le durate tra cui i clienti possono scegliere quando prenotano questa offerta.",
-    "fieldMaxParticipants": "Partecipanti max",
-    "maxParticipantsHint": "1 = individuale; un valore maggiore consente appuntamenti in piccolo gruppo.",
     "level_all": "Tutti i livelli",
     "level_beginners": "Principianti",
     "level_intermediate": "Intermedio",

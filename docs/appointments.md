@@ -23,10 +23,12 @@ This split is the core of the model. Get it wrong and nothing else makes sense.
 
 - **`Activity` (type `'appointment'`) owns the *what***: name, `durationsMinutes`
   (the lengths a client may book — a "Technique Assessment" is 60 minutes wherever
-  it's offered), `max_participants` (1 = true 1:1), `accessRule`, `dropIn`,
-  `confirmationInstructions`. Because appointments are activities, they are listed
-  on the website, gateable by subscription, and countable in analytics **exactly
-  like classes** — no special-casing.
+  it's offered), `accessRule`, `confirmationInstructions`. There is deliberately NO
+  capacity field: an appointment is a provider's *exclusive* time, so one booking
+  per slot is the definition, not a setting (the materialised session carries
+  `max_participants: 1` for the recount trigger). Because appointments are
+  activities, they are listed on the website, gateable by subscription, and
+  countable in analytics **exactly like classes** — no special-casing.
 - **`availability/{id}` (`Availability`) owns only the *when***: `providerId`,
   `title` (the SCHEDULE's admin-facing name — "Saturday mornings" — *not* the
   offering's name), `recurrence.daysOfWeek` + `startDate`/`endDate`,
@@ -67,8 +69,9 @@ Two entry styles, both **lazy**:
   its `confirmed` booking in one transaction.
 
 The materialised session **inherits from the activity**: `activityId`,
-`activityName`, `accessRule`, `max_participants`; `location`/`onlineUrl` come from
-the matched availability; `templateId` points back at it; `origin: 'window'`.
+`activityName`, `accessRule` (plus a fixed `max_participants: 1`);
+`location`/`onlineUrl` come from the matched availability; `templateId` points
+back at it; `origin: 'window'`.
 
 **Overlap safety (first-come-first-served)** — two layers in one transaction:
 1. a **deterministic id** `apt_{providerId}_{startMs}` so two bookings for the same
@@ -114,7 +117,7 @@ that route to the picker.
 ## Seeds
 
 All four seeds (`seed-emulator`, `seed-sandbox`, `seed-staging`, `seed-lead`) create
-an appointment activity (with `durationsMinutes` + `max_participants`), one or more
+an appointment activity (with `durationsMinutes`), one or more
 `availability` docs, and a few **booked** appointments — never open slots, since
 nothing is pre-generated. Shared builders live in `scripts/lib/appointments.ts` so
 every seed emits the shape `bookAppointment` would. Swimli

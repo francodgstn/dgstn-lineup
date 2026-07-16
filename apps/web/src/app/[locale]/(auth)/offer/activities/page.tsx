@@ -102,10 +102,8 @@ const activitySchema = z.object({
   // Does a booking for this activity confirm itself, or wait on studio review?
   // Not implied by `type` — shown for classes and appointments alike.
   autoConfirm: z.boolean(),
-  // APPOINTMENT-ONLY: the session lengths clients choose from, and the booking cap
-  // for a materialised appointment session (1 = true 1:1; >1 = small-group).
+  // APPOINTMENT-ONLY: the session lengths clients choose from.
   durationsMinutes: z.array(z.number()),
-  max_participants: z.number().int().min(1).max(50),
 }).superRefine((d, ctx) => {
   if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5)) {
     ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: 'Enter a drop-in price of at least 0.50' })
@@ -170,7 +168,6 @@ function ActivityDialog({
           dropInEnabled: editing.dropIn?.enabled ?? false,
           dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
           durationsMinutes: editing.durationsMinutes ?? [],
-          max_participants: editing.max_participants ?? 1,
           autoConfirm: resolveAutoConfirm(editing),
         }
       : {
@@ -178,7 +175,7 @@ function ActivityDialog({
           type: 'class' as ActivityType, level: 'all',
           color: DEFAULT_ACCENT, accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '',
-          durationsMinutes: [], max_participants: 1,
+          durationsMinutes: [],
           autoConfirm: resolveAutoConfirm({ type: 'class' }),
         },
   })
@@ -282,11 +279,8 @@ function ActivityDialog({
         },
         autoConfirm: data.autoConfirm,
         ...(data.type === 'appointment'
-          ? {
-              durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b),
-              max_participants: data.max_participants,
-            }
-          : { durationsMinutes: null, max_participants: null }),
+          ? { durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b) }
+          : { durationsMinutes: null }),
       }
       if (imageFile) {
         const url = await uploadImage(editing.id)
@@ -317,10 +311,7 @@ function ActivityDialog({
         },
         autoConfirm: data.autoConfirm,
         ...(data.type === 'appointment'
-          ? {
-              durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b),
-              max_participants: data.max_participants,
-            }
+          ? { durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b) }
           : {}),
         slug: slugify(data.name),
         teamId,
@@ -509,50 +500,31 @@ function ActivityDialog({
             />
 
             {type === 'appointment' && (
-              <>
-                <div className="flex items-center justify-between gap-4 p-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{t('fieldDurationsMinutes')}</p>
-                    <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
-                    {errors.durationsMinutes && (
-                      <p className="text-destructive text-xs">{errors.durationsMinutes.message}</p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                    {APPOINTMENT_DURATION_PRESETS.map((d) => (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => toggleDuration(d)}
-                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                          durationsMinutes.includes(d)
-                            ? 'bg-primary text-primary-foreground border-primary'
-                            : 'bg-background text-muted-foreground border-border hover:border-foreground'
-                        }`}
-                      >
-                        {formatDuration(d)}
-                      </button>
-                    ))}
-                  </div>
+              <div className="flex items-center justify-between gap-4 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{t('fieldDurationsMinutes')}</p>
+                  <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
+                  {errors.durationsMinutes && (
+                    <p className="text-destructive text-xs">{errors.durationsMinutes.message}</p>
+                  )}
                 </div>
-
-                <div className="flex items-center justify-between gap-4 p-3">
-                  <div className="min-w-0">
-                    <Label htmlFor="act-max-participants" className="font-medium">
-                      {t('fieldMaxParticipants')}
-                    </Label>
-                    <p className="text-xs text-muted-foreground">{t('maxParticipantsHint')}</p>
-                  </div>
-                  <Input
-                    id="act-max-participants"
-                    type="number"
-                    min={1}
-                    max={50}
-                    className="w-20 shrink-0"
-                    {...register('max_participants', { valueAsNumber: true })}
-                  />
+                <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                  {APPOINTMENT_DURATION_PRESETS.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => toggleDuration(d)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                        durationsMinutes.includes(d)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-muted-foreground border-border hover:border-foreground'
+                      }`}
+                    >
+                      {formatDuration(d)}
+                    </button>
+                  ))}
                 </div>
-              </>
+              </div>
             )}
           </div>
 

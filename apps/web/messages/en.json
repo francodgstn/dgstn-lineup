@@ -1143,8 +1143,6 @@
     "fieldFreeTrial": "Available as free trial booking",
     "fieldDurationsMinutes": "Session lengths",
     "durationsMinutesHint": "The lengths clients can choose from when booking this offering.",
-    "fieldMaxParticipants": "Max participants",
-    "maxParticipantsHint": "1 = one-to-one; more allows small-group appointments.",
     "level_all": "All levels",
     "level_beginners": "Beginners",
     "level_intermediate": "Intermediate",

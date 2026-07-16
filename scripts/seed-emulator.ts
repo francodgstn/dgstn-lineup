@@ -721,9 +721,7 @@ async function seedTeam(opts: {
       providerId: uid,
       providerName: displayName,
       level: 'all',
-      durationsMinutes: appointmentDurations,
-      max_participants: 1,
-      // A 1:1 slot has no roster-review step — the time is taken the moment it's
+      durationsMinutes: appointmentDurations,      // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
       isFreeTrial: true,
@@ -809,9 +807,7 @@ async function seedTeam(opts: {
       activityId: appointmentActId,
       activityName: appointmentActName,
       accessRule: { type: 'open' },
-      isFreeTrial: true,
-      maxParticipants: 1,
-      providerId: uid,
+      isFreeTrial: true,      providerId: uid,
       providerName: displayName,
       start: apt.start,
       durationMinutes: apt.durationMinutes,

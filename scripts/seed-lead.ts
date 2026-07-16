@@ -1090,9 +1090,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         providerId: uidOf(providerKey),
         providerName: staffName(providerKey),
         level: 'all',
-        durationsMinutes: apt.durationsMinutes,
-        max_participants: apt.maxParticipants ?? 1,
-        // A 1:1 slot has no roster-review step — the time is taken the moment
+        durationsMinutes: apt.durationsMinutes,        // A 1:1 slot has no roster-review step — the time is taken the moment
         // it's booked, so the booking is written 'confirmed' on the spot.
         autoConfirm: true,
         isFreeTrial: accessRule.type === 'open',
@@ -1203,9 +1201,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         activityId: aptActIdOf(bookedApt.key),
         activityName: bookedApt.activityName,
         accessRule: bookedAccessRule,
-        isFreeTrial: bookedAccessRule.type === 'open',
-        maxParticipants: bookedApt.maxParticipants ?? 1,
-        autoConfirm: true,
+        isFreeTrial: bookedAccessRule.type === 'open',        autoConfirm: true,
         providerId: providerUid,
         providerName,
         start,

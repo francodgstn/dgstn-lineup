@@ -1143,8 +1143,6 @@
     "fieldFreeTrial": "Als Schnupperstunde buchbar",
     "fieldDurationsMinutes": "Sitzungsdauern",
     "durationsMinutesHint": "Die Dauern, aus denen Kunden bei der Buchung dieses Angebots wählen können.",
-    "fieldMaxParticipants": "Max. Teilnehmer",
-    "maxParticipantsHint": "1 = Einzeltermin; mehr erlaubt Termine in kleinen Gruppen.",
     "level_all": "Alle Niveaus",
     "level_beginners": "Anfänger",
     "level_intermediate": "Fortgeschrittene",
