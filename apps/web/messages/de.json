@@ -4429,11 +4429,11 @@
         "label": "Aktivitäten",
         "shortLabel": "Aktivitäten",
         "tagline": "Was dein Studio anbietet",
-        "body": "Aktivitäten sind der Katalog deines Angebots — jede Kursart, Disziplin oder Dienstleistung ist eine Aktivität. Gruppenkurse werden als Sessions in den Kalender geplant; Coaching-Aktivitäten erzeugen buchbare 1:1-Slots aus der Verfügbarkeit eines Coachs. Eine Aktivität trägt auch ihre Zugangsregel: offen für alle, nur Mitglieder oder bestimmten Abos vorbehalten.",
+        "body": "Aktivitäten sind der Katalog dessen, was du anbietest. Jede ist entweder ein Kurs — ein Thema, das du in den Kalender einplanst, etwa Judo Grundlagen — oder ein Termin: Zeit mit einer bestimmten Person, gebucht aus deren veröffentlichter Verfügbarkeit. Eine Aktivität trägt ihren eigenen Preis und ihre Zugangsregel (offen für alle, nur Mitglieder oder bestimmten Abos vorbehalten) — das macht sie zu einem eigenständigen Angebot statt zu einer blossen Bezeichnung.",
         "terms": [
-          "Gruppenkurs — eine Aktivität, die als buchbare Kalender-Sessions geplant wird",
-          "Coaching — eine Aktivität als 1:1-Slots, erzeugt aus der Verfügbarkeit",
-          "Event — ein eigenes Format für Einmaliges wie Camps, Workshops oder Prüfungen",
+          "Kurs — ein Thema, das du als Einheiten planst und in dem man einen Platz bucht",
+          "Termin — ein Angebot, das aus der veröffentlichten Verfügbarkeit einer Person gebucht wird",
+          "Veranstaltung — ein eigenes Format für Einmaliges wie Camps, Workshops oder Prüfungen",
           "Zugangsstufe — wer buchen darf: offen, Mitglieder oder bestimmte Abos"
         ],
         "links": {
@@ -4444,12 +4444,12 @@
         "label": "Sessions",
         "shortLabel": "Sessions",
         "tagline": "Wann etwas tatsächlich stattfindet",
-        "body": "Eine Session ist eine konkrete Instanz einer Aktivität im Kalender — der Dienstag-19-Uhr-Kurs, nicht der Kurs im Allgemeinen. Gruppen-Sessions kommen aus deinem Stundenplan, Coaching-Slots werden aus der wöchentlichen Verfügbarkeit jedes Coachs erzeugt und über einen eigenen Ablauf gebucht, Events decken Einmaliges wie Camps oder Gurtprüfungen ab. Buchungen verbinden Personen mit Sessions: ein Kontakt, ein Platz, ein Termin.",
+        "body": "Eine Einheit ist ein konkreter Termin im Kalender — der Kurs am Dienstag um 19 Uhr, nicht der Kurs allgemein. Kurseinheiten planst du selbst. Termine funktionieren umgekehrt: Bis jemand bucht, steht nichts im Kalender. Eine Person veröffentlicht, wann sie frei ist, und der Termin entsteht in dem Moment, in dem eine Kundin eine dieser Zeiten nimmt. Buchungen verbinden Menschen mit Einheiten: ein Kontakt, ein Platz, eine Zeit.",
         "terms": [
-          "Session — ein geplantes Vorkommen einer Aktivität",
-          "Verfügbarkeitsvorlage — das Wochenmuster, aus dem Coaching-Slots entstehen",
-          "Event — eine eigenständige Veranstaltung mit eigener Anmeldung",
-          "Buchung — der reservierte Platz eines Kontakts in einer Session"
+          "Einheit — ein einzelner geplanter Termin einer Aktivität",
+          "Verfügbarkeit — wann jemand frei ist; daraus werden Termine gebucht",
+          "Veranstaltung — ein eigenständiger Anlass mit eigener Anmeldung",
+          "Buchung — der reservierte Platz eines Kontakts in einer Einheit"
         ],
         "links": {
           "schedule": "Kalender öffnen",
@@ -4513,7 +4513,7 @@
         },
         "appointments": {
           "name": "Termine",
-          "desc": "Die Slot-Auswahl pro Coach für Einzelstunden, erzeugt aus der Verfügbarkeit jedes Coachs. Getrennt von der Kurs-Buchungsseite, damit Privatstunden sauber buchen."
+          "desc": "Kundinnen wählen einen Coach, entscheiden, was sie buchen, und nehmen eine freie Zeit aus dessen veröffentlichter Verfügbarkeit. Bis zur Buchung steht nichts im Kalender. Getrennt von der Kurs-Buchungsseite, damit Einzelstunden sauber buchen."
         },
         "kiosk": {
           "name": "Kiosk",
@@ -4541,8 +4541,8 @@
         "a": "In Alex' Studio gibt es zahlende Erwachsene, Kinder mit Papierrechnung und einen pensionierten Mitgründer, der für immer gratis trainiert. Nur die Erwachsenen haben Abos in Linyup. Die anderen bekommen trotzdem eine Zugehörigkeit — Mitglied —, gehören also dazu, erscheinen in den richtigen Listen und können Mitglieder-Kurse buchen, ganz ohne Abrechnung."
       },
       "q5": {
-        "q": "Wie unterscheidet sich Coaching von Gruppenkursen?",
-        "a": "Alex' Cheftrainerin bietet private Technikstunden an. Statt Slots von Hand in den Kalender zu setzen, legt Alex eine Coaching-Aktivität an und die Trainerin definiert eine wöchentliche Verfügbarkeitsvorlage. Linyup erzeugt daraus buchbare Slots, und Klienten wählen ihre Zeit über die Coaching-Seite — der Gruppenkalender bleibt unberührt."
+        "q": "Brauche ich zu jedem Kurs eine 1:1-Variante?",
+        "a": "Mit ziemlicher Sicherheit nicht. Der Chefcoach von Alex unterrichtet Kickboxen und funktionelles Training, und es liegt nahe, beides als «1:1 Kickboxen» und «1:1 Funktionelles Training» zu spiegeln. Aber überleg, was tatsächlich verkauft wird: eine Stunde Aufmerksamkeit des Coachs. Preis und Länge sind ohnehin gleich — was in der Stunde passiert, wird am Tag selbst besprochen. Also legt Alex EINE Termin-Aktivität an, «Personal Training», und der Coach veröffentlicht seine Verfügbarkeit dafür. Eine zweite Termin-Aktivität lohnt sich nur, wenn es wirklich ein anderes Produkt ist — etwa ein kostenloses 20-minütiges Erstgespräch neben einer bezahlten 60-Minuten-Einheit, weil sich Preis und Zugang unterscheiden. Das ist der Test: andere Konditionen, anderes Angebot. Gleiche Konditionen, ein Angebot."
       },
       "q6": {
         "q": "Was, wenn ich nur einige öffentliche Seiten will?",

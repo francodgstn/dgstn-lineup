@@ -4429,10 +4429,10 @@
         "label": "Activities",
         "shortLabel": "Activities",
         "tagline": "What your studio offers",
-        "body": "Activities are the catalogue of what you offer — each class type, discipline or service is one activity. Group classes get scheduled onto the calendar as sessions, while coaching activities generate bookable one-to-one slots from a coach's availability. An activity also carries its access rule: open to everyone, members only, or reserved for specific subscriptions.",
+        "body": "Activities are the catalogue of what you offer. Each one is either a class — a subject you schedule onto the calendar, like Judo Fundamentals — or an appointment: time with a specific person, booked from the availability they publish. An activity carries its own price and access rule (open to everyone, members only, or reserved for specific subscriptions), which is what makes it a distinct offering rather than a label.",
         "terms": [
-          "Group class — an activity scheduled as calendar sessions people book into",
-          "Coaching — an activity offered as one-to-one slots generated from availability",
+          "Class — a subject you schedule as sessions people book a seat in",
+          "Appointment — an offering booked from a person's published availability",
           "Event — a separate format for one-offs like camps, workshops or exams",
           "Access tier — who may book: open, members, or specific subscriptions"
         ],
@@ -4444,10 +4444,10 @@
         "label": "Sessions",
         "shortLabel": "Sessions",
         "tagline": "When things actually happen",
-        "body": "A session is a concrete instance of an activity on the calendar — Tuesday's 7 pm class, not the class in general. Group sessions come from your schedule, coaching slots are generated from each coach's weekly availability and booked through their own flow, and events cover one-offs like camps or belt exams. Bookings connect people to sessions: one contact, one spot, one time.",
+        "body": "A session is a concrete instance on the calendar — Tuesday's 7 pm class, not the class in general. Class sessions you schedule yourself. Appointments work the other way round: nothing sits on the calendar until someone books. A provider publishes when they are free, and the appointment is created the moment a client takes one of those times. Bookings connect people to sessions: one contact, one spot, one time.",
         "terms": [
           "Session — one scheduled occurrence of an activity",
-          "Availability template — the weekly pattern coaching slots are generated from",
+          "Availability — when a provider is free; appointments are booked out of it",
           "Event — a standalone happening with its own registration",
           "Booking — a contact's reserved spot in a session"
         ],
@@ -4513,7 +4513,7 @@
         },
         "appointments": {
           "name": "Appointments",
-          "desc": "The per-coach slot picker for one-to-one sessions, generated from each coach's availability. Separate from the class booking page so private lessons book cleanly."
+          "desc": "Clients pick a coach, choose what they're booking and take a free time from that coach's published availability. Nothing sits on the calendar until they book. Separate from the class booking page, so one-to-one time books cleanly."
         },
         "kiosk": {
           "name": "Kiosk",
@@ -4541,8 +4541,8 @@
         "a": "Alex's studio has paying adults, kids billed on paper invoices, and a retired co-founder who trains free forever. Only the adults hold subscriptions in Linyup. The others still get an affiliation — member — so they belong, show up in the right lists and can book members-only classes, with no billing attached."
       },
       "q5": {
-        "q": "How is coaching different from group classes?",
-        "a": "Alex's head coach offers private technique sessions. Instead of placing slots on the studio calendar by hand, Alex creates a coaching activity and the coach sets a weekly availability template. Linyup generates bookable slots from it, and clients pick a time through the coaching page — the group schedule stays untouched."
+        "q": "Do I need a 1:1 version of every class?",
+        "a": "Almost certainly not. Alex's head coach teaches kickboxing and functional workouts, and it is tempting to mirror each one as '1:1 Kickboxing' and '1:1 Functional workout'. But think about what is actually being sold: an hour of the coach's attention. The price and the length are the same either way — what happens in the hour is agreed on the day. So Alex creates ONE appointment activity, 'Personal training', and the coach publishes their availability against it. Make a second appointment activity only when it is genuinely a different product — a free 20-minute intro call next to a paid 60-minute session, say, because those differ in price and in who may book. That is the test: different terms, different offering. Same terms, one offering."
       },
       "q6": {
         "q": "What if I only want some of the public pages?",

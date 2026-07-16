@@ -4429,12 +4429,12 @@
         "label": "Activités",
         "shortLabel": "Activités",
         "tagline": "Ce que votre studio propose",
-        "body": "Les activités sont le catalogue de votre offre — chaque type de cours, discipline ou service est une activité. Les cours collectifs sont planifiés au calendrier sous forme de séances ; les activités de coaching génèrent des créneaux individuels réservables à partir des disponibilités d'un coach. Une activité porte aussi sa règle d'accès : ouverte à tous, réservée aux membres ou à certains abonnements.",
+        "body": "Les activités sont le catalogue de ce que vous proposez. Chacune est soit un cours — un sujet que vous planifiez dans le calendrier, comme Judo Fondamentaux — soit un rendez-vous : du temps avec une personne précise, réservé à partir des disponibilités qu'elle publie. Une activité porte son propre tarif et sa règle d'accès (ouverte à tous, membres uniquement, ou réservée à certains abonnements), ce qui en fait une offre à part entière et non une simple étiquette.",
         "terms": [
-          "Cours collectif — une activité planifiée en séances réservables au calendrier",
-          "Coaching — une activité proposée en créneaux 1:1 générés depuis les disponibilités",
-          "Événement — un format à part pour les ponctuels : stages, ateliers, examens",
-          "Niveau d'accès — qui peut réserver : ouvert, membres ou abonnements précis"
+          "Cours — un sujet planifié en séances où l'on réserve une place",
+          "Rendez-vous — une offre réservée depuis les disponibilités publiées d'une personne",
+          "Événement — un format distinct pour les ponctuels : stages, ateliers, examens",
+          "Niveau d'accès — qui peut réserver : ouvert, membres, ou abonnements précis"
         ],
         "links": {
           "manage": "Parcourir vos activités"
@@ -4444,10 +4444,10 @@
         "label": "Séances",
         "shortLabel": "Séances",
         "tagline": "Quand les choses ont vraiment lieu",
-        "body": "Une séance est une instance concrète d'une activité au calendrier — le cours du mardi 19 h, pas le cours en général. Les séances de groupe viennent de votre planning, les créneaux de coaching sont générés à partir des disponibilités hebdomadaires de chaque coach et se réservent via leur propre parcours, et les événements couvrent les ponctuels comme les stages ou les passages de grade. Les réservations relient les personnes aux séances : un contact, une place, un horaire.",
+        "body": "Une séance est une occurrence concrète dans le calendrier — le cours de mardi 19 h, pas le cours en général. Les séances de cours, vous les planifiez. Les rendez-vous fonctionnent à l'inverse : rien n'occupe le calendrier tant que personne n'a réservé. Une personne publie ses disponibilités, et le rendez-vous naît au moment où un client prend l'un de ces créneaux. Les réservations relient les gens aux séances : un contact, une place, un horaire.",
         "terms": [
           "Séance — une occurrence planifiée d'une activité",
-          "Modèle de disponibilité — le motif hebdomadaire qui génère les créneaux de coaching",
+          "Disponibilités — quand une personne est libre ; les rendez-vous en sont issus",
           "Événement — un rendez-vous autonome avec sa propre inscription",
           "Réservation — la place réservée d'un contact dans une séance"
         ],
@@ -4513,7 +4513,7 @@
         },
         "appointments": {
           "name": "Rendez-vous",
-          "desc": "Le sélecteur de créneaux par coach pour les séances individuelles, généré depuis les disponibilités de chaque coach. Séparé de la page de réservation des cours pour des réservations nettes."
+          "desc": "Les clients choisissent un coach, ce qu'ils réservent, puis un créneau libre dans les disponibilités publiées de ce coach. Rien n'occupe le calendrier avant la réservation. Séparé de la page de réservation des cours, pour que l'individuel se réserve proprement."
         },
         "kiosk": {
           "name": "Kiosque",
@@ -4541,8 +4541,8 @@
         "a": "Le club d'Alex compte des adultes payants, des enfants facturés sur papier et un cofondateur retraité qui s'entraîne gratuitement à vie. Seuls les adultes ont un abonnement dans Linyup. Les autres reçoivent quand même une affiliation — membre — : ils appartiennent au club, apparaissent dans les bonnes listes et peuvent réserver les cours réservés aux membres, sans aucune facturation."
       },
       "q5": {
-        "q": "En quoi le coaching diffère-t-il des cours collectifs ?",
-        "a": "La coach principale d'Alex propose des séances techniques privées. Au lieu de placer des créneaux à la main dans le calendrier, Alex crée une activité de coaching et la coach définit un modèle de disponibilité hebdomadaire. Linyup en génère des créneaux réservables, et les clients choisissent leur horaire via la page de coaching — le planning de groupe reste intact."
+        "q": "Dois-je créer une version 1:1 de chaque cours ?",
+        "a": "Presque sûrement pas. Le coach principal d'Alex enseigne le kickboxing et le renforcement fonctionnel, et il est tentant de dupliquer chacun en « Kickboxing 1:1 » et « Renforcement 1:1 ». Mais demandez-vous ce qui se vend réellement : une heure d'attention du coach. Le tarif et la durée sont les mêmes de toute façon — ce qu'on y fait se décide le jour même. Alex crée donc UNE activité de rendez-vous, « Coaching individuel », et le coach y publie ses disponibilités. Une deuxième activité de rendez-vous ne se justifie que si c'est vraiment un autre produit — un appel découverte gratuit de 20 minutes à côté d'une séance payante de 60 minutes, par exemple, car le tarif et l'accès diffèrent. C'est le test : conditions différentes, offre différente. Mêmes conditions, une seule offre."
       },
       "q6": {
         "q": "Et si je ne veux que certaines pages publiques ?",

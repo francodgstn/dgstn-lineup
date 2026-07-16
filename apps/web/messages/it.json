@@ -4429,11 +4429,11 @@
         "label": "Attività",
         "shortLabel": "Attività",
         "tagline": "Cosa offre il tuo studio",
-        "body": "Le attività sono il catalogo della tua offerta — ogni tipo di corso, disciplina o servizio è un'attività. I corsi di gruppo vengono pianificati a calendario come sessioni; le attività di coaching generano slot individuali prenotabili dalle disponibilità di un coach. Un'attività porta anche la sua regola di accesso: aperta a tutti, solo membri o riservata a specifici abbonamenti.",
+        "body": "Le attività sono il catalogo di ciò che offri. Ognuna è un corso — un tema che pianifichi nel calendario, come Judo Fondamenti — oppure un appuntamento: tempo con una persona precisa, prenotato dalla disponibilità che pubblica. Un'attività porta con sé il proprio prezzo e la propria regola di accesso (aperta a tutti, solo membri o riservata a certi abbonamenti): è questo a renderla un'offerta a sé, non una semplice etichetta.",
         "terms": [
-          "Corso di gruppo — un'attività pianificata come sessioni prenotabili a calendario",
-          "Coaching — un'attività offerta come slot 1:1 generati dalle disponibilità",
-          "Evento — un formato a parte per gli appuntamenti unici: camp, workshop, esami",
+          "Corso — un tema pianificato in sessioni in cui si prenota un posto",
+          "Appuntamento — un'offerta prenotata dalla disponibilità pubblicata di una persona",
+          "Evento — un formato a parte per una tantum: camp, workshop, esami",
           "Livello di accesso — chi può prenotare: aperto, membri o abbonamenti specifici"
         ],
         "links": {
@@ -4444,11 +4444,11 @@
         "label": "Sessioni",
         "shortLabel": "Sessioni",
         "tagline": "Quando le cose accadono davvero",
-        "body": "Una sessione è un'istanza concreta di un'attività a calendario — il corso del martedì alle 19, non il corso in generale. Le sessioni di gruppo nascono dal tuo planning, gli slot di coaching vengono generati dalle disponibilità settimanali di ogni coach e si prenotano con un percorso dedicato, gli eventi coprono gli appuntamenti unici come camp o esami di cintura. Le prenotazioni collegano le persone alle sessioni: un contatto, un posto, un orario.",
+        "body": "Una sessione è un'occorrenza concreta sul calendario — il corso di martedì alle 19, non il corso in generale. Le sessioni dei corsi le pianifichi tu. Gli appuntamenti funzionano al contrario: finché nessuno prenota, sul calendario non c'è nulla. Una persona pubblica quando è libera, e l'appuntamento nasce nel momento in cui un cliente prende uno di quegli orari. Le prenotazioni collegano le persone alle sessioni: un contatto, un posto, un orario.",
         "terms": [
           "Sessione — una singola occorrenza pianificata di un'attività",
-          "Modello di disponibilità — lo schema settimanale da cui nascono gli slot di coaching",
-          "Evento — un appuntamento autonomo con la propria iscrizione",
+          "Disponibilità — quando una persona è libera; da lì nascono gli appuntamenti",
+          "Evento — un appuntamento autonomo con iscrizione propria",
           "Prenotazione — il posto riservato di un contatto in una sessione"
         ],
         "links": {
@@ -4513,7 +4513,7 @@
         },
         "appointments": {
           "name": "Appuntamenti",
-          "desc": "Il selettore di slot per coach per le sessioni individuali, generato dalle disponibilità di ogni coach. Separato dalla pagina di prenotazione dei corsi per prenotazioni pulite."
+          "desc": "I clienti scelgono un coach, cosa stanno prenotando e un orario libero dalla disponibilità che il coach ha pubblicato. Finché non prenotano, sul calendario non c'è nulla. Separato dalla pagina di prenotazione dei corsi, così le sessioni individuali si prenotano pulite."
         },
         "kiosk": {
           "name": "Kiosk",
@@ -4541,8 +4541,8 @@
         "a": "Nella palestra di Alex ci sono adulti paganti, bambini fatturati su carta e un cofondatore in pensione che si allena gratis a vita. Solo gli adulti hanno abbonamenti in Linyup. Gli altri ricevono comunque un'affiliazione — membro — così appartengono, compaiono nelle liste giuste e possono prenotare i corsi riservati ai membri, senza alcuna fatturazione."
       },
       "q5": {
-        "q": "In cosa il coaching è diverso dai corsi di gruppo?",
-        "a": "La head coach di Alex offre lezioni tecniche private. Invece di mettere gli slot a mano sul calendario, Alex crea un'attività di coaching e la coach definisce un modello di disponibilità settimanale. Linyup ne genera slot prenotabili, e i clienti scelgono l'orario dalla pagina di coaching — il calendario di gruppo resta intatto."
+        "q": "Devo creare una versione 1:1 di ogni corso?",
+        "a": "Quasi certamente no. Il coach principale di Alex insegna kickboxing e allenamento funzionale, ed è naturale voler duplicare entrambi in «Kickboxing 1:1» e «Funzionale 1:1». Ma chiediti cosa si vende davvero: un'ora di attenzione del coach. Prezzo e durata sono comunque gli stessi — cosa si fa in quell'ora si decide il giorno stesso. Alex crea quindi UNA attività di appuntamento, «Personal training», e il coach ci pubblica sopra la propria disponibilità. Una seconda attività di appuntamento ha senso solo se è davvero un altro prodotto — per esempio una call conoscitiva gratuita di 20 minuti accanto a una sessione a pagamento di 60, perché cambiano prezzo e accesso. È questo il test: condizioni diverse, offerta diversa. Stesse condizioni, una sola offerta."
       },
       "q6": {
         "q": "E se voglio solo alcune pagine pubbliche?",
