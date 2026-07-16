@@ -364,33 +364,42 @@ export const bookSession = onCall(async (request) => {
   let authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null = null
 
   if (data.authenticatedContactId) {
-    // Validate verification code
-    if (data.verificationCodeId) {
-      const codeDoc = await admin
-        .firestore()
-        .collection('booking_verification_codes')
-        .doc(data.verificationCodeId)
-        .get()
-      if (!codeDoc.exists) throw new HttpsError('invalid-argument', 'Invalid verification code')
-      const codeData = codeDoc.data()!
-      if (!codeData.verified)
-        throw new HttpsError('failed-precondition', 'Verification code not verified')
-      if (codeData.team_id !== data.teamId)
-        throw new HttpsError('permission-denied', 'Code does not match team')
-      const isValid = (codeData.matched_contact_ids || []).includes(data.authenticatedContactId)
-      if (!isValid)
-        throw new HttpsError('permission-denied', 'Contact not found in verified matches')
-      await admin
-        .firestore()
-        .collection('booking_verification_codes')
-        .doc(data.verificationCodeId)
-        .update({
-          used: true,
-          used_at: FieldValue.serverTimestamp(),
-          used_for_session: data.sessionId,
-          used_contact_id: data.authenticatedContactId,
-        })
+    // The code is MANDATORY. It is the ONLY thing that proves the caller is this
+    // contact — a contactId in the request body proves nothing by itself, and
+    // trusting one is the High-severity "booking-on-behalf-of + contact-id oracle"
+    // pattern the July 2026 audit fixed in createDropInCheckout (finding #2,
+    // docs/security-audit-2026-07.md). A caller who is already signed in should
+    // send NO authenticatedContactId and let their contact session identify them
+    // (the `else` branch below).
+    if (!data.verificationCodeId) {
+      throw new HttpsError(
+        'invalid-argument',
+        'verificationCodeId is required when authenticatedContactId is supplied'
+      )
     }
+    const codeDoc = await admin
+      .firestore()
+      .collection('booking_verification_codes')
+      .doc(data.verificationCodeId)
+      .get()
+    if (!codeDoc.exists) throw new HttpsError('invalid-argument', 'Invalid verification code')
+    const codeData = codeDoc.data()!
+    if (!codeData.verified)
+      throw new HttpsError('failed-precondition', 'Verification code not verified')
+    if (codeData.team_id !== data.teamId)
+      throw new HttpsError('permission-denied', 'Code does not match team')
+    const isValid = (codeData.matched_contact_ids || []).includes(data.authenticatedContactId)
+    if (!isValid) throw new HttpsError('permission-denied', 'Contact not found in verified matches')
+    await admin
+      .firestore()
+      .collection('booking_verification_codes')
+      .doc(data.verificationCodeId)
+      .update({
+        used: true,
+        used_at: FieldValue.serverTimestamp(),
+        used_for_session: data.sessionId,
+        used_contact_id: data.authenticatedContactId,
+      })
 
     const contactDoc = await admin
       .firestore()
