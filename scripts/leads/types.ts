@@ -175,6 +175,16 @@ export interface LeadAppointmentTemplate {
   bufferMinutes?: number
 }
 
+export interface LeadContactGroupDef {
+  /** id suffix → `{teamId}-group-{key}`; referenced by LeadContactDef.groupKeys. */
+  key: string
+  name: string
+  /** Nest under another group (LeadContactGroupDef.key). Top-level when unset. */
+  parentKey?: string
+  color?: string
+  description?: string
+}
+
 export interface LeadContactDef {
   firstname: string
   lastname: string
@@ -189,6 +199,8 @@ export interface LeadContactDef {
   subKey: string | null
   /** Assign to a coach's own-scope view (LeadStaffDef.key). */
   assignedToStaffKey?: string
+  /** Contact Groups plugin membership (LeadContactGroupDef.keys) → group_ids. */
+  groupKeys?: string[]
   /** Acquisition source override (default: seeded-random). */
   source?: 'website' | 'referral' | 'social' | 'event' | 'other'
   /** Free-text detail shown with the source (e.g. 'QR poster', 'Meta ads'). */
@@ -332,6 +344,10 @@ export interface LeadProfile {
   places?: LeadPlaceDef[]
   /** Account-wide extra contact fields (installs the custom-fields plugin). */
   customFieldDefinitions?: LeadCustomFieldDef[]
+  /** Contact Groups plugin — nested member groups (e.g. by discipline/area).
+   *  Installs the contact-groups plugin; membership is set via
+   *  LeadContactDef.groupKeys. */
+  contactGroups?: LeadContactGroupDef[]
   /** Team-wide note appended to booking confirmation emails ("Important" box). */
   bookingConfirmationInstructions?: string
   /** Booking reminder schedule (settings.bookingReminderSteps; Wave 2 sends SMS). */

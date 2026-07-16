@@ -739,6 +739,31 @@ async function seedLeadTenant(profile: LeadProfile) {
       })
   }
 
+  // ── contact groups (teams/{id}/contact_groups; Contact Groups plugin) ──────
+  // Nested member groups à la association tools — used to split the member base
+  // by discipline/area (e.g. Dance, Breathwork, Coaching). Membership lives on
+  // each contact's group_ids array (set below); nesting via parent_id.
+  const groupIdOf = (key: string) => `${teamId}-group-${key}`
+  const groupByKey = new Map((profile.contactGroups ?? []).map((g) => [g.key, g]))
+  for (const g of profile.contactGroups ?? []) {
+    if (g.parentKey && !groupByKey.has(g.parentKey)) {
+      throw new Error(`Unknown parentKey '${g.parentKey}' for group '${g.key}' in '${profile.id}'`)
+    }
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('contact_groups')
+      .doc(groupIdOf(g.key))
+      .set({
+        name: g.name,
+        parent_id: g.parentKey ? groupIdOf(g.parentKey) : null,
+        color: g.color ?? null,
+        ...(g.description ? { description: g.description } : {}),
+        created_at: ts(daysFromNow(-180)),
+        created_by: uid,
+      })
+  }
+
   // ── SMS sender config (integrations/sms_sender; consumed by the SMS service) ──
   if (profile.smsSenderName) {
     await db
@@ -1463,6 +1488,15 @@ async function seedLeadTenant(profile: LeadProfile) {
           return deduped.length ? { login_emails: deduped } : {}
         })(),
         ...(c.assignedToStaffKey ? { assigned_coach_ids: [uidOf(c.assignedToStaffKey)] } : {}),
+        ...(c.groupKeys?.length
+          ? {
+              group_ids: c.groupKeys.map((k) => {
+                if (!groupByKey.has(k))
+                  throw new Error(`Unknown groupKey '${k}' on contact in '${profile.id}'`)
+                return groupIdOf(k)
+              }),
+            }
+          : {}),
         ...(c.customFields ? { custom_fields: c.customFields } : {}),
         created_at: createdTs,
         deleted_at: null,
@@ -2211,6 +2245,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     { id: 'online-courses' },
     { id: 'products' },
     ...(profile.customFieldDefinitions?.length ? [{ id: 'custom-fields' }] : []),
+    ...(profile.contactGroups?.length ? [{ id: 'contact-groups' }] : []),
     ...(profile.documents.length > 0
       ? [{ id: 'documents', config: { signupDocumentIds: signupDocIds } }]
       : []),
