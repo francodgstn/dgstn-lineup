@@ -432,11 +432,22 @@ function ActivityDialog({
             </div>
           </div>
 
-          {/* Level + colour close the metadata block — both are small
-              classification/presentation fields, so they get a compact row
-              rather than stretching across the dialog. */}
-          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+          {/* Colour · level · auto-confirm. Colour only ever needs a swatch, so
+              it takes a fixed narrow column and the other two share the rest.
+              items-end keeps all three controls on one baseline despite the
+              checkbox having no label above it. */}
+          <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5">
+              <Label htmlFor="act-color">{t('fieldColor')}</Label>
+              <input
+                id="act-color"
+                type="color"
+                {...register('color')}
+                className="h-9 w-14 rounded-md border border-input cursor-pointer bg-background p-1"
+              />
+            </div>
+
+            <div className="flex-1 min-w-40 space-y-1.5">
               <Label htmlFor="act-level">{t('fieldLevel')}</Label>
               <Controller
                 name="level"
@@ -460,41 +471,23 @@ function ActivityDialog({
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="act-color">{t('fieldColor')}</Label>
-              <input
-                id="act-color"
-                type="color"
-                {...register('color')}
-                className="h-9 w-full rounded-md border border-input cursor-pointer bg-background p-1"
-              />
-            </div>
-          </div>
-
-          {/* Auto-confirm opens the "how it books" group (→ session lengths →
-              who can book). A field, not implied by type: either kind may
-              require a review step. */}
-          <div className="rounded-lg border p-3">
+            {/* A field, not implied by type: either kind may require a review
+                step. The label says it — no hint needed. */}
             <Controller
               name="autoConfirm"
               control={control}
               render={({ field }) => (
-                <label className="flex items-start gap-2 cursor-pointer text-sm">
+                <label className="flex h-9 flex-1 min-w-56 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-sm">
                   <input
                     type="checkbox"
-                    className="mt-0.5 accent-primary"
+                    className="accent-primary shrink-0"
                     checked={field.value}
                     onChange={(e) => {
                       setAutoConfirmTouched(true)
                       field.onChange(e.target.checked)
                     }}
                   />
-                  <span>
-                    <span className="font-medium">{t('fieldAutoConfirm')}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {field.value ? t('autoConfirmHintOn') : t('autoConfirmHintOff')}
-                    </span>
-                  </span>
+                  <span className="truncate">{t('fieldAutoConfirm')}</span>
                 </label>
               )}
             />

@@ -1141,8 +1141,6 @@
     "type_appointment": "Termin",
     "typeChangeWarning": "Bevorstehende Einheiten werden automatisch aktualisiert. Vergangene Einheiten bleiben unverändert, um die Historie zu erhalten.",
     "fieldAutoConfirm": "Buchungen automatisch bestätigen",
-    "autoConfirmHintOn": "Ein: Der Platz des Kunden ist bestätigt, sobald er bucht.",
-    "autoConfirmHintOff": "Aus: Die Buchung bleibt unbestätigt, bis du sie bestätigst oder den Kunden eincheckst.",
     "fieldFreeTrial": "Als Schnupperstunde buchbar",
     "fieldDurationsMinutes": "Sitzungsdauern",
     "durationsMinutesHint": "Die Dauern, aus denen Kunden bei der Buchung dieses Angebots wählen können.",
