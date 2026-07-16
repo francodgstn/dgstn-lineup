@@ -281,30 +281,6 @@ export const FirestoreService = {
     }
   },
 
-  // Generate a scoped auth token for authenticated actions from the app
-  async generateAuthToken(
-    contactId: string,
-    type: 'booking' | 'signup' = 'booking'
-  ): Promise<{
-    success: boolean;
-    token: string;
-    contactId: string;
-    teamId: string;
-    expiresAt: number;
-  } | null> {
-    try {
-      const generateAuthTokenFn = httpsCallable(
-        getFunctions(),
-        'generateAuthToken'
-      );
-      const result = await generateAuthTokenFn({ contactId, type });
-      return result.data as any;
-    } catch (error) {
-      console.error('Error generating auth token:', error);
-      return null;
-    }
-  },
-
   // Update the weight field on a contact document
   async updateContactWeight(contactId: string, weight: number): Promise<void> {
     const contactRef = doc(db, 'contacts', contactId);
@@ -658,9 +634,9 @@ export const FirestoreService = {
     }
   },
 
-  // Request contact update via cloud function
+  // Request contact update via cloud function. Like bookSession, the signed-in
+  // contact session rides along on the callable and identifies us server-side.
   async requestContactUpdate(params: {
-    authToken: string;
     contactDetails: Partial<Contact>;
     note?: string;
   }): Promise<{ success: boolean; requestId: string }> {
@@ -674,32 +650,19 @@ export const FirestoreService = {
     }
   },
 
-  // Book a session using an authenticated booking token so the booking is
+  // Book a session as the signed-in contact. No token dance: our contact session
+  // (the custom token minted at login) rides along on the callable automatically,
+  // and bookSession reads contactId/teamId from its claims — so the booking is
   // always stored under the contact's own ID (required for cancellation to work).
   async bookSession(params: {
     teamId: string;
     sessionId: string;
-    contactId: string;
-    contactDetails: {
-      firstname: string;
-      lastname: string;
-      email: string;
-    };
   }): Promise<{ success: boolean; message?: string }> {
     try {
-      // Generate a one-time booking auth token for this contact so that
-      // bookSession uses the authenticated path and stores the booking
-      // under the correct contactId (needed for cancel to find the doc).
-      const tokenResult = await this.generateAuthToken(params.contactId, 'booking');
-      if (!tokenResult?.token) {
-        throw new Error('Failed to generate booking auth token');
-      }
-
       const bookSessionFn = httpsCallable(getFunctions(), 'bookSession');
       const result = await bookSessionFn({
         teamId: params.teamId,
         sessionId: params.sessionId,
-        bookingAuthToken: tokenResult.token,
       });
       return result.data as any;
     } catch (error) {

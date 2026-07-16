@@ -4,11 +4,15 @@
 // contact. This callable resolves the team by slug, verifies the kiosk plugin
 // is installed + PIN-locked, timing-safe compares the submitted PIN, and mints
 // a custom token that identifies the caller as a KIOSK DEVICE (`kiosk: true`,
-// `kioskTeam`, `kioskEpoch`) — never a `contactId` claim. `bookSession` and the
-// other public booking callables never read `request.auth` at all (they only
-// trust `bookingAuthToken` / `authenticatedContactId` / `contactDetails` in the
-// request body), so a kiosk-signed-in caller books exactly like an anonymous
-// walk-in guest — which is the intended behaviour.
+// `kioskTeam`, `kioskEpoch`) — never a `contactId` claim.
+//
+// The public booking callables (`bookSession`, `bookAppointment`) DO read
+// `request.auth`, to honour a signed-in contact session. A kiosk token can never
+// be mistaken for one: `optionalContactSessionFromRequest` requires both a
+// `contactId` and a `teamId` claim, and this token deliberately carries neither
+// (its team is namespaced as `kioskTeam`). So a kiosk-signed-in caller still
+// books exactly like an anonymous walk-in guest — the intended behaviour. Keep
+// it that way: never add `contactId`/`teamId` claims to this token.
 import * as admin from 'firebase-admin'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import type { KioskConfig } from '@linyup/shared'

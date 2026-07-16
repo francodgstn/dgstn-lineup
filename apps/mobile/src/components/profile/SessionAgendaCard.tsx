@@ -16,22 +16,17 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
 
   const handleBook = async (session: SessionWithStatus) => {
-    if (!contact?.id || !contact?.email || !contact?.firstname || !contact?.lastname) {
-      Alert.alert('Error', 'Missing contact details. Please update your profile.');
+    if (!contact?.id) {
+      Alert.alert('Error', 'Please sign in again to book.');
       return;
     }
 
     setLoadingSessionId(session.id);
     try {
+      // Name/email come from our contact doc server-side, via the session claims.
       await FirestoreService.bookSession({
         teamId: session.teamId,
         sessionId: session.id,
-        contactId: contact.id,
-        contactDetails: {
-          firstname: contact.firstname,
-          lastname: contact.lastname,
-          email: contact.email,
-        }
       });
       Alert.alert('Success', 'Session booked successfully!');
       if (onRefresh) onRefresh();

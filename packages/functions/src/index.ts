@@ -21,7 +21,6 @@ export { manageTeamMember } from './teams/manageTeamMember'
 export { listTeamMembers } from './teams/listTeamMembers'
 
 // Auth
-export { generateAuthToken } from './auth/generateAuthToken'
 export { sendContactVerificationCode } from './auth/sendContactVerificationCode'
 export { validateAuthToken } from './auth/validateAuthToken'
 export { generateApiKey } from './auth/generateApiKey'

@@ -17,6 +17,7 @@ import {
   buildVerificationCodeEmail,
 } from './templates'
 import { resolveBookingAccessGate } from './access'
+import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import {
   resolveActivityAccessRule,
   resolveAutoConfirm,
@@ -290,7 +291,6 @@ export const bookSession = onCall(async (request) => {
     contactDetails?: { firstname: string; lastname: string; email: string; phone?: string }
     authenticatedContactId?: string
     verificationCodeId?: string
-    bookingAuthToken?: string
     referralCode?: string
     subscription_type_id?: string
   }
@@ -347,45 +347,21 @@ export const bookSession = onCall(async (request) => {
   }
 
   // ── Resolve authenticated contact ────────────────────────────────────────────
+  // Two ways a caller can prove who they are, checked in this order:
+  //   1. authenticatedContactId (+ verificationCodeId) — the public booking form's
+  //      passwordless email-OTP flow. Explicit, so it WINS when supplied: a contact
+  //      signed in as themselves may legitimately book for another contact they just
+  //      verified by code (e.g. a parent booking their child — see the login-email
+  //      allow-list in buildContactSession).
+  //   2. Contact session — the custom-token claims { contactId, teamId,
+  //      sessionExpires } minted by buildContactSession, which httpsCallable attaches
+  //      to request.auth once the contact is signed in (mobile app / web Space). This
+  //      is the ONLY trustworthy source of a caller's own contactId on a public
+  //      callable (see utils/contactSession.ts) — the same mechanism bookAppointment,
+  //      createDropInCheckout and requestContactUpdate use, so a signed-in app never
+  //      has to type an emailed code to book something it's already authenticated for.
+  // Neither present → guest booking from contactDetails, below.
   let authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null = null
-
-  // bookingAuthToken path — one-time token stored in auth_tokens with type:'booking'
-  if (data.bookingAuthToken) {
-    const tokenDoc = await admin
-      .firestore()
-      .collection('auth_tokens')
-      .doc(data.bookingAuthToken)
-      .get()
-    if (!tokenDoc.exists) throw new HttpsError('invalid-argument', 'Invalid booking auth token')
-    const tokenData = tokenDoc.data()!
-    if (tokenData.type !== 'booking')
-      throw new HttpsError('permission-denied', 'Token is not a booking token')
-    if (tokenData.team_id !== data.teamId)
-      throw new HttpsError('permission-denied', 'Token does not match the requested team')
-    const now = Timestamp.now()
-    if (tokenData.expires_at?.toMillis() < now.toMillis())
-      throw new HttpsError('deadline-exceeded', 'Booking auth token has expired')
-    if (tokenData.used)
-      throw new HttpsError('failed-precondition', 'Booking auth token has already been used')
-
-    const contactDoc = await admin
-      .firestore()
-      .collection('contacts')
-      .doc(tokenData.contact_id)
-      .get()
-    if (!contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
-    const c = contactDoc.data()!
-    if (c.teamId !== data.teamId)
-      throw new HttpsError('permission-denied', 'Contact does not belong to this team')
-
-    await admin.firestore().collection('auth_tokens').doc(data.bookingAuthToken).update({
-      used: true,
-      used_at: FieldValue.serverTimestamp(),
-      used_for_session: data.sessionId,
-    })
-
-    authenticatedContact = { id: tokenData.contact_id as string, ...c }
-  }
 
   if (data.authenticatedContactId) {
     // Validate verification code
@@ -426,6 +402,20 @@ export const bookSession = onCall(async (request) => {
     if (contactData.teamId !== data.teamId)
       throw new HttpsError('permission-denied', 'Contact does not belong to this team')
     authenticatedContact = { id: data.authenticatedContactId, ...contactData }
+  } else {
+    const contactSession = optionalContactSessionFromRequest(request)
+    if (contactSession && contactSession.teamId === data.teamId) {
+      const contactDoc = await admin
+        .firestore()
+        .collection('contacts')
+        .doc(contactSession.contactId)
+        .get()
+      if (!contactDoc.exists) throw new HttpsError('not-found', 'Contact not found')
+      const contactData = contactDoc.data()!
+      if (contactData.teamId !== data.teamId)
+        throw new HttpsError('permission-denied', 'Contact does not belong to this team')
+      authenticatedContact = { id: contactSession.contactId, ...contactData }
+    }
   }
 
   const isAuthenticatedBooking = !!authenticatedContact

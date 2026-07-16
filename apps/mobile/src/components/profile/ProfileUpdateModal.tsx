@@ -73,13 +73,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
     setError(null);
 
     try {
-      // 1. Generate membership auth token
-      const tokenResult = await FirestoreService.generateAuthToken(contact.id, 'signup');
-      if (!tokenResult?.success || !tokenResult.token) {
-        throw new Error('Failed to generate security token');
-      }
-
-      // 2. Prepare contact details for submission
+      // 1. Prepare contact details for submission
       const contactDetails: Partial<Contact> = {
         firstname: formData.firstname.trim(),
         lastname: formData.lastname.trim(),
@@ -101,9 +95,8 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
         weight: formData.weight ? parseFloat(formData.weight) : undefined,
       };
 
-      // 3. Submit request via cloud function
+      // 2. Submit request via cloud function — our contact session identifies us.
       await FirestoreService.requestContactUpdate({
-        authToken: tokenResult.token,
         contactDetails,
         note: formData.note.trim(),
       });

@@ -42,7 +42,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `acceptTeamInvitation`
 - ✅ `manageTeamInvitation` (studio+)
 - ✅ `manageTeamMember` (studio+)
-- ✅ `generateAuthToken`
+- ~~`generateAuthToken`~~ — deleted 2026-07-16. Gated on `isTeamMember`, so a contact could never call it; wrote a token shape no reader understood. Signed-in contacts now identify themselves with their contact session (`utils/contactSession.ts`).
 - ✅ `sendContactVerificationCode`
 - ✅ `verifyContactCode`
 - ✅ `completeSignup`
@@ -75,7 +75,7 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 - ✅ `cancelBooking`
 - ✅ `rebookSession`
 - ✅ `getBookingDetails`
-- ~~`bookTrialSession`~~ — superseded by `bookSession` (handles trial + authenticated bio-link bookings, referral tracking, IP rate limiting, bookingAuthToken)
+- ~~`bookTrialSession`~~ — superseded by `bookSession` (handles trial + authenticated bio-link bookings, referral tracking, IP rate limiting, contact sessions)
 - ✅ `bookCoachSlot`
 - ✅ `cancelCoachBooking`
 - ✅ `trackCoachBookings`

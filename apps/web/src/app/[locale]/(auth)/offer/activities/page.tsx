@@ -348,10 +348,42 @@ function ActivityDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="act-name">{t('fieldName')}</Label>
-            <Input id="act-name" {...register('name')} autoFocus />
-            {errors.name && <p className="text-destructive text-xs">{errors.name.message}</p>}
+          {/* Identity — name + kind first; the kind drives the rest of the form */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="act-name">{t('fieldName')}</Label>
+              <Input id="act-name" {...register('name')} autoFocus />
+              {errors.name && <p className="text-destructive text-xs">{errors.name.message}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{t('fieldType')}</Label>
+              <Controller
+                name="type"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-full">
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {field.value
+                          ? t(`type_${field.value}` as const)
+                          : <span className="text-muted-foreground">—</span>}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACTIVITY_TYPES.map((tp) => (
+                        <SelectItem key={tp} value={tp}>{t(`type_${tp}` as const)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {editing && watch('type') !== (editing.type ?? 'class') && (
+                <p className="text-xs text-muted-foreground">
+                  {t('typeChangeWarning')}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -362,59 +394,6 @@ function ActivityDialog({
               rows={2}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
             />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="act-prereq">{t('fieldPrerequisites')}</Label>
-            <textarea
-              id="act-prereq"
-              {...register('prerequisites')}
-              rows={2}
-              placeholder={t('prerequisitesPlaceholder')}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
-            />
-            <p className="text-xs text-muted-foreground">{t('prerequisitesHelp')}</p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="act-confirm-instructions">{t('fieldConfirmationInstructions')}</Label>
-            <textarea
-              id="act-confirm-instructions"
-              {...register('confirmationInstructions')}
-              rows={3}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-            />
-            <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
-          </div>
-
-          {/* Type */}
-          <div className="space-y-1.5">
-            <Label>{t('fieldType')}</Label>
-            <Controller
-              name="type"
-              control={control}
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {field.value
-                        ? t(`type_${field.value}` as const)
-                        : <span className="text-muted-foreground">—</span>}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACTIVITY_TYPES.map((tp) => (
-                      <SelectItem key={tp} value={tp}>{t(`type_${tp}` as const)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {editing && watch('type') !== (editing.type ?? 'class') && (
-              <p className="text-xs text-muted-foreground">
-                {t('typeChangeWarning')}
-              </p>
-            )}
           </div>
 
           {/* Auto-confirm — a field, not implied by type. Shown for classes and
@@ -445,9 +424,10 @@ function ActivityDialog({
             />
           </div>
 
-          {/* Appointment-only: bookable session lengths + booking cap */}
+          {/* Appointment-only: bookable session lengths + booking cap, side by
+              side on wider screens (the chips need room; the cap is one input) */}
           {type === 'appointment' && (
-            <div className="space-y-3 rounded-lg border p-3">
+            <div className="rounded-lg border p-3 grid gap-4 sm:grid-cols-[1fr_9rem]">
               <div className="space-y-1.5">
                 <Label>{t('fieldDurationsMinutes')}</Label>
                 <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
@@ -487,7 +467,8 @@ function ActivityDialog({
             </div>
           )}
 
-          {/* Cover image */}
+          {/* Presentation — cover image beside level + colour on wide screens */}
+          <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-1.5">
             <Label>{t('fieldImage')}</Label>
             {imagePreview ? (
@@ -521,7 +502,7 @@ function ActivityDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 content-start">
             <div className="space-y-1.5">
               <Label htmlFor="act-level">{t('fieldLevel')}</Label>
               <Controller
@@ -556,6 +537,7 @@ function ActivityDialog({
               />
             </div>
           </div>
+          </div>
 
           <div className="space-y-2">
             <Label>{t('accessLabel')}</Label>
@@ -563,9 +545,16 @@ function ActivityDialog({
               control={control}
               name="accessTier"
               render={({ field }) => (
-                <div className="flex flex-col gap-1.5">
+                // Selectable tier cards (3-across when the dialog is wide) —
+                // same pattern as the availability form's mode toggle.
+                <div className="grid gap-2 lg:grid-cols-3">
                   {(['open', 'members', 'subscription'] as const).map((tier) => (
-                    <label key={tier} className="flex items-start gap-2 cursor-pointer text-sm">
+                    <label
+                      key={tier}
+                      className={`flex items-start gap-2 cursor-pointer text-sm rounded-lg border p-2.5 transition-colors ${
+                        field.value === tier ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
+                      }`}
+                    >
                       <input
                         type="radio"
                         className="mt-0.5 accent-primary"
@@ -588,7 +577,7 @@ function ActivityDialog({
                 control={control}
                 name="subscriptionTypeIds"
                 render={({ field }) => (
-                  <div className="ml-6 space-y-1.5 rounded-md border p-3">
+                  <div className="space-y-1.5 rounded-md border p-3">
                     {subscriptionTypes.length === 0 ? (
                       <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
                     ) : (
@@ -640,7 +629,7 @@ function ActivityDialog({
               />
             )}
             {accessTier !== 'open' && (
-              <div className="ml-6 space-y-2 rounded-md border p-3">
+              <div className="space-y-2 rounded-md border p-3">
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="checkbox" {...register('dropInEnabled')} className="accent-primary" />
                   {t('dropInLabel')}
@@ -661,6 +650,32 @@ function ActivityDialog({
                 )}
               </div>
             )}
+          </div>
+
+          {/* Secondary prose — side by side when the dialog is wide */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="act-prereq">{t('fieldPrerequisites')}</Label>
+              <textarea
+                id="act-prereq"
+                {...register('prerequisites')}
+                rows={3}
+                placeholder={t('prerequisitesPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+              />
+              <p className="text-xs text-muted-foreground">{t('prerequisitesHelp')}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-confirm-instructions">{t('fieldConfirmationInstructions')}</Label>
+              <textarea
+                id="act-confirm-instructions"
+                {...register('confirmationInstructions')}
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
+            </div>
           </div>
 
           <DialogFooter>
