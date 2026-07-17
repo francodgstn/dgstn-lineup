@@ -1052,10 +1052,11 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
 
   // ── appointment activities (the WHAT) ────────────────────────────────────────
-  // Each is an offering: its name, the lengths it can be booked at, its capacity
-  // and its access rule. A lead may publish several (e.g. a free intro call and a
-  // paid 1:1) — they differ by access rule, which a single duration list cannot
-  // express. The availability docs below publish only the WHEN and link to them.
+  // Each is an offering: its name, the lengths it can be booked at (with their
+  // prices) and its access rule. A lead may publish several (e.g. a free intro
+  // call and a paid 1:1) — they differ by access rule, which the duration list
+  // cannot express (it carries prices, never access rules). The availability
+  // docs below publish only the WHEN and link to them.
   const aptActIdOf = (key: string) => `${teamId}-act-appointment-${key}`
   // The provider is whoever's schedule first offers it (owner as a fallback).
   const aptProviderKeyOf = (key: string) =>
@@ -1090,7 +1091,22 @@ async function seedLeadTenant(profile: LeadProfile) {
         providerId: uidOf(providerKey),
         providerName: staffName(providerKey),
         level: 'all',
-        durationsMinutes: apt.durationsMinutes,        // A 1:1 slot has no roster-review step — the time is taken the moment
+        // Per-duration pricing (major units, team currency). The profile's
+        // subscriptionPricing entries reference subscriptions by key — resolve
+        // them to the seeded subscription-type ids here.
+        durations: apt.durations.map((d) => ({
+          minutes: d.minutes,
+          priceAmount: d.priceAmount ?? null,
+          ...(d.subscriptionPricing?.length
+            ? {
+                subscriptionPricing: d.subscriptionPricing.map((e) => ({
+                  subscriptionTypeId: subIdOf(e.subKey),
+                  priceAmount: e.priceAmount,
+                })),
+              }
+            : {}),
+        })),
+        // A 1:1 slot has no roster-review step — the time is taken the moment
         // it's booked, so the booking is written 'confirmed' on the spot.
         autoConfirm: true,
         isFreeTrial: accessRule.type === 'open',
@@ -1117,6 +1133,13 @@ async function seedLeadTenant(profile: LeadProfile) {
         isFreeTrial: accessRule.type === 'open',
         accessRule,
         level: 'all',
+        // Duration menu with base prices only ("from CHF 45" on public cards) —
+        // subscriptionPricing is STRIPPED, exactly as syncActivityPublicProfile
+        // mirrors it (member benefits are per-contact data, never public).
+        durations: apt.durations.map((d) => ({
+          minutes: d.minutes,
+          priceAmount: d.priceAmount ?? null,
+        })),
       })
   }
 
@@ -1184,8 +1207,8 @@ async function seedLeadTenant(profile: LeadProfile) {
       const contactId = `${teamId}-contact-${contactIdx.toString().padStart(3, '0')}`
       const clientEmail = `${slugEmail(client)}.${teamId}@example.com`
 
-      // Which offering was booked — the session INHERITS the activity's name,
-      // access rule and capacity, exactly as bookAppointment does.
+      // Which offering was booked — the session INHERITS the activity's name
+      // and access rule, exactly as bookAppointment does.
       const bookedApt = aptDefOf(b.activityKey ?? avActivityKeys[0])
       if (!bookedApt) continue
       const bookedAccessRule = {
@@ -1201,7 +1224,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         activityId: aptActIdOf(bookedApt.key),
         activityName: bookedApt.activityName,
         accessRule: bookedAccessRule,
-        isFreeTrial: bookedAccessRule.type === 'open',        autoConfirm: true,
+        isFreeTrial: bookedAccessRule.type === 'open',
+        autoConfirm: true,
         providerId: providerUid,
         providerName,
         start,

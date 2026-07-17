@@ -4073,10 +4073,13 @@
       "trigger": "Trigger",
       "conditions": "Conditions",
       "conditionsHint": "(all must match)",
+      "conditionsHintEmpty": "(none — runs for every contact)",
+      "conditionsHintDailyEmpty": "(add at least one)",
       "actions": "Actions"
     },
     "ruleCard": {
       "unnamed": "(unnamed)",
+      "noConditions": "All contacts",
       "pauseAction": "Pause",
       "activateAction": "Activate",
       "runNow": "Run now",
@@ -4253,6 +4256,7 @@
     "validation": {
       "nameRequired": "Name is required",
       "triggerRequired": "Trigger is required",
+      "conditionRequiredDaily": "A daily rule needs at least one condition. Without one it would run for every contact in your team, every day.",
       "required": "Required"
     },
     "dialogs": {

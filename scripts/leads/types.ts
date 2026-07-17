@@ -152,13 +152,35 @@ export interface LeadGridSlot {
   upcomingOnly?: boolean
 }
 
+/** One bookable length of an appointment offering, with its pricing — an
+ *  `Activity.durations` entry. Prices are major units of the team currency.
+ *
+ *  `priceAmount` is the base/walk-in price — what guests, and any subscriber
+ *  without an explicit entry below, pay through Stripe checkout. Omit it (or
+ *  null) for an unpriced duration: booking stays on the free path and the
+ *  plain access rules decide.
+ *
+ *  `subscriptionPricing` is the EXPLICIT member benefit, referencing
+ *  subscriptions by `LeadSubscriptionDef.key` (resolved to subscription-type
+ *  ids at seed time): `priceAmount: null` = INCLUDED (holders book free;
+ *  credit-pack types spend a credit), a number = the member price. An ABSENT
+ *  entry means subscribers of that type pay the base price — the benefit is
+ *  data, never implied. A contact holding several types gets the LOWEST
+ *  applicable price ("included" beats any amount). */
+export interface LeadAppointmentDurationDef {
+  minutes: number
+  priceAmount?: number | null
+  subscriptionPricing?: Array<{ subKey: string; priceAmount: number | null }>
+}
+
 /**
  * One appointment OFFERING — the WHAT. Seeded as an `Activity` with
  * `type: 'appointment'`; the availability docs that link to it publish only the WHEN.
  *
- * A lead may have SEVERAL: a free 30-min intro call and a paid 60-min 1:1 are two
- * offerings (different lengths, different access rules), not one activity with two
- * durations — the duration list can't carry a free-vs-paid distinction.
+ * A lead may have SEVERAL: a free 30-min intro call and a paid 60-min 1:1 are
+ * two offerings when their ACCESS RULES differ (an open lead magnet vs a
+ * members-only session) — the duration list carries per-duration PRICES, but
+ * never per-duration access rules.
  */
 export interface LeadAppointmentDef {
   /** id suffix → `{teamId}-act-appointment-{key}`; referenced by
@@ -169,9 +191,11 @@ export interface LeadAppointmentDef {
   description: string
   /** Assets-folder base name for the cover image (as LeadActivityDef.imageAsset). */
   imageAsset?: string
-  /** The lengths this offering can be booked at (Activity.durationsMinutes).
-   *  Duration belongs to the offering, never to the availability schedule. */
-  durationsMinutes: number[]  /** Paid-access gate (Activity.accessRule). Defaults to 'open'. */
+  /** The lengths this offering can be booked at, each with optional pricing
+   *  (Activity.durations). Duration belongs to the offering, never to the
+   *  availability schedule. */
+  durations: LeadAppointmentDurationDef[]
+  /** Paid-access gate (Activity.accessRule). Defaults to 'open'. */
   accessTier?: 'open' | 'members' | 'subscription'
   /** For accessTier 'subscription': LeadSubscriptionDef.keys that grant access. */
   accessSubKeys?: string[]
@@ -179,7 +203,7 @@ export interface LeadAppointmentDef {
 
 /**
  * A provider's published free time — the WHEN, and only the when. The WHAT (name,
- * durations, capacity, access rule) lives on the linked appointment activities, i.e.
+ * durations, pricing, access rule) lives on the linked appointment activities, i.e.
  * `LeadProfile.appointments.activities`.
  *
  * NOTHING is pre-generated in either mode: an appointment session exists only once
@@ -222,7 +246,7 @@ export interface LeadBookedAppointmentDef {
   /** Which offering was booked (LeadAppointmentDef.key). Defaults to the first
    *  activity the availability links to. */
   activityKey?: string
-  /** Session length; must be one of the booked activity's `durationsMinutes`. */
+  /** Session length; must be one of the booked activity's `durations` minutes. */
   durationMinutes: number
   /** Which occurrence of the availability's weekdays to land on (1 = the next one).
    *  Negative walks backwards into the PAST — history for the calendar + reports. */

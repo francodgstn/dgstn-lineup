@@ -706,11 +706,32 @@ async function seedTeam(opts: {
   }
 
   // ── appointment activity ────────────────────────────────────────────────────────
-  // The WHAT of an appointment: its name, the lengths it can be booked at, its
-  // capacity and its access rule. The availability below only publishes the WHEN.
+  // The WHAT of an appointment: its name, the lengths it can be booked at (with
+  // their prices) and its access rule. The availability below only publishes the WHEN.
   const appointmentActId = `${teamId}-act-appointment`
   const appointmentActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
-  const appointmentDurations = [30, 60]
+  // Per-duration pricing (major units, CHF) — the MIXED demo case. The 60-min
+  // duration carries the EXPLICIT member benefit: the top tier has it INCLUDED
+  // (priceAmount: null → holders book free via the free path), a mid tier gets
+  // a member price (holders pay that through checkout), and every other
+  // subscription pays base — a priced duration with no entry costs base even
+  // for subscribers (member benefit is data, never implied). The 30-min
+  // duration is base-price-only, so it demos exactly that rule.
+  const appointmentIncludedSubId =
+    plan === 'coach' ? `${teamId}-sub-monthly` : `${teamId}-sub-elite`
+  const appointmentMemberPriceSubId =
+    plan === 'coach' ? `${teamId}-sub-10class` : `${teamId}-sub-premium`
+  const appointmentDurations = [
+    { minutes: 30, priceAmount: 45 },
+    {
+      minutes: 60,
+      priceAmount: 85,
+      subscriptionPricing: [
+        { subscriptionTypeId: appointmentIncludedSubId, priceAmount: null },
+        { subscriptionTypeId: appointmentMemberPriceSubId, priceAmount: 60 },
+      ],
+    },
+  ]
   await db
     .collection('activities')
     .doc(appointmentActId)
@@ -723,7 +744,8 @@ async function seedTeam(opts: {
       providerId: uid,
       providerName: displayName,
       level: 'all',
-      durationsMinutes: appointmentDurations,      // A 1:1 slot has no roster-review step — the time is taken the moment it's
+      durations: appointmentDurations,
+      // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
       isFreeTrial: true,
@@ -746,6 +768,13 @@ async function seedTeam(opts: {
       image_url: null,
       isFreeTrial: true,
       level: 'all',
+      // Duration menu with base prices only ("from CHF 45" on public cards) —
+      // subscriptionPricing is STRIPPED, exactly as syncActivityPublicProfile
+      // mirrors it (member benefits are per-contact data, never public).
+      durations: appointmentDurations.map((d) => ({
+        minutes: d.minutes,
+        priceAmount: d.priceAmount ?? null,
+      })),
     })
 
   // ── availability (the WHEN — publishes free time, generates nothing) ──────────
@@ -809,7 +838,8 @@ async function seedTeam(opts: {
       activityId: appointmentActId,
       activityName: appointmentActName,
       accessRule: { type: 'open' },
-      isFreeTrial: true,      providerId: uid,
+      isFreeTrial: true,
+      providerId: uid,
       providerName: displayName,
       start: apt.start,
       durationMinutes: apt.durationMinutes,

@@ -157,6 +157,12 @@ export interface ContactData {
 }
 
 export interface AutomationContext {
+  /**
+   * Trigger-supplied data addressable from action templates as {{payload.*}}.
+   * For inbound_webhook this is the raw POST body. Never persisted — it lives
+   * only for the duration of the run, since it may carry the caller's secrets.
+   */
+  payload?: Record<string, unknown>
   /** Extra data passed by the triggering event (e.g. sessionId for session_ended) */
   [key: string]: unknown
 }
@@ -177,6 +183,7 @@ export interface RunRuleOptions {
   dryRun?: boolean // evaluate conditions but do not execute actions or mark sent
   triggerTier?: 'event' | 'delayed' | 'scheduled' | 'manual'
   force?: boolean // bypass dedup (used by triggerAutomationRule callable)
+  context?: AutomationContext // trigger-supplied data, exposed to actions as {{payload.*}}
 }
 
 export interface RuleStats {
@@ -586,7 +593,8 @@ async function executeActionsForContact(
   resolved: ResolvedActions,
   teamId: string,
   teamData: Record<string, unknown>,
-  ruleId: string
+  ruleId: string,
+  payload?: Record<string, unknown>
 ): Promise<{ executed: number; failed: number }> {
   const now = new Date()
   const teamName = (teamData.name as string) || ''
@@ -601,14 +609,16 @@ async function executeActionsForContact(
           contact,
           teamName,
           now,
-          teamData
+          teamData,
+          payload
         )
         const rawBody = substituteVariables(
           resolved.template.body as string,
           contact,
           teamName,
           now,
-          teamData
+          teamData,
+          payload
         )
         const htmlBody = renderBody(resolved.template, rawBody)
         const { html, text } = buildOutreachEmail({
@@ -643,7 +653,8 @@ async function executeActionsForContact(
           contact,
           teamName,
           now,
-          teamData
+          teamData,
+          payload
         )
         await createContactAlertDoc(contactId, teamId, contact, {
           schedule: { type: 'datetime', value: Timestamp.now() },
@@ -762,7 +773,14 @@ async function executeActionsForContact(
       // add_note — append a timestamped note to the contact (contact_notes
       // subcollection), same shape the contact-detail Notes tab reads/writes.
       if (action.type === 'add_note') {
-        const content = substituteVariables(action.note, contact, teamName, now, teamData).trim()
+        const content = substituteVariables(
+          action.note,
+          contact,
+          teamName,
+          now,
+          teamData,
+          payload
+        ).trim()
         if (content) {
           await admin
             .firestore()
@@ -801,8 +819,22 @@ async function executeActionsForContact(
             `[automationEngine] notify_team: no team email configured for team ${teamId}, skipping`
           )
         } else {
-          const subject = substituteVariables(action.subject, contact, teamName, now, teamData)
-          const rawBody = substituteVariables(action.body, contact, teamName, now, teamData)
+          const subject = substituteVariables(
+            action.subject,
+            contact,
+            teamName,
+            now,
+            teamData,
+            payload
+          )
+          const rawBody = substituteVariables(
+            action.body,
+            contact,
+            teamName,
+            now,
+            teamData,
+            payload
+          )
           const htmlBody = renderBody({ body_mode: 'markdown' }, rawBody)
           const { html, text } = buildOutreachEmail({ body: htmlBody, teamName, teamData })
           await sendEmail({ to: toEmail, subject, html, text, teamId })
@@ -812,7 +844,14 @@ async function executeActionsForContact(
 
       // log_activity — append a note to the team activity log
       if (action.type === 'log_activity') {
-        const message = substituteVariables(action.message, contact, teamName, now, teamData)
+        const message = substituteVariables(
+          action.message,
+          contact,
+          teamName,
+          now,
+          teamData,
+          payload
+        )
         await logActivity(teamId, {
           date: FieldValue.serverTimestamp(),
           event: 'automation_action',
@@ -1221,7 +1260,8 @@ async function runContactRule(
   teamData: Record<string, unknown>,
   now: Date,
   stats: RuleStats,
-  options: RunRuleOptions
+  options: RunRuleOptions,
+  payload?: Record<string, unknown>
 ): Promise<void> {
   const db = admin.firestore()
 
@@ -1286,7 +1326,8 @@ async function runContactRule(
       resolved,
       teamId,
       teamData,
-      rule.id
+      rule.id,
+      payload
     )
     stats.sent += executed
     stats.errors += failed
@@ -1337,16 +1378,32 @@ export async function runRule(
   if (!rule.actions.length && !rule.template_id && !rule.alert_preset_id) {
     console.log(`[automationEngine] Rule ${rule.id} has no actions, skipping`)
     stats.skipped++
-  } else if (!rule.conditions.length) {
-    console.log(`[automationEngine] Rule ${rule.id} has no conditions, skipping`)
+  } else if (!rule.conditions.length && rule.trigger.type === 'schedule_daily') {
+    // Conditions are an AND-filter, so "no conditions" means "match everything" —
+    // which is the natural intent for an event trigger (the event already scopes
+    // the run to one contact), but a footgun for schedule_daily, whose contact set
+    // is the ENTIRE team. An unconditioned daily rule would re-sweep every contact
+    // every day, so it stays inert. The builder blocks saving one; this is the
+    // backstop for rules that predate that check.
+    console.log(`[automationEngine] Rule ${rule.id} is schedule_daily with no conditions, skipping`)
     stats.skipped++
   } else {
     const hasBookingCondition = rule.conditions.some((c) => c.type === 'bio_link_booking_no_show')
 
     if (hasBookingCondition) {
+      // Booking rules are driven by the daily scan, which has no trigger payload.
       await runBookingRule(rule, teamId, teamData, now, stats, options)
     } else {
-      await runContactRule(rule, contacts, teamId, teamData, now, stats, options)
+      await runContactRule(
+        rule,
+        contacts,
+        teamId,
+        teamData,
+        now,
+        stats,
+        options,
+        options.context?.payload
+      )
     }
   }
 
@@ -1424,6 +1481,8 @@ export async function enqueueDelayedRule(
  * then runs each against the supplied subjects.
  * Called by onContactWrite, onBookingWrite, onSessionWrite, onAffiliationWrite triggers.
  *
+ * @param context  Trigger-supplied data. Scopes inbound_webhook rules by endpoint,
+ *                 and its `payload` is exposed to action templates as {{payload.*}}.
  * @param delta  For subscription_added/removed and affiliation_added/removed: the specific
  *               type that changed. Rules with a matching trigger.subscriptionTypeId or
  *               trigger.affiliationTypeKey are scoped to this delta; absent/empty = match any.
@@ -1433,7 +1492,7 @@ export async function fireEventRules(
   teamId: string,
   triggerType: AutomationTriggerType,
   subjects: ContactData[],
-  _context?: AutomationContext,
+  context?: AutomationContext,
   delta?: EventDelta
 ): Promise<void> {
   const db = admin.firestore()
@@ -1473,7 +1532,7 @@ export async function fireEventRules(
     if (
       triggerType === 'inbound_webhook' &&
       rule.trigger.webhook_endpoint_id &&
-      rule.trigger.webhook_endpoint_id !== _context?.webhook_endpoint_id
+      rule.trigger.webhook_endpoint_id !== context?.webhook_endpoint_id
     )
       continue
 
@@ -1497,6 +1556,7 @@ export async function fireEventRules(
 
     const log = await runRule(rule, subjects, teamId, teamData, {
       triggerTier: 'event',
+      context,
     })
 
     // Write log and update rule metadata

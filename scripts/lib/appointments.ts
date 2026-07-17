@@ -9,6 +9,13 @@
  * they materialise a handful of ALREADY-BOOKED appointments instead, shaped exactly
  * like the ones the `bookAppointment` callable writes.
  *
+ * FREE-PATH ONLY: seeded booked appointments are always free-path-shaped —
+ * `status: 'confirmed'`, no payment fields (no payment_status/payment_intent_id,
+ * no `pending_payment` holds). Paid bookings are NOT seeded: they would need a
+ * matching `member_payments/*` ledger doc (webhook-written in production) and no
+ * such seeding pipeline exists. Seed paid demo data by actually paying through
+ * Stripe test mode instead.
+ *
  * Path/type constants mirror @linyup/shared (the seed scripts compile under
  * tsconfig.scripts.json, which does not resolve the workspace import — same
  * convention as scripts/lib/storefront.ts).

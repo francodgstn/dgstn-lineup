@@ -4073,10 +4073,13 @@
       "trigger": "Déclencheur",
       "conditions": "Conditions",
       "conditionsHint": "(toutes doivent correspondre)",
+      "conditionsHintEmpty": "(aucune — s'applique à tous les contacts)",
+      "conditionsHintDailyEmpty": "(ajoutez-en au moins une)",
       "actions": "Actions"
     },
     "ruleCard": {
       "unnamed": "(sans nom)",
+      "noConditions": "Tous les contacts",
       "pauseAction": "Mettre en pause",
       "activateAction": "Activer",
       "runNow": "Exécuter maintenant",
@@ -4253,6 +4256,7 @@
     "validation": {
       "nameRequired": "Le nom est requis",
       "triggerRequired": "Le déclencheur est requis",
+      "conditionRequiredDaily": "Une règle quotidienne nécessite au moins une condition. Sans condition, elle s'exécuterait chaque jour pour tous les contacts de votre équipe.",
       "required": "Requis"
     },
     "dialogs": {

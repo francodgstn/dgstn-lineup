@@ -4073,10 +4073,13 @@
       "trigger": "Auslöser",
       "conditions": "Bedingungen",
       "conditionsHint": "(alle müssen zutreffen)",
+      "conditionsHintEmpty": "(keine — gilt für alle Kontakte)",
+      "conditionsHintDailyEmpty": "(mindestens eine hinzufügen)",
       "actions": "Aktionen"
     },
     "ruleCard": {
       "unnamed": "(unbenannt)",
+      "noConditions": "Alle Kontakte",
       "pauseAction": "Pausieren",
       "activateAction": "Aktivieren",
       "runNow": "Jetzt ausführen",
@@ -4253,6 +4256,7 @@
     "validation": {
       "nameRequired": "Name ist erforderlich",
       "triggerRequired": "Auslöser ist erforderlich",
+      "conditionRequiredDaily": "Eine tägliche Regel benötigt mindestens eine Bedingung. Ohne Bedingung würde sie jeden Tag für alle Kontakte deines Teams ausgeführt.",
       "required": "Erforderlich"
     },
     "dialogs": {
