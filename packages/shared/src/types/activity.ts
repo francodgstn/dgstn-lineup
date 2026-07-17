@@ -12,6 +12,9 @@ export type ActivityType = 'class' | 'appointment'
 //  - 'members'      → any signed-in 'joined' contact of the team (trial accounts can't)
 //  - 'subscription' → a 'joined' contact holding one of `subscriptionTypeIds` (live)
 // Enforced authoritatively in the bookSession callable; defended in Firestore rules.
+// CLASSES ONLY — appointments dropped this gate entirely in 2026-07 (see
+// `ActivityMemberBenefit`'s history note); `Activity.accessRule` still exists
+// because classes use it, but appointment booking paths ignore it everywhere.
 export type ActivityAccessTier = 'open' | 'members' | 'subscription'
 
 export interface ActivityAccessRule {
@@ -48,19 +51,18 @@ export function resolveAutoConfirm(a: {
  *
  *  The coach sells TIME, so price is per duration — a 30-minute session cannot
  *  cost the same as a 90-minute one. `priceAmount` (major units, team currency)
- *  is the base/walk-in price; null/absent = unpriced, so the plain access rules
- *  decide (open → free, members/subscription → covered-only).
+ *  is the base price; null/absent = unpriced, which means free for anyone,
+ *  guests included — there is no separate access gate for appointments any
+ *  more (see `ActivityMemberBenefit`).
  *
- *  `subscriptionPricing` is the EXPLICIT member benefit: an entry with
- *  `priceAmount: null` means INCLUDED (holders book free; credit-pack types
- *  spend a credit), a number is a member price. A priced duration with no
- *  entries costs base for everyone, subscribers included — benefit is data,
- *  never implied. A contact holding several types gets the LOWEST applicable
- *  price ("included" beats any amount). */
+ *  History: until 2026-07 this also carried `subscriptionPricing`, a per-
+ *  duration × per-subscription-type price matrix. Cut after a persona test
+ *  showed it produced real coach confusion ("who pays base price if only
+ *  Premium can book?"); member benefit is now ONE rule per ACTIVITY
+ *  (`Activity.memberBenefit`), never per duration. */
 export interface ActivityDuration {
   minutes: number
   priceAmount?: number | null
-  subscriptionPricing?: Array<{ subscriptionTypeId: string; priceAmount: number | null }>
 }
 
 /** An appointment activity's duration menu, defaulting to a single unpriced
@@ -73,51 +75,79 @@ export function resolveAppointmentDurations(a: {
   return ds.length ? ds : [{ minutes: 60 }]
 }
 
-/** A duration's price for one particular contact, given the subscription types
- *  they currently hold — the PRICE gate (separate from, and orthogonal to, the
- *  ACCESS gate in `ActivityAccessRule`). Server-side resolution only; the client
- *  may mirror this for display, but booking/checkout always re-resolve.
+/** APPOINTMENT-ONLY. The one member-benefit rule for a whole activity — never
+ *  per duration (the old per-duration × per-subscription-type matrix is gone,
+ *  see `ActivityDuration`'s history note). Holders of any listed subscription
+ *  type: `kind: 'included'` books free (a credit-pack type spends a credit),
+ *  `kind: 'discount'` pays `discountPercent` off every priced duration.
+ *  Absent/empty `subscriptionTypeIds` = no benefit — everyone pays base.
  *
- *  Rule: candidates = the base `priceAmount` (what a guest, or any non-matching
- *  holder, pays) plus every `subscriptionPricing` entry whose type the contact
- *  holds. An entry with `priceAmount: null` means INCLUDED — it beats any amount
- *  outright, regardless of how it compares numerically. Otherwise the LOWEST
- *  amount among the candidates wins (several held types may each define a
- *  price; the contact gets the best one). An unpriced base with no matching
- *  entries resolves free (`{ free: true, amount: null }`) — the plain access
- *  rules decide, exactly like before paid appointments existed. A PRICED
- *  duration with no matching `subscriptionPricing` entry costs the base price
- *  for everyone, subscribers included — the member benefit is explicit data,
- *  never implied. */
+ *  Appointments also DROPPED `ActivityAccessRule` entirely in the same pass —
+ *  the price is the only gate now (unpriced = anyone books free, priced =
+ *  anyone pays, benefit holders less). `Activity.accessRule` still exists
+ *  because classes use it; appointments ignore it everywhere — forms don't
+ *  show it, booking paths don't read it. */
+export interface ActivityMemberBenefit {
+  subscriptionTypeIds: string[]
+  kind: 'included' | 'discount'
+  /** 1–100. Required/meaningful when `kind === 'discount'`; ignored for
+   *  'included'. Malformed values (missing, <=0, or >=100) are handled by
+   *  `resolveEffectiveAppointmentPrice` — see its doc comment. */
+  discountPercent?: number
+}
+
+/** A duration's effective price for one particular contact — THE PRICE IS THE
+ *  GATE for appointments (there is no separate access check any more; see
+ *  `ActivityMemberBenefit`'s history note). Server-side resolution only; the
+ *  client may mirror this for display, but booking/checkout always re-resolve.
+ *
+ *  Rules, in order:
+ *  1. Unpriced duration (`priceAmount` null/absent) → free for anyone, guests
+ *     included.
+ *  2. Priced, and the caller holds NONE of `memberBenefit.subscriptionTypeIds`
+ *     (or there's no `memberBenefit` at all) → base price. Guests always land
+ *     here — they never hold a benefit type.
+ *  3. Priced, and the caller holds one or more benefit types — `viaSubscriptionTypeId`
+ *     is the FIRST id in `memberBenefit.subscriptionTypeIds` the caller holds
+ *     (config order, so several held types resolve deterministically):
+ *     - `kind: 'included'` → free.
+ *     - `kind: 'discount'` → `max(0.50, round2(base * (100 - discountPercent) / 100))`,
+ *       major units — clamped to Stripe's 0.50 minimum-charge floor, NEVER free
+ *       via a discount. A malformed `discountPercent` (missing or <= 0) falls
+ *       back to base price (benefit not applied); `>= 100` clamps to the 0.50
+ *       floor instead of computing a (negative-or-zero) discount. */
 export function resolveEffectiveAppointmentPrice(
   duration: ActivityDuration,
   heldSubscriptionTypeIds: string[] = [],
+  memberBenefit?: ActivityMemberBenefit | null,
 ): { free: boolean; amount: number | null; viaSubscriptionTypeId?: string | null } {
+  if (typeof duration.priceAmount !== 'number') {
+    return { free: true, amount: null }
+  }
+  const base = duration.priceAmount
+
+  const benefitTypeIds = memberBenefit?.subscriptionTypeIds ?? []
   const held = new Set(heldSubscriptionTypeIds)
-  const matchingEntries = (duration.subscriptionPricing ?? []).filter((e) =>
-    held.has(e.subscriptionTypeId),
-  )
+  const viaSubscriptionTypeId = benefitTypeIds.find((id) => held.has(id)) ?? null
 
-  // "Included" (priceAmount: null) always wins outright — free beats any amount.
-  const included = matchingEntries.find((e) => e.priceAmount === null)
-  if (included) {
-    return { free: true, amount: null, viaSubscriptionTypeId: included.subscriptionTypeId }
+  if (!memberBenefit || !viaSubscriptionTypeId) {
+    return { free: false, amount: base, viaSubscriptionTypeId: null }
   }
 
-  const candidates: Array<{ amount: number; viaSubscriptionTypeId: string | null }> = []
-  if (typeof duration.priceAmount === 'number') {
-    candidates.push({ amount: duration.priceAmount, viaSubscriptionTypeId: null })
-  }
-  for (const e of matchingEntries) {
-    if (typeof e.priceAmount === 'number') {
-      candidates.push({ amount: e.priceAmount, viaSubscriptionTypeId: e.subscriptionTypeId })
-    }
+  if (memberBenefit.kind === 'included') {
+    return { free: true, amount: null, viaSubscriptionTypeId }
   }
 
-  if (candidates.length === 0) return { free: true, amount: null }
-
-  const lowest = candidates.reduce((min, c) => (c.amount < min.amount ? c : min))
-  return { free: false, amount: lowest.amount, viaSubscriptionTypeId: lowest.viaSubscriptionTypeId }
+  // kind === 'discount'
+  const pct = memberBenefit.discountPercent
+  if (typeof pct !== 'number' || pct <= 0) {
+    return { free: false, amount: base, viaSubscriptionTypeId: null }
+  }
+  if (pct >= 100) {
+    return { free: false, amount: 0.5, viaSubscriptionTypeId }
+  }
+  const rounded = Math.round(((base * (100 - pct)) / 100) * 100) / 100
+  return { free: false, amount: Math.max(0.5, rounded), viaSubscriptionTypeId }
 }
 
 export interface Activity {
@@ -144,6 +174,10 @@ export interface Activity {
    *  History: was `durationsMinutes: number[]` until 2026-07 (pre-launch), when
    *  per-duration pricing arrived with paid appointments. */
   durations?: ActivityDuration[]
+  /** APPOINTMENT-ONLY. The one member-benefit rule for this activity — see
+   *  `ActivityMemberBenefit`. Absent/empty = no benefit, everyone pays base
+   *  (or books free, when the duration itself is unpriced). */
+  memberBenefit?: ActivityMemberBenefit
   /** Does a booking confirm itself, or does the studio decide?
    *  - `true`  → the booking is written `status: 'confirmed'` on the spot.
    *  - `false` → it stays unconfirmed until the studio confirms/checks them in.
@@ -156,12 +190,22 @@ export interface Activity {
   /** Legacy trial toggle. Superseded by `accessRule` but kept in sync
    *  (`isFreeTrial = accessRule.type === 'open'`) for existing queries. */
   isFreeTrial?: boolean
-  /** Paid-access gate. When unset, derived from `isFreeTrial` (see resolveActivityAccessRule). */
+  /** Paid-access gate. When unset, derived from `isFreeTrial` (see resolveActivityAccessRule).
+   *  CLASSES ONLY — appointments ignore this field entirely; see `ActivityMemberBenefit`. */
   accessRule?: ActivityAccessRule
   /** Drop-in / pay-per-class: a contact not covered by the access rule may pay this
    *  one-off price to book a single session. Charged via Stripe Connect; no membership
    *  is created. Group-class only for now. Price is major units (team default_currency). */
   dropIn?: { enabled: boolean; priceAmount?: number }
+  /** CLASS-ONLY. Independent of `accessRule`: when true, a gated class
+   *  ('members' | 'subscription') still accepts a newcomer's trial booking —
+   *  the guest path is IDENTICAL to the 'open' tier's (provisional trial
+   *  contact, same booking shape, no repeat-limiting machinery). Lets a studio
+   *  combine "members-only" access with a free trial for newcomers, without
+   *  loosening the tier itself. No-op for 'open' activities (already open to
+   *  everyone) and ignored for appointments (money is the only gate there —
+   *  see `ActivityMemberBenefit`). */
+  trialEnabled?: boolean
   /** Display-only entry requirements shown on the public booking pages (e.g.
    *  "25m front crawl with side breathing"). Not enforced anywhere. */
   prerequisites?: string
@@ -208,10 +252,14 @@ export interface ActivityPublicProfile {
   /** Denormalised drop-in config so the booking UI can offer pay-per-class. */
   dropIn?: { enabled: boolean; priceAmount?: number }
   /** APPOINTMENT-ONLY. The duration menu with base prices so public cards can
-   *  show "from CHF 45". Mirrored from `Activity.durations` with
-   *  `subscriptionPricing` STRIPPED — member benefits are per-contact data,
-   *  never public; the picker gets the full shape from `listAvailability`. */
+   *  show "from CHF 45". Mirrored verbatim from `Activity.durations` — there's
+   *  no per-contact data to strip any more (the old `subscriptionPricing`
+   *  matrix is gone; see `ActivityDuration`'s history note). */
   durations?: Array<{ minutes: number; priceAmount: number | null }>
+  /** APPOINTMENT-ONLY. Mirrored verbatim from `Activity.memberBenefit` —
+   *  public-safe, since the referenced subscription-type ids are already
+   *  public in the shop. */
+  memberBenefit?: ActivityMemberBenefit
   /** Denormalised display-only prerequisites for the public booking pages. */
   prerequisites?: string
 }

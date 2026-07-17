@@ -9,15 +9,10 @@
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import {
-  computePlatformFee,
-  heldSubscriptionTypeIds,
-  resolveEffectiveAppointmentPrice,
-  type SubscriptionCoverageSnapshot,
-} from '@linyup/shared'
+import { computePlatformFee, resolveEffectiveAppointmentPrice } from '@linyup/shared'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import { checkoutRateLimit } from '../connect/payments'
-import { resolveBookingCoverage } from '../booking/access'
+import { resolveHeldBenefit } from '../booking/access'
 import { createOneOffCheckoutSession } from '../utils/connect/client'
 import { resolveBaseUrl } from '../utils/env'
 import { generateSecureToken } from '../utils/crypto'
@@ -79,26 +74,27 @@ export const createAppointmentCheckout = onCall(
 
     // ── The *what* + the *when* ──
     const ctx = await loadAppointmentBookingContext({ teamId, providerId, activityId, startMs, durationMinutes })
-    const hasAnyPrice =
-      typeof ctx.chosenDuration.priceAmount === 'number' ||
-      (ctx.chosenDuration.subscriptionPricing?.length ?? 0) > 0
-    if (!hasAnyPrice) {
+    if (typeof ctx.chosenDuration.priceAmount !== 'number') {
       throw new HttpsError('failed-precondition', 'This duration is not for sale', { reason: 'not_priced' })
     }
 
-    // ── Caller + coverage (non-throwing — guests may pay into gated tiers; see
-    // "Two separate gates" in appointments/booking.ts / docs/appointments.md) ──
+    // ── Caller + effective price — THE PRICE IS THE GATE, there's no access
+    // check any more: a guest always pays base; a benefit holder pays their
+    // resolved (possibly discounted) price. Free path callers never reach
+    // here — the client only calls checkout after bookAppointment's refusal. ──
     const caller = await resolveAppointmentCaller(request, { ...data, teamId })
-    const coverage = await resolveBookingCoverage({
-      teamId,
-      accessRule: ctx.accessRule,
-      authenticatedContact: caller.authenticatedContact,
-    })
-    const heldTypes = heldSubscriptionTypeIds(
-      caller.authenticatedContact as SubscriptionCoverageSnapshot | null,
-      Date.now()
+    const heldBenefit = caller.authenticatedContact
+      ? await resolveHeldBenefit({
+          teamId,
+          contact: caller.authenticatedContact,
+          subscriptionTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
+        })
+      : { heldTypeIds: [], creditSpendTypeId: null }
+    const effective = resolveEffectiveAppointmentPrice(
+      ctx.chosenDuration,
+      heldBenefit.heldTypeIds,
+      ctx.activity.memberBenefit
     )
-    const effective = resolveEffectiveAppointmentPrice(ctx.chosenDuration, heldTypes)
     if (effective.free) {
       throw new HttpsError(
         'failed-precondition',
@@ -107,7 +103,7 @@ export const createAppointmentCheckout = onCall(
       )
     }
 
-    // ── Resolve/create the contact — guests allowed on ANY tier; payment is proof. ──
+    // ── Resolve/create the contact — guests always allowed; there is no access gate. ──
     const { contactId, isNewContact } = await resolveOrCreateAppointmentContact({
       teamId,
       plan: ctx.plan,
@@ -133,7 +129,7 @@ export const createAppointmentCheckout = onCall(
       activityType: 'appointment',
       activityId,
       activityName: ctx.activity.name,
-      accessRule: ctx.accessRule,
+      // NOTE: no accessRule any more — appointments dropped the gate entirely.
       autoConfirm: ctx.autoConfirm,
       providerId,
       providerName: ctx.providerName,
@@ -167,7 +163,9 @@ export const createAppointmentCheckout = onCall(
       is_new_contact: isNewContact,
       booking_token: bookingToken,
       authenticated_booking: !!caller.authenticatedContact,
-      subscription_type_id: coverage.matchedSubscriptionTypeId,
+      // The resolved member-benefit type (discount), if any — not an access
+      // gate match any more, just which benefit (if any) priced this booking.
+      subscription_type_id: effective.viaSubscriptionTypeId ?? null,
       // NO fullname — that's only stamped once the webhook confirms payment.
       status: 'pending',
       payment_status: 'required',

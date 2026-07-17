@@ -2,6 +2,10 @@
 // (1:1 appointments). An activity's accessRule ('open' | 'members' | 'subscription')
 // is enforced here against an already-resolved authenticated contact (or null for
 // a guest) — the single source of truth so both booking flows agree.
+// CLASS-ONLY as of 2026-07 — appointments dropped the access gate entirely (money
+// is the only gate there; see `ActivityMemberBenefit` in @linyup/shared). This
+// file's held/credit core is shared with `resolveHeldBenefit` below, which is the
+// appointments-only (non-throwing, money-only) parallel read over the same data.
 import * as admin from 'firebase-admin'
 import { HttpsError } from 'firebase-functions/v2/https'
 import type { Timestamp } from 'firebase-admin/firestore'
@@ -85,13 +89,48 @@ function denialMessage(denial: BookingAccessDenialReason, isAppointment: boolean
   }
 }
 
+// The "held" shape both resolveBookingCoverage (classes) and resolveHeldBenefit
+// (appointments) start from: live subscriptions + the primary snapshot, and
+// non-exhausted, non-expired lesson-credit balances. Pure, no DB call — the DB
+// call (typeGrantsUnmeteredAccess, above) happens per-id, because it depends on
+// which id is being checked.
+function heldAndCreditSets(contact: FirebaseFirestore.DocumentData): {
+  held: Set<string>
+  creditTypes: Set<string>
+} {
+  const held = new Set<string>()
+  const active =
+    (contact.active_subscriptions as Array<{ subscription_type_id?: string }> | undefined) ?? []
+  active.forEach((s) => {
+    if (s.subscription_type_id) held.add(s.subscription_type_id)
+  })
+  if (contact.subscription_type_id) held.add(contact.subscription_type_id)
+
+  const nowMs = Date.now()
+  const creditTypes = new Set(
+    (
+      (contact.credit_summary as
+        | Array<{
+            subscription_type_id: string
+            remaining: number
+            next_expires_at?: Timestamp | null
+          }>
+        | undefined) ?? []
+    )
+      .filter((e) => e.remaining > 0 && (!e.next_expires_at || e.next_expires_at.toMillis() > nowMs))
+      .map((e) => e.subscription_type_id)
+  )
+  return { held, creditTypes }
+}
+
 /**
  * Non-throwing core of the paid-access gate: does this (already-resolved)
  * authenticated contact — or null for a guest — satisfy an activity's
  * accessRule? Pure move of the logic that used to live inline in
- * resolveBookingAccessGate (still the thrower bookSession uses); appointment
- * checkout reuses this to compute coverage WITHOUT refusing guests (payment is
- * proof — see appointments/checkout.ts).
+ * resolveBookingAccessGate (still the thrower bookSession uses). CLASS-ONLY —
+ * appointments dropped the access gate entirely; see resolveHeldBenefit below
+ * for their (money-only) held-benefit lookup, which shares the same held/credit
+ * core as this function.
  */
 export async function resolveBookingCoverage(params: {
   teamId: string
@@ -117,32 +156,7 @@ export async function resolveBookingCoverage(params: {
   if (accessRule.type !== 'subscription') return NONE
 
   const allowed = accessRule.subscriptionTypeIds ?? []
-  // Coverage = any LIVE subscription the contact holds (fallback: primary snapshot).
-  const held = new Set<string>()
-  const active =
-    (authenticatedContact.active_subscriptions as
-      | Array<{ subscription_type_id?: string }>
-      | undefined) ?? []
-  active.forEach((s) => {
-    if (s.subscription_type_id) held.add(s.subscription_type_id)
-  })
-  if (authenticatedContact.subscription_type_id) held.add(authenticatedContact.subscription_type_id)
-
-  // Lesson-credit balances (denormalised rollup; expiry re-checked on spend).
-  const nowMs = Date.now()
-  const creditTypes = new Set(
-    (
-      (authenticatedContact.credit_summary as
-        | Array<{
-            subscription_type_id: string
-            remaining: number
-            next_expires_at?: Timestamp | null
-          }>
-        | undefined) ?? []
-    )
-      .filter((e) => e.remaining > 0 && (!e.next_expires_at || e.next_expires_at.toMillis() > nowMs))
-      .map((e) => e.subscription_type_id)
-  )
+  const { held, creditTypes } = heldAndCreditSets(authenticatedContact)
 
   // 1) Unmetered coverage first — a held subscription whose type isn't
   //    credits-only never burns credits.
@@ -173,6 +187,57 @@ export async function resolveBookingCoverage(params: {
     }
   }
   return { covered: true, matchedSubscriptionTypeId, creditSpendTypeId, denial: null }
+}
+
+export interface HeldBenefitResult {
+  /** The subset of the GIVEN `subscriptionTypeIds` the contact currently holds
+   *  (unmetered subscription OR a usable credit pack), in the SAME order as
+   *  the input — so a caller that picks `heldTypeIds[0]` as "the" match gets
+   *  the one earliest in the activity's configured benefit order. */
+  heldTypeIds: string[]
+  /** Set to the first id (in input order) held ONLY via a credit pack — the
+   *  type a booking must spend a credit of, IF that id ends up being the
+   *  resolved benefit (`resolveEffectiveAppointmentPrice`'s `viaSubscriptionTypeId`).
+   *  Null when no id is credit-only-held. */
+  creditSpendTypeId: string | null
+}
+
+/**
+ * APPOINTMENTS-ONLY held-benefit lookup — money is the only gate for
+ * appointments (see `ActivityMemberBenefit`), so this never throws and never
+ * refuses a guest; it just reports which of the activity's benefit
+ * `subscriptionTypeIds` this (already-resolved) contact currently holds, for
+ * `resolveEffectiveAppointmentPrice` to price against. Shares the held/credit
+ * core (`heldAndCreditSets`) and the per-id unmetered-access check
+ * (`typeGrantsUnmeteredAccess`) with `resolveBookingCoverage` — the class gate
+ * keeps its exact behaviour; this is a parallel, non-throwing, multi-match read
+ * over the SAME underlying data.
+ */
+export async function resolveHeldBenefit(params: {
+  teamId: string
+  contact: (admin.firestore.DocumentData & { id: string }) | null
+  subscriptionTypeIds: string[]
+}): Promise<HeldBenefitResult> {
+  const { teamId, contact, subscriptionTypeIds } = params
+  if (!contact || subscriptionTypeIds.length === 0) {
+    return { heldTypeIds: [], creditSpendTypeId: null }
+  }
+
+  const { held, creditTypes } = heldAndCreditSets(contact)
+
+  const heldTypeIds: string[] = []
+  let creditSpendTypeId: string | null = null
+  for (const id of subscriptionTypeIds) {
+    if (held.has(id) && (await typeGrantsUnmeteredAccess(teamId, id, contact))) {
+      heldTypeIds.push(id)
+      continue
+    }
+    if (creditTypes.has(id)) {
+      heldTypeIds.push(id)
+      if (!creditSpendTypeId) creditSpendTypeId = id
+    }
+  }
+  return { heldTypeIds, creditSpendTypeId }
 }
 
 /**

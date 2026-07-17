@@ -508,6 +508,10 @@ export const bookSession = onCall(async (request) => {
   let activityInstructions: string | null = null
   let activityAutoConfirm: boolean | undefined
   let activityTypeVal: ActivityType | undefined
+  // CLASS-ONLY (Activity.trialEnabled, @linyup/shared). Independent of
+  // accessRule: a gated class still accepts a newcomer's (guest) trial
+  // booking when set — see the access-gate override below.
+  let activityTrialEnabled = false
 
   if (sessionData.activityId) {
     try {
@@ -526,6 +530,7 @@ export const bookSession = onCall(async (request) => {
         activityInstructions = (actData.confirmationInstructions as string) || null
         activityAutoConfirm = actData.autoConfirm as boolean | undefined
         activityTypeVal = actData.type as ActivityType | undefined
+        activityTrialEnabled = actData.trialEnabled === true
       }
     } catch (_) {
       /* non-fatal */
@@ -558,9 +563,16 @@ export const bookSession = onCall(async (request) => {
   }
 
   // ── Access gate (paid-access axis) ─────────────────────────────────────────
+  // trialEnabled override: a gated class ('members'/'subscription') still lets
+  // a newcomer (guest — no authenticatedContact) through, following EXACTLY the
+  // 'open' tier's guest path (same contact creation below, same booking shape,
+  // no repeat-limiting). Authenticated callers (trial accounts included) are
+  // NOT affected — trialEnabled is a guest-only door, not a looser tier.
+  const gateAccessRule: ActivityAccessRule =
+    !authenticatedContact && activityTrialEnabled ? { type: 'open' } : accessRule
   const { matchedSubscriptionTypeId, creditSpendTypeId } = await resolveBookingAccessGate({
     teamId: data.teamId,
-    accessRule,
+    accessRule: gateAccessRule,
     authenticatedContact,
     isAppointment: false,
   })

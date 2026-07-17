@@ -13,11 +13,9 @@ import {
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   appointmentSlotBlocked,
   isExpiredAppointmentHold,
-  resolveActivityAccessRule,
   resolveAppointmentDurations,
   resolveAutoConfirm,
   type Activity,
-  type ActivityAccessRule,
   type ActivityDuration,
   type Availability,
   type SaasPlan,
@@ -28,7 +26,6 @@ import { resolveSingleContact } from '../utils/contacts'
 import { canCreateContact } from '../utils/contactCap'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { getDatePartsInTz, localTimeToUtc } from './index'
-import type { BookingCoverageResult } from '../booking/access'
 
 export type Lang = 'en' | 'de' | 'fr' | 'it'
 const VALID_LANGS: Lang[] = ['en', 'de', 'fr', 'it']
@@ -80,7 +77,6 @@ export function availabilityCoversStart(tpl: WindowTemplate, startMsVal: number,
 export interface AppointmentBookingContext {
   activity: Activity
   chosenDuration: ActivityDuration
-  accessRule: ActivityAccessRule
   autoConfirm: boolean
   tpl: WindowTemplate
   providerName: string
@@ -94,9 +90,11 @@ export interface AppointmentBookingContext {
   lang: Lang
 }
 
-/** Resolve the *what* (activity + duration + access) and the *when* (the
- *  availability covering this exact start) for a would-be appointment booking.
- *  Shared by the free path, the paid checkout, and (indirectly) the webhook's
+/** Resolve the *what* (activity + duration) and the *when* (the availability
+ *  covering this exact start) for a would-be appointment booking. No access
+ *  rule is resolved here any more — appointments dropped the access gate;
+ *  money (the activity's durations + memberBenefit) is the only gate. Shared
+ *  by the free path, the paid checkout, and (indirectly) the webhook's
  *  re-acquire, which rebuilds from an already-materialised session instead. */
 export async function loadAppointmentBookingContext(params: {
   teamId: string
@@ -152,17 +150,11 @@ export async function loadAppointmentBookingContext(params: {
   const plan = (team.plan || 'free') as SaasPlan
   const lang = asLang(team.language)
 
-  const accessRule = resolveActivityAccessRule({
-    accessRule: activity.accessRule,
-    isFreeTrial: activity.isFreeTrial,
-  })
-
   const bufferMs = (tpl.bufferMinutes || 0) * 60_000
 
   return {
     activity,
     chosenDuration,
-    accessRule,
     autoConfirm,
     tpl,
     providerName,
@@ -181,9 +173,10 @@ export async function loadAppointmentBookingContext(params: {
 
 export interface AppointmentCallerResult {
   /** Non-null for a verified caller (contact session OR OTP-verified match);
-   *  null for a guest — only reachable for 'open' activities (the access gate
-   *  refuses guests on 'members'/'subscription' tiers in the free path; the
-   *  checkout path lets guests pay their way in — see checkout.ts). */
+   *  null for a guest — reachable on ANY appointment activity now, in both the
+   *  free path and the checkout path, since there is no access gate to refuse
+   *  a guest with. A guest always resolves to the base price (no held benefit
+   *  types). */
   authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null
   sanitized: { firstname: string; lastname: string; email: string; phone: string | null }
 }
@@ -281,9 +274,10 @@ export async function resolveAppointmentCaller(
 
 // ─── resolveOrCreateAppointmentContact ─────────────────────────────────────────
 
-/** Resolve the caller's contact, or create a new trial one (only reached
- *  unauthenticated, for 'open' activities in the free path — the checkout path
- *  allows guests on ANY tier, since payment is the proof). */
+/** Resolve the caller's contact, or create a new trial one. Reached
+ *  unauthenticated in BOTH the free path and the checkout path — appointments
+ *  have no access gate any more (money is the only gate), so a guest is always
+ *  allowed to book/pay; they just always resolve to the base price. */
 export async function resolveOrCreateAppointmentContact(params: {
   teamId: string
   plan: SaasPlan
@@ -316,20 +310,6 @@ export async function resolveOrCreateAppointmentContact(params: {
     pending_bookings_count: 1,
   })
   return { contactId: ref.id, isNewContact: true }
-}
-
-// ─── isCoveredForAppointment ────────────────────────────────────────────────────
-
-/** The ACCESS axis, expressed as a plain boolean from an already-resolved
- *  coverage result — 'open' is never "covered" (there's no membership benefit
- *  to be covered BY; anyone may book, and price alone decides what they pay). */
-export function isCoveredForAppointment(
-  accessRule: ActivityAccessRule,
-  coverage: BookingCoverageResult
-): boolean {
-  if (accessRule.type === 'open') return false
-  if (accessRule.type === 'members') return coverage.covered
-  return coverage.matchedSubscriptionTypeId != null
 }
 
 // ─── runAppointmentSlotTransaction ──────────────────────────────────────────────

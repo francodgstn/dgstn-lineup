@@ -2,35 +2,33 @@
 // Appointments are ACTIVITY-BOUND and AVAILABILITY-ONLY. A coach publishes an
 // `Availability` (the *when* — a daily range or explicit times, Calendly-style)
 // linked to one or more `type: 'appointment'` Activities (the *what* — name,
-// duration(s), capacity, access rule). Nothing is ever pre-generated: a start
-// time is indeterminate until the client picks an activity, so free time is
-// computed on the fly here, and a Session is created lazily, overlap-safe, at
-// booking time.
+// duration(s), memberBenefit). Nothing is ever pre-generated: a start time is
+// indeterminate until the client picks an activity, so free time is computed
+// on the fly here, and a Session is created lazily, overlap-safe, at booking
+// time.
 //
 //  • listAvailability — public: free start times per coach/activity/day/duration.
 //  • bookAppointment  — public: resolves the covering availability server-side,
-//    runs the shared paid-access + price gates, then delegates the overlap-safe
-//    create-session + book to the shared appointments/booking.ts transaction.
+//    runs the PRICE gate (the only gate — see ActivityMemberBenefit), then
+//    delegates the overlap-safe create-session + book to the shared
+//    appointments/booking.ts transaction.
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
-import { resolveBookingAccessGate } from '../booking/access'
+import { resolveHeldBenefit } from '../booking/access'
 import {
   AVAILABILITY_COLLECTION,
   ACTIVITIES_COLLECTION,
   appointmentSlotBlocked,
-  heldSubscriptionTypeIds,
-  resolveActivityAccessRule,
   resolveAppointmentDurations,
   resolveEffectiveAppointmentPrice,
   type Activity,
-  type ActivityAccessRule,
   type ActivityDuration,
+  type ActivityMemberBenefit,
   type Availability,
-  type SubscriptionCoverageSnapshot,
 } from '@linyup/shared'
 import {
   DAY_MS,
@@ -60,12 +58,14 @@ function conflicts(startMs: number, durMs: number, busy: BusyInterval[], bufferM
 }
 
 // Loaded/derived shape of a `type: 'appointment'` activity — the *what*.
+// No accessRule here any more — appointments dropped the access gate entirely;
+// money (durations + memberBenefit) is the only gate.
 interface ActivityInfo {
   id: string
   name: string
   /** Priced duration menu (resolveAppointmentDurations default applied). */
   durations: ActivityDuration[]
-  accessRule: ActivityAccessRule
+  memberBenefit?: ActivityMemberBenefit
 }
 
 function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
@@ -75,7 +75,7 @@ function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
     id,
     name: a.name || 'Appointment',
     durations,
-    accessRule: resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial }),
+    memberBenefit: a.memberBenefit,
   }
 }
 
@@ -206,7 +206,7 @@ export const listAvailability = onCall(async (request) => {
     activityId: string
     activityName: string
     durations: ActivityDuration[]
-    accessRule: ActivityAccessRule
+    memberBenefit?: ActivityMemberBenefit
     location: string | null
     onlineUrl: string | null
     daysMap: Map<number, Record<string, Set<number>>>
@@ -247,7 +247,7 @@ export const listAvailability = onCall(async (request) => {
             activityId,
             activityName: info.name,
             durations: info.durations,
-            accessRule: info.accessRule,
+            memberBenefit: info.memberBenefit,
             location: tpl.location ?? null,
             onlineUrl: tpl.onlineUrl ?? null,
             daysMap: new Map(),
@@ -272,14 +272,15 @@ export const listAvailability = onCall(async (request) => {
         activities.push({
           activityId: acc.activityId,
           activityName: acc.activityName,
-          // Full priced menu — incl. subscriptionPricing, so the picker can show
-          // a verified member their effective price (server re-resolves at booking).
+          // Priced duration menu so the picker can show prices per length.
           durations: acc.durations.map((d) => ({
             minutes: d.minutes,
             priceAmount: d.priceAmount ?? null,
-            subscriptionPricing: d.subscriptionPricing ?? [],
           })),
-          accessRule: acc.accessRule,
+          // Verbatim from the activity — the picker mirrors the resolver
+          // (resolveEffectiveAppointmentPrice) for display; the server always
+          // re-resolves authoritatively at booking/checkout.
+          memberBenefit: acc.memberBenefit ?? null,
           location: acc.location,
           onlineUrl: acc.onlineUrl,
           days,
@@ -295,13 +296,12 @@ export const listAvailability = onCall(async (request) => {
 })
 
 // ─── bookAppointment (public) — the FREE path ──────────────────────────────────
-// Composes the shared appointments/booking.ts helpers. Two gates, in order:
-//  1. ACCESS (unchanged) — resolveBookingAccessGate throws for a caller not
-//     covered by the activity's accessRule (open/members/subscription).
-//  2. PRICE (new) — a priced duration whose effective price (for the caller's
-//     held subscription types) is an AMOUNT refuses here; the client must use
-//     createAppointmentCheckout instead. An unpriced duration always resolves
-//     free, so this is a no-op for today's behaviour across all three tiers.
+// Composes the shared appointments/booking.ts helpers. THE PRICE IS THE GATE —
+// appointments have no access gate any more: a guest may always attempt to
+// book. Only the PRICE gate can refuse: a priced duration whose effective price
+// (base, or the caller's resolved member-benefit price) is an AMOUNT refuses
+// here; the client must use createAppointmentCheckout instead. An unpriced
+// duration always resolves free, for anyone.
 
 export const bookAppointment = onCall(async (request) => {
   const data = request.data as {
@@ -331,30 +331,36 @@ export const bookAppointment = onCall(async (request) => {
   const ctx = await loadAppointmentBookingContext({ teamId, providerId, activityId, startMs, durationMinutes })
   const caller = await resolveAppointmentCaller(request, { ...data, teamId })
 
-  // ── Access gate (paid-access axis) — shared with bookSession, see booking/access.ts.
-  // Guests booking a 'members'/'subscription' activity are refused here.
-  const { matchedSubscriptionTypeId, creditSpendTypeId } = await resolveBookingAccessGate({
-    teamId,
-    accessRule: ctx.accessRule,
-    authenticatedContact: caller.authenticatedContact,
-    isAppointment: true,
-  })
-
-  // ── Price gate — the critical bypass guard: a priced duration the caller must
-  // pay for refuses here with the amount, so the client can route to checkout.
-  const heldTypes = heldSubscriptionTypeIds(
-    caller.authenticatedContact as SubscriptionCoverageSnapshot | null,
-    Date.now()
+  // ── Price gate — the ONLY gate. Held benefit types are looked up against the
+  // activity's memberBenefit (empty for a guest — they always land on base).
+  const heldBenefit = caller.authenticatedContact
+    ? await resolveHeldBenefit({
+        teamId,
+        contact: caller.authenticatedContact,
+        subscriptionTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
+      })
+    : { heldTypeIds: [], creditSpendTypeId: null }
+  const effectivePrice = resolveEffectiveAppointmentPrice(
+    ctx.chosenDuration,
+    heldBenefit.heldTypeIds,
+    ctx.activity.memberBenefit
   )
-  const effectivePrice = resolveEffectiveAppointmentPrice(ctx.chosenDuration, heldTypes)
   if (!effectivePrice.free) {
     throw new HttpsError('failed-precondition', 'This duration requires payment.', {
       reason: 'payment_required',
       priceAmount: effectivePrice.amount,
     })
   }
+  // The resolved benefit is credit-spend-worthy only when it's the SAME id
+  // resolveHeldBenefit flagged as credit-only-held (an unmetered-held type
+  // never needs a credit spent).
+  const creditSpendTypeId =
+    effectivePrice.viaSubscriptionTypeId &&
+    effectivePrice.viaSubscriptionTypeId === heldBenefit.creditSpendTypeId
+      ? heldBenefit.creditSpendTypeId
+      : null
 
-  // ── Resolve/create the contact (only reached unauthenticated for 'open' activities) ──
+  // ── Resolve/create the contact — guests are always allowed now (no access gate). ──
   const { contactId, isNewContact } = await resolveOrCreateAppointmentContact({
     teamId,
     plan: ctx.plan,
@@ -371,11 +377,11 @@ export const bookAppointment = onCall(async (request) => {
     templateId: ctx.tpl.id,
     origin: 'window',
     activityType: 'appointment',
-    // The session INHERITS FROM THE ACTIVITY: name/access/capacity come from the
+    // The session INHERITS FROM THE ACTIVITY: name/capacity come from the
     // offering the client picked, not the schedule — exactly like a class.
+    // NOTE: no accessRule any more — appointments dropped the gate entirely.
     activityId,
     activityName: ctx.activity.name,
-    accessRule: ctx.accessRule,
     // Denormalised from the activity — see `autoConfirm` above.
     autoConfirm: ctx.autoConfirm,
     providerId,
@@ -409,7 +415,9 @@ export const bookAppointment = onCall(async (request) => {
     is_new_contact: isNewContact,
     booking_token: bookingToken,
     authenticated_booking: !!caller.authenticatedContact,
-    subscription_type_id: matchedSubscriptionTypeId,
+    // The resolved member-benefit type (free/discount), if any — not an access
+    // gate match any more, just which benefit (if any) priced this booking.
+    subscription_type_id: effectivePrice.viaSubscriptionTypeId ?? null,
     // The slot is taken the moment it's booked either way (bookings_count: 1
     // above, unconditionally) — only the booking's own status differs by
     // autoConfirm; a non-auto-confirm appointment still holds capacity but
