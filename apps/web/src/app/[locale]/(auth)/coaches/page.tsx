@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { QueryErrorState } from '@/components/ui/query-error'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -35,6 +36,11 @@ import { toast } from 'sonner'
 
 type Member = { userId: string; role: TeamRole; displayName?: string; email?: string; isCoach?: boolean }
 type Invite = { id: string; email: string; role: string }
+
+function errorMessage(err: unknown): string | null {
+  if (err instanceof Error && err.message) return err.message
+  return null
+}
 
 function initials(name?: string, email?: string): string {
   const src = (name || email || '?').trim()
@@ -71,7 +77,13 @@ export default function CoachesPage() {
     }
   }
 
-  const { data: members = [], isLoading: membersLoading } = useQuery<Member[]>({
+  const {
+    data: members = [],
+    isLoading: membersLoading,
+    isError: membersErrored,
+    error: membersError,
+    refetch: refetchMembers,
+  } = useQuery<Member[]>({
     queryKey: ['team-members', currentTeamId],
     enabled: !!currentTeamId && studioPlus,
     queryFn: async () => {
@@ -168,7 +180,9 @@ export default function CoachesPage() {
       )}
 
       {/* Coaches list */}
-      {membersLoading ? (
+      {membersErrored ? (
+        <QueryErrorState onRetry={() => refetchMembers()} detail={errorMessage(membersError)} />
+      ) : membersLoading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
         </div>
@@ -282,23 +296,28 @@ function InviteCoachDialog({
   const t = useTranslations('Coaches')
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
 
-  const reset = () => { setEmail(''); setError(null); setSending(false) }
+  const reset = () => { setEmail(''); setError(null); setErrorDetail(null); setSending(false) }
 
   async function submit() {
     const value = email.trim()
     if (!value || !teamId || sending) return
     setSending(true)
     setError(null)
+    setErrorDetail(null)
     try {
       await httpsCallable(functions, 'sendTeamInvitation')({ teamId, email: value, role: 'coach' })
       toast.success(t('inviteSent'))
       onInvited()
       reset()
       onClose()
-    } catch {
+    } catch (err) {
+      // Deliberately does NOT call reset(): the email stays filled and the
+      // dialog stays open so the user can retry instead of retyping.
       setError(t('inviteError'))
+      setErrorDetail(errorMessage(err))
       setSending(false)
     }
   }
@@ -319,7 +338,14 @@ function InviteCoachDialog({
             autoFocus
             onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && (
+            <div className="space-y-0.5">
+              <p className="text-sm text-destructive">{error}</p>
+              {errorDetail && (
+                <p className="truncate text-xs text-muted-foreground" title={errorDetail}>{errorDetail}</p>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => { reset(); onClose() }}>{t('cancel')}</Button>

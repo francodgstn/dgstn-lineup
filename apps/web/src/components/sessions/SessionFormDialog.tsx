@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { SESSIONS_COLLECTION, resolveAutoConfirm } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
 import { Loader2, Repeat2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 // ─── shared helpers (single source of truth for session forms) ─────────────────
 
@@ -43,6 +44,33 @@ function defaultStart(): Date {
   const d = new Date()
   d.setHours(d.getHours() + 1, 0, 0, 0)
   return d
+}
+
+// ─── error surfacing helpers ────────────────────────────────────────────────
+// A write that fails here (most commonly a Firestore rules denial) must never
+// look like nothing happened — see the SessionFormDialog write paths below.
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    const m = (err as { message?: unknown }).message
+    if (typeof m === 'string' && m) return m
+  }
+  return String(err)
+}
+
+class CallableTimeoutError extends Error {}
+
+const CALLABLE_TIMEOUT_MS = 30_000
+
+/** Races a promise against a fixed timeout so a hung callable clears busy state
+ *  and surfaces a message instead of spinning forever. */
+function withTimeout<T>(promise: Promise<T>, ms = CALLABLE_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new CallableTimeoutError('timeout')), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
 // ─── duration picker (preset chips + free minutes input) ───────────────────────
@@ -437,70 +465,84 @@ export function SessionFormDialog({
 
     if (isRecurring) {
       setBusyMsg(t('generatingSeries'))
-      const seriesRef = await addDoc(collection(db, 'session_series'), {
-        teamId, teacher: userId, createdBy: userId,
-        template: {
-          activityId: values.activityId || null,
-          activityName: activityEntry?.name ?? null,
-          activityType: 'class',
-          autoConfirm: resolveAutoConfirm(activityEntry ?? { type: 'class' }),
-          location: values.location || null,
-          placeId: values.placeId || null,
-          roomId: values.roomId || null,
-          tags: [], notes: values.notes || '',
-          duration: values.duration,
-          allowBooking: values.allowBooking ?? false,
-          bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
-          providerName: values.providerName || null,
-          providerId: values.providerId || null,
-          max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
-        },
-        recurrence: {
-          frequency:      recurrence.frequency,
-          interval:       recurrence.interval,
-          daysOfWeek:     recurrence.daysOfWeek,
-          endCondition:   recurrence.endCondition,
-          endDate:        recurrence.endDate ? Timestamp.fromDate(recurrence.endDate) : null,
-          maxOccurrences: recurrence.endCondition === 'count' ? recurrence.maxOccurrences : null,
-          duration:       values.duration,
-          startDate:      Timestamp.fromDate(startDate),
-        },
-        status: 'active',
-        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-        totalOccurrences: 0, lastGeneratedUntil: null,
-      })
-      const generate = httpsCallable<{ seriesId: string }, { generatedCount: number }>(functions, 'generateRecurringSessions')
-      const result = await generate({ seriesId: seriesRef.id })
-      setBusyMsg(t('seriesCreated', { count: result.data.generatedCount }))
-      onSaved()
-      setTimeout(close, 1200)
+      try {
+        const seriesRef = await addDoc(collection(db, 'session_series'), {
+          teamId, teacher: userId, createdBy: userId,
+          template: {
+            activityId: values.activityId || null,
+            activityName: activityEntry?.name ?? null,
+            activityType: 'class',
+            autoConfirm: resolveAutoConfirm(activityEntry ?? { type: 'class' }),
+            location: values.location || null,
+            placeId: values.placeId || null,
+            roomId: values.roomId || null,
+            tags: [], notes: values.notes || '',
+            duration: values.duration,
+            allowBooking: values.allowBooking ?? false,
+            bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
+            providerName: values.providerName || null,
+            providerId: values.providerId || null,
+            max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
+          },
+          recurrence: {
+            frequency:      recurrence.frequency,
+            interval:       recurrence.interval,
+            daysOfWeek:     recurrence.daysOfWeek,
+            endCondition:   recurrence.endCondition,
+            endDate:        recurrence.endDate ? Timestamp.fromDate(recurrence.endDate) : null,
+            maxOccurrences: recurrence.endCondition === 'count' ? recurrence.maxOccurrences : null,
+            duration:       values.duration,
+            startDate:      Timestamp.fromDate(startDate),
+          },
+          status: 'active',
+          createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+          totalOccurrences: 0, lastGeneratedUntil: null,
+        })
+        const generate = httpsCallable<{ seriesId: string }, { generatedCount: number }>(functions, 'generateRecurringSessions')
+        const result = await withTimeout(generate({ seriesId: seriesRef.id }))
+        setBusyMsg(t('seriesCreated', { count: result.data.generatedCount }))
+        onSaved()
+        setTimeout(close, 1200)
+      } catch (err) {
+        setBusyMsg(null)
+        if (err instanceof CallableTimeoutError) toast.error(t('saveTimeoutError'))
+        else toast.error(t('saveError', { message: errorMessage(err) }))
+      }
       return
     }
 
-    await addDoc(collection(db, SESSIONS_COLLECTION), {
-      ...basePayload(values),
-      start: Timestamp.fromDate(startDate),
-      end:   Timestamp.fromDate(endDate),
-      createdBy: userId, teacher: userId,
-      participants_count: 0,
-      created_at: serverTimestamp(),
-    })
-    onSaved()
-    close()
+    try {
+      await addDoc(collection(db, SESSIONS_COLLECTION), {
+        ...basePayload(values),
+        start: Timestamp.fromDate(startDate),
+        end:   Timestamp.fromDate(endDate),
+        createdBy: userId, teacher: userId,
+        participants_count: 0,
+        created_at: serverTimestamp(),
+      })
+      onSaved()
+      close()
+    } catch (err) {
+      toast.error(t('saveError', { message: errorMessage(err) }))
+    }
   }
 
   // ── edit a standalone session (no series) ──
   async function runSingleSessionEdit(values: SessionFormValues) {
     const startDate = values.start
     const endDate   = new Date(startDate.getTime() + values.duration * 60000)
-    await updateDoc(doc(db, SESSIONS_COLLECTION, editing!.id), {
-      ...basePayload(values),
-      start: Timestamp.fromDate(startDate),
-      end:   Timestamp.fromDate(endDate),
-      updatedAt: serverTimestamp(),
-    })
-    onSaved()
-    close()
+    try {
+      await updateDoc(doc(db, SESSIONS_COLLECTION, editing!.id), {
+        ...basePayload(values),
+        start: Timestamp.fromDate(startDate),
+        end:   Timestamp.fromDate(endDate),
+        updatedAt: serverTimestamp(),
+      })
+      onSaved()
+      close()
+    } catch (err) {
+      toast.error(t('saveError', { message: errorMessage(err) }))
+    }
   }
 
   // ── edit a session that belongs to a series (scoped) ──
@@ -512,29 +554,35 @@ export function SessionFormDialog({
     const update = httpsCallable<{ sessionId: string; editScope: string; updates: Record<string, unknown> }, { updatedCount: number }>(
       functions, 'updateRecurringSession',
     )
-    const res = await update({
-      sessionId: editing!.id,
-      editScope: scope,
-      updates: {
-        activityId:     values.activityId || null,
-        activityName:   activityEntry?.name ?? null,
-        activityType:   'class',
-        autoConfirm:    resolveAutoConfirm(activityEntry ?? { type: 'class' }),
-        start:          startDate.toISOString(),
-        end:            endDate.toISOString(),
-        duration:       values.duration,
-        location:       values.location || null,
-        providerId:     values.providerId || null,
-        providerName:   values.providerName || null,
-        max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
-        notes:          values.notes || null,
-        allowBooking:   values.allowBooking ?? false,
-        bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
-      },
-    })
-    setBusyMsg(t('seriesUpdated', { count: res.data.updatedCount || 1 }))
-    onSaved()
-    setTimeout(close, 1000)
+    try {
+      const res = await withTimeout(update({
+        sessionId: editing!.id,
+        editScope: scope,
+        updates: {
+          activityId:     values.activityId || null,
+          activityName:   activityEntry?.name ?? null,
+          activityType:   'class',
+          autoConfirm:    resolveAutoConfirm(activityEntry ?? { type: 'class' }),
+          start:          startDate.toISOString(),
+          end:            endDate.toISOString(),
+          duration:       values.duration,
+          location:       values.location || null,
+          providerId:     values.providerId || null,
+          providerName:   values.providerName || null,
+          max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
+          notes:          values.notes || null,
+          allowBooking:   values.allowBooking ?? false,
+          bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
+        },
+      }))
+      setBusyMsg(t('seriesUpdated', { count: res.data.updatedCount || 1 }))
+      onSaved()
+      setTimeout(close, 1000)
+    } catch (err) {
+      setBusyMsg(null)
+      if (err instanceof CallableTimeoutError) toast.error(t('saveTimeoutError'))
+      else toast.error(t('saveError', { message: errorMessage(err) }))
+    }
   }
 
   const onSubmit = async (values: SessionFormValues) => {

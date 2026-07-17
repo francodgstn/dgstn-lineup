@@ -9,7 +9,9 @@
     "comingSoon": "Prossimamente",
     "demoBanner": "Stai esplorando una demo live di Linyup.",
     "demoBannerCta": "Visita linyup.com →",
-    "language": "Lingua"
+    "language": "Lingua",
+    "errorLoadTitle": "Impossibile caricare questo contenuto",
+    "errorRetry": "Riprova"
   },
   "Plans": {
     "free": "Free",
@@ -865,7 +867,9 @@
     "sectionSchedule": "Orario",
     "sectionLocation": "Luogo",
     "sectionBooking": "Capacità e prenotazione",
-    "durationMinutes": "min"
+    "durationMinutes": "min",
+    "saveError": "Impossibile salvare la sessione: {message}",
+    "saveTimeoutError": "Ci vuole troppo tempo — il server potrebbe non essere disponibile. Riprova."
   },
   "Calendar": {
     "title": "Programma",
@@ -1666,6 +1670,7 @@
     "teamNotFound": "Questa pagina non è disponibile",
     "noCoaches": "Nessuna disponibilità al momento",
     "noCoachesHint": "Controlla più tardi per le disponibilità.",
+    "scheduleLoadError": "Impossibile caricare il programma — riprova.",
     "hideForm": "Nascondi",
     "onlineSession": "Sessione online",
     "fieldFirstname": "Nome",

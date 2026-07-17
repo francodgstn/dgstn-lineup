@@ -9,7 +9,9 @@
     "comingSoon": "Coming soon",
     "demoBanner": "You're exploring a live demo of Linyup.",
     "demoBannerCta": "Visit linyup.com →",
-    "language": "Language"
+    "language": "Language",
+    "errorLoadTitle": "Couldn't load this",
+    "errorRetry": "Try again"
   },
   "Plans": {
     "free": "Free",
@@ -865,7 +867,9 @@
     "sectionSchedule": "Schedule",
     "sectionLocation": "Location",
     "sectionBooking": "Capacity & booking",
-    "durationMinutes": "min"
+    "durationMinutes": "min",
+    "saveError": "Couldn't save the session: {message}",
+    "saveTimeoutError": "This is taking too long — the server may be unavailable. Try again."
   },
   "Calendar": {
     "title": "Schedule",
@@ -1666,6 +1670,7 @@
     "teamNotFound": "This page is not available",
     "noCoaches": "No availability right now",
     "noCoachesHint": "Check back later for upcoming availability.",
+    "scheduleLoadError": "We couldn't load the schedule — please try again.",
     "hideForm": "Hide",
     "onlineSession": "Online session",
     "fieldFirstname": "First name",

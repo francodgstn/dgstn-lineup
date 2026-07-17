@@ -9,7 +9,9 @@
     "comingSoon": "Demnächst",
     "demoBanner": "Du erkundest eine Live-Demo von Linyup.",
     "demoBannerCta": "linyup.com besuchen →",
-    "language": "Sprache"
+    "language": "Sprache",
+    "errorLoadTitle": "Konnte nicht geladen werden",
+    "errorRetry": "Erneut versuchen"
   },
   "Plans": {
     "free": "Free",
@@ -865,7 +867,9 @@
     "sectionSchedule": "Zeitplan",
     "sectionLocation": "Ort",
     "sectionBooking": "Kapazität & Buchung",
-    "durationMinutes": "Min."
+    "durationMinutes": "Min.",
+    "saveError": "Der Termin konnte nicht gespeichert werden: {message}",
+    "saveTimeoutError": "Das dauert zu lange — der Server ist möglicherweise nicht erreichbar. Bitte erneut versuchen."
   },
   "Calendar": {
     "title": "Zeitplan",
@@ -1666,6 +1670,7 @@
     "teamNotFound": "Diese Seite ist nicht verfügbar",
     "noCoaches": "Aktuell keine Verfügbarkeit",
     "noCoachesHint": "Schaue später nach verfügbaren Terminen.",
+    "scheduleLoadError": "Der Zeitplan konnte nicht geladen werden — bitte versuche es erneut.",
     "hideForm": "Verbergen",
     "onlineSession": "Online-Sitzung",
     "fieldFirstname": "Vorname",

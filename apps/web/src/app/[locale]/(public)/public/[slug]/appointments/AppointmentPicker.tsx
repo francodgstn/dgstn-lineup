@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { QueryErrorState } from '@/components/ui/query-error'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   CalendarClock,
@@ -987,6 +988,11 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
   const currency = team.default_currency ?? 'CHF'
   const [coaches, setCoaches] = useState<AvailCoach[]>([])
   const [loading, setLoading] = useState(true)
+  // Tracked separately from `coaches` — a failed load must never be mistaken for
+  // the genuine "this coach has no open times" empty state (a coach would read
+  // that as a misconfiguration; a client would just leave).
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
   const [confirmed, setConfirmed] = useState<{ email: string } | null>(null)
   const [windowBooking, setWindowBooking] = useState<WindowBooking | null>(null)
   const [step, setStep] = useState<PickerStep>('coach')
@@ -996,6 +1002,8 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
   useEffect(() => {
     let alive = true
     async function load() {
+      setLoading(true)
+      setLoadError(null)
       try {
         const availFn = httpsCallable<
           { teamId: string; days?: number },
@@ -1004,8 +1012,10 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
         const res = await availFn({ teamId, days: 60 })
         if (!alive) return
         setCoaches(res.data.coaches ?? [])
-      } catch {
-        if (alive) setCoaches([])
+      } catch (err) {
+        if (!alive) return
+        setCoaches([])
+        setLoadError(errorDetails(err).message ?? null)
       } finally {
         if (alive) setLoading(false)
       }
@@ -1013,7 +1023,11 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
     if (teamId) load()
     else setLoading(false)
     return () => { alive = false }
-  }, [teamId])
+  }, [teamId, reloadNonce])
+
+  function retryLoad() {
+    setReloadNonce((n) => n + 1)
+  }
 
   if (confirmed) return <ConfirmationScreen email={confirmed.email} />
 
@@ -1054,11 +1068,15 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
 
         {!loading && !teamId && <EmptyState icon={CalendarClock} text={t('teamNotFound')} />}
 
-        {!loading && teamId && !hasCoaches && (
+        {!loading && teamId && loadError && (
+          <QueryErrorState onRetry={retryLoad} title={t('scheduleLoadError')} detail={loadError} />
+        )}
+
+        {!loading && teamId && !loadError && !hasCoaches && (
           <EmptyState icon={CalendarClock} text={t('noCoaches')} hint={t('noCoachesHint')} />
         )}
 
-        {!loading && teamId && hasCoaches && step === 'coach' && (
+        {!loading && teamId && !loadError && hasCoaches && step === 'coach' && (
           <section className="space-y-3">
             {coaches.map((c) => (
               <CoachCard key={c.providerId} coach={c} onSelect={() => selectCoach(c)} />

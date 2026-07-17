@@ -9,7 +9,9 @@
     "comingSoon": "Bientôt disponible",
     "demoBanner": "Vous explorez une démo en direct de Linyup.",
     "demoBannerCta": "Visiter linyup.com →",
-    "language": "Langue"
+    "language": "Langue",
+    "errorLoadTitle": "Impossible de charger ceci",
+    "errorRetry": "Réessayer"
   },
   "Plans": {
     "free": "Free",
@@ -865,7 +867,9 @@
     "sectionSchedule": "Horaire",
     "sectionLocation": "Lieu",
     "sectionBooking": "Capacité et réservation",
-    "durationMinutes": "min"
+    "durationMinutes": "min",
+    "saveError": "Impossible d'enregistrer la séance : {message}",
+    "saveTimeoutError": "Cela prend trop de temps — le serveur est peut-être indisponible. Réessayez."
   },
   "Calendar": {
     "title": "Planning",
@@ -1666,6 +1670,7 @@
     "teamNotFound": "Cette page n'est pas disponible",
     "noCoaches": "Aucune disponibilité pour le moment",
     "noCoachesHint": "Revenez plus tard pour voir les disponibilités.",
+    "scheduleLoadError": "Impossible de charger le planning — veuillez réessayer.",
     "hideForm": "Masquer",
     "onlineSession": "Séance en ligne",
     "fieldFirstname": "Prénom",

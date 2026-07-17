@@ -906,7 +906,13 @@ service cloud.firestore {
                            || (hasTeamCapability(request.resource.data.teamId, 'schedule.manage')
                                && (callerIsAllScoped(request.resource.data.teamId)
                                    || callerOwnsSession(request.resource))))
-                       && (!request.resource.data.keys().hasAny(['location', 'tags']));
+                       // 'tags' stays server-managed. 'location' was removed from this
+                       // guard 2026-07: the session form legitimately writes free-text
+                       // location as the fallback for online/ad-hoc sessions (see
+                       // Session.location), and the guard denied EVERY create from the
+                       // dialog — silently, which is how it went unnoticed. Recurring
+                       // creation bypassed it via the callable (admin SDK).
+                       && (!request.resource.data.keys().hasAny(['tags']));
 
       // Update: Requires schedule.manage (own-scope for a coach); cannot update location/tags directly
       allow update: if (belongsToUserTeam(resource) || hasRole('admin'))
@@ -914,7 +920,7 @@ service cloud.firestore {
                            || (hasTeamCapability(resource.data.teamId, 'schedule.manage')
                                && (callerIsAllScoped(resource.data.teamId)
                                    || callerOwnsSession(resource))))
-                       && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['location', 'tags']));
+                       && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['tags']));
 
       // Delete: Requires schedule.manage (own-scope for a coach); session must not have location, tags, or participants
       allow delete: if (belongsToUserTeam(resource) || hasRole('admin')) &&

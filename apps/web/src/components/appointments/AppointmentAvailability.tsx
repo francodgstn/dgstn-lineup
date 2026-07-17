@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DatePicker, TimePicker } from '@/components/ui/date-picker'
 import { Skeleton } from '@/components/ui/skeleton'
+import { QueryErrorState } from '@/components/ui/query-error'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -745,6 +746,18 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
     qc.invalidateQueries({ queryKey: ['coachAvailability'] })
   }
 
+  // A failed fetch must never render as "no templates yet" — that reads as a
+  // config problem, not an outage. Both queries feed this list (providers come
+  // from membersQ), so either failing blocks it the same way.
+  const listErrored = templatesQ.isError || membersQ.isError
+  const listErrorDetail =
+    (templatesQ.error instanceof Error ? templatesQ.error.message : null) ??
+    (membersQ.error instanceof Error ? membersQ.error.message : null)
+  function retryList() {
+    if (templatesQ.isError) templatesQ.refetch()
+    if (membersQ.isError) membersQ.refetch()
+  }
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -761,65 +774,71 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
               </Button>
             </div>
 
-            {templatesQ.isLoading && (
-              <div className="space-y-2">
-                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
-              </div>
-            )}
+            {listErrored ? (
+              <QueryErrorState onRetry={retryList} detail={listErrorDetail} />
+            ) : (
+              <>
+                {templatesQ.isLoading && (
+                  <div className="space-y-2">
+                    {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+                  </div>
+                )}
 
-            {!templatesQ.isLoading && templatesQ.data?.length === 0 && (
-              <div className="text-center py-10 text-muted-foreground">
-                <CalendarClock className="h-8 w-8 mx-auto mb-3 opacity-40" />
-                <p className="font-medium">{t('noTemplates')}</p>
-                <p className="text-sm mt-1">{t('noTemplatesHint')}</p>
-              </div>
-            )}
+                {!templatesQ.isLoading && templatesQ.data?.length === 0 && (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <CalendarClock className="h-8 w-8 mx-auto mb-3 opacity-40" />
+                    <p className="font-medium">{t('noTemplates')}</p>
+                    <p className="text-sm mt-1">{t('noTemplatesHint')}</p>
+                  </div>
+                )}
 
-            <div className="space-y-2">
-              {templatesQ.data?.map((tmpl) => (
-                <div key={tmpl.id} className="rounded-xl border p-4 flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm">{tmpl.title}</p>
-                      <StatusBadge status={tmpl.status} />
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                        {t(tmpl.mode === 'range' ? 'modeRange' : 'modeTimes')}
-                      </span>
+                <div className="space-y-2">
+                  {templatesQ.data?.map((tmpl) => (
+                    <div key={tmpl.id} className="rounded-xl border p-4 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-sm">{tmpl.title}</p>
+                          <StatusBadge status={tmpl.status} />
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                            {t(tmpl.mode === 'range' ? 'modeRange' : 'modeTimes')}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          {(tmpl.activityIds ?? []).map((id) => activityNameById.get(id) ?? id).join(', ')}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          {tmpl.mode === 'range' && tmpl.window
+                            ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
+                            : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{tmpl.providerName}</p>
+                        {tmpl.location && (
+                          <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                            <MapPin className="h-3 w-3" />{tmpl.location}
+                          </p>
+                        )}
+                        {tmpl.onlineUrl && (
+                          <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                            <Video className="h-3 w-3" />{t('onlineSession')}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => toggleTemplateStatus(tmpl)}
+                          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                          title={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
+                          {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                        </button>
+                        <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
+                          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      {(tmpl.activityIds ?? []).map((id) => activityNameById.get(id) ?? id).join(', ')}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      {tmpl.mode === 'range' && tmpl.window
-                        ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
-                        : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{tmpl.providerName}</p>
-                    {tmpl.location && (
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                        <MapPin className="h-3 w-3" />{tmpl.location}
-                      </p>
-                    )}
-                    {tmpl.onlineUrl && (
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                        <Video className="h-3 w-3" />{t('onlineSession')}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={() => toggleTemplateStatus(tmpl)}
-                      className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
-                      title={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
-                      {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                    </button>
-                    <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
-                      className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
