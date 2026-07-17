@@ -10,9 +10,22 @@ const chfFmt = new Intl.NumberFormat('en-CH', {
   maximumFractionDigits: 0,
 })
 
+const dateTimeFmt = new Intl.DateTimeFormat('en-CH', {
+  year: 'numeric',
+  month: 'short',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
 export function formatDate(ms: number | null | undefined): string {
   if (ms == null) return '—'
   return dateFmt.format(new Date(ms))
+}
+
+export function formatDateTime(ms: number | null | undefined): string {
+  if (ms == null) return '—'
+  return dateTimeFmt.format(new Date(ms))
 }
 
 export function formatChf(amount: number): string {

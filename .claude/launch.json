@@ -8,6 +8,17 @@
       "port": 4322
     },
     {
+      "name": "emulators-worktree",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "exec", "firebase", "emulators:start",
+        "--config", "firebase.worktree.json",
+        "--only", "auth,firestore,functions,storage",
+        "--project", "demo-linyup"
+      ],
+      "port": 14000
+    },
+    {
       "name": "web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev:web"],

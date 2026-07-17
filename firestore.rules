@@ -1388,5 +1388,48 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ── In-app feedback (see shared types/feedback.ts) ────────────────────────
+    // Signed-in users create submissions; the operator console reads/updates
+    // them via Admin SDK. Strict key + shape validation; identity fields must
+    // match the caller and status is forced to 'new'. created_at must be a
+    // serverTimestamp() (== request.time).
+    match /feedback/{id} {
+      allow create: if isAuthed()
+        && request.resource.data.keys().hasOnly(['type', 'rating', 'message',
+            'scopes', 'prompt_id', 'context', 'team_id', 'team_name', 'plan',
+            'created_by', 'created_by_email', 'created_at', 'screenshot_path',
+            'status'])
+        && request.resource.data.created_by == request.auth.uid
+        && request.resource.data.created_by_email == request.auth.token.email
+        && request.resource.data.type in ['general', 'prompt_answer']
+        && (('rating' in request.resource.data) || ('message' in request.resource.data))
+        && (!('rating' in request.resource.data)
+            || (request.resource.data.rating is int
+                && request.resource.data.rating >= 1
+                && request.resource.data.rating <= 5))
+        && (!('message' in request.resource.data)
+            || (request.resource.data.message is string
+                && request.resource.data.message.size() > 0
+                && request.resource.data.message.size() <= 5000))
+        && request.resource.data.scopes is list
+        && request.resource.data.scopes.size() <= 10
+        && (!('prompt_id' in request.resource.data)
+            || request.resource.data.prompt_id is string)
+        && (!('screenshot_path' in request.resource.data)
+            || request.resource.data.screenshot_path is string)
+        && request.resource.data.status == 'new'
+        && request.resource.data.created_at == request.time;
+      allow read, update, delete: if false;
+    }
+
+    // Ops-authored prompt questions pushed to app users. Content is
+    // non-sensitive by policy (any signed-in user can read every doc,
+    // including drafts — rules cannot filter list reads by field).
+    // Written only by the operator console (Admin SDK).
+    match /feedback_prompts/{id} {
+      allow read: if isAuthed();
+      allow write: if false;
+    }
+
   }
 }

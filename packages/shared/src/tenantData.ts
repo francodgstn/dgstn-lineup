@@ -28,7 +28,9 @@ import {
   SITE_PUBLISHED_COLLECTION,
   EMBED_WIDGETS_COLLECTION,
   MESSAGING_POLICIES_COLLECTION,
+  FEEDBACK_COLLECTION,
   // platform-wide / cross-tenant
+  FEEDBACK_PROMPTS_COLLECTION,
   USERS_COLLECTION,
   APP_SETTINGS_COLLECTION,
   SIGNUP_ALLOWLIST_COLLECTION,
@@ -115,6 +117,11 @@ export const TENANT_DATA_COLLECTIONS: TenantCollection[] = [
   // Operator-set outbound-delivery policy; doc id = teamId (or orgId/'system',
   // which per-team teardown never touches).
   { collection: MESSAGING_POLICIES_COLLECTION, match: { by: 'docId' } },
+  // In-app feedback submissions reference the submitting tenant (and carry the
+  // submitter's email), so they go with the team. Screenshots live under the
+  // PLATFORM `feedback/{uid}/` Storage prefix (keyed by user, not team) and are
+  // not part of the team's storage teardown.
+  { collection: FEEDBACK_COLLECTION, match: { by: 'field', field: 'team_id' } },
 ]
 
 /**
@@ -127,6 +134,8 @@ export const TENANT_DATA_COLLECTIONS: TenantCollection[] = [
  */
 export const PLATFORM_COLLECTIONS: string[] = [
   USERS_COLLECTION,
+  // Ops-authored feedback prompt questions are global (pushed to all tenants).
+  FEEDBACK_PROMPTS_COLLECTION,
   APP_SETTINGS_COLLECTION,
   SIGNUP_ALLOWLIST_COLLECTION,
   SIGNUP_INVITES_COLLECTION,

@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import type { UserFeedbackState } from './feedback'
 
 export interface UserRoles {
   admin?: boolean
@@ -17,6 +18,7 @@ export interface UserProfile {
   orgIds?: string[]          // org IDs where user is an org_admin
   roles?: UserRoles
   onboarding?: OnboardingState
+  feedback?: UserFeedbackState
   created_at?: Timestamp
   disabled_at?: Timestamp | null
 }

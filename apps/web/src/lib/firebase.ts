@@ -21,6 +21,16 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
 const useEmulators = process.env.NEXT_PUBLIC_USE_EMULATORS === 'true'
 
+// Emulator ports, overridable for parallel worktree dev where a second suite
+// runs on alternate ports (see firebase.worktree.json). Defaults match
+// firebase.json.
+export const EMULATOR_PORTS = {
+  firestore: process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT ?? '8080',
+  auth: process.env.NEXT_PUBLIC_AUTH_EMULATOR_PORT ?? '9099',
+  functions: Number(process.env.NEXT_PUBLIC_FUNCTIONS_EMULATOR_PORT ?? '5001'),
+  storage: Number(process.env.NEXT_PUBLIC_STORAGE_EMULATOR_PORT ?? '9199'),
+}
+
 // In a browser-based Codespace the emulators aren't reachable on localhost.
 // Instead of relying on (public) forwarded emulator ports, the browser talks
 // to this app's own origin and the Next.js dev server proxies the emulator
@@ -57,7 +67,7 @@ function createDb(): Firestore {
         experimentalForceLongPolling: true,
       })
     }
-    return initializeFirestore(app, { host: 'localhost:8080', ssl: false })
+    return initializeFirestore(app, { host: `localhost:${EMULATOR_PORTS.firestore}`, ssl: false })
   } catch {
     // Already initialized for this app in this realm (HMR re-run).
     return getFirestore(app)
@@ -78,8 +88,8 @@ if (
   // The functions and storage emulators aren't reachable through the dev-server
   // proxy, so only wire them up for direct (non-proxied) local dev.
   if (!emulatorProxy) {
-    connectFunctionsEmulator(functions, 'localhost', 5001)
-    connectStorageEmulator(storage, 'localhost', 9199)
+    connectFunctionsEmulator(functions, 'localhost', EMULATOR_PORTS.functions)
+    connectStorageEmulator(storage, 'localhost', EMULATOR_PORTS.storage)
   }
   ;(globalThis as { _emulatorConnected?: boolean })._emulatorConnected = true
 }
