@@ -45,6 +45,18 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  # Inbound webhooks (Automations → Webhooks). Without this the endpoints dialog
+  # cannot render an endpoint's full URL and shows the "not available in this
+  # environment yet" notice — the inboundWebhook function itself is deployed and
+  # public regardless. Use the cloudfunctions.net alias, not the *.a.run.app URL:
+  # the latter carries a generated hash that changes if the service is recreated.
+  # NEXT_PUBLIC_* is inlined at build time, so BUILD availability is what matters
+  # and a redeploy is required for a change here to reach the browser.
+  - variable: NEXT_PUBLIC_INBOUND_WEBHOOK_URL
+    value: https://europe-west6-linyup-staging.cloudfunctions.net/inboundWebhook
+    availability:
+      - BUILD
+      - RUNTIME
   # PostHog product analytics — intentionally NOT set on staging so it does not
   # pollute the prod PostHog project. initPostHog() treats a missing key as a
   # no-op (see apps/web/src/lib/posthog.ts). To enable staging analytics, add a
