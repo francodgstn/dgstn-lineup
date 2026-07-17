@@ -40,6 +40,10 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     ...(data.dropIn?.enabled && typeof data.dropIn.priceAmount === 'number'
       ? { dropIn: { enabled: true, priceAmount: data.dropIn.priceAmount } }
       : {}),
+    // CLASS-ONLY trial door: without this the public booking flow can't OFFER
+    // the trial the admin toggled on — the promise "even when members-only"
+    // needs the mirror to carry it.
+    ...(data.type !== 'appointment' && data.trialEnabled === true ? { trialEnabled: true } : {}),
     // Appointment duration menu with base prices so public cards can show
     // "from CHF 45". Mirrored verbatim — no per-contact data to strip any more
     // (the old subscriptionPricing matrix is gone).

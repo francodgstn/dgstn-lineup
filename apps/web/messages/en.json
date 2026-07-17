@@ -3427,7 +3427,8 @@
     "durationHoursMinutes": "{h}h {m}m",
     "durationHours": "{h}h",
     "bookingRequired": "Booking required",
-    "errorNoSubscriptionForActivity": "You don’t currently hold a membership that includes this activity. Please contact the studio or check the available plans."
+    "errorNoSubscriptionForActivity": "You don’t currently hold a membership that includes this activity. Please contact the studio or check the available plans.",
+    "badgeFromPrice": "From CHF {price}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Book a Trial Class",

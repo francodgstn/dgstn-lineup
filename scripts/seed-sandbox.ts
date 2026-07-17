@@ -1746,9 +1746,10 @@ async function seedDemoTeam(profile: SectorProfile) {
         isFreeTrial: a.isFreeTrial,
         accessRule,
         // Drop-in mirrored only when enabled + priced, exactly as
-        // syncActivityPublicProfile does (trialEnabled is NOT mirrored; the
-        // trial door is enforced server-side in bookSession).
+        // syncActivityPublicProfile does. trialEnabled IS mirrored (when true)
+        // so the public flow can offer the newcomer trial door.
         ...(dropIn ? { dropIn } : {}),
+        ...(a.trialEnabled ? { trialEnabled: true } : {}),
         level: a.level,
       })
   }

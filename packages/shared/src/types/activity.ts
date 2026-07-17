@@ -251,6 +251,9 @@ export interface ActivityPublicProfile {
   accessRule?: ActivityAccessRule
   /** Denormalised drop-in config so the booking UI can offer pay-per-class. */
   dropIn?: { enabled: boolean; priceAmount?: number }
+  /** CLASS-ONLY. Mirrored so the public flow can OFFER the newcomer trial door
+   *  on a gated class ("even when members-only") — present only when true. */
+  trialEnabled?: boolean
   /** APPOINTMENT-ONLY. The duration menu with base prices so public cards can
    *  show "from CHF 45". Mirrored verbatim from `Activity.durations` — there's
    *  no per-contact data to strip any more (the old `subscriptionPricing`

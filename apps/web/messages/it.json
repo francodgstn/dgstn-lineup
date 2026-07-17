@@ -3427,7 +3427,8 @@
     "durationHoursMinutes": "{h} h {m} min",
     "durationHours": "{h} h",
     "bookingRequired": "Prenotazione obbligatoria",
-    "errorNoSubscriptionForActivity": "Al momento non hai un abbonamento che include questa attività. Contatta lo studio o consulta i piani disponibili."
+    "errorNoSubscriptionForActivity": "Al momento non hai un abbonamento che include questa attività. Contatta lo studio o consulta i piani disponibili.",
+    "badgeFromPrice": "Da CHF {price}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Prenota una lezione di prova",

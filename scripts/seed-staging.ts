@@ -1038,11 +1038,13 @@ async function seedTeam(opts: TeamSeed) {
       isFreeTrial: a.isFreeTrial,
       accessRule: a.accessRule,
       // Drop-in config, mirrored only when enabled + priced — exactly as
-      // syncActivityPublicProfile does (trialEnabled is NOT mirrored; the
-      // trial door is enforced server-side in bookSession).
+      // syncActivityPublicProfile does. trialEnabled IS mirrored (when true):
+      // the public flow needs it to OFFER the newcomer trial door on a gated
+      // class; bookSession stays the enforcement.
       ...(a.dropIn?.enabled && typeof a.dropIn.priceAmount === 'number'
         ? { dropIn: { enabled: true, priceAmount: a.dropIn.priceAmount } }
         : {}),
+      ...(a.trialEnabled ? { trialEnabled: true } : {}),
       level: a.level,
     })
   }

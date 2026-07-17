@@ -56,6 +56,10 @@ interface ActivityProfile {
   order?: number
   accessRule?: ActivityAccessRule
   dropIn?: { enabled: boolean; priceAmount?: number }
+  /** CLASS-ONLY: a gated class still accepts a newcomer's free trial booking. */
+  trialEnabled?: boolean
+  /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
+  durations?: Array<{ minutes: number; priceAmount: number | null }>
   prerequisites?: string
 }
 
@@ -463,6 +467,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   const [step, setStep] = useState<Step>('activities')
   const [selectedActivity, setSelectedActivity] = useState<ActivityProfile | null>(null)
   const [selectedSession, setSelectedSession] = useState<SessionProfile | null>(null)
+  // Which guest door the visitor chose on the "who" step. A gated class can now
+  // offer BOTH doors at once (trialEnabled + drop-in), and they submit
+  // differently: 'trial' books free via bookSession (the backend admits gated
+  // trial guests), 'dropin' pays via checkout. Null = not chosen (open classes
+  // only ever have the free path, so null behaves like 'trial').
+  const [guestPath, setGuestPath] = useState<'trial' | 'dropin' | null>(null)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   // Returning member state
@@ -526,6 +536,8 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               order: typeof data.order === 'number' ? data.order : undefined,
               accessRule: data.accessRule ?? undefined,
               dropIn: data.dropIn ?? undefined,
+              trialEnabled: data.trialEnabled === true,
+              durations: Array.isArray(data.durations) ? data.durations : undefined,
               prerequisites: data.prerequisites ?? undefined,
             }
           })
@@ -641,8 +653,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     setBookingError(null)
     try {
       // Gated class with drop-in enabled → pay-per-class; the webhook confirms the
-      // booking on payment success. Redirect to Stripe Checkout.
-      if (dropInAvailable) {
+      // booking on payment success. Redirect to Stripe Checkout. NOT when the
+      // visitor explicitly took the free-trial door — a trial newcomer must never
+      // be charged; bookSession admits gated trial guests (Activity.trialEnabled).
+      if (dropInAvailable && guestPath !== 'trial') {
         const fn = httpsCallable<Record<string, unknown>, { url?: string }>(
           functions,
           'createDropInCheckout'
@@ -999,24 +1013,44 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                   <div className="flex items-start gap-2 flex-wrap">
                     <p className="font-semibold text-sm leading-tight">{a.name}</p>
                     {(() => {
+                      // Appointments have NO access gate (the price is the gate) —
+                      // resolving a rule for them fabricates a "Members only" badge
+                      // from the mirror's isFreeTrial:false. Show the price instead.
+                      if (isAppointment) {
+                        const prices = (a.durations ?? [])
+                          .map((d) => d.priceAmount)
+                          .filter((p): p is number => typeof p === 'number')
+                        return prices.length ? (
+                          <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
+                            {t('badgeFromPrice', { price: Math.min(...prices) })}
+                          </span>
+                        ) : null
+                      }
+                      // A gated class can ALSO be triable (trialEnabled) — show
+                      // both badges, or a newcomer never learns the class is
+                      // triable at all.
                       const rule = resolveActivityAccessRule(a)
-                      if (rule.type === 'subscription')
-                        return (
-                          <span className="rounded-full bg-amber-100 text-amber-700 text-xs px-2 py-0.5 font-medium">
-                            {t('badgeMembershipRequired')}
-                          </span>
-                        )
-                      if (rule.type === 'members')
-                        return (
-                          <span className="rounded-full bg-blue-100 text-blue-700 text-xs px-2 py-0.5 font-medium">
-                            {t('badgeMembersOnly')}
-                          </span>
-                        )
-                      return a.isFreeTrial ? (
-                        <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
-                          {t('badgeFreeTrial')}
-                        </span>
-                      ) : null
+                      const triable =
+                        (rule.type === 'open' && a.isFreeTrial) || a.trialEnabled === true
+                      return (
+                        <>
+                          {rule.type === 'subscription' && (
+                            <span className="rounded-full bg-amber-100 text-amber-700 text-xs px-2 py-0.5 font-medium">
+                              {t('badgeMembershipRequired')}
+                            </span>
+                          )}
+                          {rule.type === 'members' && (
+                            <span className="rounded-full bg-blue-100 text-blue-700 text-xs px-2 py-0.5 font-medium">
+                              {t('badgeMembersOnly')}
+                            </span>
+                          )}
+                          {triable && (
+                            <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
+                              {t('badgeFreeTrial')}
+                            </span>
+                          )}
+                        </>
+                      )
                     })()}
                     {isAppointment && (
                       <span className="rounded-full bg-primary/10 text-primary text-xs px-2 py-0.5 font-medium">
@@ -1122,10 +1156,13 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                       key={s.id}
                       onClick={() => {
                         setSelectedSession(s)
-                        // Members-only → sign in. But if drop-in is available, go to the
-                        // chooser ('who') so a non-member can pay to book.
+                        setGuestPath(null)
+                        // Members-only → sign in. But if there's a guest door —
+                        // drop-in (pay per class) or a free trial for newcomers —
+                        // go to the chooser ('who') instead.
                         const gated = selectedActivity?.isFreeTrial === false
-                        const nextStep = gated && !dropInAvailable ? 'ret-email' : 'who'
+                        const canGuest = dropInAvailable || selectedActivity?.trialEnabled === true
+                        const nextStep = gated && !canGuest ? 'ret-email' : 'who'
                         setStep(nextStep)
                       }}
                       className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group"
@@ -1195,9 +1232,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         </div>
 
         <div className="space-y-3">
-          {!isMembersOnly && (
+          {(!isMembersOnly || selectedActivity?.trialEnabled) && (
             <button
-              onClick={() => setStep('details')}
+              onClick={() => { setGuestPath('trial'); setStep('details') }}
               className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
             >
               <div className="flex-1">
@@ -1217,7 +1254,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           )}
           {isMembersOnly && dropInAvailable && (
             <button
-              onClick={() => setStep('details')}
+              onClick={() => { setGuestPath('dropin'); setStep('details') }}
               className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
             >
               <div className="flex-1">
@@ -1266,12 +1303,16 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   if (step === 'ret-email' && selectedSession) {
     const isMembersOnly = selectedActivity?.isFreeTrial === false
+    // Back goes to wherever the visitor came from: gated classes with a guest
+    // door (drop-in or trial) DID pass through the 'who' chooser.
+    const hadWhoStep =
+      !isMembersOnly || dropInAvailable || selectedActivity?.trialEnabled === true
     return withBar(
       <>
         <div>
           <BackButton
             onClick={() => {
-              setStep(isMembersOnly ? 'sessions' : 'who')
+              setStep(hadWhoStep ? 'who' : 'sessions')
               setReturningError(null)
               emailForm.reset()
             }}

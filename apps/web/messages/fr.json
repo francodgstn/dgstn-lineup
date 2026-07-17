@@ -3427,7 +3427,8 @@
     "durationHoursMinutes": "{h} h {m} min",
     "durationHours": "{h} h",
     "bookingRequired": "Réservation obligatoire",
-    "errorNoSubscriptionForActivity": "Vous n’avez actuellement aucun abonnement incluant cette activité. Veuillez contacter le studio ou consulter les formules disponibles."
+    "errorNoSubscriptionForActivity": "Vous n’avez actuellement aucun abonnement incluant cette activité. Veuillez contacter le studio ou consulter les formules disponibles.",
+    "badgeFromPrice": "Dès CHF {price}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Réserver un cours d'essai",

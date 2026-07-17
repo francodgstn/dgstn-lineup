@@ -1049,6 +1049,9 @@ async function seedLeadTenant(profile: LeadProfile) {
         isFreeTrial: accessRule.type === 'open',
         accessRule,
         ...(dropIn.enabled ? { dropIn } : {}),
+        // Mirrored so the public flow can OFFER the newcomer trial door on a
+        // gated class (matches syncActivityPublicProfile).
+        ...(a.trialEnabled ? { trialEnabled: true } : {}),
         level: a.level,
       })
   }
