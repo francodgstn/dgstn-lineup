@@ -51,7 +51,17 @@ export const inboundWebhook = onRequest(
         .limit(1)
         .get()
     )
-    if (endpointErr || !endpointSnap || endpointSnap.empty) {
+    // A failed lookup is NOT the same as an unknown key: this query needs a
+    // COLLECTION_GROUP index on (active, secret_key), and a missing one fails with
+    // FAILED_PRECONDITION. Folding that into 'unknown_endpoint' made a hard
+    // infrastructure error look like a caller typo — and the emulator does not
+    // enforce indexes, so it only ever surfaced on a real project.
+    if (endpointErr) {
+      console.error('[inboundWebhook] Endpoint lookup failed:', endpointErr) // eslint-disable-line no-console
+      res.status(200).json({ ok: false, reason: 'lookup_failed' })
+      return
+    }
+    if (!endpointSnap || endpointSnap.empty) {
       // Never log the raw secret key — it is the bearer credential for this
       // capability URL and would leak into log sinks.
       console.log('[inboundWebhook] Unknown or inactive endpoint key') // eslint-disable-line no-console

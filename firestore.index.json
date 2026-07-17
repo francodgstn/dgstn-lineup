@@ -1968,6 +1968,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "webhook_endpoints",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "secret_key",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
