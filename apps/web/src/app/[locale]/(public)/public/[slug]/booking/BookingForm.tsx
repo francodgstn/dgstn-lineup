@@ -1,9 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useForm, Controller } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import {
   collectionGroup,
   query,
@@ -25,28 +22,19 @@ import {
 import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import { formatCurrency } from '@/lib/format'
 import { useLocale, useTranslations } from 'next-intl'
-import {
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  addMonths,
-  subMonths,
-  isSameDay,
-  isToday,
-  isAfter,
-  startOfDay,
-  format,
-} from 'date-fns'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { COLOR_PRESETS } from '@/lib/colors'
+import { MiniCalendar } from '@/components/booking/MiniCalendar'
+import {
+  GuestDetailsForm,
+  type GuestDetailsFormHandle,
+  type GuestDetailsValues,
+} from '@/components/booking/GuestDetailsForm'
+import {
+  ReturningSignIn,
+  type ContactData,
+} from '@/components/booking/ReturningSignIn'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -95,31 +83,15 @@ interface SessionProfile {
   bookings_count?: number
 }
 
-interface MatchedContact {
-  id: string
-  firstname: string
-  lastname: string
-  phone: string
-}
-
-interface ContactData {
-  id: string
-  firstname: string
-  lastname: string
-  email: string
-  phone: string
-  /** Subscription-type ids the contact holds (live subs, primary snapshot, valid
-   *  credit packs) — returned by verifyBookingCode for the pre-booking warning. */
-  held_subscription_type_ids?: string[]
-}
+// MatchedContact / ContactData now live in components/booking/ReturningSignIn
+// (ContactData imported above; MatchedContact is an internal detail of that
+// component, not needed here).
 
 type Step =
   | 'activities'
   | 'sessions'
   | 'who'
-  | 'ret-email'
-  | 'ret-code'
-  | 'ret-select'
+  | 'returning'
   | 'details'
   | 'confirmed'
 
@@ -168,8 +140,6 @@ function activityGradient(name: string): string {
   return `linear-gradient(135deg, ${colors[i]}, ${colors[(i + 2) % colors.length]})`
 }
 
-const FITNESS_APPS = ['Fitpass', 'ClassPass', 'Urban Sports Club', 'Gymlib', 'Wellhub', 'Other']
-
 // Money-chip label for one resolved term — the activity-list step's ONLY new
 // badges (gate/trial keep the dual-badge logic just added this week, untouched
 // here). No subscription-type names loaded on this public flow, so benefit
@@ -199,34 +169,6 @@ function moneyChipLabel(
   }
 }
 
-// ─── schemas ─────────────────────────────────────────────────────────────────
-
-function createNewGuestSchema(t: ReturnType<typeof useTranslations>) {
-  return z.object({
-    firstname: z.string().min(1, t('errorRequired')).max(60),
-    lastname: z.string().min(1, t('errorRequired')).max(60),
-    email: z.string().email(t('errorInvalidEmail')),
-    phone: z.string().max(30).optional(),
-    aggregatorApp: z.string().optional(),
-  })
-}
-
-function createEmailSchema(t: ReturnType<typeof useTranslations>) {
-  return z.object({
-    email: z.string().email(t('errorInvalidEmailAddress')),
-  })
-}
-
-function createCodeSchema(t: ReturnType<typeof useTranslations>) {
-  return z.object({
-    code: z.string().regex(/^\d{6}$/, t('errorEnterCode')),
-  })
-}
-
-type NewGuestValues = z.infer<ReturnType<typeof createNewGuestSchema>>
-type EmailValues = z.infer<ReturnType<typeof createEmailSchema>>
-type CodeValues = z.infer<ReturnType<typeof createCodeSchema>>
-
 // ─── props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -235,134 +177,8 @@ interface Props {
   initialDate?: string
 }
 
-// ─── MiniCalendar ─────────────────────────────────────────────────────────────
-
-interface MiniCalendarProps {
-  availableDates: string[] // YYYY-MM-DD keys
-  selectedDate: string | null
-  onSelect: (dateKey: string) => void
-  maxDateKey: string // YYYY-MM-DD, last bookable date
-}
-
-function MiniCalendar({ availableDates, selectedDate, onSelect, maxDateKey }: MiniCalendarProps) {
-  const t = useTranslations('PublicBooking')
-  const initialMonth = useMemo(() => {
-    if (availableDates.length > 0) return dateKeyToDate(availableDates[0])
-    return new Date()
-  }, [availableDates])
-
-  const [currentMonth, setCurrentMonth] = useState(initialMonth)
-
-  const monthStart = startOfMonth(currentMonth)
-  const monthEnd = endOfMonth(currentMonth)
-  const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
-
-  // Mon=0 offset
-  const firstDow = monthStart.getDay() === 0 ? 6 : monthStart.getDay() - 1
-  const paddedDays = [...Array(firstDow).fill(null), ...days]
-  while (paddedDays.length % 7 !== 0) paddedDays.push(null)
-
-  const maxDate = dateKeyToDate(maxDateKey)
-  const isAtMax = isAfter(startOfMonth(addMonths(currentMonth, 1)), startOfMonth(maxDate))
-  const today = startOfDay(new Date())
-  const isAtStart = !isAfter(currentMonth, today)
-
-  const availableSet = new Set(availableDates)
-  const WEEKDAYS = [
-    t('weekdayMon'),
-    t('weekdayTue'),
-    t('weekdayWed'),
-    t('weekdayThu'),
-    t('weekdayFri'),
-    t('weekdaySat'),
-    t('weekdaySun'),
-  ]
-
-  return (
-    <div className="select-none">
-      {/* Month header */}
-      <div className="flex items-center justify-between mb-3">
-        <button
-          onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-          disabled={isAtStart}
-          className="p-1.5 rounded-lg hover:bg-muted transition-colors disabled:opacity-30"
-        >
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <span className="text-sm font-semibold">{format(currentMonth, 'MMMM yyyy')}</span>
-        <button
-          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-          disabled={isAtMax}
-          className="p-1.5 rounded-lg hover:bg-muted transition-colors disabled:opacity-30"
-        >
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-
-      {isAtMax && (
-        <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-2 py-1 mb-2 text-center">
-          {t('showingBookableWindowOnly')}
-        </p>
-      )}
-
-      {/* Weekday labels */}
-      <div className="grid grid-cols-7 mb-1">
-        {WEEKDAYS.map((d) => (
-          <div key={d} className="text-center text-xs text-muted-foreground py-1 font-medium">
-            {d}
-          </div>
-        ))}
-      </div>
-
-      {/* Day grid */}
-      <div className="grid grid-cols-7 gap-y-1">
-        {paddedDays.map((day, i) => {
-          if (!day) return <div key={`pad-${i}`} />
-          const key = toDateKey(Timestamp.fromDate(day))
-          const available = availableSet.has(key)
-          const isSelected = selectedDate === key
-          const isTodayDay = isToday(day)
-
-          return (
-            <button
-              key={key}
-              onClick={() => available && onSelect(key)}
-              disabled={!available}
-              className={[
-                'aspect-square rounded-full text-xs font-medium transition-all flex items-center justify-center mx-auto w-8 h-8',
-                isSelected
-                  ? 'bg-primary text-primary-foreground shadow-sm scale-110'
-                  : available
-                    ? 'hover:bg-primary/10 hover:text-primary cursor-pointer'
-                    : 'text-muted-foreground/40 cursor-default',
-                isTodayDay && !isSelected ? 'ring-1 ring-primary/40' : '',
-              ].join(' ')}
-              style={undefined}
-            >
-              {day.getDate()}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+// MiniCalendar now lives in components/booking/MiniCalendar (shared with the
+// appointment picker) — imported above.
 
 // ─── StickyBar ────────────────────────────────────────────────────────────────
 
@@ -515,37 +331,14 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   const [guestPath, setGuestPath] = useState<'trial' | 'dropin' | null>(null)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
-  // Returning member state
-  const [returningEmail, setReturningEmail] = useState('')
-  const [returningCodeId, setReturningCodeId] = useState('')
-  const [matchedContacts, setMatchedContacts] = useState<MatchedContact[]>([])
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null)
-  const [verifiedContactData, setVerifiedContactData] = useState<ContactData | null>(null) // eslint-disable-line @typescript-eslint/no-unused-vars
-  const [countdown, setCountdown] = useState(0)
-  const [returningError, setReturningError] = useState<string | null>(null)
-
   // Confirmation
   const [confirmedSession, setConfirmedSession] = useState<SessionProfile | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const newGuestSchema = useMemo(() => createNewGuestSchema(t), [t])
-  const emailSchema = useMemo(() => createEmailSchema(t), [t])
-  const codeSchema = useMemo(() => createCodeSchema(t), [t])
-
-  const guestForm = useForm<NewGuestValues>({ resolver: zodResolver(newGuestSchema) })
-  const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
-  const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
-
-  // Ref to trigger guest form submit from the sticky bar
-  const triggerGuestSubmit = useRef<(() => void) | undefined>(undefined)
-
-  // Countdown timer
-  useEffect(() => {
-    if (countdown <= 0) return
-    const timeoutId = setTimeout(() => setCountdown((c) => c - 1), 1000)
-    return () => clearTimeout(timeoutId)
-  }, [countdown])
+  // Ref to trigger the shared guest-details form's submit from the sticky bar
+  // (the Confirm button lives outside the <form> element).
+  const guestFormRef = useRef<GuestDetailsFormHandle>(null)
 
   // Load activities + sessions for the resolved team
   useEffect(() => {
@@ -613,7 +406,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           if (matched?.activityType === 'appointment') {
             // Appointments have their own booking flow (per-coach slot picker) —
             // the class calendar can't render 1:1 slots, so hand the visitor over.
-            window.location.replace(`/public/${slug}/appointments`)
+            // The activity id carries over so the picker preselects the same
+            // offering instead of forgetting what was clicked.
+            window.location.replace(`/public/${slug}/appointments?activity=${matched.id}`)
             return
           }
           if (matched) {
@@ -688,7 +483,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   // ── Guest booking ─────────────────────────────────────────────────────────
 
-  const onSubmitGuest = async (values: NewGuestValues) => {
+  const onSubmitGuest = async (values: GuestDetailsValues) => {
     if (!selectedSession || !teamId) return
     setIsSubmitting(true)
     setBookingError(null)
@@ -749,106 +544,22 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     }
   }
 
-  // Wire up sticky bar trigger whenever onSubmitGuest changes
-  useEffect(() => {
-    triggerGuestSubmit.current = guestForm.handleSubmit(onSubmitGuest)
-  })
+  // ── Returning member — post-verify (class-specific: subscription coverage
+  // check, then book). ReturningSignIn owns the email→code→select steps
+  // themselves; this only runs once a contact is confirmed. Throwing here
+  // surfaces the error on ReturningSignIn's current step, matching the
+  // original inline behaviour. ──────────────────────────────────────────────
 
-  // ── Returning member ──────────────────────────────────────────────────────
-
-  const onSendCode = async (values: EmailValues) => {
-    if (!teamId) return
-    setReturningError(null)
-    try {
-      const fn = httpsCallable<
-        { email: string; teamId: string },
-        { codeId: string; hasContacts?: boolean }
-      >(functions, 'sendBookingVerificationCode')
-      const result = await fn({ email: values.email, teamId })
-      if (result.data.hasContacts === false) {
-        const isMembersOnly = selectedActivity?.isFreeTrial === false
-        setReturningError(
-          isMembersOnly
-            ? t('errorNoAccountMembersOnly')
-            : t('errorNoAccountGeneral')
-        )
-        return
-      }
-      setReturningEmail(values.email)
-      setReturningCodeId(result.data.codeId)
-      setCountdown(60)
-      setStep('ret-code')
-    } catch (err: unknown) {
-      const e = err as { message?: string }
-      setReturningError(e.message || t('errorSendCodeFailed'))
-    }
-  }
-
-  const onVerifyCode = async (values: CodeValues) => {
+  async function onVerified({
+    contactId,
+    verificationCodeId,
+    contactData,
+  }: {
+    contactId: string
+    verificationCodeId: string
+    contactData: ContactData
+  }) {
     if (!selectedSession) return
-    setReturningError(null)
-    try {
-      const fn = httpsCallable<
-        { codeId: string; code: string },
-        {
-          verified: boolean
-          codeId: string
-          requiresContactSelection: boolean
-          selectedContactId?: string
-          contactData?: ContactData
-          matchedContacts?: MatchedContact[]
-        }
-      >(functions, 'verifyBookingCode')
-      const result = await fn({ codeId: returningCodeId, code: values.code })
-
-      if (result.data.requiresContactSelection) {
-        setMatchedContacts(result.data.matchedContacts ?? [])
-        setStep('ret-select')
-      } else {
-        const cId = result.data.selectedContactId!
-        setSelectedContactId(cId)
-        setVerifiedContactData(result.data.contactData ?? null)
-        await doAuthenticatedBooking(cId, returningCodeId, selectedSession, result.data.contactData)
-      }
-    } catch (err: unknown) {
-      const e = err as { message?: string; code?: string }
-      if (e.code === 'already-exists') {
-        setReturningError(t('errorAlreadyRegistered'))
-      } else {
-        setReturningError(e.message || t('errorIncorrectCode'))
-      }
-    }
-  }
-
-  const onSelectContact = async (contactId: string) => {
-    if (!selectedSession) return
-    setReturningError(null)
-    try {
-      const fn = httpsCallable<
-        { codeId: string; selectedContactId: string },
-        { verified: boolean; codeId: string; selectedContactId?: string; contactData?: ContactData }
-      >(functions, 'verifyBookingCode')
-      const result = await fn({ codeId: returningCodeId, selectedContactId: contactId })
-      const cId = result.data.selectedContactId!
-      setSelectedContactId(cId)
-      setVerifiedContactData(result.data.contactData ?? null)
-      await doAuthenticatedBooking(cId, returningCodeId, selectedSession, result.data.contactData)
-    } catch (err: unknown) {
-      const e = err as { message?: string; code?: string }
-      if (e.code === 'already-exists') {
-        setReturningError(t('errorAlreadyRegistered'))
-      } else {
-        setReturningError(e.message || t('errorSelectContactFailed'))
-      }
-    }
-  }
-
-  async function doAuthenticatedBooking(
-    contactId: string,
-    codeId: string,
-    session: SessionProfile,
-    contactData?: ContactData | null
-  ) {
     // Personalised gate warning: the identified contact holds no subscription the
     // activity accepts — tell them in their language instead of surfacing
     // bookSession's raw permission error. Skipped when drop-in is offered so the
@@ -861,40 +572,21 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       : null
     if (
       required?.length &&
-      contactData?.held_subscription_type_ids &&
+      contactData.held_subscription_type_ids &&
       !contactData.held_subscription_type_ids.some((id) => required.includes(id)) &&
       !dropInAvailable
     ) {
-      setReturningError(t('errorNoSubscriptionForActivity'))
-      return
+      throw new Error(t('errorNoSubscriptionForActivity'))
     }
     const bookSessionFn = httpsCallable(functions, 'bookSession')
     await bookSessionFn({
       teamId,
-      sessionId: session.id,
+      sessionId: selectedSession.id,
       authenticatedContactId: contactId,
-      verificationCodeId: codeId,
+      verificationCodeId,
     })
-    setConfirmedSession(session)
+    setConfirmedSession(selectedSession)
     setStep('confirmed')
-  }
-
-  const onResendCode = async () => {
-    if (countdown > 0 || !teamId) return
-    setReturningError(null)
-    try {
-      const fn = httpsCallable<{ email: string; teamId: string }, { codeId: string }>(
-        functions,
-        'sendBookingVerificationCode'
-      )
-      const result = await fn({ email: returningEmail, teamId })
-      setReturningCodeId(result.data.codeId)
-      setCountdown(60)
-      codeForm.reset()
-    } catch (err: unknown) {
-      const e = err as { message?: string }
-      setReturningError(e.message || t('errorResendCodeFailed'))
-    }
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────
@@ -909,14 +601,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   function resetToStart() {
     setSelectedSession(null)
-    setReturningEmail('')
-    setReturningCodeId('')
-    setMatchedContacts([])
-    setSelectedContactId(null)
     setBookingError(null)
-    setReturningError(null)
-    codeForm.reset()
-    guestForm.reset()
     if (preSelectedActivitySlug || activities.length === 1) {
       setStep('sessions')
     } else {
@@ -972,7 +657,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             accentColor={accentColor}
             showConfirm={step === 'details'}
             submitting={isSubmitting}
-            onConfirm={() => triggerGuestSubmit.current?.()}
+            onConfirm={() => guestFormRef.current?.submit()}
           />
         )}
       </>
@@ -1031,7 +716,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                 onClick={() => {
                   if (!hasSessions) return
                   if (isAppointment) {
-                    window.location.assign(`/public/${slug}/appointments`)
+                    window.location.assign(`/public/${slug}/appointments?activity=${a.id}`)
                     return
                   }
                   setSelectedActivity(a)
@@ -1220,7 +905,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                         // go to the chooser ('who') instead.
                         const gated = selectedActivity?.isFreeTrial === false
                         const canGuest = dropInAvailable || selectedActivity?.trialEnabled === true
-                        const nextStep = gated && !canGuest ? 'ret-email' : 'who'
+                        const nextStep = gated && !canGuest ? 'returning' : 'who'
                         setStep(nextStep)
                       }}
                       className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group"
@@ -1333,7 +1018,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             </button>
           )}
           <button
-            onClick={() => setStep('ret-email')}
+            onClick={() => setStep('returning')}
             className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
           >
             <div className="flex-1">
@@ -1357,160 +1042,25 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     )
   }
 
-  // ─── Step: Returning — enter email ────────────────────────────────────────
+  // ─── Step: Returning — email → code → (optional) contact select ──────────
+  // ReturningSignIn owns all three internal steps; class-specific post-verify
+  // logic (subscription coverage check, then bookSession) lives in onVerified
+  // above.
 
-  if (step === 'ret-email' && selectedSession) {
+  if (step === 'returning' && selectedSession) {
     const isMembersOnly = selectedActivity?.isFreeTrial === false
     // Back goes to wherever the visitor came from: gated classes with a guest
     // door (drop-in or trial) DID pass through the 'who' chooser.
     const hadWhoStep =
       !isMembersOnly || dropInAvailable || selectedActivity?.trialEnabled === true
     return withBar(
-      <>
-        <div>
-          <BackButton
-            onClick={() => {
-              setStep(hadWhoStep ? 'who' : 'sessions')
-              setReturningError(null)
-              emailForm.reset()
-            }}
-          />
-          <h1 className="text-2xl font-bold">{t('welcomeBackTitle')}</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {t('welcomeBackSubtitle')}
-          </p>
-        </div>
-
-        <form onSubmit={emailForm.handleSubmit(onSendCode)} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">{t('labelEmailAddress')}</label>
-            <input
-              type="email"
-              {...emailForm.register('email')}
-              autoComplete="email"
-              placeholder={t('placeholderEmailExample')}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            {emailForm.formState.errors.email && (
-              <p className="text-xs text-destructive">{emailForm.formState.errors.email.message}</p>
-            )}
-          </div>
-          {returningError && (
-            <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-              {returningError}
-            </div>
-          )}
-          <BioLinkButton
-            type="submit"
-            disabled={emailForm.formState.isSubmitting}
-            accentColor={accentColor}
-          >
-            {emailForm.formState.isSubmitting ? t('sendingEllipsis') : t('sendVerificationCode')}
-          </BioLinkButton>
-        </form>
-      </>
-    )
-  }
-
-  // ─── Step: Returning — verify code ───────────────────────────────────────
-
-  if (step === 'ret-code' && selectedSession) {
-    return withBar(
-      <>
-        <div>
-          <BackButton
-            onClick={() => {
-              setStep('ret-email')
-              setReturningError(null)
-              codeForm.reset()
-            }}
-          />
-          <h1 className="text-2xl font-bold">{t('checkEmailTitle')}</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {t('sentCodeTo')} <strong>{returningEmail}</strong>
-          </p>
-        </div>
-
-        <form onSubmit={codeForm.handleSubmit(onVerifyCode)} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">{t('labelVerificationCode')}</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              {...codeForm.register('code', {
-                onChange: (e) => {
-                  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6)
-                },
-              })}
-              placeholder={t('placeholderCode')}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-center tracking-widest text-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            {codeForm.formState.errors.code && (
-              <p className="text-xs text-destructive">{codeForm.formState.errors.code.message}</p>
-            )}
-          </div>
-          {returningError && (
-            <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-              {returningError}
-            </div>
-          )}
-          <BioLinkButton
-            type="submit"
-            disabled={codeForm.formState.isSubmitting}
-            accentColor={accentColor}
-          >
-            {codeForm.formState.isSubmitting ? t('verifyingEllipsis') : t('confirmBookingCta')}
-          </BioLinkButton>
-        </form>
-
-        <div className="text-center">
-          <button
-            onClick={onResendCode}
-            disabled={countdown > 0}
-            className="text-sm text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
-          >
-            {countdown > 0 ? t('resendIn', { countdown }) : t('resendPrompt')}
-          </button>
-        </div>
-      </>
-    )
-  }
-
-  // ─── Step: Returning — select contact ────────────────────────────────────
-
-  if (step === 'ret-select' && selectedSession) {
-    return withBar(
-      <>
-        <div>
-          <BackButton onClick={() => setStep('ret-code')} />
-          <h1 className="text-2xl font-bold">{t('titleWhosBooking')}</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {t('multipleProfilesFound')}
-          </p>
-        </div>
-        {returningError && (
-          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-            {returningError}
-          </div>
-        )}
-        <div className="space-y-3">
-          {matchedContacts.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => onSelectContact(c.id)}
-              disabled={selectedContactId === c.id}
-              className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
-            >
-              <p className="font-semibold text-sm">
-                {c.firstname} {c.lastname}
-              </p>
-              {c.phone && <p className="text-xs text-muted-foreground mt-0.5">{c.phone}</p>}
-            </button>
-          ))}
-        </div>
-      </>
+      <ReturningSignIn
+        teamId={teamId}
+        onVerified={onVerified}
+        onBack={() => setStep(hadWhoStep ? 'who' : 'sessions')}
+        accentColor={accentColor}
+        noAccountMessage={isMembersOnly ? t('errorNoAccountMembersOnly') : t('errorNoAccountGeneral')}
+      />
     )
   }
 
@@ -1527,116 +1077,14 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           </p>
         </div>
 
-        <form
-          id="guest-form"
-          onSubmit={guestForm.handleSubmit(onSubmitGuest)}
-          className="space-y-4"
-        >
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">
-                {t('labelFirstName')} <span className="text-destructive">*</span>
-              </label>
-              <input
-                type="text"
-                {...guestForm.register('firstname')}
-                autoComplete="given-name"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              {guestForm.formState.errors.firstname && (
-                <p className="text-xs text-destructive">
-                  {guestForm.formState.errors.firstname.message}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">
-                {t('labelLastName')} <span className="text-destructive">*</span>
-              </label>
-              <input
-                type="text"
-                {...guestForm.register('lastname')}
-                autoComplete="family-name"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              {guestForm.formState.errors.lastname && (
-                <p className="text-xs text-destructive">
-                  {guestForm.formState.errors.lastname.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium">
-              {t('labelEmail')} <span className="text-destructive">*</span>
-            </label>
-            <input
-              type="email"
-              {...guestForm.register('email')}
-              autoComplete="email"
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            {guestForm.formState.errors.email && (
-              <p className="text-xs text-destructive">{guestForm.formState.errors.email.message}</p>
-            )}
-          </div>
-
-          {showPhone && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium">
-                {t('labelPhone')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
-              </label>
-              <input
-                type="tel"
-                {...guestForm.register('phone')}
-                autoComplete="tel"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-          )}
-
-          {showFitnessApp && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium">
-                {t('labelFitnessApp')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
-              </label>
-              <Controller
-                name="aggregatorApp"
-                control={guestForm.control}
-                render={({ field }) => (
-                  <Select
-                    value={field.value || '__none__'}
-                    onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">{t('notUsingFitnessApp')}</SelectItem>
-                      {FITNESS_APPS.map((app) => (
-                        <SelectItem key={app} value={app}>
-                          {app}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-          )}
-
-          {bookingError && (
-            <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-              {bookingError}
-            </div>
-          )}
-
-          {/* Hidden submit — triggered by sticky bar Confirm button */}
-          <button type="submit" className="sr-only" aria-hidden="true">
-            {t('srOnlySubmit')}
-          </button>
-        </form>
+        <GuestDetailsForm
+          ref={guestFormRef}
+          showPhone={showPhone}
+          showAggregatorField={showFitnessApp}
+          submitting={isSubmitting}
+          error={bookingError}
+          onSubmit={onSubmitGuest}
+        />
 
         <p className="text-xs text-muted-foreground">
           {t('consentText')}

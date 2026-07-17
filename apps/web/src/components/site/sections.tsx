@@ -405,7 +405,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               const href = !section.showBooking
                 ? undefined
                 : a.activityType === 'appointment'
-                  ? `/public/${slug}/appointments`
+                  ? `/public/${slug}/appointments?activity=${a.id}`
                   : a.slug
                     ? `/public/${slug}/booking/${a.slug}`
                     : undefined

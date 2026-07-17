@@ -693,7 +693,7 @@ export default function ShopHome({
                       .filter((label): label is string => !!label)
                     const href =
                       a.activityType === 'appointment'
-                        ? `/public/${slug}/appointments`
+                        ? `/public/${slug}/appointments?activity=${a.id}`
                         : a.slug
                           ? `/public/${slug}/booking/${a.slug}`
                           : `/public/${slug}/booking`

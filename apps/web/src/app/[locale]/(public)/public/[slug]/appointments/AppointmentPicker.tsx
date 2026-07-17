@@ -1,21 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { resolveEffectiveAppointmentPrice, type ActivityMemberBenefit } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { formatCurrency } from '@/lib/format'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { MiniCalendar, toDateKey } from '@/components/booking/MiniCalendar'
+import { GuestDetailsForm, type GuestDetailsValues } from '@/components/booking/GuestDetailsForm'
+import { ReturningSignIn, type ContactData } from '@/components/booking/ReturningSignIn'
 import {
   CalendarClock,
   MapPin,
@@ -25,7 +23,6 @@ import {
   Check,
   ChevronRight,
   ChevronLeft,
-  Sparkles,
   Tag,
 } from 'lucide-react'
 
@@ -85,8 +82,8 @@ type BookArgs =
 
 const fmtDate = (ms: number) =>
   new Date(ms).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-const fmtDayShort = (ms: number) =>
-  new Date(ms).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
+const fmtDateFull = (ms: number) =>
+  new Date(ms).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })
 const fmtTime = (ms: number) =>
   new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
@@ -135,21 +132,11 @@ function errorDetails(err: unknown): { code?: string; message?: string; reason?:
   return { code: fe?.code, message: fe?.message, reason: details.reason, priceAmount: details.priceAmount }
 }
 
-// ─── booking form schemas ──────────────────────────────────────────────────────
-
-const bookingSchema = z.object({
-  firstname: z.string().min(1, 'Required').max(60),
-  lastname: z.string().min(1, 'Required').max(60),
-  email: z.string().email('Enter a valid email'),
-  phone: z.string().max(30).optional(),
-})
-type BookingFormValues = z.infer<typeof bookingSchema>
-const emailSchema = z.object({ email: z.string().email('Enter a valid email address') })
-type EmailValues = z.infer<typeof emailSchema>
-const codeSchema = z.object({ code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code') })
-type CodeValues = z.infer<typeof codeSchema>
-
 // ─── booking form (guest, always allowed / optional member sign-in for a price) ─
+// Guest fields + returning-member sign-in are the SHARED components also used
+// by the class BookingForm (components/booking/) — see that file for the
+// reference design this mirrors. Only the money-specific bits (price display,
+// the sign-in offer link, the member-pay confirmation screen) stay local here.
 
 function SlotBookingForm({
   teamId,
@@ -179,7 +166,9 @@ function SlotBookingForm({
   onClose: () => void
 }) {
   const t = useTranslations('AppointmentBooking')
+  const tPublic = useTranslations('PublicBooking')
   const [error, setError] = useState<string | null>(null)
+  const [submittingGuest, setSubmittingGuest] = useState(false)
   const [submittingPay, setSubmittingPay] = useState(false)
 
   const offersMemberBenefit = !!memberBenefit?.subscriptionTypeIds.length
@@ -188,75 +177,46 @@ function SlotBookingForm({
   // access gate any more (see ActivityMemberBenefit's history note): a guest
   // may always book, priced or not. Signing in is purely an OFFER to check a
   // possibly-lower member price, reached via a link on the guest-pay form.
-  type Step = 'guest' | 'signInEmail' | 'signInCode'
+  type Step = 'guest' | 'signIn'
   const [step, setStep] = useState<Step>('guest')
-  const [returningEmail, setReturningEmail] = useState('')
-  const [codeId, setCodeId] = useState('')
-  const [countdown, setCountdown] = useState(0)
 
   // Set once a signed-in member verifies and their effective price is an AMOUNT
   // (not free) — holds what checkout needs. `viaSubscriptionTypeId` is null when
   // the price is unchanged from base (no benefit applies) — used to skip the
-  // "was CHF X" strikethrough in that case.
+  // "was CHF X" strikethrough in that case. `firstname`/`email` are carried
+  // along too — only needed for the rare "became covered" retry-to-free path
+  // below, which calls onBooked directly (checkout's own success path lands
+  // on the confirmation screen via the Stripe redirect instead).
   const [memberPay, setMemberPay] = useState<{
     contactId: string
     verificationCodeId: string
     amount: number
     viaSubscriptionTypeId?: string | null
+    firstname: string
+    email: string
   } | null>(null)
   // Transient state while an INCLUDED member's free booking is in flight.
   const [autobooking, setAutobooking] = useState(false)
 
-  useEffect(() => {
-    if (countdown <= 0) return
-    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000)
-    return () => clearTimeout(timer)
-  }, [countdown])
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<BookingFormValues>({ resolver: zodResolver(bookingSchema) })
-  const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
-  const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
-
-  // ── Guest, FREE path — an unpriced duration is free for anyone. ──
-  async function onSubmitGuestFree(data: BookingFormValues) {
+  // ── Guest submit — routes to the free callable or checkout depending on
+  // whether this duration has a base price. Replaces the old two separate
+  // guest-free/guest-pay forms; GuestDetailsForm supplies the fields. ──
+  async function onSubmitGuest(values: GuestDetailsValues) {
     setError(null)
+    setSubmittingGuest(true)
     try {
-      await book({
-        contactDetails: {
-          firstname: data.firstname,
-          lastname: data.lastname,
-          email: data.email,
-          phone: data.phone || undefined,
-        },
-      })
-      onBooked({ firstname: data.firstname, email: data.email })
-    } catch (err) {
-      const { code } = errorDetails(err)
-      if (code === 'already-exists') setError(t('errorAlreadyBooked'))
-      else if (code === 'failed-precondition') setError(t('errorSlotUnavailable'))
-      else setError(t('errorGeneric'))
-    }
-  }
-
-  // ── Guest, PAY path — the default for any priced duration. Guests always pay
-  // the BASE price; a member gets their (possibly lower) price via the sign-in
-  // offer instead. The server still re-checks (see createAppointmentCheckout)
-  // before creating the hold. ──
-  async function onSubmitGuestPay(data: BookingFormValues) {
-    setError(null)
-    try {
-      const res = await checkout({
-        contactDetails: {
-          firstname: data.firstname,
-          lastname: data.lastname,
-          email: data.email,
-          phone: data.phone || undefined,
-        },
-      })
+      const contactDetails = {
+        firstname: values.firstname,
+        lastname: values.lastname,
+        email: values.email,
+        phone: values.phone || undefined,
+      }
+      if (!hasAnyPrice) {
+        await book({ contactDetails })
+        onBooked({ firstname: values.firstname, email: values.email })
+        return
+      }
+      const res = await checkout({ contactDetails })
       if (res?.url) {
         window.location.href = res.url
         return
@@ -266,128 +226,81 @@ function SlotBookingForm({
       const { code } = errorDetails(err)
       if (code === 'functions/already-exists') setError(t('errorAlreadyBooked'))
       else if (code === 'functions/failed-precondition') setError(t('errorSlotUnavailable'))
-      else setError(t('errorCheckoutFailed'))
+      else setError(hasAnyPrice ? t('errorCheckoutFailed') : t('errorGeneric'))
+    } finally {
+      setSubmittingGuest(false)
     }
   }
 
-  async function onSendCode(values: EmailValues) {
-    setError(null)
-    try {
-      const fn = httpsCallable<
-        { email: string; teamId: string },
-        { codeId: string; hasContacts?: boolean }
-      >(functions, 'sendBookingVerificationCode')
-      const result = await fn({ email: values.email, teamId })
-      if (result.data.hasContacts === false) {
-        setError(t('membersNoAccount'))
-        return
-      }
-      setReturningEmail(values.email)
-      setCodeId(result.data.codeId)
-      setCountdown(60)
-      setStep('signInCode')
-    } catch (err) {
-      setError((err as { message?: string }).message || t('errorSendCode'))
-    }
-  }
+  // ── Returning member, post-verify. Reached ONLY via the priced guest-pay
+  // form's sign-in offer — `hasAnyPrice` is always true here (an unpriced
+  // duration never shows the offer, there's nothing a member price could
+  // improve on free). Throwing surfaces the message on ReturningSignIn's
+  // current step (its code/select screen), matching the original inline
+  // behaviour. ──
+  async function onVerifiedAppointment({
+    contactId,
+    verificationCodeId,
+    contactData,
+  }: {
+    contactId: string
+    verificationCodeId: string
+    contactData: ContactData
+  }) {
+    const held = contactData.held_subscription_type_ids ?? []
+    const contactFirstname = contactData.firstname || contactData.email.split('@')[0]
+    // Mirrors resolveEffectiveAppointmentPrice server-side — DISPLAY/ROUTING
+    // only, book()/checkout() always re-resolve authoritatively.
+    const effective = resolveEffectiveAppointmentPrice(
+      { minutes: durationMinutes, priceAmount },
+      held,
+      memberBenefit
+    )
 
-  // Reached ONLY from the priced guest-pay form's sign-in offer — `hasAnyPrice`
-  // is always true here (an unpriced duration never shows the offer, there's
-  // nothing a member price could improve on free).
-  async function onVerifyCode(values: CodeValues) {
-    setError(null)
-    try {
-      const verifyFn = httpsCallable<
-        { codeId: string; code?: string; selectedContactId?: string },
-        {
-          verified: boolean
-          codeId: string
-          selectedContactId?: string
-          requiresContactSelection?: boolean
-          matchedContacts?: { id: string }[]
-          contactData?: { held_subscription_type_ids?: string[] }
-        }
-      >(functions, 'verifyBookingCode')
-      const result = await verifyFn({ codeId, code: values.code })
-      const contactId = result.data.selectedContactId ?? result.data.matchedContacts?.[0]?.id ?? null
-      if (!contactId) {
-        setError(t('errorNoAccount'))
-        return
-      }
-
-      // Need the held-subscription snapshot to price it for THIS caller. When
-      // several contacts matched, the auto-picked one above didn't carry it —
-      // one follow-up call resolves it exactly like the manual pick does.
-      let contactData = result.data.contactData
-      if (!contactData) {
-        const sel = await verifyFn({ codeId, selectedContactId: contactId })
-        contactData = sel.data.contactData
-      }
-      const held = contactData?.held_subscription_type_ids ?? []
-
-      // Mirrors resolveEffectiveAppointmentPrice server-side — DISPLAY/ROUTING
-      // only, book()/checkout() always re-resolve authoritatively.
-      const effective = resolveEffectiveAppointmentPrice(
-        { minutes: durationMinutes, priceAmount },
-        held,
-        memberBenefit
-      )
-
-      if (effective.free) {
-        setAutobooking(true)
-        try {
-          await book({ authenticatedContactId: contactId, verificationCodeId: result.data.codeId })
-          onBooked({ firstname: returningEmail.split('@')[0], email: returningEmail })
-        } catch (bookErr) {
-          const { code, reason, priceAmount: amt } = errorDetails(bookErr)
-          if (code === 'functions/already-exists') {
-            setError(t('errorAlreadyBooked'))
-          } else if (code === 'functions/failed-precondition' && reason === 'payment_required') {
-            // Race: pricing/coverage changed between our check and the free
-            // attempt — the server is authoritative, fall back to the pay CTA.
-            if (typeof amt === 'number') setMemberPay({ contactId, verificationCodeId: result.data.codeId, amount: amt })
-            else setError(t('errorPaymentRequired'))
+    if (effective.free) {
+      setAutobooking(true)
+      try {
+        await book({ authenticatedContactId: contactId, verificationCodeId })
+        onBooked({ firstname: contactFirstname, email: contactData.email })
+      } catch (bookErr) {
+        const { code, reason, priceAmount: amt } = errorDetails(bookErr)
+        if (code === 'functions/already-exists') {
+          throw new Error(t('errorAlreadyBooked'))
+        } else if (code === 'functions/failed-precondition' && reason === 'payment_required') {
+          // Race: pricing/coverage changed between our check and the free
+          // attempt — the server is authoritative, fall back to the pay CTA.
+          if (typeof amt === 'number') {
+            setMemberPay({
+              contactId,
+              verificationCodeId,
+              amount: amt,
+              firstname: contactFirstname,
+              email: contactData.email,
+            })
           } else {
-            setError(t('errorGeneric'))
+            throw new Error(t('errorPaymentRequired'))
           }
-        } finally {
-          setAutobooking(false)
+        } else {
+          throw new Error(t('errorGeneric'))
         }
-        return
+      } finally {
+        setAutobooking(false)
       }
-
-      if (typeof effective.amount === 'number') {
-        setMemberPay({
-          contactId,
-          verificationCodeId: result.data.codeId,
-          amount: effective.amount,
-          viaSubscriptionTypeId: effective.viaSubscriptionTypeId,
-        })
-        return
-      }
-      setError(t('errorPaymentRequired'))
-    } catch (err) {
-      const e = err as { code?: string; message?: string }
-      if (e.code === 'already-exists') setError(t('errorAlreadyBooked'))
-      else setError(e.message || t('errorIncorrectCode'))
+      return
     }
-  }
 
-  async function onResendCode() {
-    if (countdown > 0) return
-    setError(null)
-    try {
-      const fn = httpsCallable<{ email: string; teamId: string }, { codeId: string }>(
-        functions,
-        'sendBookingVerificationCode'
-      )
-      const result = await fn({ email: returningEmail, teamId })
-      setCodeId(result.data.codeId)
-      setCountdown(60)
-      codeForm.reset()
-    } catch (err) {
-      setError((err as { message?: string }).message || t('errorResendCode'))
+    if (typeof effective.amount === 'number') {
+      setMemberPay({
+        contactId,
+        verificationCodeId,
+        amount: effective.amount,
+        viaSubscriptionTypeId: effective.viaSubscriptionTypeId,
+        firstname: contactFirstname,
+        email: contactData.email,
+      })
+      return
     }
+    throw new Error(t('errorPaymentRequired'))
   }
 
   // A verified member's effective price is an AMOUNT — pay to confirm.
@@ -414,7 +327,7 @@ function SlotBookingForm({
             authenticatedContactId: memberPay.contactId,
             verificationCodeId: memberPay.verificationCodeId,
           })
-          onBooked({ firstname: returningEmail.split('@')[0], email: returningEmail })
+          onBooked({ firstname: memberPay.firstname, email: memberPay.email })
         } catch {
           setError(t('errorGeneric'))
         }
@@ -433,8 +346,6 @@ function SlotBookingForm({
     setMemberPay(null)
     setAutobooking(false)
     setError(null)
-    emailForm.reset()
-    codeForm.reset()
   }
 
   const errorBox = error ? (
@@ -443,42 +354,7 @@ function SlotBookingForm({
     </p>
   ) : null
 
-  // ── 1. Unpriced — free for anyone, no sign-in offer (a member price could
-  // never beat free). ──
-  if (!hasAnyPrice) {
-    return (
-      <form onSubmit={handleSubmit(onSubmitGuestFree)} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="cbf-fn" className="text-xs">{t('fieldFirstname')}</Label>
-            <Input id="cbf-fn" {...register('firstname')} />
-            {errors.firstname && <p className="text-destructive text-xs">{errors.firstname.message}</p>}
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="cbf-ln" className="text-xs">{t('fieldLastname')}</Label>
-            <Input id="cbf-ln" {...register('lastname')} />
-            {errors.lastname && <p className="text-destructive text-xs">{errors.lastname.message}</p>}
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="cbf-em" className="text-xs">{t('fieldEmail')}</Label>
-          <Input id="cbf-em" type="email" {...register('email')} />
-          {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="cbf-ph" className="text-xs">{t('fieldPhone')}</Label>
-          <Input id="cbf-ph" type="tel" {...register('phone')} />
-        </div>
-        {errorBox}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
-          <Button type="submit" size="sm" disabled={isSubmitting}>{isSubmitting ? t('submitting') : t('submit')}</Button>
-        </div>
-      </form>
-    )
-  }
-
-  // ── 2. An INCLUDED member's free booking is in flight. ──
+  // ── An INCLUDED member's free booking is in flight. ──
   if (autobooking) {
     return (
       <div className="space-y-3 py-3 text-center">
@@ -487,7 +363,7 @@ function SlotBookingForm({
     )
   }
 
-  // ── 3. A verified member's effective price is an AMOUNT — pay to confirm.
+  // ── A verified member's effective price is an AMOUNT — pay to confirm.
   // Shows the base price struck through only when the member's price is
   // actually lower (a benefit applied); otherwise just the (unchanged) price. ──
   if (memberPay) {
@@ -514,128 +390,56 @@ function SlotBookingForm({
     )
   }
 
-  // ── 4. Sign-in offer, step 1: email. Reached only via the guest-pay form's
-  // "check your price" link — never a requirement. ──
-  if (step === 'signInEmail') {
+  // ── Sign-in offer — the shared returning-member flow. Reached only via the
+  // guest-pay form's "check your price" link — never a requirement. ──
+  if (step === 'signIn') {
     return (
-      <form onSubmit={emailForm.handleSubmit(onSendCode)} className="space-y-3">
-        <BackRow label={t('back')} onClick={backToGuest} />
-        <p className="text-xs text-muted-foreground bg-muted/50 border rounded-lg px-3 py-2">
-          {t('memberVerifyPrompt')}
-        </p>
-        <div className="space-y-1">
-          <Label className="text-xs">{t('fieldEmail')}</Label>
-          <Input type="email" {...emailForm.register('email')} autoComplete="email" placeholder="your@email.com" />
-          {emailForm.formState.errors.email && (
-            <p className="text-destructive text-xs">{emailForm.formState.errors.email.message}</p>
-          )}
-        </div>
-        {errorBox}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
-          <Button type="submit" size="sm" disabled={emailForm.formState.isSubmitting}>
-            {emailForm.formState.isSubmitting ? t('sending') : t('sendCode')}
-          </Button>
-        </div>
-      </form>
+      <ReturningSignIn
+        teamId={teamId}
+        onVerified={onVerifiedAppointment}
+        onBack={backToGuest}
+        noAccountMessage={tPublic('errorNoAccountMembersOnly')}
+      />
     )
   }
 
-  // ── 5. Sign-in offer, step 2: code. ──
-  if (step === 'signInCode') {
-    return (
-      <form onSubmit={codeForm.handleSubmit(onVerifyCode)} className="space-y-3">
-        <p className="text-xs text-muted-foreground">{t('codeSentTo', { email: returningEmail })}</p>
-        <div className="space-y-1">
-          <Label className="text-xs">{t('fieldCode')}</Label>
-          <Input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={6}
-            {...codeForm.register('code', {
-              onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6)
-              },
-            })}
-            placeholder="000000"
-            className="text-center tracking-widest text-lg font-mono"
-          />
-          {codeForm.formState.errors.code && (
-            <p className="text-destructive text-xs">{codeForm.formState.errors.code.message}</p>
-          )}
-        </div>
-        {errorBox}
-        <div className="flex justify-between items-center">
-          <button
-            type="button"
-            onClick={onResendCode}
-            disabled={countdown > 0}
-            className="text-xs text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
-          >
-            {countdown > 0 ? t('resendIn', { seconds: countdown }) : t('resend')}
-          </button>
-          <div className="flex gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => { setStep('signInEmail'); setError(null); codeForm.reset() }}>
-              {t('back')}
-            </Button>
-            <Button type="submit" size="sm" disabled={codeForm.formState.isSubmitting}>
-              {codeForm.formState.isSubmitting ? t('verifying') : t('confirmBooking')}
-            </Button>
-          </div>
-        </div>
-      </form>
-    )
-  }
-
-  // ── 6. DEFAULT — priced, guest checkout. Always available; the sign-in
-  // offer is a link, never a gate. ──
+  // ── DEFAULT — guest details. Always available; the sign-in offer is a link,
+  // never a gate. ──
   return (
-    <form onSubmit={handleSubmit(onSubmitGuestPay)} className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label htmlFor="cbf-fn" className="text-xs">{t('fieldFirstname')}</Label>
-          <Input id="cbf-fn" {...register('firstname')} />
-          {errors.firstname && <p className="text-destructive text-xs">{errors.firstname.message}</p>}
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="cbf-ln" className="text-xs">{t('fieldLastname')}</Label>
-          <Input id="cbf-ln" {...register('lastname')} />
-          {errors.lastname && <p className="text-destructive text-xs">{errors.lastname.message}</p>}
-        </div>
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="cbf-em" className="text-xs">{t('fieldEmail')}</Label>
-        <Input id="cbf-em" type="email" {...register('email')} />
-        {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="cbf-ph" className="text-xs">{t('fieldPhone')}</Label>
-        <Input id="cbf-ph" type="tel" {...register('phone')} />
-      </div>
-      {priceAmount != null && (
+    <div className="space-y-3">
+      {hasAnyPrice && priceAmount != null && (
         <p className="text-xs text-muted-foreground">
           {t('payToBook', { price: formatCurrency(priceAmount, currency, locale) })}
         </p>
       )}
-      {offersMemberBenefit && (
+      {hasAnyPrice && offersMemberBenefit && (
         <button
           type="button"
-          onClick={() => setStep('signInEmail')}
+          onClick={() => setStep('signIn')}
           className="flex w-full items-center gap-2 rounded-lg border border-dashed p-2.5 text-left text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
         >
           <Tag className="h-3.5 w-3.5 shrink-0" />
           {t('memberSignInOffer')}
         </button>
       )}
-      {errorBox}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
-        <Button type="submit" size="sm" disabled={isSubmitting}>
-          {isSubmitting ? t('payingEllipsis') : t('submit')}
-        </Button>
+      <GuestDetailsForm
+        showPhone
+        submitting={submittingGuest}
+        error={error}
+        onSubmit={onSubmitGuest}
+        submitLabel={t('submit')}
+        submittingLabel={hasAnyPrice ? t('payingEllipsis') : t('submitting')}
+      />
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {t('cancel')}
+        </button>
       </div>
-    </form>
+    </div>
   )
 }
 
@@ -780,7 +584,9 @@ function CoachCard({ coach, onSelect }: { coach: AvailCoach; onSelect: () => voi
   )
 }
 
-// Step 2 — pick an activity offered by that coach.
+// Step 2 — pick an activity offered by that coach. Skipped entirely when a
+// `?activity=` deep link is active (the server-side activityId filter means
+// every coach in the response offers exactly that one activity).
 function ActivityCard({
   activity,
   currency,
@@ -828,6 +634,8 @@ function ActivityCard({
 }
 
 // Step 3 — duration (only if the activity offers more than one) → day → time.
+// Same layout as the class BookingForm's 'sessions' step: MiniCalendar LEFT,
+// time slots (with duration chips above them) RIGHT — see BookingForm.tsx.
 function TimePicker({
   coach,
   activity,
@@ -842,98 +650,125 @@ function TimePicker({
   onPick: (startMs: number, duration: AvailDuration) => void
 }) {
   const t = useTranslations('AppointmentBooking')
-  const [dayMs, setDayMs] = useState<number>(activity.days[0]?.dayMs ?? 0)
+  const tPublic = useTranslations('PublicBooking')
   const [duration, setDuration] = useState<number>(activity.durations[0]?.minutes ?? 60)
 
-  const day = activity.days.find((d) => d.dayMs === dayMs) ?? activity.days[0]
+  // Only days with a free start for the CHOSEN duration are selectable — a
+  // window may offer several lengths and not every day has room for all of
+  // them.
+  const availableDates = useMemo(
+    () =>
+      activity.days
+        .filter((d) => (d.slotsByDuration[String(duration)] ?? []).length > 0)
+        .map((d) => toDateKey(new Date(d.dayMs))),
+    [activity, duration]
+  )
+  const maxDateKey = useMemo(() => {
+    const last = activity.days[activity.days.length - 1]
+    return last ? toDateKey(new Date(last.dayMs)) : toDateKey(new Date())
+  }, [activity])
+
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(availableDates[0] ?? null)
+
+  // Re-validate the selected day whenever the duration (or activity) changes —
+  // the previously-selected day may not offer the new duration.
+  useEffect(() => {
+    setSelectedDateKey((prev) => (prev && availableDates.includes(prev) ? prev : (availableDates[0] ?? null)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, activity.activityId])
+
+  const day = activity.days.find((d) => toDateKey(new Date(d.dayMs)) === selectedDateKey)
   const times = day?.slotsByDuration[String(duration)] ?? []
   const chosenDuration =
     activity.durations.find((d) => d.minutes === duration) ??
     activity.durations[0] ?? { minutes: duration, priceAmount: null }
 
   return (
-    <div className="rounded-xl border p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Sparkles className="h-4 w-4" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold truncate">{activity.activityName}</p>
-          {coach.providerName && <p className="text-xs text-muted-foreground">{coach.providerName}</p>}
-        </div>
-      </div>
-
-      {/* Day */}
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">{t('pickDay')}</p>
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          {activity.days.map((d) => (
-            <button
-              key={d.dayMs}
-              type="button"
-              onClick={() => setDayMs(d.dayMs)}
-              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                d.dayMs === dayMs ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              {fmtDayShort(d.dayMs)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Duration — only shown when the activity offers more than one length. */}
-      {activity.durations.length > 1 && (
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">{t('pickDuration')}</p>
-          <div className="flex gap-2 flex-wrap">
-            {activity.durations.map((d) => (
-              <button
-                key={d.minutes}
-                type="button"
-                onClick={() => setDuration(d.minutes)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  d.minutes === duration ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
-                }`}
-              >
-                {fmtDuration(d.minutes)}
-                {typeof d.priceAmount === 'number' && ` · ${formatCurrency(d.priceAmount, currency, locale)}`}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Times */}
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">{t('pickTime')}</p>
-        {times.length === 0 ? (
-          <p className="text-xs text-muted-foreground">{t('noTimesThisDay')}</p>
-        ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {times.map((startMs) => (
-              <button
-                key={startMs}
-                type="button"
-                onClick={() => onPick(startMs, chosenDuration)}
-                className="rounded-lg border py-1.5 text-sm font-medium transition-colors hover:border-primary hover:bg-primary/5"
-              >
-                {fmtTime(startMs)}
-              </button>
-            ))}
-          </div>
+    <>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{activity.activityName}</h1>
+        {coach.providerName && (
+          <p className="text-sm text-muted-foreground mt-1">{tPublic('withInstructor', { name: coach.providerName })}</p>
         )}
       </div>
-    </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 items-start">
+        {/* Calendar */}
+        <div className="bg-card border rounded-xl p-4">
+          <MiniCalendar
+            availableDates={availableDates}
+            selectedDate={selectedDateKey}
+            onSelect={setSelectedDateKey}
+            maxDateKey={maxDateKey}
+          />
+        </div>
+
+        {/* Duration chips (above the time list) + times */}
+        <div>
+          {activity.durations.length > 1 && (
+            <div className="space-y-1.5 mb-4">
+              <p className="text-xs font-medium text-muted-foreground">{t('pickDuration')}</p>
+              <div className="flex gap-2 flex-wrap">
+                {activity.durations.map((d) => (
+                  <button
+                    key={d.minutes}
+                    type="button"
+                    onClick={() => setDuration(d.minutes)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      d.minutes === duration ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {fmtDuration(d.minutes)}
+                    {typeof d.priceAmount === 'number' && ` · ${formatCurrency(d.priceAmount, currency, locale)}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedDateKey && (
+            <p className="text-sm font-medium mb-3 text-muted-foreground">
+              {fmtDateFull(new Date(selectedDateKey + 'T00:00:00').getTime())}
+            </p>
+          )}
+
+          {times.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">{t('noTimesThisDay')}</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {times.map((startMs) => (
+                <button
+                  key={startMs}
+                  type="button"
+                  onClick={() => onPick(startMs, chosenDuration)}
+                  className="rounded-lg border py-1.5 text-sm font-medium transition-colors hover:border-primary hover:bg-primary/5"
+                >
+                  {fmtTime(startMs)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   )
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
 // Coach-first funnel: coach → activity → duration (only if >1) → day → time.
 // Availability is the ONLY source of bookable times — there are no
-// pre-generated appointment sessions any more.
+// pre-generated appointment sessions any more. A `?activity=` deep link (from
+// an activity card elsewhere on the site) preselects that offering: coaches
+// are pre-filtered server-side, and when exactly one coach offers it the
+// coach step is skipped entirely.
 
-export default function AppointmentPicker({ slug }: { slug: string }) {
+export default function AppointmentPicker({
+  slug,
+  presetActivityId,
+}: {
+  slug: string
+  presetActivityId?: string
+}) {
   const t = useTranslations('AppointmentBooking')
   const locale = useLocale()
   const { teamId, team } = usePublicTeam()
@@ -950,6 +785,9 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
   const [step, setStep] = useState<PickerStep>('coach')
   const [selectedCoach, setSelectedCoach] = useState<AvailCoach | null>(null)
   const [selectedActivity, setSelectedActivity] = useState<AvailActivity | null>(null)
+  // True once the coach step was skipped because exactly one coach offers the
+  // preselected activity — changes where Back on the time step goes.
+  const [skippedCoachStep, setSkippedCoachStep] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -958,12 +796,31 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
       setLoadError(null)
       try {
         const availFn = httpsCallable<
-          { teamId: string; days?: number },
+          { teamId: string; days?: number; activityId?: string },
           { coaches: AvailCoach[] }
         >(functions, 'listAvailability')
-        const res = await availFn({ teamId, days: 60 })
+        const res = await availFn({
+          teamId,
+          days: 60,
+          ...(presetActivityId ? { activityId: presetActivityId } : {}),
+        })
         if (!alive) return
-        setCoaches(res.data.coaches ?? [])
+        const list = res.data.coaches ?? []
+        setCoaches(list)
+        // Deep-link continuity: exactly one coach offers the preselected
+        // activity — land straight on duration/day/time, no coach (or
+        // activity) step shown. Decided here (not a separate effect) so
+        // there's no flash of the coach-list step first.
+        if (presetActivityId && list.length === 1) {
+          const coach = list[0]
+          const activity = coach.activities[0]
+          if (activity) {
+            setSelectedCoach(coach)
+            setSelectedActivity(activity)
+            setStep('time')
+            setSkippedCoachStep(true)
+          }
+        }
       } catch (err) {
         if (!alive) return
         setCoaches([])
@@ -975,7 +832,7 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
     if (teamId) load()
     else setLoading(false)
     return () => { alive = false }
-  }, [teamId, reloadNonce])
+  }, [teamId, presetActivityId, reloadNonce])
 
   function retryLoad() {
     setReloadNonce((n) => n + 1)
@@ -985,8 +842,15 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
 
   function selectCoach(c: AvailCoach) {
     setSelectedCoach(c)
-    setSelectedActivity(null)
-    setStep('activity')
+    // Preset mode: the activityId filter guarantees this coach offers exactly
+    // the one activity — no need to make the visitor pick it again.
+    if (presetActivityId && c.activities.length === 1) {
+      setSelectedActivity(c.activities[0])
+      setStep('time')
+    } else {
+      setSelectedActivity(null)
+      setStep('activity')
+    }
   }
   function selectActivity(a: AvailActivity) {
     setSelectedActivity(a)
@@ -1001,16 +865,38 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
     setStep('activity')
     setSelectedActivity(null)
   }
+  // Back from the time step: exits to the team's public root when the coach
+  // step was never shown (single-coach deep link), otherwise back to whichever
+  // step WAS shown (coach step in preset mode — activity step is always
+  // skipped there; activity step in the normal funnel).
+  function backFromTime() {
+    if (skippedCoachStep) {
+      window.location.href = `/public/${slug}`
+      return
+    }
+    if (presetActivityId) {
+      backToCoaches()
+      return
+    }
+    backToActivities()
+  }
+  const timeBackLabel = skippedCoachStep
+    ? t('back')
+    : presetActivityId
+      ? t('backToCoaches')
+      : t('backToActivities')
 
   const hasCoaches = coaches.length > 0
 
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
-        </div>
+        {step !== 'time' && (
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
+          </div>
+        )}
 
         {loading && (
           <div className="space-y-3">
@@ -1057,8 +943,8 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
         )}
 
         {!loading && teamId && step === 'time' && selectedCoach && selectedActivity && (
-          <section className="space-y-3">
-            <BackRow label={t('backToActivities')} onClick={backToActivities} />
+          <section className="space-y-4">
+            <BackRow label={timeBackLabel} onClick={backFromTime} />
             <TimePicker
               coach={selectedCoach}
               activity={selectedActivity}
