@@ -15,6 +15,20 @@
       ]
     },
     {
+      "collectionGroup": "feedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "subscription_types",
       "queryScope": "COLLECTION",
       "fields": [

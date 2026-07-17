@@ -200,6 +200,9 @@ export { createManualEntry, reverseEntry } from './accounting/manualEntries'
 export { closeFiscalYear } from './accounting/close'
 export { setChartTemplate } from './accounting/settings'
 
+// In-app feedback — ops email notification on new submissions
+export { onFeedbackCreated } from './feedback/onFeedbackCreated'
+
 // Outreach
 export { sendOutreachEmail } from './outreach'
 

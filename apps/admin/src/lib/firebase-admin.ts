@@ -7,6 +7,7 @@ import {
 } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
+import { getStorage } from 'firebase-admin/storage'
 
 // The Admin SDK talks to the emulators automatically when these env vars are
 // set (FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST). In that mode no
@@ -41,6 +42,17 @@ const app = globalForAdmin._adminApp ?? (globalForAdmin._adminApp = createApp())
 
 export const adminDb = getFirestore(app)
 export const adminAuth = getAuth(app)
+
+// Default bucket the web app uploads to (feedback screenshots, etc.). The
+// emulator dataset uses the legacy .appspot.com name (matches apps/web's local
+// NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET); cloud projects use .firebasestorage.app.
+// Override with FIREBASE_STORAGE_BUCKET when a project deviates. Against the
+// Storage emulator, FIREBASE_STORAGE_EMULATOR_HOST must also be set.
+const storageBucket =
+  process.env.FIREBASE_STORAGE_BUCKET ||
+  (useEmulators ? `${projectId}.appspot.com` : `${projectId}.firebasestorage.app`)
+
+export const adminBucket = getStorage(app).bucket(storageBucket)
 
 // Which Firebase backend this console is operating on — surfaced in the shell
 // (sidebar + mobile header) so an operator always knows what they're touching.

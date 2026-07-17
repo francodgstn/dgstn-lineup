@@ -65,6 +65,7 @@ import { Logo } from '@/components/Logo'
 import { ProductTour } from '@/components/onboarding/ProductTour'
 import { FreeDowngradeBanner } from '@/components/onboarding/FreeDowngradeBanner'
 import AssistantLauncher from '@/plugins/ai-assistant/AssistantPanel'
+import FeedbackLauncher from '@/components/feedback/FeedbackLauncher'
 
 // Icons referenced by string name in plugin manifest navContributions
 const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
@@ -1475,6 +1476,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
           {/* AI assistant — self-gates on the (locked) plugin being installed. */}
           <AssistantLauncher />
+          {/* In-app feedback — self-gates on the ops-controlled global flag. */}
+          <FeedbackLauncher />
         </div>
         </OpenTabsProvider>
       </UpgradeModalProvider>

@@ -80,6 +80,13 @@ export const MESSAGING_POLICIES_COLLECTION = 'messaging_policies'
 // (teams/{id}/integrations/sms_sender): { type, senderName, enabled }.
 export const SMS_SENDER_INTEGRATION_DOC = 'sms_sender'
 
+// In-app feedback (see types/feedback.ts).
+// feedback: client CREATE with strict rules validation; read/update via the
+// operator console only (Admin SDK). feedback_prompts: ops-authored prompt
+// questions — any signed-in user reads, Admin-SDK-only writes.
+export const FEEDBACK_COLLECTION = 'feedback'
+export const FEEDBACK_PROMPTS_COLLECTION = 'feedback_prompts'
+
 export const PROJECTS_COLLECTION = 'projects'
 export const CONTACTS_COLLECTION = 'contacts'
 export const CONTACT_ALERTS_SUBCOLLECTION = 'contact_alerts'
