@@ -650,7 +650,7 @@ export function SessionFormDialog({
               </div>
             )}
 
-            {/* ── Basics: what is taught and by whom ── */}
+            {/* ── Basics: what is taught ── */}
             <section className="space-y-3">
               <SectionLabel>{t('sectionBasics')}</SectionLabel>
               <div className="space-y-1.5">
@@ -670,38 +670,6 @@ export function SessionFormDialog({
                     </SelectContent>
                   </Select>
                 )} />
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">{t('fieldInstructor')}</label>
-                  <Controller name="providerId" control={control} render={({ field }) => (
-                    <Select
-                      value={field.value || '__none__'}
-                      onValueChange={(v) => {
-                        if (v === '__none__') {
-                          field.onChange('')
-                          setValue('providerName', '')
-                        } else {
-                          field.onChange(v)
-                          const c = coaches.find((m) => m.userId === v)
-                          setValue('providerName', c ? coachLabel(c) : '')
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <span className="flex flex-1 text-left text-sm truncate">
-                          {instructorLabel ?? <span className="text-muted-foreground">{t('instructorNone')}</span>}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">{t('instructorNone')}</SelectItem>
-                        {coaches.map((m) => (
-                          <SelectItem key={m.userId} value={m.userId}>{coachLabel(m)}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )} />
-                </div>
               </div>
             </section>
 
@@ -757,109 +725,136 @@ export function SessionFormDialog({
 
             <div className="border-t" />
 
-            {/* ── Location: place/room from the team's venues + free-text label ── */}
+            {/* ── Details: the scattered per-session settings, gathered into one
+                outlined group — label left, control right, one per row (same
+                pattern as the Activities form). ── */}
             <section className="space-y-3">
-              <SectionLabel>{t('sectionLocation')}</SectionLabel>
-              {places.length > 0 && (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
+              <SectionLabel>{t('sectionDetails')}</SectionLabel>
+              <div className="divide-y rounded-lg border">
+                <div className="flex items-center justify-between gap-4 p-3">
+                  <label className="text-sm font-medium">{t('fieldInstructor')}</label>
+                  <Controller name="providerId" control={control} render={({ field }) => (
+                    <Select
+                      value={field.value || '__none__'}
+                      onValueChange={(v) => {
+                        if (v === '__none__') {
+                          field.onChange('')
+                          setValue('providerName', '')
+                        } else {
+                          field.onChange(v)
+                          const c = coaches.find((m) => m.userId === v)
+                          setValue('providerName', c ? coachLabel(c) : '')
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-48">
+                        <span className="flex flex-1 text-left text-sm truncate">
+                          {instructorLabel ?? <span className="text-muted-foreground">{t('instructorNone')}</span>}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">{t('instructorNone')}</SelectItem>
+                        {coaches.map((m) => (
+                          <SelectItem key={m.userId} value={m.userId}>{coachLabel(m)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )} />
+                </div>
+
+                {/* Place + room share a row — both are selects from the team's venues. */}
+                {places.length > 0 && (
+                  <div className="flex items-center justify-between gap-4 p-3">
                     <label className="text-sm font-medium">{t('fieldPlace')}</label>
-                    <Controller name="placeId" control={control} render={({ field }) => (
-                      <Select
-                        value={field.value || '__none'}
-                        onValueChange={(v) => { field.onChange(v === '__none' ? '' : v); setValue('roomId', '') }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <span className="flex flex-1 text-left text-sm truncate">
-                            {field.value
-                              ? places.find((p) => p.id === field.value)?.name ?? field.value
-                              : <span className="text-muted-foreground">{t('placeNone')}</span>}
-                          </span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">{t('placeNone')}</SelectItem>
-                          {places.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name}{p.scope === 'org' ? ' · org' : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )} />
-                  </div>
-                  {placeRooms.length > 0 && (
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">{t('fieldRoom')}</label>
-                      <Controller name="roomId" control={control} render={({ field }) => (
-                        <Select value={field.value || '__none'} onValueChange={(v) => field.onChange(v === '__none' ? '' : v)}>
-                          <SelectTrigger className="w-full">
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Controller name="placeId" control={control} render={({ field }) => (
+                        <Select
+                          value={field.value || '__none'}
+                          onValueChange={(v) => { field.onChange(v === '__none' ? '' : v); setValue('roomId', '') }}
+                        >
+                          <SelectTrigger className="w-36">
                             <span className="flex flex-1 text-left text-sm truncate">
                               {field.value
-                                ? placeRooms.find((r) => r.id === field.value)?.name ?? field.value
-                                : <span className="text-muted-foreground">{t('roomNone')}</span>}
+                                ? places.find((p) => p.id === field.value)?.name ?? field.value
+                                : <span className="text-muted-foreground">{t('placeNone')}</span>}
                             </span>
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="__none">{t('roomNone')}</SelectItem>
-                            {placeRooms.map((r) => (
-                              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                            <SelectItem value="__none">{t('placeNone')}</SelectItem>
+                            {places.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.name}{p.scope === 'org' ? ' · org' : ''}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       )} />
+                      {placeRooms.length > 0 && (
+                        <Controller name="roomId" control={control} render={({ field }) => (
+                          <Select value={field.value || '__none'} onValueChange={(v) => field.onChange(v === '__none' ? '' : v)}>
+                            <SelectTrigger className="w-32">
+                              <span className="flex flex-1 text-left text-sm truncate">
+                                {field.value
+                                  ? placeRooms.find((r) => r.id === field.value)?.name ?? field.value
+                                  : <span className="text-muted-foreground">{t('roomNone')}</span>}
+                              </span>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none">{t('roomNone')}</SelectItem>
+                              {placeRooms.map((r) => (
+                                <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )} />
+                      )}
                     </div>
-                  )}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-4 p-3">
+                  <label className="text-sm font-medium">
+                    {t('fieldLocation')}
+                    <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
+                  </label>
+                  <input type="text" {...register('location')} placeholder={t('locationPlaceholder')}
+                    className="h-9 w-48 shrink-0 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
-              )}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">
-                  {t('fieldLocation')}
-                  <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
-                </label>
-                <input type="text" {...register('location')} placeholder={t('locationPlaceholder')}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-              </div>
-            </section>
 
-            <div className="border-t" />
-
-            {/* ── Capacity & booking ── */}
-            <section className="space-y-3">
-              <SectionLabel>{t('sectionBooking')}</SectionLabel>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-4 p-3">
                   <label className="text-sm font-medium">
                     {t('fieldMaxParticipants')}
                     <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
                   </label>
                   <input type="number" min={1} step={1} inputMode="numeric"
                     {...register('maxParticipants')} placeholder={t('maxParticipantsPlaceholder')}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                    className="h-9 w-28 shrink-0 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
-                <div className="space-y-3 sm:pt-7">
-                  <div className="flex items-center gap-3">
-                    <Controller name="allowBooking" control={control} render={({ field }) => (
-                      <input type="checkbox" id="sess-allowBooking" checked={field.value ?? false}
-                        onChange={field.onChange} className="h-4 w-4 rounded border-input accent-primary" />
-                    )} />
-                    <label htmlFor="sess-allowBooking" className="text-sm">{t('fieldAllowBooking')}</label>
-                  </div>
-                  {/* Booking-required — a refinement of allowBooking; only relevant once
-                      booking is offered. Drives the "Booking required" chip in the public flow. */}
-                  {watchedAllowBooking && (
-                    <div className="flex items-start gap-3 pl-7">
-                      <Controller name="bookingMandatory" control={control} render={({ field }) => (
-                        <input type="checkbox" id="sess-bookingMandatory" checked={field.value ?? false}
-                          onChange={field.onChange} className="mt-0.5 h-4 w-4 rounded border-input accent-primary" />
-                      )} />
-                      <label htmlFor="sess-bookingMandatory" className="text-sm">
-                        {t('fieldBookingMandatory')}
+
+                <Controller name="allowBooking" control={control} render={({ field }) => (
+                  <label className="flex cursor-pointer items-center justify-between gap-4 p-3">
+                    <span className="text-sm font-medium">{t('fieldAllowBooking')}</span>
+                    <input type="checkbox" checked={field.value ?? false}
+                      onChange={field.onChange} className="h-4 w-4 shrink-0 rounded border-input accent-primary" />
+                  </label>
+                )} />
+
+                {/* Booking-required — a refinement of allowBooking; only relevant once
+                    booking is offered. Drives the "Booking required" chip in the public flow. */}
+                {watchedAllowBooking && (
+                  <Controller name="bookingMandatory" control={control} render={({ field }) => (
+                    <label className="flex cursor-pointer items-center justify-between gap-4 p-3">
+                      <span className="min-w-0 pr-4">
+                        <span className="block text-sm font-medium">{t('fieldBookingMandatory')}</span>
                         <span className="block text-xs text-muted-foreground">{t('bookingMandatoryHint')}</span>
-                      </label>
-                    </div>
-                  )}
-                </div>
+                      </span>
+                      <input type="checkbox" checked={field.value ?? false}
+                        onChange={field.onChange} className="h-4 w-4 shrink-0 rounded border-input accent-primary" />
+                    </label>
+                  )} />
+                )}
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">
                   {t('fieldNotes')}

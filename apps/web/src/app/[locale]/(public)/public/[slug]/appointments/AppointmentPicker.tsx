@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
-import { resolveActivityAccessRule, resolveEffectiveAppointmentPrice, type ActivityAccessRule } from '@linyup/shared'
+import { resolveEffectiveAppointmentPrice, type ActivityMemberBenefit } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { formatCurrency } from '@/lib/format'
 import { Input } from '@/components/ui/input'
@@ -23,34 +23,31 @@ import {
   Clock,
   User,
   Check,
-  Lock,
   ChevronRight,
   ChevronLeft,
   Sparkles,
+  Tag,
 } from 'lucide-react'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 // Mirrors the listAvailability callable's contract: availability is the ONLY
 // source of bookable times (nothing is pre-generated any more — an appointment
-// Session exists only once booked). Duration/name/access/pricing come from the
-// linked Activity, not the availability window.
-
-interface AvailDurationPricing {
-  subscriptionTypeId: string
-  priceAmount: number | null
-}
+// Session exists only once booked). Duration/name/pricing come from the linked
+// Activity, not the availability window. THE PRICE IS THE GATE for appointments
+// — there is no access rule any more (see ActivityMemberBenefit's history note):
+// an unpriced duration is free for anyone, a priced one is payable by anyone,
+// and `memberBenefit` only ever lowers a signed-in member's price.
 
 interface AvailDuration {
   minutes: number
   priceAmount: number | null
-  subscriptionPricing: AvailDurationPricing[]
 }
 
 interface AvailActivity {
   activityId: string
   activityName: string
   durations: AvailDuration[]
-  accessRule: ActivityAccessRule
+  memberBenefit: ActivityMemberBenefit | null
   location: string | null
   onlineUrl: string | null
   days: { dayMs: number; slotsByDuration: Record<string, number[]> }[]
@@ -71,12 +68,10 @@ interface WindowBooking {
   activityName: string
   startMs: number
   durationMinutes: number
-  isFreeTrial: boolean
   location: string | null
   onlineUrl: string | null
   priceAmount: number | null
-  subscriptionPricing: AvailDurationPricing[]
-  accessRule: ActivityAccessRule
+  memberBenefit: ActivityMemberBenefit | null
 }
 
 type PickerStep = 'coach' | 'activity' | 'time'
@@ -124,10 +119,11 @@ function activityPriceRangeLabel(
   return t('priceFrom', { price: formatCurrency(min, currency, locale) })
 }
 
-// A duration is "for sale" when it has a base price OR at least one member-price
-// entry — mirrors the same check in createAppointmentCheckout.
-function durationHasAnyPrice(priceAmount: number | null, subscriptionPricing: AvailDurationPricing[]): boolean {
-  return typeof priceAmount === 'number' || subscriptionPricing.length > 0
+// A duration is "for sale" when it has a base price — an unpriced duration is
+// free for anyone regardless of `memberBenefit` (resolveEffectiveAppointmentPrice
+// returns free for it before ever looking at the benefit).
+function durationIsPriced(priceAmount: number | null): boolean {
+  return typeof priceAmount === 'number'
 }
 
 // Pulls the {code, reason, priceAmount} triad off a callable's FunctionsError —
@@ -153,15 +149,13 @@ type EmailValues = z.infer<typeof emailSchema>
 const codeSchema = z.object({ code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code') })
 type CodeValues = z.infer<typeof codeSchema>
 
-// ─── booking form (guest / members-only / pay) ─────────────────────────────────
+// ─── booking form (guest, always allowed / optional member sign-in for a price) ─
 
 function SlotBookingForm({
   teamId,
-  isFreeTrial,
-  gated,
   hasAnyPrice,
   priceAmount,
-  subscriptionPricing,
+  memberBenefit,
   durationMinutes,
   currency,
   locale,
@@ -171,12 +165,11 @@ function SlotBookingForm({
   onClose,
 }: {
   teamId: string
-  isFreeTrial: boolean
-  /** accessRule.type !== 'open' — a signed-in contact or a paying guest is required. */
-  gated: boolean
   hasAnyPrice: boolean
   priceAmount: number | null
-  subscriptionPricing: AvailDurationPricing[]
+  /** null/empty subscriptionTypeIds = nothing to offer — the sign-in link never
+   *  renders (there's no price a member could get that a guest can't). */
+  memberBenefit: ActivityMemberBenefit | null
   durationMinutes: number
   currency: string
   locale: string
@@ -189,22 +182,29 @@ function SlotBookingForm({
   const [error, setError] = useState<string | null>(null)
   const [submittingPay, setSubmittingPay] = useState(false)
 
-  type VerifyStep = 'email' | 'code'
-  const [verifyStep, setVerifyStep] = useState<VerifyStep>('email')
+  const offersMemberBenefit = !!memberBenefit?.subscriptionTypeIds.length
+
+  // 'guest' is the DEFAULT and only ever-required step — appointments have no
+  // access gate any more (see ActivityMemberBenefit's history note): a guest
+  // may always book, priced or not. Signing in is purely an OFFER to check a
+  // possibly-lower member price, reached via a link on the guest-pay form.
+  type Step = 'guest' | 'signInEmail' | 'signInCode'
+  const [step, setStep] = useState<Step>('guest')
   const [returningEmail, setReturningEmail] = useState('')
   const [codeId, setCodeId] = useState('')
   const [countdown, setCountdown] = useState(0)
 
-  // Gated + priced only: which path the visitor picked at the chooser.
-  const [gatedChoice, setGatedChoice] = useState<'member' | 'guest' | null>(null)
   // Set once a signed-in member verifies and their effective price is an AMOUNT
-  // (not covered) — holds what checkout needs.
+  // (not free) — holds what checkout needs. `viaSubscriptionTypeId` is null when
+  // the price is unchanged from base (no benefit applies) — used to skip the
+  // "was CHF X" strikethrough in that case.
   const [memberPay, setMemberPay] = useState<{
     contactId: string
     verificationCodeId: string
     amount: number
+    viaSubscriptionTypeId?: string | null
   } | null>(null)
-  // Transient state while a COVERED member's free booking is in flight.
+  // Transient state while an INCLUDED member's free booking is in flight.
   const [autobooking, setAutobooking] = useState(false)
 
   useEffect(() => {
@@ -221,7 +221,7 @@ function SlotBookingForm({
   const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
   const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
 
-  // ── Guest, FREE path (unpriced + open) — untouched. ──
+  // ── Guest, FREE path — an unpriced duration is free for anyone. ──
   async function onSubmitGuestFree(data: BookingFormValues) {
     setError(null)
     try {
@@ -242,9 +242,10 @@ function SlotBookingForm({
     }
   }
 
-  // ── Guest, PAY path (open + priced, or gated + priced + chose "guest"). Guests
-  // always pay the BASE price; payment is proof (drop-in precedent) — the server
-  // still re-checks (see createAppointmentCheckout) before creating the hold. ──
+  // ── Guest, PAY path — the default for any priced duration. Guests always pay
+  // the BASE price; a member gets their (possibly lower) price via the sign-in
+  // offer instead. The server still re-checks (see createAppointmentCheckout)
+  // before creating the hold. ──
   async function onSubmitGuestPay(data: BookingFormValues) {
     setError(null)
     try {
@@ -284,12 +285,15 @@ function SlotBookingForm({
       setReturningEmail(values.email)
       setCodeId(result.data.codeId)
       setCountdown(60)
-      setVerifyStep('code')
+      setStep('signInCode')
     } catch (err) {
       setError((err as { message?: string }).message || t('errorSendCode'))
     }
   }
 
+  // Reached ONLY from the priced guest-pay form's sign-in offer — `hasAnyPrice`
+  // is always true here (an unpriced duration never shows the offer, there's
+  // nothing a member price could improve on free).
   async function onVerifyCode(values: CodeValues) {
     setError(null)
     try {
@@ -311,15 +315,9 @@ function SlotBookingForm({
         return
       }
 
-      if (!hasAnyPrice) {
-        await book({ authenticatedContactId: contactId, verificationCodeId: result.data.codeId })
-        onBooked({ firstname: returningEmail.split('@')[0], email: returningEmail })
-        return
-      }
-
-      // Priced + gated: need the held-subscription snapshot to price it for THIS
-      // caller. When several contacts matched, the auto-picked one above didn't
-      // carry it — one follow-up call resolves it exactly like the manual pick does.
+      // Need the held-subscription snapshot to price it for THIS caller. When
+      // several contacts matched, the auto-picked one above didn't carry it —
+      // one follow-up call resolves it exactly like the manual pick does.
       let contactData = result.data.contactData
       if (!contactData) {
         const sel = await verifyFn({ codeId, selectedContactId: contactId })
@@ -330,8 +328,9 @@ function SlotBookingForm({
       // Mirrors resolveEffectiveAppointmentPrice server-side — DISPLAY/ROUTING
       // only, book()/checkout() always re-resolve authoritatively.
       const effective = resolveEffectiveAppointmentPrice(
-        { minutes: durationMinutes, priceAmount, subscriptionPricing },
-        held
+        { minutes: durationMinutes, priceAmount },
+        held,
+        memberBenefit
       )
 
       if (effective.free) {
@@ -358,14 +357,18 @@ function SlotBookingForm({
       }
 
       if (typeof effective.amount === 'number') {
-        setMemberPay({ contactId, verificationCodeId: result.data.codeId, amount: effective.amount })
+        setMemberPay({
+          contactId,
+          verificationCodeId: result.data.codeId,
+          amount: effective.amount,
+          viaSubscriptionTypeId: effective.viaSubscriptionTypeId,
+        })
         return
       }
       setError(t('errorPaymentRequired'))
     } catch (err) {
       const e = err as { code?: string; message?: string }
       if (e.code === 'already-exists') setError(t('errorAlreadyBooked'))
-      else if (e.code === 'permission-denied') setError(e.message || t('membersOnlyError'))
       else setError(e.message || t('errorIncorrectCode'))
     }
   }
@@ -425,9 +428,8 @@ function SlotBookingForm({
     }
   }
 
-  function backToChooser() {
-    setGatedChoice(null)
-    setVerifyStep('email')
+  function backToGuest() {
+    setStep('guest')
     setMemberPay(null)
     setAutobooking(false)
     setError(null)
@@ -441,8 +443,9 @@ function SlotBookingForm({
     </p>
   ) : null
 
-  // ── 1. Unpriced + open (free trial) — the ORIGINAL flow, untouched. ──
-  if (!hasAnyPrice && isFreeTrial) {
+  // ── 1. Unpriced — free for anyone, no sign-in offer (a member price could
+  // never beat free). ──
+  if (!hasAnyPrice) {
     return (
       <form onSubmit={handleSubmit(onSubmitGuestFree)} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
@@ -475,90 +478,7 @@ function SlotBookingForm({
     )
   }
 
-  // ── 2. Priced + open, OR priced + gated + chose "guest" — pay by guest. ──
-  if (hasAnyPrice && (!gated || gatedChoice === 'guest')) {
-    return (
-      <form onSubmit={handleSubmit(onSubmitGuestPay)} className="space-y-3">
-        {gated && (
-          <button
-            type="button"
-            onClick={backToChooser}
-            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            {t('back')}
-          </button>
-        )}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="cbf-fn" className="text-xs">{t('fieldFirstname')}</Label>
-            <Input id="cbf-fn" {...register('firstname')} />
-            {errors.firstname && <p className="text-destructive text-xs">{errors.firstname.message}</p>}
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="cbf-ln" className="text-xs">{t('fieldLastname')}</Label>
-            <Input id="cbf-ln" {...register('lastname')} />
-            {errors.lastname && <p className="text-destructive text-xs">{errors.lastname.message}</p>}
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="cbf-em" className="text-xs">{t('fieldEmail')}</Label>
-          <Input id="cbf-em" type="email" {...register('email')} />
-          {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="cbf-ph" className="text-xs">{t('fieldPhone')}</Label>
-          <Input id="cbf-ph" type="tel" {...register('phone')} />
-        </div>
-        {priceAmount != null && (
-          <p className="text-xs text-muted-foreground">
-            {t('payToBook', { price: formatCurrency(priceAmount, currency, locale) })}
-          </p>
-        )}
-        {errorBox}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
-          <Button type="submit" size="sm" disabled={isSubmitting}>
-            {isSubmitting ? t('payingEllipsis') : t('submit')}
-          </Button>
-        </div>
-      </form>
-    )
-  }
-
-  // ── 3. Priced + gated, no choice made yet — offer BOTH: sign in as a member,
-  // or pay as a guest (payment is proof — the server re-checks either way). ──
-  if (hasAnyPrice && gated && !gatedChoice) {
-    return (
-      <div className="space-y-3">
-        <button
-          type="button"
-          onClick={() => setGatedChoice('member')}
-          className="w-full text-left rounded-xl border p-3.5 hover:border-primary hover:bg-primary/5 transition-colors"
-        >
-          <p className="font-semibold text-sm">{t('payChooserMemberTitle')}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{t('payChooserMemberSubtitle')}</p>
-        </button>
-        {priceAmount != null && (
-          <button
-            type="button"
-            onClick={() => setGatedChoice('guest')}
-            className="w-full text-left rounded-xl border p-3.5 hover:border-primary hover:bg-primary/5 transition-colors"
-          >
-            <p className="font-semibold text-sm">{t('payChooserGuestTitle')}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t('payChooserGuestSubtitle', { price: formatCurrency(priceAmount, currency, locale) })}
-            </p>
-          </button>
-        )}
-        <div className="flex justify-end">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
-        </div>
-      </div>
-    )
-  }
-
-  // ── 4. A COVERED member's free booking is in flight. ──
+  // ── 2. An INCLUDED member's free booking is in flight. ──
   if (autobooking) {
     return (
       <div className="space-y-3 py-3 text-center">
@@ -567,11 +487,20 @@ function SlotBookingForm({
     )
   }
 
-  // ── 5. A verified member's effective price is an AMOUNT — pay to confirm. ──
+  // ── 3. A verified member's effective price is an AMOUNT — pay to confirm.
+  // Shows the base price struck through only when the member's price is
+  // actually lower (a benefit applied); otherwise just the (unchanged) price. ──
   if (memberPay) {
     return (
       <div className="space-y-3">
-        <p className="text-sm">{t('yourPrice', { price: formatCurrency(memberPay.amount, currency, locale) })}</p>
+        <div className="flex items-baseline gap-2">
+          {memberPay.viaSubscriptionTypeId && priceAmount != null && memberPay.amount !== priceAmount && (
+            <span className="text-sm text-muted-foreground line-through">
+              {formatCurrency(priceAmount, currency, locale)}
+            </span>
+          )}
+          <p className="text-sm font-medium">{t('yourPrice', { price: formatCurrency(memberPay.amount, currency, locale) })}</p>
+        </div>
         {errorBox}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
@@ -585,23 +514,14 @@ function SlotBookingForm({
     )
   }
 
-  // ── 6. Member OTP — either the plain "gated + unpriced" flow (no chooser,
-  // untouched) or "priced + gated" after choosing "member" above. ──
-  if (verifyStep === 'email') {
+  // ── 4. Sign-in offer, step 1: email. Reached only via the guest-pay form's
+  // "check your price" link — never a requirement. ──
+  if (step === 'signInEmail') {
     return (
       <form onSubmit={emailForm.handleSubmit(onSendCode)} className="space-y-3">
-        {gated && hasAnyPrice && (
-          <button
-            type="button"
-            onClick={backToChooser}
-            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            {t('back')}
-          </button>
-        )}
-        <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-          {t('membersVerifyPrompt')}
+        <BackRow label={t('back')} onClick={backToGuest} />
+        <p className="text-xs text-muted-foreground bg-muted/50 border rounded-lg px-3 py-2">
+          {t('memberVerifyPrompt')}
         </p>
         <div className="space-y-1">
           <Label className="text-xs">{t('fieldEmail')}</Label>
@@ -621,46 +541,99 @@ function SlotBookingForm({
     )
   }
 
+  // ── 5. Sign-in offer, step 2: code. ──
+  if (step === 'signInCode') {
+    return (
+      <form onSubmit={codeForm.handleSubmit(onVerifyCode)} className="space-y-3">
+        <p className="text-xs text-muted-foreground">{t('codeSentTo', { email: returningEmail })}</p>
+        <div className="space-y-1">
+          <Label className="text-xs">{t('fieldCode')}</Label>
+          <Input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            {...codeForm.register('code', {
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6)
+              },
+            })}
+            placeholder="000000"
+            className="text-center tracking-widest text-lg font-mono"
+          />
+          {codeForm.formState.errors.code && (
+            <p className="text-destructive text-xs">{codeForm.formState.errors.code.message}</p>
+          )}
+        </div>
+        {errorBox}
+        <div className="flex justify-between items-center">
+          <button
+            type="button"
+            onClick={onResendCode}
+            disabled={countdown > 0}
+            className="text-xs text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+          >
+            {countdown > 0 ? t('resendIn', { seconds: countdown }) : t('resend')}
+          </button>
+          <div className="flex gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => { setStep('signInEmail'); setError(null); codeForm.reset() }}>
+              {t('back')}
+            </Button>
+            <Button type="submit" size="sm" disabled={codeForm.formState.isSubmitting}>
+              {codeForm.formState.isSubmitting ? t('verifying') : t('confirmBooking')}
+            </Button>
+          </div>
+        </div>
+      </form>
+    )
+  }
+
+  // ── 6. DEFAULT — priced, guest checkout. Always available; the sign-in
+  // offer is a link, never a gate. ──
   return (
-    <form onSubmit={codeForm.handleSubmit(onVerifyCode)} className="space-y-3">
-      <p className="text-xs text-muted-foreground">{t('codeSentTo', { email: returningEmail })}</p>
-      <div className="space-y-1">
-        <Label className="text-xs">{t('fieldCode')}</Label>
-        <Input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={6}
-          {...codeForm.register('code', {
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-              e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6)
-            },
-          })}
-          placeholder="000000"
-          className="text-center tracking-widest text-lg font-mono"
-        />
-        {codeForm.formState.errors.code && (
-          <p className="text-destructive text-xs">{codeForm.formState.errors.code.message}</p>
-        )}
+    <form onSubmit={handleSubmit(onSubmitGuestPay)} className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="cbf-fn" className="text-xs">{t('fieldFirstname')}</Label>
+          <Input id="cbf-fn" {...register('firstname')} />
+          {errors.firstname && <p className="text-destructive text-xs">{errors.firstname.message}</p>}
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="cbf-ln" className="text-xs">{t('fieldLastname')}</Label>
+          <Input id="cbf-ln" {...register('lastname')} />
+          {errors.lastname && <p className="text-destructive text-xs">{errors.lastname.message}</p>}
+        </div>
       </div>
-      {errorBox}
-      <div className="flex justify-between items-center">
+      <div className="space-y-1">
+        <Label htmlFor="cbf-em" className="text-xs">{t('fieldEmail')}</Label>
+        <Input id="cbf-em" type="email" {...register('email')} />
+        {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="cbf-ph" className="text-xs">{t('fieldPhone')}</Label>
+        <Input id="cbf-ph" type="tel" {...register('phone')} />
+      </div>
+      {priceAmount != null && (
+        <p className="text-xs text-muted-foreground">
+          {t('payToBook', { price: formatCurrency(priceAmount, currency, locale) })}
+        </p>
+      )}
+      {offersMemberBenefit && (
         <button
           type="button"
-          onClick={onResendCode}
-          disabled={countdown > 0}
-          className="text-xs text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+          onClick={() => setStep('signInEmail')}
+          className="flex w-full items-center gap-2 rounded-lg border border-dashed p-2.5 text-left text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
         >
-          {countdown > 0 ? t('resendIn', { seconds: countdown }) : t('resend')}
+          <Tag className="h-3.5 w-3.5 shrink-0" />
+          {t('memberSignInOffer')}
         </button>
-        <div className="flex gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={() => { setVerifyStep('email'); setError(null); codeForm.reset() }}>
-            {t('back')}
-          </Button>
-          <Button type="submit" size="sm" disabled={codeForm.formState.isSubmitting}>
-            {codeForm.formState.isSubmitting ? t('verifying') : t('confirmBooking')}
-          </Button>
-        </div>
+      )}
+      {errorBox}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
+        <Button type="submit" size="sm" disabled={isSubmitting}>
+          {isSubmitting ? t('payingEllipsis') : t('submit')}
+        </Button>
       </div>
     </form>
   )
@@ -670,11 +643,9 @@ function SlotBookingForm({
 
 function BookingModal({
   title,
-  isFreeTrial,
-  gated,
   hasAnyPrice,
   priceAmount,
-  subscriptionPricing,
+  memberBenefit,
   durationMinutes,
   currency,
   locale,
@@ -689,11 +660,9 @@ function BookingModal({
   onClose,
 }: {
   title: string | null
-  isFreeTrial: boolean
-  gated: boolean
   hasAnyPrice: boolean
   priceAmount: number | null
-  subscriptionPricing: AvailDurationPricing[]
+  memberBenefit: ActivityMemberBenefit | null
   durationMinutes: number
   currency: string
   locale: string
@@ -712,15 +681,7 @@ function BookingModal({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 pr-6">
-            {title}
-            {!isFreeTrial && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                <Lock className="h-2.5 w-2.5" />
-                {t('membersOnly')}
-              </span>
-            )}
-          </DialogTitle>
+          <DialogTitle className="pr-6">{title}</DialogTitle>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             <span>{dateLine}</span>
             {providerName && (
@@ -736,11 +697,9 @@ function BookingModal({
         </DialogHeader>
         <SlotBookingForm
           teamId={teamId}
-          isFreeTrial={isFreeTrial}
-          gated={gated}
           hasAnyPrice={hasAnyPrice}
           priceAmount={priceAmount}
-          subscriptionPricing={subscriptionPricing}
+          memberBenefit={memberBenefit}
           durationMinutes={durationMinutes}
           currency={currency}
           locale={locale}
@@ -834,7 +793,6 @@ function ActivityCard({
   onSelect: () => void
 }) {
   const t = useTranslations('AppointmentBooking')
-  const isFreeTrial = resolveActivityAccessRule({ accessRule: activity.accessRule }).type === 'open'
   const durations = activity.durations.map((d) => d.minutes)
   const durationLabel =
     durations.length > 1
@@ -851,12 +809,6 @@ function ActivityCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-sm">{activity.activityName}</p>
-            {!isFreeTrial && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                <Lock className="h-2.5 w-2.5" />
-                {t('membersOnly')}
-              </span>
-            )}
             {priceLabel && (
               <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
                 {priceLabel}
@@ -897,7 +849,7 @@ function TimePicker({
   const times = day?.slotsByDuration[String(duration)] ?? []
   const chosenDuration =
     activity.durations.find((d) => d.minutes === duration) ??
-    activity.durations[0] ?? { minutes: duration, priceAmount: null, subscriptionPricing: [] }
+    activity.durations[0] ?? { minutes: duration, priceAmount: null }
 
   return (
     <div className="rounded-xl border p-4 space-y-4">
@@ -1120,12 +1072,10 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
                   activityName: selectedActivity.activityName,
                   startMs,
                   durationMinutes: duration.minutes,
-                  isFreeTrial: resolveActivityAccessRule({ accessRule: selectedActivity.accessRule }).type === 'open',
                   location: selectedActivity.location,
                   onlineUrl: selectedActivity.onlineUrl,
                   priceAmount: duration.priceAmount,
-                  subscriptionPricing: duration.subscriptionPricing,
-                  accessRule: selectedActivity.accessRule,
+                  memberBenefit: selectedActivity.memberBenefit,
                 })
               }
             />
@@ -1137,11 +1087,9 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
         <BookingModal
           key={`${windowBooking.providerId}-${windowBooking.activityId}-${windowBooking.startMs}-${windowBooking.durationMinutes}`}
           title={windowBooking.activityName}
-          isFreeTrial={windowBooking.isFreeTrial}
-          gated={!windowBooking.isFreeTrial}
-          hasAnyPrice={durationHasAnyPrice(windowBooking.priceAmount, windowBooking.subscriptionPricing)}
+          hasAnyPrice={durationIsPriced(windowBooking.priceAmount)}
           priceAmount={windowBooking.priceAmount}
-          subscriptionPricing={windowBooking.subscriptionPricing}
+          memberBenefit={windowBooking.memberBenefit}
           durationMinutes={windowBooking.durationMinutes}
           currency={currency}
           locale={locale}

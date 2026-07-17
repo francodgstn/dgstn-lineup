@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityLevel, ActivityType } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityLevel, ActivityMemberBenefit, ActivityType } from '@linyup/shared'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -80,47 +80,59 @@ function slugify(name: string): string {
 // yet"), vs. the persisted shape's `priceAmount: number | null`. These two helpers
 // convert between the two: `toDurationFormValues` hydrates the form from a saved
 // activity (edit mode); `toActivityDurations` builds the payload on submit.
+// History: durations also carried a per-duration × per-subscription-type
+// `subscriptionPricing` matrix until 2026-07; member benefit is now ONE rule
+// per activity (see `MemberBenefitFormValue` below) — see ActivityDuration's
+// doc comment in @linyup/shared.
 
 interface DurationFormValue {
   minutes: number
   price: string
-  subscriptionPricing: Array<{ subscriptionTypeId: string; included: boolean; price: string }>
 }
 
 function toDurationFormValues(durations?: ActivityDuration[] | null): DurationFormValue[] {
   return (durations ?? []).map((d) => ({
     minutes: d.minutes,
     price: d.priceAmount != null ? String(d.priceAmount) : '',
-    subscriptionPricing: (d.subscriptionPricing ?? []).map((sp) => ({
-      subscriptionTypeId: sp.subscriptionTypeId,
-      included: sp.priceAmount === null,
-      price: sp.priceAmount != null ? String(sp.priceAmount) : '',
-    })),
   }))
 }
 
-// subscriptionPricing entries are only written when they carry real data —
-// "Included" (priceAmount: null) or an explicit member price. An entry left
-// unchecked with no price simply isn't written, so that subscription type falls
-// through to the base price like anyone else — see resolveEffectiveAppointmentPrice
-// (a PRICED duration with no matching entry costs base for everyone, subscribers
-// included; the member benefit is explicit data, never implied).
 function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[] {
   return [...durations]
     .sort((a, b) => a.minutes - b.minutes)
-    .map((d) => {
-      const subscriptionPricing = d.subscriptionPricing
-        .filter((sp) => sp.included || sp.price.trim() !== '')
-        .map((sp) => ({
-          subscriptionTypeId: sp.subscriptionTypeId,
-          priceAmount: sp.included ? null : Number(sp.price),
-        }))
-      return {
-        minutes: d.minutes,
-        priceAmount: d.price.trim() === '' ? null : Number(d.price),
-        ...(subscriptionPricing.length > 0 ? { subscriptionPricing } : {}),
-      }
-    })
+    .map((d) => ({
+      minutes: d.minutes,
+      priceAmount: d.price.trim() === '' ? null : Number(d.price),
+    }))
+}
+
+// APPOINTMENT-ONLY. The one member-benefit rule for the whole activity — see
+// `ActivityMemberBenefit`. `percent` is kept as a string in form state ('' = not
+// entered yet); an empty `subscriptionTypeIds` means "no benefit" and the field
+// is cleared (written `null`) on save.
+interface MemberBenefitFormValue {
+  subscriptionTypeIds: string[]
+  kind: 'included' | 'discount'
+  percent: string
+}
+
+function toMemberBenefitFormValue(mb?: ActivityMemberBenefit | null): MemberBenefitFormValue {
+  return {
+    subscriptionTypeIds: mb?.subscriptionTypeIds ?? [],
+    kind: mb?.kind ?? 'included',
+    percent: mb?.discountPercent != null ? String(mb.discountPercent) : '',
+  }
+}
+
+// null (not omitted) when empty — an EDIT must be able to CLEAR a previously
+// saved benefit, e.g. after the admin unchecks every subscription type.
+function toMemberBenefitPayload(mb: MemberBenefitFormValue): ActivityMemberBenefit | null {
+  if (mb.subscriptionTypeIds.length === 0) return null
+  return {
+    subscriptionTypeIds: mb.subscriptionTypeIds,
+    kind: mb.kind,
+    ...(mb.kind === 'discount' ? { discountPercent: Number(mb.percent) } : {}),
+  }
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -144,32 +156,38 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
     type: z.enum(['class', 'appointment'] as const).default('class'),
     level: z.enum(LEVELS),
     color: z.string().optional(),
-    // Paid-access gate (supersedes the legacy isFreeTrial toggle; 'open' === free trial).
+    // CLASS-ONLY paid-access gate (supersedes the legacy isFreeTrial toggle;
+    // 'open' === free trial). Appointments dropped this entirely — the price is
+    // the only gate; see `memberBenefit` below.
     accessTier: z.enum(['open', 'members', 'subscription'] as const),
     subscriptionTypeIds: z.array(z.string()),
-    // Drop-in / pay-per-class: an uncovered contact may pay this to book a single session.
+    // Drop-in / pay-per-class: an uncovered contact may pay this to book a single
+    // session. CLASS-ONLY.
     dropInEnabled: z.boolean(),
     dropInPrice: z.string(),
+    // CLASS-ONLY: independent of accessTier — a gated class still takes a
+    // newcomer's trial booking when this is on.
+    trialEnabled: z.boolean(),
     // Does a booking for this activity confirm itself, or wait on studio review?
     // Not implied by `type` — shown for classes and appointments alike.
     autoConfirm: z.boolean(),
-    // APPOINTMENT-ONLY: the session lengths clients choose from, each with its own
-    // optional base price and per-subscription-type member pricing. Kept as
-    // strings in form state ('' = no price yet) — see toDurationFormValues /
-    // toActivityDurations for the conversion to/from the persisted shape.
+    // APPOINTMENT-ONLY: the session lengths clients choose from, each with its
+    // own optional base price. Kept as strings in form state ('' = no price
+    // yet) — see toDurationFormValues / toActivityDurations for the conversion
+    // to/from the persisted shape.
     durations: z.array(
       z.object({
         minutes: z.number(),
         price: z.string(),
-        subscriptionPricing: z.array(
-          z.object({
-            subscriptionTypeId: z.string(),
-            included: z.boolean(),
-            price: z.string(),
-          })
-        ),
       })
     ),
+    // APPOINTMENT-ONLY: the one member-benefit rule for the whole activity — see
+    // MemberBenefitFormValue / toMemberBenefitPayload.
+    memberBenefit: z.object({
+      subscriptionTypeIds: z.array(z.string()),
+      kind: z.enum(['included', 'discount'] as const),
+      percent: z.string(),
+    }),
   }).superRefine((d, ctx) => {
     if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5)) {
       ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: 'Enter a drop-in price of at least 0.50' })
@@ -181,16 +199,17 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
       if (dur.price.trim() !== '' && !(Number(dur.price) >= 0.5)) {
         ctx.addIssue({ code: 'custom', path: ['durations', i, 'price'], message: t('durationPriceValidation') })
       }
-      dur.subscriptionPricing.forEach((sp, j) => {
-        if (!sp.included && sp.price.trim() !== '' && !(Number(sp.price) >= 0.5)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['durations', i, 'subscriptionPricing', j, 'price'],
-            message: t('durationPriceValidation'),
-          })
-        }
-      })
     })
+    if (d.memberBenefit.subscriptionTypeIds.length > 0 && d.memberBenefit.kind === 'discount') {
+      const pct = Number(d.memberBenefit.percent)
+      if (!(d.memberBenefit.percent.trim() !== '' && Number.isInteger(pct) && pct >= 1 && pct <= 99)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['memberBenefit', 'percent'],
+          message: t('memberBenefitPercentValidation'),
+        })
+      }
+    }
   })
 }
 
@@ -252,15 +271,18 @@ function ActivityDialog({
           subscriptionTypeIds: initialRule.subscriptionTypeIds ?? [],
           dropInEnabled: editing.dropIn?.enabled ?? false,
           dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
+          trialEnabled: editing.trialEnabled ?? false,
           durations: toDurationFormValues(editing.durations),
+          memberBenefit: toMemberBenefitFormValue(editing.memberBenefit),
           autoConfirm: resolveAutoConfirm(editing),
         }
       : {
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
           type: 'class' as ActivityType, level: 'all',
           color: DEFAULT_ACCENT, accessTier: 'open', subscriptionTypeIds: [],
-          dropInEnabled: false, dropInPrice: '',
+          dropInEnabled: false, dropInPrice: '', trialEnabled: false,
           durations: [],
+          memberBenefit: toMemberBenefitFormValue(null),
           autoConfirm: resolveAutoConfirm({ type: 'class' }),
         },
   })
@@ -268,63 +290,21 @@ function ActivityDialog({
   const accessTier = watch('accessTier')
   const dropInEnabled = watch('dropInEnabled')
   const durations = watch('durations') || []
-  const subscriptionTypeIds = watch('subscriptionTypeIds') || []
 
   function toggleDuration(minutes: number) {
     setValue(
       'durations',
       durations.some((d) => d.minutes === minutes)
         ? durations.filter((d) => d.minutes !== minutes)
-        : [...durations, { minutes, price: '', subscriptionPricing: [] }].sort(
-            (a, b) => a.minutes - b.minutes
-          )
+        : [...durations, { minutes, price: '' }].sort((a, b) => a.minutes - b.minutes)
     )
   }
 
-  // Set (or clear) a duration's base price. The FIRST time a price is set on a
-  // subscription-gated activity, pre-fill "Included" entries for every covering
-  // subscription type — the friendly default the admin sees ("my subscribers
-  // still book free"), written down as real data rather than implied (see the
-  // ActivityDuration doc comment in @linyup/shared).
+  // Set (or clear) a duration's base price — no pre-fill dance any more: member
+  // benefit is ONE rule for the whole activity (see the memberBenefit row),
+  // never derived from a price edit.
   function updateDurationPrice(minutes: number, price: string) {
-    const current = getValues('durations')
-    const idx = current.findIndex((d) => d.minutes === minutes)
-    if (idx === -1) return
-    const prev = current[idx]
-    const wasEmpty = prev.price.trim() === ''
-    const nowSet = price.trim() !== ''
-    let subscriptionPricing = prev.subscriptionPricing
-    if (wasEmpty && nowSet && accessTier === 'subscription' && subscriptionPricing.length === 0) {
-      subscriptionPricing = subscriptionTypeIds.map((id) => ({
-        subscriptionTypeId: id,
-        included: true,
-        price: '',
-      }))
-    }
-    const next = [...current]
-    next[idx] = { ...prev, price, subscriptionPricing }
-    setValue('durations', next)
-  }
-
-  function updateSubscriptionPricing(
-    minutes: number,
-    subscriptionTypeId: string,
-    patch: Partial<{ included: boolean; price: string }>
-  ) {
-    const current = getValues('durations')
-    const idx = current.findIndex((d) => d.minutes === minutes)
-    if (idx === -1) return
-    const dur = current[idx]
-    const spIdx = dur.subscriptionPricing.findIndex((sp) => sp.subscriptionTypeId === subscriptionTypeId)
-    const nextSp = [...dur.subscriptionPricing]
-    if (spIdx === -1) {
-      nextSp.push({ subscriptionTypeId, included: true, price: '', ...patch })
-    } else {
-      nextSp[spIdx] = { ...nextSp[spIdx], ...patch }
-    }
-    const next = [...current]
-    next[idx] = { ...dur, subscriptionPricing: nextSp }
-    setValue('durations', next)
+    setValue('durations', durations.map((d) => (d.minutes === minutes ? { ...d, price } : d)))
   }
 
   // Re-default autoConfirm when the studio flips the type — but only while the
@@ -393,31 +373,57 @@ function ActivityDialog({
     return getDownloadURL(storageRef)
   }
 
+  // Fields common to both kinds.
+  function sharedPayload(data: ActivityFormData) {
+    return {
+      name: data.name,
+      description: data.description ?? '',
+      prerequisites: data.prerequisites ?? '',
+      confirmationInstructions: data.confirmationInstructions ?? '',
+      type: data.type,
+      level: data.level,
+      color: data.color ?? '',
+      autoConfirm: data.autoConfirm,
+    }
+  }
+
+  // Appointments dropped accessRule/isFreeTrial/dropIn/trialEnabled entirely —
+  // the price is the only gate (see ActivityMemberBenefit's history note). We
+  // simply don't write those class-only keys for an appointment: `accessRule`
+  // still exists on the doc type (classes use it) but appointment booking
+  // paths ignore it everywhere, so leaving a stale value from a prior "class"
+  // save untouched is harmless. `durations`/`memberBenefit` ARE cleared (null)
+  // on a class save, since those are appointment-only and must not linger.
+  function kindSpecificPayload(data: ActivityFormData): Record<string, unknown> {
+    if (data.type === 'appointment') {
+      return {
+        durations: toActivityDurations(data.durations),
+        memberBenefit: toMemberBenefitPayload(data.memberBenefit),
+      }
+    }
+    return {
+      isFreeTrial: data.accessTier === 'open',
+      accessRule: {
+        type: data.accessTier,
+        ...(data.accessTier === 'subscription'
+          ? { subscriptionTypeIds: data.subscriptionTypeIds }
+          : {}),
+      },
+      dropIn: {
+        enabled: data.dropInEnabled,
+        ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
+      },
+      trialEnabled: data.trialEnabled,
+      durations: null,
+      memberBenefit: null,
+    }
+  }
+
   async function onSubmit(data: ActivityFormData) {
     if (editing) {
       const updates: Record<string, unknown> = {
-        name: data.name,
-        description: data.description ?? '',
-        prerequisites: data.prerequisites ?? '',
-        confirmationInstructions: data.confirmationInstructions ?? '',
-        type: data.type,
-        level: data.level,
-        color: data.color ?? '',
-        isFreeTrial: data.accessTier === 'open',
-        accessRule: {
-          type: data.accessTier,
-          ...(data.accessTier === 'subscription'
-            ? { subscriptionTypeIds: data.subscriptionTypeIds }
-            : {}),
-        },
-        dropIn: {
-          enabled: data.dropInEnabled,
-          ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
-        },
-        autoConfirm: data.autoConfirm,
-        ...(data.type === 'appointment'
-          ? { durations: toActivityDurations(data.durations) }
-          : { durations: null }),
+        ...sharedPayload(data),
+        ...kindSpecificPayload(data),
       }
       if (imageFile) {
         const url = await uploadImage(editing.id)
@@ -428,28 +434,8 @@ function ActivityDialog({
       await updateDoc(doc(db, ACTIVITIES_COLLECTION, editing.id), updates)
     } else {
       const newRef = await addDoc(collection(db, ACTIVITIES_COLLECTION), {
-        name: data.name,
-        description: data.description ?? '',
-        prerequisites: data.prerequisites ?? '',
-        confirmationInstructions: data.confirmationInstructions ?? '',
-        type: data.type,
-        level: data.level,
-        color: data.color ?? '',
-        isFreeTrial: data.accessTier === 'open',
-        accessRule: {
-          type: data.accessTier,
-          ...(data.accessTier === 'subscription'
-            ? { subscriptionTypeIds: data.subscriptionTypeIds }
-            : {}),
-        },
-        dropIn: {
-          enabled: data.dropInEnabled,
-          ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
-        },
-        autoConfirm: data.autoConfirm,
-        ...(data.type === 'appointment'
-          ? { durations: toActivityDurations(data.durations) }
-          : {}),
+        ...sharedPayload(data),
+        ...kindSpecificPayload(data),
         slug: slugify(data.name),
         teamId,
         createdBy: userId,
@@ -636,6 +622,59 @@ function ActivityDialog({
               )}
             />
 
+            {/* CLASS-ONLY: independent of the access tier below — a gated class
+                may still take a newcomer's trial booking. */}
+            {type === 'class' && (
+              <Controller
+                name="trialEnabled"
+                control={control}
+                render={({ field }) => (
+                  <label className="flex cursor-pointer items-center justify-between gap-4 p-3">
+                    <span className="min-w-0 pr-4">
+                      <span className="block text-sm font-medium">{t('fieldTrialEnabled')}</span>
+                      <span className="block text-xs text-muted-foreground">{t('trialEnabledHint')}</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="accent-primary shrink-0"
+                      checked={field.value}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                    />
+                  </label>
+                )}
+              />
+            )}
+
+            {/* CLASS-ONLY: the one drop-in concept — always visible, not nested
+                under an access tier. */}
+            {type === 'class' && (
+              <div className="p-3 space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 pr-4">
+                    <p className="text-sm font-medium">{t('dropInLabel')}</p>
+                    <p className="text-xs text-muted-foreground">{t('dropInHelp')}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <input type="checkbox" {...register('dropInEnabled')} className="accent-primary" />
+                    {dropInEnabled && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">{currency}</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          {...register('dropInPrice')}
+                          placeholder={t('dropInPricePlaceholder')}
+                          className="h-8 w-24 text-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {errors.dropInPrice && <p className="text-destructive text-xs">{errors.dropInPrice.message}</p>}
+              </div>
+            )}
+
             {type === 'appointment' && (
               <div className="p-3 space-y-3">
                 <div className="flex items-center justify-between gap-4">
@@ -666,7 +705,8 @@ function ActivityDialog({
 
                 {/* One price sub-row per SELECTED duration — the coach sells TIME,
                     so price is per-length, not one flat activity price. Empty =
-                    unpriced (the plain access rules decide who can book it). */}
+                    unpriced, which is free for anyone (no separate access gate
+                    for appointments any more — see the member-benefit row below). */}
                 {durations.length > 0 && (
                   <div className="space-y-2 rounded-md bg-muted/30 p-2.5">
                     <p className="text-xs text-muted-foreground">{t('durationPriceHint')}</p>
@@ -694,60 +734,6 @@ function ActivityDialog({
                               </div>
                             </div>
                             {priceError && <p className="text-destructive text-xs">{priceError}</p>}
-
-                            {/* Member pricing — only meaningful for the 'subscription' access
-                                tier, where "covering types" exist to key benefits off. */}
-                            {accessTier === 'subscription' &&
-                              d.price.trim() !== '' &&
-                              subscriptionTypeIds.length > 0 && (
-                                <div className="ml-1 space-y-1 border-l-2 pl-2.5">
-                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                    {t('memberPricingLabel')}
-                                  </p>
-                                  {subscriptionTypeIds.map((subId) => {
-                                    const subName = subscriptionTypes.find((s) => s.id === subId)?.name ?? subId
-                                    const sp = d.subscriptionPricing.find((x) => x.subscriptionTypeId === subId)
-                                    const included = sp?.included ?? true
-                                    const spPrice = sp?.price ?? ''
-                                    return (
-                                      <div key={subId} className="flex items-center justify-between gap-2">
-                                        <span className="truncate text-xs">{subName}</span>
-                                        <div className="flex shrink-0 items-center gap-1.5">
-                                          <label className="flex cursor-pointer items-center gap-1 text-xs">
-                                            <input
-                                              type="checkbox"
-                                              className="accent-primary"
-                                              checked={included}
-                                              onChange={(e) =>
-                                                updateSubscriptionPricing(d.minutes, subId, {
-                                                  included: e.target.checked,
-                                                })
-                                              }
-                                            />
-                                            {t('memberPricingIncluded')}
-                                          </label>
-                                          {!included && (
-                                            <Input
-                                              type="number"
-                                              min={0}
-                                              step="0.01"
-                                              value={spPrice}
-                                              onChange={(e) =>
-                                                updateSubscriptionPricing(d.minutes, subId, {
-                                                  price: e.target.value,
-                                                })
-                                              }
-                                              placeholder="0.00"
-                                              aria-label={t('memberPricingPriceLabel')}
-                                              className="h-7 w-20 text-xs"
-                                            />
-                                          )}
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
                           </div>
                         )
                       })}
@@ -755,120 +741,186 @@ function ActivityDialog({
                 )}
               </div>
             )}
-          </div>
 
-          <div className="space-y-2">
-            <Label>{t('accessLabel')}</Label>
-            <Controller
-              control={control}
-              name="accessTier"
-              render={({ field }) => (
-                // Selectable tier cards (3-across when the dialog is wide) —
-                // same pattern as the availability form's mode toggle.
-                <div className="grid gap-2 lg:grid-cols-3">
-                  {(['open', 'members', 'subscription'] as const).map((tier) => (
-                    <label
-                      key={tier}
-                      className={`flex items-start gap-2 cursor-pointer text-sm rounded-lg border p-2.5 transition-colors ${
-                        field.value === tier ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        className="mt-0.5 accent-primary"
-                        checked={field.value === tier}
-                        onChange={() => field.onChange(tier)}
-                      />
-                      <span>
-                        <span className="font-medium">{t(`access_${tier}`)}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {t(`access_${tier}_desc`)}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
+            {/* APPOINTMENT-ONLY: the one member-benefit rule for the whole
+                activity — no per-duration matrix any more. Absent selection =
+                no benefit, everyone pays base. */}
+            {type === 'appointment' && (
+              <div className="p-3 space-y-3">
+                <div>
+                  <p className="text-sm font-medium">{t('fieldMemberBenefit')}</p>
+                  <p className="text-xs text-muted-foreground">{t('memberBenefitHint')}</p>
                 </div>
-              )}
-            />
-            {accessTier === 'subscription' && (
-              <Controller
-                control={control}
-                name="subscriptionTypeIds"
-                render={({ field }) => (
-                  <div className="space-y-1.5 rounded-md border p-3">
-                    {subscriptionTypes.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
-                    ) : (
-                      subscriptionTypes.map((s) => (
-                        <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                          <input
-                            type="checkbox"
-                            className="accent-primary"
-                            checked={field.value.includes(s.id)}
-                            onChange={(e) =>
-                              field.onChange(
-                                e.target.checked
-                                  ? [...field.value, s.id]
-                                  : field.value.filter((id: string) => id !== s.id),
-                              )
-                            }
-                          />
-                          {s.name}
-                        </label>
-                      ))
-                    )}
-                    <div className="flex items-center gap-2 pt-1.5 border-t mt-1.5">
-                      <Input
-                        value={newSubName}
-                        onChange={(e) => setNewSubName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            void quickCreateSubscription()
-                          }
-                        }}
-                        placeholder={t('quickCreateSubPlaceholder')}
-                        className="h-8 text-sm flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={!newSubName.trim() || creatingSub}
-                        onClick={() => void quickCreateSubscription()}
-                      >
-                        <Plus className="h-3.5 w-3.5 mr-1" />
-                        {t('quickCreateSubButton')}
-                      </Button>
+                <Controller
+                  control={control}
+                  name="memberBenefit"
+                  render={({ field }) => (
+                    <div className="space-y-2">
+                      <div className="space-y-1.5 rounded-md border p-3">
+                        {subscriptionTypes.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
+                        ) : (
+                          subscriptionTypes.map((s) => (
+                            <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                              <input
+                                type="checkbox"
+                                className="accent-primary"
+                                checked={field.value.subscriptionTypeIds.includes(s.id)}
+                                onChange={(e) =>
+                                  field.onChange({
+                                    ...field.value,
+                                    subscriptionTypeIds: e.target.checked
+                                      ? [...field.value.subscriptionTypeIds, s.id]
+                                      : field.value.subscriptionTypeIds.filter((id: string) => id !== s.id),
+                                  })
+                                }
+                              />
+                              {s.name}
+                            </label>
+                          ))
+                        )}
+                      </div>
+                      {field.value.subscriptionTypeIds.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            {(['included', 'discount'] as const).map((kind) => (
+                              <button
+                                key={kind}
+                                type="button"
+                                onClick={() => field.onChange({ ...field.value, kind })}
+                                aria-pressed={field.value.kind === kind}
+                                className={`rounded-lg border p-2 text-left transition-colors ${
+                                  field.value.kind === kind ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
+                                }`}
+                              >
+                                <span className="block text-xs font-medium">{t(`memberBenefitKind_${kind}`)}</span>
+                                <span className="block text-[11px] text-muted-foreground">
+                                  {t(`memberBenefitKind_${kind}_desc`)}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                          {field.value.kind === 'discount' && (
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={99}
+                                value={field.value.percent}
+                                onChange={(e) => field.onChange({ ...field.value, percent: e.target.value })}
+                                placeholder="20"
+                                className="h-8 w-20 text-sm"
+                                aria-label={t('memberBenefitPercentLabel')}
+                              />
+                              <span className="text-xs text-muted-foreground">%</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground">{t('quickCreateSubHint')}</p>
-                  </div>
-                )}
-              />
-            )}
-            {accessTier !== 'open' && (
-              <div className="space-y-2 rounded-md border p-3">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox" {...register('dropInEnabled')} className="accent-primary" />
-                  {t('dropInLabel')}
-                </label>
-                {dropInEnabled && (
-                  <div className="space-y-1">
-                    <Label>{t('dropInPriceLabel')}</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      {...register('dropInPrice')}
-                      placeholder={t('dropInPricePlaceholder')}
-                      className="w-32"
-                    />
-                    <p className="text-xs text-muted-foreground">{t('dropInHelp')}</p>
-                  </div>
+                  )}
+                />
+                {errors.memberBenefit?.percent?.message && (
+                  <p className="text-destructive text-xs">{errors.memberBenefit.percent.message}</p>
                 )}
               </div>
             )}
           </div>
+
+          {/* CLASS-ONLY: appointments dropped the access gate entirely — the
+              price is the only gate (see the member-benefit row above). */}
+          {type === 'class' && (
+            <div className="space-y-2">
+              <Label>{t('accessLabel')}</Label>
+              <Controller
+                control={control}
+                name="accessTier"
+                render={({ field }) => (
+                  // Selectable tier cards (3-across when the dialog is wide) —
+                  // same pattern as the availability form's mode toggle.
+                  <div className="grid gap-2 lg:grid-cols-3">
+                    {(['open', 'members', 'subscription'] as const).map((tier) => (
+                      <label
+                        key={tier}
+                        className={`flex items-start gap-2 cursor-pointer text-sm rounded-lg border p-2.5 transition-colors ${
+                          field.value === tier ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          className="mt-0.5 accent-primary"
+                          checked={field.value === tier}
+                          onChange={() => field.onChange(tier)}
+                        />
+                        <span>
+                          <span className="font-medium">{t(`access_${tier}`)}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {t(`access_${tier}_desc`)}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              />
+              {accessTier === 'subscription' && (
+                <Controller
+                  control={control}
+                  name="subscriptionTypeIds"
+                  render={({ field }) => (
+                    <div className="space-y-1.5 rounded-md border p-3">
+                      {subscriptionTypes.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
+                      ) : (
+                        subscriptionTypes.map((s) => (
+                          <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                            <input
+                              type="checkbox"
+                              className="accent-primary"
+                              checked={field.value.includes(s.id)}
+                              onChange={(e) =>
+                                field.onChange(
+                                  e.target.checked
+                                    ? [...field.value, s.id]
+                                    : field.value.filter((id: string) => id !== s.id),
+                                )
+                              }
+                            />
+                            {s.name}
+                          </label>
+                        ))
+                      )}
+                      <div className="flex items-center gap-2 pt-1.5 border-t mt-1.5">
+                        <Input
+                          value={newSubName}
+                          onChange={(e) => setNewSubName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              void quickCreateSubscription()
+                            }
+                          }}
+                          placeholder={t('quickCreateSubPlaceholder')}
+                          className="h-8 text-sm flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!newSubName.trim() || creatingSub}
+                          onClick={() => void quickCreateSubscription()}
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          {t('quickCreateSubButton')}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{t('quickCreateSubHint')}</p>
+                    </div>
+                  )}
+                />
+              )}
+            </div>
+          )}
 
           {/* Secondary prose — side by side when the dialog is wide */}
           <div className="grid gap-4 lg:grid-cols-2">

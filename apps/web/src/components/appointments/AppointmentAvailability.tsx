@@ -325,78 +325,6 @@ function TemplateDialog({
             {errors.title && <p className="text-destructive text-xs">{errors.title.message}</p>}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>{t('fieldCoach')}</Label>
-            <Controller name="providerId" control={control} render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="w-full">
-                  <span className="flex flex-1 text-left text-sm truncate">
-                    {members.find((m) => m.id === field.value)?.name ?? <span className="text-muted-foreground">—</span>}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )} />
-            {errors.providerId && <p className="text-destructive text-xs">{errors.providerId.message}</p>}
-          </div>
-
-          {/* Linked appointment offerings — the *what*; duration/capacity/access live on the activity. */}
-          <div className="space-y-1.5">
-            <Label>{t('fieldActivities')}</Label>
-            <p className="text-xs text-muted-foreground">{t('fieldActivitiesHint')}</p>
-            {activities.length === 0 ? (
-              <div className="rounded-md border border-dashed p-3 space-y-2">
-                <p className="text-xs text-muted-foreground">{t('noAppointmentActivitiesHint')}</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={creatingActivity}
-                  onClick={() => void createGeneralActivity()}
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  {creatingActivity ? t('creatingActivity') : t('createGeneralActivity')}
-                </Button>
-              </div>
-            ) : (
-              <Controller
-                control={control}
-                name="activityIds"
-                render={({ field }) => (
-                  <div className="space-y-1.5 rounded-md border p-3">
-                    {activities.map((a) => (
-                      <label key={a.id} className="flex items-start gap-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 accent-primary"
-                          checked={field.value.includes(a.id)}
-                          onChange={(e) =>
-                            field.onChange(
-                              e.target.checked
-                                ? [...field.value, a.id]
-                                : field.value.filter((id: string) => id !== a.id),
-                            )
-                          }
-                        />
-                        <span>
-                          <span className="font-medium">{a.name}</span>
-                          {a.durations && a.durations.length > 0 && (
-                            <span className="block text-xs text-muted-foreground">
-                              {a.durations.map((d) => d.minutes).map(formatDuration).join(' / ')}
-                            </span>
-                          )}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              />
-            )}
-            {errors.activityIds && <p className="text-destructive text-xs">{errors.activityIds.message}</p>}
-          </div>
-
           {/* Availability mode — both are lazy, nothing is pre-generated. */}
           <div className="space-y-1.5">
             <Label>{t('fieldMode')}</Label>
@@ -431,66 +359,143 @@ function TemplateDialog({
                   {errors.windowEnd && <p className="text-destructive text-xs">{errors.windowEnd.message}</p>}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>{t('fieldGranularity')}</Label>
-                  <Controller name="granularityMinutes" control={control} render={({ field }) => (
-                    <Select value={String(field.value ?? 15)} onValueChange={(v) => field.onChange(Number(v))}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {GRANULARITY_OPTIONS.map((g) => <SelectItem key={g} value={String(g)}>{g} min</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="bufferMinutes">{t('fieldBuffer')}</Label>
-                  <Input id="bufferMinutes" type="number" min={0} max={120} step={5}
-                    {...register('bufferMinutes', { valueAsNumber: true })} />
-                </div>
+              <div className="space-y-1.5">
+                <Label>{t('fieldGranularity')}</Label>
+                <Controller name="granularityMinutes" control={control} render={({ field }) => (
+                  <Select value={String(field.value ?? 15)} onValueChange={(v) => field.onChange(Number(v))}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {GRANULARITY_OPTIONS.map((g) => <SelectItem key={g} value={String(g)}>{g} min</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )} />
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>{t('fieldTimes')}</Label>
-                <div className="space-y-2">
-                  {timesList.map((time, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <TimePicker value={time} onChange={(v) => updateTime(idx, v)} />
-                      <button
-                        type="button"
-                        onClick={() => removeTime(idx)}
-                        className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors"
-                        aria-label={t('removeTime')}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                  <Button type="button" variant="outline" size="sm" onClick={addTime}>
-                    <Plus className="h-3.5 w-3.5 mr-1.5" />{t('addTime')}
-                  </Button>
-                </div>
-                {errors.times && <p className="text-destructive text-xs">{errors.times.message}</p>}
+            <div className="space-y-1.5">
+              <Label>{t('fieldTimes')}</Label>
+              <div className="space-y-2">
+                {timesList.map((time, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <TimePicker value={time} onChange={(v) => updateTime(idx, v)} />
+                    <button
+                      type="button"
+                      onClick={() => removeTime(idx)}
+                      className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors"
+                      aria-label={t('removeTime')}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={addTime}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />{t('addTime')}
+                </Button>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="bufferMinutes">{t('fieldBuffer')}</Label>
-                <Input id="bufferMinutes" type="number" min={0} max={120} step={5}
-                  {...register('bufferMinutes', { valueAsNumber: true })} />
-              </div>
+              {errors.times && <p className="text-destructive text-xs">{errors.times.message}</p>}
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="location">{t('fieldLocation')}</Label>
-            <Input id="location" placeholder="Gym, studio…" {...register('location')} />
-          </div>
+          {/* The scattered per-schedule settings, gathered into one outlined
+              group: label (+ hint) on the left, control on the right, one per
+              row — same pattern as the Activities form. Offerings gets a
+              taller row (label+hint above, checklist below) since it's a
+              multi-select, not a single control. */}
+          <div className="divide-y rounded-lg border">
+            <div className="p-3">
+              <div className="flex items-center justify-between gap-4">
+                <Label className="font-medium">{t('fieldCoach')}</Label>
+                <Controller name="providerId" control={control} render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-48">
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {members.find((m) => m.id === field.value)?.name ?? <span className="text-muted-foreground">—</span>}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )} />
+              </div>
+              {errors.providerId && <p className="text-destructive text-xs mt-1.5">{errors.providerId.message}</p>}
+            </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="onlineUrl">{t('fieldOnlineUrl')}</Label>
-            <Input id="onlineUrl" placeholder="https://meet.google.com/…" {...register('onlineUrl')} />
-            {errors.onlineUrl && <p className="text-destructive text-xs">{errors.onlineUrl.message}</p>}
+            {/* Linked appointment offerings — the *what*; duration/capacity/access live on the activity. */}
+            <div className="p-3 space-y-1.5">
+              <div>
+                <p className="text-sm font-medium">{t('fieldActivities')}</p>
+                <p className="text-xs text-muted-foreground">{t('fieldActivitiesHint')}</p>
+              </div>
+              {activities.length === 0 ? (
+                <div className="rounded-md border border-dashed p-3 space-y-2">
+                  <p className="text-xs text-muted-foreground">{t('noAppointmentActivitiesHint')}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={creatingActivity}
+                    onClick={() => void createGeneralActivity()}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    {creatingActivity ? t('creatingActivity') : t('createGeneralActivity')}
+                  </Button>
+                </div>
+              ) : (
+                <Controller
+                  control={control}
+                  name="activityIds"
+                  render={({ field }) => (
+                    <div className="space-y-1.5 rounded-md border p-3">
+                      {activities.map((a) => (
+                        <label key={a.id} className="flex items-start gap-2 cursor-pointer text-sm">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 accent-primary"
+                            checked={field.value.includes(a.id)}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.checked
+                                  ? [...field.value, a.id]
+                                  : field.value.filter((id: string) => id !== a.id),
+                              )
+                            }
+                          />
+                          <span>
+                            <span className="font-medium">{a.name}</span>
+                            {a.durations && a.durations.length > 0 && (
+                              <span className="block text-xs text-muted-foreground">
+                                {a.durations.map((d) => d.minutes).map(formatDuration).join(' / ')}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                />
+              )}
+              {errors.activityIds && <p className="text-destructive text-xs">{errors.activityIds.message}</p>}
+            </div>
+
+            <div className="flex items-center justify-between gap-4 p-3">
+              <Label htmlFor="location" className="font-medium">{t('fieldLocation')}</Label>
+              <Input id="location" placeholder="Gym, studio…" {...register('location')} className="h-9 w-48" />
+            </div>
+
+            <div className="p-3">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="onlineUrl" className="font-medium">{t('fieldOnlineUrl')}</Label>
+                <Input id="onlineUrl" placeholder="https://meet.google.com/…" {...register('onlineUrl')} className="h-9 w-48" />
+              </div>
+              {errors.onlineUrl && <p className="text-destructive text-xs mt-1.5">{errors.onlineUrl.message}</p>}
+            </div>
+
+            <div className="flex items-center justify-between gap-4 p-3">
+              <Label htmlFor="bufferMinutes" className="font-medium">{t('fieldBuffer')}</Label>
+              <Input id="bufferMinutes" type="number" min={0} max={120} step={5}
+                {...register('bufferMinutes', { valueAsNumber: true })} className="h-9 w-24" />
+            </div>
           </div>
 
           <div className="space-y-3 rounded-lg border p-3">
