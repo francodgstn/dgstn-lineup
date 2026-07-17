@@ -1196,7 +1196,12 @@
     "memberBenefitKind_discount": "% off",
     "memberBenefitKind_discount_desc": "Holders pay less than base price.",
     "memberBenefitPercentLabel": "Discount percent",
-    "memberBenefitPercentValidation": "Enter a discount between 1 and 99%."
+    "memberBenefitPercentValidation": "Enter a discount between 1 and 99%.",
+    "chipDropIn": "Drop-in {amount}",
+    "chipBenefitIncluded": "Included with subscription",
+    "chipBenefitIncludedNamed": "Included · {name}",
+    "chipBenefitDiscount": "−{percent}% members",
+    "chipBenefitDiscountNamed": "−{percent}% · {name}"
   },
   "TeamSettings": {
     "title": "Team settings",
@@ -2994,7 +2999,17 @@
       "monthly": "/ month",
       "quarterly": "/ quarter",
       "annual": "/ year"
-    }
+    },
+    "payPerVisitHeading": "Prefer to pay per visit?",
+    "payPerVisitSubtitle": "Book single classes and appointments — no membership needed.",
+    "payPerVisitCta": "Book",
+    "payPerVisitDropIn": "Drop-in {price}",
+    "payPerVisitFromPrice": "From {price}",
+    "payPerVisitPriceRange": "{min}–{max}",
+    "payPerVisitIncludedGeneric": "Included with membership",
+    "payPerVisitIncludedNamed": "Included with {name}",
+    "payPerVisitDiscountGeneric": "−{percent}% for members",
+    "payPerVisitDiscountNamed": "−{percent}% with {name}"
   },
   "Products": {
     "title": "Products",
@@ -3428,7 +3443,11 @@
     "durationHours": "{h}h",
     "bookingRequired": "Booking required",
     "errorNoSubscriptionForActivity": "You don’t currently hold a membership that includes this activity. Please contact the studio or check the available plans.",
-    "badgeFromPrice": "From CHF {price}"
+    "badgeFromPrice": "From {price}",
+    "badgePriceRange": "{min}–{max}",
+    "badgeDropInPrice": "Drop-in {price}",
+    "chipBenefitIncluded": "Included with subscription",
+    "chipBenefitDiscount": "−{percent}% members"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Book a Trial Class",

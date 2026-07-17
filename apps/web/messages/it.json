@@ -1196,7 +1196,12 @@
     "memberBenefitKind_discount": "% di sconto",
     "memberBenefitKind_discount_desc": "I titolari pagano meno del prezzo base.",
     "memberBenefitPercentLabel": "Percentuale di sconto",
-    "memberBenefitPercentValidation": "Inserisci uno sconto tra 1 e 99%."
+    "memberBenefitPercentValidation": "Inserisci uno sconto tra 1 e 99%.",
+    "chipDropIn": "Ingresso singolo {amount}",
+    "chipBenefitIncluded": "Incluso con l'abbonamento",
+    "chipBenefitIncludedNamed": "Incluso · {name}",
+    "chipBenefitDiscount": "−{percent}% per i soci",
+    "chipBenefitDiscountNamed": "−{percent}% · {name}"
   },
   "TeamSettings": {
     "title": "Impostazioni del team",
@@ -2994,7 +2999,17 @@
       "monthly": "/ mese",
       "quarterly": "/ trimestre",
       "annual": "/ anno"
-    }
+    },
+    "payPerVisitHeading": "Preferisci pagare a lezione?",
+    "payPerVisitSubtitle": "Prenota singole lezioni e appuntamenti — senza abbonamento.",
+    "payPerVisitCta": "Prenota",
+    "payPerVisitDropIn": "Ingresso singolo {price}",
+    "payPerVisitFromPrice": "Da {price}",
+    "payPerVisitPriceRange": "{min}–{max}",
+    "payPerVisitIncludedGeneric": "Incluso con l'abbonamento",
+    "payPerVisitIncludedNamed": "Incluso con {name}",
+    "payPerVisitDiscountGeneric": "−{percent}% per i soci",
+    "payPerVisitDiscountNamed": "−{percent}% con {name}"
   },
   "Products": {
     "title": "Prodotti",
@@ -3428,7 +3443,11 @@
     "durationHours": "{h} h",
     "bookingRequired": "Prenotazione obbligatoria",
     "errorNoSubscriptionForActivity": "Al momento non hai un abbonamento che include questa attività. Contatta lo studio o consulta i piani disponibili.",
-    "badgeFromPrice": "Da CHF {price}"
+    "badgeFromPrice": "Da {price}",
+    "badgePriceRange": "{min}–{max}",
+    "badgeDropInPrice": "Ingresso singolo {price}",
+    "chipBenefitIncluded": "Incluso con l'abbonamento",
+    "chipBenefitDiscount": "−{percent}% per i soci"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Prenota una lezione di prova",

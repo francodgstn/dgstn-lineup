@@ -15,7 +15,15 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
-import { resolveActivityAccessRule, compareActivities, activityRequiresSubscription, type ActivityAccessRule } from '@linyup/shared'
+import {
+  resolveActivityAccessRule,
+  compareActivities,
+  activityRequiresSubscription,
+  type ActivityAccessRule,
+  type ActivityMemberBenefit,
+} from '@linyup/shared'
+import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
+import { formatCurrency } from '@/lib/format'
 import { useLocale, useTranslations } from 'next-intl'
 import {
   startOfMonth,
@@ -60,6 +68,8 @@ interface ActivityProfile {
   trialEnabled?: boolean
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
   durations?: Array<{ minutes: number; priceAmount: number | null }>
+  /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
+  memberBenefit?: ActivityMemberBenefit
   prerequisites?: string
 }
 
@@ -159,6 +169,35 @@ function activityGradient(name: string): string {
 }
 
 const FITNESS_APPS = ['Fitpass', 'ClassPass', 'Urban Sports Club', 'Gymlib', 'Wellhub', 'Other']
+
+// Money-chip label for one resolved term — the activity-list step's ONLY new
+// badges (gate/trial keep the dual-badge logic just added this week, untouched
+// here). No subscription-type names loaded on this public flow, so benefit
+// chips stay generic — same convention as the public website.
+function moneyChipLabel(
+  term: ActivityTerm,
+  currency: string,
+  locale: string,
+  t: ReturnType<typeof useTranslations>
+): string | null {
+  switch (term.kind) {
+    case 'price':
+      return term.min === term.max
+        ? t('badgeFromPrice', { price: formatCurrency(term.min ?? 0, currency, locale) })
+        : t('badgePriceRange', {
+            min: formatCurrency(term.min ?? 0, currency, locale),
+            max: formatCurrency(term.max ?? 0, currency, locale),
+          })
+    case 'dropIn':
+      return t('badgeDropInPrice', { price: formatCurrency(term.amount ?? 0, currency, locale) })
+    case 'benefitIncluded':
+      return t('chipBenefitIncluded')
+    case 'benefitDiscount':
+      return t('chipBenefitDiscount', { percent: term.percent ?? 0 })
+    default:
+      return null
+  }
+}
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
@@ -452,6 +491,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   const accentColor = team.bioLinkAccentColor ?? null
   const bookingSettings = team.bookingSettings
   const showBranding = team.showBranding === true
+  const currency = team.default_currency ?? 'CHF'
 
   const bookingWindowMonths = bookingSettings?.windowMonths ?? 2
   const showPhone = bookingSettings?.showPhone !== false
@@ -538,6 +578,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               dropIn: data.dropIn ?? undefined,
               trialEnabled: data.trialEnabled === true,
               durations: Array.isArray(data.durations) ? data.durations : undefined,
+              memberBenefit: data.memberBenefit ?? undefined,
               prerequisites: data.prerequisites ?? undefined,
             }
           })
@@ -1015,23 +1056,35 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                     {(() => {
                       // Appointments have NO access gate (the price is the gate) —
                       // resolving a rule for them fabricates a "Members only" badge
-                      // from the mirror's isFreeTrial:false. Show the price instead.
+                      // from the mirror's isFreeTrial:false. Show the money terms
+                      // (price + member benefit) instead, via the shared helper.
                       if (isAppointment) {
-                        const prices = (a.durations ?? [])
-                          .map((d) => d.priceAmount)
-                          .filter((p): p is number => typeof p === 'number')
-                        return prices.length ? (
-                          <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
-                            {t('badgeFromPrice', { price: Math.min(...prices) })}
-                          </span>
-                        ) : null
+                        const moneyTerms = resolveActivityTerms({ ...a, type: a.activityType }).filter(
+                          (term) => term.kind === 'price' || term.kind.startsWith('benefit')
+                        )
+                        return moneyTerms.map((term, i) => {
+                          const label = moneyChipLabel(term, currency, locale, t)
+                          return label ? (
+                            <span
+                              key={`${term.kind}-${i}`}
+                              className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium"
+                            >
+                              {label}
+                            </span>
+                          ) : null
+                        })
                       }
                       // A gated class can ALSO be triable (trialEnabled) — show
                       // both badges, or a newcomer never learns the class is
-                      // triable at all.
+                      // triable at all. Gate/trial badges are untouched (existing
+                      // logic); the drop-in money chip is the only ADDITION here —
+                      // today its price only surfaced two steps deep in the flow.
                       const rule = resolveActivityAccessRule(a)
                       const triable =
                         (rule.type === 'open' && a.isFreeTrial) || a.trialEnabled === true
+                      const dropInTerm = resolveActivityTerms({ ...a, type: a.activityType }).find(
+                        (term) => term.kind === 'dropIn'
+                      )
                       return (
                         <>
                           {rule.type === 'subscription' && (
@@ -1047,6 +1100,11 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                           {triable && (
                             <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
                               {t('badgeFreeTrial')}
+                            </span>
+                          )}
+                          {dropInTerm && (
+                            <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
+                              {moneyChipLabel(dropInTerm, currency, locale, t)}
                             </span>
                           )}
                         </>

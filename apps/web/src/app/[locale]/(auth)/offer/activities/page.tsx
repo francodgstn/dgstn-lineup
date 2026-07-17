@@ -25,9 +25,11 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityLevel, ActivityMemberBenefit, ActivityType } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityLevel, ActivityMemberBenefit, ActivityType, SubscriptionType } from '@linyup/shared'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
+import { resolveActivityTerms } from '@/lib/activityTerms'
+import { formatCurrency } from '@/lib/format'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -961,19 +963,62 @@ function ActivityDialog({
 
 // ─── activity card ────────────────────────────────────────────────────────────
 
+// Money-chip label for one resolved term — the only NEW badges this list adds
+// (trial/gate keep their existing, separate badge block below). Benefit chips
+// try to stay compact by resolving a single subscription type's name when the
+// admin already has the list loaded; multiple types (or an unresolved id) fall
+// back to the generic label.
+function moneyChipLabel(
+  term: ReturnType<typeof resolveActivityTerms>[number],
+  currency: string,
+  subscriptionTypes: SubscriptionType[],
+  t: ReturnType<typeof useTranslations>,
+): string | null {
+  const nameFor = (ids?: string[]) =>
+    ids?.length === 1 ? subscriptionTypes.find((s) => s.id === ids[0])?.name : undefined
+
+  switch (term.kind) {
+    case 'dropIn':
+      return t('chipDropIn', { amount: formatCurrency(term.amount ?? 0, currency) })
+    case 'price':
+      return term.min === term.max
+        ? formatCurrency(term.min ?? 0, currency)
+        : `${formatCurrency(term.min ?? 0, currency)}–${formatCurrency(term.max ?? 0, currency)}`
+    case 'benefitIncluded': {
+      const name = nameFor(term.subscriptionTypeIds)
+      return name ? t('chipBenefitIncludedNamed', { name }) : t('chipBenefitIncluded')
+    }
+    case 'benefitDiscount': {
+      const name = nameFor(term.subscriptionTypeIds)
+      return name
+        ? t('chipBenefitDiscountNamed', { percent: term.percent ?? 0, name })
+        : t('chipBenefitDiscount', { percent: term.percent ?? 0 })
+    }
+    default:
+      return null
+  }
+}
+
 function ActivityCard({
   activity,
   onEdit,
   onArchive,
   sortable,
+  currency,
+  subscriptionTypes,
 }: {
   activity: Activity
   onEdit: () => void
   onArchive: () => void
   sortable: SortableRenderProps
+  currency: string
+  subscriptionTypes: SubscriptionType[]
 }) {
   const t = useTranslations('Activities')
   const { setNodeRef, style, attributes, listeners, isDragging } = sortable
+  const moneyTerms = resolveActivityTerms(activity).filter(
+    (term) => term.kind !== 'trial' && term.kind !== 'gate'
+  )
 
   return (
     <div
@@ -1034,6 +1079,14 @@ function ActivityCard({
               <Badge variant="outline" className="text-xs">{t('freeTrialBadge')}</Badge>
             ) : null
           })()}
+          {moneyTerms.map((term, i) => {
+            const label = moneyChipLabel(term, currency, subscriptionTypes, t)
+            return label ? (
+              <Badge key={`${term.kind}-${i}`} variant="secondary" className="text-xs">
+                {label}
+              </Badge>
+            ) : null
+          })}
         </div>
         {activity.description && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{activity.description}</p>
@@ -1065,6 +1118,8 @@ function ActivityCard({
 export default function ActivitiesPage() {
   const { currentTeamId, user, team } = useAuth()
   const { data: activities = [], isLoading } = useActivities(currentTeamId)
+  const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
+  const currency = team?.default_currency ?? 'CHF'
   const qc = useQueryClient()
   const t = useTranslations('Activities')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -1151,6 +1206,8 @@ export default function ActivitiesPage() {
                         onEdit={() => openEdit(a)}
                         onArchive={() => setArchiving(a)}
                         sortable={sortable}
+                        currency={currency}
+                        subscriptionTypes={subscriptionTypes}
                       />
                     )}
                   </SortableItem>

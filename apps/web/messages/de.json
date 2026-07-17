@@ -1196,7 +1196,12 @@
     "memberBenefitKind_discount": "% Rabatt",
     "memberBenefitKind_discount_desc": "Inhaber zahlen weniger als den Basispreis.",
     "memberBenefitPercentLabel": "Rabatt in Prozent",
-    "memberBenefitPercentValidation": "Gib einen Rabatt zwischen 1 und 99% ein."
+    "memberBenefitPercentValidation": "Gib einen Rabatt zwischen 1 und 99% ein.",
+    "chipDropIn": "Einzeleintritt {amount}",
+    "chipBenefitIncluded": "Im Abo inbegriffen",
+    "chipBenefitIncludedNamed": "Inbegriffen · {name}",
+    "chipBenefitDiscount": "−{percent}% für Mitglieder",
+    "chipBenefitDiscountNamed": "−{percent}% · {name}"
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",
@@ -2994,7 +2999,17 @@
       "monthly": "/ Monat",
       "quarterly": "/ Quartal",
       "annual": "/ Jahr"
-    }
+    },
+    "payPerVisitHeading": "Lieber pro Einheit zahlen?",
+    "payPerVisitSubtitle": "Einzelne Kurse und Termine buchen — keine Mitgliedschaft nötig.",
+    "payPerVisitCta": "Buchen",
+    "payPerVisitDropIn": "Einzeleintritt {price}",
+    "payPerVisitFromPrice": "Ab {price}",
+    "payPerVisitPriceRange": "{min}–{max}",
+    "payPerVisitIncludedGeneric": "Im Abo inbegriffen",
+    "payPerVisitIncludedNamed": "Inbegriffen mit {name}",
+    "payPerVisitDiscountGeneric": "−{percent}% für Mitglieder",
+    "payPerVisitDiscountNamed": "−{percent}% mit {name}"
   },
   "Products": {
     "title": "Produkte",
@@ -3428,7 +3443,11 @@
     "durationHours": "{h} Std.",
     "bookingRequired": "Buchung erforderlich",
     "errorNoSubscriptionForActivity": "Sie haben derzeit keine Mitgliedschaft, die diese Aktivität einschliesst. Bitte kontaktieren Sie das Studio oder prüfen Sie die verfügbaren Angebote.",
-    "badgeFromPrice": "Ab CHF {price}"
+    "badgeFromPrice": "Ab {price}",
+    "badgePriceRange": "{min}–{max}",
+    "badgeDropInPrice": "Einzeleintritt {price}",
+    "chipBenefitIncluded": "Im Abo inbegriffen",
+    "chipBenefitDiscount": "−{percent}% für Mitglieder"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Probetraining buchen",

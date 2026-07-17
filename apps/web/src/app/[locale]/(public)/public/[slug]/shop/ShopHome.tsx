@@ -17,7 +17,14 @@ import type { Route } from 'next'
 import { db, functions } from '@/lib/firebase'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { formatCurrency } from '@/lib/format'
-import { resolveProductPrice, type CheckoutContactMode } from '@linyup/shared'
+import {
+  resolveProductPrice,
+  compareActivities,
+  type CheckoutContactMode,
+  type ActivityAccessRule,
+  type ActivityMemberBenefit,
+} from '@linyup/shared'
+import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
 import { DEFAULT_ACCENT } from '@/lib/colors'
@@ -79,6 +86,32 @@ interface RawCoursePublicProfile {
   order?: number
 }
 
+// "Pay per visit" strip (Subscriptions tab): activities with a money story
+// (drop-in or priced durations) — routing-only cross-sell into the booking
+// flows, no purchase happens here. Same public_profile shape BookingForm /
+// sections.tsx read.
+interface PayPerVisitEntry {
+  id: string
+  name: string
+  slug: string
+  activityType?: string
+  dropIn?: { enabled: boolean; priceAmount?: number }
+  durations?: Array<{ minutes: number; priceAmount: number | null }>
+  memberBenefit?: ActivityMemberBenefit
+  accessRule?: ActivityAccessRule
+  order?: number
+}
+
+// Only activities with an actual money story belong in the strip — a bare
+// gated/trial class with no drop-in, or an unpriced appointment, has nothing
+// to "pay per visit" for.
+function hasMoneyStory(a: PayPerVisitEntry): boolean {
+  if (a.activityType === 'appointment') {
+    return (a.durations ?? []).some((d) => typeof d.priceAmount === 'number')
+  }
+  return a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number'
+}
+
 type Tab = 'subscriptions' | 'products' | 'courses'
 
 type Checkout =
@@ -104,6 +137,7 @@ export default function ShopHome({
   const [pendingCheckout, setPendingCheckout] = useState<Checkout | null>(null)
   const [products, setProducts] = useState<ProductEntry[]>([])
   const [courses, setCourses] = useState<CourseEntry[]>([])
+  const [payPerVisitActivities, setPayPerVisitActivities] = useState<PayPerVisitEntry[]>([])
   const [purchasedCourseIds, setPurchasedCourseIds] = useState<Set<string>>(new Set())
   const [currency, setCurrency] = useState('CHF')
   const [loading, setLoading] = useState(true)
@@ -130,8 +164,17 @@ export default function ShopHome({
         where('teamId', '==', teamId)
       )
     )
-    Promise.all([profileP, coursesP])
-      .then(([snap, courseSnap]) => {
+    // Same public activity mirrors BookingForm / the website Activities block
+    // read — filtered down (below) to the ones with an actual money story.
+    const activitiesP = getDocs(
+      query(
+        collectionGroup(db, 'public_profile'),
+        where('type', '==', 'activity'),
+        where('teamId', '==', teamId)
+      )
+    )
+    Promise.all([profileP, coursesP, activitiesP])
+      .then(([snap, courseSnap, activitiesSnap]) => {
         if (cancelled) return
         const planList = (snap.data()?.aggregator_subscription_types ?? []) as PlanEntry[]
         const productList = (snap.data()?.products ?? []) as ProductEntry[]
@@ -153,12 +196,31 @@ export default function ShopHome({
             priceAmount: typeof data.priceAmount === 'number' ? data.priceAmount : undefined,
           }))
         setCourses(courseList)
+        const activityList: PayPerVisitEntry[] = activitiesSnap.docs
+          .map((d) => {
+            const data = d.data()
+            return {
+              id: d.id,
+              name: (data.name as string) || '',
+              slug: (data.slug as string) || '',
+              activityType: (data.activityType as string) || undefined,
+              dropIn: (data.dropIn as PayPerVisitEntry['dropIn']) ?? undefined,
+              durations: Array.isArray(data.durations) ? (data.durations as PayPerVisitEntry['durations']) : undefined,
+              memberBenefit: (data.memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
+              accessRule: (data.accessRule as ActivityAccessRule | undefined) ?? undefined,
+              order: typeof data.order === 'number' ? (data.order as number) : undefined,
+            }
+          })
+          .filter((a) => a.name && hasMoneyStory(a))
+          .sort(compareActivities)
+        setPayPerVisitActivities(activityList)
       })
       .catch(() => {
         if (cancelled) return
         setPlans([])
         setProducts([])
         setCourses([])
+        setPayPerVisitActivities([])
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -278,6 +340,42 @@ export default function ShopHome({
         return val === key ? '' : val
       },
     [t]
+  )
+
+  // Money-chip label for one resolved term, for the "pay per visit" strip below.
+  // Unlike the public website (generic labels only), the shop already has the
+  // subscription-type list loaded — the cross-sell bridge: resolve a SINGLE
+  // held type's name ("Included with Premium"); fall back to generic when the
+  // benefit spans several types.
+  const payPerVisitTermLabel = useCallback(
+    (term: ActivityTerm): string | null => {
+      const nameFor = (ids?: string[]) =>
+        ids?.length === 1 ? plans.find((p) => p.id === ids[0])?.name : undefined
+      switch (term.kind) {
+        case 'dropIn':
+          return t('payPerVisitDropIn', { price: formatCurrency(term.amount ?? 0, currency) })
+        case 'price':
+          return term.min === term.max
+            ? t('payPerVisitFromPrice', { price: formatCurrency(term.min ?? 0, currency) })
+            : t('payPerVisitPriceRange', {
+                min: formatCurrency(term.min ?? 0, currency),
+                max: formatCurrency(term.max ?? 0, currency),
+              })
+        case 'benefitIncluded': {
+          const name = nameFor(term.subscriptionTypeIds)
+          return name ? t('payPerVisitIncludedNamed', { name }) : t('payPerVisitIncludedGeneric')
+        }
+        case 'benefitDiscount': {
+          const name = nameFor(term.subscriptionTypeIds)
+          return name
+            ? t('payPerVisitDiscountNamed', { percent: term.percent ?? 0, name })
+            : t('payPerVisitDiscountGeneric', { percent: term.percent ?? 0 })
+        }
+        default:
+          return null
+      }
+    },
+    [plans, currency, t]
   )
 
   // Resume a pending checkout once sign-in (or registration) resolves — always as
@@ -570,6 +668,62 @@ export default function ShopHome({
                 </div>
               </div>
             ))}
+
+            {/* "Pay per visit" strip — routing only, no purchase here (payment
+                always happens in the booking flows). The cross-sell bridge back
+                from booking into a membership: benefit chips resolve plan names
+                from the aggregator already loaded above. */}
+            {payPerVisitActivities.length > 0 && (
+              <div className="mt-2 pt-5 border-t" style={{ borderColor: cardBorder }}>
+                <h3 className="text-sm font-semibold">{t('payPerVisitHeading')}</h3>
+                <p className="mt-0.5 text-xs" style={{ color: textMuted }}>
+                  {t('payPerVisitSubtitle')}
+                </p>
+                <div className="mt-3 space-y-2">
+                  {payPerVisitActivities.map((a) => {
+                    const chipLabels = resolveActivityTerms({
+                      type: a.activityType,
+                      dropIn: a.dropIn,
+                      durations: a.durations,
+                      memberBenefit: a.memberBenefit,
+                      accessRule: a.accessRule,
+                    })
+                      .filter((term) => term.kind !== 'gate' && term.kind !== 'trial')
+                      .map((term) => payPerVisitTermLabel(term))
+                      .filter((label): label is string => !!label)
+                    const href =
+                      a.activityType === 'appointment'
+                        ? `/public/${slug}/appointments`
+                        : a.slug
+                          ? `/public/${slug}/booking/${a.slug}`
+                          : `/public/${slug}/booking`
+                    return (
+                      <div
+                        key={a.id}
+                        className="rounded-xl border p-3 flex items-center justify-between gap-3"
+                        style={{ borderColor: cardBorder }}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{a.name}</p>
+                          {chipLabels.length > 0 && (
+                            <p className="mt-0.5 text-xs truncate" style={{ color: textMuted }}>
+                              {chipLabels.join(' · ')}
+                            </p>
+                          )}
+                        </div>
+                        <Link
+                          href={href as Route}
+                          className="shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold"
+                          style={{ background: accent, color: '#ffffff' }}
+                        >
+                          {t('payPerVisitCta')}
+                        </Link>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </section>
         ) : tab === 'products' ? (
           <section className="mt-6 grid grid-cols-2 gap-4">

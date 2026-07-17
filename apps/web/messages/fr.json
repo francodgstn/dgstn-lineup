@@ -1196,7 +1196,12 @@
     "memberBenefitKind_discount": "% de réduction",
     "memberBenefitKind_discount_desc": "Les détenteurs paient moins que le prix de base.",
     "memberBenefitPercentLabel": "Pourcentage de réduction",
-    "memberBenefitPercentValidation": "Saisissez une réduction entre 1 et 99%."
+    "memberBenefitPercentValidation": "Saisissez une réduction entre 1 et 99%.",
+    "chipDropIn": "À la séance {amount}",
+    "chipBenefitIncluded": "Inclus avec l'abonnement",
+    "chipBenefitIncludedNamed": "Inclus · {name}",
+    "chipBenefitDiscount": "−{percent}% membres",
+    "chipBenefitDiscountNamed": "−{percent}% · {name}"
   },
   "TeamSettings": {
     "title": "Paramètres de l'équipe",
@@ -2994,7 +2999,17 @@
       "monthly": "/ mois",
       "quarterly": "/ trimestre",
       "annual": "/ an"
-    }
+    },
+    "payPerVisitHeading": "Vous préférez payer à la séance ?",
+    "payPerVisitSubtitle": "Réservez des cours ou des rendez-vous à l'unité — sans abonnement.",
+    "payPerVisitCta": "Réserver",
+    "payPerVisitDropIn": "À la séance {price}",
+    "payPerVisitFromPrice": "Dès {price}",
+    "payPerVisitPriceRange": "{min}–{max}",
+    "payPerVisitIncludedGeneric": "Inclus avec l'abonnement",
+    "payPerVisitIncludedNamed": "Inclus avec {name}",
+    "payPerVisitDiscountGeneric": "−{percent}% pour les membres",
+    "payPerVisitDiscountNamed": "−{percent}% avec {name}"
   },
   "Products": {
     "title": "Produits",
@@ -3428,7 +3443,11 @@
     "durationHours": "{h} h",
     "bookingRequired": "Réservation obligatoire",
     "errorNoSubscriptionForActivity": "Vous n’avez actuellement aucun abonnement incluant cette activité. Veuillez contacter le studio ou consulter les formules disponibles.",
-    "badgeFromPrice": "Dès CHF {price}"
+    "badgeFromPrice": "Dès {price}",
+    "badgePriceRange": "{min}–{max}",
+    "badgeDropInPrice": "À la séance {price}",
+    "chipBenefitIncluded": "Inclus avec l'abonnement",
+    "chipBenefitDiscount": "−{percent}% membres"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Réserver un cours d'essai",

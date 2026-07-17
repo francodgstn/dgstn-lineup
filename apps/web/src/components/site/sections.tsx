@@ -50,7 +50,8 @@ import type {
   SocialLink,
   OrgSiteTeamRef,
 } from '@linyup/shared'
-import { compareActivities } from '@linyup/shared'
+import { compareActivities, type ActivityAccessRule, type ActivityMemberBenefit } from '@linyup/shared'
+import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
 import { usePlaces } from '@/hooks/usePlaces'
@@ -285,11 +286,45 @@ interface ActivityEntry {
   level?: string
   isFreeTrial?: boolean
   order?: number
+  /** CLASS-ONLY. */
+  accessRule?: ActivityAccessRule
+  /** CLASS-ONLY. */
+  dropIn?: { enabled: boolean; priceAmount?: number }
+  /** CLASS-ONLY: a gated class still accepts a newcomer's free trial booking. */
+  trialEnabled?: boolean
+  /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
+  durations?: Array<{ minutes: number; priceAmount: number | null }>
+  /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
+  memberBenefit?: ActivityMemberBenefit
+}
+
+// Public website chip labels are hardcoded English, matching this renderer's
+// existing convention (it isn't i18n-aware — see the other literal strings in
+// this block, e.g. "Free trial", "Book"). Benefit chips stay GENERIC (no plan
+// names — the website has no subscription-type list loaded).
+function activityTermLabel(term: ActivityTerm, currency: string): string | null {
+  switch (term.kind) {
+    case 'gate':
+      return term.tier === 'subscription' ? 'Membership required' : 'Members only'
+    case 'dropIn':
+      return `Drop-in ${formatCurrency(term.amount ?? 0, currency)}`
+    case 'price':
+      return term.min === term.max
+        ? `From ${formatCurrency(term.min ?? 0, currency)}`
+        : `${formatCurrency(term.min ?? 0, currency)}–${formatCurrency(term.max ?? 0, currency)}`
+    case 'benefitIncluded':
+      return 'Included with membership'
+    case 'benefitDiscount':
+      return `−${term.percent ?? 0}% for members`
+    default:
+      return null
+  }
 }
 
 function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: RenderCtx }) {
   const { palette, slug, teamId, preview } = ctx
   const [activities, setActivities] = useState<ActivityEntry[]>([])
+  const [currency, setCurrency] = useState('CHF')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -299,8 +334,8 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
       where('teamId', '==', teamId),
       where('type', '==', 'activity')
     )
-    getDocs(q)
-      .then((snap) => {
+    Promise.all([getDocs(q), getDoc(doc(db, 'teams', teamId!, 'public_profile', teamId!))])
+      .then(([snap, teamSnap]) => {
         if (!alive) return
         const list = snap.docs
           .map((d) => {
@@ -316,11 +351,17 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               level: (data.level as string) || undefined,
               isFreeTrial: Boolean(data.isFreeTrial),
               order: typeof data.order === 'number' ? (data.order as number) : undefined,
+              accessRule: (data.accessRule as ActivityAccessRule | undefined) ?? undefined,
+              dropIn: (data.dropIn as ActivityEntry['dropIn']) ?? undefined,
+              trialEnabled: data.trialEnabled === true,
+              durations: Array.isArray(data.durations) ? (data.durations as ActivityEntry['durations']) : undefined,
+              memberBenefit: (data.memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
             }
           })
           .filter((a) => a.name)
           .sort(compareActivities)
         setActivities(list)
+        setCurrency((teamSnap.data()?.default_currency as string | undefined) ?? 'CHF')
       })
       .catch(() => {
         if (alive) setActivities([])
@@ -368,6 +409,14 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                   : a.slug
                     ? `/public/${slug}/booking/${a.slug}`
                     : undefined
+              // Terms chips live on the activity card on every surface that lists
+              // them (see activityTerms.ts). Trial keeps its own ribbon on the
+              // image (more prominent, and now correctly accounts for a
+              // trialEnabled gated class — not just isFreeTrial); the rest render
+              // as a meta row in the card footer.
+              const terms = resolveActivityTerms({ ...a, type: a.activityType })
+              const hasTrial = terms.some((term) => term.kind === 'trial')
+              const footerTerms = terms.filter((term) => term.kind !== 'trial')
               return (
                 <div
                   key={a.id}
@@ -395,7 +444,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         </span>
                       </div>
                     )}
-                    {a.isFreeTrial && (
+                    {hasTrial && (
                       <span
                         className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow"
                         style={{ background: palette.accent, color: palette.onAccent }}
@@ -422,6 +471,22 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                       <p className="mt-2 flex-1 text-sm" style={{ color: palette.muted }}>
                         {a.description}
                       </p>
+                    )}
+                    {footerTerms.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {footerTerms.map((term, i) => {
+                          const label = activityTermLabel(term, currency)
+                          return label ? (
+                            <span
+                              key={`${term.kind}-${i}`}
+                              className="rounded-full border px-2 py-0.5 text-xs"
+                              style={{ borderColor: palette.border, color: palette.muted }}
+                            >
+                              {label}
+                            </span>
+                          ) : null
+                        })}
+                      </div>
                     )}
                     {href && (
                       <a
