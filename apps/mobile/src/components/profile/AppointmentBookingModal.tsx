@@ -109,7 +109,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
 
   const selectActivity = (activity: AvailabilityActivity) => {
     setSelectedActivity(activity);
-    setSelectedDuration(activity.durationsMinutes[0] ?? 60);
+    setSelectedDuration(activity.durations[0]?.minutes ?? 60);
     setSelectedDay(activity.days[0]?.dayMs ?? null);
     setStep('time');
   };
@@ -259,7 +259,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
             ) : (
               selectedCoach.activities.map((activity) => {
                 const isGated = activity.accessRule.type !== 'open';
-                const durations = activity.durationsMinutes;
+                const durations = activity.durations.map((d) => d.minutes);
                 const durationLabel =
                   durations.length > 1
                     ? `${fmtDuration(Math.min(...durations))} – ${fmtDuration(Math.max(...durations))}`
@@ -330,13 +330,13 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
 
           {!loading && !error && step === 'time' && selectedCoach && selectedActivity && (
             <View style={{ gap: 16 }}>
-              {selectedActivity.durationsMinutes.length > 1 && (
+              {selectedActivity.durations.length > 1 && (
                 <View style={{ gap: 8 }}>
                   <Text variant="labelMedium" style={[styles.groupLabel, { color: theme.colors.onSurfaceVariant }]}>
                     DURATION
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {selectedActivity.durationsMinutes.map((d) => {
+                    {selectedActivity.durations.map(({ minutes: d }) => {
                       const active = d === selectedDuration;
                       return (
                         <TouchableRipple key={d} onPress={() => setSelectedDuration(d)} borderless style={styles.chipWrap}>

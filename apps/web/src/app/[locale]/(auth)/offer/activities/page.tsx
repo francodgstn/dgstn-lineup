@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
-import type { Activity, ActivityLevel, ActivityType } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityLevel, ActivityType } from '@linyup/shared'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -74,6 +74,20 @@ function slugify(name: string): string {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 50)
+}
+
+// Rebuild the `durations` array from the chip-toggled minutes list, preserving
+// each existing duration's pricing (matched by minutes) so toggling chips never
+// wipes pricing data configured elsewhere. New minutes get an unpriced entry.
+function buildDurations(
+  minutesList: number[],
+  existing?: ActivityDuration[] | null,
+): ActivityDuration[] {
+  const byMinutes = new Map((existing ?? []).map((d) => [d.minutes, d]))
+  return [...minutesList].sort((a, b) => a - b).map((minutes) => {
+    const prev = byMinutes.get(minutes)
+    return prev ? { ...prev, minutes } : { minutes, priceAmount: null }
+  })
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -167,7 +181,7 @@ function ActivityDialog({
           subscriptionTypeIds: initialRule.subscriptionTypeIds ?? [],
           dropInEnabled: editing.dropIn?.enabled ?? false,
           dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
-          durationsMinutes: editing.durationsMinutes ?? [],
+          durationsMinutes: editing.durations ? editing.durations.map((d) => d.minutes) : [],
           autoConfirm: resolveAutoConfirm(editing),
         }
       : {
@@ -279,8 +293,8 @@ function ActivityDialog({
         },
         autoConfirm: data.autoConfirm,
         ...(data.type === 'appointment'
-          ? { durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b) }
-          : { durationsMinutes: null }),
+          ? { durations: buildDurations(data.durationsMinutes, editing.durations) }
+          : { durations: null }),
       }
       if (imageFile) {
         const url = await uploadImage(editing.id)
@@ -311,7 +325,7 @@ function ActivityDialog({
         },
         autoConfirm: data.autoConfirm,
         ...(data.type === 'appointment'
-          ? { durationsMinutes: [...data.durationsMinutes].sort((a, b) => a - b) }
+          ? { durations: buildDurations(data.durationsMinutes) }
           : {}),
         slug: slugify(data.name),
         teamId,

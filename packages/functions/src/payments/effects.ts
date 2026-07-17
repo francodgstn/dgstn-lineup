@@ -38,6 +38,7 @@ const LINE_ITEM_KINDS: PaymentLineItemKind[] = [
   'course',
   'product',
   'drop_in',
+  'appointment',
   'other',
 ]
 
@@ -301,7 +302,12 @@ export async function applyPaymentEffects(db: Db, input: ApplyPaymentEffectsInpu
       await logPaymentActivity(db, contactId, {
         type: 'payment_received',
         source,
-        message: li.kind === 'drop_in' ? 'Drop-in payment' : (li.label ?? 'Payment'),
+        message:
+          li.kind === 'drop_in'
+            ? 'Drop-in payment'
+            : li.kind === 'appointment'
+              ? (li.label ?? 'Appointment payment')
+              : (li.label ?? 'Payment'),
         paymentRef,
       })
       return

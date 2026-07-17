@@ -29,7 +29,7 @@ export type PaymentAssignmentStatus = 'assigned' | 'unassigned'
 // same effects a Connect purchase would: subscription → set subscription fields
 // (+ credits if the price carries them); course → grant the lifetime entitlement
 // (unlocks in the Space); product → record only. See applyPaymentEffects.
-export type PaymentLineItemKind = 'subscription' | 'course' | 'product' | 'drop_in' | 'other'
+export type PaymentLineItemKind = 'subscription' | 'course' | 'product' | 'drop_in' | 'appointment' | 'other'
 
 export interface PaymentLineItem {
   kind: PaymentLineItemKind

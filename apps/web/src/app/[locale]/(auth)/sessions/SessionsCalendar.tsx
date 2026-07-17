@@ -16,6 +16,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react'
+import { resolveAppointmentDurations } from '@linyup/shared'
 import type { Session, Activity, Event, Availability } from '@linyup/shared'
 import { SessionPeekSheet } from '@/components/sessions/SessionPeekSheet'
 import { EventPeekSheet } from '@/components/events/EventPeekSheet'
@@ -411,7 +412,10 @@ interface PositionedAvailabilityBand {
  *  30min if no linked activity resolves a duration. */
 function shortestActivityDuration(activityIds: string[] | undefined, activities: Activity[]): number {
   const durations = (activityIds ?? [])
-    .flatMap((id) => activities.find((a) => a.id === id)?.durationsMinutes ?? [])
+    .flatMap((id) => {
+      const activity = activities.find((a) => a.id === id)
+      return activity ? resolveAppointmentDurations(activity).map((d) => d.minutes) : []
+    })
     .filter((d) => d > 0)
   return durations.length ? Math.min(...durations) : 30
 }

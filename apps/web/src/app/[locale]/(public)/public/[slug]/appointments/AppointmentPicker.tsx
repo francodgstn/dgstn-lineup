@@ -36,7 +36,11 @@ import {
 interface AvailActivity {
   activityId: string
   activityName: string
-  durationsMinutes: number[]
+  durations: Array<{
+    minutes: number
+    priceAmount: number | null
+    subscriptionPricing: Array<{ subscriptionTypeId: string; priceAmount: number | null }>
+  }>
   accessRule: ActivityAccessRule
   location: string | null
   onlineUrl: string | null
@@ -455,7 +459,7 @@ function CoachCard({ coach, onSelect }: { coach: AvailCoach; onSelect: () => voi
 function ActivityCard({ activity, onSelect }: { activity: AvailActivity; onSelect: () => void }) {
   const t = useTranslations('AppointmentBooking')
   const isFreeTrial = resolveActivityAccessRule({ accessRule: activity.accessRule }).type === 'open'
-  const durations = activity.durationsMinutes
+  const durations = activity.durations.map((d) => d.minutes)
   const durationLabel =
     durations.length > 1
       ? `${fmtDuration(Math.min(...durations))} – ${fmtDuration(Math.max(...durations))}`
@@ -501,7 +505,7 @@ function TimePicker({
 }) {
   const t = useTranslations('AppointmentBooking')
   const [dayMs, setDayMs] = useState<number>(activity.days[0]?.dayMs ?? 0)
-  const [duration, setDuration] = useState<number>(activity.durationsMinutes[0] ?? 60)
+  const [duration, setDuration] = useState<number>(activity.durations[0]?.minutes ?? 60)
 
   const day = activity.days.find((d) => d.dayMs === dayMs) ?? activity.days[0]
   const times = day?.slotsByDuration[String(duration)] ?? []
@@ -538,20 +542,20 @@ function TimePicker({
       </div>
 
       {/* Duration — only shown when the activity offers more than one length. */}
-      {activity.durationsMinutes.length > 1 && (
+      {activity.durations.length > 1 && (
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-muted-foreground">{t('pickDuration')}</p>
           <div className="flex gap-2 flex-wrap">
-            {activity.durationsMinutes.map((d) => (
+            {activity.durations.map((d) => (
               <button
-                key={d}
+                key={d.minutes}
                 type="button"
-                onClick={() => setDuration(d)}
+                onClick={() => setDuration(d.minutes)}
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  d === duration ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                  d.minutes === duration ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
                 }`}
               >
-                {fmtDuration(d)}
+                {fmtDuration(d.minutes)}
               </button>
             ))}
           </div>

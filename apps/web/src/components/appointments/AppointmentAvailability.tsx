@@ -257,7 +257,7 @@ function TemplateDialog({
         isFreeTrial: true,
         accessRule: { type: 'open' as const },
         dropIn: { enabled: false },
-        durationsMinutes: [60],
+        durations: [{ minutes: 60, priceAmount: null }],
         slug: 'appointment',
         teamId,
         createdBy: userId,
@@ -376,9 +376,9 @@ function TemplateDialog({
                         />
                         <span>
                           <span className="font-medium">{a.name}</span>
-                          {a.durationsMinutes && a.durationsMinutes.length > 0 && (
+                          {a.durations && a.durations.length > 0 && (
                             <span className="block text-xs text-muted-foreground">
-                              {a.durationsMinutes.map(formatDuration).join(' / ')}
+                              {a.durations.map((d) => d.minutes).map(formatDuration).join(' / ')}
                             </span>
                           )}
                         </span>

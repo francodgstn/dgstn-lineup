@@ -44,6 +44,35 @@ export function resolveAutoConfirm(a: {
   return a.type === 'appointment'
 }
 
+/** One bookable session length of an appointment offering, with its pricing.
+ *
+ *  The coach sells TIME, so price is per duration — a 30-minute session cannot
+ *  cost the same as a 90-minute one. `priceAmount` (major units, team currency)
+ *  is the base/walk-in price; null/absent = unpriced, so the plain access rules
+ *  decide (open → free, members/subscription → covered-only).
+ *
+ *  `subscriptionPricing` is the EXPLICIT member benefit: an entry with
+ *  `priceAmount: null` means INCLUDED (holders book free; credit-pack types
+ *  spend a credit), a number is a member price. A priced duration with no
+ *  entries costs base for everyone, subscribers included — benefit is data,
+ *  never implied. A contact holding several types gets the LOWEST applicable
+ *  price ("included" beats any amount). */
+export interface ActivityDuration {
+  minutes: number
+  priceAmount?: number | null
+  subscriptionPricing?: Array<{ subscriptionTypeId: string; priceAmount: number | null }>
+}
+
+/** An appointment activity's duration menu, defaulting to a single unpriced
+ *  60-minute entry when unset — the one fallback rule, shared by the
+ *  availability grid, the booking gate, and the UIs. */
+export function resolveAppointmentDurations(a: {
+  durations?: ActivityDuration[] | null
+}): ActivityDuration[] {
+  const ds = (a.durations ?? []).filter((d) => d.minutes > 0)
+  return ds.length ? ds : [{ minutes: 60 }]
+}
+
 export interface Activity {
   id: string
   teamId: string
@@ -60,12 +89,14 @@ export interface Activity {
   /** Denormalised provider display name. */
   providerName?: string
   /** APPOINTMENT-ONLY. The session lengths a client may book this offering at,
-   *  e.g. [30, 60, 90]. Duration belongs to the *what* (the activity), not to the
-   *  *when* (the availability schedule): a "Technique Assessment" is 60 minutes
-   *  wherever it is offered. An availability window's selectable start times are
-   *  derived from these — they are never configured on the availability doc.
-   *  Classes don't use this (their length is per-session, from start/end). */
-  durationsMinutes?: number[]
+   *  each with an optional price. Duration belongs to the *what* (the activity),
+   *  not to the *when* (the availability schedule): a "Technique Assessment" is
+   *  60 minutes wherever it is offered. An availability window's selectable start
+   *  times are derived from these — never configured on the availability doc.
+   *  Classes don't use this (their length is per-session, from start/end).
+   *  History: was `durationsMinutes: number[]` until 2026-07 (pre-launch), when
+   *  per-duration pricing arrived with paid appointments. */
+  durations?: ActivityDuration[]
   /** Does a booking confirm itself, or does the studio decide?
    *  - `true`  → the booking is written `status: 'confirmed'` on the spot.
    *  - `false` → it stays unconfirmed until the studio confirms/checks them in.

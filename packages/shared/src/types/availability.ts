@@ -12,8 +12,8 @@ export interface AvailabilityRecurrence {
  *  - 'range': a daily time range the client self-books within (Calendly-style),
  *    stepped by `granularityMinutes`.
  *  - 'times': an explicit list of start times per day.
- *  Which *durations* are offered is NOT stored here — it derives from the linked
- *  activities' `durationsMinutes` (see `activityIds`). */
+ *  Which *durations* are offered (and at what price) is NOT stored here — it
+ *  derives from the linked activities' `durations` (see `activityIds`). */
 export type AvailabilityMode = 'range' | 'times'
 
 /** Daily bookable time range ('range' mode), Europe/Zurich, 'HH:MM'. */

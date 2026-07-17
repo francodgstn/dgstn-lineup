@@ -143,8 +143,10 @@ export interface Appointment {
    *  booking status = pending = holds a seat). */
   bookings_count: number;
   location?: string | null;
-  /** Absent on the wire when nobody has booked yet — normalised to 'open' on read. */
-  status: 'open' | 'full' | 'cancelled';
+  /** Absent on the wire when nobody has booked yet — normalised to 'open' on read.
+   *  'pending_payment' is a slot held while its buyer completes checkout; the
+   *  member never sees one of their own (holds aren't their bookings yet). */
+  status: 'open' | 'full' | 'cancelled' | 'pending_payment';
 }
 
 export type AppointmentBookingStatus = 'booked' | 'available' | 'full' | 'cancelled';
@@ -176,10 +178,20 @@ export interface AvailabilityDay {
   slotsByDuration: Record<string, number[]>;
 }
 
+/** One bookable length of an appointment offering. Mirrors @linyup/shared's
+ *  `ActivityDuration` (structural copy — keep in sync).
+ *  `priceAmount` is major units; null/absent = unpriced. Mobile stays on the
+ *  free path for now: a priced length the contact isn't covered for is refused
+ *  by `bookAppointment` with `payment_required` (no checkout surface here yet). */
+export interface AppointmentDuration {
+  minutes: number;
+  priceAmount?: number | null;
+}
+
 export interface AvailabilityActivity {
   activityId: string;
   activityName: string;
-  durationsMinutes: number[];
+  durations: AppointmentDuration[];
   accessRule: ActivityAccessRule;
   location: string | null;
   onlineUrl: string | null;

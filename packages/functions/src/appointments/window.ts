@@ -28,9 +28,11 @@ import {
   ACTIVITIES_COLLECTION,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   resolveActivityAccessRule,
+  resolveAppointmentDurations,
   resolveAutoConfirm,
   type Activity,
   type ActivityAccessRule,
+  type ActivityDuration,
   type Availability,
   type SaasPlan,
 } from '@linyup/shared'
@@ -75,19 +77,18 @@ function conflicts(startMs: number, durMs: number, busy: BusyInterval[], bufferM
 interface ActivityInfo {
   id: string
   name: string
-  durationsMinutes: number[]
+  /** Priced duration menu (resolveAppointmentDurations default applied). */
+  durations: ActivityDuration[]
   accessRule: ActivityAccessRule
 }
 
 function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
-  const durationsMinutes = (a.durationsMinutes && a.durationsMinutes.length ? a.durationsMinutes : [60]).filter(
-    (x) => x > 0
-  )
-  if (!durationsMinutes.length) return null
+  const durations = resolveAppointmentDurations(a)
+  if (!durations.length) return null
   return {
     id,
     name: a.name || 'Appointment',
-    durationsMinutes,
+    durations,
     accessRule: resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial }),
   }
 }
@@ -218,7 +219,7 @@ export const listAvailability = onCall(async (request) => {
   interface ActivityAccumulator {
     activityId: string
     activityName: string
-    durationsMinutes: number[]
+    durations: ActivityDuration[]
     accessRule: ActivityAccessRule
     location: string | null
     onlineUrl: string | null
@@ -256,7 +257,7 @@ export const listAvailability = onCall(async (request) => {
           acc = {
             activityId,
             activityName: info.name,
-            durationsMinutes: info.durationsMinutes,
+            durations: info.durations,
             accessRule: info.accessRule,
             location: tpl.location ?? null,
             onlineUrl: tpl.onlineUrl ?? null,
@@ -264,7 +265,7 @@ export const listAvailability = onCall(async (request) => {
           }
           activityAcc.set(activityId, acc)
         }
-        accumulateCandidates(tpl, info.durationsMinutes, busy, nowMs, toMs, acc.daysMap)
+        accumulateCandidates(tpl, info.durations.map((d) => d.minutes), busy, nowMs, toMs, acc.daysMap)
       }
     }
 
@@ -282,7 +283,13 @@ export const listAvailability = onCall(async (request) => {
         activities.push({
           activityId: acc.activityId,
           activityName: acc.activityName,
-          durationsMinutes: acc.durationsMinutes,
+          // Full priced menu — incl. subscriptionPricing, so the picker can show
+          // a verified member their effective price (server re-resolves at booking).
+          durations: acc.durations.map((d) => ({
+            minutes: d.minutes,
+            priceAmount: d.priceAmount ?? null,
+            subscriptionPricing: d.subscriptionPricing ?? [],
+          })),
           accessRule: acc.accessRule,
           location: acc.location,
           onlineUrl: acc.onlineUrl,
@@ -475,10 +482,11 @@ export const bookAppointment = onCall(async (request) => {
   if (activity.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Team mismatch')
   if (activity.type !== 'appointment')
     throw new HttpsError('failed-precondition', 'This activity does not support appointment booking')
-  const allowedDurations =
-    activity.durationsMinutes && activity.durationsMinutes.length ? activity.durationsMinutes : [60]
-  if (!allowedDurations.includes(durationMinutes))
-    throw new HttpsError('failed-precondition', 'Duration is not offered')
+  const allowedDurations = resolveAppointmentDurations(activity)
+  const chosenDuration = allowedDurations.find((d) => d.minutes === durationMinutes)
+  if (!chosenDuration) throw new HttpsError('failed-precondition', 'Duration is not offered')
+  // chosenDuration.priceAmount / subscriptionPricing feed the payment gate (P3).
+  void chosenDuration
 
   // Does a booking here confirm itself on the spot, or does the studio decide?
   // Denormalised onto the created session below so cancellation/booking logic

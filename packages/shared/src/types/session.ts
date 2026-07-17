@@ -1,5 +1,26 @@
 import type { Timestamp } from './common'
 
+/** Has a paid-booking hold lapsed? A 'pending_payment' session whose
+ *  `hold_expires_at` has passed no longer blocks its slot — readers treat it as
+ *  free (lazy expiry) until the daily sweep flips it to 'cancelled'. */
+export function isExpiredAppointmentHold(
+  s: { status?: string; hold_expires_at?: { toMillis(): number } | null },
+  nowMs = Date.now()
+): boolean {
+  return s.status === 'pending_payment' && !!s.hold_expires_at && s.hold_expires_at.toMillis() <= nowMs
+}
+
+/** THE slot-blocking predicate for appointment scheduling — the single source of
+ *  truth for "does this session make the provider busy?". Used by
+ *  listAvailability's busy filter, both branches of the booking transaction
+ *  (deterministic-id reuse + overlap range loop), and the admin calendar. */
+export function appointmentSlotBlocked(
+  s: { status?: string; hold_expires_at?: { toMillis(): number } | null },
+  nowMs = Date.now()
+): boolean {
+  return s.status !== 'cancelled' && !isExpiredAppointmentHold(s, nowMs)
+}
+
 export interface Session {
   id: string
   teamId: string
@@ -47,8 +68,16 @@ export interface Session {
   bookings_count?: number
   /** Capacity state, derived from bookings_count vs max_participants (plus
    *  explicit cancellation). Treat an ABSENT value as 'open' — a session that
-   *  nobody has booked yet may not carry one. */
-  status?: 'open' | 'full' | 'cancelled'
+   *  nobody has booked yet may not carry one.
+   *  'pending_payment' (appointments only) = a paid-booking HOLD: the slot is
+   *  reserved while the client completes Stripe checkout. Blocks the slot while
+   *  live, is logically free once `hold_expires_at` passes (lazy expiry — see
+   *  appointmentSlotBlocked), is never published publicly, and is skipped by the
+   *  trackBookings recount (the checkout/webhook/sweeper own its lifecycle). */
+  status?: 'open' | 'full' | 'cancelled' | 'pending_payment'
+  /** When a 'pending_payment' hold stops blocking the slot (created +30 min).
+   *  Deleted when the webhook confirms payment. */
+  hold_expires_at?: Timestamp | null
   /** Denormalised from Activity.autoConfirm. When true a booking is written
    *  `status: 'confirmed'` immediately (the client's slot is theirs); when false
    *  it stays unconfirmed until the studio confirms/checks them in. Defaults by
