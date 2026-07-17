@@ -207,6 +207,11 @@ export interface ActivityPublicProfile {
   accessRule?: ActivityAccessRule
   /** Denormalised drop-in config so the booking UI can offer pay-per-class. */
   dropIn?: { enabled: boolean; priceAmount?: number }
+  /** APPOINTMENT-ONLY. The duration menu with base prices so public cards can
+   *  show "from CHF 45". Mirrored from `Activity.durations` with
+   *  `subscriptionPricing` STRIPPED — member benefits are per-contact data,
+   *  never public; the picker gets the full shape from `listAvailability`. */
+  durations?: Array<{ minutes: number; priceAmount: number | null }>
   /** Denormalised display-only prerequisites for the public booking pages. */
   prerequisites?: string
 }

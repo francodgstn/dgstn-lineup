@@ -52,7 +52,7 @@ reused by the BYO webhooks, the manual entry, and `updatePaymentRecord` on assig
 | `subscription` | Set subscription fields (`subscription_type_id`/name/price/recurrence) + a credit grant when the price carries `credits`. **No** affiliation/expiry write — the subscription axis is separate from the affiliation axis. |
 | `course` | Grant the **lifetime entitlement** (`courses/{id}/purchases/{contactId}`) — unlocks the course in the Space. |
 | `product` | Record-only: an `activity_log` entry (merch, no entitlement). |
-| `drop_in` / `other` | `last_payment_at` + an activity entry. |
+| `drop_in` / `appointment` / `other` | `last_payment_at` + an activity entry. |
 
 Every effect appends an `activity_log` entry carrying the `payment_id` so the contact
 timeline links back to the exact payment. Effects are idempotent (course keyed by
@@ -209,6 +209,23 @@ membership is created — a drop-in is a single paid booking, not a subscription
 - **Scope.** Group-class only (coaching is rejected — 1:1 capacity model). The mobile app
   books coaching only, so it has no drop-in surface.
 
+## Appointments (pay-per-1:1 booking)
+
+The 1:1 counterpart to drop-in, over the same Connect one-off checkout — but with its
+own model: the price is **per duration** on the appointment activity
+(`Activity.durations[].priceAmount` + explicit per-subscription-type member pricing),
+and since an appointment session doesn't exist until booked, **the hold IS the
+session** — `createAppointmentCheckout` (`appointments/checkout.ts`) reserves the slot
+as a `pending_payment` session (+ a `pending`/`required` booking, `hold_expires_at` ≈
+now + 30 min, Stripe `expires_at` at 31) before starting the Checkout, with metadata
+`{ kind: 'appointment', sessionId, contactId, activityId, providerId, startMs,
+durationMinutes }`. The `checkout.session.completed` webhook (`handleAppointmentCheckout`)
+confirms the hold (or re-acquires a swept slot, or refunds a lost/duplicate one) and
+writes `member_payments/{pi}` with `kind: 'appointment'` + `sessionId`;
+`checkout.session.expired` (`handleAppointmentCheckoutExpired`) releases a still-pending
+hold promptly. Full architecture — pricing model, access-vs-price gates, the hold state
+machine, race cases: **`docs/appointments.md` → "Paid appointments"**.
+
 ## Functions
 
 | Function | Type | Who | What |
@@ -220,6 +237,7 @@ membership is created — a drop-in is a single paid booking, not a subscription
 | `createMemberSubscription` | callable | manager+ | Ad-hoc subscription Checkout Session (+ `application_fee_percent`). |
 | `createMembershipCheckout` / `createProductCheckout` / `createCourseCheckout` | callable (public) | anyone | Member self-checkout from the public shop (email only). |
 | `createDropInCheckout` | callable (public) | anyone | Pay-per-class booking — writes a pending booking hold + a one-off Checkout; the webhook confirms the booking on payment. See [Drop-in](#drop-in-pay-per-class-booking). |
+| `createAppointmentCheckout` | callable (public) | anyone | Pay-per-appointment booking — reserves the slot as a `pending_payment` session (the hold IS the session) + a one-off Checkout at the caller's **effective** per-duration price; the webhook confirms on payment. See [Appointments](#appointments-pay-per-11-booking). |
 | `refundMemberPayment` | callable | manager+ | Refund a charge, reversing the platform fee proportionally. |
 | `updatePaymentRecord` | callable | manager+ | (Re)assign the contact + edit the comment (shared with BYO). |
 | `handleConnectWebhook` | onRequest (public) | Stripe | Verify + reconcile account / payment / subscription / refund / dispute state + contact membership. |
@@ -299,6 +317,7 @@ Functions emulator. In production, register a **Connect** webhook endpoint point
 ```
 account.updated, capability.updated, v2.core.account*  (account state)
 checkout.session.completed                              (links/creates the buyer's contact)
+checkout.session.expired                                (releases appointment payment holds)
 payment_intent.succeeded, payment_intent.payment_failed
 charge.refunded, charge.dispute.created, charge.dispute.closed
 customer.subscription.created/updated/deleted
@@ -403,6 +422,36 @@ forwarded (see [Webhook setup](#webhook-setup)).
 6. **Double-charge guard.** Pay two Checkout sessions for the same class+contact → the
    second `checkout.session.completed` finds the booking already `confirmed` and issues an
    automatic refund (a duplicate `member_payments` row lands as `status: refunded`).
+
+### Appointment (pay-per-1:1)
+
+End-to-end for the [appointment checkout](#appointments-pay-per-11-booking). Same
+prerequisites as the drop-in test (chargeable connected account + Connect webhook
+forwarded — the CLI forwards `checkout.session.expired` too).
+
+1. **Price a duration.** In `offer/activities`, give an **appointment** activity a
+   priced duration (e.g. 60 min → `85`) and publish availability covering it.
+2. **Book as a guest.** Open `/public/{slug}/appointments`, pick coach → activity →
+   the priced duration (the chip shows the price) → a time → fill name + email → pay
+   with `4242 4242 4242 4242`.
+3. **Expect the confirmation.** During checkout the slot is HELD: `sessions/apt_…`
+   exists with `status: pending_payment` + `hold_expires_at` (ghosted "Awaiting
+   payment" in the admin calendar). On payment, `checkout.session.completed`
+   (`kind: appointment`) flips the session to `full` (hold field deleted), the booking
+   to `confirmed`/`paid` (+ `payment_intent_id`, `fullname`), and writes
+   `member_payments/{pi}` with `kind: appointment` + `sessionId`. The buyer lands on
+   `/{locale}/pay/result?seg=appointments`.
+4. **Covered refusal.** As a contact whose subscription type has an INCLUDED entry on
+   that duration, `createAppointmentCheckout` throws `failed-precondition`
+   (`reason: 'covered'`) — the picker books them free instead (a credit-pack type
+   spends a credit). Conversely, a payable caller on `bookAppointment` gets
+   `reason: 'payment_required'` with their effective amount.
+5. **Abandoned hold.** Start a checkout, don't pay → the slot stays blocked for other
+   browsers; after ~31 min `checkout.session.expired` cancels the hold (or hand-expire
+   `hold_expires_at` and watch the picker re-offer the time lazily; the daily
+   `expirePendingBookings` sweeps it to `cancelled`).
+6. **Double-charge guard.** Pay two Checkouts for the same slot+contact → the second
+   delivery refunds the duplicate PI (`member_payments` row `status: refunded`).
 
 Unit tests for the fee calculation: `pnpm --filter @linyup/functions test`
 (`computePlatformFee` / `applyTakeRate`). Build `@linyup/shared` first.

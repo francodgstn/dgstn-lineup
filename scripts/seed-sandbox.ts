@@ -1761,10 +1761,29 @@ async function seedDemoTeam(profile: SectorProfile) {
       })
   }
 
-  // The WHAT of an appointment: name, bookable lengths, capacity, access rule.
-  // The availability below only publishes the WHEN.
+  // The WHAT of an appointment: name, bookable lengths (with their prices),
+  // access rule. The availability below only publishes the WHEN.
   const appointmentActId = `${teamId}-act-appointment`
-  const appointmentDurations = [30, 60]
+  // Per-duration pricing (major units, CHF) — the MIXED demo case. The 60-min
+  // duration carries the EXPLICIT member benefit: the annual plan has it
+  // INCLUDED (priceAmount: null → holders book free via the free path), the
+  // monthly plan gets a member price (holders pay that through checkout), and
+  // every other subscription (quarterly, drop-in, aggregator) pays base — a
+  // priced duration with no entry costs base even for subscribers (member
+  // benefit is data, never implied). Every sandbox profile defines a monthly
+  // and an annual plan, so the ids below always resolve. The 30-min duration
+  // is base-price-only, so it demos exactly that rule.
+  const appointmentDurations = [
+    { minutes: 30, priceAmount: 45 },
+    {
+      minutes: 60,
+      priceAmount: 85,
+      subscriptionPricing: [
+        { subscriptionTypeId: subIdOf('annual'), priceAmount: null },
+        { subscriptionTypeId: subIdOf('monthly'), priceAmount: 60 },
+      ],
+    },
+  ]
   await db
     .collection('activities')
     .doc(appointmentActId)
@@ -1777,7 +1796,8 @@ async function seedDemoTeam(profile: SectorProfile) {
       providerId: uid,
       providerName: ownerName,
       level: 'all',
-      durationsMinutes: appointmentDurations,      // A 1:1 slot has no roster-review step — the time is taken the moment it's
+      durations: appointmentDurations,
+      // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
       isFreeTrial: true,
@@ -1800,6 +1820,13 @@ async function seedDemoTeam(profile: SectorProfile) {
       image_url: null,
       isFreeTrial: true,
       level: 'all',
+      // Duration menu with base prices only ("from CHF 45" on public cards) —
+      // subscriptionPricing is STRIPPED, exactly as syncActivityPublicProfile
+      // mirrors it (member benefits are per-contact data, never public).
+      durations: appointmentDurations.map((d) => ({
+        minutes: d.minutes,
+        priceAmount: d.priceAmount ?? null,
+      })),
     })
 
   // ── availability (the WHEN — publishes free time, generates nothing) ────
@@ -1857,7 +1884,8 @@ async function seedDemoTeam(profile: SectorProfile) {
       activityId: appointmentActId,
       activityName: appointmentName,
       accessRule: { type: 'open' },
-      isFreeTrial: true,      providerId: uid,
+      isFreeTrial: true,
+      providerId: uid,
       providerName: ownerName,
       start: apt.start,
       durationMinutes: apt.durationMinutes,

@@ -245,22 +245,33 @@ Two primitives, not two entities — both are `sessions/{id}` docs:
 `'appointment_session'`; activity mirrors carry `activityType` so public UIs route
 appointment cards to the picker.
 
-**The what vs the when.** The `Activity` owns the *what* — `durationsMinutes`,
-`accessRule`, price (no capacity: an appointment is exclusive time, one booking per
-slot by definition). The `availability/{id}` doc owns only the
-*when* — provider, recurrence, `mode: 'range'|'times'`, buffer, and
+**The what vs the when.** The `Activity` owns the *what* — `durations`
+(each length with an optional price), `accessRule` (no capacity: an appointment is
+exclusive time, one booking per slot by definition). The `availability/{id}` doc
+owns only the *when* — provider, recurrence, `mode: 'range'|'times'`, buffer, and
 **`activityIds`** (which appointment activities are bookable in that window).
 Durations are never stored on availability; they derive from the linked activities.
 Because a window may offer activities of different lengths, a start time is
 indeterminate until the client picks one — **which is why availability can never be
 pre-generated** (the old slot-generation cron was deleted for exactly this reason).
 
-Booking: **`bookAppointment`** is the only appointment path (`bookSession` is
-class-only and rejects them); the client sends no templateId — the server resolves
-the covering availability. `listAvailability` computes free times, coach-first.
-Both callables share the paid-access gate in `booking/access.ts`, so appointments
-are subscription-gateable like any activity. `cancelBooking` handles both kinds.
-Drop-in and kiosk walk-in are class-only. Full doc: `docs/appointments.md`.
+Booking: **`bookAppointment`** is the free/covered appointment path (`bookSession`
+is class-only and rejects them); the client sends no templateId — the server
+resolves the covering availability. `listAvailability` computes free times,
+coach-first. Both callables share the paid-access gate in `booking/access.ts`, so
+appointments are subscription-gateable like any activity. `cancelBooking` handles
+both kinds.
+
+**Paid appointments** price the duration itself: `Activity.durations:
+[{minutes, priceAmount?, subscriptionPricing?}]` — member benefit is EXPLICIT data
+per subscription type (`priceAmount: null` = included/free, a number = member
+price, absent entry = holders pay base; never implied). A payable caller is refused
+by `bookAppointment` (`payment_required`) and instead reserves→pays→confirms via
+**`createAppointmentCheckout`**: the hold IS the session (`status:
+'pending_payment'` + `hold_expires_at`, +30 min, lazily expiring) and the Connect
+webhook (`kind: 'appointment'`) confirms it to `full` on payment. `dropIn` stays
+class-only — appointments never use it. Kiosk walk-in is class-only too. Full doc:
+`docs/appointments.md` → "Paid appointments".
 
 ### SaaS plan tiers (Phase 2)
 

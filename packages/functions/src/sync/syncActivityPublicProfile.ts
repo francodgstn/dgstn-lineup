@@ -36,6 +36,18 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     ...(data.dropIn?.enabled && typeof data.dropIn.priceAmount === 'number'
       ? { dropIn: { enabled: true, priceAmount: data.dropIn.priceAmount } }
       : {}),
+    // Appointment duration menu with base prices so public cards can show
+    // "from CHF 45". subscriptionPricing is STRIPPED — member benefits are
+    // per-contact data, never public; the picker gets the full shape from
+    // listAvailability.
+    ...(data.type === 'appointment' && Array.isArray(data.durations) && data.durations.length
+      ? {
+          durations: data.durations.map((d: { minutes: number; priceAmount?: number | null }) => ({
+            minutes: d.minutes,
+            priceAmount: d.priceAmount ?? null,
+          })),
+        }
+      : {}),
     // Display-only prerequisites shown on the public booking pages.
     prerequisites: data.prerequisites || null,
   }
