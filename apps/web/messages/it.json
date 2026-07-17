@@ -4038,10 +4038,13 @@
       "trigger": "Trigger",
       "conditions": "Condizioni",
       "conditionsHint": "(tutte devono corrispondere)",
+      "conditionsHintEmpty": "(nessuna — si applica a tutti i contatti)",
+      "conditionsHintDailyEmpty": "(aggiungine almeno una)",
       "actions": "Azioni"
     },
     "ruleCard": {
       "unnamed": "(senza nome)",
+      "noConditions": "Tutti i contatti",
       "pauseAction": "Metti in pausa",
       "activateAction": "Attiva",
       "runNow": "Esegui ora",
@@ -4218,6 +4221,7 @@
     "validation": {
       "nameRequired": "Il nome è obbligatorio",
       "triggerRequired": "Il trigger è obbligatorio",
+      "conditionRequiredDaily": "Una regola giornaliera richiede almeno una condizione. Senza condizioni verrebbe eseguita ogni giorno per tutti i contatti del team.",
       "required": "Obbligatorio"
     },
     "dialogs": {
