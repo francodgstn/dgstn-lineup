@@ -21,6 +21,15 @@ env:
       - BUILD
       - RUNTIME
 
+  # Inbound webhooks (Automations → Webhooks). MUST be overridden here: the base
+  # apphosting.yaml carries the staging URL, and this file merges over it — without
+  # this line sandbox would hand out staging's webhook URL.
+  - variable: NEXT_PUBLIC_INBOUND_WEBHOOK_URL
+    value: https://europe-west6-linyup-sandbox.cloudfunctions.net/inboundWebhook
+    availability:
+      - BUILD
+      - RUNTIME
+
   # Firebase web config — public values (embedded in the JS bundle).
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
     value: linyup-sandbox

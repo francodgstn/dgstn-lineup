@@ -46,6 +46,16 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  # Inbound webhooks (Automations → Webhooks). MUST be overridden here: the base
+  # apphosting.yaml carries the staging URL and this file merges over it, so
+  # without this line prod would hand customers a staging webhook URL. App Hosting
+  # rejects `value: ""`, so the variable cannot be unset once the base defines it —
+  # it can only be pointed at the right project.
+  - variable: NEXT_PUBLIC_INBOUND_WEBHOOK_URL
+    value: https://europe-west6-linyup-prod.cloudfunctions.net/inboundWebhook
+    availability:
+      - BUILD
+      - RUNTIME
   # PostHog product analytics — public project key (safe to embed, like the
   # Firebase keys above). Paste your prod PostHog project key (phc_…) here to turn
   # analytics on; while empty, initPostHog() stays a no-op.
