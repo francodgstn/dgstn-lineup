@@ -1,7 +1,8 @@
 'use client'
 
 // The world-facing surfaces, as a vertical-tabs section: the list of public
-// pages runs down the left, the selected one's description sits on the right.
+// pages runs down the left, the selected one's description sits on the right,
+// over a wireframe of the surface that rises out of the panel's bottom edge.
 // On narrow screens the list becomes a horizontal, scrollable chip row above
 // the panel.
 import { useState } from 'react'
@@ -10,6 +11,7 @@ import type { Route } from 'next'
 import { ArrowRight } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { PUBLIC_PAGES, type PublicPageId } from './concepts'
+import { PublicPagePreview } from './PublicPagePreview'
 
 export function PublicPages() {
   const t = useTranslations('HowTo')
@@ -56,31 +58,40 @@ export function PublicPages() {
           })}
         </div>
 
-        {/* Detail panel */}
+        {/* Detail panel. `overflow-hidden` is what crops the preview: the mock
+            below is taller than the space left for it, so it's cut off by the
+            panel's own bottom edge. */}
         <div
           role="tabpanel"
           id="howto-pp-panel"
           aria-labelledby={`howto-pp-tab-${selected}`}
-          className="min-w-0 flex-1 rounded-xl border bg-card p-5"
+          className="min-w-0 flex-1 overflow-hidden rounded-xl border bg-card"
         >
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <PageIcon className="h-4 w-4" />
-            </span>
-            <h3 className="text-base font-semibold">
-              {t(`publicPages.surfaces.${selected}.name` as Parameters<typeof t>[0])}
-            </h3>
+          <div className="p-5">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <PageIcon className="h-4 w-4" />
+              </span>
+              <h3 className="text-base font-semibold">
+                {t(`publicPages.surfaces.${selected}.name` as Parameters<typeof t>[0])}
+              </h3>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              {t(`publicPages.surfaces.${selected}.desc` as Parameters<typeof t>[0])}
+            </p>
+            <div className="mt-4 border-t pt-3">
+              <Link
+                href={page.href as Route}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                {t('publicPages.openLink')} <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            {t(`publicPages.surfaces.${selected}.desc` as Parameters<typeof t>[0])}
-          </p>
-          <div className="mt-4 border-t pt-3">
-            <Link
-              href={page.href as Route}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              {t('publicPages.openLink')} <ArrowRight className="h-3 w-3" />
-            </Link>
+
+          {/* Wireframe of the surface, framed like a window rising from below. */}
+          <div className="mx-5 mt-1 h-32 overflow-hidden rounded-t-lg border border-b-0 shadow-sm sm:h-40">
+            <PublicPagePreview id={selected} className="h-auto w-full" />
           </div>
         </div>
       </div>

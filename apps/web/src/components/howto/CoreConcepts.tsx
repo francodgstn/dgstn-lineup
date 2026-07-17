@@ -14,8 +14,9 @@ import { ConceptMap } from './ConceptMap'
 
 export function CoreConcepts() {
   const t = useTranslations('HowTo')
-  // Never empty — the panel always shows a concept (activities first).
-  const [selected, setSelected] = useState<ConceptId>('activities')
+  // Never empty — the panel always shows a concept. Contacts is where both the
+  // map (the apex) and the card row start, so it's also where the panel starts.
+  const [selected, setSelected] = useState<ConceptId>('contacts')
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Diagram clicks scroll the panel into view (it may be below the fold);
