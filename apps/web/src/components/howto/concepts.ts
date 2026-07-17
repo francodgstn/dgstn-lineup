@@ -32,13 +32,10 @@ export interface Concept {
   links: { href: string; labelKey: string }[]
 }
 
+// Order matters: the selector cards render in this order, and it deliberately
+// mirrors the map — Contacts (apex) first, then the base read left to right.
 export const CONCEPTS: Concept[] = [
-  { id: 'activities', icon: Zap, links: [{ href: '/offer/activities', labelKey: 'manage' }] },
-  {
-    id: 'sessions',
-    icon: CalendarDays,
-    links: [{ href: '/schedule', labelKey: 'schedule' }],
-  },
+  { id: 'contacts', icon: Users, links: [{ href: '/contacts', labelKey: 'open' }] },
   {
     id: 'subscriptions',
     icon: IdCard,
@@ -47,13 +44,19 @@ export const CONCEPTS: Concept[] = [
       { href: '/offer/affiliations', labelKey: 'affiliations' },
     ],
   },
-  { id: 'contacts', icon: Users, links: [{ href: '/contacts', labelKey: 'open' }] },
+  { id: 'activities', icon: Zap, links: [{ href: '/offer/activities', labelKey: 'manage' }] },
+  {
+    id: 'sessions',
+    icon: CalendarDays,
+    links: [{ href: '/schedule', labelKey: 'schedule' }],
+  },
 ]
 
 // ─── concept-map geometry (triangle) ──────────────────────────────────────────
-// viewBox 0 0 500 270. Contacts at the apex; its base holds Subscriptions
-// (left) → Activities (middle) → Sessions (right).
-export const MAP_VIEWBOX = '0 0 500 270'
+// viewBox 0 0 560 258. Contacts at the apex; its base holds Subscriptions
+// (left) → Activities (middle) → Sessions (right). The base gaps are wide
+// (68px / 88px) so the connectors read as connectors and their labels have room.
+export const MAP_VIEWBOX = '0 0 560 258'
 
 export interface MapNode {
   id: ConceptId
@@ -64,10 +67,10 @@ export interface MapNode {
 }
 
 export const MAP_NODES: MapNode[] = [
-  { id: 'contacts', x: 190, y: 12, w: 130, h: 44 },
-  { id: 'subscriptions', x: 12, y: 190, w: 140, h: 44 },
-  { id: 'activities', x: 195, y: 190, w: 120, h: 44 },
-  { id: 'sessions', x: 368, y: 190, w: 120, h: 44 },
+  { id: 'contacts', x: 215, y: 12, w: 130, h: 44 },
+  { id: 'subscriptions', x: 10, y: 200, w: 140, h: 44 },
+  { id: 'activities', x: 220, y: 200, w: 120, h: 44 },
+  { id: 'sessions', x: 430, y: 200, w: 120, h: 44 },
 ]
 
 export interface MapEdge {
@@ -85,11 +88,15 @@ export interface MapEdge {
 // Triangle edges: Contacts "hold" Subscriptions + "book" Sessions (the two
 // sloping sides); Subscriptions "unlock" Activities and Activities are
 // "scheduled as" Sessions (along the base).
+//
+// The two base labels sit clear of their line, just above the boxes' top edge
+// (y 200): a translated label is usually wider than the gap it names, so on the
+// line it would be run over by the boxes on either side.
 export const MAP_EDGES: MapEdge[] = [
-  { labelKey: 'hold', x1: 218, y1: 56, x2: 110, y2: 190, lx: 152, ly: 120 },
-  { labelKey: 'book', x1: 292, y1: 56, x2: 398, y2: 190, lx: 358, ly: 120 },
-  { labelKey: 'unlocks', x1: 152, y1: 212, x2: 193, y2: 212, lx: 172, ly: 204 },
-  { labelKey: 'scheduledAs', x1: 315, y1: 212, x2: 366, y2: 212, lx: 340, ly: 204 },
+  { labelKey: 'hold', x1: 245, y1: 56, x2: 80, y2: 200, lx: 155, ly: 124 },
+  { labelKey: 'book', x1: 315, y1: 56, x2: 490, y2: 200, lx: 410, ly: 124 },
+  { labelKey: 'unlocks', x1: 150, y1: 222, x2: 218, y2: 222, lx: 184, ly: 192 },
+  { labelKey: 'scheduledAs', x1: 340, y1: 222, x2: 428, y2: 222, lx: 384, ly: 192 },
 ]
 
 // ─── public pages (their own section) ─────────────────────────────────────────

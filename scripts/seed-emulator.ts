@@ -157,14 +157,18 @@ function mondayOfWeeksAgo(n: number): Date {
   return d
 }
 
+// Wipe via the same hosts the admin SDK was pointed at (above) — hardcoding the
+// default ports here would clear the DEFAULT-port suite while seeding an
+// alternate-port one, i.e. silently destroy a parallel worktree's data.
 async function clearEmulator() {
   await fetch(
-    'http://localhost:8080/emulator/v1/projects/demo-linyup/databases/(default)/documents',
+    `http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/demo-linyup/databases/(default)/documents`,
     { method: 'DELETE' }
   ).catch(() => {})
-  await fetch('http://localhost:9099/emulator/v1/projects/demo-linyup/accounts', {
-    method: 'DELETE',
-  }).catch(() => {})
+  await fetch(
+    `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/emulator/v1/projects/demo-linyup/accounts`,
+    { method: 'DELETE' }
+  ).catch(() => {})
 }
 
 // Which seed teams belong to which org. seedOrg() links these later, but seedTeam

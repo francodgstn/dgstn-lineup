@@ -4478,6 +4478,13 @@
   "HowTo": {
     "title": "How-to",
     "subtitle": "Wie Linyup zusammenspielt — und wie dein Studio startklar wird.",
+    "tocTitle": "Auf dieser Seite",
+    "toc": {
+      "concepts": "Grundbegriffe",
+      "publicPages": "Öffentliche Seiten",
+      "faq": "Häufige Fragen",
+      "utilities": "Weitermachen"
+    },
     "conceptsTitle": "Kernkonzepte",
     "conceptsIntro": "Vier Bausteine treiben alles in Linyup an. Tippe auf einen Block in der Karte — oder auf eine Karte darunter —, um zu sehen, was er tut und wie er verknüpft ist.",
     "diagramAria": "Karte, wie die Kernkonzepte von Linyup zusammenhängen",

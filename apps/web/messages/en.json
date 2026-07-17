@@ -4478,6 +4478,13 @@
   "HowTo": {
     "title": "How-to",
     "subtitle": "How Linyup fits together, and how to get your studio up and running.",
+    "tocTitle": "On this page",
+    "toc": {
+      "concepts": "Core concepts",
+      "publicPages": "Public pages",
+      "faq": "Common questions",
+      "utilities": "Keep going"
+    },
     "conceptsTitle": "Core concepts",
     "conceptsIntro": "Four building blocks power everything inside Linyup. Tap a block on the map — or a card below — to see what it does and how it connects.",
     "diagramAria": "Map of how Linyup's core concepts connect",
