@@ -17,13 +17,13 @@ export function ConceptMap({ selected, onSelect }: Props) {
   const t = useTranslations('HowTo')
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-2xl">
       <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <svg
           viewBox={MAP_VIEWBOX}
           role="group"
           aria-label={t('diagramAria')}
-          className="h-auto w-full min-w-[440px]"
+          className="h-auto w-full min-w-[520px]"
         >
           <defs>
             <marker
@@ -39,32 +39,18 @@ export function ConceptMap({ selected, onSelect }: Props) {
             </marker>
           </defs>
 
-          {/* Edges + mid-edge labels. Labels get a background-coloured outline
-              (paint-order: stroke) so they stay readable over lines and node
-              borders at any translated length. */}
+          {/* Edge lines. Labels are a separate layer below, drawn last. */}
           {MAP_EDGES.map((e) => (
-            <g key={e.labelKey}>
-              <line
-                x1={e.x1}
-                y1={e.y1}
-                x2={e.x2}
-                y2={e.y2}
-                strokeWidth={1.5}
-                className="stroke-border"
-                markerEnd="url(#howto-arrow)"
-              />
-              <text
-                x={e.lx}
-                y={e.ly}
-                textAnchor="middle"
-                fontSize={11}
-                strokeWidth={5}
-                style={{ paintOrder: 'stroke' }}
-                className="fill-muted-foreground stroke-background select-none"
-              >
-                {t(`edges.${e.labelKey}` as Parameters<typeof t>[0])}
-              </text>
-            </g>
+            <line
+              key={e.labelKey}
+              x1={e.x1}
+              y1={e.y1}
+              x2={e.x2}
+              y2={e.y2}
+              strokeWidth={1.5}
+              className="stroke-border"
+              markerEnd="url(#howto-arrow)"
+            />
           ))}
 
           {/* Nodes — keyboard-focusable buttons. */}
@@ -111,6 +97,24 @@ export function ConceptMap({ selected, onSelect }: Props) {
               </g>
             )
           })}
+
+          {/* Edge labels last, so a long translated label is never painted over
+              by a node it happens to reach. The background-coloured outline
+              (paint-order: stroke) keeps it legible wherever it lands. */}
+          {MAP_EDGES.map((e) => (
+            <text
+              key={e.labelKey}
+              x={e.lx}
+              y={e.ly}
+              textAnchor="middle"
+              fontSize={11}
+              strokeWidth={5}
+              style={{ paintOrder: 'stroke' }}
+              className="pointer-events-none fill-muted-foreground stroke-background select-none"
+            >
+              {t(`edges.${e.labelKey}` as Parameters<typeof t>[0])}
+            </text>
+          ))}
         </svg>
       </div>
       <p className="mt-1 text-center text-xs text-muted-foreground sm:hidden">{t('diagramHint')}</p>

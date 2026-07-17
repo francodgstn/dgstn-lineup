@@ -4479,6 +4479,13 @@
   "HowTo": {
     "title": "Guida",
     "subtitle": "Come si incastra Linyup, e come avviare il tuo studio.",
+    "tocTitle": "In questa pagina",
+    "toc": {
+      "concepts": "Concetti chiave",
+      "publicPages": "Pagine pubbliche",
+      "faq": "Domande frequenti",
+      "utilities": "Continua"
+    },
     "conceptsTitle": "Concetti chiave",
     "conceptsIntro": "Quattro mattoni fanno funzionare tutto Linyup. Tocca un blocco sulla mappa — o una scheda qui sotto — per vedere cosa fa e come si collega.",
     "diagramAria": "Mappa dei collegamenti tra i concetti chiave di Linyup",

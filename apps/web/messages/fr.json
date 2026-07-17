@@ -4479,6 +4479,13 @@
   "HowTo": {
     "title": "Guide",
     "subtitle": "Comment Linyup s'articule, et comment lancer votre studio.",
+    "tocTitle": "Sur cette page",
+    "toc": {
+      "concepts": "Concepts clés",
+      "publicPages": "Pages publiques",
+      "faq": "Questions fréquentes",
+      "utilities": "Continuer"
+    },
     "conceptsTitle": "Concepts clés",
     "conceptsIntro": "Quatre briques font tourner tout Linyup. Touchez un bloc sur la carte — ou une carte ci-dessous — pour voir son rôle et ses liens.",
     "diagramAria": "Carte des liens entre les concepts clés de Linyup",
