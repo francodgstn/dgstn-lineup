@@ -42,6 +42,15 @@ describe('optionalContactSessionFromRequest', () => {
     assert.equal(optionalContactSessionFromRequest(r), null)
   })
 
+  it('never mistakes a kiosk token for a contact session', () => {
+    // A kiosk tablet signs in as a DEVICE and namespaces its team as `kioskTeam`
+    // precisely so it can never be read as a contact. bookSession/bookAppointment
+    // read request.auth now, so a kiosk caller must still fall through to the guest
+    // path. Guards against anyone renaming kioskTeam -> teamId. See kiosk/index.ts.
+    const r = req({ kiosk: true, kioskTeam: 't1', kioskEpoch: 1 })
+    assert.equal(optionalContactSessionFromRequest(r), null)
+  })
+
   it('ignores a body contactId even alongside a session (session wins)', () => {
     const r = req(
       { contactId: 'real', teamId: 't1', sessionExpires: future },

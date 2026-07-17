@@ -66,9 +66,6 @@ export interface Activity {
    *  derived from these — they are never configured on the availability doc.
    *  Classes don't use this (their length is per-session, from start/end). */
   durationsMinutes?: number[]
-  /** APPOINTMENT-ONLY. Booking cap for a materialised appointment session.
-   *  Defaults to 1 (a true 1:1); >1 allows small-group coaching. */
-  max_participants?: number
   /** Does a booking confirm itself, or does the studio decide?
    *  - `true`  → the booking is written `status: 'confirmed'` on the spot.
    *  - `false` → it stays unconfirmed until the studio confirms/checks them in.

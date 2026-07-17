@@ -66,7 +66,6 @@ export interface SeedAppointmentInput {
   /** Inherited from the activity, exactly as bookAppointment does. */
   accessRule: SeedAccessRule
   isFreeTrial: boolean
-  maxParticipants: number
   /** Denormalised from the activity's `autoConfirm` (see resolveAutoConfirm).
    *  Defaults to true — an appointment's booking takes the provider's time on the
    *  spot, which is why the booking doc below is written `status: 'confirmed'`. */
@@ -116,7 +115,9 @@ export function buildAppointmentSessionDocs(input: SeedAppointmentInput): {
     start: tsOf(input.start),
     end: tsOf(end),
     duration_minutes: input.durationMinutes,
-    max_participants: input.maxParticipants,
+    // Always 1 — an appointment is a provider's exclusive time (bookAppointment
+    // hardcodes this too; trackBookings reads it to drive the 'full' flip).
+    max_participants: 1,
     // ONE counter for both kinds: bookings HOLDING CAPACITY (status neither
     // 'cancelled' nor 'no_show'). The separate bio-link counter classes used to
     // count into was merged into this one (2026-07).
@@ -149,7 +150,9 @@ export function buildAppointmentSessionDocs(input: SeedAppointmentInput): {
     duration_minutes: input.durationMinutes,
     location: input.location ?? null,
     onlineUrl: input.onlineUrl ?? null,
-    max_participants: input.maxParticipants,
+    // Always 1 — an appointment is a provider's exclusive time (bookAppointment
+    // hardcodes this too; trackBookings reads it to drive the 'full' flip).
+    max_participants: 1,
     bookings_count: 1,
     isFreeTrial: input.isFreeTrial,
     accessRule: input.accessRule,

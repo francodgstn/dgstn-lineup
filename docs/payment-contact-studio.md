@@ -348,6 +348,35 @@ Lead-demo seeds wire it inline: `pnpm lead:seed --lead <id> --connect acct_xxx` 
 tenant can take payments immediately — shared helper `scripts/lib/connect.ts`. See
 `scripts/leads/README.md`.
 
+### Enable TWINT on a test connected account
+
+Checkout shows whatever the **connected account's** payment-method configuration has on
+(direct charges + dynamic payment methods — `createOneOffCheckoutSession` never passes
+`payment_method_types`). The platform's own Settings → Payment methods page does NOT
+affect this. Two independent switches, both API-doable in test mode (the CLI is logged
+into the sandbox — no key handling):
+
+```bash
+# 1. Capability — usually already 'active' on CH accounts; if missing, request it
+#    (instant in test mode, no real KYC):
+stripe post /v1/accounts/acct_xxx/capabilities/twint_payments -d requested=true
+
+# 2. The actual gate — flip TWINT on in the ACCOUNT's payment-method config(s):
+stripe payment_method_configurations list --stripe-account acct_xxx
+stripe payment_method_configurations update pmc_xxx --stripe-account acct_xxx \
+  -d "twint[display_preference][preference]=on"     # repeat per pmc_… returned
+```
+
+Expect `twint: available: true, preference: on` in the response — the next CHF checkout
+session offers TWINT immediately (no code change / restart). Dashboard equivalent:
+Connect → Connected accounts → *account* → Payment methods → Edit → TWINT *On by
+default*. Constraints: **CHF-only** sessions; reliable on **one-off** (`mode: payment`)
+checkouts (recurring TWINT depends on the API version — see "Validate in test mode");
+test mode shows a simulator page with Authorize/Fail instead of the app handoff. Note
+TWINT charges are `py_…` objects whose balance transaction arrives AFTER
+`payment_intent.succeeded` — the `charge.updated` healer upgrades the finance journal's
+fee split (see `docs/finance-reports.md`).
+
 ### Drop-in (pay-per-class)
 
 End-to-end for the [drop-in flow](#drop-in-pay-per-class-booking). Needs a test team with

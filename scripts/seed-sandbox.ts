@@ -1777,9 +1777,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       providerId: uid,
       providerName: ownerName,
       level: 'all',
-      durationsMinutes: appointmentDurations,
-      max_participants: 1,
-      // A 1:1 slot has no roster-review step — the time is taken the moment it's
+      durationsMinutes: appointmentDurations,      // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
       isFreeTrial: true,
@@ -1859,9 +1857,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       activityId: appointmentActId,
       activityName: appointmentName,
       accessRule: { type: 'open' },
-      isFreeTrial: true,
-      maxParticipants: 1,
-      providerId: uid,
+      isFreeTrial: true,      providerId: uid,
       providerName: ownerName,
       start: apt.start,
       durationMinutes: apt.durationMinutes,
@@ -2579,7 +2575,7 @@ async function seedDemoTeam(profile: SectorProfile) {
     updated_by: 'seed-sandbox',
   })
 
-  // ── student auth user (custom-token identity matching generateAuthToken) ───
+  // ── student auth user (contact-session identity matching buildContactSession) ───
   const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
   const studentContactId = contactIds[studentIdx]
   const studentUid = `contact:${teamId}:${studentContactId}`
@@ -2592,16 +2588,6 @@ async function seedDemoTeam(profile: SectorProfile) {
     password: DEMO_PASSWORD,
     claims: { contactId: studentContactId, teamId, sessionExpires, email: studentEmail },
   })
-  await db
-    .collection('auth_tokens')
-    .doc(`${teamId}-seed-student`)
-    .set({
-      contactId: studentContactId,
-      teamId,
-      createdBy: uid,
-      sessionExpires,
-      created_at: ts(now()),
-    })
 
   console.log(
     `   ✓ ${teamName} (${profile.sector}) — ${contactCount} contacts, ${sessionDefs.length} sessions`

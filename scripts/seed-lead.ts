@@ -449,6 +449,9 @@ const TENANT_FIELD_COLLECTIONS: { collection: string; field: string }[] = [
   { collection: 'referral_codes', field: 'teamId' },
   { collection: 'connect_accounts', field: 'teamId' },
   { collection: 'saas_checkout_attempts', field: 'teamId' },
+  // Legacy: nothing writes auth_tokens any more (the mechanism was dead and was
+  // removed 2026-07-17), but keep purging it so docs left by earlier seed runs of
+  // an already-provisioned sandbox still get cleaned up on --reset.
   { collection: 'auth_tokens', field: 'teamId' },
 ]
 const TENANT_DOCID_COLLECTIONS = [
@@ -1087,9 +1090,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         providerId: uidOf(providerKey),
         providerName: staffName(providerKey),
         level: 'all',
-        durationsMinutes: apt.durationsMinutes,
-        max_participants: apt.maxParticipants ?? 1,
-        // A 1:1 slot has no roster-review step — the time is taken the moment
+        durationsMinutes: apt.durationsMinutes,        // A 1:1 slot has no roster-review step — the time is taken the moment
         // it's booked, so the booking is written 'confirmed' on the spot.
         autoConfirm: true,
         isFreeTrial: accessRule.type === 'open',
@@ -1200,9 +1201,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         activityId: aptActIdOf(bookedApt.key),
         activityName: bookedApt.activityName,
         accessRule: bookedAccessRule,
-        isFreeTrial: bookedAccessRule.type === 'open',
-        maxParticipants: bookedApt.maxParticipants ?? 1,
-        autoConfirm: true,
+        isFreeTrial: bookedAccessRule.type === 'open',        autoConfirm: true,
         providerId: providerUid,
         providerName,
         start,
@@ -2020,7 +2019,7 @@ async function seedLeadTenant(profile: LeadProfile) {
       updated_at: ts(now()),
     })
 
-  // ── student login (custom-token identity matching generateAuthToken) ───────
+  // ── student login (contact-session identity matching buildContactSession) ───────
   const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? studentIdxs[0]
   const studentContactId = contactIds[studentIdx]
   const studentUid = `contact:${teamId}:${studentContactId}`
@@ -2033,16 +2032,6 @@ async function seedLeadTenant(profile: LeadProfile) {
     password: DEMO_PASSWORD,
     claims: { contactId: studentContactId, teamId, sessionExpires, email: studentEmail },
   })
-  await db
-    .collection('auth_tokens')
-    .doc(`${teamId}-seed-student`)
-    .set({
-      contactId: studentContactId,
-      teamId,
-      createdBy: uid,
-      sessionExpires,
-      created_at: ts(now()),
-    })
 
   // Demo-login contact (if any) — surfaced in the seed summary so you know which
   // member to sign in as, and with which emails.

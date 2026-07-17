@@ -258,7 +258,6 @@ function TemplateDialog({
         accessRule: { type: 'open' as const },
         dropIn: { enabled: false },
         durationsMinutes: [60],
-        max_participants: 1,
         slug: 'appointment',
         teamId,
         createdBy: userId,

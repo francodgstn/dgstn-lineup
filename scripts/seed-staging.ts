@@ -1053,9 +1053,7 @@ async function seedTeam(opts: TeamSeed) {
       providerId: uid,
       providerName: displayName,
       level: 'all',
-      durationsMinutes: appointmentDurations,
-      max_participants: 1,
-      // A 1:1 slot has no roster-review step — the time is taken the moment it's
+      durationsMinutes: appointmentDurations,      // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
       isFreeTrial: true,
@@ -1136,9 +1134,7 @@ async function seedTeam(opts: TeamSeed) {
       activityId: appointmentActId,
       activityName: appointmentActName,
       accessRule: { type: 'open' },
-      isFreeTrial: true,
-      maxParticipants: 1,
-      providerId: uid,
+      isFreeTrial: true,      providerId: uid,
       providerName: displayName,
       start: apt.start,
       durationMinutes: apt.durationMinutes,
@@ -1946,7 +1942,7 @@ async function seedTeam(opts: TeamSeed) {
   }
   // org member teams are billed through the org subscription (handled in seedOrg)
 
-  // ── student auth user (custom-token identity matching generateAuthToken) ──────
+  // ── student auth user (contact-session identity matching buildContactSession) ──────
   const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
   const studentContactId = contactIds[studentIdx]
   const studentUid = `contact:${teamId}:${studentContactId}`
@@ -1963,16 +1959,6 @@ async function seedTeam(opts: TeamSeed) {
       email: `${slugEmail(pool[studentIdx])}.${teamId}@example.com`,
     },
   })
-  await db
-    .collection('auth_tokens')
-    .doc(`${teamId}-seed-student`)
-    .set({
-      contactId: studentContactId,
-      teamId,
-      createdBy: uid,
-      sessionExpires,
-      created_at: ts(now()),
-    })
 
   // ── documents (all plans — minPlan 'free') ──────────────────────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)

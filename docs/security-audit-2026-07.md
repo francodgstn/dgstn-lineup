@@ -28,6 +28,7 @@ or hardening gap · **L** = low-risk / defense-in-depth.
 |---|-----|---------|--------|
 | 1 | H | Cross-tenant LIST on `courses`/`forms`/`documents` | ✅ Fixed |
 | 2 | H | `createDropInCheckout` trusts client `authenticatedContactId` | ✅ Fixed |
+| 2b | H | Same pattern missed in `bookSession` / `bookAppointment` | ✅ Fixed (2026-07-17) |
 | 3 | M | App Check absent on all callables | ✅ Implemented (web provider + staged monitor→enforce on web-only callables) |
 | 4 | M | Event-invitation tokens never expire + leak PII | ✅ Fixed |
 | 5 | M | Unescaped user content in email HTML | ✅ Fixed |
@@ -69,6 +70,29 @@ the `contactDetails` email/name path only when there is no session. The client-s
 `authenticatedContactId` field was removed. The `optionalContactSession` duplicate in
 `connect/payments.ts` was folded into the same shared helper. The web guest flow (which
 already sent `contactDetails`) is unaffected.
+
+### 2b — the same pattern in `bookSession` / `bookAppointment` (H, fixed 2026-07-17)
+Finding #2 scoped itself to the *checkout* callables, so the two **booking** callables were
+never swept — and they carried the identical flaw. Both accepted `authenticatedContactId`
+from the request body and validated it only against an *optional* `verificationCodeId`:
+omit the code and the `if` block was skipped entirely, so the contact was adopted having
+been checked only for existence + `teamId` match, never that the caller *is* that contact.
+Worse than the `dropIn` case, which merely opened a checkout: `bookSession` writes a real
+booking and runs the paid-access gate **as the victim**, consuming their subscription
+entitlement or burning a lesson credit from their pack.
+
+Exploitation needs the victim's `contactId` — a random 20-char Firestore auto-ID that is
+not published — so this was not mass-exploitable, but the blast radius opened the moment
+any contactId leaked (a shared QR/screenshot, a stale export, a departed staffer, or any
+future endpoint returning contact ids).
+
+**Fix:** `verificationCodeId` is now **mandatory** whenever `authenticatedContactId` is
+supplied; both callables throw `invalid-argument` otherwise. The audit's own remedy
+(delete the field, derive from the session) does not apply here: the web OTP caller is
+anonymous — `verifyBookingCode` returns contact data without minting a custom token — so
+there is no session to derive from and the code must remain the proof. Signed-in callers
+(mobile) send no `authenticatedContactId` at all and are identified by their contact
+session. Every real caller already sent both fields, so no client changed.
 
 ### 3 — App Check (M, implemented — staged)
 No `enforceAppCheck` existed anywhere; unauthenticated Firestore-writing callables were

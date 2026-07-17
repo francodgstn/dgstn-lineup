@@ -1,9 +1,13 @@
 // Ported from hmd-lineup/functions/src/requestContactUpdate/index.js
-// Creates a contact data update request. Supports three auth modes:
-//   1. authToken      — from the student app (membership token)
-//   2. contact session — the passwordless contact session (web Space portal /
+// Creates a contact data update request. Supports two auth modes:
+//   1. contact session — the passwordless contact session (web Space portal /
 //                        mobile), identified by the custom-token claims
-//   3. codeId         — from the bio-link email-verification flow
+//   2. codeId         — from the bio-link email-verification flow
+//
+// A third mode, `authToken` (an `auth_tokens` doc from the student app), was
+// removed 2026-07-17: its only minter (`generateAuthToken`) never wrote the
+// snake_case shape this read, so the branch was unreachable. The student app now
+// uses its contact session — see docs/security-audit-2026-07.md.
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
@@ -11,9 +15,8 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 const CONTACT_REQUESTS_SUBCOLLECTION = 'contact_requests'
 
 export const requestContactUpdate = onCall(async (request) => {
-  const { codeId, authToken, contactDetails, note } = request.data as {
+  const { codeId, contactDetails, note } = request.data as {
     codeId?: string
-    authToken?: string
     contactId?: string
     teamId?: string
     contactDetails: Record<string, unknown>
@@ -26,11 +29,8 @@ export const requestContactUpdate = onCall(async (request) => {
   const sessionTeamId = request.auth?.token?.teamId as string | undefined
   const sessionExpires = request.auth?.token?.sessionExpires as number | undefined
 
-  if (!codeId && !authToken && !sessionContactId)
-    throw new HttpsError(
-      'invalid-argument',
-      'Missing required field: codeId, authToken, or a contact session'
-    )
+  if (!codeId && !sessionContactId)
+    throw new HttpsError('invalid-argument', 'Missing required field: codeId, or a contact session')
   if (!contactDetails)
     throw new HttpsError('invalid-argument', 'Missing required field: contactDetails')
 
@@ -43,28 +43,9 @@ export const requestContactUpdate = onCall(async (request) => {
   let teamId: string = request.data.teamId ?? ''
 
   const db = admin.firestore()
-  let tokenRef: admin.firestore.DocumentReference | null = null
   let codeRef: admin.firestore.DocumentReference | null = null
 
-  if (authToken) {
-    // ── Token-based auth (student app) ───────────────────────────────────────
-    const tokenDoc = await db.collection('auth_tokens').doc(authToken).get()
-    if (!tokenDoc.exists) throw new HttpsError('not-found', 'Invalid or expired token')
-
-    const tokenData = tokenDoc.data()!
-    if (tokenData.type !== 'signup')
-      throw new HttpsError('permission-denied', 'Token is not a signup token')
-    if ((tokenData.expires_at as Timestamp).toMillis() < Timestamp.now().toMillis())
-      throw new HttpsError('deadline-exceeded', 'Token has expired')
-    if (tokenData.used) throw new HttpsError('failed-precondition', 'Token has already been used')
-    if (request.data.teamId && tokenData.team_id !== request.data.teamId)
-      throw new HttpsError('permission-denied', 'Token does not match the requested team')
-
-    contactId = tokenData.contact_id as string
-    teamId = tokenData.team_id as string
-    tokenRef = tokenDoc.ref
-    console.log(`Token-based contact update request from contact ${contactId} for team ${teamId}`)
-  } else if (sessionContactId) {
+  if (sessionContactId) {
     // ── Contact-session auth (web Space portal / mobile) ────────────────────────
     // Trust the custom-token claims (minted server-side after email verification);
     // refuse a session past its 7-day window.
@@ -191,13 +172,6 @@ export const requestContactUpdate = onCall(async (request) => {
   }
 
   // ── Mark auth as used ───────────────────────────────────────────────────────
-  if (tokenRef) {
-    await tokenRef.update({
-      used: true,
-      used_at: FieldValue.serverTimestamp(),
-      used_for_request: requestRef.id,
-    })
-  }
   if (codeRef) {
     await codeRef.update({ used: true, usedAt: FieldValue.serverTimestamp(), contactId })
   }

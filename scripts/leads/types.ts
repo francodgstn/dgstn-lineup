@@ -171,10 +171,7 @@ export interface LeadAppointmentDef {
   imageAsset?: string
   /** The lengths this offering can be booked at (Activity.durationsMinutes).
    *  Duration belongs to the offering, never to the availability schedule. */
-  durationsMinutes: number[]
-  /** Activity.max_participants — 1 (a true 1:1) unless set. */
-  maxParticipants?: number
-  /** Paid-access gate (Activity.accessRule). Defaults to 'open'. */
+  durationsMinutes: number[]  /** Paid-access gate (Activity.accessRule). Defaults to 'open'. */
   accessTier?: 'open' | 'members' | 'subscription'
   /** For accessTier 'subscription': LeadSubscriptionDef.keys that grant access. */
   accessSubKeys?: string[]

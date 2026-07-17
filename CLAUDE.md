@@ -246,7 +246,8 @@ Two primitives, not two entities — both are `sessions/{id}` docs:
 appointment cards to the picker.
 
 **The what vs the when.** The `Activity` owns the *what* — `durationsMinutes`,
-`max_participants`, `accessRule`, price. The `availability/{id}` doc owns only the
+`accessRule`, price (no capacity: an appointment is exclusive time, one booking per
+slot by definition). The `availability/{id}` doc owns only the
 *when* — provider, recurrence, `mode: 'range'|'times'`, buffer, and
 **`activityIds`** (which appointment activities are bookable in that window).
 Durations are never stored on availability; they derive from the linked activities.

@@ -546,23 +546,32 @@ export const bookAppointment = onCall(async (request) => {
       phone: c.phone || null,
     }
   } else if (authenticated) {
-    if (data.verificationCodeId) {
-      const codeDoc = await db
-        .collection('booking_verification_codes')
-        .doc(data.verificationCodeId)
-        .get()
-      if (!codeDoc.exists) throw new HttpsError('invalid-argument', 'Invalid verification code')
-      const cd = codeDoc.data()!
-      if (!cd.verified) throw new HttpsError('failed-precondition', 'Verification code not verified')
-      if (cd.team_id !== data.teamId) throw new HttpsError('permission-denied', 'Code team mismatch')
-      if (!(cd.matched_contact_ids || []).includes(data.authenticatedContactId))
-        throw new HttpsError('permission-denied', 'Contact not in verified matches')
-      await codeDoc.ref.update({
-        used: true,
-        used_at: FieldValue.serverTimestamp(),
-        used_contact_id: data.authenticatedContactId,
-      })
+    // The code is MANDATORY — see the identical gate in bookSession. Without it a
+    // contactId from the request body would be trusted on nothing but its own say-so
+    // (audit finding #2, docs/security-audit-2026-07.md). Signed-in callers take the
+    // session branch above and never supply authenticatedContactId at all.
+    if (!data.verificationCodeId) {
+      throw new HttpsError(
+        'invalid-argument',
+        'verificationCodeId is required when authenticatedContactId is supplied'
+      )
     }
+    const codeDoc = await db
+      .collection('booking_verification_codes')
+      .doc(data.verificationCodeId)
+      .get()
+    if (!codeDoc.exists) throw new HttpsError('invalid-argument', 'Invalid verification code')
+    const cd = codeDoc.data()!
+    if (!cd.verified) throw new HttpsError('failed-precondition', 'Verification code not verified')
+    if (cd.team_id !== data.teamId) throw new HttpsError('permission-denied', 'Code team mismatch')
+    if (!(cd.matched_contact_ids || []).includes(data.authenticatedContactId))
+      throw new HttpsError('permission-denied', 'Contact not in verified matches')
+    await codeDoc.ref.update({
+      used: true,
+      used_at: FieldValue.serverTimestamp(),
+      used_contact_id: data.authenticatedContactId,
+    })
+
     const cDoc = await db.collection('contacts').doc(data.authenticatedContactId as string).get()
     if (!cDoc.exists) throw new HttpsError('not-found', 'Contact not found')
     const c = cDoc.data()!
@@ -659,7 +668,9 @@ export const bookAppointment = onCall(async (request) => {
     start: Timestamp.fromDate(start),
     end: Timestamp.fromDate(end),
     duration_minutes: durationMinutes,
-    max_participants: activity.max_participants ?? 1,
+    // An appointment is a provider's exclusive time — one booking per slot, by
+    // definition. trackBookings reads this to drive the 'full' flip.
+    max_participants: 1,
     bookings_count: 1,
     // Location/onlineUrl come from the matched availability (the *when*).
     location: tpl.location ?? null,

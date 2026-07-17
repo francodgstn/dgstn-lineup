@@ -22,7 +22,6 @@ export { listTeamMembers } from './teams/listTeamMembers'
 
 // Auth
 export { sendContactVerificationCode } from './auth/sendContactVerificationCode'
-export { validateAuthToken } from './auth/validateAuthToken'
 export { generateApiKey } from './auth/generateApiKey'
 
 // Signup gating (limited launch) — blocking function + invite email trigger
