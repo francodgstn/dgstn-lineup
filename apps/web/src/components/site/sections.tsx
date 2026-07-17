@@ -305,7 +305,10 @@ interface ActivityEntry {
 function activityTermLabel(term: ActivityTerm, currency: string): string | null {
   switch (term.kind) {
     case 'gate':
-      return term.tier === 'subscription' ? 'Membership required' : 'Members only'
+      // Default vocabulary is "subscription", not "membership" — a studio may
+      // separately define "membership" as its own term (the affiliation axis),
+      // but the subscription gate stays "Subscription required" by default.
+      return term.tier === 'subscription' ? 'Subscription required' : 'Members only'
     case 'dropIn':
       return `Drop-in ${formatCurrency(term.amount ?? 0, currency)}`
     case 'price':
@@ -313,7 +316,7 @@ function activityTermLabel(term: ActivityTerm, currency: string): string | null 
         ? `From ${formatCurrency(term.min ?? 0, currency)}`
         : `${formatCurrency(term.min ?? 0, currency)}–${formatCurrency(term.max ?? 0, currency)}`
     case 'benefitIncluded':
-      return 'Included with membership'
+      return 'Included with subscription'
     case 'benefitDiscount':
       return `−${term.percent ?? 0}% for members`
     default:
