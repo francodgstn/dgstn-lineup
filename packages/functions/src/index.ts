@@ -121,6 +121,8 @@ export { loginContactWithCode } from './auth/loginContactWithCode'
 // time; the paid-access gate is shared with bookSession via booking/access.ts.
 // Cancellation is handled by the shared cancelBooking callable.
 export { listAvailability, bookAppointment } from './appointments/window'
+// Paid appointments — reserve→pay→confirm via Stripe Connect (see checkout.ts).
+export { createAppointmentCheckout } from './appointments/checkout'
 
 // SaaS billing (Linyup's own platform subscriptions — Stripe)
 export {

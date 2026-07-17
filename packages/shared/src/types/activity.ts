@@ -73,6 +73,53 @@ export function resolveAppointmentDurations(a: {
   return ds.length ? ds : [{ minutes: 60 }]
 }
 
+/** A duration's price for one particular contact, given the subscription types
+ *  they currently hold — the PRICE gate (separate from, and orthogonal to, the
+ *  ACCESS gate in `ActivityAccessRule`). Server-side resolution only; the client
+ *  may mirror this for display, but booking/checkout always re-resolve.
+ *
+ *  Rule: candidates = the base `priceAmount` (what a guest, or any non-matching
+ *  holder, pays) plus every `subscriptionPricing` entry whose type the contact
+ *  holds. An entry with `priceAmount: null` means INCLUDED — it beats any amount
+ *  outright, regardless of how it compares numerically. Otherwise the LOWEST
+ *  amount among the candidates wins (several held types may each define a
+ *  price; the contact gets the best one). An unpriced base with no matching
+ *  entries resolves free (`{ free: true, amount: null }`) — the plain access
+ *  rules decide, exactly like before paid appointments existed. A PRICED
+ *  duration with no matching `subscriptionPricing` entry costs the base price
+ *  for everyone, subscribers included — the member benefit is explicit data,
+ *  never implied. */
+export function resolveEffectiveAppointmentPrice(
+  duration: ActivityDuration,
+  heldSubscriptionTypeIds: string[] = [],
+): { free: boolean; amount: number | null; viaSubscriptionTypeId?: string | null } {
+  const held = new Set(heldSubscriptionTypeIds)
+  const matchingEntries = (duration.subscriptionPricing ?? []).filter((e) =>
+    held.has(e.subscriptionTypeId),
+  )
+
+  // "Included" (priceAmount: null) always wins outright — free beats any amount.
+  const included = matchingEntries.find((e) => e.priceAmount === null)
+  if (included) {
+    return { free: true, amount: null, viaSubscriptionTypeId: included.subscriptionTypeId }
+  }
+
+  const candidates: Array<{ amount: number; viaSubscriptionTypeId: string | null }> = []
+  if (typeof duration.priceAmount === 'number') {
+    candidates.push({ amount: duration.priceAmount, viaSubscriptionTypeId: null })
+  }
+  for (const e of matchingEntries) {
+    if (typeof e.priceAmount === 'number') {
+      candidates.push({ amount: e.priceAmount, viaSubscriptionTypeId: e.subscriptionTypeId })
+    }
+  }
+
+  if (candidates.length === 0) return { free: true, amount: null }
+
+  const lowest = candidates.reduce((min, c) => (c.amount < min.amount ? c : min))
+  return { free: false, amount: lowest.amount, viaSubscriptionTypeId: lowest.viaSubscriptionTypeId }
+}
+
 export interface Activity {
   id: string
   teamId: string

@@ -1,6 +1,8 @@
 // Keeps sessions/{sessionId}/public_profile/{sessionId} in sync.
 // Regular sessions: synced when allowBooking === true.
-// Appointment sessions (activityType === 'appointment'): always synced when status !== 'cancelled'.
+// Appointment sessions (activityType === 'appointment'): synced when
+// status !== 'cancelled' AND status !== 'pending_payment' — a paid-booking hold
+// (awaiting Stripe checkout) is never published.
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import type { Timestamp } from 'firebase-admin/firestore'
 import { resolveActivityAccessRule } from '@linyup/shared'
@@ -16,8 +18,15 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
   // Remove public profile when:
   // - session deleted
   // - regular session with allowBooking disabled
-  // - appointment session explicitly cancelled
-  const shouldBePublic = data && (isAppointment ? data.status !== 'cancelled' : data.allowBooking === true)
+  // - appointment session explicitly cancelled, OR a paid-booking HOLD
+  //   ('pending_payment') — holds are never published, so an abandoned/awaiting
+  //   checkout never leaks onto public feeds. Once the webhook confirms it,
+  //   status flips to 'full' and this write republishes it normally.
+  const shouldBePublic =
+    data &&
+    (isAppointment
+      ? data.status !== 'cancelled' && data.status !== 'pending_payment'
+      : data.allowBooking === true)
 
   if (!shouldBePublic) {
     await afterRef.collection('public_profile').doc(sessionId).delete()

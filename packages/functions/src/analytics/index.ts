@@ -83,6 +83,17 @@ export const trackBookings = onDocumentWritten(
     const teamId = (session.teamId || session.teacher) as string | undefined
     if (!teamId) return
 
+    // A paid-appointment HOLD ('pending_payment') owns its own lifecycle —
+    // createAppointmentCheckout, the Connect webhook, and the daily sweep. Its
+    // own 'pending'/'required' booking write must NOT trigger the recount below:
+    // count >= max_participants (1) would immediately clobber 'pending_payment'
+    // into 'open'/'full', breaking hold-expiry (isExpiredAppointmentHold only
+    // recognises 'pending_payment') and the admin's "awaiting payment" ghosting.
+    // Once the webhook confirms, session.status is already 'full' (same
+    // transaction as the booking's own 'confirmed' write), so this only ever
+    // skips the hold-creation event — everything else recounts normally.
+    if (session.status === 'pending_payment') return
+
     // ── Every session: maintain bookings_count and status — self-healing ─────
     // recount, run for classes and appointments alike. A booking HOLDS
     // CAPACITY unless it's 'cancelled', 'no_show', or 'rebooked' away to

@@ -236,6 +236,10 @@ export async function createOneOffCheckoutSession(params: {
   customerEmail?: string
   metadata?: Record<string, string>
   idempotencyKey: string
+  /** Unix seconds the Checkout Session itself expires at (Stripe minimum: 30 min
+   *  from creation). Appointment holds pass now+31min — see checkout.ts for why
+   *  not exactly 30 (clock-skew rejection risk). Omit for Stripe's default (24h). */
+  expiresAtEpochSeconds?: number
 }): Promise<{ url: string; sessionId: string }> {
   const stripe = await getConnectStripe()
   const session = await stripe.checkout.sessions.create(
@@ -259,6 +263,7 @@ export async function createOneOffCheckoutSession(params: {
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       metadata: params.metadata,
+      ...(params.expiresAtEpochSeconds ? { expires_at: params.expiresAtEpochSeconds } : {}),
     },
     { stripeAccount: params.accountId, idempotencyKey: params.idempotencyKey }
   )

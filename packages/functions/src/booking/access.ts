@@ -58,34 +58,60 @@ export interface AccessGateResult {
   creditSpendTypeId: string | null
 }
 
+/** Why coverage was denied — null means it wasn't (the caller is covered). */
+export type BookingAccessDenialReason = 'guest' | 'not_joined' | 'no_subscription' | 'no_credits'
+
+export interface BookingCoverageResult extends AccessGateResult {
+  /** Whether the accessRule is satisfied — the non-throwing twin of
+   *  resolveBookingAccessGate's "doesn't throw". */
+  covered: boolean
+  denial: BookingAccessDenialReason | null
+}
+
+function denialMessage(denial: BookingAccessDenialReason, isAppointment: boolean): string {
+  switch (denial) {
+    case 'guest':
+      return isAppointment
+        ? 'This appointment series is for registered members only. Please verify your email.'
+        : 'This session is for registered members only. Please verify your email.'
+    case 'not_joined':
+      return isAppointment
+        ? 'This appointment series is for members only. Trial accounts cannot book.'
+        : 'This session is for members only. Trial accounts cannot book this class.'
+    case 'no_credits':
+      return 'No lesson credits remaining on your pack. Purchase a new pack to book this class.'
+    case 'no_subscription':
+      return 'This class requires an active membership you do not currently hold.'
+  }
+}
+
 /**
- * Enforce an activity's accessRule against an already-resolved authenticated
- * contact (or null for a guest). Throws HttpsError on denial. Shared by
- * bookSession (group classes) and bookAppointment (1:1 appointments) so both
- * agree on the paid-access axis.
+ * Non-throwing core of the paid-access gate: does this (already-resolved)
+ * authenticated contact — or null for a guest — satisfy an activity's
+ * accessRule? Pure move of the logic that used to live inline in
+ * resolveBookingAccessGate (still the thrower bookSession uses); appointment
+ * checkout reuses this to compute coverage WITHOUT refusing guests (payment is
+ * proof — see appointments/checkout.ts).
  */
-export async function resolveBookingAccessGate(params: {
+export async function resolveBookingCoverage(params: {
   teamId: string
   accessRule: ActivityAccessRule
   authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null
-  /** Drives denial-message wording only. */
-  isAppointment: boolean
-}): Promise<AccessGateResult> {
-  const { teamId, accessRule, authenticatedContact, isAppointment } = params
-  const NONE: AccessGateResult = { matchedSubscriptionTypeId: null, creditSpendTypeId: null }
+}): Promise<BookingCoverageResult> {
+  const { teamId, accessRule, authenticatedContact } = params
+  const NONE: BookingCoverageResult = {
+    covered: true,
+    matchedSubscriptionTypeId: null,
+    creditSpendTypeId: null,
+    denial: null,
+  }
   if (accessRule.type === 'open') return NONE
 
   if (!authenticatedContact) {
-    const msg = isAppointment
-      ? 'This appointment series is for registered members only. Please verify your email.'
-      : 'This session is for registered members only. Please verify your email.'
-    throw new HttpsError('permission-denied', msg)
+    return { covered: false, matchedSubscriptionTypeId: null, creditSpendTypeId: null, denial: 'guest' }
   }
   if (authenticatedContact.acquisition_stage !== 'joined') {
-    const msg = isAppointment
-      ? 'This appointment series is for members only. Trial accounts cannot book.'
-      : 'This session is for members only. Trial accounts cannot book this class.'
-    throw new HttpsError('permission-denied', msg)
+    return { covered: false, matchedSubscriptionTypeId: null, creditSpendTypeId: null, denial: 'not_joined' }
   }
 
   if (accessRule.type !== 'subscription') return NONE
@@ -139,12 +165,33 @@ export async function resolveBookingAccessGate(params: {
   }
   if (!matchedSubscriptionTypeId) {
     const heldCreditType = allowed.some((id) => held.has(id))
-    throw new HttpsError(
-      'permission-denied',
-      heldCreditType
-        ? 'No lesson credits remaining on your pack. Purchase a new pack to book this class.'
-        : 'This class requires an active membership you do not currently hold.'
-    )
+    return {
+      covered: false,
+      matchedSubscriptionTypeId: null,
+      creditSpendTypeId: null,
+      denial: heldCreditType ? 'no_credits' : 'no_subscription',
+    }
   }
-  return { matchedSubscriptionTypeId, creditSpendTypeId }
+  return { covered: true, matchedSubscriptionTypeId, creditSpendTypeId, denial: null }
+}
+
+/**
+ * Enforce an activity's accessRule against an already-resolved authenticated
+ * contact (or null for a guest). Throws HttpsError on denial. Shared by
+ * bookSession (group classes) and bookAppointment (1:1 appointments) so both
+ * agree on the paid-access axis. Thin thrower over resolveBookingCoverage —
+ * class behaviour is unchanged.
+ */
+export async function resolveBookingAccessGate(params: {
+  teamId: string
+  accessRule: ActivityAccessRule
+  authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null
+  /** Drives denial-message wording only. */
+  isAppointment: boolean
+}): Promise<AccessGateResult> {
+  const coverage = await resolveBookingCoverage(params)
+  if (coverage.denial) {
+    throw new HttpsError('permission-denied', denialMessage(coverage.denial, params.isAppointment))
+  }
+  return { matchedSubscriptionTypeId: coverage.matchedSubscriptionTypeId, creditSpendTypeId: coverage.creditSpendTypeId }
 }

@@ -9,58 +9,44 @@
 //
 //  • listAvailability — public: free start times per coach/activity/day/duration.
 //  • bookAppointment  — public: resolves the covering availability server-side,
-//    runs the shared paid-access gate, then overlap-checked create-session + book.
+//    runs the shared paid-access + price gates, then delegates the overlap-safe
+//    create-session + book to the shared appointments/booking.ts transaction.
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { getTeam } from '../utils/teams'
-import { sendEmail } from '../utils/email'
-import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
-import { resolveSingleContact } from '../utils/contacts'
-import { canCreateContact } from '../utils/contactCap'
 import { resolveBookingAccessGate } from '../booking/access'
-import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import {
   AVAILABILITY_COLLECTION,
   ACTIVITIES_COLLECTION,
-  CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
+  appointmentSlotBlocked,
+  heldSubscriptionTypeIds,
   resolveActivityAccessRule,
   resolveAppointmentDurations,
-  resolveAutoConfirm,
+  resolveEffectiveAppointmentPrice,
   type Activity,
   type ActivityAccessRule,
   type ActivityDuration,
   type Availability,
-  type SaasPlan,
+  type SubscriptionCoverageSnapshot,
 } from '@linyup/shared'
-import { getDatePartsInTz, localTimeToUtc } from './index'
 import {
-  buildAppointmentConfirmationEmail,
-  buildAppointmentICalAttachment,
-  buildAppointmentProviderNotificationEmail,
-} from './templates'
+  DAY_MS,
+  MAX_SESSION_MS,
+  loadAppointmentBookingContext,
+  parseHHMM,
+  resolveAppointmentCaller,
+  resolveOrCreateAppointmentContact,
+  runAppointmentSlotTransaction,
+  type WindowTemplate,
+} from './booking'
+import { sendAppointmentBookingEmails } from './emails'
+import { getDatePartsInTz, localTimeToUtc } from './index'
 
-type Lang = 'en' | 'de' | 'fr' | 'it'
-const VALID_LANGS: Lang[] = ['en', 'de', 'fr', 'it']
-const asLang = (v: unknown): Lang => (VALID_LANGS.includes(v as Lang) ? (v as Lang) : 'en')
-
-const DAY_MS = 24 * 60 * 60_000
-const MAX_SESSION_MS = 8 * 60 * 60_000 // upper bound on any single appointment
 const DEFAULT_RANGE_DAYS = 28
 const MAX_RANGE_DAYS = 60
-
-const parseHHMM = (s: unknown): [number, number] => {
-  const [h, m] = String(s ?? '').split(':').map((x) => parseInt(x, 10))
-  return [Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0]
-}
-
-// A provider's published free time — the *when*. `id` is the Firestore doc id.
-interface WindowTemplate extends Availability {
-  id: string
-}
 
 interface BusyInterval {
   start: number
@@ -228,7 +214,10 @@ export const listAvailability = onCall(async (request) => {
 
   const coaches: unknown[] = []
   for (const [providerId, providerTemplates] of byProvider) {
-    // Busy = this provider's non-cancelled sessions overlapping the range.
+    // Busy = this provider's slot-blocking sessions overlapping the range —
+    // EXPIRED paid-booking holds don't block (lazy release, see
+    // appointmentSlotBlocked): a lapsed checkout must free its slot immediately,
+    // not wait for the daily sweep.
     const busySnap = await db
       .collection('sessions')
       .where('teamId', '==', data.teamId)
@@ -238,7 +227,7 @@ export const listAvailability = onCall(async (request) => {
       .get()
     const busy: BusyInterval[] = busySnap.docs
       .map((d) => d.data())
-      .filter((s) => s.status !== 'cancelled')
+      .filter((s) => appointmentSlotBlocked(s as { status?: string; hold_expires_at?: Timestamp | null }, nowMs))
       .map((s) => ({ start: (s.start as Timestamp).toMillis(), end: (s.end as Timestamp).toMillis() }))
 
     // GROUP BY (provider, activity) — merge days across a provider's several
@@ -305,142 +294,14 @@ export const listAvailability = onCall(async (request) => {
   return { coaches }
 })
 
-// ─── appointment booking emails (shared confirmation + .ics + coach notify) ────
-
-async function sendAppointmentBookingEmails(p: {
-  teamId: string
-  teamName: string
-  lang: Lang
-  activityName: string
-  providerId: string | null
-  providerName: string
-  start: Date
-  end: Date
-  location: string | null
-  onlineUrl: string | null
-  cancelUrl: string | null
-  bookingId: string
-  client: { firstname: string; lastname: string; email: string; phone: string | null }
-}): Promise<void> {
-  let coachEmail: string | null = null
-  let coachFirstname = 'Coach'
-  if (p.providerId) {
-    const [, coachDoc] = await to(admin.firestore().collection('users').doc(p.providerId).get())
-    if (coachDoc?.exists) {
-      coachEmail = coachDoc.get('email') || null
-      coachFirstname = coachDoc.get('firstname') || 'Coach'
-    }
-  }
-
-  const confirmationEnabled = await systemEmailEnabledFor(p.teamId, 'booking_confirmation')
-  if (confirmationEnabled) {
-    try {
-      const email = buildAppointmentConfirmationEmail({
-        firstname: p.client.firstname,
-        teamName: p.teamName,
-        slotTitle: p.activityName,
-        providerName: p.providerName,
-        start: p.start,
-        end: p.end,
-        location: p.location,
-        onlineUrl: p.onlineUrl,
-        cancelUrl: p.cancelUrl,
-        instructions: null,
-        lang: p.lang,
-      })
-      const ical = buildAppointmentICalAttachment({
-        bookingId: p.bookingId,
-        slotTitle: p.activityName,
-        start: p.start,
-        end: p.end,
-        location: p.location,
-        providerName: p.providerName,
-        coachEmail: coachEmail || 'noreply@linyup.com',
-        clientName: `${p.client.firstname} ${p.client.lastname}`,
-        clientEmail: p.client.email,
-      })
-      const subjects: Record<Lang, string> = {
-        en: `Appointment Confirmed – ${p.activityName}`,
-        de: `Termin bestätigt – ${p.activityName}`,
-        fr: `Rendez-vous confirmé – ${p.activityName}`,
-        it: `Appuntamento confermato – ${p.activityName}`,
-      }
-      await sendEmail({
-        to: p.client.email,
-        subject: subjects[p.lang],
-        html: email.html,
-        text: email.text,
-        teamId: p.teamId,
-        attachments: [
-          { filename: ical.filename, content: ical.content, contentType: ical.contentType },
-        ],
-      })
-    } catch (err) {
-      console.error('appointment window: confirmation email failed', err)
-    }
-  }
-
-  if (coachEmail) {
-    try {
-      const notif = buildAppointmentProviderNotificationEmail({
-        coachFirstname,
-        clientName: `${p.client.firstname} ${p.client.lastname}`,
-        clientEmail: p.client.email,
-        clientPhone: p.client.phone,
-        slotTitle: p.activityName,
-        start: p.start,
-        end: p.end,
-        notes: null,
-        lang: p.lang,
-      })
-      const subjects: Record<Lang, string> = {
-        en: `New appointment: ${p.client.firstname} ${p.client.lastname}`,
-        de: `Neuer Termin: ${p.client.firstname} ${p.client.lastname}`,
-        fr: `Nouveau rendez-vous : ${p.client.firstname} ${p.client.lastname}`,
-        it: `Nuovo appuntamento: ${p.client.firstname} ${p.client.lastname}`,
-      }
-      await sendEmail({
-        to: coachEmail,
-        subject: subjects[p.lang],
-        html: notif.html,
-        text: notif.text,
-        teamId: p.teamId,
-      })
-    } catch (err) {
-      console.error('appointment window: coach notification failed', err)
-    }
-  }
-}
-
-// Does availability `tpl` (offering `activityId`, already pre-filtered by the
-// caller) cover this exact start for a booking of length `durMs`?
-function availabilityCoversStart(tpl: WindowTemplate, startMsVal: number, durMs: number): boolean {
-  const { year, month, day, dayOfWeek } = getDatePartsInTz(new Date(startMsVal))
-  if (!(tpl.recurrence?.daysOfWeek ?? []).includes(dayOfWeek)) return false
-  const sd = tpl.recurrence?.startDate ? tpl.recurrence.startDate.toMillis() : 0
-  const ed = tpl.recurrence?.endDate ? tpl.recurrence.endDate.toMillis() : Infinity
-  if (startMsVal < sd || startMsVal > ed + DAY_MS) return false
-
-  if (tpl.mode === 'times') {
-    return (tpl.times ?? []).some((hhmm) => {
-      const [h, m] = parseHHMM(hhmm)
-      return localTimeToUtc(year, month, day, h, m).getTime() === startMsVal
-    })
-  }
-
-  // 'range' mode
-  if (!tpl.window) return false
-  const [wsH, wsM] = parseHHMM(tpl.window.start)
-  const [weH, weM] = parseHHMM(tpl.window.end)
-  const winStart = localTimeToUtc(year, month, day, wsH, wsM).getTime()
-  const winEnd = localTimeToUtc(year, month, day, weH, weM).getTime()
-  const gran = (tpl.granularityMinutes || 15) * 60_000
-  if (startMsVal < winStart || startMsVal + durMs > winEnd) return false
-  if ((startMsVal - winStart) % gran !== 0) return false
-  return true
-}
-
-// ─── bookAppointment (public) ───────────────────────────────────────────────────
+// ─── bookAppointment (public) — the FREE path ──────────────────────────────────
+// Composes the shared appointments/booking.ts helpers. Two gates, in order:
+//  1. ACCESS (unchanged) — resolveBookingAccessGate throws for a caller not
+//     covered by the activity's accessRule (open/members/subscription).
+//  2. PRICE (new) — a priced duration whose effective price (for the caller's
+//     held subscription types) is an AMOUNT refuses here; the client must use
+//     createAppointmentCheckout instead. An unpriced duration always resolves
+//     free, so this is a no-op for today's behaviour across all three tiers.
 
 export const bookAppointment = onCall(async (request) => {
   const data = request.data as {
@@ -465,224 +326,70 @@ export const bookAppointment = onCall(async (request) => {
       'teamId, providerId, activityId, startMs and durationMinutes are required'
     )
   }
+  const { teamId, providerId, activityId, startMs, durationMinutes } = data
 
-  const db = admin.firestore()
-  const start = new Date(data.startMs)
-  if (start.getTime() <= Date.now()) {
-    throw new HttpsError('failed-precondition', 'Cannot book a time in the past')
-  }
-  const durationMinutes = data.durationMinutes
-  const durationMs = durationMinutes * 60_000
-  const end = new Date(start.getTime() + durationMs)
-
-  // ── Load + validate the activity (the *what*: name, duration, capacity, access) ──
-  const actDoc = await db.collection(ACTIVITIES_COLLECTION).doc(data.activityId).get()
-  if (!actDoc.exists) throw new HttpsError('not-found', 'Activity not found')
-  const activity = actDoc.data() as Activity
-  if (activity.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Team mismatch')
-  if (activity.type !== 'appointment')
-    throw new HttpsError('failed-precondition', 'This activity does not support appointment booking')
-  const allowedDurations = resolveAppointmentDurations(activity)
-  const chosenDuration = allowedDurations.find((d) => d.minutes === durationMinutes)
-  if (!chosenDuration) throw new HttpsError('failed-precondition', 'Duration is not offered')
-  // chosenDuration.priceAmount / subscriptionPricing feed the payment gate (P3).
-  void chosenDuration
-
-  // Does a booking here confirm itself on the spot, or does the studio decide?
-  // Denormalised onto the created session below so cancellation/booking logic
-  // never needs to re-fetch the activity.
-  const autoConfirm = resolveAutoConfirm({ autoConfirm: activity.autoConfirm, type: activity.type })
-
-  // ── Resolve the availability (the *when*) that covers this start ──
-  const providerId = data.providerId
-  const tplSnap = await db
-    .collection(AVAILABILITY_COLLECTION)
-    .where('teamId', '==', data.teamId)
-    .where('providerId', '==', providerId)
-    .where('status', '==', 'active')
-    .get()
-  const templates: WindowTemplate[] = tplSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Availability) }))
-  const tpl = templates.find(
-    (t) =>
-      (t.activityIds ?? []).includes(data.activityId as string) &&
-      availabilityCoversStart(t, start.getTime(), durationMs)
-  )
-  if (!tpl) {
-    throw new HttpsError('failed-precondition', 'This time is no longer available. Please pick another.')
-  }
-  const providerName = tpl.providerName
-
-  // ── Team ──
-  const team = await getTeam(data.teamId)
-  if (!team) throw new HttpsError('not-found', 'Team not found')
-  const teamName = (team as { name?: string }).name || 'Our Team'
-  const teamSlug = (team as { slug?: string }).slug || null
-  const plan = ((team as { plan?: SaasPlan }).plan || 'free') as SaasPlan
-  const lang = asLang((team as { language?: string }).language)
-
-  // ── Resolve/validate the caller's contact details ──
-  // Three ways a caller can identify themselves, checked in trust order:
-  //   1. Contact session (signed-in mobile/web contact) — the custom-token claims
-  //      { contactId, teamId, sessionExpires } minted by `buildContactSession`,
-  //      which `httpsCallable` attaches to `request.auth` automatically once the
-  //      client is signed in. This is the ONLY trustworthy source of a caller's
-  //      contactId on a public callable (see utils/contactSession.ts) — reused
-  //      here from the same helper `createDropInCheckout`/`requestContactUpdate`/
-  //      `switchActiveContact` use, so the app never needs to type an emailed
-  //      code to book something it's already authenticated for.
-  //   2. authenticatedContactId + verificationCodeId — the public picker's
-  //      passwordless email-OTP flow for an anonymous (no Firebase Auth) caller.
-  //   3. Guest contactDetails — brand-new/unmatched contact, no verification
-  //      (only reachable for 'open' activities; the access gate below refuses
-  //      guests on 'members'/'subscription' activities).
-  const contactSession = optionalContactSessionFromRequest(request)
-  const sessionAuthenticated = !!contactSession && contactSession.teamId === data.teamId
-  const authenticated = sessionAuthenticated || !!data.authenticatedContactId
-  let authenticatedContactFull: (admin.firestore.DocumentData & { id: string }) | null = null
-  let sanitized: { firstname: string; lastname: string; email: string; phone: string | null }
-
-  if (sessionAuthenticated) {
-    const cDoc = await db.collection('contacts').doc(contactSession!.contactId).get()
-    if (!cDoc.exists) throw new HttpsError('not-found', 'Contact not found')
-    const c = cDoc.data()!
-    if (c.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Contact team mismatch')
-    authenticatedContactFull = { id: contactSession!.contactId, ...c }
-    sanitized = {
-      firstname: c.firstname || '',
-      lastname: c.lastname || '',
-      email: (c.email || '').toLowerCase().trim(),
-      phone: c.phone || null,
-    }
-  } else if (authenticated) {
-    // The code is MANDATORY — see the identical gate in bookSession. Without it a
-    // contactId from the request body would be trusted on nothing but its own say-so
-    // (audit finding #2, docs/security-audit-2026-07.md). Signed-in callers take the
-    // session branch above and never supply authenticatedContactId at all.
-    if (!data.verificationCodeId) {
-      throw new HttpsError(
-        'invalid-argument',
-        'verificationCodeId is required when authenticatedContactId is supplied'
-      )
-    }
-    const codeDoc = await db
-      .collection('booking_verification_codes')
-      .doc(data.verificationCodeId)
-      .get()
-    if (!codeDoc.exists) throw new HttpsError('invalid-argument', 'Invalid verification code')
-    const cd = codeDoc.data()!
-    if (!cd.verified) throw new HttpsError('failed-precondition', 'Verification code not verified')
-    if (cd.team_id !== data.teamId) throw new HttpsError('permission-denied', 'Code team mismatch')
-    if (!(cd.matched_contact_ids || []).includes(data.authenticatedContactId))
-      throw new HttpsError('permission-denied', 'Contact not in verified matches')
-    await codeDoc.ref.update({
-      used: true,
-      used_at: FieldValue.serverTimestamp(),
-      used_contact_id: data.authenticatedContactId,
-    })
-
-    const cDoc = await db.collection('contacts').doc(data.authenticatedContactId as string).get()
-    if (!cDoc.exists) throw new HttpsError('not-found', 'Contact not found')
-    const c = cDoc.data()!
-    if (c.teamId !== data.teamId) throw new HttpsError('permission-denied', 'Contact team mismatch')
-    authenticatedContactFull = { id: data.authenticatedContactId as string, ...c }
-    sanitized = {
-      firstname: c.firstname || '',
-      lastname: c.lastname || '',
-      email: (c.email || '').toLowerCase().trim(),
-      phone: c.phone || null,
-    }
-  } else {
-    const cd = data.contactDetails
-    if (!cd?.firstname || !cd?.lastname || !cd?.email)
-      throw new HttpsError('invalid-argument', 'firstname, lastname and email are required')
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cd.email))
-      throw new HttpsError('invalid-argument', 'Invalid email format')
-    sanitized = {
-      firstname: cd.firstname.trim(),
-      lastname: cd.lastname.trim(),
-      email: cd.email.toLowerCase().trim(),
-      phone: cd.phone?.trim() || null,
-    }
-  }
+  const ctx = await loadAppointmentBookingContext({ teamId, providerId, activityId, startMs, durationMinutes })
+  const caller = await resolveAppointmentCaller(request, { ...data, teamId })
 
   // ── Access gate (paid-access axis) — shared with bookSession, see booking/access.ts.
   // Guests booking a 'members'/'subscription' activity are refused here.
-  const accessRule = resolveActivityAccessRule({
-    accessRule: activity.accessRule,
-    isFreeTrial: activity.isFreeTrial,
-  })
   const { matchedSubscriptionTypeId, creditSpendTypeId } = await resolveBookingAccessGate({
-    teamId: data.teamId,
-    accessRule,
-    authenticatedContact: authenticatedContactFull,
+    teamId,
+    accessRule: ctx.accessRule,
+    authenticatedContact: caller.authenticatedContact,
     isAppointment: true,
   })
 
-  // ── Resolve/create the contact (only reached unauthenticated for 'open' activities) ──
-  let contactId: string
-  let isNewContact = false
-  if (authenticated) {
-    contactId = authenticatedContactFull!.id
-  } else {
-    const match = await resolveSingleContact(data.teamId, sanitized.email)
-    if (match.contactId) {
-      contactId = match.contactId
-    } else {
-      if (!(await canCreateContact(data.teamId, plan)))
-        throw new HttpsError('resource-exhausted', 'Contact limit reached — please contact the studio.')
-      isNewContact = true
-      const ref = db.collection('contacts').doc()
-      await ref.set({
-        firstname: sanitized.firstname,
-        lastname: sanitized.lastname,
-        email: sanitized.email,
-        phone: sanitized.phone,
-        acquisition_stage: 'trial_booked',
-        acquisition_stage_updated_at: FieldValue.serverTimestamp(),
-        entry: 'booking',
-        provisional: true,
-        teamId: data.teamId,
-        archived_at: null,
-        deleted_at: null,
-        created_at: FieldValue.serverTimestamp(),
-        pending_bookings_count: 1,
-      })
-      contactId = ref.id
-    }
+  // ── Price gate — the critical bypass guard: a priced duration the caller must
+  // pay for refuses here with the amount, so the client can route to checkout.
+  const heldTypes = heldSubscriptionTypeIds(
+    caller.authenticatedContact as SubscriptionCoverageSnapshot | null,
+    Date.now()
+  )
+  const effectivePrice = resolveEffectiveAppointmentPrice(ctx.chosenDuration, heldTypes)
+  if (!effectivePrice.free) {
+    throw new HttpsError('failed-precondition', 'This duration requires payment.', {
+      reason: 'payment_required',
+      priceAmount: effectivePrice.amount,
+    })
   }
 
+  // ── Resolve/create the contact (only reached unauthenticated for 'open' activities) ──
+  const { contactId, isNewContact } = await resolveOrCreateAppointmentContact({
+    teamId,
+    plan: ctx.plan,
+    sanitized: caller.sanitized,
+    authenticatedContact: caller.authenticatedContact,
+  })
+
   // ── Overlap-safe create (transaction) ──
-  // Deterministic id makes same-start double-books collide on one doc; the range
-  // query inside the tx catches overlapping different starts. A previously
-  // cancelled session at the same id is reusable (its time is free again).
-  const bufferMs = (tpl.bufferMinutes || 0) * 60_000
-  const sessionRef = db.collection('sessions').doc(`apt_${providerId}_${start.getTime()}`)
   const bookingToken = generateSecureToken()
+  const sessionRef = admin.firestore().collection('sessions').doc(`apt_${providerId}_${ctx.start.getTime()}`)
 
   const sessionDoc = {
-    teamId: data.teamId,
-    templateId: tpl.id,
+    teamId,
+    templateId: ctx.tpl.id,
     origin: 'window',
     activityType: 'appointment',
     // The session INHERITS FROM THE ACTIVITY: name/access/capacity come from the
     // offering the client picked, not the schedule — exactly like a class.
-    activityId: data.activityId,
-    activityName: activity.name,
-    accessRule,
+    activityId,
+    activityName: ctx.activity.name,
+    accessRule: ctx.accessRule,
     // Denormalised from the activity — see `autoConfirm` above.
-    autoConfirm,
+    autoConfirm: ctx.autoConfirm,
     providerId,
-    providerName,
-    start: Timestamp.fromDate(start),
-    end: Timestamp.fromDate(end),
+    providerName: ctx.providerName,
+    start: Timestamp.fromDate(ctx.start),
+    end: Timestamp.fromDate(ctx.end),
     duration_minutes: durationMinutes,
     // An appointment is a provider's exclusive time — one booking per slot, by
     // definition. trackBookings reads this to drive the 'full' flip.
     max_participants: 1,
     bookings_count: 1,
     // Location/onlineUrl come from the matched availability (the *when*).
-    location: tpl.location ?? null,
-    onlineUrl: tpl.onlineUrl ?? null,
+    location: ctx.tpl.location ?? null,
+    onlineUrl: ctx.tpl.onlineUrl ?? null,
     allowBooking: true,
     status: 'full',
     has_bookings: true,
@@ -690,106 +397,46 @@ export const bookAppointment = onCall(async (request) => {
     created_at: FieldValue.serverTimestamp(),
   }
   const bookingDoc = {
-    firstname: sanitized.firstname,
-    lastname: sanitized.lastname,
-    email: sanitized.email,
-    phone: sanitized.phone,
+    firstname: caller.sanitized.firstname,
+    lastname: caller.sanitized.lastname,
+    email: caller.sanitized.email,
+    phone: caller.sanitized.phone,
     contact: contactId,
     session: sessionRef.id,
-    teamId: data.teamId,
+    teamId,
     joinedAt: FieldValue.serverTimestamp(),
     fromBioLink: true,
     is_new_contact: isNewContact,
     booking_token: bookingToken,
-    authenticated_booking: authenticated,
+    authenticated_booking: !!caller.authenticatedContact,
     subscription_type_id: matchedSubscriptionTypeId,
     // The slot is taken the moment it's booked either way (bookings_count: 1
     // above, unconditionally) — only the booking's own status differs by
     // autoConfirm; a non-auto-confirm appointment still holds capacity but
     // stays unconfirmed until the studio confirms it.
-    ...(autoConfirm && {
+    ...(ctx.autoConfirm && {
       status: 'confirmed' as const,
-      fullname: `${sanitized.firstname} ${sanitized.lastname}`,
+      fullname: `${caller.sanitized.firstname} ${caller.sanitized.lastname}`,
     }),
   }
 
-  await db.runTransaction(async (tx) => {
-    const existing = await tx.get(sessionRef)
-    if (existing.exists && existing.data()!.status !== 'cancelled') {
-      throw new HttpsError('failed-precondition', 'This time was just taken. Please pick another.')
-    }
-    const overlapQ = db
-      .collection('sessions')
-      .where('teamId', '==', data.teamId)
-      .where('providerId', '==', providerId)
-      .where('start', '>=', Timestamp.fromMillis(start.getTime() - MAX_SESSION_MS))
-      .where('start', '<=', Timestamp.fromMillis(end.getTime() + bufferMs))
-    const overlapSnap = await tx.get(overlapQ)
-    for (const d of overlapSnap.docs) {
-      if (d.id === sessionRef.id) continue
-      const s = d.data()
-      if (s.status === 'cancelled') continue
-      const bStart = (s.start as Timestamp).toMillis()
-      const bEnd = (s.end as Timestamp).toMillis()
-      if (start.getTime() < bEnd + bufferMs && end.getTime() > bStart - bufferMs) {
-        throw new HttpsError('failed-precondition', 'This time overlaps another appointment.')
-      }
-    }
-
-    // Credit-pack coverage: spend one credit atomically with the booking write,
-    // inside the SAME transaction as the overlap check (all reads before writes).
-    // FIFO across the contact's usable grants (soonest expiry first, then oldest).
-    let grant: { ref: FirebaseFirestore.DocumentReference; credits_used: number } | null = null
-    if (creditSpendTypeId) {
-      const grantsQuery = db
-        .collection('contacts')
-        .doc(contactId)
-        .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
-        .where('teamId', '==', data.teamId)
-        .where('subscription_type_id', '==', creditSpendTypeId)
-      const grantsSnap = await tx.get(grantsQuery)
-      const nowMsTx = Date.now()
-      const usable = grantsSnap.docs
-        .map((d) => {
-          const g = d.data()
-          return {
-            ref: d.ref,
-            credits_total: (g.credits_total as number) ?? 0,
-            credits_used: (g.credits_used as number) ?? 0,
-            expires_at: (g.expires_at as Timestamp | null) ?? null,
-            created_at: (g.created_at as Timestamp | null) ?? null,
-          }
-        })
-        .filter(
-          (g) => g.credits_used < g.credits_total && (!g.expires_at || g.expires_at.toMillis() > nowMsTx)
-        )
-        .sort((a, b) => {
-          const ax = a.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
-          const bx = b.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
-          if (ax !== bx) return ax - bx
-          return (a.created_at?.toMillis() ?? 0) - (b.created_at?.toMillis() ?? 0)
-        })
-      const picked = usable[0]
-      if (!picked) {
-        throw new HttpsError(
-          'permission-denied',
-          'No lesson credits remaining on your pack. Purchase a new pack to book this class.'
-        )
-      }
-      grant = { ref: picked.ref, credits_used: picked.credits_used }
-    }
-
-    if (grant) tx.update(grant.ref, { credits_used: grant.credits_used + 1 })
-    tx.set(sessionRef, sessionDoc)
-    tx.set(sessionRef.collection('bookings').doc(contactId), {
-      ...bookingDoc,
-      ...(grant && { credit_grant_id: grant.ref.id, credit_spent: 1 }),
-    })
+  await runAppointmentSlotTransaction({
+    sessionRef,
+    sessionDoc,
+    bookingDocId: contactId,
+    bookingDoc,
+    teamId,
+    providerId,
+    startMs: ctx.start.getTime(),
+    endMs: ctx.end.getTime(),
+    bufferMs: ctx.bufferMs,
+    creditSpend: creditSpendTypeId ? { contactId, subscriptionTypeId: creditSpendTypeId } : undefined,
   })
 
   if (!isNewContact) {
     await to(
-      db
+      admin
+        .firestore()
         .collection('contacts')
         .doc(contactId)
         .update({ pending_bookings_count: FieldValue.increment(1) })
@@ -797,23 +444,23 @@ export const bookAppointment = onCall(async (request) => {
   }
 
   // ── Emails (confirmation + .ics + coach notification) ──
-  const cancelUrl = teamSlug
-    ? `${getHostingUrl()}/public/${teamSlug}/appointments/cancel?token=${bookingToken}`
+  const cancelUrl = ctx.teamSlug
+    ? `${getHostingUrl()}/public/${ctx.teamSlug}/appointments/cancel?token=${bookingToken}`
     : null
   await sendAppointmentBookingEmails({
-    teamId: data.teamId,
-    teamName,
-    lang,
-    activityName: activity.name,
+    teamId,
+    teamName: ctx.teamName,
+    lang: ctx.lang,
+    activityName: ctx.activity.name,
     providerId,
-    providerName,
-    start,
-    end,
-    location: tpl.location ?? null,
-    onlineUrl: tpl.onlineUrl ?? null,
+    providerName: ctx.providerName,
+    start: ctx.start,
+    end: ctx.end,
+    location: ctx.tpl.location ?? null,
+    onlineUrl: ctx.tpl.onlineUrl ?? null,
     cancelUrl,
     bookingId: `${sessionRef.id}-${contactId}`,
-    client: sanitized,
+    client: caller.sanitized,
   })
 
   return { success: true }
