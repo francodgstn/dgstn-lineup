@@ -798,7 +798,6 @@
     "fieldStart": "Début",
     "fieldEnd": "Fin",
     "fieldNotes": "Notes",
-    "fieldType": "Type",
     "type_class": "Cours",
     "type_appointment": "Rendez-vous",
     "typeAutoSet": "Défini automatiquement depuis l'activité — vous pouvez le modifier si nécessaire.",

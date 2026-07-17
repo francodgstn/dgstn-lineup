@@ -798,7 +798,6 @@
     "fieldStart": "Beginn",
     "fieldEnd": "Ende",
     "fieldNotes": "Notizen",
-    "fieldType": "Typ",
     "type_class": "Kurs",
     "type_appointment": "Termin",
     "typeAutoSet": "Automatisch aus der Aktivität übernommen — kann bei Bedarf überschrieben werden.",

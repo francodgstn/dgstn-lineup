@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -146,11 +146,17 @@ function getPreviewDates(pattern: RecurrencePattern, startDate: Date, count = 5)
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
-const SESSION_TYPES = ['class', 'appointment'] as const
-
+// This dialog schedules CLASSES only. An appointment is never placed on the
+// calendar by hand: it's a provider's exclusive time, created lazily by
+// `bookAppointment` from published availability, with a deterministic id
+// (`apt_{providerId}_{startMs}`) and an overlap-safe transaction. A hand-made
+// appointment session would carry none of that — and, with no activity behind
+// it, no accessRule either, which is exactly the orphan the 2026-07 refactor
+// deleted the slot generator to eliminate. `bookSession` refuses appointments
+// for the same reason. Appointments are edited via AppointmentDetail, so this
+// form only ever sees classes.
 const sessionSchema = z.object({
   activityId:      z.string().optional(),
-  activityType:    z.enum(SESSION_TYPES).default('class'),
   start:           z.date({ required_error: 'Required' }),
   duration:        z.number().min(15).max(480),
   location:        z.string().max(120).optional(),
@@ -340,7 +346,6 @@ export function SessionFormDialog({
       resolver: zodResolver(sessionSchema),
       defaultValues: {
         activityId:      editing?.activityId ?? '',
-        activityType:    (editing?.activityType as typeof SESSION_TYPES[number]) ?? 'class',
         start:           editing?.start?.toDate() ?? defaultStart(),
         duration:        deriveDefaultDuration(editing),
         location:        editing?.location ?? '',
@@ -355,7 +360,16 @@ export function SessionFormDialog({
       },
     })
 
-  const watchedActivityId  = watch('activityId')
+  // Class activities only. Picking an appointment offering here would mint a
+  // session outside the appointment model — no deterministic id, no overlap
+  // check, no booking — i.e. the orphan "open slot" the refactor removed.
+  // Appointments are published as availability instead (Schedule → "+ New
+  // entry" → Appointment availability).
+  const classActivities = useMemo(
+    () => activities.filter(a => (a.type ?? 'class') !== 'appointment'),
+    [activities],
+  )
+
   const watchedStart       = watch('start')
   const watchedPlaceId     = watch('placeId')
   const watchedProviderId  = watch('providerId')
@@ -374,10 +388,6 @@ export function SessionFormDialog({
     return watch('providerName') || null
   })()
 
-  useEffect(() => {
-    const act = activities.find(a => a.id === watchedActivityId)
-    if (act?.type) setValue('activityType', act.type as typeof SESSION_TYPES[number])
-  }, [watchedActivityId, activities, setValue])
 
   function handleRecurringToggle(on: boolean) {
     setIsRecurring(on)
@@ -401,11 +411,11 @@ export function SessionFormDialog({
       teamId,
       activityId:     values.activityId || null,
       activityName:   activityEntry?.name ?? null,
-      activityType:   values.activityType,
+      activityType:   'class',
       // Denormalised from the picked activity so the booking callable can read it
       // off the session without a second lookup. Falls back to the kind default
       // when no activity is picked yet.
-      autoConfirm:    resolveAutoConfirm(activityEntry ?? { type: values.activityType }),
+      autoConfirm:    resolveAutoConfirm(activityEntry ?? { type: 'class' }),
       location:       values.location || null,
       placeId:        values.placeId || null,
       roomId:         values.roomId || null,
@@ -432,8 +442,8 @@ export function SessionFormDialog({
         template: {
           activityId: values.activityId || null,
           activityName: activityEntry?.name ?? null,
-          activityType: values.activityType,
-          autoConfirm: resolveAutoConfirm(activityEntry ?? { type: values.activityType }),
+          activityType: 'class',
+          autoConfirm: resolveAutoConfirm(activityEntry ?? { type: 'class' }),
           location: values.location || null,
           placeId: values.placeId || null,
           roomId: values.roomId || null,
@@ -508,8 +518,8 @@ export function SessionFormDialog({
       updates: {
         activityId:     values.activityId || null,
         activityName:   activityEntry?.name ?? null,
-        activityType:   values.activityType,
-        autoConfirm:    resolveAutoConfirm(activityEntry ?? { type: values.activityType }),
+        activityType:   'class',
+        autoConfirm:    resolveAutoConfirm(activityEntry ?? { type: 'class' }),
         start:          startDate.toISOString(),
         end:            endDate.toISOString(),
         duration:       values.duration,
@@ -608,29 +618,12 @@ export function SessionFormDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">—</SelectItem>
-                      {activities.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                      {classActivities.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )} />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">{t('fieldType')}</label>
-                  <Controller name="activityType" control={control} render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className="w-full">
-                        <span className="flex flex-1 text-left text-sm truncate">
-                          {t(`type_${field.value}` as Parameters<typeof t>[0])}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SESSION_TYPES.map(tp => (
-                          <SelectItem key={tp} value={tp}>{t(`type_${tp}` as Parameters<typeof t>[0])}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )} />
-                </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">{t('fieldInstructor')}</label>
                   <Controller name="providerId" control={control} render={({ field }) => (

@@ -798,7 +798,6 @@
     "fieldStart": "Inizio",
     "fieldEnd": "Fine",
     "fieldNotes": "Note",
-    "fieldType": "Tipo",
     "type_class": "Corso",
     "type_appointment": "Appuntamento",
     "typeAutoSet": "Impostato automaticamente dall'attività — puoi modificarlo se necessario.",
