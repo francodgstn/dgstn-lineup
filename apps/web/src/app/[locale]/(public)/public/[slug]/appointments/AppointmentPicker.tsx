@@ -1,30 +1,25 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { resolveEffectiveAppointmentPrice, type ActivityMemberBenefit } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { formatCurrency } from '@/lib/format'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/ui/query-error'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { BioLinkShell } from '../BioLinkShell'
 import { MiniCalendar, toDateKey } from '@/components/booking/MiniCalendar'
-import { GuestDetailsForm, type GuestDetailsValues } from '@/components/booking/GuestDetailsForm'
-import { ReturningSignIn, type ContactData } from '@/components/booking/ReturningSignIn'
 import {
-  CalendarClock,
-  MapPin,
-  Video,
-  Clock,
-  User,
-  Check,
-  ChevronRight,
-  ChevronLeft,
-  Tag,
-} from 'lucide-react'
+  GuestDetailsForm,
+  type GuestDetailsFormHandle,
+  type GuestDetailsValues,
+} from '@/components/booking/GuestDetailsForm'
+import { ReturningSignIn, type ContactData } from '@/components/booking/ReturningSignIn'
+import { StickyBar } from '@/components/booking/StickyBar'
+import { BackButton } from '@/components/booking/BackButton'
+import { CalendarClock, MapPin, Video, Clock, User, Check, ChevronRight, Tag } from 'lucide-react'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 // Mirrors the listAvailability callable's contract: availability is the ONLY
@@ -56,8 +51,9 @@ interface AvailCoach {
   activities: AvailActivity[]
 }
 
-// What a time chip opens the booking modal with. Pricing here is DISPLAY/ROUTING
-// only — bookAppointment / createAppointmentCheckout always re-resolve server-side.
+// What a picked time carries into the in-page booking step. Pricing here is
+// DISPLAY/ROUTING only — bookAppointment / createAppointmentCheckout always
+// re-resolve server-side.
 interface WindowBooking {
   providerId: string
   providerName: string | null
@@ -71,7 +67,14 @@ interface WindowBooking {
   memberBenefit: ActivityMemberBenefit | null
 }
 
-type PickerStep = 'coach' | 'activity' | 'time'
+// The booking form is now an in-page step (not a modal), so it joins the funnel.
+type PickerStep = 'coach' | 'activity' | 'time' | 'book'
+
+// Which screen the in-page booking step is showing. Reported UP so the parent's
+// sticky bar shows its Confirm only on the guest screen (the sign-in and
+// member-pay screens carry their own action buttons) — the same rule the class
+// BookingForm applies (Confirm only on its 'details' step).
+type BookScreen = 'guest' | 'signIn' | 'memberPay' | 'autobooking'
 
 // Args passed to whichever booking/checkout callable backs the form.
 type BookArgs =
@@ -80,8 +83,6 @@ type BookArgs =
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-const fmtDate = (ms: number) =>
-  new Date(ms).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 const fmtDateFull = (ms: number) =>
   new Date(ms).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })
 const fmtTime = (ms: number) =>
@@ -132,26 +133,39 @@ function errorDetails(err: unknown): { code?: string; message?: string; reason?:
   return { code: fe?.code, message: fe?.message, reason: details.reason, priceAmount: details.priceAmount }
 }
 
-// ─── booking form (guest, always allowed / optional member sign-in for a price) ─
-// Guest fields + returning-member sign-in are the SHARED components also used
-// by the class BookingForm (components/booking/) — see that file for the
-// reference design this mirrors. Only the money-specific bits (price display,
-// the sign-in offer link, the member-pay confirmation screen) stay local here.
+// ─── in-page booking step ───────────────────────────────────────────────────
+// Guest fields + returning-member sign-in are the SHARED components also used by
+// the class BookingForm (components/booking/). Rendered IN THE PAGE (inside
+// BioLinkShell), not a modal — same as the class 'details'/'returning' steps.
+// Only the money-specific bits (price display, the sign-in offer, the member-pay
+// confirmation) stay local here. The guest screen's submit is driven from the
+// parent's sticky bar via `guestFormRef` (sr-only <form> submit) — exactly the
+// class BookingForm mechanism; the parent learns which screen is showing (to
+// gate the Confirm button) through `onScreenChange`.
 
 function SlotBookingForm({
   teamId,
+  guestFormRef,
+  onScreenChange,
+  onSubmittingChange,
+  accentColor,
   hasAnyPrice,
   priceAmount,
   memberBenefit,
   durationMinutes,
   currency,
   locale,
+  backLabel,
+  onExit,
   book,
   checkout,
   onBooked,
-  onClose,
 }: {
   teamId: string
+  guestFormRef: Ref<GuestDetailsFormHandle>
+  onScreenChange: (screen: BookScreen) => void
+  onSubmittingChange: (submitting: boolean) => void
+  accentColor: string | null
   hasAnyPrice: boolean
   priceAmount: number | null
   /** null/empty subscriptionTypeIds = nothing to offer — the sign-in link never
@@ -160,10 +174,12 @@ function SlotBookingForm({
   durationMinutes: number
   currency: string
   locale: string
+  backLabel: string
+  /** Leaves the booking step entirely — back to the time picker. */
+  onExit: () => void
   book: (args: BookArgs) => Promise<void>
   checkout: (args: BookArgs) => Promise<{ url?: string; amount?: number }>
   onBooked: (details: { firstname: string; email: string }) => void
-  onClose: () => void
 }) {
   const t = useTranslations('AppointmentBooking')
   const tPublic = useTranslations('PublicBooking')
@@ -173,20 +189,18 @@ function SlotBookingForm({
 
   const offersMemberBenefit = !!memberBenefit?.subscriptionTypeIds.length
 
-  // 'guest' is the DEFAULT and only ever-required step — appointments have no
-  // access gate any more (see ActivityMemberBenefit's history note): a guest
-  // may always book, priced or not. Signing in is purely an OFFER to check a
-  // possibly-lower member price, reached via a link on the guest-pay form.
-  type Step = 'guest' | 'signIn'
-  const [step, setStep] = useState<Step>('guest')
+  // 'guest' is the DEFAULT and only ever-required screen — appointments have no
+  // access gate any more (see ActivityMemberBenefit's history note): a guest may
+  // always book, priced or not. Signing in is purely an OFFER to check a
+  // possibly-lower member price, reached via a link on the guest form.
+  type Screen = 'guest' | 'signIn'
+  const [screen, setScreen] = useState<Screen>('guest')
 
   // Set once a signed-in member verifies and their effective price is an AMOUNT
   // (not free) — holds what checkout needs. `viaSubscriptionTypeId` is null when
   // the price is unchanged from base (no benefit applies) — used to skip the
-  // "was CHF X" strikethrough in that case. `firstname`/`email` are carried
-  // along too — only needed for the rare "became covered" retry-to-free path
-  // below, which calls onBooked directly (checkout's own success path lands
-  // on the confirmation screen via the Stripe redirect instead).
+  // "was CHF X" strikethrough. `firstname`/`email` are carried for the rare
+  // "became covered" retry-to-free path (which calls onBooked directly).
   const [memberPay, setMemberPay] = useState<{
     contactId: string
     verificationCodeId: string
@@ -198,9 +212,25 @@ function SlotBookingForm({
   // Transient state while an INCLUDED member's free booking is in flight.
   const [autobooking, setAutobooking] = useState(false)
 
+  // Report the current screen UP so the sticky bar can gate its Confirm button.
+  const currentScreen: BookScreen = autobooking
+    ? 'autobooking'
+    : memberPay
+      ? 'memberPay'
+      : screen === 'signIn'
+        ? 'signIn'
+        : 'guest'
+  useEffect(() => {
+    onScreenChange(currentScreen)
+  }, [currentScreen, onScreenChange])
+  useEffect(() => {
+    onSubmittingChange(submittingGuest)
+  }, [submittingGuest, onSubmittingChange])
+
   // ── Guest submit — routes to the free callable or checkout depending on
-  // whether this duration has a base price. Replaces the old two separate
-  // guest-free/guest-pay forms; GuestDetailsForm supplies the fields. ──
+  // whether this duration has a base price. GuestDetailsForm supplies the
+  // fields; on the guest screen its submit is sr-only and fired by the sticky
+  // bar's Confirm (via guestFormRef). ──
   async function onSubmitGuest(values: GuestDetailsValues) {
     setError(null)
     setSubmittingGuest(true)
@@ -232,12 +262,9 @@ function SlotBookingForm({
     }
   }
 
-  // ── Returning member, post-verify. Reached ONLY via the priced guest-pay
-  // form's sign-in offer — `hasAnyPrice` is always true here (an unpriced
-  // duration never shows the offer, there's nothing a member price could
-  // improve on free). Throwing surfaces the message on ReturningSignIn's
-  // current step (its code/select screen), matching the original inline
-  // behaviour. ──
+  // ── Returning member, post-verify. Reached ONLY via the priced guest form's
+  // sign-in offer — `hasAnyPrice` is always true here. Throwing surfaces the
+  // message on ReturningSignIn's current step. ──
   async function onVerifiedAppointment({
     contactId,
     verificationCodeId,
@@ -342,7 +369,7 @@ function SlotBookingForm({
   }
 
   function backToGuest() {
-    setStep('guest')
+    setScreen('guest')
     setMemberPay(null)
     setAutobooking(false)
     setError(null)
@@ -357,180 +384,103 @@ function SlotBookingForm({
   // ── An INCLUDED member's free booking is in flight. ──
   if (autobooking) {
     return (
-      <div className="space-y-3 py-3 text-center">
+      <div className="py-10 text-center space-y-3">
+        <div className="mx-auto h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
         <p className="text-sm text-muted-foreground">{t('memberCoveredHint')}</p>
       </div>
     )
   }
 
-  // ── A verified member's effective price is an AMOUNT — pay to confirm.
-  // Shows the base price struck through only when the member's price is
-  // actually lower (a benefit applied); otherwise just the (unchanged) price. ──
+  // ── A verified member's effective price is an AMOUNT — pay to confirm. Shows
+  // the base price struck through only when the member's price is actually lower
+  // (a benefit applied); otherwise just the (unchanged) price. ──
   if (memberPay) {
     return (
-      <div className="space-y-3">
-        <div className="flex items-baseline gap-2">
-          {memberPay.viaSubscriptionTypeId && priceAmount != null && memberPay.amount !== priceAmount && (
-            <span className="text-sm text-muted-foreground line-through">
-              {formatCurrency(priceAmount, currency, locale)}
-            </span>
-          )}
-          <p className="text-sm font-medium">{t('yourPrice', { price: formatCurrency(memberPay.amount, currency, locale) })}</p>
+      <>
+        <div>
+          <BackButton label={backLabel} onClick={backToGuest} />
+          <h1 className="text-2xl font-bold">{t('confirmedTitle')}</h1>
         </div>
-        {errorBox}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
-          <Button type="button" size="sm" disabled={submittingPay} onClick={onMemberPay}>
+        <div className="rounded-xl border bg-card p-4 space-y-4">
+          <div className="flex items-baseline gap-2">
+            {memberPay.viaSubscriptionTypeId && priceAmount != null && memberPay.amount !== priceAmount && (
+              <span className="text-sm text-muted-foreground line-through">
+                {formatCurrency(priceAmount, currency, locale)}
+              </span>
+            )}
+            <p className="text-base font-semibold">
+              {t('yourPrice', { price: formatCurrency(memberPay.amount, currency, locale) })}
+            </p>
+          </div>
+          {errorBox}
+          <button
+            type="button"
+            disabled={submittingPay}
+            onClick={onMemberPay}
+            style={accentColor ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
+            className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity disabled:opacity-40 text-sm"
+          >
             {submittingPay
               ? t('payingEllipsis')
               : t('confirmPay', { price: formatCurrency(memberPay.amount, currency, locale) })}
-          </Button>
+          </button>
         </div>
-      </div>
+      </>
     )
   }
 
   // ── Sign-in offer — the shared returning-member flow. Reached only via the
-  // guest-pay form's "check your price" link — never a requirement. ──
-  if (step === 'signIn') {
+  // guest form's "check your price" link — never a requirement. It renders its
+  // own back button + headings. ──
+  if (screen === 'signIn') {
     return (
       <ReturningSignIn
         teamId={teamId}
         onVerified={onVerifiedAppointment}
         onBack={backToGuest}
+        accentColor={accentColor}
         noAccountMessage={tPublic('errorNoAccountMembersOnly')}
       />
     )
   }
 
   // ── DEFAULT — guest details. Always available; the sign-in offer is a link,
-  // never a gate. ──
+  // never a gate. The visible submit is sr-only — the parent's sticky bar drives
+  // it. ──
   return (
-    <div className="space-y-3">
+    <>
+      <div>
+        <BackButton label={backLabel} onClick={onExit} />
+        <h1 className="text-2xl font-bold">{tPublic('yourDetailsTitle')}</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{tPublic('detailsSubtitle')}</p>
+      </div>
+
       {hasAnyPrice && priceAmount != null && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t('payToBook', { price: formatCurrency(priceAmount, currency, locale) })}
         </p>
       )}
       {hasAnyPrice && offersMemberBenefit && (
         <button
           type="button"
-          onClick={() => setStep('signIn')}
-          className="flex w-full items-center gap-2 rounded-lg border border-dashed p-2.5 text-left text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+          onClick={() => setScreen('signIn')}
+          className="flex w-full items-center gap-2 rounded-lg border border-dashed p-3 text-left text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
         >
-          <Tag className="h-3.5 w-3.5 shrink-0" />
+          <Tag className="h-4 w-4 shrink-0" />
           {t('memberSignInOffer')}
         </button>
       )}
+
       <GuestDetailsForm
+        ref={guestFormRef}
         showPhone
         submitting={submittingGuest}
         error={error}
         onSubmit={onSubmitGuest}
-        submitLabel={t('submit')}
-        submittingLabel={hasAnyPrice ? t('payingEllipsis') : t('submitting')}
       />
-      <div className="flex justify-center">
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {t('cancel')}
-        </button>
-      </div>
-    </div>
-  )
-}
 
-// ─── booking modal shell (shared header + form) ────────────────────────────────
-
-function BookingModal({
-  title,
-  hasAnyPrice,
-  priceAmount,
-  memberBenefit,
-  durationMinutes,
-  currency,
-  locale,
-  providerName,
-  location,
-  onlineUrl,
-  dateLine,
-  teamId,
-  book,
-  checkout,
-  onBooked,
-  onClose,
-}: {
-  title: string | null
-  hasAnyPrice: boolean
-  priceAmount: number | null
-  memberBenefit: ActivityMemberBenefit | null
-  durationMinutes: number
-  currency: string
-  locale: string
-  providerName: string | null
-  location: string | null
-  onlineUrl: string | null
-  dateLine: string
-  teamId: string
-  book: (args: BookArgs) => Promise<void>
-  checkout: (args: BookArgs) => Promise<{ url?: string; amount?: number }>
-  onBooked: (d: { firstname: string; email: string }) => void
-  onClose: () => void
-}) {
-  const t = useTranslations('AppointmentBooking')
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="pr-6">{title}</DialogTitle>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            <span>{dateLine}</span>
-            {providerName && (
-              <span className="flex items-center gap-1"><User className="h-3 w-3" />{providerName}</span>
-            )}
-            {location && (
-              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{location}</span>
-            )}
-            {onlineUrl && (
-              <span className="flex items-center gap-1"><Video className="h-3 w-3" />{t('onlineSession')}</span>
-            )}
-          </div>
-        </DialogHeader>
-        <SlotBookingForm
-          teamId={teamId}
-          hasAnyPrice={hasAnyPrice}
-          priceAmount={priceAmount}
-          memberBenefit={memberBenefit}
-          durationMinutes={durationMinutes}
-          currency={currency}
-          locale={locale}
-          book={book}
-          checkout={checkout}
-          onBooked={onBooked}
-          onClose={onClose}
-        />
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ─── confirmation screen ──────────────────────────────────────────────────────
-
-function ConfirmationScreen({ email }: { email: string }) {
-  const t = useTranslations('AppointmentBooking')
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-sm w-full text-center space-y-4">
-        <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-          <Check className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-        </div>
-        <h1 className="text-xl font-bold">{t('confirmedTitle')}</h1>
-        <p className="text-sm text-muted-foreground">{t('confirmedMessage', { email })}</p>
-      </div>
-    </div>
+      <p className="text-xs text-muted-foreground">{tPublic('consentText')}</p>
+    </>
   )
 }
 
@@ -543,19 +493,6 @@ function EmptyState({ icon: Icon, text, hint }: { icon: typeof CalendarClock; te
       <p className="font-medium">{text}</p>
       {hint && <p className="text-sm mt-1">{hint}</p>}
     </div>
-  )
-}
-
-function BackRow({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-    >
-      <ChevronLeft className="h-3.5 w-3.5" />
-      {label}
-    </button>
   )
 }
 
@@ -654,8 +591,7 @@ function TimePicker({
   const [duration, setDuration] = useState<number>(activity.durations[0]?.minutes ?? 60)
 
   // Only days with a free start for the CHOSEN duration are selectable — a
-  // window may offer several lengths and not every day has room for all of
-  // them.
+  // window may offer several lengths and not every day has room for all of them.
   const availableDates = useMemo(
     () =>
       activity.days
@@ -741,7 +677,7 @@ function TimePicker({
                   key={startMs}
                   type="button"
                   onClick={() => onPick(startMs, chosenDuration)}
-                  className="rounded-lg border py-1.5 text-sm font-medium transition-colors hover:border-primary hover:bg-primary/5"
+                  className="rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:border-primary hover:bg-primary/5"
                 >
                   {fmtTime(startMs)}
                 </button>
@@ -755,12 +691,12 @@ function TimePicker({
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
-// Coach-first funnel: coach → activity → duration (only if >1) → day → time.
-// Availability is the ONLY source of bookable times — there are no
-// pre-generated appointment sessions any more. A `?activity=` deep link (from
-// an activity card elsewhere on the site) preselects that offering: coaches
-// are pre-filtered server-side, and when exactly one coach offers it the
-// coach step is skipped entirely.
+// Coach-first funnel: coach → activity → duration (only if >1) → day → time →
+// book. Wrapped in BioLinkShell so it wears the same team top bar, content width
+// and branded footer as the class BookingForm, and the booking step renders
+// in-page (not a modal) with the shared bottom summary bar. A `?activity=` deep
+// link preselects that offering: coaches are pre-filtered server-side, and when
+// exactly one coach offers it the coach step is skipped entirely.
 
 export default function AppointmentPicker({
   slug,
@@ -770,9 +706,14 @@ export default function AppointmentPicker({
   presetActivityId?: string
 }) {
   const t = useTranslations('AppointmentBooking')
+  const tPublic = useTranslations('PublicBooking')
   const locale = useLocale()
   const { teamId, team } = usePublicTeam()
   const currency = team.default_currency ?? 'CHF'
+  const teamName = team.name || ''
+  const accentColor = team.bioLinkAccentColor ?? null
+  const showBranding = team.showBranding === true
+
   const [coaches, setCoaches] = useState<AvailCoach[]>([])
   const [loading, setLoading] = useState(true)
   // Tracked separately from `coaches` — a failed load must never be mistaken for
@@ -788,6 +729,13 @@ export default function AppointmentPicker({
   // True once the coach step was skipped because exactly one coach offers the
   // preselected activity — changes where Back on the time step goes.
   const [skippedCoachStep, setSkippedCoachStep] = useState(false)
+
+  // In-page booking step ↔ sticky bar wiring (mirrors the class BookingForm):
+  // the sticky bar's Confirm fires the guest form's sr-only submit, and only
+  // shows on the guest screen — the booking form reports its screen up here.
+  const [bookScreen, setBookScreen] = useState<BookScreen>('guest')
+  const [bookSubmitting, setBookSubmitting] = useState(false)
+  const guestFormRef = useRef<GuestDetailsFormHandle>(null)
 
   useEffect(() => {
     let alive = true
@@ -808,9 +756,9 @@ export default function AppointmentPicker({
         const list = res.data.coaches ?? []
         setCoaches(list)
         // Deep-link continuity: exactly one coach offers the preselected
-        // activity — land straight on duration/day/time, no coach (or
-        // activity) step shown. Decided here (not a separate effect) so
-        // there's no flash of the coach-list step first.
+        // activity — land straight on duration/day/time, no coach (or activity)
+        // step shown. Decided here (not a separate effect) so there's no flash
+        // of the coach-list step first.
         if (presetActivityId && list.length === 1) {
           const coach = list[0]
           const activity = coach.activities[0]
@@ -838,7 +786,27 @@ export default function AppointmentPicker({
     setReloadNonce((n) => n + 1)
   }
 
-  if (confirmed) return <ConfirmationScreen email={confirmed.email} />
+  // ── Confirmation — wrapped in BioLinkShell so the team top bar persists,
+  // matching the class flow's confirmed step. ──
+  if (confirmed) {
+    return (
+      <BioLinkShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
+        <div className="py-6 space-y-6">
+          <div className="flex flex-col items-center text-center space-y-3">
+            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">{t('confirmedTitle')}</h1>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {t('confirmedMessage', { email: confirmed.email })}
+              </p>
+            </div>
+          </div>
+        </div>
+      </BioLinkShell>
+    )
+  }
 
   function selectCoach(c: AvailCoach) {
     setSelectedCoach(c)
@@ -865,10 +833,10 @@ export default function AppointmentPicker({
     setStep('activity')
     setSelectedActivity(null)
   }
-  // Back from the time step: exits to the team's public root when the coach
-  // step was never shown (single-coach deep link), otherwise back to whichever
-  // step WAS shown (coach step in preset mode — activity step is always
-  // skipped there; activity step in the normal funnel).
+  // Back from the time step: exits to the team's public root when the coach step
+  // was never shown (single-coach deep link), otherwise back to whichever step
+  // WAS shown (coach step in preset mode — activity step is always skipped
+  // there; activity step in the normal funnel).
   function backFromTime() {
     if (skippedCoachStep) {
       window.location.href = `/public/${slug}`
@@ -880,6 +848,11 @@ export default function AppointmentPicker({
     }
     backToActivities()
   }
+  // Back from the booking step returns to the time picker to re-pick a slot.
+  function backFromBook() {
+    setStep('time')
+    setBookScreen('guest')
+  }
   const timeBackLabel = skippedCoachStep
     ? t('back')
     : presetActivityId
@@ -887,11 +860,24 @@ export default function AppointmentPicker({
       : t('backToActivities')
 
   const hasCoaches = coaches.length > 0
+  // The bottom summary bar rides along once an activity is chosen — on the time
+  // picker (activity only) and the booking step (activity + slot + Confirm),
+  // mirroring the class flow (sessions/details). The Confirm shows only on the
+  // booking step's guest screen.
+  const showBar = !!selectedActivity && (step === 'time' || step === 'book')
+  const STICKY_H = 100
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
-        {step !== 'time' && (
+    <>
+      <BioLinkShell
+        teamName={teamName}
+        slug={slug}
+        accentColor={accentColor}
+        wide={step === 'time'}
+        stickyBarHeight={showBar ? STICKY_H : undefined}
+        showBranding={showBranding}
+      >
+        {step === 'coach' && (
           <div className="space-y-1">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
@@ -924,7 +910,7 @@ export default function AppointmentPicker({
 
         {!loading && teamId && step === 'activity' && selectedCoach && (
           <section className="space-y-3">
-            <BackRow label={t('backToCoaches')} onClick={backToCoaches} />
+            <BackButton label={t('backToCoaches')} onClick={backToCoaches} />
             <h2 className="text-sm font-semibold">{selectedCoach.providerName || t('unnamedCoach')}</h2>
             {selectedCoach.activities.length === 0 ? (
               <EmptyState icon={CalendarClock} text={t('noCoaches')} hint={t('noCoachesHint')} />
@@ -944,13 +930,13 @@ export default function AppointmentPicker({
 
         {!loading && teamId && step === 'time' && selectedCoach && selectedActivity && (
           <section className="space-y-4">
-            <BackRow label={timeBackLabel} onClick={backFromTime} />
+            <BackButton label={timeBackLabel} onClick={backFromTime} />
             <TimePicker
               coach={selectedCoach}
               activity={selectedActivity}
               currency={currency}
               locale={locale}
-              onPick={(startMs, duration) =>
+              onPick={(startMs, duration) => {
                 setWindowBooking({
                   providerId: selectedCoach.providerId,
                   providerName: selectedCoach.providerName,
@@ -963,57 +949,83 @@ export default function AppointmentPicker({
                   priceAmount: duration.priceAmount,
                   memberBenefit: selectedActivity.memberBenefit,
                 })
-              }
+                setStep('book')
+              }}
             />
           </section>
         )}
-      </div>
 
-      {windowBooking && teamId && (
-        <BookingModal
-          key={`${windowBooking.providerId}-${windowBooking.activityId}-${windowBooking.startMs}-${windowBooking.durationMinutes}`}
-          title={windowBooking.activityName}
-          hasAnyPrice={durationIsPriced(windowBooking.priceAmount)}
-          priceAmount={windowBooking.priceAmount}
-          memberBenefit={windowBooking.memberBenefit}
-          durationMinutes={windowBooking.durationMinutes}
-          currency={currency}
-          locale={locale}
-          providerName={windowBooking.providerName}
-          location={windowBooking.location}
-          onlineUrl={windowBooking.onlineUrl}
-          dateLine={`${fmtDate(windowBooking.startMs)} · ${fmtTime(windowBooking.startMs)} – ${fmtTime(windowBooking.startMs + windowBooking.durationMinutes * 60_000)} · ${fmtDuration(windowBooking.durationMinutes)}`}
-          teamId={teamId}
-          book={(args) =>
-            httpsCallable(functions, 'bookAppointment')({
-              teamId,
-              providerId: windowBooking.providerId,
-              activityId: windowBooking.activityId,
-              startMs: windowBooking.startMs,
-              durationMinutes: windowBooking.durationMinutes,
-              ...args,
-            }).then(() => undefined)
+        {!loading && teamId && step === 'book' && selectedCoach && selectedActivity && windowBooking && (
+          <section className="space-y-4">
+            <SlotBookingForm
+              key={`${windowBooking.providerId}-${windowBooking.activityId}-${windowBooking.startMs}-${windowBooking.durationMinutes}`}
+              teamId={teamId}
+              guestFormRef={guestFormRef}
+              onScreenChange={setBookScreen}
+              onSubmittingChange={setBookSubmitting}
+              accentColor={accentColor}
+              hasAnyPrice={durationIsPriced(windowBooking.priceAmount)}
+              priceAmount={windowBooking.priceAmount}
+              memberBenefit={windowBooking.memberBenefit}
+              durationMinutes={windowBooking.durationMinutes}
+              currency={currency}
+              locale={locale}
+              backLabel={t('back')}
+              onExit={backFromBook}
+              book={(args) =>
+                httpsCallable(functions, 'bookAppointment')({
+                  teamId,
+                  providerId: windowBooking.providerId,
+                  activityId: windowBooking.activityId,
+                  startMs: windowBooking.startMs,
+                  durationMinutes: windowBooking.durationMinutes,
+                  ...args,
+                }).then(() => undefined)
+              }
+              checkout={(args) =>
+                httpsCallable<Record<string, unknown>, { url?: string; amount?: number }>(
+                  functions,
+                  'createAppointmentCheckout'
+                )({
+                  teamId,
+                  providerId: windowBooking.providerId,
+                  activityId: windowBooking.activityId,
+                  startMs: windowBooking.startMs,
+                  durationMinutes: windowBooking.durationMinutes,
+                  slug,
+                  locale,
+                  origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+                  ...args,
+                }).then((res) => res.data)
+              }
+              onBooked={({ email }) => { setWindowBooking(null); setConfirmed({ email }) }}
+            />
+          </section>
+        )}
+      </BioLinkShell>
+
+      {showBar && selectedActivity && (
+        <StickyBar
+          title={selectedActivity.activityName}
+          providerLabel={
+            selectedCoach?.providerName
+              ? tPublic('withInstructor', { name: selectedCoach.providerName })
+              : null
           }
-          checkout={(args) =>
-            httpsCallable<Record<string, unknown>, { url?: string; amount?: number }>(
-              functions,
-              'createAppointmentCheckout'
-            )({
-              teamId,
-              providerId: windowBooking.providerId,
-              activityId: windowBooking.activityId,
-              startMs: windowBooking.startMs,
-              durationMinutes: windowBooking.durationMinutes,
-              slug,
-              locale,
-              origin: typeof window !== 'undefined' ? window.location.origin : undefined,
-              ...args,
-            }).then((res) => res.data)
+          dateTimeLabel={
+            step === 'book' && windowBooking
+              ? `${fmtDateFull(windowBooking.startMs)} · ${fmtTime(windowBooking.startMs)}–${fmtTime(windowBooking.startMs + windowBooking.durationMinutes * 60_000)}`
+              : null
           }
-          onBooked={({ email }) => { setWindowBooking(null); setConfirmed({ email }) }}
-          onClose={() => setWindowBooking(null)}
+          location={step === 'book' ? (windowBooking?.location ?? null) : null}
+          accentColor={accentColor}
+          showConfirm={step === 'book' && bookScreen === 'guest'}
+          submitting={bookSubmitting}
+          confirmLabel={tPublic('ctaConfirm')}
+          submittingLabel={tPublic('ctaBooking')}
+          onConfirm={() => guestFormRef.current?.submit()}
         />
       )}
-    </div>
+    </>
   )
 }
