@@ -914,8 +914,9 @@
     "monthCoaching": "Termine",
     "monthEvents": "Veranstaltungen",
     "openDetail": "Details öffnen",
-    "manageAppointments": "Termin-Verfügbarkeit",
-    "availabilityBandsAllHint": "Wählen Sie oben einen bestimmten Coach aus, um dessen veröffentlichte Verfügbarkeit hinter dem Zeitplan anzuzeigen."
+    "availabilityBandsAllHint": "Wählen Sie oben einen bestimmten Coach aus, um dessen veröffentlichte Verfügbarkeit hinter dem Zeitplan anzuzeigen.",
+    "availability": "Verfügbarkeit",
+    "newAvailability": "Termin-Verfügbarkeit"
   },
   "Events": {
     "title": "Veranstaltungen",

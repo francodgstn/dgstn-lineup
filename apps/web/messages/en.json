@@ -914,8 +914,9 @@
     "monthCoaching": "Appointments",
     "monthEvents": "Events",
     "openDetail": "Open details",
-    "manageAppointments": "Appointment availability",
-    "availabilityBandsAllHint": "Select a specific coach above to see their published availability behind the schedule."
+    "availabilityBandsAllHint": "Select a specific coach above to see their published availability behind the schedule.",
+    "availability": "Availability",
+    "newAvailability": "Appointment availability"
   },
   "Events": {
     "title": "Events",

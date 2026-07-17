@@ -914,8 +914,9 @@
     "monthCoaching": "Rendez-vous",
     "monthEvents": "Événements",
     "openDetail": "Ouvrir les détails",
-    "manageAppointments": "Disponibilités de rendez-vous",
-    "availabilityBandsAllHint": "Sélectionnez un coach précis ci-dessus pour voir ses disponibilités publiées derrière le planning."
+    "availabilityBandsAllHint": "Sélectionnez un coach précis ci-dessus pour voir ses disponibilités publiées derrière le planning.",
+    "availability": "Disponibilités",
+    "newAvailability": "Disponibilité de rendez-vous"
   },
   "Events": {
     "title": "Événements",

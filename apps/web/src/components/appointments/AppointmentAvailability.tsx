@@ -666,6 +666,44 @@ export function AppointmentDetail({ slot, onClose, onCancelled }: {
 
 // ─── availability manager dialog ───────────────────────────────────────────────
 
+/** Create (or edit) ONE availability schedule, standalone — fetches its own
+ *  provider + appointment-activity options so a caller can open it directly.
+ *  This is the "+ New entry → Appointment availability" action; the manager
+ *  list below uses the inner TemplateDialog directly, having already loaded
+ *  those options. */
+export function AppointmentAvailabilityFormDialog({
+  open, onOpenChange, editing = null, teamId, userId,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  editing?: (Availability & { id: string }) | null
+  teamId: string
+  userId: string
+}) {
+  const qc = useQueryClient()
+  const membersQ = useTeamMemberOptions(open ? teamId : null)
+  const activitiesQ = useActivities(open ? teamId : null)
+
+  return (
+    <TemplateDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      editing={editing}
+      teamId={teamId}
+      userId={userId}
+      members={membersQ.data ?? []}
+      activities={(activitiesQ.data ?? []).filter((a) => a.type === 'appointment')}
+      onSaved={() => {
+        qc.invalidateQueries({ queryKey: ['coachSlots'] })
+        qc.invalidateQueries({ queryKey: ['coachAvailability'] })
+      }}
+    />
+  )
+}
+
+/** The availability MANAGER — the list of a team's schedules, with edit/pause.
+ *  A list is a management surface, not a creation action, so it hangs off the
+ *  Schedule header rather than the "+ New entry" menu. */
 export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, userId }: {
   open: boolean
   onOpenChange: (v: boolean) => void

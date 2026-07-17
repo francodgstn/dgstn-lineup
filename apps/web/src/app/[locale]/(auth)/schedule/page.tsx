@@ -82,7 +82,7 @@ import { Link } from '@/i18n/navigation'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
-import { AppointmentAvailabilityDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
+import { AppointmentAvailabilityDialog, AppointmentAvailabilityFormDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -818,9 +818,12 @@ export default function CalendarPage() {
     open: false,
     editing: null,
   })
-  // Appointments, folded into the schedule: an availability-manager modal (from
-  // "+ New entry") and a bookings-roster modal (clicking an appointment slot).
+  // Appointments, folded into the schedule: the availability MANAGER (the list,
+  // opened from the header — a list isn't a "new" action), the availability
+  // CREATE form (from "+ New entry"), and a bookings-roster modal (clicking a
+  // booked appointment slot).
   const [availabilityOpen, setAvailabilityOpen] = useState(false)
+  const [newAvailabilityOpen, setNewAvailabilityOpen] = useState(false)
   const [appointmentSlot, setAppointmentSlot] = useState<Session | null>(null)
 
   const sessionsQ = useAllSessions(currentTeamId, viewYear, viewMonth)
@@ -954,6 +957,19 @@ export default function CalendarPage() {
               </button>
             ))}
           </div>
+          {/* Availability manager — a LIST of schedules is a management surface,
+              not a "new" action, so it lives here rather than under "+ New". */}
+          {currentTeamId && user && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAvailabilityOpen(true)}
+              title={t('availability')}
+            >
+              <CalendarClock className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">{t('availability')}</span>
+            </Button>
+          )}
           {/* Add dropdown */}
           {currentTeamId && user && (
             <DropdownMenu>
@@ -972,9 +988,9 @@ export default function CalendarPage() {
                   {t('newEvent')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setAvailabilityOpen(true)}>
+                <DropdownMenuItem onClick={() => setNewAvailabilityOpen(true)}>
                   <CalendarClock className="h-4 w-4 mr-2" />
-                  {t('manageAppointments')}
+                  {t('newAvailability')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1202,9 +1218,9 @@ export default function CalendarPage() {
                 {t('newEvent')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setAvailabilityOpen(true)}>
+              <DropdownMenuItem onClick={() => setNewAvailabilityOpen(true)}>
                 <CalendarClock className="h-4 w-4 mr-2" />
-                {t('manageAppointments')}
+                {t('newAvailability')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1247,10 +1263,17 @@ export default function CalendarPage() {
             onClose={() => setEventDialog({ open: false, editing: null })}
             onSaved={invalidateEvents}
           />
-          {/* Appointment availability manager (fixed slots + open windows) */}
+          {/* Availability MANAGER — the list of schedules (header button) */}
           <AppointmentAvailabilityDialog
             open={availabilityOpen}
             onOpenChange={setAvailabilityOpen}
+            teamId={currentTeamId}
+            userId={user.uid}
+          />
+          {/* Availability CREATE — one new schedule ("+ New entry") */}
+          <AppointmentAvailabilityFormDialog
+            open={newAvailabilityOpen}
+            onOpenChange={setNewAvailabilityOpen}
             teamId={currentTeamId}
             userId={user.uid}
           />
