@@ -9,6 +9,10 @@
 // Body (JSON): must contain an email address in one of these locations:
 //   { email }  |  { data: { email } }  |  { payload: { email } }  |  { contact: { email } }
 //
+// Any other field in the body is addressable from a rule's actions as a dotted
+// {{payload.*}} token — e.g. { plan: 'pro', order: { id: 42 } } exposes
+// {{payload.plan}} and {{payload.order.id}}. Unknown paths render empty.
+//
 // Response: always 200 (prevents retry storms from calling services).
 //   { ok: true,  contact_id }           — matched and rules fired
 //   { ok: false, reason: string }       — skipped; reason explains why
@@ -63,8 +67,17 @@ export const inboundWebhook = onRequest(
       return
     }
 
-    // Extract email from the payload — try the most common shapes
-    const body = req.body as Record<string, unknown>
+    // Extract email from the payload — try the most common shapes.
+    // Normalise first: a non-JSON content-type yields a string (or Buffer) body,
+    // which must not become the {{payload.*}} root.
+    const rawBody: unknown = req.body
+    const body: Record<string, unknown> =
+      rawBody !== null &&
+      typeof rawBody === 'object' &&
+      !Array.isArray(rawBody) &&
+      !Buffer.isBuffer(rawBody)
+        ? (rawBody as Record<string, unknown>)
+        : {}
     const email =
       (body.email as string | undefined) ||
       ((body.data as Record<string, unknown>)?.email as string | undefined) ||
@@ -109,8 +122,12 @@ export const inboundWebhook = onRequest(
 
     console.log(`[inboundWebhook] contact=${contact.id} team=${teamId} endpoint=${endpointDoc.id}`) // eslint-disable-line no-console
 
+    // The body is forwarded so actions can address it as {{payload.*}}. It is
+    // never persisted or logged — callers routinely POST their own secrets
+    // alongside the data, and a rule only ever renders the paths it names.
     await fireEventRules(teamId, 'inbound_webhook', [contact], {
       webhook_endpoint_id: endpointDoc.id,
+      payload: body,
     })
 
     // Update endpoint stats — best effort, don't fail the request if this errors

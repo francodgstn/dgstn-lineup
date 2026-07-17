@@ -540,19 +540,24 @@ function RuleCard({
         )}
       </div>
 
-      {/* Condition chips */}
-      {rule.conditions.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {rule.conditions.map((c, i) => (
+      {/* Condition chips — an empty list is a real state ("no filter"), not an
+          absence of information, so it gets a chip of its own rather than a gap. */}
+      <div className="flex flex-wrap gap-1.5">
+        {rule.conditions.length === 0 ? (
+          <span className="inline-flex items-center rounded-full border border-dashed px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+            {t('ruleCard.noConditions')}
+          </span>
+        ) : (
+          rule.conditions.map((c, i) => (
             <span
               key={i}
               className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium text-muted-foreground bg-muted"
             >
               {conditionSummary(t, c, subName)}
             </span>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
 
       {/* Action line */}
       {rule.actions.length > 0 && (
@@ -630,7 +635,11 @@ function ConditionEditor({
           <div key={i} className="flex gap-2 items-start">
             <div className="flex-1 space-y-1">
               {/* Row 1: type selector + inline value (all types except field_equals) */}
-              <div className={`grid gap-2 ${isFieldEquals ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              {/* lg:grid-cols-1 — at lg this row sits inside a one-third-width
+                  column, where two side-by-side selects would be unreadable. */}
+              <div
+                className={`grid gap-2 ${isFieldEquals ? 'grid-cols-1' : 'grid-cols-2 lg:grid-cols-1'}`}
+              >
                 {/* Type select */}
                 <Select
                   value={cond.type}
@@ -882,8 +891,9 @@ function ActionEditor({
       {actions.map((action, i) => (
         <div key={i} className="flex gap-2 items-start">
           <div className="flex-1 space-y-2">
-            {/* Row 1: action type + inline secondary for simple types */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Row 1: action type + inline secondary for simple types.
+                lg:grid-cols-1 for the same reason as the condition rows. */}
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
               <Select
                 value={action.type}
                 onValueChange={(v) =>
@@ -1256,6 +1266,17 @@ function RuleDialog({
   const supportsDelay =
     resolvedTriggerOptions.find((opt) => opt.value === triggerType)?.supportsDelay ?? false
 
+  // No conditions = no filter = every contact. Harmless for an event trigger, which
+  // is already scoped to the contact that caused it; unacceptable for schedule_daily,
+  // whose contact set is the whole team. onSubmit blocks that case.
+  const needsDailyCondition = triggerType === 'schedule_daily' && conditions.length === 0
+  const conditionsHint =
+    conditions.length > 0
+      ? t('sections.conditionsHint')
+      : needsDailyCondition
+        ? t('sections.conditionsHintDailyEmpty')
+        : t('sections.conditionsHintEmpty')
+
   // Populate form when editing
   useEffect(() => {
     if (!open) return
@@ -1309,6 +1330,17 @@ function RuleDialog({
 
   const onSubmit = async (values: RuleFormValues) => {
     setSubmitError('')
+
+    // Conditions are an AND-filter, so an empty list means "every contact". That is
+    // the natural intent for an event trigger (the event already picks the contact),
+    // but schedule_daily's contact set is the whole team — so it needs at least one.
+    // The engine enforces this too; failing here gives the user an explanation
+    // instead of a rule that saves happily and then silently never runs.
+    if (values.trigger_type === 'schedule_daily' && conditions.length === 0) {
+      setSubmitError(t('validation.conditionRequiredDaily'))
+      return
+    }
+
     try {
       const ruleData = {
         name: values.name.trim(),
@@ -1381,7 +1413,7 @@ function RuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[680px] lg:max-w-[1100px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? t('dialogs.rule.editTitle') : t('common.newAutomation')}</DialogTitle>
         </DialogHeader>
@@ -1417,12 +1449,20 @@ function RuleDialog({
 
           <Separator />
 
-          {/* Trigger */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              {t('sections.trigger')}
-            </p>
-            <div className="grid grid-cols-2 gap-2">
+          {/*
+            Trigger → conditions → actions reads as one left-to-right sentence on lg,
+            where the extra width is there to spend. Below lg it falls back to the
+            stacked order, which is the same sequence read top-to-bottom.
+            The mobile <Separator />s are grid children that vanish at lg, letting
+            divide-x draw the column rules instead.
+          */}
+          <div className="grid gap-5 lg:grid-cols-3 lg:gap-0 lg:divide-x">
+            {/* Trigger */}
+            <div className="space-y-2 lg:pr-5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {t('sections.trigger')}
+              </p>
+              <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
               <div>
                 <Label className="text-xs">{t('dialogs.rule.whenLabel')}</Label>
                 <Select
@@ -1524,37 +1564,43 @@ function RuleDialog({
                 />
               </div>
             )}
-          </div>
+            </div>
 
-          <Separator />
+            <Separator className="lg:hidden" />
 
-          {/* Conditions */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              {t('sections.conditions')} <span className="normal-case font-normal">{t('sections.conditionsHint')}</span>
-            </p>
-            <ConditionEditor
-              conditions={conditions}
-              onChange={setConditions}
-              subscriptionTypes={subscriptionTypes}
-            />
-          </div>
+            {/* Conditions */}
+            <div className="space-y-2 lg:px-5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {t('sections.conditions')}{' '}
+                <span
+                  className={`normal-case font-normal ${needsDailyCondition ? 'text-destructive' : ''}`}
+                >
+                  {conditionsHint}
+                </span>
+              </p>
+              <ConditionEditor
+                conditions={conditions}
+                onChange={setConditions}
+                subscriptionTypes={subscriptionTypes}
+              />
+            </div>
 
-          <Separator />
+            <Separator className="lg:hidden" />
 
-          {/* Actions */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              {t('sections.actions')}
-            </p>
-            <ActionEditor
-              actions={actions}
-              templates={templates}
-              onChange={setActions}
-              actionTypeLabels={actionTypeLabelsProp}
-              contactGroups={contactGroups}
-              groupsEnabled={groupsEnabled}
-            />
+            {/* Actions */}
+            <div className="space-y-2 lg:pl-5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {t('sections.actions')}
+              </p>
+              <ActionEditor
+                actions={actions}
+                templates={templates}
+                onChange={setActions}
+                actionTypeLabels={actionTypeLabelsProp}
+                contactGroups={contactGroups}
+                groupsEnabled={groupsEnabled}
+              />
+            </div>
           </div>
 
           {submitError && <p className="text-xs text-destructive">{submitError}</p>}
