@@ -23,6 +23,8 @@ export default async function PayResultPage({
   const toSignup = success && seg === 'signup'
   // Drop-in bookings land with seg=booking — point the buyer back to the booking page.
   const toBooking = success && seg === 'booking'
+  // Paid appointments land with seg=appointments — point the buyer back to the picker.
+  const toAppointments = success && seg === 'appointments'
 
   // Primary CTA target + label.
   let ctaHref = `/public/${slug}/shop`
@@ -36,6 +38,9 @@ export default async function PayResultPage({
   } else if (toBooking) {
     ctaHref = `/public/${slug}/booking`
     ctaLabel = t('backToBooking')
+  } else if (toAppointments) {
+    ctaHref = `/public/${slug}/appointments`
+    ctaLabel = t('backToAppointments')
   }
 
   const body = success
@@ -45,7 +50,9 @@ export default async function PayResultPage({
         ? t('successBodySignup')
         : toBooking
           ? t('successBodyBooking')
-          : t('successBody')
+          : toAppointments
+            ? t('successBodyAppointment')
+            : t('successBody')
     : t('cancelledBody')
 
   return (

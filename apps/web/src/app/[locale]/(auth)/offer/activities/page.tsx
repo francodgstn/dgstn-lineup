@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
@@ -76,18 +76,51 @@ function slugify(name: string): string {
     .slice(0, 50)
 }
 
-// Rebuild the `durations` array from the chip-toggled minutes list, preserving
-// each existing duration's pricing (matched by minutes) so toggling chips never
-// wipes pricing data configured elsewhere. New minutes get an unpriced entry.
-function buildDurations(
-  minutesList: number[],
-  existing?: ActivityDuration[] | null,
-): ActivityDuration[] {
-  const byMinutes = new Map((existing ?? []).map((d) => [d.minutes, d]))
-  return [...minutesList].sort((a, b) => a - b).map((minutes) => {
-    const prev = byMinutes.get(minutes)
-    return prev ? { ...prev, minutes } : { minutes, priceAmount: null }
-  })
+// The form keeps price as a STRING per duration ('' unambiguously means "no price
+// yet"), vs. the persisted shape's `priceAmount: number | null`. These two helpers
+// convert between the two: `toDurationFormValues` hydrates the form from a saved
+// activity (edit mode); `toActivityDurations` builds the payload on submit.
+
+interface DurationFormValue {
+  minutes: number
+  price: string
+  subscriptionPricing: Array<{ subscriptionTypeId: string; included: boolean; price: string }>
+}
+
+function toDurationFormValues(durations?: ActivityDuration[] | null): DurationFormValue[] {
+  return (durations ?? []).map((d) => ({
+    minutes: d.minutes,
+    price: d.priceAmount != null ? String(d.priceAmount) : '',
+    subscriptionPricing: (d.subscriptionPricing ?? []).map((sp) => ({
+      subscriptionTypeId: sp.subscriptionTypeId,
+      included: sp.priceAmount === null,
+      price: sp.priceAmount != null ? String(sp.priceAmount) : '',
+    })),
+  }))
+}
+
+// subscriptionPricing entries are only written when they carry real data —
+// "Included" (priceAmount: null) or an explicit member price. An entry left
+// unchecked with no price simply isn't written, so that subscription type falls
+// through to the base price like anyone else — see resolveEffectiveAppointmentPrice
+// (a PRICED duration with no matching entry costs base for everyone, subscribers
+// included; the member benefit is explicit data, never implied).
+function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[] {
+  return [...durations]
+    .sort((a, b) => a.minutes - b.minutes)
+    .map((d) => {
+      const subscriptionPricing = d.subscriptionPricing
+        .filter((sp) => sp.included || sp.price.trim() !== '')
+        .map((sp) => ({
+          subscriptionTypeId: sp.subscriptionTypeId,
+          priceAmount: sp.included ? null : Number(sp.price),
+        }))
+      return {
+        minutes: d.minutes,
+        priceAmount: d.price.trim() === '' ? null : Number(d.price),
+        ...(subscriptionPricing.length > 0 ? { subscriptionPricing } : {}),
+      }
+    })
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -99,35 +132,69 @@ const APPOINTMENT_DURATION_PRESETS = [15, 30, 45, 60, 90, 120]
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
-const activitySchema = z.object({
-  name: z.string().min(1, 'Required').max(80),
-  description: z.string().max(500).optional(),
-  prerequisites: z.string().max(300).optional(),
-  confirmationInstructions: z.string().max(2000).optional(),
-  type: z.enum(['class', 'appointment'] as const).default('class'),
-  level: z.enum(LEVELS),
-  color: z.string().optional(),
-  // Paid-access gate (supersedes the legacy isFreeTrial toggle; 'open' === free trial).
-  accessTier: z.enum(['open', 'members', 'subscription'] as const),
-  subscriptionTypeIds: z.array(z.string()),
-  // Drop-in / pay-per-class: an uncovered contact may pay this to book a single session.
-  dropInEnabled: z.boolean(),
-  dropInPrice: z.string(),
-  // Does a booking for this activity confirm itself, or wait on studio review?
-  // Not implied by `type` — shown for classes and appointments alike.
-  autoConfirm: z.boolean(),
-  // APPOINTMENT-ONLY: the session lengths clients choose from.
-  durationsMinutes: z.array(z.number()),
-}).superRefine((d, ctx) => {
-  if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5)) {
-    ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: 'Enter a drop-in price of at least 0.50' })
-  }
-  if (d.type === 'appointment' && d.durationsMinutes.length === 0) {
-    ctx.addIssue({ code: 'custom', path: ['durationsMinutes'], message: 'Pick at least one session length' })
-  }
-})
+// Wrapped in a factory so the ≥0.5 price-floor message can be translated — the
+// rest of the messages here are pre-existing tech debt (hardcoded English),
+// unrelated to this change, left as-is.
+function createActivitySchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    name: z.string().min(1, 'Required').max(80),
+    description: z.string().max(500).optional(),
+    prerequisites: z.string().max(300).optional(),
+    confirmationInstructions: z.string().max(2000).optional(),
+    type: z.enum(['class', 'appointment'] as const).default('class'),
+    level: z.enum(LEVELS),
+    color: z.string().optional(),
+    // Paid-access gate (supersedes the legacy isFreeTrial toggle; 'open' === free trial).
+    accessTier: z.enum(['open', 'members', 'subscription'] as const),
+    subscriptionTypeIds: z.array(z.string()),
+    // Drop-in / pay-per-class: an uncovered contact may pay this to book a single session.
+    dropInEnabled: z.boolean(),
+    dropInPrice: z.string(),
+    // Does a booking for this activity confirm itself, or wait on studio review?
+    // Not implied by `type` — shown for classes and appointments alike.
+    autoConfirm: z.boolean(),
+    // APPOINTMENT-ONLY: the session lengths clients choose from, each with its own
+    // optional base price and per-subscription-type member pricing. Kept as
+    // strings in form state ('' = no price yet) — see toDurationFormValues /
+    // toActivityDurations for the conversion to/from the persisted shape.
+    durations: z.array(
+      z.object({
+        minutes: z.number(),
+        price: z.string(),
+        subscriptionPricing: z.array(
+          z.object({
+            subscriptionTypeId: z.string(),
+            included: z.boolean(),
+            price: z.string(),
+          })
+        ),
+      })
+    ),
+  }).superRefine((d, ctx) => {
+    if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5)) {
+      ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: 'Enter a drop-in price of at least 0.50' })
+    }
+    if (d.type === 'appointment' && d.durations.length === 0) {
+      ctx.addIssue({ code: 'custom', path: ['durations'], message: 'Pick at least one session length' })
+    }
+    d.durations.forEach((dur, i) => {
+      if (dur.price.trim() !== '' && !(Number(dur.price) >= 0.5)) {
+        ctx.addIssue({ code: 'custom', path: ['durations', i, 'price'], message: t('durationPriceValidation') })
+      }
+      dur.subscriptionPricing.forEach((sp, j) => {
+        if (!sp.included && sp.price.trim() !== '' && !(Number(sp.price) >= 0.5)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['durations', i, 'subscriptionPricing', j, 'price'],
+            message: t('durationPriceValidation'),
+          })
+        }
+      })
+    })
+  })
+}
 
-type ActivityFormData = z.infer<typeof activitySchema>
+type ActivityFormData = z.infer<ReturnType<typeof createActivitySchema>>
 
 // ─── dialog ───────────────────────────────────────────────────────────────────
 
@@ -138,6 +205,7 @@ function ActivityDialog({
   userId,
   editing,
   nextOrder,
+  currency,
 }: {
   open: boolean
   onClose: () => void
@@ -146,12 +214,15 @@ function ActivityDialog({
   editing: Activity | null
   /** Order assigned to a newly created activity so it appends to the end. */
   nextOrder: number
+  /** Team's billing currency (ISO code), shown next to duration price inputs. */
+  currency: string
 }) {
   const t = useTranslations('Activities')
   const qc = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(editing?.image_url ?? null)
+  const activitySchema = useMemo(() => createActivitySchema(t), [t])
 
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
   const initialRule = editing
@@ -181,7 +252,7 @@ function ActivityDialog({
           subscriptionTypeIds: initialRule.subscriptionTypeIds ?? [],
           dropInEnabled: editing.dropIn?.enabled ?? false,
           dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
-          durationsMinutes: editing.durations ? editing.durations.map((d) => d.minutes) : [],
+          durations: toDurationFormValues(editing.durations),
           autoConfirm: resolveAutoConfirm(editing),
         }
       : {
@@ -189,19 +260,71 @@ function ActivityDialog({
           type: 'class' as ActivityType, level: 'all',
           color: DEFAULT_ACCENT, accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '',
-          durationsMinutes: [],
+          durations: [],
           autoConfirm: resolveAutoConfirm({ type: 'class' }),
         },
   })
   const type = watch('type')
   const accessTier = watch('accessTier')
   const dropInEnabled = watch('dropInEnabled')
-  const durationsMinutes = watch('durationsMinutes') || []
+  const durations = watch('durations') || []
+  const subscriptionTypeIds = watch('subscriptionTypeIds') || []
 
-  function toggleDuration(d: number) {
-    setValue('durationsMinutes', durationsMinutes.includes(d)
-      ? durationsMinutes.filter((x) => x !== d)
-      : [...durationsMinutes, d].sort((a, b) => a - b))
+  function toggleDuration(minutes: number) {
+    setValue(
+      'durations',
+      durations.some((d) => d.minutes === minutes)
+        ? durations.filter((d) => d.minutes !== minutes)
+        : [...durations, { minutes, price: '', subscriptionPricing: [] }].sort(
+            (a, b) => a.minutes - b.minutes
+          )
+    )
+  }
+
+  // Set (or clear) a duration's base price. The FIRST time a price is set on a
+  // subscription-gated activity, pre-fill "Included" entries for every covering
+  // subscription type — the friendly default the admin sees ("my subscribers
+  // still book free"), written down as real data rather than implied (see the
+  // ActivityDuration doc comment in @linyup/shared).
+  function updateDurationPrice(minutes: number, price: string) {
+    const current = getValues('durations')
+    const idx = current.findIndex((d) => d.minutes === minutes)
+    if (idx === -1) return
+    const prev = current[idx]
+    const wasEmpty = prev.price.trim() === ''
+    const nowSet = price.trim() !== ''
+    let subscriptionPricing = prev.subscriptionPricing
+    if (wasEmpty && nowSet && accessTier === 'subscription' && subscriptionPricing.length === 0) {
+      subscriptionPricing = subscriptionTypeIds.map((id) => ({
+        subscriptionTypeId: id,
+        included: true,
+        price: '',
+      }))
+    }
+    const next = [...current]
+    next[idx] = { ...prev, price, subscriptionPricing }
+    setValue('durations', next)
+  }
+
+  function updateSubscriptionPricing(
+    minutes: number,
+    subscriptionTypeId: string,
+    patch: Partial<{ included: boolean; price: string }>
+  ) {
+    const current = getValues('durations')
+    const idx = current.findIndex((d) => d.minutes === minutes)
+    if (idx === -1) return
+    const dur = current[idx]
+    const spIdx = dur.subscriptionPricing.findIndex((sp) => sp.subscriptionTypeId === subscriptionTypeId)
+    const nextSp = [...dur.subscriptionPricing]
+    if (spIdx === -1) {
+      nextSp.push({ subscriptionTypeId, included: true, price: '', ...patch })
+    } else {
+      nextSp[spIdx] = { ...nextSp[spIdx], ...patch }
+    }
+    const next = [...current]
+    next[idx] = { ...dur, subscriptionPricing: nextSp }
+    setValue('durations', next)
   }
 
   // Re-default autoConfirm when the studio flips the type — but only while the
@@ -293,7 +416,7 @@ function ActivityDialog({
         },
         autoConfirm: data.autoConfirm,
         ...(data.type === 'appointment'
-          ? { durations: buildDurations(data.durationsMinutes, editing.durations) }
+          ? { durations: toActivityDurations(data.durations) }
           : { durations: null }),
       }
       if (imageFile) {
@@ -325,7 +448,7 @@ function ActivityDialog({
         },
         autoConfirm: data.autoConfirm,
         ...(data.type === 'appointment'
-          ? { durations: buildDurations(data.durationsMinutes) }
+          ? { durations: toActivityDurations(data.durations) }
           : {}),
         slug: slugify(data.name),
         teamId,
@@ -514,30 +637,122 @@ function ActivityDialog({
             />
 
             {type === 'appointment' && (
-              <div className="flex items-center justify-between gap-4 p-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{t('fieldDurationsMinutes')}</p>
-                  <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
-                  {errors.durationsMinutes && (
-                    <p className="text-destructive text-xs">{errors.durationsMinutes.message}</p>
-                  )}
+              <div className="p-3 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{t('fieldDurationsMinutes')}</p>
+                    <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                    {APPOINTMENT_DURATION_PRESETS.map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => toggleDuration(d)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                          durations.some((x) => x.minutes === d)
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground border-border hover:border-foreground'
+                        }`}
+                      >
+                        {formatDuration(d)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                  {APPOINTMENT_DURATION_PRESETS.map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => toggleDuration(d)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                        durationsMinutes.includes(d)
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background text-muted-foreground border-border hover:border-foreground'
-                      }`}
-                    >
-                      {formatDuration(d)}
-                    </button>
-                  ))}
-                </div>
+                {errors.durations?.message && (
+                  <p className="text-destructive text-xs">{errors.durations.message}</p>
+                )}
+
+                {/* One price sub-row per SELECTED duration — the coach sells TIME,
+                    so price is per-length, not one flat activity price. Empty =
+                    unpriced (the plain access rules decide who can book it). */}
+                {durations.length > 0 && (
+                  <div className="space-y-2 rounded-md bg-muted/30 p-2.5">
+                    <p className="text-xs text-muted-foreground">{t('durationPriceHint')}</p>
+                    {[...durations]
+                      .sort((a, b) => a.minutes - b.minutes)
+                      .map((d) => {
+                        const idx = durations.findIndex((x) => x.minutes === d.minutes)
+                        const priceError = errors.durations?.[idx]?.price?.message
+                        return (
+                          <div key={d.minutes} className="space-y-1.5 rounded-md border bg-background p-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium">{formatDuration(d.minutes)}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground">{currency}</span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={d.price}
+                                  onChange={(e) => updateDurationPrice(d.minutes, e.target.value)}
+                                  placeholder="0.00"
+                                  className="h-8 w-24 text-sm"
+                                  aria-label={t('durationPriceLabel', { duration: formatDuration(d.minutes) })}
+                                />
+                              </div>
+                            </div>
+                            {priceError && <p className="text-destructive text-xs">{priceError}</p>}
+
+                            {/* Member pricing — only meaningful for the 'subscription' access
+                                tier, where "covering types" exist to key benefits off. */}
+                            {accessTier === 'subscription' &&
+                              d.price.trim() !== '' &&
+                              subscriptionTypeIds.length > 0 && (
+                                <div className="ml-1 space-y-1 border-l-2 pl-2.5">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    {t('memberPricingLabel')}
+                                  </p>
+                                  {subscriptionTypeIds.map((subId) => {
+                                    const subName = subscriptionTypes.find((s) => s.id === subId)?.name ?? subId
+                                    const sp = d.subscriptionPricing.find((x) => x.subscriptionTypeId === subId)
+                                    const included = sp?.included ?? true
+                                    const spPrice = sp?.price ?? ''
+                                    return (
+                                      <div key={subId} className="flex items-center justify-between gap-2">
+                                        <span className="truncate text-xs">{subName}</span>
+                                        <div className="flex shrink-0 items-center gap-1.5">
+                                          <label className="flex cursor-pointer items-center gap-1 text-xs">
+                                            <input
+                                              type="checkbox"
+                                              className="accent-primary"
+                                              checked={included}
+                                              onChange={(e) =>
+                                                updateSubscriptionPricing(d.minutes, subId, {
+                                                  included: e.target.checked,
+                                                })
+                                              }
+                                            />
+                                            {t('memberPricingIncluded')}
+                                          </label>
+                                          {!included && (
+                                            <Input
+                                              type="number"
+                                              min={0}
+                                              step="0.01"
+                                              value={spPrice}
+                                              onChange={(e) =>
+                                                updateSubscriptionPricing(d.minutes, subId, {
+                                                  price: e.target.value,
+                                                })
+                                              }
+                                              placeholder="0.00"
+                                              aria-label={t('memberPricingPriceLabel')}
+                                              className="h-7 w-20 text-xs"
+                                            />
+                                          )}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -796,7 +1011,7 @@ function ActivityCard({
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function ActivitiesPage() {
-  const { currentTeamId, user } = useAuth()
+  const { currentTeamId, user, team } = useAuth()
   const { data: activities = [], isLoading } = useActivities(currentTeamId)
   const qc = useQueryClient()
   const t = useTranslations('Activities')
@@ -937,6 +1152,7 @@ export default function ActivitiesPage() {
           userId={user.uid}
           editing={editing}
           nextOrder={activities.length}
+          currency={team?.default_currency ?? 'CHF'}
         />
       )}
 

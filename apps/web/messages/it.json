@@ -899,6 +899,7 @@
     "statusOpen": "Aperta",
     "statusFull": "Completa",
     "statusCancelled": "Annullata",
+    "statusAwaitingPayment": "In attesa di pagamento",
     "peekCheckIns": "Presenze",
     "peekPendingBookings": "Prenotazioni in sospeso",
     "peekNoCheckIns": "Ancora nessuna presenza",
@@ -1180,7 +1181,13 @@
     "sectionEmpty": "Ancora niente qui.",
     "fieldOfferAs": "Offri come",
     "type_class_desc": "Lo pianifichi tu; le persone prenotano un posto.",
-    "type_appointment_desc": "Le persone scelgono un orario dalla tua disponibilità."
+    "type_appointment_desc": "Le persone scelgono un orario dalla tua disponibilità.",
+    "durationPriceHint": "Lascia vuoto il prezzo di una durata per tenerla senza prezzo — le regole di accesso sopra decideranno chi può prenotare.",
+    "durationPriceLabel": "Prezzo per {duration}",
+    "durationPriceValidation": "Inserisci un prezzo di almeno 0.50, oppure lascia il campo vuoto.",
+    "memberPricingLabel": "Prezzi per gli abbonati",
+    "memberPricingIncluded": "Incluso",
+    "memberPricingPriceLabel": "Prezzo membro"
   },
   "TeamSettings": {
     "title": "Impostazioni del team",
@@ -1605,6 +1612,7 @@
     "statusOpen": "Disponibile",
     "statusFull": "Pieno",
     "statusCancelled": "Annullato",
+    "statusAwaitingPayment": "In attesa di pagamento",
     "statusActive": "Attivo",
     "statusPaused": "In pausa",
     "bookingsHeading": "Prenotazioni",
@@ -1696,7 +1704,19 @@
     "pickDay": "Scegli un giorno",
     "pickDuration": "Scegli una durata",
     "pickTime": "Scegli un orario",
-    "noTimesThisDay": "Nessun orario disponibile in questo giorno."
+    "noTimesThisDay": "Nessun orario disponibile in questo giorno.",
+    "priceFrom": "da {price}",
+    "payToBook": "Paga {price} per prenotare",
+    "payChooserMemberTitle": "Sono un membro",
+    "payChooserMemberSubtitle": "Accedi per verificare il tuo prezzo",
+    "payChooserGuestTitle": "Prenota come ospite",
+    "payChooserGuestSubtitle": "Paga {price} per prenotare",
+    "yourPrice": "Il tuo prezzo: {price}",
+    "confirmPay": "Paga {price}",
+    "payingEllipsis": "Reindirizzamento al pagamento…",
+    "memberCoveredHint": "Incluso nel tuo abbonamento — prenotazione in corso…",
+    "errorCheckoutFailed": "Impossibile avviare il pagamento. Riprova.",
+    "errorPaymentRequired": "Questa sessione ora richiede il pagamento. Riprova."
   },
   "AppointmentCancel": {
     "title": "Annulla appuntamento",
@@ -2990,7 +3010,9 @@
     "openSpace": "Apri il tuo Space",
     "close": "Puoi chiudere questa finestra.",
     "backToBooking": "Torna alla prenotazione",
-    "successBodyBooking": "Pagamento ricevuto — la tua lezione è prenotata. Ci vediamo!"
+    "successBodyBooking": "Pagamento ricevuto — la tua lezione è prenotata. Ci vediamo!",
+    "backToAppointments": "Torna agli appuntamenti",
+    "successBodyAppointment": "Pagamento ricevuto — il tuo appuntamento è prenotato. Riceverai una conferma via e-mail."
   },
   "Notifications": {
     "dismiss": "Chiudi"

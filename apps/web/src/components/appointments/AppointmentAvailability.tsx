@@ -38,6 +38,7 @@ import {
   SESSIONS_COLLECTION,
   TEAMS_COLLECTION,
   TEAM_MEMBERS_SUBCOLLECTION,
+  isExpiredAppointmentHold,
 } from '@linyup/shared'
 import type { Availability, AppointmentBooking, Session, Activity } from '@linyup/shared'
 import { useActivities } from '@/hooks/useActivities'
@@ -113,10 +114,14 @@ function StatusBadge({ status }: { status: string }) {
     cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
     active:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
     paused:    'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+    // A paid-booking HOLD — reserved while checkout completes. An expired-but-
+    // unswept hold is shown as 'cancelled' instead (see AppointmentDetail).
+    pending_payment: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
   }
   const labels: Record<string, string> = {
     open: t('statusOpen'), full: t('statusFull'), cancelled: t('statusCancelled'),
     active: t('statusActive'), paused: t('statusPaused'),
+    pending_payment: t('statusAwaitingPayment'),
   }
   return (
     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls[status] ?? ''}`}>
@@ -565,6 +570,13 @@ export function AppointmentDetail({ slot, onClose, onCancelled }: {
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelling, setCancelling] = useState(false)
 
+  // A lapsed paid-booking hold (see isExpiredAppointmentHold) is logically free
+  // even before the daily sweep flips the stored status — show it as 'cancelled'
+  // so admin never mistakes it for a live hold or a real booking.
+  const effectiveSlotStatus = slot && isExpiredAppointmentHold(slot, Date.now())
+    ? 'cancelled'
+    : (slot?.status ?? 'open')
+
   async function loadBookings() {
     if (!slot) return
     setLoadingBookings(true)
@@ -595,7 +607,7 @@ export function AppointmentDetail({ slot, onClose, onCancelled }: {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 flex-wrap">
                 {slot.activityName}
-                <StatusBadge status={slot.status ?? 'open'} />
+                <StatusBadge status={effectiveSlotStatus} />
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-1 text-sm">
@@ -633,7 +645,7 @@ export function AppointmentDetail({ slot, onClose, onCancelled }: {
               )}
             </div>
 
-            {(slot.status ?? 'open') !== 'cancelled' && (
+            {effectiveSlotStatus !== 'cancelled' && (
               <div className="border-t pt-3">
                 <Button variant="destructive" size="sm" className="w-full"
                   onClick={() => setConfirmCancel(true)}>

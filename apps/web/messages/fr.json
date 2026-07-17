@@ -899,6 +899,7 @@
     "statusOpen": "Ouverte",
     "statusFull": "Complète",
     "statusCancelled": "Annulée",
+    "statusAwaitingPayment": "En attente de paiement",
     "peekCheckIns": "Présences",
     "peekPendingBookings": "Réservations en attente",
     "peekNoCheckIns": "Aucune présence pour l'instant",
@@ -1180,7 +1181,13 @@
     "sectionEmpty": "Rien ici pour l’instant.",
     "fieldOfferAs": "Proposer comme",
     "type_class_desc": "Vous le planifiez ; les gens réservent une place.",
-    "type_appointment_desc": "Les gens choisissent un créneau dans vos disponibilités."
+    "type_appointment_desc": "Les gens choisissent un créneau dans vos disponibilités.",
+    "durationPriceHint": "Laissez le prix d'une durée vide pour la garder non tarifée — les règles d'accès ci-dessus décident alors qui peut réserver.",
+    "durationPriceLabel": "Prix pour {duration}",
+    "durationPriceValidation": "Saisissez un prix d'au moins 0.50, ou laissez le champ vide.",
+    "memberPricingLabel": "Tarifs pour les abonnés",
+    "memberPricingIncluded": "Inclus",
+    "memberPricingPriceLabel": "Prix membre"
   },
   "TeamSettings": {
     "title": "Paramètres de l'équipe",
@@ -1605,6 +1612,7 @@
     "statusOpen": "Disponible",
     "statusFull": "Complet",
     "statusCancelled": "Annulé",
+    "statusAwaitingPayment": "En attente de paiement",
     "statusActive": "Actif",
     "statusPaused": "En pause",
     "bookingsHeading": "Réservations",
@@ -1696,7 +1704,19 @@
     "pickDay": "Choisissez un jour",
     "pickDuration": "Choisissez une durée",
     "pickTime": "Choisissez une heure",
-    "noTimesThisDay": "Plus de créneaux ce jour-là."
+    "noTimesThisDay": "Plus de créneaux ce jour-là.",
+    "priceFrom": "à partir de {price}",
+    "payToBook": "Payer {price} pour réserver",
+    "payChooserMemberTitle": "Je suis membre",
+    "payChooserMemberSubtitle": "Connectez-vous pour vérifier votre tarif",
+    "payChooserGuestTitle": "Réserver en tant qu'invité",
+    "payChooserGuestSubtitle": "Payer {price} pour réserver",
+    "yourPrice": "Votre tarif : {price}",
+    "confirmPay": "Payer {price}",
+    "payingEllipsis": "Redirection vers le paiement…",
+    "memberCoveredHint": "Inclus dans votre abonnement — réservation en cours…",
+    "errorCheckoutFailed": "Impossible de démarrer le paiement. Veuillez réessayer.",
+    "errorPaymentRequired": "Cette séance nécessite désormais un paiement. Veuillez réessayer."
   },
   "AppointmentCancel": {
     "title": "Annuler le rendez-vous",
@@ -2990,7 +3010,9 @@
     "openSpace": "Ouvrir votre Space",
     "close": "Vous pouvez fermer cette fenêtre.",
     "backToBooking": "Retour à la réservation",
-    "successBodyBooking": "Paiement reçu — votre cours est réservé. À bientôt !"
+    "successBodyBooking": "Paiement reçu — votre cours est réservé. À bientôt !",
+    "backToAppointments": "Retour aux rendez-vous",
+    "successBodyAppointment": "Paiement reçu — votre rendez-vous est réservé. Vous recevrez une confirmation par e-mail."
   },
   "Notifications": {
     "dismiss": "Fermer"

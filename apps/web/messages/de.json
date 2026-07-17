@@ -899,6 +899,7 @@
     "statusOpen": "Offen",
     "statusFull": "Ausgebucht",
     "statusCancelled": "Abgesagt",
+    "statusAwaitingPayment": "Zahlung ausstehend",
     "peekCheckIns": "Check-ins",
     "peekPendingBookings": "Offene Buchungen",
     "peekNoCheckIns": "Noch keine Check-ins",
@@ -1180,7 +1181,13 @@
     "sectionEmpty": "Noch nichts hier.",
     "fieldOfferAs": "Anbieten als",
     "type_class_desc": "Du planst ihn; Leute buchen einen Platz.",
-    "type_appointment_desc": "Leute wählen eine Zeit aus deiner Verfügbarkeit."
+    "type_appointment_desc": "Leute wählen eine Zeit aus deiner Verfügbarkeit.",
+    "durationPriceHint": "Lass den Preis einer Dauer leer, um sie unbepreist zu lassen — die obigen Zugriffsregeln entscheiden dann, wer buchen kann.",
+    "durationPriceLabel": "Preis für {duration}",
+    "durationPriceValidation": "Gib einen Preis von mindestens 0.50 ein oder lass das Feld leer.",
+    "memberPricingLabel": "Preise für Abonnenten",
+    "memberPricingIncluded": "Inbegriffen",
+    "memberPricingPriceLabel": "Mitgliederpreis"
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",
@@ -1605,6 +1612,7 @@
     "statusOpen": "Offen",
     "statusFull": "Voll",
     "statusCancelled": "Abgesagt",
+    "statusAwaitingPayment": "Zahlung ausstehend",
     "statusActive": "Aktiv",
     "statusPaused": "Pausiert",
     "bookingsHeading": "Buchungen",
@@ -1696,7 +1704,19 @@
     "pickDay": "Tag wählen",
     "pickDuration": "Dauer wählen",
     "pickTime": "Zeit wählen",
-    "noTimesThisDay": "An diesem Tag keine Zeiten frei."
+    "noTimesThisDay": "An diesem Tag keine Zeiten frei.",
+    "priceFrom": "ab {price}",
+    "payToBook": "{price} zahlen, um zu buchen",
+    "payChooserMemberTitle": "Ich bin Mitglied",
+    "payChooserMemberSubtitle": "Melde dich an, um deinen Preis zu prüfen",
+    "payChooserGuestTitle": "Als Gast buchen",
+    "payChooserGuestSubtitle": "{price} zahlen, um zu buchen",
+    "yourPrice": "Dein Preis: {price}",
+    "confirmPay": "{price} zahlen",
+    "payingEllipsis": "Weiterleitung zur Zahlung…",
+    "memberCoveredHint": "In deiner Mitgliedschaft inbegriffen — wird gebucht…",
+    "errorCheckoutFailed": "Zahlung konnte nicht gestartet werden. Bitte versuche es erneut.",
+    "errorPaymentRequired": "Für diese Sitzung ist jetzt eine Zahlung erforderlich. Bitte versuche es erneut."
   },
   "AppointmentCancel": {
     "title": "Termin absagen",
@@ -2990,7 +3010,9 @@
     "openSpace": "Space öffnen",
     "close": "Du kannst dieses Fenster schliessen.",
     "backToBooking": "Zurück zur Buchung",
-    "successBodyBooking": "Zahlung erhalten — dein Kurs ist gebucht. Bis bald!"
+    "successBodyBooking": "Zahlung erhalten — dein Kurs ist gebucht. Bis bald!",
+    "backToAppointments": "Zurück zu den Terminen",
+    "successBodyAppointment": "Zahlung erhalten — dein Termin ist gebucht. Du erhältst eine Bestätigung per E-Mail."
   },
   "Notifications": {
     "dismiss": "Verwerfen"

@@ -899,6 +899,7 @@
     "statusOpen": "Open",
     "statusFull": "Full",
     "statusCancelled": "Cancelled",
+    "statusAwaitingPayment": "Awaiting payment",
     "peekCheckIns": "Check-ins",
     "peekPendingBookings": "Pending bookings",
     "peekNoCheckIns": "No check-ins yet",
@@ -1180,7 +1181,13 @@
     "sectionEmpty": "Nothing here yet.",
     "fieldOfferAs": "Offer as",
     "type_class_desc": "You put it on the calendar; people book a seat.",
-    "type_appointment_desc": "People pick a time from your availability."
+    "type_appointment_desc": "People pick a time from your availability.",
+    "durationPriceHint": "Leave a length's price empty to keep it unpriced — the access rules above decide who can book it.",
+    "durationPriceLabel": "Price for {duration}",
+    "durationPriceValidation": "Enter a price of at least 0.50, or leave it empty.",
+    "memberPricingLabel": "Pricing for subscribers",
+    "memberPricingIncluded": "Included",
+    "memberPricingPriceLabel": "Member price"
   },
   "TeamSettings": {
     "title": "Team settings",
@@ -1605,6 +1612,7 @@
     "statusOpen": "Open",
     "statusFull": "Full",
     "statusCancelled": "Cancelled",
+    "statusAwaitingPayment": "Awaiting payment",
     "statusActive": "Active",
     "statusPaused": "Paused",
     "bookingsHeading": "Bookings",
@@ -1696,7 +1704,19 @@
     "pickDay": "Choose a day",
     "pickDuration": "Choose a length",
     "pickTime": "Choose a time",
-    "noTimesThisDay": "No times left this day."
+    "noTimesThisDay": "No times left this day.",
+    "priceFrom": "from {price}",
+    "payToBook": "Pay {price} to book",
+    "payChooserMemberTitle": "I'm a member",
+    "payChooserMemberSubtitle": "Sign in to check your price",
+    "payChooserGuestTitle": "Book as guest",
+    "payChooserGuestSubtitle": "Pay {price} to book",
+    "yourPrice": "Your price: {price}",
+    "confirmPay": "Pay {price}",
+    "payingEllipsis": "Redirecting to payment…",
+    "memberCoveredHint": "Included with your membership — booking…",
+    "errorCheckoutFailed": "Couldn't start checkout. Please try again.",
+    "errorPaymentRequired": "This session now requires payment. Please try again."
   },
   "AppointmentCancel": {
     "title": "Cancel appointment",
@@ -2990,7 +3010,9 @@
     "openSpace": "Open your Space",
     "close": "You can close this window.",
     "backToBooking": "Back to booking",
-    "successBodyBooking": "Payment received — your class is booked. See you there!"
+    "successBodyBooking": "Payment received — your class is booked. See you there!",
+    "backToAppointments": "Back to appointments",
+    "successBodyAppointment": "Payment received — your appointment is booked. You'll receive a confirmation by email."
   },
   "Notifications": {
     "dismiss": "Dismiss"

@@ -1,14 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { httpsCallable } from 'firebase/functions'
+import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
-import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
+import { resolveActivityAccessRule, resolveEffectiveAppointmentPrice, type ActivityAccessRule } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
+import { formatCurrency } from '@/lib/format'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -30,17 +31,24 @@ import {
 // ─── types ────────────────────────────────────────────────────────────────────
 // Mirrors the listAvailability callable's contract: availability is the ONLY
 // source of bookable times (nothing is pre-generated any more — an appointment
-// Session exists only once booked). Duration/name/access come from the linked
-// Activity, not the availability window.
+// Session exists only once booked). Duration/name/access/pricing come from the
+// linked Activity, not the availability window.
+
+interface AvailDurationPricing {
+  subscriptionTypeId: string
+  priceAmount: number | null
+}
+
+interface AvailDuration {
+  minutes: number
+  priceAmount: number | null
+  subscriptionPricing: AvailDurationPricing[]
+}
 
 interface AvailActivity {
   activityId: string
   activityName: string
-  durations: Array<{
-    minutes: number
-    priceAmount: number | null
-    subscriptionPricing: Array<{ subscriptionTypeId: string; priceAmount: number | null }>
-  }>
+  durations: AvailDuration[]
   accessRule: ActivityAccessRule
   location: string | null
   onlineUrl: string | null
@@ -53,7 +61,8 @@ interface AvailCoach {
   activities: AvailActivity[]
 }
 
-// What a time chip opens the booking modal with.
+// What a time chip opens the booking modal with. Pricing here is DISPLAY/ROUTING
+// only — bookAppointment / createAppointmentCheckout always re-resolve server-side.
 interface WindowBooking {
   providerId: string
   providerName: string | null
@@ -64,11 +73,14 @@ interface WindowBooking {
   isFreeTrial: boolean
   location: string | null
   onlineUrl: string | null
+  priceAmount: number | null
+  subscriptionPricing: AvailDurationPricing[]
+  accessRule: ActivityAccessRule
 }
 
 type PickerStep = 'coach' | 'activity' | 'time'
 
-// Args passed to whichever booking callable backs the form.
+// Args passed to whichever booking/checkout callable backs the form.
 type BookArgs =
   | { contactDetails: { firstname: string; lastname: string; email: string; phone?: string } }
   | { authenticatedContactId: string; verificationCodeId: string }
@@ -89,6 +101,43 @@ function fmtDuration(mins: number): string {
   return m ? `${h}h ${m}m` : `${h}h`
 }
 
+// "CHF 45–85" when every duration is priced and prices differ, "from CHF 45" when
+// only some durations are priced (or several distinct prices exist but the range
+// doesn't cover every length), the plain price when there's only one, and null
+// when nothing is priced (no chip).
+function activityPriceRangeLabel(
+  activity: AvailActivity,
+  currency: string,
+  locale: string,
+  t: ReturnType<typeof useTranslations>
+): string | null {
+  const priced = activity.durations.filter((d) => typeof d.priceAmount === 'number')
+  if (priced.length === 0) return null
+  const amounts = priced.map((d) => d.priceAmount as number)
+  const min = Math.min(...amounts)
+  const max = Math.max(...amounts)
+  if (min === max) return formatCurrency(min, currency, locale)
+  if (priced.length === activity.durations.length) {
+    return `${formatCurrency(min, currency, locale)}–${formatCurrency(max, currency, locale)}`
+  }
+  return t('priceFrom', { price: formatCurrency(min, currency, locale) })
+}
+
+// A duration is "for sale" when it has a base price OR at least one member-price
+// entry — mirrors the same check in createAppointmentCheckout.
+function durationHasAnyPrice(priceAmount: number | null, subscriptionPricing: AvailDurationPricing[]): boolean {
+  return typeof priceAmount === 'number' || subscriptionPricing.length > 0
+}
+
+// Pulls the {code, reason, priceAmount} triad off a callable's FunctionsError —
+// `code` is prefixed ('functions/failed-precondition'); `reason`/`priceAmount`
+// come from the HttpsError's `details` (see bookAppointment / createAppointmentCheckout).
+function errorDetails(err: unknown): { code?: string; message?: string; reason?: string; priceAmount?: number } {
+  const fe = err as FunctionsError
+  const details = (fe?.details ?? {}) as { reason?: string; priceAmount?: number }
+  return { code: fe?.code, message: fe?.message, reason: details.reason, priceAmount: details.priceAmount }
+}
+
 // ─── booking form schemas ──────────────────────────────────────────────────────
 
 const bookingSchema = z.object({
@@ -103,29 +152,59 @@ type EmailValues = z.infer<typeof emailSchema>
 const codeSchema = z.object({ code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code') })
 type CodeValues = z.infer<typeof codeSchema>
 
-// ─── booking form (guest / members-only) ───────────────────────────────────────
+// ─── booking form (guest / members-only / pay) ─────────────────────────────────
 
 function SlotBookingForm({
   teamId,
   isFreeTrial,
+  gated,
+  hasAnyPrice,
+  priceAmount,
+  subscriptionPricing,
+  durationMinutes,
+  currency,
+  locale,
   book,
+  checkout,
   onBooked,
   onClose,
 }: {
   teamId: string
   isFreeTrial: boolean
+  /** accessRule.type !== 'open' — a signed-in contact or a paying guest is required. */
+  gated: boolean
+  hasAnyPrice: boolean
+  priceAmount: number | null
+  subscriptionPricing: AvailDurationPricing[]
+  durationMinutes: number
+  currency: string
+  locale: string
   book: (args: BookArgs) => Promise<void>
+  checkout: (args: BookArgs) => Promise<{ url?: string; amount?: number }>
   onBooked: (details: { firstname: string; email: string }) => void
   onClose: () => void
 }) {
   const t = useTranslations('AppointmentBooking')
   const [error, setError] = useState<string | null>(null)
+  const [submittingPay, setSubmittingPay] = useState(false)
 
   type VerifyStep = 'email' | 'code'
   const [verifyStep, setVerifyStep] = useState<VerifyStep>('email')
   const [returningEmail, setReturningEmail] = useState('')
   const [codeId, setCodeId] = useState('')
   const [countdown, setCountdown] = useState(0)
+
+  // Gated + priced only: which path the visitor picked at the chooser.
+  const [gatedChoice, setGatedChoice] = useState<'member' | 'guest' | null>(null)
+  // Set once a signed-in member verifies and their effective price is an AMOUNT
+  // (not covered) — holds what checkout needs.
+  const [memberPay, setMemberPay] = useState<{
+    contactId: string
+    verificationCodeId: string
+    amount: number
+  } | null>(null)
+  // Transient state while a COVERED member's free booking is in flight.
+  const [autobooking, setAutobooking] = useState(false)
 
   useEffect(() => {
     if (countdown <= 0) return
@@ -141,7 +220,8 @@ function SlotBookingForm({
   const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) })
   const codeForm = useForm<CodeValues>({ resolver: zodResolver(codeSchema) })
 
-  async function onSubmitGuest(data: BookingFormValues) {
+  // ── Guest, FREE path (unpriced + open) — untouched. ──
+  async function onSubmitGuestFree(data: BookingFormValues) {
     setError(null)
     try {
       await book({
@@ -154,10 +234,37 @@ function SlotBookingForm({
       })
       onBooked({ firstname: data.firstname, email: data.email })
     } catch (err) {
-      const e = err as { code?: string }
-      if (e.code === 'already-exists') setError(t('errorAlreadyBooked'))
-      else if (e.code === 'failed-precondition') setError(t('errorSlotUnavailable'))
+      const { code } = errorDetails(err)
+      if (code === 'already-exists') setError(t('errorAlreadyBooked'))
+      else if (code === 'failed-precondition') setError(t('errorSlotUnavailable'))
       else setError(t('errorGeneric'))
+    }
+  }
+
+  // ── Guest, PAY path (open + priced, or gated + priced + chose "guest"). Guests
+  // always pay the BASE price; payment is proof (drop-in precedent) — the server
+  // still re-checks (see createAppointmentCheckout) before creating the hold. ──
+  async function onSubmitGuestPay(data: BookingFormValues) {
+    setError(null)
+    try {
+      const res = await checkout({
+        contactDetails: {
+          firstname: data.firstname,
+          lastname: data.lastname,
+          email: data.email,
+          phone: data.phone || undefined,
+        },
+      })
+      if (res?.url) {
+        window.location.href = res.url
+        return
+      }
+      throw new Error('no-url')
+    } catch (err) {
+      const { code } = errorDetails(err)
+      if (code === 'functions/already-exists') setError(t('errorAlreadyBooked'))
+      else if (code === 'functions/failed-precondition') setError(t('errorSlotUnavailable'))
+      else setError(t('errorCheckoutFailed'))
     }
   }
 
@@ -186,8 +293,15 @@ function SlotBookingForm({
     setError(null)
     try {
       const verifyFn = httpsCallable<
-        { codeId: string; code: string },
-        { verified: boolean; codeId: string; selectedContactId?: string; matchedContacts?: { id: string }[] }
+        { codeId: string; code?: string; selectedContactId?: string },
+        {
+          verified: boolean
+          codeId: string
+          selectedContactId?: string
+          requiresContactSelection?: boolean
+          matchedContacts?: { id: string }[]
+          contactData?: { held_subscription_type_ids?: string[] }
+        }
       >(functions, 'verifyBookingCode')
       const result = await verifyFn({ codeId, code: values.code })
       const contactId = result.data.selectedContactId ?? result.data.matchedContacts?.[0]?.id ?? null
@@ -195,8 +309,58 @@ function SlotBookingForm({
         setError(t('errorNoAccount'))
         return
       }
-      await book({ authenticatedContactId: contactId, verificationCodeId: result.data.codeId })
-      onBooked({ firstname: returningEmail.split('@')[0], email: returningEmail })
+
+      if (!hasAnyPrice) {
+        await book({ authenticatedContactId: contactId, verificationCodeId: result.data.codeId })
+        onBooked({ firstname: returningEmail.split('@')[0], email: returningEmail })
+        return
+      }
+
+      // Priced + gated: need the held-subscription snapshot to price it for THIS
+      // caller. When several contacts matched, the auto-picked one above didn't
+      // carry it — one follow-up call resolves it exactly like the manual pick does.
+      let contactData = result.data.contactData
+      if (!contactData) {
+        const sel = await verifyFn({ codeId, selectedContactId: contactId })
+        contactData = sel.data.contactData
+      }
+      const held = contactData?.held_subscription_type_ids ?? []
+
+      // Mirrors resolveEffectiveAppointmentPrice server-side — DISPLAY/ROUTING
+      // only, book()/checkout() always re-resolve authoritatively.
+      const effective = resolveEffectiveAppointmentPrice(
+        { minutes: durationMinutes, priceAmount, subscriptionPricing },
+        held
+      )
+
+      if (effective.free) {
+        setAutobooking(true)
+        try {
+          await book({ authenticatedContactId: contactId, verificationCodeId: result.data.codeId })
+          onBooked({ firstname: returningEmail.split('@')[0], email: returningEmail })
+        } catch (bookErr) {
+          const { code, reason, priceAmount: amt } = errorDetails(bookErr)
+          if (code === 'functions/already-exists') {
+            setError(t('errorAlreadyBooked'))
+          } else if (code === 'functions/failed-precondition' && reason === 'payment_required') {
+            // Race: pricing/coverage changed between our check and the free
+            // attempt — the server is authoritative, fall back to the pay CTA.
+            if (typeof amt === 'number') setMemberPay({ contactId, verificationCodeId: result.data.codeId, amount: amt })
+            else setError(t('errorPaymentRequired'))
+          } else {
+            setError(t('errorGeneric'))
+          }
+        } finally {
+          setAutobooking(false)
+        }
+        return
+      }
+
+      if (typeof effective.amount === 'number') {
+        setMemberPay({ contactId, verificationCodeId: result.data.codeId, amount: effective.amount })
+        return
+      }
+      setError(t('errorPaymentRequired'))
     } catch (err) {
       const e = err as { code?: string; message?: string }
       if (e.code === 'already-exists') setError(t('errorAlreadyBooked'))
@@ -222,15 +386,64 @@ function SlotBookingForm({
     }
   }
 
+  // A verified member's effective price is an AMOUNT — pay to confirm.
+  async function onMemberPay() {
+    if (!memberPay) return
+    setSubmittingPay(true)
+    setError(null)
+    try {
+      const res = await checkout({
+        authenticatedContactId: memberPay.contactId,
+        verificationCodeId: memberPay.verificationCodeId,
+      })
+      if (res?.url) {
+        window.location.href = res.url
+        return
+      }
+      throw new Error('no-url')
+    } catch (err) {
+      const { code, reason } = errorDetails(err)
+      if (code === 'functions/failed-precondition' && reason === 'covered') {
+        // Race: became covered since we checked — retry the free path.
+        try {
+          await book({
+            authenticatedContactId: memberPay.contactId,
+            verificationCodeId: memberPay.verificationCodeId,
+          })
+          onBooked({ firstname: returningEmail.split('@')[0], email: returningEmail })
+        } catch {
+          setError(t('errorGeneric'))
+        }
+      } else if (code === 'functions/already-exists') {
+        setError(t('errorAlreadyBooked'))
+      } else {
+        setError(t('errorCheckoutFailed'))
+      }
+    } finally {
+      setSubmittingPay(false)
+    }
+  }
+
+  function backToChooser() {
+    setGatedChoice(null)
+    setVerifyStep('email')
+    setMemberPay(null)
+    setAutobooking(false)
+    setError(null)
+    emailForm.reset()
+    codeForm.reset()
+  }
+
   const errorBox = error ? (
     <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded px-3 py-2">
       {error}
     </p>
   ) : null
 
-  if (isFreeTrial) {
+  // ── 1. Unpriced + open (free trial) — the ORIGINAL flow, untouched. ──
+  if (!hasAnyPrice && isFreeTrial) {
     return (
-      <form onSubmit={handleSubmit(onSubmitGuest)} className="space-y-3">
+      <form onSubmit={handleSubmit(onSubmitGuestFree)} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label htmlFor="cbf-fn" className="text-xs">{t('fieldFirstname')}</Label>
@@ -261,9 +474,131 @@ function SlotBookingForm({
     )
   }
 
+  // ── 2. Priced + open, OR priced + gated + chose "guest" — pay by guest. ──
+  if (hasAnyPrice && (!gated || gatedChoice === 'guest')) {
+    return (
+      <form onSubmit={handleSubmit(onSubmitGuestPay)} className="space-y-3">
+        {gated && (
+          <button
+            type="button"
+            onClick={backToChooser}
+            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            {t('back')}
+          </button>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="cbf-fn" className="text-xs">{t('fieldFirstname')}</Label>
+            <Input id="cbf-fn" {...register('firstname')} />
+            {errors.firstname && <p className="text-destructive text-xs">{errors.firstname.message}</p>}
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="cbf-ln" className="text-xs">{t('fieldLastname')}</Label>
+            <Input id="cbf-ln" {...register('lastname')} />
+            {errors.lastname && <p className="text-destructive text-xs">{errors.lastname.message}</p>}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="cbf-em" className="text-xs">{t('fieldEmail')}</Label>
+          <Input id="cbf-em" type="email" {...register('email')} />
+          {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="cbf-ph" className="text-xs">{t('fieldPhone')}</Label>
+          <Input id="cbf-ph" type="tel" {...register('phone')} />
+        </div>
+        {priceAmount != null && (
+          <p className="text-xs text-muted-foreground">
+            {t('payToBook', { price: formatCurrency(priceAmount, currency, locale) })}
+          </p>
+        )}
+        {errorBox}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
+          <Button type="submit" size="sm" disabled={isSubmitting}>
+            {isSubmitting ? t('payingEllipsis') : t('submit')}
+          </Button>
+        </div>
+      </form>
+    )
+  }
+
+  // ── 3. Priced + gated, no choice made yet — offer BOTH: sign in as a member,
+  // or pay as a guest (payment is proof — the server re-checks either way). ──
+  if (hasAnyPrice && gated && !gatedChoice) {
+    return (
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => setGatedChoice('member')}
+          className="w-full text-left rounded-xl border p-3.5 hover:border-primary hover:bg-primary/5 transition-colors"
+        >
+          <p className="font-semibold text-sm">{t('payChooserMemberTitle')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('payChooserMemberSubtitle')}</p>
+        </button>
+        {priceAmount != null && (
+          <button
+            type="button"
+            onClick={() => setGatedChoice('guest')}
+            className="w-full text-left rounded-xl border p-3.5 hover:border-primary hover:bg-primary/5 transition-colors"
+          >
+            <p className="font-semibold text-sm">{t('payChooserGuestTitle')}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {t('payChooserGuestSubtitle', { price: formatCurrency(priceAmount, currency, locale) })}
+            </p>
+          </button>
+        )}
+        <div className="flex justify-end">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── 4. A COVERED member's free booking is in flight. ──
+  if (autobooking) {
+    return (
+      <div className="space-y-3 py-3 text-center">
+        <p className="text-sm text-muted-foreground">{t('memberCoveredHint')}</p>
+      </div>
+    )
+  }
+
+  // ── 5. A verified member's effective price is an AMOUNT — pay to confirm. ──
+  if (memberPay) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm">{t('yourPrice', { price: formatCurrency(memberPay.amount, currency, locale) })}</p>
+        {errorBox}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t('cancel')}</Button>
+          <Button type="button" size="sm" disabled={submittingPay} onClick={onMemberPay}>
+            {submittingPay
+              ? t('payingEllipsis')
+              : t('confirmPay', { price: formatCurrency(memberPay.amount, currency, locale) })}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── 6. Member OTP — either the plain "gated + unpriced" flow (no chooser,
+  // untouched) or "priced + gated" after choosing "member" above. ──
   if (verifyStep === 'email') {
     return (
       <form onSubmit={emailForm.handleSubmit(onSendCode)} className="space-y-3">
+        {gated && hasAnyPrice && (
+          <button
+            type="button"
+            onClick={backToChooser}
+            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            {t('back')}
+          </button>
+        )}
         <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
           {t('membersVerifyPrompt')}
         </p>
@@ -335,23 +670,39 @@ function SlotBookingForm({
 function BookingModal({
   title,
   isFreeTrial,
+  gated,
+  hasAnyPrice,
+  priceAmount,
+  subscriptionPricing,
+  durationMinutes,
+  currency,
+  locale,
   providerName,
   location,
   onlineUrl,
   dateLine,
   teamId,
   book,
+  checkout,
   onBooked,
   onClose,
 }: {
   title: string | null
   isFreeTrial: boolean
+  gated: boolean
+  hasAnyPrice: boolean
+  priceAmount: number | null
+  subscriptionPricing: AvailDurationPricing[]
+  durationMinutes: number
+  currency: string
+  locale: string
   providerName: string | null
   location: string | null
   onlineUrl: string | null
   dateLine: string
   teamId: string
   book: (args: BookArgs) => Promise<void>
+  checkout: (args: BookArgs) => Promise<{ url?: string; amount?: number }>
   onBooked: (d: { firstname: string; email: string }) => void
   onClose: () => void
 }) {
@@ -382,7 +733,21 @@ function BookingModal({
             )}
           </div>
         </DialogHeader>
-        <SlotBookingForm teamId={teamId} isFreeTrial={isFreeTrial} book={book} onBooked={onBooked} onClose={onClose} />
+        <SlotBookingForm
+          teamId={teamId}
+          isFreeTrial={isFreeTrial}
+          gated={gated}
+          hasAnyPrice={hasAnyPrice}
+          priceAmount={priceAmount}
+          subscriptionPricing={subscriptionPricing}
+          durationMinutes={durationMinutes}
+          currency={currency}
+          locale={locale}
+          book={book}
+          checkout={checkout}
+          onBooked={onBooked}
+          onClose={onClose}
+        />
       </DialogContent>
     </Dialog>
   )
@@ -456,7 +821,17 @@ function CoachCard({ coach, onSelect }: { coach: AvailCoach; onSelect: () => voi
 }
 
 // Step 2 — pick an activity offered by that coach.
-function ActivityCard({ activity, onSelect }: { activity: AvailActivity; onSelect: () => void }) {
+function ActivityCard({
+  activity,
+  currency,
+  locale,
+  onSelect,
+}: {
+  activity: AvailActivity
+  currency: string
+  locale: string
+  onSelect: () => void
+}) {
   const t = useTranslations('AppointmentBooking')
   const isFreeTrial = resolveActivityAccessRule({ accessRule: activity.accessRule }).type === 'open'
   const durations = activity.durations.map((d) => d.minutes)
@@ -464,6 +839,7 @@ function ActivityCard({ activity, onSelect }: { activity: AvailActivity; onSelec
     durations.length > 1
       ? `${fmtDuration(Math.min(...durations))} – ${fmtDuration(Math.max(...durations))}`
       : fmtDuration(durations[0] ?? 60)
+  const priceLabel = activityPriceRangeLabel(activity, currency, locale, t)
   return (
     <button
       type="button"
@@ -478,6 +854,11 @@ function ActivityCard({ activity, onSelect }: { activity: AvailActivity; onSelec
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                 <Lock className="h-2.5 w-2.5" />
                 {t('membersOnly')}
+              </span>
+            )}
+            {priceLabel && (
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                {priceLabel}
               </span>
             )}
           </div>
@@ -497,11 +878,15 @@ function ActivityCard({ activity, onSelect }: { activity: AvailActivity; onSelec
 function TimePicker({
   coach,
   activity,
+  currency,
+  locale,
   onPick,
 }: {
   coach: AvailCoach
   activity: AvailActivity
-  onPick: (startMs: number, durationMinutes: number) => void
+  currency: string
+  locale: string
+  onPick: (startMs: number, duration: AvailDuration) => void
 }) {
   const t = useTranslations('AppointmentBooking')
   const [dayMs, setDayMs] = useState<number>(activity.days[0]?.dayMs ?? 0)
@@ -509,6 +894,9 @@ function TimePicker({
 
   const day = activity.days.find((d) => d.dayMs === dayMs) ?? activity.days[0]
   const times = day?.slotsByDuration[String(duration)] ?? []
+  const chosenDuration =
+    activity.durations.find((d) => d.minutes === duration) ??
+    activity.durations[0] ?? { minutes: duration, priceAmount: null, subscriptionPricing: [] }
 
   return (
     <div className="rounded-xl border p-4 space-y-4">
@@ -556,6 +944,7 @@ function TimePicker({
                 }`}
               >
                 {fmtDuration(d.minutes)}
+                {typeof d.priceAmount === 'number' && ` · ${formatCurrency(d.priceAmount, currency, locale)}`}
               </button>
             ))}
           </div>
@@ -573,7 +962,7 @@ function TimePicker({
               <button
                 key={startMs}
                 type="button"
-                onClick={() => onPick(startMs, duration)}
+                onClick={() => onPick(startMs, chosenDuration)}
                 className="rounded-lg border py-1.5 text-sm font-medium transition-colors hover:border-primary hover:bg-primary/5"
               >
                 {fmtTime(startMs)}
@@ -593,7 +982,9 @@ function TimePicker({
 
 export default function AppointmentPicker({ slug }: { slug: string }) {
   const t = useTranslations('AppointmentBooking')
-  const { teamId } = usePublicTeam()
+  const locale = useLocale()
+  const { teamId, team } = usePublicTeam()
+  const currency = team.default_currency ?? 'CHF'
   const [coaches, setCoaches] = useState<AvailCoach[]>([])
   const [loading, setLoading] = useState(true)
   const [confirmed, setConfirmed] = useState<{ email: string } | null>(null)
@@ -683,7 +1074,13 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
               <EmptyState icon={CalendarClock} text={t('noCoaches')} hint={t('noCoachesHint')} />
             ) : (
               selectedCoach.activities.map((a) => (
-                <ActivityCard key={a.activityId} activity={a} onSelect={() => selectActivity(a)} />
+                <ActivityCard
+                  key={a.activityId}
+                  activity={a}
+                  currency={currency}
+                  locale={locale}
+                  onSelect={() => selectActivity(a)}
+                />
               ))
             )}
           </section>
@@ -695,17 +1092,22 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
             <TimePicker
               coach={selectedCoach}
               activity={selectedActivity}
-              onPick={(startMs, durationMinutes) =>
+              currency={currency}
+              locale={locale}
+              onPick={(startMs, duration) =>
                 setWindowBooking({
                   providerId: selectedCoach.providerId,
                   providerName: selectedCoach.providerName,
                   activityId: selectedActivity.activityId,
                   activityName: selectedActivity.activityName,
                   startMs,
-                  durationMinutes,
+                  durationMinutes: duration.minutes,
                   isFreeTrial: resolveActivityAccessRule({ accessRule: selectedActivity.accessRule }).type === 'open',
                   location: selectedActivity.location,
                   onlineUrl: selectedActivity.onlineUrl,
+                  priceAmount: duration.priceAmount,
+                  subscriptionPricing: duration.subscriptionPricing,
+                  accessRule: selectedActivity.accessRule,
                 })
               }
             />
@@ -718,6 +1120,13 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
           key={`${windowBooking.providerId}-${windowBooking.activityId}-${windowBooking.startMs}-${windowBooking.durationMinutes}`}
           title={windowBooking.activityName}
           isFreeTrial={windowBooking.isFreeTrial}
+          gated={!windowBooking.isFreeTrial}
+          hasAnyPrice={durationHasAnyPrice(windowBooking.priceAmount, windowBooking.subscriptionPricing)}
+          priceAmount={windowBooking.priceAmount}
+          subscriptionPricing={windowBooking.subscriptionPricing}
+          durationMinutes={windowBooking.durationMinutes}
+          currency={currency}
+          locale={locale}
           providerName={windowBooking.providerName}
           location={windowBooking.location}
           onlineUrl={windowBooking.onlineUrl}
@@ -732,6 +1141,22 @@ export default function AppointmentPicker({ slug }: { slug: string }) {
               durationMinutes: windowBooking.durationMinutes,
               ...args,
             }).then(() => undefined)
+          }
+          checkout={(args) =>
+            httpsCallable<Record<string, unknown>, { url?: string; amount?: number }>(
+              functions,
+              'createAppointmentCheckout'
+            )({
+              teamId,
+              providerId: windowBooking.providerId,
+              activityId: windowBooking.activityId,
+              startMs: windowBooking.startMs,
+              durationMinutes: windowBooking.durationMinutes,
+              slug,
+              locale,
+              origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+              ...args,
+            }).then((res) => res.data)
           }
           onBooked={({ email }) => { setWindowBooking(null); setConfirmed({ email }) }}
           onClose={() => setWindowBooking(null)}

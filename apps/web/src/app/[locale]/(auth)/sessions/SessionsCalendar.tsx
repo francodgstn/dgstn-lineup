@@ -16,7 +16,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react'
-import { resolveAppointmentDurations } from '@linyup/shared'
+import { resolveAppointmentDurations, isExpiredAppointmentHold } from '@linyup/shared'
 import type { Session, Activity, Event, Availability } from '@linyup/shared'
 import { SessionPeekSheet } from '@/components/sessions/SessionPeekSheet'
 import { EventPeekSheet } from '@/components/events/EventPeekSheet'
@@ -111,6 +111,14 @@ function StatusBadge({ status }: { status: string }) {
       cls: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
       label: t('statusCancelled'),
     },
+    // A paid-booking HOLD — the slot is reserved while checkout completes. Never
+    // published publicly; ghosted here so admin never mistakes it for a real
+    // booking. An expired-but-unswept hold is displayed as 'cancelled' instead
+    // (see effectiveSessionStatus) — this entry only fires for a LIVE hold.
+    pending_payment: {
+      cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+      label: t('statusAwaitingPayment'),
+    },
   }
   const { cls, label } = cfg[status] ?? { cls: 'bg-muted text-muted-foreground', label: status }
   return (
@@ -118,6 +126,14 @@ function StatusBadge({ status }: { status: string }) {
       {label}
     </span>
   )
+}
+
+// The single source of truth for "what status do we SHOW" — a lapsed paid-booking
+// hold (see isExpiredAppointmentHold) is logically free/cancelled even before the
+// daily sweep flips the stored status, so admin surfaces should never render it as
+// a live 'pending_payment' hold.
+function effectiveSessionStatus(s: Session, nowMs: number): string {
+  return isExpiredAppointmentHold(s, nowMs) ? 'cancelled' : (s.status ?? 'open')
 }
 
 // ─── DayCell ──────────────────────────────────────────────────────────────────
@@ -214,7 +230,7 @@ function SessionCard({ session, activities, onOpen, onEdit, onDelete }: SessionC
           <span className="font-medium text-sm truncate">
             {session.activityName ?? t('noActivity')}
           </span>
-          <StatusBadge status={session.status ?? 'open'} />
+          <StatusBadge status={effectiveSessionStatus(session, Date.now())} />
         </div>
 
         {/* row 2: time + location */}
@@ -945,14 +961,20 @@ export default function SessionsCalendar({
                       {/* Session blocks */}
                       {blocks.map(({ session: s, top, height, col, cols }) => {
                         const color = activityAccent(s.activityId, activities)
-                        const cancelled = s.status === 'cancelled'
+                        const expiredHold = isExpiredAppointmentHold(s, now.getTime())
+                        const cancelled = s.status === 'cancelled' || expiredHold
+                        // A LIVE paid-booking hold — ghosted like 'cancelled' (dimmed +
+                        // dashed border) but NOT struck through: it isn't cancelled, it's
+                        // reserved pending payment.
+                        const awaitingPayment = s.status === 'pending_payment' && !expiredHold
                         return (
                           <button
                             key={s.id}
                             onClick={() => openSessionPeek(s)}
                             className={cn(
                               'absolute z-[5] rounded-md border-l-2 px-1.5 py-0.5 text-left overflow-hidden transition-opacity hover:opacity-75',
-                              cancelled && 'opacity-50'
+                              (cancelled || awaitingPayment) && 'opacity-50',
+                              awaitingPayment && 'border-dashed'
                             )}
                             style={{
                               top: top + 1,
