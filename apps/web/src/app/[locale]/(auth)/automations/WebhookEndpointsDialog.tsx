@@ -140,7 +140,7 @@ export function WebhookEndpointsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Webhook className="h-4 w-4" />
@@ -201,8 +201,12 @@ export function WebhookEndpointsDialog({
                   </div>
 
                   {baseUrl ? (
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 text-[10px] bg-muted rounded px-2 py-1 truncate font-mono">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {/* min-w-0 is required for truncate to engage: a flex item
+                          defaults to min-width:auto and won't shrink below its
+                          content, so a long Cloud Functions URL would otherwise
+                          force the whole dialog to overflow horizontally. */}
+                      <code className="min-w-0 flex-1 text-[10px] bg-muted rounded px-2 py-1 truncate font-mono">
                         POST {url}
                       </code>
                       <CopyButton text={url} />
