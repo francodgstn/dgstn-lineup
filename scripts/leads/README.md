@@ -50,6 +50,20 @@ must be onboarded once in Stripe test mode — grab its id with
 `pnpm connect:test-account --list`. Because it wires the team's `payments` block +
 `connect_accounts/{acct}`, `--reset` removes that doc along with the rest of the tenant.
 
+**TWINT in the demo checkout**: payment methods come from the *connected account's*
+payment-method configuration (not the platform's settings page). One-time setup per
+test account — full walkthrough in `docs/payment-contact-studio.md` → *Enable TWINT on
+a test connected account*; short version:
+
+```bash
+stripe payment_method_configurations list --stripe-account acct_xxx
+stripe payment_method_configurations update pmc_xxx --stripe-account acct_xxx \
+  -d "twint[display_preference][preference]=on"     # repeat per pmc_… returned
+```
+
+CHF one-off checkouts (drop-in, packs, products) then offer TWINT with a test-mode
+Authorize/Fail simulator page — a nice touch in CH lead demos.
+
 ### Contact POV — sign in as a member (shop / Space)
 
 To try the **member** experience (shop checkout, Space, courses, credit balance)
