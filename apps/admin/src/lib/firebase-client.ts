@@ -21,6 +21,8 @@ if (
   typeof window !== 'undefined' &&
   !(globalThis as { _adminAuthEmu?: boolean })._adminAuthEmu
 ) {
-  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
+  // Port overridable for parallel worktree dev (firebase.worktree.json).
+  const authPort = process.env.NEXT_PUBLIC_AUTH_EMULATOR_PORT ?? '9099'
+  connectAuthEmulator(auth, `http://localhost:${authPort}`, { disableWarnings: true })
   ;(globalThis as { _adminAuthEmu?: boolean })._adminAuthEmu = true
 }

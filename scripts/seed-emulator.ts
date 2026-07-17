@@ -30,9 +30,11 @@
  *     Published courses also get a courses/{id}/public_profile/{id} summary.
  */
 
-// emulator env vars must be set BEFORE admin.initializeApp()
-process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099'
-process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080'
+// emulator env vars must be set BEFORE admin.initializeApp().
+// Pre-set values win so the script can seed an alternate-port suite
+// (parallel worktree dev).
+process.env.FIREBASE_AUTH_EMULATOR_HOST ??= 'localhost:9099'
+process.env.FIRESTORE_EMULATOR_HOST ??= 'localhost:8080'
 
 import admin from 'firebase-admin'
 import { DEFAULT_PAYMENT_MODES, DEFAULT_KIOSK_CONFIG, toKioskPublicConfig } from '@linyup/shared'

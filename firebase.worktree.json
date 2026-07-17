@@ -1,0 +1,58 @@
+{
+  "_comment": "Alternate-port emulator config for parallel worktree dev — lets a second emulator suite run next to the main checkout's default-port suite. Same rules/functions as firebase.json, every port +10000. Point the apps at it via NEXT_PUBLIC_*_EMULATOR_PORT (web) / *_EMULATOR_HOST (admin, scripts). Start: pnpm exec firebase emulators:start --config firebase.worktree.json --only auth,firestore,functions,storage --project demo-linyup",
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.index.json"
+  },
+  "functions": {
+    "predeploy": [
+      "pnpm --filter @linyup/functions run build"
+    ],
+    "ignore": [
+      "**/.*",
+      "**/*.test.ts",
+      "**/node_modules/**",
+      "coverage/**",
+      "src"
+    ],
+    "source": "packages/functions"
+  },
+  "emulators": {
+    "auth": {
+      "host": "0.0.0.0",
+      "port": 19099
+    },
+    "firestore": {
+      "host": "0.0.0.0",
+      "port": 18080
+    },
+    "storage": {
+      "host": "0.0.0.0",
+      "port": 19199
+    },
+    "database": {
+      "host": "0.0.0.0",
+      "port": 19000
+    },
+    "functions": {
+      "host": "0.0.0.0",
+      "port": 15001
+    },
+    "tasks": {
+      "host": "0.0.0.0",
+      "port": 19499
+    },
+    "ui": {
+      "enabled": true,
+      "host": "0.0.0.0",
+      "port": 14000
+    },
+    "singleProjectMode": true
+  }
+}

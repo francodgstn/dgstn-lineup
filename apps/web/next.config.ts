@@ -1,3 +1,4 @@
+import path from 'node:path'
 import type { NextConfig } from 'next'
 import createNextIntlPlugin from 'next-intl/plugin'
 
@@ -49,6 +50,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   typedRoutes: true,
+  // Pin the workspace root to THIS monorepo checkout. Without it, Next infers
+  // the root from the nearest lockfile — inside a git worktree
+  // (.claude/worktrees/*) it finds the parent checkout's pnpm-workspace.yaml
+  // and module resolution breaks ("Module not found" for installed packages).
+  turbopack: { root: path.join(__dirname, '..', '..') },
   rewrites: emulatorRewrites,
   // NOTE: the bare-root → /login redirect is intentionally NOT a config redirect.
   // Config redirects run outside the middleware, so their Location keeps the
