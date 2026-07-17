@@ -101,6 +101,10 @@ export interface LeadActivityDef {
   accessSubKeys?: string[]
   /** Drop-in / pay-per-class price (major units) for uncovered contacts. */
   dropInPrice?: number
+  /** Independent of accessTier: a gated class still accepts a newcomer's trial
+   *  booking (guest path identical to 'open'). Lets a class combine
+   *  members-only access + free trial + drop-in (Activity.trialEnabled). */
+  trialEnabled?: boolean
 }
 
 export interface LeadSubscriptionPriceDef {
@@ -152,25 +156,31 @@ export interface LeadGridSlot {
   upcomingOnly?: boolean
 }
 
-/** One bookable length of an appointment offering, with its pricing — an
+/** One bookable length of an appointment offering, with its base price — an
  *  `Activity.durations` entry. Prices are major units of the team currency.
  *
- *  `priceAmount` is the base/walk-in price — what guests, and any subscriber
- *  without an explicit entry below, pay through Stripe checkout. Omit it (or
- *  null) for an unpriced duration: booking stays on the free path and the
- *  plain access rules decide.
- *
- *  `subscriptionPricing` is the EXPLICIT member benefit, referencing
- *  subscriptions by `LeadSubscriptionDef.key` (resolved to subscription-type
- *  ids at seed time): `priceAmount: null` = INCLUDED (holders book free;
- *  credit-pack types spend a credit), a number = the member price. An ABSENT
- *  entry means subscribers of that type pay the base price — the benefit is
- *  data, never implied. A contact holding several types gets the LOWEST
- *  applicable price ("included" beats any amount). */
+ *  Appointments have NO access gate — THE PRICE IS THE GATE. `priceAmount` is
+ *  the base price anyone (guests included) pays through Stripe checkout; omit
+ *  it (or null) for an unpriced duration, which anyone books free. The member
+ *  benefit is never per duration: it is ONE rule for the whole offering
+ *  (`LeadAppointmentDef.memberBenefit`). */
 export interface LeadAppointmentDurationDef {
   minutes: number
   priceAmount?: number | null
-  subscriptionPricing?: Array<{ subKey: string; priceAmount: number | null }>
+}
+
+/** The ONE member-benefit rule of an appointment offering
+ *  (`Activity.memberBenefit`), referencing subscriptions by
+ *  `LeadSubscriptionDef.key` (resolved to subscription-type ids at seed time).
+ *  Holders of any listed type: `kind: 'included'` book every priced duration
+ *  free (a credit-pack type spends a credit); `kind: 'discount'` pay
+ *  `discountPercent` off every priced duration. Absent = no benefit — everyone
+ *  pays base. The benefit is data, never implied. */
+export interface LeadAppointmentMemberBenefitDef {
+  subKeys: string[]
+  kind: 'included' | 'discount'
+  /** 1–100; required when kind === 'discount'. */
+  discountPercent?: number
 }
 
 /**
@@ -178,9 +188,9 @@ export interface LeadAppointmentDurationDef {
  * `type: 'appointment'`; the availability docs that link to it publish only the WHEN.
  *
  * A lead may have SEVERAL: a free 30-min intro call and a paid 60-min 1:1 are
- * two offerings when their ACCESS RULES differ (an open lead magnet vs a
- * members-only session) — the duration list carries per-duration PRICES, but
- * never per-duration access rules.
+ * two offerings because they are different PRODUCTS with different pricing —
+ * appointments carry no access rule (the price is the only gate), so what
+ * separates offerings is name, durations, price and member benefit.
  */
 export interface LeadAppointmentDef {
   /** id suffix → `{teamId}-act-appointment-{key}`; referenced by
@@ -191,20 +201,19 @@ export interface LeadAppointmentDef {
   description: string
   /** Assets-folder base name for the cover image (as LeadActivityDef.imageAsset). */
   imageAsset?: string
-  /** The lengths this offering can be booked at, each with optional pricing
-   *  (Activity.durations). Duration belongs to the offering, never to the
+  /** The lengths this offering can be booked at, each with an optional base
+   *  price (Activity.durations). Duration belongs to the offering, never to the
    *  availability schedule. */
   durations: LeadAppointmentDurationDef[]
-  /** Paid-access gate (Activity.accessRule). Defaults to 'open'. */
-  accessTier?: 'open' | 'members' | 'subscription'
-  /** For accessTier 'subscription': LeadSubscriptionDef.keys that grant access. */
-  accessSubKeys?: string[]
+  /** The ONE member-benefit rule (Activity.memberBenefit). Absent = no benefit
+   *  — everyone pays the base price (or books free when unpriced). */
+  memberBenefit?: LeadAppointmentMemberBenefitDef
 }
 
 /**
  * A provider's published free time — the WHEN, and only the when. The WHAT (name,
- * durations, pricing, access rule) lives on the linked appointment activities, i.e.
- * `LeadProfile.appointments.activities`.
+ * durations, pricing, member benefit) lives on the linked appointment activities,
+ * i.e. `LeadProfile.appointments.activities`.
  *
  * NOTHING is pre-generated in either mode: an appointment session exists only once
  * a client books one. `booked` below is demo dressing, not generated availability.

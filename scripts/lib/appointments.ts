@@ -2,8 +2,10 @@
  * Shared appointment-seeding helpers — the AVAILABILITY-ONLY model.
  *
  * An `availability` doc publishes only the WHEN (a provider's free time). The
- * WHAT — name, duration, capacity, access rule — lives on the linked `appointment`
- * activities (`activityIds`). Crucially, NOTHING is pre-generated: there is no
+ * WHAT — name, priced durations, member benefit — lives on the linked `appointment`
+ * activities (`activityIds`). Appointments carry NO access rule: the price is the
+ * only gate (unpriced = anyone books free, priced = anyone pays, benefit holders
+ * less). Crucially, NOTHING is pre-generated: there is no
  * generator cron and no availability trigger, so an appointment `Session` exists
  * only once a client books one. Seeds must therefore never fabricate "open slots";
  * they materialise a handful of ALREADY-BOOKED appointments instead, shaped exactly
@@ -23,11 +25,6 @@
 import * as admin from 'firebase-admin'
 
 const tsOf = (d: Date) => admin.firestore.Timestamp.fromDate(d)
-
-export interface SeedAccessRule {
-  type: 'open' | 'members' | 'subscription'
-  subscriptionTypeIds?: string[]
-}
 
 /**
  * Dates matching `daysOfWeek` (JS getDay(): 0=Sun … 6=Sat) at `time` ('HH:MM',
@@ -70,9 +67,6 @@ export interface SeedAppointmentInput {
   /** The `type: 'appointment'` activity the client picked — the WHAT. */
   activityId: string
   activityName: string
-  /** Inherited from the activity, exactly as bookAppointment does. */
-  accessRule: SeedAccessRule
-  isFreeTrial: boolean
   /** Denormalised from the activity's `autoConfirm` (see resolveAutoConfirm).
    *  Defaults to true — an appointment's booking takes the provider's time on the
    *  spot, which is why the booking doc below is written `status: 'confirmed'`. */
@@ -115,10 +109,10 @@ export function buildAppointmentSessionDocs(input: SeedAppointmentInput): {
     activityType: 'appointment',
     activityId: input.activityId,
     activityName: input.activityName,
-    accessRule: input.accessRule,
+    // NOTE: no accessRule / isFreeTrial — appointments dropped the access gate
+    // entirely (2026-07); the price is the only gate. Matches bookAppointment.
     providerId: input.providerId,
     providerName: input.providerName,
-    isFreeTrial: input.isFreeTrial,
     start: tsOf(input.start),
     end: tsOf(end),
     duration_minutes: input.durationMinutes,
@@ -161,8 +155,10 @@ export function buildAppointmentSessionDocs(input: SeedAppointmentInput): {
     // hardcodes this too; trackBookings reads it to drive the 'full' flip).
     max_participants: 1,
     bookings_count: 1,
-    isFreeTrial: input.isFreeTrial,
-    accessRule: input.accessRule,
+    // The live sync writes `isFreeTrial: data.isFreeTrial !== false`, and the
+    // session doc no longer carries the field — so the mirror gets `true`.
+    // No accessRule: appointment mirrors dropped the gate (syncSessionPublicProfile).
+    isFreeTrial: true,
     status: 'full',
     allowBooking: true,
     ...extra,

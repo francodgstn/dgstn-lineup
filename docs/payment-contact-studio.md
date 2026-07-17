@@ -181,10 +181,12 @@ A contact **not covered** by an activity's access rule can pay a **per-class** d
 to book a single **group-class** session, over the same Connect one-off checkout. No
 membership is created — a drop-in is a single paid booking, not a subscription.
 
-- **Config.** Set per activity under the activity's **"Who can book"** section
-  (`offer/activities`): `Activity.dropIn = { enabled, priceAmount }` (major units, the team's
-  currency). Only shown for gated tiers (`members` / `subscription`); an `open` class is free,
-  so drop-in doesn't apply. Denormalised to the activity `public_profile` for the booking UI.
+- **Config.** Set per class activity (`offer/activities`, an always-visible row in the
+  class settings group since 2026-07): `Activity.dropIn = { enabled, priceAmount }` (major
+  units, the team's currency). Only *effective* on gated tiers (`members` / `subscription`)
+  — an `open` class is free for everyone, so there is nobody to charge. Independent of the
+  `trialEnabled` toggle (a gated class can offer members-free + trial + drop-in at once).
+  Denormalised to the activity `public_profile` for the booking UI.
 - **Flow (hold-pending → webhook-confirm).** The public **`createDropInCheckout`** callable
   (`booking/dropIn.ts`) resolves/creates the contact (payment is the proof — **no email
   verification**), writes a **PENDING** booking hold
@@ -212,19 +214,22 @@ membership is created — a drop-in is a single paid booking, not a subscription
 ## Appointments (pay-per-1:1 booking)
 
 The 1:1 counterpart to drop-in, over the same Connect one-off checkout — but with its
-own model: the price is **per duration** on the appointment activity
-(`Activity.durations[].priceAmount` + explicit per-subscription-type member pricing),
-and since an appointment session doesn't exist until booked, **the hold IS the
-session** — `createAppointmentCheckout` (`appointments/checkout.ts`) reserves the slot
-as a `pending_payment` session (+ a `pending`/`required` booking, `hold_expires_at` ≈
-now + 30 min, Stripe `expires_at` at 31) before starting the Checkout, with metadata
+own model: the base price is **per duration** on the appointment activity
+(`Activity.durations[].priceAmount`), the member benefit is **one rule per activity**
+(`Activity.memberBenefit`: `included` books free, `discount` takes a % off), and there
+is **no access gate** — the price is the gate; the checkout charges the caller's
+**effective** amount. Since an appointment session doesn't exist until booked,
+**the hold IS the session** — `createAppointmentCheckout` (`appointments/checkout.ts`)
+reserves the slot as a `pending_payment` session (+ a `pending`/`required` booking,
+`hold_expires_at` ≈ now + 30 min, Stripe `expires_at` at 31) before starting the
+Checkout, with metadata
 `{ kind: 'appointment', sessionId, contactId, activityId, providerId, startMs,
 durationMinutes }`. The `checkout.session.completed` webhook (`handleAppointmentCheckout`)
 confirms the hold (or re-acquires a swept slot, or refunds a lost/duplicate one) and
 writes `member_payments/{pi}` with `kind: 'appointment'` + `sessionId`;
 `checkout.session.expired` (`handleAppointmentCheckoutExpired`) releases a still-pending
-hold promptly. Full architecture — pricing model, access-vs-price gates, the hold state
-machine, race cases: **`docs/appointments.md` → "Paid appointments"**.
+hold promptly. Full architecture — pricing model, the price-is-the-gate rule, the hold
+state machine, race cases: **`docs/appointments.md` → "Paid appointments"**.
 
 ## Functions
 
@@ -441,11 +446,13 @@ forwarded — the CLI forwards `checkout.session.expired` too).
    to `confirmed`/`paid` (+ `payment_intent_id`, `fullname`), and writes
    `member_payments/{pi}` with `kind: appointment` + `sessionId`. The buyer lands on
    `/{locale}/pay/result?seg=appointments`.
-4. **Covered refusal.** As a contact whose subscription type has an INCLUDED entry on
-   that duration, `createAppointmentCheckout` throws `failed-precondition`
-   (`reason: 'covered'`) — the picker books them free instead (a credit-pack type
-   spends a credit). Conversely, a payable caller on `bookAppointment` gets
-   `reason: 'payment_required'` with their effective amount.
+4. **Covered refusal.** As a contact holding a type listed in the activity's
+   `memberBenefit` with `kind: 'included'`, `createAppointmentCheckout` throws
+   `failed-precondition` (`reason: 'covered'`) — the picker books them free instead
+   (a credit-pack type spends a credit). A `discount` benefit doesn't refuse: the
+   Checkout amount is simply the discounted price (≥ CHF 0.50). Conversely, a payable
+   caller on `bookAppointment` gets `reason: 'payment_required'` with their effective
+   amount.
 5. **Abandoned hold.** Start a checkout, don't pay → the slot stays blocked for other
    browsers; after ~31 min `checkout.session.expired` cancels the hold (or hand-expire
    `hold_expires_at` and watch the picker re-offer the time lazily; the daily

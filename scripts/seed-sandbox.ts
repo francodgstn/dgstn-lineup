@@ -177,7 +177,10 @@ function stageForPoolEntry(type: 'student' | 'trial' | 'external', totalSessions
 // 32 sector-neutral people, ordered so any prefix yields a realistic mix of
 // active students, trials, almost-ready leads, expired and external contacts.
 
-type SubKind = 'monthly' | 'quarterly' | 'annual' | 'dropin' | 'aggregator' | null
+// NOTE: no 'dropin' kind any more — the "Drop-in" per-class subscription PLAN was
+// removed (2026-07): drop-in is the per-activity `Activity.dropIn` price, paid per
+// booking, not a membership. Pay-per-class contacts simply hold no subscription.
+type SubKind = 'monthly' | 'quarterly' | 'annual' | 'aggregator' | null
 
 interface PoolEntry {
   firstname: string
@@ -256,7 +259,9 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'almost_ready',
     totalSessions: 7,
-    sub: 'dropin',
+    // Pay-per-class regular: no subscription — she books via the per-activity
+    // drop-in price (the Drop-in PLAN is gone; see the SubKind note).
+    sub: null,
   },
   {
     firstname: 'David',
@@ -377,7 +382,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'almost_ready',
     totalSessions: 5,
-    sub: 'dropin',
+    sub: null,
   },
   {
     firstname: 'Amélie',
@@ -480,6 +485,14 @@ interface ActivityDef {
   isFreeTrial: boolean
   base_score: number
   description: string // shown on the portal booking page activity cards
+  /** Subscription-gate the class on these plan kinds (Activity.accessRule
+   *  'subscription'). Unset → the tier derives from isFreeTrial (open/members). */
+  accessSubKinds?: Array<Exclude<SubKind, null>>
+  /** Independent of the tier: a gated class still accepts a newcomer's trial. */
+  trialEnabled?: boolean
+  /** Pay-per-class price for uncovered contacts (the ONE drop-in concept —
+   *  the "Drop-in" subscription PLAN is gone). */
+  dropInPrice?: number
 }
 interface SubDef {
   kind: Exclude<SubKind, null>
@@ -556,6 +569,10 @@ const SECTOR_PROFILES: SectorProfile[] = [
         description: 'Core positions, escapes and submissions for your first year on the mats.',
       },
       {
+        // The sandbox's FULL-ordinary-offer demo (members included + trial +
+        // drop-in): subscription-gated on the internal plans, `trialEnabled`
+        // lets a newcomer book a free trial, and an uncovered contact can pay
+        // the per-class drop-in price instead — three independent toggles.
         name: 'Advanced BJJ',
         slug: 'advanced-bjj',
         color: '#7c3aed',
@@ -563,6 +580,9 @@ const SECTOR_PROFILES: SectorProfile[] = [
         isFreeTrial: false,
         base_score: 15,
         description: 'Competition-paced rounds and advanced systems for experienced grapplers.',
+        accessSubKinds: ['monthly', 'quarterly', 'annual'],
+        trialEnabled: true,
+        dropInPrice: 30,
       },
       {
         name: 'No-Gi Grappling',
@@ -605,13 +625,6 @@ const SECTOR_PROFILES: SectorProfile[] = [
         description: 'Best value — 2 months free.',
         source: 'internal',
         price: 1290,
-      },
-      {
-        kind: 'dropin',
-        name: 'Drop-in',
-        description: 'Single open-mat session.',
-        source: 'internal',
-        price: 30,
       },
       {
         kind: 'aggregator',
@@ -764,13 +777,6 @@ const SECTOR_PROFILES: SectorProfile[] = [
         price: 1490,
       },
       {
-        kind: 'dropin',
-        name: 'Drop-in',
-        description: 'Single WOD.',
-        source: 'internal',
-        price: 28,
-      },
-      {
         kind: 'aggregator',
         name: 'ClassPass',
         description: 'Access via the ClassPass network.',
@@ -920,13 +926,6 @@ const SECTOR_PROFILES: SectorProfile[] = [
         source: 'internal',
         price: 1190,
       },
-      {
-        kind: 'dropin',
-        name: 'Drop-in Clinic',
-        description: 'Single group clinic.',
-        source: 'internal',
-        price: 32,
-      },
     ],
     locations: ['Court 1', 'Court 2', 'Indoor Court'],
     events: [
@@ -1061,13 +1060,6 @@ const SECTOR_PROFILES: SectorProfile[] = [
         description: 'Full year of unlimited flow.',
         source: 'internal',
         price: 990,
-      },
-      {
-        kind: 'dropin',
-        name: 'Drop-in',
-        description: 'Single class.',
-        source: 'internal',
-        price: 24,
       },
       {
         kind: 'aggregator',
@@ -1219,13 +1211,6 @@ const SECTOR_PROFILES: SectorProfile[] = [
         price: 1690,
       },
       {
-        kind: 'dropin',
-        name: 'Drop-in',
-        description: 'Single reformer class.',
-        source: 'internal',
-        price: 38,
-      },
-      {
         kind: 'aggregator',
         name: 'ClassPass',
         description: 'Access via the ClassPass network.',
@@ -1375,13 +1360,6 @@ const SECTOR_PROFILES: SectorProfile[] = [
         source: 'internal',
         price: 1090,
       },
-      {
-        kind: 'dropin',
-        name: 'Drop-in',
-        description: 'Single class.',
-        source: 'internal',
-        price: 26,
-      },
     ],
     locations: ['Dance Hall', 'Studio 2', 'Performance Space'],
     events: [
@@ -1472,7 +1450,7 @@ async function seedDemoTeam(profile: SectorProfile) {
   // ── subscription types ────────────────────────────────────────────────────
   const subIdOf = (kind: SubKind) => `${teamId}-sub-${kind}`
   // Canonical recurrence per kind — drives the single seeded price each priced
-  // type carries. Drop-in is pay-per-class; aggregator types stay price-less.
+  // type carries. Aggregator types stay price-less.
   const recurrenceForKind = (k: Exclude<SubKind, null>): string | null =>
     k === 'monthly'
       ? 'monthly'
@@ -1480,9 +1458,7 @@ async function seedDemoTeam(profile: SectorProfile) {
         ? 'quarterly'
         : k === 'annual'
           ? 'annual'
-          : k === 'dropin'
-            ? 'per_class'
-            : null
+          : null
   function resolveSub(kind: SubKind): {
     id: string
     name: string
@@ -1722,6 +1698,14 @@ async function seedDemoTeam(profile: SectorProfile) {
   const actIds = activities.map((_, i) => `${teamId}-act-${i}`)
   for (let i = 0; i < activities.length; i++) {
     const a = activities[i]
+    // Paid-access gate: explicit subscription gate when the def carries
+    // accessSubKinds, else derived from isFreeTrial (the same derivation
+    // resolveActivityAccessRule applies). isFreeTrial stays in sync (open ⇔ true).
+    const accessRule = a.accessSubKinds?.length
+      ? { type: 'subscription', subscriptionTypeIds: a.accessSubKinds.map((k) => subIdOf(k)) }
+      : { type: a.isFreeTrial ? 'open' : 'members' }
+    const dropIn =
+      a.dropInPrice != null ? { enabled: true, priceAmount: a.dropInPrice } : null
     await db
       .collection('activities')
       .doc(actIds[i])
@@ -1733,6 +1717,9 @@ async function seedDemoTeam(profile: SectorProfile) {
         level: a.level,
         description: a.description,
         isFreeTrial: a.isFreeTrial,
+        accessRule,
+        ...(a.trialEnabled ? { trialEnabled: true } : {}),
+        ...(dropIn ? { dropIn } : {}),
         base_score: a.base_score,
         type: 'class',
         // Classes don't auto-confirm: a booking holds a seat but stays
@@ -1757,33 +1744,35 @@ async function seedDemoTeam(profile: SectorProfile) {
         description: a.description,
         image_url: null,
         isFreeTrial: a.isFreeTrial,
+        accessRule,
+        // Drop-in mirrored only when enabled + priced, exactly as
+        // syncActivityPublicProfile does (trialEnabled is NOT mirrored; the
+        // trial door is enforced server-side in bookSession).
+        ...(dropIn ? { dropIn } : {}),
         level: a.level,
       })
   }
 
-  // The WHAT of an appointment: name, bookable lengths (with their prices),
-  // access rule. The availability below only publishes the WHEN.
+  // The WHAT of an appointment: name, bookable lengths (with their prices) and
+  // the ONE member-benefit rule. No access rule — the price is the gate. The
+  // availability below only publishes the WHEN.
   const appointmentActId = `${teamId}-act-appointment`
-  // Per-duration pricing (major units, CHF) — the MIXED demo case. The 60-min
-  // duration carries the EXPLICIT member benefit: the annual plan has it
-  // INCLUDED (priceAmount: null → holders book free via the free path), the
-  // monthly plan gets a member price (holders pay that through checkout), and
-  // every other subscription (quarterly, drop-in, aggregator) pays base — a
-  // priced duration with no entry costs base even for subscribers (member
-  // benefit is data, never implied). Every sandbox profile defines a monthly
-  // and an annual plan, so the ids below always resolve. The 30-min duration
-  // is base-price-only, so it demos exactly that rule.
+  // Per-duration BASE pricing (major units, CHF). The member benefit is ONE rule
+  // for the whole activity (`Activity.memberBenefit`, never per duration). The
+  // sandbox demos `kind: 'discount'` (seed-emulator/-staging demo 'included'):
+  // monthly-plan holders get 20% off EVERY priced duration (30 min → 36,
+  // 60 min → 68); every other subscription pays base — the benefit is explicit
+  // data, never implied. Every sandbox profile defines a monthly plan, so the
+  // id below always resolves.
   const appointmentDurations = [
     { minutes: 30, priceAmount: 45 },
-    {
-      minutes: 60,
-      priceAmount: 85,
-      subscriptionPricing: [
-        { subscriptionTypeId: subIdOf('annual'), priceAmount: null },
-        { subscriptionTypeId: subIdOf('monthly'), priceAmount: 60 },
-      ],
-    },
+    { minutes: 60, priceAmount: 85 },
   ]
+  const appointmentMemberBenefit = {
+    subscriptionTypeIds: [subIdOf('monthly')],
+    kind: 'discount',
+    discountPercent: 20,
+  }
   await db
     .collection('activities')
     .doc(appointmentActId)
@@ -1797,10 +1786,10 @@ async function seedDemoTeam(profile: SectorProfile) {
       providerName: ownerName,
       level: 'all',
       durations: appointmentDurations,
+      memberBenefit: appointmentMemberBenefit,
       // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
-      isFreeTrial: true,
       isActive: true,
       created_at: ts(daysFromNow(-180)),
     })
@@ -1818,15 +1807,17 @@ async function seedDemoTeam(profile: SectorProfile) {
       slug: 'private-coaching',
       color: accentColor,
       image_url: null,
-      isFreeTrial: true,
+      // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
+      isFreeTrial: false,
       level: 'all',
-      // Duration menu with base prices only ("from CHF 45" on public cards) —
-      // subscriptionPricing is STRIPPED, exactly as syncActivityPublicProfile
-      // mirrors it (member benefits are per-contact data, never public).
+      // Duration menu ("from CHF 45" on public cards) + the member-benefit rule,
+      // both mirrored verbatim, exactly as syncActivityPublicProfile does
+      // (public-safe: the subscription-type ids are already public in the shop).
       durations: appointmentDurations.map((d) => ({
         minutes: d.minutes,
         priceAmount: d.priceAmount ?? null,
       })),
+      memberBenefit: appointmentMemberBenefit,
     })
 
   // ── availability (the WHEN — publishes free time, generates nothing) ────
@@ -1883,8 +1874,6 @@ async function seedDemoTeam(profile: SectorProfile) {
       templateId: appointmentTemplateId,
       activityId: appointmentActId,
       activityName: appointmentName,
-      accessRule: { type: 'open' },
-      isFreeTrial: true,
       providerId: uid,
       providerName: ownerName,
       start: apt.start,

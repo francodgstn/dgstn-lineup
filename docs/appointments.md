@@ -14,8 +14,11 @@ mechanism an offering uses:
 | Time chosen by | the studio | the client, from published availability |
 | Created via | Schedule → "New session" | client books from availability (`bookAppointment`) |
 
-Everything else — provider, capacity, access rule, price — is an ordinary field
-both kinds carry, **not** something implied by the type.
+Everything else — provider, capacity, price — is an ordinary field both kinds
+carry, **not** something implied by the type. One deliberate asymmetry: classes
+have an **access rule** (`open`/`members`/`subscription`, plus the independent
+`trialEnabled` and `dropIn` toggles), while appointments have **none** — for an
+appointment, **the price is the gate** (see "Paid appointments").
 
 ## The two halves: the *what* and the *when*
 
@@ -23,14 +26,17 @@ This split is the core of the model. Get it wrong and nothing else makes sense.
 
 - **`Activity` (type `'appointment'`) owns the *what***: name, `durations`
   (the lengths a client may book — a "Technique Assessment" is 60 minutes wherever
-  it's offered — each carrying an optional **per-duration price** and explicit
-  **per-subscription-type member pricing**; see "Paid appointments" below),
-  `accessRule`, `confirmationInstructions`. There is deliberately NO
-  capacity field: an appointment is a provider's *exclusive* time, so one booking
-  per slot is the definition, not a setting (the materialised session carries
-  `max_participants: 1` for the recount trigger). Because appointments are
-  activities, they are listed on the website, gateable by subscription, and
-  countable in analytics **exactly like classes** — no special-casing.
+  it's offered — each carrying an optional **base price**), the ONE
+  **`memberBenefit`** rule (see "Paid appointments" below), and
+  `confirmationInstructions`. There is deliberately NO capacity field: an
+  appointment is a provider's *exclusive* time, so one booking per slot is the
+  definition, not a setting (the materialised session carries
+  `max_participants: 1` for the recount trigger). And there is NO `accessRule`:
+  appointments dropped the access gate in 2026-07 — the field still exists on
+  `Activity` because classes use it, but appointment forms don't show it and
+  appointment booking paths don't read it. Because appointments are activities,
+  they are listed on the website and countable in analytics **exactly like
+  classes** — no special-casing.
 - **`availability/{id}` (`Availability`) owns only the *when***: `providerId`,
   `title` (the SCHEDULE's admin-facing name — "Saturday mornings" — *not* the
   offering's name), `recurrence.daysOfWeek` + `startDate`/`endDate`,
@@ -60,27 +66,31 @@ Two entry styles, both **lazy**:
   (its `durations` drive the grid), minus the provider's booked sessions
   expanded by `bufferMinutes` (busy = `appointmentSlotBlocked`, so an expired
   payment hold doesn't block). Returns coach-first:
-  `coaches[] → { providerId, providerName, activities: [{ activityId, activityName, durations, accessRule, location, onlineUrl, days: [{ dayMs, slotsByDuration }] }] }`
-  where `durations` is the **full priced menu** `[{ minutes, priceAmount,
-  subscriptionPricing }]` — the picker needs `subscriptionPricing` to show a
-  verified member their effective price (the server re-resolves at booking).
-  Days are merged across a provider's several schedules; when schedules disagree on
-  location, the first contributor's is shown (booking resolves the real one).
+  `coaches[] → { providerId, providerName, activities: [{ activityId, activityName, durations, memberBenefit, location, onlineUrl, days: [{ dayMs, slotsByDuration }] }] }`
+  where `durations` is the priced menu `[{ minutes, priceAmount }]` and
+  `memberBenefit` is the activity's rule, verbatim — the picker mirrors
+  `resolveEffectiveAppointmentPrice` to show a verified member their price
+  (public-safe: the type ids are already public in the shop; the server
+  re-resolves at booking). Days are merged across a provider's several
+  schedules; when schedules disagree on location, the first contributor's is
+  shown (booking resolves the real one).
 - **`bookAppointment`** `{ teamId, providerId, activityId, startMs, durationMinutes, …contact }` —
   the **free-path** booking callable. The client sends **no** `templateId`: the
   server resolves which active availability covers that start (day-of-week, date
   range, window/grid or explicit time), which is both simpler and unspoofable.
-  It validates `durationMinutes` against the activity's `durations`, applies
-  **two gates in order** — the activity's ACCESS rule (shared gate, see below),
-  then the PRICE gate: when the caller's effective price is an amount it refuses
-  with `failed-precondition { reason: 'payment_required', priceAmount }` (the
-  client routes to `createAppointmentCheckout`) — then creates the session and
-  its `confirmed` booking in one transaction.
+  It validates `durationMinutes` against the activity's `durations` and applies
+  **the price gate — the only gate** (there is no access check): when the
+  caller's effective price is an amount it refuses with `failed-precondition
+  { reason: 'payment_required', priceAmount }` (the client routes to
+  `createAppointmentCheckout`); when it's free it creates the session and its
+  `confirmed` booking in one transaction (an `included` benefit via a
+  credit-pack type spends a credit).
 - **`createAppointmentCheckout`** — the **paid path**
   (`appointments/checkout.ts`); see "Paid appointments" below.
 
 The materialised session **inherits from the activity**: `activityId`,
-`activityName`, `accessRule` (plus a fixed `max_participants: 1`);
+`activityName`, `autoConfirm` (plus a fixed `max_participants: 1`) — but **no
+`accessRule`**, which appointment session docs and mirrors stopped carrying;
 `location`/`onlineUrl` come from the matched availability; `templateId` points
 back at it; `origin: 'window'`.
 
@@ -90,16 +100,26 @@ back at it; `origin: 'window'`.
 2. an **in-transaction range query** over the provider's sessions to catch
    *overlapping different* starts, buffer-expanded.
 
-**Access gate.** The gate is shared with `bookSession` (see
-`packages/functions/src/booking/`) and reads the **activity's** `accessRule` —
-so `subscription`-gated appointments and lesson credits work. This is only possible
-because sessions carry an `activityId`; the pre-2026-07 generator didn't set one,
-which is why appointments could not be gated at all back then.
+**No access gate.** Appointments have no access rule — THE PRICE IS THE GATE
+(see "Paid appointments"). The class access gate (`booking/access.ts`) is
+untouched for `bookSession`; what the two paths share is the **held-types
+computation**: `resolveHeldBenefit` reuses the same held-subscription/credit
+lookup the class coverage gate uses, but feeds it
+`memberBenefit.subscriptionTypeIds` — so credit packs keep spending a credit on
+an `included` booking. (History: the 2026-07 activity-bound refactor initially
+gave appointments the class access gate; a persona test showed it produced the
+"who pays base price if only Premium can book?" paradox, and it was dropped the
+same month — while the old generator model before the refactor couldn't gate at
+all, since its slots carried no `activityId`.)
 
 **`bookSession` is class-only.** It rejects `activityType === 'appointment'` — no
-open appointment sessions exist to book. **`cancelBooking` still handles both**: an
-appointment cancel flips the session to `status: 'cancelled'` (unpublishing it via
-the sync gate) and frees the provider's time, which reappears in `listAvailability`.
+open appointment sessions exist to book. Class-side, `accessRule` still means
+"who books FREE", with two independent toggles alongside it: `trialEnabled` (a
+gated class still accepts a newcomer's guest trial via the open-tier path) and
+`dropIn` (uncovered contacts pay per class). **`cancelBooking` still handles
+both kinds**: an appointment cancel flips the session to `status: 'cancelled'`
+(unpublishing it via the sync gate) and frees the provider's time, which
+reappears in `listAvailability`.
 
 ## Paid appointments
 
@@ -108,56 +128,54 @@ by paying up front through Stripe Connect — the same rail as the class drop-in
 (`docs/payment-contact-studio.md`), but **not** the class `dropIn` config, which
 stays class-only. Appointments price the duration itself.
 
-### The pricing model — the price lives on the duration
+### The pricing model — base price per duration, ONE benefit rule per activity
 
-The coach sells TIME, so the price is per duration, on the activity
-(`Activity.durations`, `packages/shared/src/types/activity.ts`):
+The coach sells TIME, so the base price is per duration; the member benefit is
+ONE rule for the whole activity — never per duration, never per type-×-duration
+(`packages/shared/src/types/activity.ts`):
 
 ```ts
 durations: [
-  { minutes: 30, priceAmount: 45 },          // base/walk-in price, major units
-  {
-    minutes: 60,
-    priceAmount: 85,
-    subscriptionPricing: [                    // the EXPLICIT member benefit
-      { subscriptionTypeId: 'sub-elite',   priceAmount: null }, // INCLUDED → holders book free
-      { subscriptionTypeId: 'sub-premium', priceAmount: 60 },   // member price
-    ],
-  },
+  { minutes: 30, priceAmount: 45 },   // base price, major units
+  { minutes: 60, priceAmount: 85 },   // null/absent = unpriced → free for anyone
 ]
+memberBenefit: {                      // the ONE rule — optional
+  subscriptionTypeIds: ['sub-elite', 'sub-premium'],
+  kind: 'included',                   // or 'discount' + discountPercent: 20
+}
 ```
 
-- **Unpriced** (`priceAmount` null/absent, no entries): the free path — exactly the
-  pre-payment behaviour, the access rule alone decides.
-- **The member benefit is data, never implied.** `priceAmount: null` in
-  `subscriptionPricing` = INCLUDED (holders book free; a credit-pack type spends a
-  credit), a number = the member price, and an **absent entry = holders of that
-  type pay base**. A priced duration with no entries costs base for everyone,
-  subscribers included. The activities form pre-fills INCLUDED entries for the
-  accessRule's covering subscription types when a price is first set — so "my
-  subscribers book free" is the default the admin *sees*, while remaining explicit
-  data they can change.
-- **Effective price for a contact** = the LOWEST of the base price and every entry
-  whose type the contact holds; INCLUDED beats any amount
-  (`resolveEffectiveAppointmentPrice`, shared + unit-tested). Guests always pay
-  base. Server-side resolution is authoritative — the picker mirrors the math for
-  display only.
+- **The benefit is data, never implied — but it is now ONE rule.** Holders of
+  any listed type: `kind: 'included'` → every priced duration is free (a
+  credit-pack type spends a credit); `kind: 'discount'` → `discountPercent` off
+  every priced duration. **Absent `memberBenefit` = no benefit** — everyone,
+  subscribers included, pays base. (History: until 2026-07 this was a
+  per-duration × per-subscription-type `subscriptionPricing` matrix, plus a form
+  that pre-filled entries from the access rule; the persona test showed the
+  algebra confused real coaches, and it was cut for this one rule.)
+- **Effective price for a caller** (`resolveEffectiveAppointmentPrice(duration,
+  heldTypeIds, memberBenefit)`, shared + unit-tested), in order: unpriced → free
+  for anyone; priced + no held benefit type → base (guests always land here);
+  priced + held + `included` → free; priced + held + `discount` →
+  `max(0.50, round(base × (100 − pct) / 100))` — clamped to Stripe's **0.50
+  minimum-charge floor**, never "free via discount" (a `discountPercent` ≥ 100
+  clamps to 0.50; missing/≤ 0 falls back to base). Server-side resolution is
+  authoritative — the picker mirrors the math for display only.
 
-### Access vs price — two separate gates, in order
+### The price is the gate — there is no access gate
 
-1. **ACCESS** (unchanged): `open` → anyone; `members` → joined contacts;
-   `subscription` → holder of a covering type. **Guests may pay their way into
-   gated tiers** — the drop-in precedent: payment is proof — so the checkout
-   callable applies coverage only to compute the price, never as a refusal.
-2. **PRICE**: unpriced duration → free path. Priced → the caller's effective
-   price decides: free/INCLUDED → free path (credit packs spend a credit exactly
-   as before); an amount → checkout at THAT amount.
+An appointment has **no** access rule. Unpriced duration → **anyone books
+free**, guests included. Priced → **anyone books by paying their effective
+price**; holding a benefit type just lowers (or zeroes) that price. Sign-in is
+never a requirement — the picker offers it purely as "have a subscription? sign
+in to get your member price."
 
 Bypass-proof in both directions: `bookAppointment` refuses a payable caller with
-`{ reason: 'payment_required', priceAmount }`; `createAppointmentCheckout` refuses
-with `{ reason: 'covered' }` when the caller's effective price is free (the client
-falls back to the free path) and `{ reason: 'not_priced' }` when the duration has
-no price at all.
+`{ reason: 'payment_required', priceAmount }`; `createAppointmentCheckout`
+charges the CALLER's effective amount (base or discounted) and refuses with
+`{ reason: 'covered' }` when the caller's effective price is free (the client
+falls back to the free path) and `{ reason: 'not_priced' }` when the duration
+has no price at all. The refusal shapes are unchanged from the matrix era.
 
 ### The hold state machine — the hold IS the session
 
@@ -235,9 +253,9 @@ the booking becomes real.
 - **Stripe-create failure after the hold** is caught: best-effort release
   (session → `cancelled`, booking deleted); a leaked hold self-heals via lazy
   expiry anyway.
-- **Mobile stays free-path.** The app books via `bookAppointment` only; a priced,
-  uncovered caller gets the `payment_required` refusal (no mobile checkout surface
-  yet).
+- **Mobile stays free-path.** The app books via `bookAppointment` only; a caller
+  whose effective price is an amount gets the `payment_required` refusal (no
+  mobile checkout surface yet).
 
 ## Mirrors
 
@@ -249,13 +267,16 @@ the booking becomes real.
 Since only **booked** appointments have a session, the only `appointment_session`
 mirrors that exist are already full — which is why the public site's schedule
 section lists **classes only**. Appointments reach the public as *activity* cards
-that route to the picker.
+that route to the picker. Appointment `appointment_session` mirrors carry **no
+`accessRule`** (dropped with the access gate, `syncSessionPublicProfile`).
 
-The activity mirror carries a **stripped** duration menu — `durations:
-[{ minutes, priceAmount }]`, `subscriptionPricing` removed
-(`syncActivityPublicProfile`) — so public cards can show "from CHF 45" without
-exposing member pricing, which is per-contact data. The picker itself never reads
-the mirror for prices; it gets the full shape from `listAvailability`.
+The activity mirror (`syncActivityPublicProfile`) carries the duration menu
+`durations: [{ minutes, priceAmount }]` **and `memberBenefit`, both verbatim** —
+there is no per-contact data to strip any more (the old `subscriptionPricing`
+matrix is gone), and the benefit is public-safe since the referenced
+subscription-type ids are already public in the shop. Public cards can show
+"from CHF 45"; the picker itself never reads the mirror — it gets the same
+shape from `listAvailability`.
 
 ## Where appointments appear
 
@@ -263,7 +284,7 @@ the mirror for prices; it gets the full shape from `listAvailability`.
 |---|---|
 | Admin **Schedule** | Booked appointments render like any session; the **Classes / Appointments / Events** filter shows/hides them. Clicking one opens `AppointmentDetail` (bookings roster + cancel), not the session edit form. A `pending_payment` hold renders **ghosted** (dimmed, dashed border) with an amber **"Awaiting payment"** badge; an expired-but-unswept hold renders as cancelled. Cancelling a hold is safe — a late payment re-acquires the slot or refunds. |
 | Admin **availability** | Schedule → "+ New entry" → *Appointment availability* (`AppointmentAvailabilityDialog`): list/create/edit/pause schedules, pick their activities. No dedicated admin route. |
-| Public picker | `/public/{slug}/appointments` — coach → activity → duration (if >1) → day → time. 100% `listAvailability`; reads no Firestore directly. Priced durations show on the chips ("45 min · CHF 65") and route to `createAppointmentCheckout`; a verified member sees their effective price ("Your price: CHF 40" — display-only, the server re-resolves). |
+| Public picker | `/public/{slug}/appointments` — coach → activity → duration (if >1) → day → time. 100% `listAvailability`; reads no Firestore directly. Priced durations show on the chips ("45 min · CHF 65") and route to `createAppointmentCheckout`. No gate: guests always book (pay if priced); when the activity has a `memberBenefit`, sign-in is offered — "have a subscription? sign in to check your price" — and after OTP the member sees their effective price (display-only, the server re-resolves). |
 | Public site / booking flow | Appointment **activity** cards route to the picker. The schedule section is classes-only. |
 | Kiosk schedule / Now-Next | Booked appointments shown — the front desk sees the day's 1:1s. |
 | Kiosk walk-in | **Not offered.** Walk-in needs a discrete open slot, which no longer exists. Removed 2026-07; re-addable on `listAvailability` if wanted. |
@@ -275,14 +296,21 @@ All four seeds (`seed-emulator`, `seed-sandbox`, `seed-staging`, `seed-lead`) cr
 an appointment activity (with a priced `durations` menu), one or more
 `availability` docs, and a few **booked** appointments — never open slots, since
 nothing is pre-generated. Shared builders live in `scripts/lib/appointments.ts` so
-every seed emits the shape `bookAppointment` would. The generic seeds carry the
-MIXED pricing case — a base-price-only 30-min duration plus a 60-min duration whose
-`subscriptionPricing` has one INCLUDED type and one member-priced type — so every
-effective-price path has demo data. Seeded **booked** appointments are always
-free-path-shaped (`confirmed`, no payment fields): paid bookings are not seeded, as
-that would require fabricating `member_payments` ledger rows. Swimli
-(`scripts/leads/swimli/profile.ts`) is the richest: 3 providers, both `times` and
-`range` schedules, and a credit-pack INCLUDED entry on the standard 45-min lesson.
+every seed emits the shape `bookAppointment` would (no `accessRule`/`isFreeTrial`
+on appointment session docs or mirrors). Both `memberBenefit` kinds have demo
+data: **emulator + staging** seed `kind: 'included'` (the top tier books free —
+Monthly on coach, Elite on studio/org), **sandbox** seeds `kind: 'discount'`
+(monthly holders get 20% off every priced duration). Each generic seed also
+gates ONE class with the full ordinary offer — subscription access +
+`trialEnabled` + `dropIn` (MMA in emulator/staging, Advanced BJJ in the sandbox
+grappling team) — and none seeds a "Drop-in" subscription PLAN any more (the
+per-activity `dropIn` price is the one drop-in concept). Seeded **booked**
+appointments are always free-path-shaped (`confirmed`, no payment fields): paid
+bookings are not seeded, as that would require fabricating `member_payments`
+ledger rows. Swimli (`scripts/leads/swimli/profile.ts`) is the richest: 3
+providers, both `times` and `range` schedules, and a credit-pack `included`
+benefit on the private lesson; nicole's paid 1:1 deliberately has NO benefit
+(everyone pays base) while her free intro call stays unpriced.
 
 ## History / gotchas
 
@@ -293,6 +321,15 @@ that would require fabricating `member_payments` ledger rows. Swimli
   and impossible to subscription-gate. All of it was deleted in favour of the lazy,
   activity-bound model above. If you're tempted to re-add pre-generation, re-read
   "Why nothing can be pre-generated".
+- **2026-07, later the same month — "the price is the gate".** The initial paid
+  model gave appointments the class access gate plus a per-duration ×
+  per-subscription-type `subscriptionPricing` matrix. A coach persona test
+  showed both confused real users, so appointments dropped `accessRule` entirely
+  and the matrix collapsed into the ONE `memberBenefit` rule (see "Paid
+  appointments"). Session docs and appointment mirrors stopped carrying
+  `accessRule` in the same pass; classes gained the independent `trialEnabled`
+  toggle, and the seeded "Drop-in" subscription plan was removed in favour of
+  the per-activity `dropIn` price.
 - `instructorId`/`coachId` were unified into **`providerId`** across sessions,
   activities and availability. `Event.coachId` is a different entity and unchanged.
 - The kiosk `walkInActivityIds` allowlist matches on `activityId`. Appointments now

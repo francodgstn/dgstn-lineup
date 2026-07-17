@@ -69,7 +69,6 @@ import {
   buildAppointmentSessionDocs,
   buildAppointmentBookingDoc,
 } from './lib/appointments'
-import type { SeedAccessRule } from './lib/appointments'
 import type {
   LeadProfile,
   LeadContactDef,
@@ -1016,6 +1015,9 @@ async function seedLeadTenant(profile: LeadProfile) {
           : {}),
         isFreeTrial: accessRule.type === 'open',
         accessRule,
+        // Independent of the tier: a gated class still accepts a newcomer's
+        // trial booking (guest path identical to 'open').
+        ...(a.trialEnabled ? { trialEnabled: true } : {}),
         dropIn,
         base_score: a.base_score,
         type: 'class',
@@ -1053,10 +1055,11 @@ async function seedLeadTenant(profile: LeadProfile) {
 
   // ── appointment activities (the WHAT) ────────────────────────────────────────
   // Each is an offering: its name, the lengths it can be booked at (with their
-  // prices) and its access rule. A lead may publish several (e.g. a free intro
-  // call and a paid 1:1) — they differ by access rule, which the duration list
-  // cannot express (it carries prices, never access rules). The availability
-  // docs below publish only the WHEN and link to them.
+  // base prices) and its ONE member-benefit rule. Appointments carry NO access
+  // rule — the price is the gate (unpriced = anyone books free, priced = anyone
+  // pays, benefit holders less). A lead may publish several offerings (e.g. a
+  // free intro call and a paid 1:1) — different products with different
+  // pricing. The availability docs below publish only the WHEN and link to them.
   const aptActIdOf = (key: string) => `${teamId}-act-appointment-${key}`
   // The provider is whoever's schedule first offers it (owner as a fallback).
   const aptProviderKeyOf = (key: string) =>
@@ -1071,13 +1074,17 @@ async function seedLeadTenant(profile: LeadProfile) {
     const imageUrl = apt.imageAsset
       ? await uploadAsset(apt.imageAsset, `teams/${teamId}/activities/${aptActId}/cover`)
       : null
-    // Same paid-access gate as a class; isFreeTrial stays in sync (legacy queries).
-    const accessRule = {
-      type: apt.accessTier ?? 'open',
-      ...(apt.accessTier === 'subscription'
-        ? { subscriptionTypeIds: (apt.accessSubKeys ?? []).map(subIdOf) }
-        : {}),
-    }
+    // The ONE member-benefit rule — the profile references subscriptions by key;
+    // resolve them to the seeded subscription-type ids here.
+    const memberBenefit = apt.memberBenefit
+      ? {
+          subscriptionTypeIds: apt.memberBenefit.subKeys.map(subIdOf),
+          kind: apt.memberBenefit.kind,
+          ...(apt.memberBenefit.kind === 'discount'
+            ? { discountPercent: apt.memberBenefit.discountPercent }
+            : {}),
+        }
+      : null
     await db
       .collection('activities')
       .doc(aptActId)
@@ -1091,26 +1098,16 @@ async function seedLeadTenant(profile: LeadProfile) {
         providerId: uidOf(providerKey),
         providerName: staffName(providerKey),
         level: 'all',
-        // Per-duration pricing (major units, team currency). The profile's
-        // subscriptionPricing entries reference subscriptions by key — resolve
-        // them to the seeded subscription-type ids here.
+        // Per-duration BASE pricing (major units, team currency). No access
+        // rule / isFreeTrial: the price is the only gate for appointments.
         durations: apt.durations.map((d) => ({
           minutes: d.minutes,
           priceAmount: d.priceAmount ?? null,
-          ...(d.subscriptionPricing?.length
-            ? {
-                subscriptionPricing: d.subscriptionPricing.map((e) => ({
-                  subscriptionTypeId: subIdOf(e.subKey),
-                  priceAmount: e.priceAmount,
-                })),
-              }
-            : {}),
         })),
+        ...(memberBenefit ? { memberBenefit } : {}),
         // A 1:1 slot has no roster-review step — the time is taken the moment
         // it's booked, so the booking is written 'confirmed' on the spot.
         autoConfirm: true,
-        isFreeTrial: accessRule.type === 'open',
-        accessRule,
         isActive: true,
         ...(imageUrl ? { image_url: imageUrl } : {}),
         created_at: ts(daysFromNow(-180)),
@@ -1130,16 +1127,18 @@ async function seedLeadTenant(profile: LeadProfile) {
         color: profile.accentColor,
         description: apt.description,
         image_url: imageUrl,
-        isFreeTrial: accessRule.type === 'open',
-        accessRule,
+        // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
+        // No accessRule — appointment mirrors dropped the access gate.
+        isFreeTrial: false,
         level: 'all',
-        // Duration menu with base prices only ("from CHF 45" on public cards) —
-        // subscriptionPricing is STRIPPED, exactly as syncActivityPublicProfile
-        // mirrors it (member benefits are per-contact data, never public).
+        // Duration menu ("from CHF 45" on public cards) + the member-benefit
+        // rule, both mirrored verbatim, exactly as syncActivityPublicProfile
+        // does (public-safe: the type ids are already public in the shop).
         durations: apt.durations.map((d) => ({
           minutes: d.minutes,
           priceAmount: d.priceAmount ?? null,
         })),
+        ...(memberBenefit ? { memberBenefit } : {}),
       })
   }
 
@@ -1207,24 +1206,17 @@ async function seedLeadTenant(profile: LeadProfile) {
       const contactId = `${teamId}-contact-${contactIdx.toString().padStart(3, '0')}`
       const clientEmail = `${slugEmail(client)}.${teamId}@example.com`
 
-      // Which offering was booked — the session INHERITS the activity's name
-      // and access rule, exactly as bookAppointment does.
+      // Which offering was booked — the session INHERITS the activity's name,
+      // exactly as bookAppointment does (no accessRule/isFreeTrial: appointment
+      // sessions dropped the access gate).
       const bookedApt = aptDefOf(b.activityKey ?? avActivityKeys[0])
       if (!bookedApt) continue
-      const bookedAccessRule = {
-        type: bookedApt.accessTier ?? 'open',
-        ...(bookedApt.accessTier === 'subscription'
-          ? { subscriptionTypeIds: (bookedApt.accessSubKeys ?? []).map(subIdOf) }
-          : {}),
-      } as SeedAccessRule
 
       const { id: sid, session, publicProfile } = buildAppointmentSessionDocs({
         teamId,
         templateId,
         activityId: aptActIdOf(bookedApt.key),
         activityName: bookedApt.activityName,
-        accessRule: bookedAccessRule,
-        isFreeTrial: bookedAccessRule.type === 'open',
         autoConfirm: true,
         providerId: providerUid,
         providerName,

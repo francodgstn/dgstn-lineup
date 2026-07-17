@@ -81,7 +81,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~15 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Outreach/automation engine** — not started
-- **Appointments (1:1)** — DONE: activity-bound, availability-only booking (`listAvailability` + `bookAppointment`, overlap-safe lazy session creation, subscription-gateable, .ics emails, public picker at `/public/{slug}/appointments` — see `docs/appointments.md`). Still open: mobile app integration (browse/book is gated pending a rebuild on `listAvailability`), push reminders, session notes, waiting list (`docs/product-strategy.md`).
+- **Appointments (1:1)** — DONE: activity-bound, availability-only booking (`listAvailability` + `bookAppointment`, overlap-safe lazy session creation, priced durations + one `memberBenefit` rule (no access gate — the price is the gate), .ics emails, public picker at `/public/{slug}/appointments` — see `docs/appointments.md`). Still open: mobile app integration (browse/book is gated pending a rebuild on `listAvailability`), push reminders, session notes, waiting list (`docs/product-strategy.md`).
 
 ---
 
@@ -245,33 +245,45 @@ Two primitives, not two entities — both are `sessions/{id}` docs:
 `'appointment_session'`; activity mirrors carry `activityType` so public UIs route
 appointment cards to the picker.
 
-**The what vs the when.** The `Activity` owns the *what* — `durations`
-(each length with an optional price), `accessRule` (no capacity: an appointment is
-exclusive time, one booking per slot by definition). The `availability/{id}` doc
-owns only the *when* — provider, recurrence, `mode: 'range'|'times'`, buffer, and
-**`activityIds`** (which appointment activities are bookable in that window).
-Durations are never stored on availability; they derive from the linked activities.
-Because a window may offer activities of different lengths, a start time is
-indeterminate until the client picks one — **which is why availability can never be
-pre-generated** (the old slot-generation cron was deleted for exactly this reason).
+**The what vs the when.** The `Activity` owns the *what* — `durations` (each
+length with an optional base price) and the ONE `memberBenefit` rule (no
+capacity: an appointment is exclusive time, one booking per slot by definition).
+The `availability/{id}` doc owns only the *when* — provider, recurrence,
+`mode: 'range'|'times'`, buffer, and **`activityIds`** (which appointment
+activities are bookable in that window). Durations are never stored on
+availability; they derive from the linked activities. Because a window may offer
+activities of different lengths, a start time is indeterminate until the client
+picks one — **which is why availability can never be pre-generated** (the old
+slot-generation cron was deleted for exactly this reason).
 
-Booking: **`bookAppointment`** is the free/covered appointment path (`bookSession`
-is class-only and rejects them); the client sends no templateId — the server
-resolves the covering availability. `listAvailability` computes free times,
-coach-first. Both callables share the paid-access gate in `booking/access.ts`, so
-appointments are subscription-gateable like any activity. `cancelBooking` handles
-both kinds.
+Booking: **`bookAppointment`** is the free-path appointment callable
+(`bookSession` is class-only and rejects them); the client sends no templateId —
+the server resolves the covering availability. `listAvailability` computes free
+times, coach-first (returning `durations` + `memberBenefit` per activity).
+Appointments have **NO access gate** — THE PRICE IS THE GATE: unpriced → anyone
+books free (guests included), priced → anyone pays their effective price.
+`Activity.accessRule` is CLASS-ONLY (appointment forms don't show it, appointment
+paths don't read it, appointment session docs/mirrors don't carry it).
+`cancelBooking` handles both kinds.
 
-**Paid appointments** price the duration itself: `Activity.durations:
-[{minutes, priceAmount?, subscriptionPricing?}]` — member benefit is EXPLICIT data
-per subscription type (`priceAmount: null` = included/free, a number = member
-price, absent entry = holders pay base; never implied). A payable caller is refused
-by `bookAppointment` (`payment_required`) and instead reserves→pays→confirms via
-**`createAppointmentCheckout`**: the hold IS the session (`status:
-'pending_payment'` + `hold_expires_at`, +30 min, lazily expiring) and the Connect
-webhook (`kind: 'appointment'`) confirms it to `full` on payment. `dropIn` stays
-class-only — appointments never use it. Kiosk walk-in is class-only too. Full doc:
-`docs/appointments.md` → "Paid appointments".
+**Paid appointments** put a base price per duration (`Activity.durations:
+[{minutes, priceAmount?}]`) and the member benefit in ONE rule per activity:
+`Activity.memberBenefit: {subscriptionTypeIds, kind: 'included'|'discount',
+discountPercent?}` — holders of a listed type book free (`included`; credit
+packs spend a credit) or pay `discountPercent` off every priced duration
+(`discount`, clamped to Stripe's 0.50 floor, never free-via-discount). Absent =
+no benefit, everyone pays base — the benefit is data, never implied, but it is
+one rule (the per-duration × per-type `subscriptionPricing` matrix is gone).
+Resolver: `resolveEffectiveAppointmentPrice(duration, heldTypeIds,
+memberBenefit)`. A payable caller is refused by `bookAppointment`
+(`payment_required`) and instead reserves→pays→confirms via
+**`createAppointmentCheckout`** at the caller's effective amount: the hold IS
+the session (`status: 'pending_payment'` + `hold_expires_at`, +30 min, lazily
+expiring) and the Connect webhook (`kind: 'appointment'`) confirms it to `full`
+on payment. `dropIn` stays class-only — appointments never use it; class-side,
+the independent `trialEnabled` toggle lets a gated class accept a newcomer's
+guest trial, so members-included + trial + drop-in coexist. Kiosk walk-in is
+class-only too. Full doc: `docs/appointments.md` → "Paid appointments".
 
 ### SaaS plan tiers (Phase 2)
 

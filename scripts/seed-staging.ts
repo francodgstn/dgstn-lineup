@@ -186,7 +186,10 @@ function acquisitionFieldsFor(opts: {
 // 32 entries, ordered so any prefix (15 / 18 / 20 / 30) yields a realistic mix
 // of active students, trials, almost-ready leads, expired and external contacts.
 
-type SubKind = 'starter_monthly' | 'starter_annual' | 'premium_monthly' | 'premium_annual' | 'elite_monthly' | 'dropin' | 'aggregator' | null
+// NOTE: no 'dropin' kind any more — the "Drop-in" per-class subscription PLAN was
+// removed (2026-07): drop-in is the per-activity `Activity.dropIn` price, paid per
+// booking, not a membership. Pay-per-class contacts simply hold no subscription.
+type SubKind = 'starter_monthly' | 'starter_annual' | 'premium_monthly' | 'premium_annual' | 'elite_monthly' | 'aggregator' | null
 
 interface PoolEntry {
   firstname: string
@@ -265,7 +268,9 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'almost_ready',
     totalSessions: 7,
-    sub: 'dropin',
+    // Pay-per-class regular: no subscription — she books via the per-activity
+    // drop-in price (the Drop-in PLAN is gone; see the SubKind note).
+    sub: null,
   },
   {
     firstname: 'David',
@@ -386,7 +391,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'almost_ready',
     totalSessions: 5,
-    sub: 'dropin',
+    sub: null,
   },
   {
     firstname: 'Amélie',
@@ -496,7 +501,7 @@ const CONTACT_POOL: PoolEntry[] = [
     type: 'student',
     status: 'almost_ready',
     totalSessions: 8,
-    sub: 'dropin',
+    sub: null,
   },
   {
     firstname: 'Marie',
@@ -639,14 +644,6 @@ async function seedTeam(opts: TeamSeed) {
             prices: [{ id: `${teamId}-sub-10class-price`, amount: 180, recurrence: 'per_class' }],
             active: true,
           },
-          {
-            id: `${teamId}-sub-dropin`,
-            name: 'Drop-in',
-            description: 'Pay per session, no commitment.',
-            source: 'internal',
-            prices: [{ id: `${teamId}-sub-dropin-price`, amount: 25, recurrence: 'per_class' }],
-            active: true,
-          },
         ]
       : [
           {
@@ -680,14 +677,6 @@ async function seedTeam(opts: TeamSeed) {
               { id: `${teamId}-sub-elite-monthly`, amount: 189, recurrence: 'monthly' },
               { id: `${teamId}-sub-elite-annual`, amount: 1890, recurrence: 'annual' },
             ],
-            active: true,
-          },
-          {
-            id: `${teamId}-sub-dropin`,
-            name: 'Drop-in',
-            description: 'Pay per session, no commitment.',
-            source: 'internal',
-            prices: [{ id: `${teamId}-sub-dropin-price`, amount: 30, recurrence: 'per_class' }],
             active: true,
           },
           {
@@ -725,8 +714,6 @@ async function seedTeam(opts: TeamSeed) {
         return plan === 'coach'
           ? { id: `${teamId}-sub-monthly`, name: 'Monthly Membership', priceId: `${teamId}-sub-monthly-price`, amount: 95, recurrence: 'monthly' }
           : { id: `${teamId}-sub-elite`, name: 'Elite', priceId: `${teamId}-sub-elite-monthly`, amount: 189, recurrence: 'monthly' }
-      case 'dropin':
-        return { id: `${teamId}-sub-dropin`, name: 'Drop-in', priceId: `${teamId}-sub-dropin-price`, amount: plan === 'coach' ? 25 : 30, recurrence: null }
       case 'aggregator':
         return { id: `${teamId}-sub-fitpass`, name: 'FitPass Partner', priceId: null, amount: null, recurrence: null }
     }
@@ -946,7 +933,23 @@ async function seedTeam(opts: TeamSeed) {
   }
 
   // ── activities (group classes + appointments) ─────────────────────────────────────
-  const activities = [
+  type ClassActivitySeed = {
+    id: string
+    name: string
+    slug: string
+    color: string
+    level: string
+    isFreeTrial: boolean
+    type: 'class'
+    base_score: number
+    description: string
+    accessRule: { type: string; subscriptionTypeIds?: string[] }
+    /** Independent of the tier: a gated class still accepts a newcomer's trial. */
+    trialEnabled?: boolean
+    /** Pay-per-class price for uncovered contacts (the ONE drop-in concept). */
+    dropIn?: { enabled: boolean; priceAmount?: number }
+  }
+  const activities: ClassActivitySeed[] = [
     {
       id: `${teamId}-act-bjj`,
       name: 'Brazilian Jiu-Jitsu',
@@ -954,20 +957,23 @@ async function seedTeam(opts: TeamSeed) {
       color: accentColor,
       level: 'all',
       isFreeTrial: true,
-      type: 'class' as const,
+      type: 'class',
       base_score: 12,
       description:
         'Gi grappling from fundamentals to advanced — positions, escapes and submissions.',
-      accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
+      accessRule: { type: 'open' },
     },
     {
+      // MMA demos the FULL ordinary offer (members included + trial + drop-in):
+      // subscription-gated, but `trialEnabled` lets a newcomer book a free trial,
+      // and an uncovered contact can pay the per-class drop-in price instead.
       id: `${teamId}-act-mma`,
       name: 'MMA',
       slug: 'mma',
       color: '#dc2626',
       level: 'intermediate',
       isFreeTrial: false,
-      type: 'class' as const,
+      type: 'class',
       base_score: 15,
       description: 'Striking-to-grappling transitions and cage craft for experienced athletes.',
       // Showcases the activity↔subscription link (see seed-emulator.ts).
@@ -977,7 +983,9 @@ async function seedTeam(opts: TeamSeed) {
           plan === 'coach'
             ? [`${teamId}-sub-monthly`, `${teamId}-sub-10class`]
             : [`${teamId}-sub-premium`, `${teamId}-sub-elite`],
-      } as { type: string; subscriptionTypeIds?: string[] },
+      },
+      trialEnabled: true,
+      dropIn: { enabled: true, priceAmount: plan === 'coach' ? 25 : 30 },
     },
     {
       id: `${teamId}-act-kickbox`,
@@ -986,10 +994,10 @@ async function seedTeam(opts: TeamSeed) {
       color: '#ea580c',
       level: 'all',
       isFreeTrial: true,
-      type: 'class' as const,
+      type: 'class',
       base_score: 10,
       description: 'Pad work, combinations and conditioning — a serious workout for every level.',
-      accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
+      accessRule: { type: 'open' },
     },
     {
       id: `${teamId}-act-yoga`,
@@ -998,10 +1006,10 @@ async function seedTeam(opts: TeamSeed) {
       color: '#059669',
       level: 'all',
       isFreeTrial: true,
-      type: 'class' as const,
+      type: 'class',
       base_score: 8,
       description: 'Recovery-focused mobility and breath work to keep you on the mats.',
-      accessRule: { type: 'open' } as { type: string; subscriptionTypeIds?: string[] },
+      accessRule: { type: 'open' },
     },
   ]
   for (const a of activities) {
@@ -1029,38 +1037,37 @@ async function seedTeam(opts: TeamSeed) {
       image_url: null,
       isFreeTrial: a.isFreeTrial,
       accessRule: a.accessRule,
+      // Drop-in config, mirrored only when enabled + priced — exactly as
+      // syncActivityPublicProfile does (trialEnabled is NOT mirrored; the
+      // trial door is enforced server-side in bookSession).
+      ...(a.dropIn?.enabled && typeof a.dropIn.priceAmount === 'number'
+        ? { dropIn: { enabled: true, priceAmount: a.dropIn.priceAmount } }
+        : {}),
       level: a.level,
     })
   }
 
-  // The WHAT of an appointment: name, bookable lengths (with their prices),
-  // access rule. The availability below only publishes the WHEN.
+  // The WHAT of an appointment: name, bookable lengths (with their prices) and
+  // the ONE member-benefit rule. No access rule — the price is the gate. The
+  // availability below only publishes the WHEN.
   const appointmentActId = `${teamId}-act-appointment`
   const appointmentActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
   const appointmentActDescription =
     'One-on-one session tailored to your goals — technique, strategy and conditioning.'
-  // Per-duration pricing (major units, CHF) — the MIXED demo case. The 60-min
-  // duration carries the EXPLICIT member benefit: the top tier has it INCLUDED
-  // (priceAmount: null → holders book free via the free path), a mid tier gets
-  // a member price (holders pay that through checkout), and every other
-  // subscription pays base — a priced duration with no entry costs base even
-  // for subscribers (member benefit is data, never implied). The 30-min
-  // duration is base-price-only, so it demos exactly that rule.
-  const appointmentIncludedSubId =
-    plan === 'coach' ? `${teamId}-sub-monthly` : `${teamId}-sub-elite`
-  const appointmentMemberPriceSubId =
-    plan === 'coach' ? `${teamId}-sub-10class` : `${teamId}-sub-premium`
+  // Per-duration BASE pricing (major units, CHF). The member benefit is ONE rule
+  // for the whole activity (`Activity.memberBenefit`, never per duration): the
+  // top tier has every priced duration INCLUDED (holders book free via the free
+  // path); every other subscription pays base — the benefit is explicit data,
+  // never implied. This seed demos `kind: 'included'`; seed-sandbox demos
+  // `kind: 'discount'`.
   const appointmentDurations = [
     { minutes: 30, priceAmount: 45 },
-    {
-      minutes: 60,
-      priceAmount: 85,
-      subscriptionPricing: [
-        { subscriptionTypeId: appointmentIncludedSubId, priceAmount: null },
-        { subscriptionTypeId: appointmentMemberPriceSubId, priceAmount: 60 },
-      ],
-    },
+    { minutes: 60, priceAmount: 85 },
   ]
+  const appointmentMemberBenefit = {
+    subscriptionTypeIds: [plan === 'coach' ? `${teamId}-sub-monthly` : `${teamId}-sub-elite`],
+    kind: 'included',
+  }
   await db
     .collection('activities')
     .doc(appointmentActId)
@@ -1075,10 +1082,10 @@ async function seedTeam(opts: TeamSeed) {
       providerName: displayName,
       level: 'all',
       durations: appointmentDurations,
+      memberBenefit: appointmentMemberBenefit,
       // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
-      isFreeTrial: true,
       isActive: true,
       created_at: ts(daysFromNow(-180)),
     })
@@ -1097,15 +1104,17 @@ async function seedTeam(opts: TeamSeed) {
       color: accentColor,
       description: appointmentActDescription,
       image_url: null,
-      isFreeTrial: true,
+      // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
+      isFreeTrial: false,
       level: 'all',
-      // Duration menu with base prices only ("from CHF 45" on public cards) —
-      // subscriptionPricing is STRIPPED, exactly as syncActivityPublicProfile
-      // mirrors it (member benefits are per-contact data, never public).
+      // Duration menu ("from CHF 45" on public cards) + the member-benefit rule,
+      // both mirrored verbatim, exactly as syncActivityPublicProfile does
+      // (public-safe: the subscription-type ids are already public in the shop).
       durations: appointmentDurations.map((d) => ({
         minutes: d.minutes,
         priceAmount: d.priceAmount ?? null,
       })),
+      memberBenefit: appointmentMemberBenefit,
     })
 
   // ── availability (the WHEN — publishes free time, generates nothing) ─────────────
@@ -1162,8 +1171,6 @@ async function seedTeam(opts: TeamSeed) {
       templateId: appointmentTemplateId,
       activityId: appointmentActId,
       activityName: appointmentActName,
-      accessRule: { type: 'open' },
-      isFreeTrial: true,
       providerId: uid,
       providerName: displayName,
       start: apt.start,

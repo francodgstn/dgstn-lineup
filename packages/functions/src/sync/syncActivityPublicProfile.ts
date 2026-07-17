@@ -31,7 +31,11 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     isFreeTrial: data.isFreeTrial || false,
     level: data.level || null,
     // Denormalised access gate so the public booking UI can render lock badges.
-    accessRule: resolveActivityAccessRule({ accessRule: data.accessRule, isFreeTrial: data.isFreeTrial }),
+    // CLASS-ONLY: appointments have no access gate (the price is the gate) —
+    // mirroring a resolved rule for them would resurrect a phantom {type:'open'}.
+    ...(data.type !== 'appointment'
+      ? { accessRule: resolveActivityAccessRule({ accessRule: data.accessRule, isFreeTrial: data.isFreeTrial }) }
+      : {}),
     // Drop-in config so the booking UI can offer pay-per-class (only when enabled + priced).
     ...(data.dropIn?.enabled && typeof data.dropIn.priceAmount === 'number'
       ? { dropIn: { enabled: true, priceAmount: data.dropIn.priceAmount } }
