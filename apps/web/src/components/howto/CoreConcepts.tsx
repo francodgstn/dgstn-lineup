@@ -31,11 +31,15 @@ export function CoreConcepts() {
   }
 
   const concept = CONCEPTS.find((c) => c.id === selected)!
-  // `t.raw` yields the key PATH (a string) when a key is missing, never
-  // undefined — so these must be Array.isArray-guarded, not `?? []`, or an
-  // absent key renders as a truthy non-array and blows up on .map.
+  // These blocks are OPTIONAL per concept, so a missing key is normal, not a
+  // fault. Two traps: `t.raw` reports MISSING_MESSAGE to the console (and to
+  // error tracking) for every absent key, so check `t.has` first; and what it
+  // returns on a miss is the key PATH — a truthy string — so the result still
+  // needs an Array.isArray guard rather than `?? []`, or it reaches .map.
   const raw = (key: string): unknown[] => {
-    const v = t.raw(`concepts.${selected}.${key}`)
+    const path = `concepts.${selected}.${key}` as Parameters<typeof t.has>[0]
+    if (!t.has(path)) return []
+    const v = t.raw(path)
     return Array.isArray(v) ? v : []
   }
   const terms = raw('terms') as string[]

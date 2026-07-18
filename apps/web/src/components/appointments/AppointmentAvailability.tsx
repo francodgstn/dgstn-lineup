@@ -13,6 +13,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '@/lib/firebase'
+import { coachLabel, type CoachOption } from '@/hooks/useCoaches'
 import { useTranslations } from 'next-intl'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -20,7 +23,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import {
   collection, query, where, orderBy,
-  getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc,
+  getDocs, addDoc, updateDoc, deleteDoc, doc,
   serverTimestamp, Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -39,8 +42,6 @@ import {
   AVAILABILITY_COLLECTION,
   AVAILABILITY_EXCEPTIONS_COLLECTION,
   SESSIONS_COLLECTION,
-  TEAMS_COLLECTION,
-  TEAM_MEMBERS_SUBCOLLECTION,
   isExpiredAppointmentHold,
 } from '@linyup/shared'
 import type { Availability, AvailabilityException, AppointmentBooking, Session, Activity } from '@linyup/shared'
@@ -175,20 +176,27 @@ export function useAvailabilityExceptions(teamId: string | null) {
 
 interface MemberOption { id: string; name: string }
 
+/** Team members with display names, for the provider picker.
+ *
+ *  Goes through the `listTeamMembers` callable — NOT a direct read. Names live
+ *  on `users/{uid}`, which firestore.rules denies cross-user (see
+ *  `match /users/{userId}`): fetching them client-side threw permission-denied
+ *  for every member except yourself, which took the whole list down with it.
+ *  The visible damage was two-fold — an error overlay on save, and, because the
+ *  empty list made the provider lookup miss, the coach's NAME being written
+ *  back to the template as their raw uid. */
 function useTeamMemberOptions(teamId: string | null) {
-  return useQuery<MemberOption[]>({
-    queryKey: ['teamMembersWithNames', teamId],
+  // Same queryKey + queryFn as useCoaches, so the two share one fetch and one
+  // cache entry; `select` maps the shape for this picker without forking it.
+  return useQuery<CoachOption[], Error, MemberOption[]>({
+    queryKey: ['team-coaches-roster', teamId],
     enabled: !!teamId,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
-      const snap = await getDocs(collection(db, TEAMS_COLLECTION, teamId!, TEAM_MEMBERS_SUBCOLLECTION))
-      return Promise.all(snap.docs.map(async (memberDoc) => {
-        const userId = memberDoc.id
-        const userDoc = await getDoc(doc(db, 'users', userId))
-        if (!userDoc.exists()) return { id: userId, name: userId }
-        const u = userDoc.data()!
-        return { id: userId, name: `${u.firstname || ''} ${u.lastname || ''}`.trim() || u.email || userId }
-      }))
+      const res = await httpsCallable(functions, 'listTeamMembers')({ teamId })
+      return (res.data as { members?: CoachOption[] }).members ?? []
     },
+    select: (ms) => ms.map((m) => ({ id: m.userId, name: coachLabel(m) })),
   })
 }
 
@@ -397,7 +405,16 @@ function TemplateDialog({
       endDate: data.endDate ? Timestamp.fromDate(new Date(data.endDate)) : null,
     }
     const payload = {
-      teamId, providerId: data.providerId, providerName: member?.name || data.providerId,
+      teamId,
+      providerId: data.providerId,
+      // Fall back to the name already on the template before the uid: if the
+      // roster ever fails to load, an edit must not overwrite a real name with
+      // an opaque id. The uid stays as the last resort so the field is never
+      // empty. (Only reuse it when the provider hasn't been changed.)
+      providerName:
+        member?.name ||
+        (editing && editing.providerId === data.providerId ? editing.providerName : '') ||
+        data.providerId,
       title: data.title,
       activityIds: data.activityIds,
       location: data.location || null, onlineUrl: data.onlineUrl || null,

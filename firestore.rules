@@ -22,16 +22,27 @@ service cloud.firestore {
     }
 
     // return the current users roles
+    // Must degrade to {} rather than error. `roles` is absent on almost every
+    // user doc (it's an operator-only field), and a missing doc has no `.data`
+    // at all — both cases used to raise "Property roles is undefined on object"
+    // instead of evaluating to false. An evaluation error still denies, but it
+    // denies LOUDLY: the client sees an internal rules error rather than a
+    // clean permission-denied, so an ordinary "you may not read this" surfaced
+    // as a crash. Guard the doc read, then read the field with a default.
     function getRoles() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+      return isAuthed() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('roles', {})
+        : {};
     }
 
     // check if the current user has a specific role
     function hasRole(role) {
       //superadmin has all roles (not really nice but I need this)
-      return getRoles()["superadmin"] == true
+      // Indexed with .get(key, false): map["missing"] is itself an evaluation
+      // error, so the {} above would just move the crash one line down.
+      return getRoles().get('superadmin', false) == true
       ||
-      (isAuthed() && getRoles()[role] == true);
+      (isAuthed() && getRoles().get(role, false) == true);
     }
 
     // check if the user has any of the given roles (list)
