@@ -611,81 +611,74 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                 />
                 {/* Content */}
                 <div className="flex-1 p-4 min-w-0">
-                  <div className="flex items-start gap-2 flex-wrap">
-                    <p className="font-semibold text-sm leading-tight">{a.name}</p>
-                    {(() => {
-                      // Appointments have NO access gate (the price is the gate) —
-                      // resolving a rule for them fabricates a "Members only" badge
-                      // from the mirror's isFreeTrial:false. Show the money terms
-                      // (price + member benefit) instead, via the shared helper.
-                      if (isAppointment) {
-                        const moneyTerms = resolveActivityTerms({ ...a, type: a.activityType }).filter(
-                          (term) => term.kind === 'price' || term.kind.startsWith('benefit')
-                        )
-                        return moneyTerms.map((term, i) => {
-                          const label = moneyChipLabel(term, currency, locale, t)
-                          return label ? (
-                            <span
-                              key={`${term.kind}-${i}`}
-                              className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium"
-                            >
-                              {label}
-                            </span>
-                          ) : null
-                        })
-                      }
-                      // A gated class can ALSO be triable (trialEnabled) — show
-                      // both badges, or a newcomer never learns the class is
-                      // triable at all. Gate/trial badges are untouched (existing
-                      // logic); the drop-in money chip is the only ADDITION here —
-                      // today its price only surfaced two steps deep in the flow.
-                      const rule = resolveActivityAccessRule(a)
-                      const triable =
-                        (rule.type === 'open' && a.isFreeTrial) || a.trialEnabled === true
-                      const dropInTerm = resolveActivityTerms({ ...a, type: a.activityType }).find(
-                        (term) => term.kind === 'dropIn'
+                  {(() => {
+                    // ── Card details, structured into two tiers so the mix of
+                    // topics stops competing: (1) status BADGES next to the name —
+                    // ONE colour per meaning (amber = an access gate, green = free
+                    // to try, muted = neutral facts like type/level); (2) a muted
+                    // PRICING line below — every money term (price/drop-in/benefit)
+                    // as plain text, kept out of the coloured-badge noise.
+                    // Appointments have NO access gate (the price is the gate), so
+                    // they never show a gate/trial badge — just the neutral
+                    // "Appointment" type chip and their price line.
+                    const rule = resolveActivityAccessRule(a)
+                    const triable =
+                      !isAppointment &&
+                      ((rule.type === 'open' && a.isFreeTrial) || a.trialEnabled === true)
+                    const pricingLine = resolveActivityTerms({ ...a, type: a.activityType })
+                      .filter(
+                        (term) =>
+                          term.kind === 'price' ||
+                          term.kind === 'dropIn' ||
+                          term.kind.startsWith('benefit')
                       )
-                      return (
-                        <>
-                          {rule.type === 'subscription' && (
+                      .map((term) => moneyChipLabel(term, currency, locale, t))
+                      .filter((label): label is string => !!label)
+                      .join(' · ')
+                    return (
+                      <>
+                        <div className="flex items-start gap-1.5 flex-wrap">
+                          <p className="font-semibold text-sm leading-tight">{a.name}</p>
+                          {/* Type (neutral) — appointments route to the slot picker */}
+                          {isAppointment && (
+                            <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5 font-medium">
+                              {t('badgeAppointment')}
+                            </span>
+                          )}
+                          {/* Access gate (classes only) — one amber colour for both kinds */}
+                          {!isAppointment && rule.type === 'subscription' && (
                             <span className="rounded-full bg-amber-100 text-amber-700 text-xs px-2 py-0.5 font-medium">
                               {t('badgeMembershipRequired')}
                             </span>
                           )}
-                          {rule.type === 'members' && (
-                            <span className="rounded-full bg-blue-100 text-blue-700 text-xs px-2 py-0.5 font-medium">
+                          {!isAppointment && rule.type === 'members' && (
+                            <span className="rounded-full bg-amber-100 text-amber-700 text-xs px-2 py-0.5 font-medium">
                               {t('badgeMembersOnly')}
                             </span>
                           )}
+                          {/* Free trial (classes) — green (the one "positive/free" signal) */}
                           {triable && (
                             <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
                               {t('badgeFreeTrial')}
                             </span>
                           )}
-                          {dropInTerm && (
-                            <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
-                              {moneyChipLabel(dropInTerm, currency, locale, t)}
+                          {a.level && (
+                            <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
+                              {a.level}
                             </span>
                           )}
-                        </>
-                      )
-                    })()}
-                    {isAppointment && (
-                      <span className="rounded-full bg-primary/10 text-primary text-xs px-2 py-0.5 font-medium">
-                        {t('badgeAppointment')}
-                      </span>
-                    )}
-                    {a.level && (
-                      <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
-                        {a.level}
-                      </span>
-                    )}
-                    {!hasSessions && (
-                      <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
-                        {t('badgeNoOpenSessions')}
-                      </span>
-                    )}
-                  </div>
+                          {!hasSessions && (
+                            <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
+                              {t('badgeNoOpenSessions')}
+                            </span>
+                          )}
+                        </div>
+                        {pricingLine && (
+                          <p className="text-xs text-muted-foreground mt-1">{pricingLine}</p>
+                        )}
+                      </>
+                    )
+                  })()}
                   {showDesc && a.description && (
                     <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
                       {a.description}

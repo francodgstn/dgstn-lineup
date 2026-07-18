@@ -324,6 +324,36 @@ function activityTermLabel(term: ActivityTerm, currency: string): string | null 
   }
 }
 
+// Activities with an actual "pay per visit" money story — a priced appointment
+// duration, or a priced drop-in on a class. Mirrors the shop's hasMoneyStory:
+// a bare gated/trial class or an unpriced (free) appointment has nothing to sell
+// per visit, so it never appears on the Pricing block's pay-per-visit card.
+function activityHasMoneyStory(a: ActivityEntry): boolean {
+  if (a.activityType === 'appointment') {
+    return (a.durations ?? []).some((d) => typeof d.priceAmount === 'number')
+  }
+  return a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number'
+}
+
+// One activity's money terms as a "·"-joined line (price / drop-in / member
+// benefit) for the Pricing block's pay-per-visit card. Generic labels — the
+// website has no subscription-type list, same convention as the chips.
+function payPerVisitLine(a: ActivityEntry, currency: string): string {
+  return resolveActivityTerms({
+    type: a.activityType,
+    dropIn: a.dropIn,
+    durations: a.durations,
+    memberBenefit: a.memberBenefit,
+    accessRule: a.accessRule,
+  })
+    .filter(
+      (term) => term.kind === 'price' || term.kind === 'dropIn' || term.kind.startsWith('benefit')
+    )
+    .map((term) => activityTermLabel(term, currency))
+    .filter((l): l is string => !!l)
+    .join(' · ')
+}
+
 function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: RenderCtx }) {
   const { palette, slug, teamId, preview } = ctx
   const [activities, setActivities] = useState<ActivityEntry[]>([])
@@ -542,22 +572,59 @@ const RECURRENCE_SUFFIX: Record<string, string> = {
 function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCtx }) {
   const { palette, slug, teamId, preview } = ctx
   const [plans, setPlans] = useState<PlanEntry[]>([])
+  // Pay-per-visit activities (priced drop-ins + priced appointments) — the same
+  // "additional lines" the shop shows under Subscriptions, surfaced here as a
+  // card so the website's pricing isn't subscriptions-only.
+  const [ppvActivities, setPpvActivities] = useState<ActivityEntry[]>([])
   const [currency, setCurrency] = useState('CHF')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let alive = true
     // PricingBlock only ever renders inside a team site (org sites have no
-    // 'pricing' section type), so teamId is always defined here.
-    getDoc(doc(db, 'teams', teamId!, 'public_profile', teamId!))
-      .then((snap) => {
+    // 'pricing' section type), so teamId is always defined here. Plans live on
+    // the team's single public_profile doc; the pay-per-visit prices come from
+    // the per-activity mirrors (same query the Activities block reads).
+    const planP = getDoc(doc(db, 'teams', teamId!, 'public_profile', teamId!))
+    const actP = getDocs(
+      query(
+        collectionGroup(db, 'public_profile'),
+        where('teamId', '==', teamId),
+        where('type', '==', 'activity')
+      )
+    )
+    Promise.all([planP, actP])
+      .then(([snap, actSnap]) => {
         if (!alive) return
         const list = (snap.data()?.aggregator_subscription_types ?? []) as PlanEntry[]
         setPlans(Array.isArray(list) ? list : [])
         setCurrency((snap.data()?.default_currency as string | undefined) ?? 'CHF')
+        const acts = actSnap.docs
+          .map(
+            (d) =>
+              ({
+                id: d.id,
+                name: (d.data().name as string) || '',
+                slug: (d.data().slug as string) || '',
+                activityType: (d.data().activityType as string) || undefined,
+                order: typeof d.data().order === 'number' ? (d.data().order as number) : undefined,
+                accessRule: (d.data().accessRule as ActivityAccessRule | undefined) ?? undefined,
+                dropIn: (d.data().dropIn as ActivityEntry['dropIn']) ?? undefined,
+                durations: Array.isArray(d.data().durations)
+                  ? (d.data().durations as ActivityEntry['durations'])
+                  : undefined,
+                memberBenefit: (d.data().memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
+              }) as ActivityEntry
+          )
+          .filter((a) => a.name && activityHasMoneyStory(a))
+          .sort(compareActivities)
+        setPpvActivities(acts)
       })
       .catch(() => {
-        if (alive) setPlans([])
+        if (alive) {
+          setPlans([])
+          setPpvActivities([])
+        }
       })
       .finally(() => {
         if (alive) setLoading(false)
@@ -626,6 +693,60 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
             ))
           )}
         </div>
+        {/* Pay per visit — the drop-in + appointment prices that aren't
+            subscriptions. One card, each activity a row with its price line and
+            a Book CTA into the right flow (appointments → picker, class → the
+            activity's booking). */}
+        {!loading && ppvActivities.length > 0 && (
+          <div
+            className="mt-6 rounded-2xl border p-6"
+            style={{ borderColor: palette.border, background: palette.surface }}
+          >
+            <h3 className="text-lg font-semibold" style={{ color: palette.text }}>
+              Pay per visit
+            </h3>
+            <p className="mt-1 text-sm" style={{ color: palette.muted }}>
+              Book single classes and appointments — no subscription needed.
+            </p>
+            <div className="mt-4 space-y-3">
+              {ppvActivities.map((a) => {
+                const line = payPerVisitLine(a, currency)
+                const href =
+                  a.activityType === 'appointment'
+                    ? `/public/${slug}/appointments?activity=${a.id}`
+                    : a.slug
+                      ? `/public/${slug}/booking/${a.slug}`
+                      : `/public/${slug}/booking`
+                return (
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between gap-4 border-t pt-3 first:border-t-0 first:pt-0"
+                    style={{ borderColor: palette.border }}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium" style={{ color: palette.text }}>
+                        {a.name}
+                      </p>
+                      {line && (
+                        <p className="mt-0.5 text-xs" style={{ color: palette.muted }}>
+                          {line}
+                        </p>
+                      )}
+                    </div>
+                    <a
+                      {...linkProps(preview ? undefined : href, preview)}
+                      className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-transform hover:scale-[1.02]"
+                      style={{ background: palette.accent, color: palette.onAccent }}
+                    >
+                      Book
+                    </a>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {!loading && plans.length > 0 && (
           <div className="mt-8 text-center">
             <a
