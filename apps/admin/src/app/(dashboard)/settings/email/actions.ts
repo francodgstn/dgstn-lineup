@@ -8,15 +8,7 @@ import {
   SecretManagerUnavailableError,
 } from '@/lib/secret-manager'
 import { BREVO_API_KEY_SECRET, BREVO_SYSTEM_SENDER, BREVO_WEBHOOK_SECRET } from '@/lib/queries/settings'
-
-export interface SaveSecretResult {
-  ok: boolean
-  error?: string
-  // Set when the secret could not be stored against the emulators, where Secret
-  // Manager is unavailable — the value is read from packages/functions/.env.local
-  // instead. The save is otherwise a no-op.
-  warning?: string
-}
+import type { SaveSecretResult } from '@/components/secret-field'
 
 // Shared write path for the two Brevo secrets. Re-verifies the operator (server
 // actions are public POST endpoints), then stores the value in Secret Manager.

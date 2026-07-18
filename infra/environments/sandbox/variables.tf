@@ -88,7 +88,16 @@ variable "secret_ids" {
 variable "admin_writable_secret_ids" {
   type        = list(string)
   description = "Secret IDs the ops console may write new versions to (subset of secret_ids)."
-  default     = ["brevo-api-key", "brevo-webhook-secret"]
+  default = [
+    "brevo-api-key",
+    "brevo-webhook-secret",
+    # Payments (Settings → Payments): the key plus BOTH webhook signing secrets.
+    # stripe-connect-webhook-secret is the one that was empty in every
+    # environment, so member→studio payments never confirmed.
+    "stripe-secret-key",
+    "stripe-webhook-secret",
+    "stripe-connect-webhook-secret",
+  ]
 }
 
 # ── Budget ────────────────────────────────────────────────────────────────────

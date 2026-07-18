@@ -52,6 +52,32 @@ export async function getBrevoStatus(): Promise<BrevoStatus> {
   }
 }
 
+// Secret Manager names backing Stripe. Stable identifiers matching what the
+// Cloud Functions read via getSecret() (packages/functions/src/utils/secrets.ts).
+// Two DISTINCT webhook secrets, because there are two endpoints:
+//   handleStripeWebhook  → platform/SaaS billing (studios paying Linyup)
+//   handleConnectWebhook → Connect (members paying studios) — signed separately
+export const STRIPE_SECRET_KEY_SECRET = 'stripe-secret-key'
+export const STRIPE_WEBHOOK_SECRET = 'stripe-webhook-secret'
+export const STRIPE_CONNECT_WEBHOOK_SECRET = 'stripe-connect-webhook-secret'
+
+export interface StripeStatus {
+  secretKeyConfigured: boolean
+  webhookSecretConfigured: boolean
+  connectWebhookSecretConfigured: boolean
+}
+
+export async function getStripeStatus(): Promise<StripeStatus> {
+  const [secretKeyConfigured, webhookSecretConfigured, connectWebhookSecretConfigured] =
+    await Promise.all([
+      isSecretConfigured(STRIPE_SECRET_KEY_SECRET),
+      isSecretConfigured(STRIPE_WEBHOOK_SECRET),
+      isSecretConfigured(STRIPE_CONNECT_WEBHOOK_SECRET),
+    ])
+
+  return { secretKeyConfigured, webhookSecretConfigured, connectWebhookSecretConfigured }
+}
+
 export interface AnnouncementStatus {
   enabled: boolean
   text: string | null

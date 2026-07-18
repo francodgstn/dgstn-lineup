@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 // own data server-side. Add a tab by adding an entry here + a matching route.
 const TABS = [
   { href: '/settings/email', label: 'Email' },
+  { href: '/settings/stripe', label: 'Payments' },
   { href: '/settings/access', label: 'Access' },
   { href: '/settings/announcement', label: 'Announcement' },
 ]
