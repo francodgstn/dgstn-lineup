@@ -4968,9 +4968,24 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               <div className="h-16 w-16 rounded-full shrink-0 flex items-center justify-center bg-muted text-muted-foreground text-xl font-bold">
                 {initials(contact)}
               </div>
-              <h1 className="text-xl font-bold min-w-0 break-words">
-                {contact.firstname} {contact.lastname}
-              </h1>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold min-w-0 break-words">
+                  {contact.firstname} {contact.lastname}
+                </h1>
+                {/* Sits with the name because it acts ON the person — "send this
+                    contact a link to update their own details" — rather than
+                    describing them like the status and contact lines below. */}
+                {team?.slug && !contact.archived_at && !contact.deleted_at && (
+                  <button
+                    onClick={handleCopyUpdateLink}
+                    className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    title={t('copyUpdateLink')}
+                  >
+                    <Link2 className="h-3.5 w-3.5 shrink-0" />
+                    {linkCopied ? t('updateLinkCopied') : t('copyUpdateLink')}
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex-1 min-w-0 mt-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -4980,7 +4995,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   <Badge variant="secondary">{t('archivedBadge')}</Badge>
                 ) : (
                   <>
-                    {contact.acquisition_stage && (
+                    {/* Only the IN-PROGRESS stages get a chip. "Joined" is the
+                        settled, expected state — badging it says nothing, and
+                        "Joined on {date}" below already carries it. Absence of a
+                        chip is the signal that nothing needs chasing. */}
+                    {contact.acquisition_stage && contact.acquisition_stage !== 'joined' && (
                       <Badge variant="outline">{t(`stage_${contact.acquisition_stage}` as Parameters<typeof t>[0])}</Badge>
                     )}
                     {contact.pending_signup && (
@@ -4992,46 +5011,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                       <Badge className="bg-blue-500 text-white border-blue-500">
                         {t('newBadge')}
                       </Badge>
-                    )}
-                    {/* Subscription summary chip → Membership tab, Subscription segment.
-                        Shows the primary live subscription + "+N" when the contact holds
-                        several different types (full list lives in the Membership tab). */}
-                    {((contact.active_subscriptions?.length ?? 0) > 0 ||
-                      contact.subscription_type_name) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMembershipSeg('subscription')
-                          setTab('affiliation')
-                        }}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <BookOpen className="h-3 w-3 shrink-0" />
-                        <span>
-                          {t('subscriptionHeadingCard')}:{' '}
-                          {(contact.active_subscriptions?.length ?? 0) > 0
-                            ? `${contact.active_subscriptions![0].subscription_type_name ?? contact.subscription_type_name}${
-                                contact.active_subscriptions!.length > 1
-                                  ? ` +${contact.active_subscriptions!.length - 1}`
-                                  : ''
-                              }`
-                            : contact.subscription_type_name}
-                        </span>
-                      </button>
-                    )}
-                    {/* Affiliation summary chip → Membership tab, Affiliation segment */}
-                    {contact.affiliation_summary?.has_active && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMembershipSeg('affiliation')
-                          setTab('affiliation')
-                        }}
-                        className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 transition-colors"
-                      >
-                        <CheckCircle className="h-3 w-3 shrink-0" />
-                        <span>{t('affiliationHeadingCard')}</span>
-                      </button>
                     )}
                   </>
                 )}
@@ -5081,27 +5060,63 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     </span>
                   </span>
                 )}
+                {/* What they hold, read as part of the same factual list as the
+                    email / phone / joined-on lines rather than as status badges
+                    up top — they describe the relationship, not its state.
+                    Both jump to the Membership tab's matching segment. */}
+                {!contact.archived_at && !contact.deleted_at && (
+                  <>
+                    {/* Primary live subscription + "+N" when the contact holds several
+                        types (the full list lives in the Membership tab). */}
+                    {((contact.active_subscriptions?.length ?? 0) > 0 ||
+                      contact.subscription_type_name) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMembershipSeg('subscription')
+                          setTab('affiliation')
+                        }}
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <BookOpen className="h-3 w-3 shrink-0" />
+                        <span className="truncate">
+                          {t('subscriptionHeadingCard')}:{' '}
+                          {(contact.active_subscriptions?.length ?? 0) > 0
+                            ? `${contact.active_subscriptions![0].subscription_type_name ?? contact.subscription_type_name}${
+                                contact.active_subscriptions!.length > 1
+                                  ? ` +${contact.active_subscriptions!.length - 1}`
+                                  : ''
+                              }`
+                            : contact.subscription_type_name}
+                        </span>
+                      </button>
+                    )}
+                    {contact.affiliation_summary?.has_active && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMembershipSeg('affiliation')
+                          setTab('affiliation')
+                        }}
+                        className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 transition-colors"
+                      >
+                        <CheckCircle className="h-3 w-3 shrink-0" />
+                        <span>{t('affiliationHeadingCard')}</span>
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
               {/* Contact Groups plugin — membership chips */}
               {isInstalled('contact-groups') && !contact.archived_at && !contact.deleted_at && (
                 <ContactGroupsChips contact={contact} onChanged={invalidate} />
               )}
-              {/* Copy update-request link */}
-              {team?.slug && !contact.archived_at && !contact.deleted_at && (
-                <button
-                  onClick={handleCopyUpdateLink}
-                  className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  title={t('copyUpdateLink')}
-                >
-                  <Link2 className="h-3.5 w-3.5 shrink-0" />
-                  {linkCopied ? t('updateLinkCopied') : t('copyUpdateLink')}
-                </button>
-              )}
             </div>
             {/* Header action cluster — alerts jump to the Follow-ups tab; notes
-                open the editor sheet (also glanced in the profile column). */}
+                open the editor sheet (also glanced in the profile column).
+                Margin so the buttons don't crowd the detail lines above them. */}
             {!contact.archived_at && !contact.deleted_at && (
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="mt-4 flex items-center gap-2 shrink-0">
                 <HeaderActionButton
                   icon={Bell}
                   label={t('tabFollowups')}

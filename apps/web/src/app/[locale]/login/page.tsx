@@ -11,6 +11,7 @@ import { userHasTeam } from '@/lib/provisioning'
 import { usePublicSignupEnabled } from '@/lib/signupGate'
 import { isDemoMode } from '@/lib/demo'
 import { Logo } from '@/components/Logo'
+import { LocaleSwitcher } from '@/components/LocaleSwitcher'
 import { SocialAuthButtons, AuthDivider } from '@/components/auth/SocialAuthButtons'
 
 const schema = z.object({
@@ -60,7 +61,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-muted/40 px-4">
+      {/* Language switcher — same placement as /try. Sign-in is the first screen
+          a non-English user meets, and the locale is otherwise only reachable
+          from inside the app, i.e. behind this very page. */}
+      <div className="absolute right-4 top-4 z-20">
+        <LocaleSwitcher />
+      </div>
+
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <div className="flex justify-center"><Logo size={32} /></div>
