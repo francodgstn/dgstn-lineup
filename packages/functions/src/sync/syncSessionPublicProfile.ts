@@ -21,10 +21,13 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
   //   ('pending_payment') — holds are never published, so an abandoned/awaiting
   //   checkout never leaks onto public feeds. Once the webhook confirms it,
   //   status flips to 'full' and this write republishes it normally.
+  // - a staff-created BLOCKED-TIME hold (`blocked_time`) — a coach's private
+  //   personal block, not a bookable slot; its manager note must never surface
+  //   on public feeds.
   const shouldBePublic =
     data &&
     (isAppointment
-      ? data.status !== 'cancelled' && data.status !== 'pending_payment'
+      ? data.status !== 'cancelled' && data.status !== 'pending_payment' && data.blocked_time !== true
       : data.allowBooking === true)
 
   if (!shouldBePublic) {

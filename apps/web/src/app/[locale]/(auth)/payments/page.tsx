@@ -4,10 +4,15 @@
 // current team (read-only mirror of Stripe, reconciled by the webhook). Managers
 // and owners can refund one-off payments here; dispute status is surfaced inline.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CreditCard, Loader2, Plus, Copy, Check, Search } from 'lucide-react'
-import type { SubscriptionType } from '@linyup/shared'
+import { toast } from 'sonner'
+import { httpsCallable } from 'firebase/functions'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+import { db, functions } from '@/lib/firebase'
+import { DEFAULT_PAYMENT_MODES, SESSIONS_COLLECTION, type SubscriptionType } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useMemberPayments,
@@ -65,6 +70,49 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
+// ─── awaiting-payment appointments ───────────────────────────────────────────
+// Manually booked appointments (AppointmentFormDialog → createStaffAppointment)
+// whose payment is still open — an offline hold or a Stripe payment link that
+// hasn't been paid yet. Distinct from the Connect/BYO payment rails above:
+// these are `sessions` docs, not payment records, until they're settled.
+
+interface PendingAppointment {
+  id: string
+  contact_id?: string | null
+  client_name?: string | null
+  activityName?: string | null
+  providerName?: string | null
+  start?: { toDate(): Date } | null
+  payment_amount?: number | null
+  payment_currency?: string | null
+  payment_intent_mode?: 'offline' | 'link' | null
+}
+
+function usePendingStaffAppointments(teamId: string | null) {
+  return useQuery<PendingAppointment[]>({
+    queryKey: ['sessions', 'pending-payment', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, SESSIONS_COLLECTION),
+          where('teamId', '==', teamId),
+          where('status', '==', 'pending_payment'),
+          where('payment_pending', '==', true),
+        )
+      )
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PendingAppointment)
+    },
+  })
+}
+
+function formatSessionStart(ts: { toDate(): Date } | null | undefined): string {
+  if (!ts) return ''
+  return ts.toDate().toLocaleString([], {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+}
+
 export default function PaymentsDashboardPage() {
   const t = useTranslations('PaymentsDashboard')
   const { currentTeamId, team } = useAuth()
@@ -87,12 +135,14 @@ export default function PaymentsDashboardPage() {
   } = usePaymentEvents(teamId, pageSize)
   const { data: subscriptions = [] } = useMemberSubscriptions(teamId)
   const { data: contacts = [] } = useActiveContacts(teamId)
+  const { data: pendingAppointments = [] } = usePendingStaffAppointments(teamId)
   const refund = useRefundMemberPayment()
   const { isInstalled } = useInstalledPlugins()
 
   const [refundTarget, setRefundTarget] = useState<UnifiedPaymentRow | null>(null)
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
   const [recordOpen, setRecordOpen] = useState(false)
+  const [markPaidTarget, setMarkPaidTarget] = useState<PendingAppointment | null>(null)
   const [filter, setFilter] = useState<'all' | 'unassigned'>('all')
   const [search, setSearch] = useState('')
 
@@ -161,6 +211,50 @@ export default function PaymentsDashboardPage() {
           {teamId && connectReady && <CreatePaymentLinkDialog teamId={teamId} />}
         </div>
       </div>
+
+      {/* Awaiting payment — manually booked appointments (AppointmentFormDialog)
+          with an open offline hold or an unpaid payment link. Empty renders
+          nothing — no noise once everything's settled. */}
+      {pendingAppointments.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium">{t('awaitingPaymentHeading')}</h2>
+          <Card>
+            <CardContent className="p-0 divide-y">
+              {pendingAppointments.map((s) => (
+                <div key={s.id} className="flex items-center gap-3 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">
+                      {s.client_name || t('unassigned')}
+                      {s.activityName && (
+                        <span className="font-normal text-muted-foreground"> · {s.activityName}</span>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {formatSessionStart(s.start)}
+                      {s.providerName ? ` · ${s.providerName}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {formatMoneyMinor(s.payment_amount, s.payment_currency ?? 'CHF')}
+                    </span>
+                    <Badge variant={s.payment_intent_mode === 'link' ? 'secondary' : 'outline'}>
+                      {s.payment_intent_mode === 'link'
+                        ? t('awaitingPaymentLinkSent')
+                        : t('awaitingPaymentOffline')}
+                    </Badge>
+                    {s.payment_intent_mode !== 'link' && (
+                      <Button size="sm" variant="outline" onClick={() => setMarkPaidTarget(s)}>
+                        {t('markPaid')}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       {/* Toolbar: filter + search */}
       <div className="flex flex-wrap items-center gap-2">
@@ -267,6 +361,14 @@ export default function PaymentsDashboardPage() {
           teamId={teamId}
           open={recordOpen}
           onClose={() => setRecordOpen(false)}
+        />
+      )}
+
+      {teamId && (
+        <MarkPaidDialog
+          teamId={teamId}
+          target={markPaidTarget}
+          onClose={() => setMarkPaidTarget(null)}
         />
       )}
 
@@ -448,6 +550,92 @@ function CreatePaymentLinkDialog({ teamId }: { teamId: string }) {
               {t('generate')}
             </Button>
           )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── mark an awaiting-payment appointment as paid (offline) ─────────────────
+// Small confirm: pick the studio-configured method the client actually paid
+// with, then call markAppointmentPaid. Payment-link rows aren't offered this
+// action — the Connect webhook settles those on its own.
+function MarkPaidDialog({
+  teamId,
+  target,
+  onClose,
+}: {
+  teamId: string
+  target: PendingAppointment | null
+  onClose: () => void
+}) {
+  const t = useTranslations('PaymentsDashboard')
+  const { team } = useAuth()
+  const qc = useQueryClient()
+  const modes = useMemo(
+    () =>
+      team?.payment_modes && team.payment_modes.length > 0
+        ? team.payment_modes
+        : [...DEFAULT_PAYMENT_MODES],
+    [team?.payment_modes]
+  )
+  const [method, setMethod] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (target) setMethod(modes[0] ?? '')
+    // modes is derived from team config; intentionally not a reset trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.id])
+
+  async function confirm() {
+    if (!target || !method) return
+    setSubmitting(true)
+    try {
+      const fn = httpsCallable<
+        { teamId: string; sessionId: string; method: string },
+        { ok: boolean }
+      >(functions, 'markAppointmentPaid')
+      await fn({ teamId, sessionId: target.id, method })
+      toast.success(t('markPaidSuccess'))
+      qc.invalidateQueries({ queryKey: ['sessions'] })
+      onClose()
+    } catch (err) {
+      toast.error(t('markPaidError', { message: err instanceof Error ? err.message : String(err) }))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!target} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t('markPaidTitle')}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label>{t('markPaidMethodLabel')}</Label>
+          <Select value={method} onValueChange={(v) => setMethod(v ?? '')}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder={t('methodPlaceholder')} />
+            </SelectTrigger>
+            <SelectContent>
+              {modes.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
+            {t('cancel')}
+          </Button>
+          <Button onClick={confirm} disabled={submitting || !method}>
+            {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            {t('markPaidConfirm')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

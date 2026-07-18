@@ -83,6 +83,7 @@ import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
 import { AppointmentAvailabilityDialog, AppointmentAvailabilityFormDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
+import { AppointmentFormDialog } from '@/components/appointments/AppointmentFormDialog'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -825,6 +826,11 @@ export default function CalendarPage() {
   const [availabilityOpen, setAvailabilityOpen] = useState(false)
   const [newAvailabilityOpen, setNewAvailabilityOpen] = useState(false)
   const [appointmentSlot, setAppointmentSlot] = useState<Session | null>(null)
+  // Manual booking — a manager books an appointment for a client (or blocks
+  // time) on the spot, e.g. a phone booking. Distinct from "Appointment
+  // availability" above (the *when* a coach is bookable) — this creates ONE
+  // session directly via the staff-only callable.
+  const [appointmentFormOpen, setAppointmentFormOpen] = useState(false)
 
   const sessionsQ = useAllSessions(currentTeamId, viewYear, viewMonth)
   const activitiesQ = useActivities(currentTeamId)
@@ -966,17 +972,18 @@ export default function CalendarPage() {
             ))}
           </div>
           {/* Availability manager — a LIST of schedules is a management surface,
-              not a "new" action, so it lives here rather than under "+ New". */}
+              not a "new" action, so it lives here rather than under "+ New".
+              Same shape as the "+ New entry" trigger (outline, not filled) so
+              the header reads as one consistent control group. */}
           {currentTeamId && user && (
-            <Button
-              variant="outline"
-              size="sm"
+            <button
               onClick={() => setAvailabilityOpen(true)}
               title={t('availability')}
+              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
             >
-              <CalendarClock className="h-4 w-4 sm:mr-1.5" />
+              <CalendarClock className="h-4 w-4" />
               <span className="hidden sm:inline">{t('availability')}</span>
-            </Button>
+            </button>
           )}
           {/* Add dropdown */}
           {currentTeamId && user && (
@@ -990,6 +997,10 @@ export default function CalendarPage() {
                 <DropdownMenuItem onClick={() => setSessionDialog({ open: true, editing: null })}>
                   <CalendarDays className="h-4 w-4 mr-2" />
                   {t('newSession')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAppointmentFormOpen(true)}>
+                  <User className="h-4 w-4 mr-2" />
+                  {t('newAppointment')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setEventDialog({ open: true, editing: null })}>
                   <CalendarRange className="h-4 w-4 mr-2" />
@@ -1221,6 +1232,10 @@ export default function CalendarPage() {
                 <CalendarDays className="h-4 w-4 mr-2" />
                 {t('newSession')}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setAppointmentFormOpen(true)}>
+                <User className="h-4 w-4 mr-2" />
+                {t('newAppointment')}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setEventDialog({ open: true, editing: null })}>
                 <CalendarRange className="h-4 w-4 mr-2" />
                 {t('newEvent')}
@@ -1284,6 +1299,16 @@ export default function CalendarPage() {
             onOpenChange={setNewAvailabilityOpen}
             teamId={currentTeamId}
             userId={user.uid}
+          />
+          {/* Manual appointment booking — a manager books (or blocks) one slot */}
+          <AppointmentFormDialog
+            open={appointmentFormOpen}
+            onOpenChange={setAppointmentFormOpen}
+            activities={activitiesQ.data ?? []}
+            coaches={coachRoster}
+            teamId={currentTeamId}
+            userId={user.uid}
+            onSaved={invalidateSessions}
           />
           {/* Appointment slot detail — bookings roster + cancel */}
           <AppointmentDetail

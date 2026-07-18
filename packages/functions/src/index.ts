@@ -123,6 +123,10 @@ export { loginContactWithCode } from './auth/loginContactWithCode'
 export { listAvailability, bookAppointment } from './appointments/window'
 // Paid appointments — reserve→pay→confirm via Stripe Connect (see checkout.ts).
 export { createAppointmentCheckout } from './appointments/checkout'
+// Staff "phone booking" — a manager creates/blocks an appointment directly
+// from the admin (existing/new contact, free/paid-offline/pending-offline/
+// payment-link), and settles a pending offline hold once paid in person.
+export { createStaffAppointment, markAppointmentPaid } from './appointments/staffBooking'
 
 // SaaS billing (Linyup's own platform subscriptions — Stripe)
 export {

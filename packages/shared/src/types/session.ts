@@ -91,6 +91,29 @@ export interface Session {
   trial_bookings_count?: number
   /** Legacy free-trial flag. Superseded by the activity's `accessRule`. */
   isFreeTrial?: boolean
+  // ── Staff "phone booking" fields (appointments/staffBooking.ts) — a manager
+  // creates the appointment directly, settled offline or via a Stripe Connect
+  // payment link, distinct from the public checkout's own 'pending_payment'
+  // hold (which carries `hold_expires_at` instead). ──
+  /** True while a manager-created hold (offline or payment-link) awaits
+   *  payment. Deleted once markAppointmentPaid / the Connect webhook confirms. */
+  payment_pending?: boolean
+  /** How a `payment_pending` hold will be settled: 'offline' (cash/bank
+   *  transfer, confirmed via markAppointmentPaid) or 'link' (Stripe Connect
+   *  checkout link emailed to the client, confirmed by the Connect webhook). */
+  payment_intent_mode?: 'offline' | 'link'
+  /** The amount owed for a `payment_pending` hold, in MINOR units (Rappen/cents). */
+  payment_amount?: number
+  payment_currency?: string
+  /** True for a manager's calendar block (no client) — see appointments/staffBooking.ts. */
+  blocked_time?: boolean
+  /** Denormalised booking contact so list views (e.g. the Payments page) can
+   *  render a client name/link without an N+1 read into the bookings
+   *  subcollection. Null for a `blocked_time` session. */
+  contact_id?: string | null
+  /** Denormalised "firstname lastname" (or the block's note) for display —
+   *  same rationale as `contact_id`. */
+  client_name?: string | null
 }
 
 export interface SessionPublicProfile {
