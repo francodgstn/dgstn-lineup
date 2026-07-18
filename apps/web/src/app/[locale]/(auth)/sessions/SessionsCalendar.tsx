@@ -942,24 +942,19 @@ export default function SessionsCalendar({
                         />
                       ))}
 
-                      {/* Availability bands — the RAW published free time (single-provider
-                          scope only, see schedule/page.tsx), rendered translucent BEHIND
-                          the session blocks (z-2 < blocks' z-5) so booked-vs-free reads at
-                          a glance. Spans the full column; dashed top/right/bottom, with a
-                          thick SOLID left spine (thicker than a session's own border-l-2). */}
+                      {/* Availability rail — the RAW published free time (single-provider
+                          scope only, see schedule/page.tsx) shown as a compact colored
+                          segment in the LEFT lane only, NOT a full-width slot: it declutters
+                          the grid and never fights a session's own fill. Single colour; the
+                          schedule name lives in the hover tooltip. (Future: per-coach
+                          sub-lanes when several providers are in scope.) */}
                       {bands.map((band) => (
                         <div
                           key={band.key}
-                          aria-hidden="true"
-                          className="absolute inset-x-0.5 z-[2] overflow-hidden rounded-sm border border-dashed border-primary/25 border-l-[3px] border-l-primary/60 bg-primary/[0.07] pointer-events-none"
-                          style={{ top: band.top, height: band.height, borderLeftStyle: 'solid' }}
-                        >
-                          {band.height >= 16 && (
-                            <p className="truncate px-1 pt-0.5 text-[9px] font-medium leading-tight text-primary/70">
-                              {band.title}
-                            </p>
-                          )}
-                        </div>
+                          title={band.title}
+                          className="absolute left-0 z-[2] rounded-r-sm border-l-[3px] border-primary/70 bg-primary/40"
+                          style={{ top: band.top, height: band.height, width: AVAIL_GUTTER_PX }}
+                        />
                       ))}
 
                       {/* Now indicator */}
