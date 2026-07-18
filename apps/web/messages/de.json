@@ -1623,6 +1623,7 @@
     "noTemplates": "Keine Verfügbarkeitsvorlagen",
     "noTemplatesHint": "Vorlage hinzufügen, um Verfügbarkeit für 1:1-Sitzungen festzulegen.",
     "newTemplate": "Neue Verfügbarkeit",
+    "templateCount": "{count, plural, one {# Zeitplan} other {# Zeitpläne}}",
     "editTemplate": "Verfügbarkeit bearbeiten",
     "statusOpen": "Offen",
     "statusFull": "Voll",

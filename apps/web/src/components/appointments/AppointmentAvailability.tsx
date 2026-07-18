@@ -11,7 +11,7 @@
 //   • AppointmentDetail — a booked appointment session's bookings roster + cancel,
 //     opened from the Schedule calendar when an appointment slot is clicked.
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useForm, Controller } from 'react-hook-form'
@@ -44,7 +44,7 @@ import {
 import type { Availability, AppointmentBooking, Session, Activity } from '@linyup/shared'
 import { useActivities } from '@/hooks/useActivities'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
-import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock, X } from 'lucide-react'
+import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock, X, ChevronDown, ChevronRight, User } from 'lucide-react'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -740,6 +740,27 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
   const activityNameById = new Map(activities.map((a) => [a.id, a.name]))
   const [templateDialog, setTemplateDialog] = useState<{ open: boolean; editing: (Availability & { id: string }) | null }>({ open: false, editing: null })
 
+  // Group the schedules by coach so a multi-coach studio's list stays scannable —
+  // one collapsible section per provider, COLLAPSED by default (open on click).
+  const coachGroups = useMemo(() => {
+    const map = new Map<string, { providerId: string; providerName: string; templates: (Availability & { id: string })[] }>()
+    for (const tmpl of templatesQ.data ?? []) {
+      const key = tmpl.providerId || 'unknown'
+      if (!map.has(key)) map.set(key, { providerId: key, providerName: tmpl.providerName || key, templates: [] })
+      map.get(key)!.templates.push(tmpl)
+    }
+    return [...map.values()].sort((a, b) => a.providerName.localeCompare(b.providerName))
+  }, [templatesQ.data])
+  const [expandedCoaches, setExpandedCoaches] = useState<Set<string>>(new Set())
+  function toggleCoach(id: string) {
+    setExpandedCoaches((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   async function toggleTemplateStatus(tmpl: Availability & { id: string }) {
     await updateDoc(doc(db, AVAILABILITY_COLLECTION, tmpl.id), {
       status: tmpl.status === 'active' ? 'paused' : 'active',
@@ -800,49 +821,80 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
                 )}
 
                 <div className="space-y-2">
-                  {templatesQ.data?.map((tmpl) => (
-                    <div key={tmpl.id} className="rounded-xl border p-4 flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-sm">{tmpl.title}</p>
-                          <StatusBadge status={tmpl.status} />
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                            {t(tmpl.mode === 'range' ? 'modeRange' : 'modeTimes')}
+                  {coachGroups.map((group) => {
+                    const isExpanded = expandedCoaches.has(group.providerId)
+                    return (
+                      <div key={group.providerId} className="rounded-xl border overflow-hidden">
+                        {/* Per-coach section header — collapsed by default; click to expand. */}
+                        <button
+                          type="button"
+                          onClick={() => toggleCoach(group.providerId)}
+                          aria-expanded={isExpanded}
+                          className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          )}
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <User className="h-3.5 w-3.5" />
                           </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">
-                          {(tmpl.activityIds ?? []).map((id) => activityNameById.get(id) ?? id).join(', ')}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-0.5">
-                          {tmpl.mode === 'range' && tmpl.window
-                            ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
-                            : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{tmpl.providerName}</p>
-                        {tmpl.location && (
-                          <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                            <MapPin className="h-3 w-3" />{tmpl.location}
-                          </p>
-                        )}
-                        {tmpl.onlineUrl && (
-                          <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                            <Video className="h-3 w-3" />{t('onlineSession')}
-                          </p>
+                          <span className="font-medium text-sm flex-1 min-w-0 truncate">{group.providerName}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {t('templateCount', { count: group.templates.length })}
+                          </span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="border-t divide-y">
+                            {group.templates.map((tmpl) => (
+                              <div key={tmpl.id} className="p-4 flex items-start gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-medium text-sm">{tmpl.title}</p>
+                                    <StatusBadge status={tmpl.status} />
+                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                      {t(tmpl.mode === 'range' ? 'modeRange' : 'modeTimes')}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mt-0.5">
+                                    {(tmpl.activityIds ?? []).map((id) => activityNameById.get(id) ?? id).join(', ')}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground mt-0.5">
+                                    {tmpl.mode === 'range' && tmpl.window
+                                      ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
+                                      : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
+                                  </p>
+                                  {tmpl.location && (
+                                    <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                                      <MapPin className="h-3 w-3" />{tmpl.location}
+                                    </p>
+                                  )}
+                                  {tmpl.onlineUrl && (
+                                    <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                                      <Video className="h-3 w-3" />{t('onlineSession')}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button onClick={() => toggleTemplateStatus(tmpl)}
+                                    className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                                    title={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
+                                    {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                  </button>
+                                  <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
+                                    className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground">
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button onClick={() => toggleTemplateStatus(tmpl)}
-                          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
-                          title={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
-                          {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                        </button>
-                        <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
-                          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground">
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </>
             )}

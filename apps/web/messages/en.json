@@ -1623,6 +1623,7 @@
     "noTemplates": "No availability templates",
     "noTemplatesHint": "Add a template to define when you're available for 1:1 sessions.",
     "newTemplate": "New availability",
+    "templateCount": "{count, plural, one {# schedule} other {# schedules}}",
     "editTemplate": "Edit availability",
     "statusOpen": "Open",
     "statusFull": "Full",

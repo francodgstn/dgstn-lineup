@@ -1623,6 +1623,7 @@
     "noTemplates": "Nessun modello di disponibilità",
     "noTemplatesHint": "Aggiungi un modello per definire quando sei disponibile per sessioni individuali.",
     "newTemplate": "Nuova disponibilità",
+    "templateCount": "{count, plural, one {# orario} other {# orari}}",
     "editTemplate": "Modifica disponibilità",
     "statusOpen": "Disponibile",
     "statusFull": "Pieno",
