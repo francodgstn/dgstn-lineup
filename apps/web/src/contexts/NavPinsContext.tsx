@@ -8,9 +8,23 @@
 // context so the sidebar and the /settings rail stay in sync within a tab
 // (localStorage's `storage` event only fires across tabs). One-time migration
 // from the legacy settings-only key.
+//
+// Default pins precedence (highest wins): (1) the user's own localStorage pins,
+// if the STORAGE_KEY exists at all — even `[]`, an explicit "I unpinned
+// everything" — (2) legacy-key migration, which counts as a user pin too, (3)
+// the team's seeded `settings.defaultNavPins` (TeamNavDefaults, see
+// packages/shared/src/types/team.ts), (4) the hardcoded DEFAULT_PINNED_IDS.
+// The team default reuses AuthContext's existing team subscription — no new
+// Firestore listener — and is applied in-memory only (never written to
+// localStorage) so it can never be mistaken for a deliberate user choice and
+// so it keeps tracking the team doc until the user actually makes a choice.
+// The instant the user pins/unpins/reorders anything, that choice is
+// persisted and wins permanently — see `hasUserPinsRef`.
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { DEFAULT_PINNED_IDS } from '@/lib/settings-nav'
+import { useAuth } from '@/contexts/AuthContext'
+import type { TeamNavDefaults } from '@linyup/shared'
 
 const STORAGE_KEY = 'linyup_nav_pins'
 const LEGACY_KEY = 'linyup_settings_pins'
@@ -57,12 +71,25 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
   // effect below has loaded stored recents — merge from storage in that window so
   // the first visit of a session never clobbers the history.
   const recentsHydrated = useRef(false)
+  // True once we know the user has (or just got, via legacy migration) their own
+  // stored pin preference — set either by the localStorage hydration below or by
+  // any pin mutation (togglePin/setPinOrder/removeShortcut). While false, the
+  // team-default effect is allowed to keep syncing `pinnedIds`; once true, it
+  // never touches pinnedIds again, satisfying "user choice wins permanently".
+  const hasUserPinsRef = useRef(false)
+  // Gates the team-default effect until the (synchronous, but effect-scheduled)
+  // localStorage check above has actually run — otherwise a fast team snapshot
+  // could apply the team default before we've confirmed there's no user key.
+  const [localHydrated, setLocalHydrated] = useState(false)
+  // Reused from AuthContext's existing team subscription — no new Firestore read.
+  const { team } = useAuth()
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) {
         setPinnedIds(JSON.parse(raw) as string[])
+        hasUserPinsRef.current = true
       } else {
         // One-time migration from the settings-only pin key.
         const legacy = localStorage.getItem(LEGACY_KEY)
@@ -70,6 +97,7 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
           const ids = JSON.parse(legacy) as string[]
           setPinnedIds(ids)
           persistPins(ids)
+          hasUserPinsRef.current = true
         }
       }
       const recents = localStorage.getItem(RECENTS_KEY)
@@ -84,7 +112,23 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
       /* ignore malformed storage */
     }
     recentsHydrated.current = true
+    setLocalHydrated(true)
   }, [])
+
+  // Team-seeded default pins (TeamNavDefaults.defaultNavPins): only takes effect
+  // while the user has no stored preference of their own. Applied in-memory only
+  // (never persisted to localStorage — see file header) so it keeps tracking the
+  // team doc (e.g. an updated seed) until the user makes their own choice, at
+  // which point hasUserPinsRef flips true and this effect becomes a no-op.
+  useEffect(() => {
+    if (!localHydrated || hasUserPinsRef.current || !team) return
+    const teamDefault = (team.settings as TeamNavDefaults | undefined)?.defaultNavPins
+    if (!teamDefault || !teamDefault.length) return
+    setPinnedIds((prev) => {
+      const same = prev.length === teamDefault.length && prev.every((id, i) => id === teamDefault[i])
+      return same ? prev : teamDefault
+    })
+  }, [team, localHydrated])
 
   const pushRecent = useCallback((id: string) => {
     setRecentIds((prev) => {
@@ -110,6 +154,8 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
       const next = removing ? pinnedIds.filter((p) => p !== id) : [...pinnedIds, id]
       setPinnedIds(next)
       persistPins(next)
+      // A deliberate pin change — the team default (if any) never applies again.
+      hasUserPinsRef.current = true
       // Firebase-style: unpinning demotes the item to a recent shortcut rather
       // than dropping it from the Shortcuts group (removeShortcut does that).
       if (removing) pushRecent(id)
@@ -120,6 +166,7 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
   const setPinOrder = useCallback((ids: string[]) => {
     setPinnedIds(ids)
     persistPins(ids)
+    hasUserPinsRef.current = true
   }, [])
 
   const removeShortcut = useCallback(
@@ -128,6 +175,7 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
         const next = pinnedIds.filter((p) => p !== id)
         setPinnedIds(next)
         persistPins(next)
+        hasUserPinsRef.current = true
       }
       setRecentIds((prev) => {
         const next = prev.filter((p) => p !== id)

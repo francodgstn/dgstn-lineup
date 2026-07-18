@@ -113,6 +113,25 @@ export function resolveBookingReminderSteps(settings: {
   ]
 }
 
+// ─── Nav pins seeding ─────────────────────────────────────────────────────────
+// Team-seedable DEFAULT for the admin sidebar's pinned "Shortcuts" (see
+// NavPinsContext / DEFAULT_PINNED_IDS in apps/web). Lets a demo/seeded tenant
+// ship with its own pin set + order that survives a fresh browser on any
+// machine, instead of relying on the per-browser localStorage default. Array
+// order IS the pin order (same convention as the localStorage payload). Only
+// applied by NavPinsProvider when the signed-in user has no pins of their own
+// yet (no `linyup_nav_pins` / legacy `linyup_settings_pins` key in
+// localStorage) — once the user pins/unpins/reorders anything, their choice
+// is persisted and wins permanently, even if this default later changes.
+// Ids are the same catalogue keys the sidebar already resolves pins against
+// (main nav ids, settings ids from SETTINGS_ITEMS, or plugin-scoped
+// `plugin:{pluginId}:{href}`); an id that doesn't currently resolve (e.g. a
+// plugin that isn't installed for this team) is silently skipped, so a stale
+// or not-yet-installed id degrades gracefully rather than breaking the list.
+export interface TeamNavDefaults {
+  defaultNavPins?: string[]
+}
+
 // A "page link" target — one of the team's own public surfaces, reachable at
 // /public/{slug}/{route}. Replaces the former per-surface boolean flags
 // (is{Booking,Membership,Courses,Shop}Link) with a single discriminator so new
@@ -238,7 +257,13 @@ export interface Team {
   custom_field_definitions?: CustomFieldDefinition[]
   links?: TeamLink[]
   language?: 'en' | 'de' | 'fr' | 'it'
+  // Free-form settings bag (booking, gamification, referral, …). Untyped at
+  // this level because it's a grab-bag of unrelated feature settings; typed
+  // sub-shapes (e.g. TeamNavDefaults for `defaultNavPins`, BookingSettings)
+  // live alongside their feature and get cast at the read site — see
+  // TeamNavDefaults above for the nav-pins-seeding key.
   settings?: Record<string, unknown>
+
   // Bio-link / link-in-bio
   profileImage?: string
   heroImage?: string
