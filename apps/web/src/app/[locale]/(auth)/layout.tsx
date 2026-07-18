@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useTranslations, useMessages } from 'next-intl'
 import { Link, useRouter, usePathname } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTrackNavigationDepth } from '@/hooks/useBackNavigation'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { MobileHeader } from '@/components/layout/MobileHeader'
 import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
@@ -1390,6 +1391,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter()
   const pathname = usePathname()
   const t = useTranslations('Nav')
+  // Counts client-side navigations so detail pages' "Back" can step back
+  // through history instead of jumping to a hardcoded parent list. Must be
+  // mounted exactly once, above every page that uses `useBack`.
+  useTrackNavigationDepth()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 

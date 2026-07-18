@@ -11,7 +11,8 @@
     "demoBannerCta": "Visita linyup.com →",
     "language": "Lingua",
     "errorLoadTitle": "Impossibile caricare questo contenuto",
-    "errorRetry": "Riprova"
+    "errorRetry": "Riprova",
+    "back": "Indietro"
   },
   "Plans": {
     "free": "Free",
@@ -2071,7 +2072,10 @@
     "bulkRemoveTitle": "Rimuovi dal gruppo",
     "noGroupsYet": "Nessun gruppo ancora.",
     "manageGroups": "Gestisci gruppi",
-    "addToGroup": "Aggiungi al gruppo"
+    "addToGroup": "Aggiungi al gruppo",
+    "ungrouped": "Nessun gruppo",
+    "ungroupedHint": "Non ancora in nessun gruppo",
+    "assignToGroup": "Assegna a un gruppo"
   },
   "Org": {
     "tabPlaces": "Sedi",

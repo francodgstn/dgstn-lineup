@@ -11,7 +11,8 @@
     "demoBannerCta": "Visit linyup.com →",
     "language": "Language",
     "errorLoadTitle": "Couldn't load this",
-    "errorRetry": "Try again"
+    "errorRetry": "Try again",
+    "back": "Back"
   },
   "Plans": {
     "free": "Free",
@@ -2071,7 +2072,10 @@
     "bulkRemoveTitle": "Remove from group",
     "noGroupsYet": "No groups yet.",
     "manageGroups": "Manage groups",
-    "addToGroup": "Add to group"
+    "addToGroup": "Add to group",
+    "ungrouped": "No group",
+    "ungroupedHint": "Not in any group yet",
+    "assignToGroup": "Assign to a group"
   },
   "Org": {
     "tabPlaces": "Places",

@@ -21,8 +21,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from 'sonner'
 import {
   FolderTree, Plus, ChevronRight, MoreHorizontal, Pencil, Trash2, FolderPlus,
-  Users, Search, X, Check,
+  Users, Search, X, Check, FolderOpen,
 } from 'lucide-react'
+import { GroupPickerPopover } from '@/plugins/contact-groups/GroupPickerPopover'
 import {
   useContactGroups, useInvalidateContactGroups, buildGroupTree, groupWithDescendantIds,
   createGroup, updateGroup, deleteGroup,
@@ -30,6 +31,10 @@ import {
 import type { GroupTreeNode } from '@/plugins/contact-groups/hooks'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+/** Sentinel `selectedId` for the "not in any group" bucket. Not a group id —
+ *  no such document exists — so it must never be passed to group mutations. */
+const UNGROUPED_ID = '__ungrouped__'
 
 const GROUP_COLORS = [
   '#6b7280', '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
@@ -339,6 +344,14 @@ export default function ContactGroupsPage() {
 
   const tree = useMemo(() => buildGroupTree(groups), [groups])
   const selectedGroup = groups.find((g) => g.id === selectedId) ?? null
+  // The "Ungrouped" bucket isn't a group — it's the absence of one, so it can't
+  // live in the tree (no id, no parent, nothing to rename or delete). It's a
+  // sentinel selection instead, which keeps `groups` honestly the real groups.
+  const ungroupedSelected = selectedId === UNGROUPED_ID
+  const ungrouped = useMemo(
+    () => contacts.filter((c) => (c.group_ids ?? []).length === 0),
+    [contacts]
+  )
 
   // member counts: direct, and including descendants
   const { directCounts, totalCounts } = useMemo(() => {
@@ -355,15 +368,18 @@ export default function ContactGroupsPage() {
   }, [contacts, groups])
 
   const members = useMemo(() => {
+    const sq = memberSearch.trim().toLowerCase()
+    const bySearch = (c: Contact) =>
+      !sq || `${c.firstname} ${c.lastname}`.toLowerCase().includes(sq)
+    if (ungroupedSelected) return ungrouped.filter(bySearch)
     if (!selectedGroup) return []
     const ids = includeSubgroups
       ? groupWithDescendantIds(groups, selectedGroup.id)
       : new Set([selectedGroup.id])
-    const sq = memberSearch.trim().toLowerCase()
     return contacts
       .filter((c) => (c.group_ids ?? []).some((gid) => ids.has(gid)))
-      .filter((c) => !sq || `${c.firstname} ${c.lastname}`.toLowerCase().includes(sq))
-  }, [contacts, groups, selectedGroup, includeSubgroups, memberSearch])
+      .filter(bySearch)
+  }, [contacts, groups, selectedGroup, includeSubgroups, memberSearch, ungroupedSelected, ungrouped])
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -466,11 +482,32 @@ export default function ContactGroupsPage() {
               onRename={(g) => setFormMode({ kind: 'edit', group: g })}
               onDelete={(g) => setConfirmDelete(g)} />
           ))}
+          {/* Ungrouped — below a divider because it is NOT a group: it can't be
+              renamed, nested, deleted or added to, and it's the one bucket that
+              shrinks as you do the work. Hidden when everyone is filed. */}
+          {!isLoading && ungrouped.length > 0 && (
+            <>
+              <div className="my-1.5 border-t" />
+              <button
+                type="button"
+                onClick={() => setSelectedId(ungroupedSelected ? null : UNGROUPED_ID)}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
+                  ungroupedSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                }`}
+              >
+                <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="text-sm truncate">{t('ungrouped')}</span>
+                <Badge variant="secondary" className="ml-auto text-xs tabular-nums">
+                  {ungrouped.length}
+                </Badge>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Members panel */}
         <div className="rounded-xl border bg-card overflow-hidden">
-          {!selectedGroup ? (
+          {!selectedGroup && !ungroupedSelected ? (
             <div className="text-center py-16 px-4 text-sm text-muted-foreground">
               <Users className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
               {t('selectGroupHint')}
@@ -478,20 +515,35 @@ export default function ContactGroupsPage() {
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b bg-muted/30">
-                <span className="h-2.5 w-2.5 rounded-full shrink-0 border border-border/40"
-                  style={{ background: selectedGroup.color ?? 'transparent' }} />
-                <span className="font-semibold text-sm">{selectedGroup.name}</span>
+                {ungroupedSelected ? (
+                  <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0 border border-border/40"
+                    style={{ background: selectedGroup!.color ?? 'transparent' }} />
+                )}
+                <span className="font-semibold text-sm">
+                  {ungroupedSelected ? t('ungrouped') : selectedGroup!.name}
+                </span>
                 <Badge variant="secondary" className="text-xs tabular-nums">{members.length}</Badge>
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground ml-auto cursor-pointer">
-                  <input type="checkbox" checked={includeSubgroups}
-                    onChange={(e) => setIncludeSubgroups(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-border" />
-                  {t('includeSubgroups')}
-                </label>
-                <button type="button" onClick={() => setAddMembersOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors">
-                  <Plus className="h-3.5 w-3.5" />{t('addMembers')}
-                </button>
+                {/* Subgroups and bulk-add are group-only: "ungrouped" has no
+                    children, and you file people OUT of it, not into it. */}
+                {!ungroupedSelected && (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground ml-auto cursor-pointer">
+                      <input type="checkbox" checked={includeSubgroups}
+                        onChange={(e) => setIncludeSubgroups(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-border" />
+                      {t('includeSubgroups')}
+                    </label>
+                    <button type="button" onClick={() => setAddMembersOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors">
+                      <Plus className="h-3.5 w-3.5" />{t('addMembers')}
+                    </button>
+                  </>
+                )}
+                {ungroupedSelected && (
+                  <span className="ml-auto text-xs text-muted-foreground">{t('ungroupedHint')}</span>
+                )}
               </div>
               <div className="px-4 py-2 border-b">
                 <div className="relative">
@@ -510,7 +562,7 @@ export default function ContactGroupsPage() {
                   <p className="text-sm text-muted-foreground text-center py-10">{t('noMembers')}</p>
                 )}
                 {!contactsLoading && members.map((c) => {
-                  const isDirect = (c.group_ids ?? []).includes(selectedGroup.id)
+                  const isDirect = !ungroupedSelected && (c.group_ids ?? []).includes(selectedGroup!.id)
                   return (
                     <div key={c.id} className="flex items-center gap-3 px-4 py-2 border-b last:border-0 hover:bg-muted/40 transition-colors group">
                       <button type="button" onClick={() => router.push(`/contacts/${c.id}` as Route)}
@@ -519,10 +571,24 @@ export default function ContactGroupsPage() {
                           {initials(c)}
                         </span>
                         <span className="text-sm font-medium truncate">{c.firstname} {c.lastname}</span>
-                        {!isDirect && (
+                        {!isDirect && !ungroupedSelected && (
                           <Badge variant="outline" className="text-[10px] shrink-0">{t('viaSubgroup')}</Badge>
                         )}
                       </button>
+                      {/* Quick-assign: file someone into another group without
+                          leaving the one you're reviewing. Same picker as the
+                          contact detail header. Always available — it's the only
+                          action that makes sense on an ungrouped contact. */}
+                      <GroupPickerPopover
+                        contactId={c.id}
+                        groupIds={c.group_ids ?? []}
+                        onChanged={invalidateContacts}
+                        align="end"
+                        triggerTitle={t('assignToGroup')}
+                        triggerClassName="p-1.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all data-[popup-open]:opacity-100"
+                      >
+                        <FolderPlus className="h-4 w-4" />
+                      </GroupPickerPopover>
                       {isDirect && (
                         <button type="button" onClick={() => removeMember(c.id)}
                           className="p-1.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"

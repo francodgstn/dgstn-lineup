@@ -4,7 +4,9 @@ import { useState, use, useMemo, useEffect } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import { useRouter, Link } from '@/i18n/navigation'
+import { Link } from '@/i18n/navigation'
+import type { Route } from 'next'
+import { useBack } from '@/hooks/useBackNavigation'
 import { useSearchParams } from 'next/navigation'
 import {
   doc,
@@ -4853,8 +4855,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [editingTabs, setEditingTabs] = useState(false)
   // Which segment the merged Membership tab shows (deep-linked from header chips)
   const [membershipSeg, setMembershipSeg] = useState<'subscription' | 'affiliation'>('subscription')
-  const router = useRouter()
   const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
+  const { goBack, isHistoryBack } = useBack('/contacts' as Route)
   const qc = useQueryClient()
   const { hasFeature } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
@@ -4942,13 +4945,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
-      {/* Back */}
+      {/* Back — steps back through history so opening a contact FROM the groups
+          page (or a session, or search) returns you there rather than dumping
+          you in the contacts list. Falls back to the list only when there's no
+          in-app history, and labels itself accordingly. */}
       <button
-        onClick={() => router.push('/contacts')}
+        onClick={goBack}
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        {t('title')}
+        {isHistoryBack ? tCommon('back') : t('title')}
       </button>
 
       {/* Header card */}

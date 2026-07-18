@@ -11,7 +11,8 @@
     "demoBannerCta": "linyup.com besuchen →",
     "language": "Sprache",
     "errorLoadTitle": "Konnte nicht geladen werden",
-    "errorRetry": "Erneut versuchen"
+    "errorRetry": "Erneut versuchen",
+    "back": "Zurück"
   },
   "Plans": {
     "free": "Free",
@@ -2071,7 +2072,10 @@
     "bulkRemoveTitle": "Aus Gruppe entfernen",
     "noGroupsYet": "Noch keine Gruppen.",
     "manageGroups": "Gruppen verwalten",
-    "addToGroup": "Zu Gruppe hinzufügen"
+    "addToGroup": "Zu Gruppe hinzufügen",
+    "ungrouped": "Keine Gruppe",
+    "ungroupedHint": "Noch in keiner Gruppe",
+    "assignToGroup": "Einer Gruppe zuordnen"
   },
   "Org": {
     "tabPlaces": "Orte",
