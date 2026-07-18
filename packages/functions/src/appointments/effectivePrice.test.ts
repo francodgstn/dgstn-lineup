@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  MIN_CHARGE_MAJOR,
   resolveEffectiveAppointmentPrice,
   type ActivityDuration,
   type ActivityMemberBenefit,
@@ -83,9 +84,10 @@ describe('resolveEffectiveAppointmentPrice', () => {
       discountPercent: 90,
     }
     const result = resolveEffectiveAppointmentPrice(priced, ['basic'], benefit)
-    // 1 * 0.10 = 0.10 -> clamped to 0.50
+    // 1 * 0.10 = 0.10 -> clamped to the shared floor (import, don't re-literal —
+    // the clamp and the checkout guard must never drift apart).
     assert.equal(result.free, false)
-    assert.equal(result.amount, 0.5)
+    assert.equal(result.amount, MIN_CHARGE_MAJOR)
     assert.equal(result.viaSubscriptionTypeId, 'basic')
   })
 
@@ -118,7 +120,7 @@ describe('resolveEffectiveAppointmentPrice', () => {
     }
     const result = resolveEffectiveAppointmentPrice(priced, ['basic'], benefit)
     assert.equal(result.free, false)
-    assert.equal(result.amount, 0.5)
+    assert.equal(result.amount, MIN_CHARGE_MAJOR)
     assert.equal(result.viaSubscriptionTypeId, 'basic')
   })
 

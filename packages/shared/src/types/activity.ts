@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import { MIN_CHARGE_MAJOR } from '../utils/money'
 
 export type ActivityLevel = 'all' | 'beginners' | 'intermediate' | 'advanced'
 
@@ -144,10 +145,10 @@ export function resolveEffectiveAppointmentPrice(
     return { free: false, amount: base, viaSubscriptionTypeId: null }
   }
   if (pct >= 100) {
-    return { free: false, amount: 0.5, viaSubscriptionTypeId }
+    return { free: false, amount: MIN_CHARGE_MAJOR, viaSubscriptionTypeId }
   }
   const rounded = Math.round(((base * (100 - pct)) / 100) * 100) / 100
-  return { free: false, amount: Math.max(0.5, rounded), viaSubscriptionTypeId }
+  return { free: false, amount: Math.max(MIN_CHARGE_MAJOR, rounded), viaSubscriptionTypeId }
 }
 
 export interface Activity {

@@ -9,15 +9,15 @@
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import {
-  computePlatformFee,
-  resolveActivityAccessRule,
-  type ActivityAccessRule,
-} from '@linyup/shared'
+import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
-import { checkoutRateLimit } from '../connect/payments'
-import { createOneOffCheckoutSession } from '../utils/connect/client'
-import { resolveBaseUrl } from '../utils/env'
+import {
+  buildResultUrls,
+  checkoutRateLimit,
+  defaultIdempotencyKey,
+  requireChargeableAmountFromMajor,
+  startOneOffCheckout,
+} from '../connect/checkout'
 import { generateSecureToken } from '../utils/crypto'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
@@ -27,7 +27,6 @@ import { resolveSingleContact } from '../utils/contacts'
 // same-directory-index import pattern already used elsewhere in this package.
 import { resolveTrialEligibility } from './index'
 
-const MIN_AMOUNT_RAPPEN = 50
 const HOLD_MINUTES = 30
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -78,7 +77,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
 
   // Team must have Connect enabled + a chargeable account.
   const team = await loadEnabledTeam(teamId)
-  const { accountId, model } = requireChargeableAccount(team)
+  requireChargeableAccount(team) // fail before the reads; the orchestrator re-checks
 
   // Session must be bookable, in the future, and a group class.
   const sessionSnap = await db.collection('sessions').doc(sessionId).get()
@@ -126,13 +125,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   }
 
   const priceAmountMajor = isTrial ? (trialPriceAmount as number) : (dropIn!.priceAmount as number)
-  const amount = Math.round(priceAmountMajor * 100)
-  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
-    throw new HttpsError(
-      'failed-precondition',
-      `${isTrial ? 'Trial' : 'Drop-in'} price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`
-    )
-  }
+  const amount = requireChargeableAmountFromMajor(priceAmountMajor)
 
   // Resolve the contact (payment is proof — no email verification needed here).
   let contactId: string
@@ -271,9 +264,11 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   })
 
   // Create the Connect checkout; the webhook (kind: 'drop_in') confirms the booking.
-  const applicationFeeAmount = computePlatformFee({ tier: team.plan, amount, model })
-  const base = `${resolveBaseUrl(data.origin)}/${locale}/pay/result`
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=booking` : ''
+  const { successUrl, cancelUrl } = buildResultUrls(locale, {
+    extraQuery: slugQuery,
+    origin: data.origin,
+  })
   const metadata: Record<string, string> = {
     teamId,
     kind: 'drop_in',
@@ -287,23 +282,18 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     ...(isTrial ? { trial: 'true' } : {}),
   }
   const idempotencyKey =
-    data.idempotencyKey ?? `dropin:${teamId}:${sessionId}:${contactId}:${Math.floor(Date.now() / 60000)}`
+    data.idempotencyKey ?? defaultIdempotencyKey('dropin', teamId, sessionId, contactId)
 
-  try {
-    const session = await createOneOffCheckoutSession({
-      accountId,
-      amount,
-      applicationFeeAmount,
-      productName: `${isTrial ? 'Trial' : 'Drop-in'} · ${activityName}`,
-      successUrl: `${base}?status=success${slugQuery}`,
-      cancelUrl: `${base}?status=cancelled${slugQuery}`,
-      customerEmail: email || undefined,
-      metadata,
-      idempotencyKey,
-    })
-    return { url: session.url, sessionId: session.sessionId, amount }
-  } catch (err) {
-    console.error('[dropIn] createDropInCheckout failed:', err)
-    throw new HttpsError('internal', 'Failed to start checkout')
-  }
+  const checkout = await startOneOffCheckout({
+    team,
+    amountMinor: amount,
+    productName: `${isTrial ? 'Trial' : 'Drop-in'} · ${activityName}`,
+    successUrl,
+    cancelUrl,
+    customerEmail: email || undefined,
+    metadata,
+    idempotencyKey,
+    label: 'createDropInCheckout',
+  })
+  return { url: checkout.url, sessionId: checkout.sessionId, amount }
 })
