@@ -23,12 +23,16 @@
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply --reprice   # also reprice drift
  *
  * WEBHOOK ENDPOINTS (separate mode — pass --project):
- *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox
- *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox --apply
+ *   pnpm stripe:sync --project linyup-sandbox                       # dry-run
+ *   pnpm stripe:sync --project linyup-sandbox --apply               # create
  *   ... --apply --store-secrets     # also write the signing secrets to Secret Manager
  *
- * The key decides the ACCOUNT and the MODE: sk_test_ for sandbox/staging,
- * sk_live_ for prod. There is no separate live flag.
+ * With --project the key is read from THAT project's Secret Manager
+ * (stripe-secret-key) — the same value the deployed functions use — so it never
+ * lands on a command line. STRIPE_SECRET_KEY still overrides.
+ *
+ * The key decides the ACCOUNT and the MODE, so a mismatch is refused:
+ * linyup-prod needs sk_live_, everything else sk_test_ (--force to override).
  */
 import Stripe from 'stripe'
 import { execFileSync } from 'node:child_process'
@@ -38,12 +42,65 @@ const CURRENCY = 'chf'
 const APPLY = process.argv.includes('--apply')
 const REPRICE = process.argv.includes('--reprice')
 
-const secretKey = process.env.STRIPE_SECRET_KEY
-if (!secretKey) {
-  console.error('STRIPE_SECRET_KEY is required (use a test key unless syncing prod).')
-  process.exit(1)
+/** The one project that must be driven by a LIVE key. Everything else is test. */
+const PROD_PROJECT = 'linyup-prod'
+
+// Key resolution, in order:
+//   1. STRIPE_SECRET_KEY  — explicit override (local, CI, one-offs)
+//   2. Secret Manager     — when --project is given, read stripe-secret-key from
+//                           THAT project, i.e. the same value the functions use
+//
+// Preferring (2) means the key isn't pasted onto a command line (and into shell
+// history), and it can't drift from what the deployed functions actually use.
+function resolveSecretKey(project: string | undefined): string {
+  const fromEnv = process.env.STRIPE_SECRET_KEY?.trim()
+  if (fromEnv) return fromEnv
+
+  if (!project) {
+    console.error(
+      'STRIPE_SECRET_KEY is required (or pass --project to read it from that project’s Secret Manager).',
+    )
+    process.exit(1)
+  }
+
+  try {
+    const key = execFileSync(
+      'gcloud',
+      ['secrets', 'versions', 'access', 'latest', '--secret=stripe-secret-key', `--project=${project}`],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+    ).trim()
+    if (!key) throw new Error('empty')
+    console.log(`Using stripe-secret-key from ${project}’s Secret Manager.`)
+    return key
+  } catch {
+    console.error(
+      `Could not read stripe-secret-key from ${project}. Check gcloud auth, or set STRIPE_SECRET_KEY.`,
+    )
+    process.exit(1)
+  }
 }
-const stripe = new Stripe(secretKey)
+
+// A live key against a non-prod project (or vice versa) would create real
+// endpoints/prices in the wrong place — and for webhooks the damage is quiet:
+// a live endpoint pointing at sandbox looks fine and simply never fires.
+function assertModeMatchesProject(key: string, project: string) {
+  const isLiveKey = key.startsWith('sk_live_') || key.startsWith('rk_live_')
+  const isProdProject = project === PROD_PROJECT
+  if (isLiveKey === isProdProject) return
+
+  console.error(
+    `\nMode mismatch: ${isLiveKey ? 'a LIVE key' : 'a TEST key'} was given for ${project}.\n` +
+      `  ${PROD_PROJECT} needs sk_live_…; every other project needs sk_test_….\n` +
+      `  Pass --force if this is deliberate.`,
+  )
+  if (!process.argv.includes('--force')) process.exit(1)
+  console.error('  --force given — continuing anyway.\n')
+}
+
+// Assigned in main() once --project is known, so the key can come from Secret
+// Manager rather than the environment. `Stripe` is a namespace in this SDK, so
+// the instance type has to come from the constructor.
+let stripe: InstanceType<typeof Stripe>
 
 interface CatalogEntry { kind: 'plan' | 'addon'; name: string; lookupKey: string; chf: number }
 
@@ -304,6 +361,13 @@ async function syncWebhooks(project: string, secretProject: string | undefined) 
 
 async function main() {
   const project = argValue('--project')
+
+  const key = resolveSecretKey(project)
+  // Only checkable when the target project is known; the catalogue mode without
+  // --project is trusted to the caller as before.
+  if (project) assertModeMatchesProject(key, project)
+  stripe = new Stripe(key)
+
   if (project) {
     const secretProject = process.argv.includes('--store-secrets') ? project : undefined
     console.log(

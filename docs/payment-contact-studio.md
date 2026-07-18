@@ -355,17 +355,25 @@ keyed by URL, dry-run by default.
 
 ```bash
 # dry-run — shows what it would create / which events are missing
-STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox
+pnpm stripe:sync --project linyup-sandbox
 
 # create the endpoints and print the signing secrets
-STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox --apply
+pnpm stripe:sync --project linyup-sandbox --apply
 
-# ...or write the secrets straight into Secret Manager (needs gcloud + secretVersionAdder)
-STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox --apply --store-secrets
+# ...or write the secrets straight into Secret Manager (needs secretVersionAdder)
+pnpm stripe:sync --project linyup-sandbox --apply --store-secrets
 ```
 
-The key selects both the **account** and the **mode** — `sk_test_` for
-sandbox/staging, `sk_live_` for prod. There is no separate live flag.
+**No key on the command line.** With `--project`, the script reads
+`stripe-secret-key` from that project's Secret Manager — the same value the
+deployed functions use, so the two can't drift, and the key never reaches shell
+history. `STRIPE_SECRET_KEY` still overrides when you need it (local, CI).
+
+The key is what selects the account and the mode, so the script refuses a
+mismatch: `linyup-prod` requires `sk_live_…`, every other project requires
+`sk_test_…`. Override with `--force` only if you mean it. This matters most for
+webhooks, where the damage is quiet — a live-mode endpoint pointing at sandbox
+looks perfectly healthy and simply never fires.
 
 Re-running is safe: an existing endpoint is left alone, and any events missing from
 it are reported (added with `--apply`). The signing secret of an existing endpoint
