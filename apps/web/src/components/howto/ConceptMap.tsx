@@ -85,15 +85,31 @@ export function ConceptMap({ selected, onSelect }: Props) {
                       : 'fill-card stroke-border transition-colors hover:stroke-muted-foreground/60'
                   }
                 />
-                <text
-                  x={n.x + n.w / 2}
-                  y={n.y + n.h / 2 + 4.5}
-                  textAnchor="middle"
-                  fontSize={13}
-                  className={`select-none ${active ? 'fill-primary font-semibold' : 'fill-foreground font-medium'}`}
-                >
-                  {t(`concepts.${n.id}.shortLabel` as Parameters<typeof t>[0])}
-                </text>
+                {(() => {
+                  // A shortLabel may carry a newline to wrap inside the node —
+                  // SVG <text> doesn't wrap, so a two-word concept name that
+                  // exceeds the box gets split explicitly rather than
+                  // abbreviated into jargon. Centred as a block: one line sits
+                  // on the middle, two straddle it.
+                  const lines = (t(`concepts.${n.id}.shortLabel` as Parameters<typeof t>[0]) as string)
+                    .split('\n')
+                  const mid = n.y + n.h / 2 + 4.5
+                  return (
+                    <text
+                      x={n.x + n.w / 2}
+                      y={lines.length > 1 ? mid - 7 : mid}
+                      textAnchor="middle"
+                      fontSize={13}
+                      className={`select-none ${active ? 'fill-primary font-semibold' : 'fill-foreground font-medium'}`}
+                    >
+                      {lines.map((line, i) => (
+                        <tspan key={i} x={n.x + n.w / 2} dy={i === 0 ? 0 : 14}>
+                          {line}
+                        </tspan>
+                      ))}
+                    </text>
+                  )
+                })()}
               </g>
             )
           })}

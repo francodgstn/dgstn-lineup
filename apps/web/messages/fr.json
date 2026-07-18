@@ -4599,7 +4599,7 @@
       },
       "sessions": {
         "label": "Cours & rendez-vous",
-        "shortLabel": "Cours & 1:1",
+        "shortLabel": "Cours &\nrendez-vous",
         "tagline": "Quand les choses se passent vraiment",
         "body": "C'est l'agenda lui-même — le cours de mardi à 19 h, pas le cours en général. Les réservations y relient les personnes : un contact, une place, un horaire.",
         "compareIntro": "Trois formes partagent l'agenda. Ce qui les distingue, c'est qui y place le créneau :",
@@ -4610,7 +4610,7 @@
           },
           {
             "title": "Rendez-vous",
-            "body": "Rien n'existe tant que personne ne réserve. Le prestataire publie ses disponibilités — les fenêtres où il est libre — et la séance est créée dès qu'un client en prend une. Du temps exclusif : une réservation par créneau."
+            "body": "Rien n'existe tant que personne ne réserve. Le prestataire (coach) publie ses disponibilités — les fenêtres où il est libre — et la séance est créée dès qu'un client en prend une. Du temps exclusif : une réservation par créneau."
           },
           {
             "title": "Événement",
@@ -4619,7 +4619,7 @@
         ],
         "terms": [
           "Séance — une occurrence planifiée, que vous l’ayez placée ou qu’une réservation l’ait créée",
-          "Disponibilité — quand un prestataire est libre ; les rendez-vous y sont réservés",
+          "Disponibilité — quand un prestataire (coach) est libre ; les rendez-vous y sont réservés",
           "Réservation — la place réservée par un contact",
           "Événement — un format autonome avec sa propre inscription"
         ],
@@ -4648,6 +4648,39 @@
         "shortLabel": "Contacts",
         "tagline": "Tous ceux que votre studio connaît",
         "body": "Les contacts sont le côté humain de Linyup — prospects, essais, membres et anciens vivent dans une seule liste. Tout le reste s'attache à un contact : ses abonnements, son statut d'affiliation et les séances qu'il a réservées. Quand quelqu'un réserve ou s'inscrit via une de vos pages publiques, le contact est créé ou rattaché automatiquement.",
+        "funnelIntro": "Les contacts passent par trois étapes d'acquisition. L'étape ne fait qu'avancer — c'est un plus-haut atteint, pas un statut que l'on modifie dans les deux sens :",
+        "funnel": [
+          {
+            "label": "Essai réservé",
+            "meaning": "La première séance est réservée, mais la personne n'est pas encore venue.",
+            "entries": [
+              "Page de réservation publique",
+              "Cours à l’unité payant",
+              "Réservation de rendez-vous",
+              "Ajouté à la main",
+              "« Placer dans le tunnel »"
+            ]
+          },
+          {
+            "label": "Essai effectué",
+            "meaning": "La personne est venue. La première présence la fait monter automatiquement.",
+            "entries": [
+              "Première présence",
+              "Sans rendez-vous à l’accueil",
+              "Promu à la main"
+            ]
+          },
+          {
+            "label": "Inscrit",
+            "meaning": "L'inscription est terminée : la personne est membre du studio.",
+            "entries": [
+              "Inscription terminée",
+              "Importé comme membre existant",
+              "Promu à la main"
+            ]
+          }
+        ],
+        "funnelNote": "Une personne peut aussi arriver SANS aucune étape — un achat en boutique ou l'envoi d'un formulaire capte un prospect hors tunnel. Elle y entre à « Essai réservé » lors de sa première réservation, ou passe directement à « Essai effectué » la première fois qu'elle vient.",
         "terms": [
           "Contact — la fiche d'une personne, du premier contact au membre fidèle",
           "Titulaire d'abonnement — un contact avec une formule active",
@@ -4685,7 +4718,7 @@
         },
         "appointments": {
           "name": "Rendez-vous",
-          "desc": "Les clients choisissent un coach, ce qu'ils réservent, puis un créneau libre dans les disponibilités publiées de ce coach. Rien n'occupe le calendrier avant la réservation. Séparé de la page de réservation des cours, pour que l'individuel se réserve proprement."
+          "desc": "Les clients choisissent un coach, choisissent ce qu'ils réservent et prennent un créneau libre dans les disponibilités publiées par ce coach. Rien ne figure à l'agenda avant la réservation. Séparé de la page de réservation des cours, pour que les rendez-vous se réservent proprement."
         },
         "kiosk": {
           "name": "Kiosque",
@@ -4713,8 +4746,8 @@
         "a": "Le club d'Alex compte des adultes payants, des enfants facturés sur papier et un cofondateur retraité qui s'entraîne gratuitement à vie. Seuls les adultes ont un abonnement dans Linyup. Les autres reçoivent quand même une affiliation — membre — : ils appartiennent au club, apparaissent dans les bonnes listes et peuvent réserver les cours réservés aux membres, sans aucune facturation."
       },
       "q5": {
-        "q": "Dois-je créer une version 1:1 de chaque cours ?",
-        "a": "Presque sûrement pas. Le coach principal d'Alex enseigne le kickboxing et le renforcement fonctionnel, et il est tentant de dupliquer chacun en « Kickboxing 1:1 » et « Renforcement 1:1 ». Mais demandez-vous ce qui se vend réellement : une heure d'attention du coach. Le tarif et la durée sont les mêmes de toute façon — ce qu'on y fait se décide le jour même. Alex crée donc UNE activité de rendez-vous, « Coaching individuel », et le coach y publie ses disponibilités. Une deuxième activité de rendez-vous ne se justifie que si c'est vraiment un autre produit — un appel découverte gratuit de 20 minutes à côté d'une séance payante de 60 minutes, par exemple, car le tarif et l'accès diffèrent. C'est le test : conditions différentes, offre différente. Mêmes conditions, une seule offre."
+        "q": "Dois-je créer une version rendez-vous de chaque cours ?",
+        "a": "Presque certainement pas. Le coach principal d'Alex enseigne le kickboxing et le renforcement fonctionnel, et il est tentant de dupliquer chacun en offre privée distincte. Mais demandez-vous ce qui est réellement vendu : une heure d'attention du coach. Le prix et la durée sont les mêmes dans les deux cas — ce qui se passe pendant l'heure se décide le jour même. Alex crée donc UNE seule activité de type rendez-vous, « Coaching personnel », et le coach y publie ses disponibilités. Créez une deuxième activité de ce type seulement si c'est véritablement un autre produit — un appel de découverte gratuit de 20 minutes à côté d'une séance payante de 60 minutes, par exemple, car le prix et l'accès diffèrent. C'est le test : conditions différentes, offre différente. Mêmes conditions, une seule offre."
       },
       "q6": {
         "q": "Et si je ne veux que certaines pages publiques ?",
@@ -4741,7 +4774,8 @@
         "body": "Surfaces et fonctionnalités optionnelles — n'activez que ce que votre studio utilise.",
         "action": "Parcourir les plugins"
       }
-    }
+    },
+    "funnelEntriesLabel": "Arrive ici via"
   },
   "DashboardFinance": {
     "revenueTitle": "Recettes",

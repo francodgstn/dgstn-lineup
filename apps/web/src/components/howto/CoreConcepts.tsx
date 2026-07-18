@@ -44,6 +44,10 @@ export function CoreConcepts() {
   // listed. Data-driven from i18n so the panel stays generic — a concept
   // without `compare` simply doesn't render one.
   const compare = raw('compare') as { title: string; body: string }[]
+  // Optional funnel block: a top-down stage flow mirroring the real
+  // AcquisitionTimeline on the contact detail page, with each stage's meaning
+  // and the entry points that land someone on it.
+  const funnel = raw('funnel') as { label: string; meaning: string; entries: string[] }[]
 
   return (
     <section>
@@ -119,6 +123,58 @@ export function CoreConcepts() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Acquisition funnel — same rail-and-connector shape as the real
+            AcquisitionTimeline on the contact detail page, so the explanation
+            and the thing being explained look like each other. Nodes are
+            NUMBERED rather than checked: this is the whole path, not one
+            contact's progress, and ticks would read as "already reached". */}
+        {funnel.length > 0 && (
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground">
+              {t(`concepts.${selected}.funnelIntro` as Parameters<typeof t>[0])}
+            </p>
+            <ol className="mt-3 flex flex-col">
+              {funnel.map((stage, i) => {
+                const isLast = i === funnel.length - 1
+                return (
+                  <li key={i} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-primary bg-primary/10 text-[10px] font-semibold text-primary">
+                        {i + 1}
+                      </span>
+                      {!isLast && <span className="my-1 w-0.5 flex-1 bg-primary/30" />}
+                    </div>
+                    <div className={`min-w-0 ${isLast ? '' : 'pb-4'}`}>
+                      <p className="text-[13px] font-medium leading-5">{stage.label}</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                        {stage.meaning}
+                      </p>
+                      {stage.entries.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[11px] text-muted-foreground/70">
+                            {t('funnelEntriesLabel')}
+                          </span>
+                          {stage.entries.map((e, j) => (
+                            <span
+                              key={j}
+                              className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                            >
+                              {e}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {t(`concepts.${selected}.funnelNote` as Parameters<typeof t>[0])}
+            </p>
           </div>
         )}
 

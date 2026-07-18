@@ -4599,7 +4599,7 @@
       },
       "sessions": {
         "label": "Corsi e appuntamenti",
-        "shortLabel": "Corsi & 1:1",
+        "shortLabel": "Corsi e\nappuntamenti",
         "tagline": "Quando le cose accadono davvero",
         "body": "Questo è il calendario vero e proprio — il corso di martedì alle 19, non il corso in generale. Le prenotazioni collegano le persone: un contatto, un posto, un orario.",
         "compareIntro": "Tre forme condividono il calendario. La differenza sta in chi ci mette il tempo:",
@@ -4610,7 +4610,7 @@
           },
           {
             "title": "Appuntamento",
-            "body": "Non esiste nulla finché qualcuno non prenota. Chi eroga il servizio pubblica la propria disponibilità — le finestre in cui è libero — e la sessione nasce nel momento in cui un cliente ne prende una. Tempo esclusivo: una prenotazione per slot."
+            "body": "Non esiste nulla finché qualcuno non prenota. Chi eroga il servizio (coach) pubblica la propria disponibilità — le finestre in cui è libero — e la sessione nasce nel momento in cui un cliente ne prende una. Tempo esclusivo: una prenotazione per slot."
           },
           {
             "title": "Evento",
@@ -4619,7 +4619,7 @@
         ],
         "terms": [
           "Sessione — un’occorrenza pianificata, che l’abbia messa tu o l’abbia creata una prenotazione",
-          "Disponibilità — quando chi eroga il servizio è libero; gli appuntamenti si prenotano da lì",
+          "Disponibilità — quando chi eroga il servizio (coach) è libero; gli appuntamenti si prenotano da lì",
           "Prenotazione — il posto riservato di un contatto",
           "Evento — un formato autonomo con iscrizione propria"
         ],
@@ -4648,6 +4648,39 @@
         "shortLabel": "Contatti",
         "tagline": "Tutte le persone che il tuo studio conosce",
         "body": "I contatti sono il lato umano di Linyup — lead, persone in prova, membri e alumni vivono in un'unica lista. Tutto il resto si aggancia a un contatto: gli abbonamenti che possiede, il suo stato di affiliazione e le sessioni prenotate. Quando qualcuno prenota o si iscrive da una delle tue pagine pubbliche, il contatto viene creato o abbinato automaticamente.",
+        "funnelIntro": "I contatti attraversano tre fasi di acquisizione. La fase avanza soltanto — è un massimo raggiunto, non uno stato da spostare avanti e indietro:",
+        "funnel": [
+          {
+            "label": "Prova prenotata",
+            "meaning": "Ha prenotato la prima sessione ma non si è ancora presentato.",
+            "entries": [
+              "Pagina di prenotazione pubblica",
+              "Ingresso singolo a pagamento",
+              "Prenotazione appuntamento",
+              "Aggiunto a mano",
+              "«Metti nel funnel»"
+            ]
+          },
+          {
+            "label": "Prova effettuata",
+            "meaning": "Si è presentato. La prima presenza lo promuove automaticamente.",
+            "entries": [
+              "Prima presenza",
+              "Walk-in alla reception",
+              "Promosso a mano"
+            ]
+          },
+          {
+            "label": "Iscritto",
+            "meaning": "Ha completato l'iscrizione ed è membro dello studio.",
+            "entries": [
+              "Iscrizione completata",
+              "Importato come membro esistente",
+              "Promosso a mano"
+            ]
+          }
+        ],
+        "funnelNote": "Qualcuno può anche arrivare SENZA alcuna fase — un acquisto nello shop o l'invio di un modulo raccoglie un lead fuori dal funnel. Ci entra a «Prova prenotata» con la prima prenotazione, oppure salta direttamente a «Prova effettuata» la prima volta che si presenta.",
         "terms": [
           "Contatto — la scheda di una persona, dal primo contatto al membro di lunga data",
           "Titolare di abbonamento — un contatto con un piano attivo",
@@ -4685,7 +4718,7 @@
         },
         "appointments": {
           "name": "Appuntamenti",
-          "desc": "I clienti scelgono un coach, cosa stanno prenotando e un orario libero dalla disponibilità che il coach ha pubblicato. Finché non prenotano, sul calendario non c'è nulla. Separato dalla pagina di prenotazione dei corsi, così le sessioni individuali si prenotano pulite."
+          "desc": "I clienti scelgono un coach, scelgono cosa stanno prenotando e prendono un orario libero dalla disponibilità pubblicata da quel coach. Fino alla prenotazione il calendario resta vuoto. Separata dalla pagina di prenotazione dei corsi, così gli appuntamenti si prenotano in modo pulito."
         },
         "kiosk": {
           "name": "Kiosk",
@@ -4713,8 +4746,8 @@
         "a": "Nella palestra di Alex ci sono adulti paganti, bambini fatturati su carta e un cofondatore in pensione che si allena gratis a vita. Solo gli adulti hanno abbonamenti in Linyup. Gli altri ricevono comunque un'affiliazione — membro — così appartengono, compaiono nelle liste giuste e possono prenotare i corsi riservati ai membri, senza alcuna fatturazione."
       },
       "q5": {
-        "q": "Devo creare una versione 1:1 di ogni corso?",
-        "a": "Quasi certamente no. Il coach principale di Alex insegna kickboxing e allenamento funzionale, ed è naturale voler duplicare entrambi in «Kickboxing 1:1» e «Funzionale 1:1». Ma chiediti cosa si vende davvero: un'ora di attenzione del coach. Prezzo e durata sono comunque gli stessi — cosa si fa in quell'ora si decide il giorno stesso. Alex crea quindi UNA attività di appuntamento, «Personal training», e il coach ci pubblica sopra la propria disponibilità. Una seconda attività di appuntamento ha senso solo se è davvero un altro prodotto — per esempio una call conoscitiva gratuita di 20 minuti accanto a una sessione a pagamento di 60, perché cambiano prezzo e accesso. È questo il test: condizioni diverse, offerta diversa. Stesse condizioni, una sola offerta."
+        "q": "Serve una versione ad appuntamento di ogni corso?",
+        "a": "Quasi certamente no. Il coach principale di Alex insegna kickboxing e allenamento funzionale, ed è tentante duplicare ciascuno come offerta privata separata. Ma pensa a cosa si sta davvero vendendo: un'ora di attenzione del coach. Prezzo e durata sono gli stessi in entrambi i casi — cosa succede in quell'ora si concorda il giorno stesso. Alex crea quindi UNA sola attività ad appuntamento, «Personal training», e il coach ci pubblica sopra la propria disponibilità. Crea una seconda attività di questo tipo solo se è davvero un prodotto diverso — una chiamata conoscitiva gratuita di 20 minuti accanto a una sessione a pagamento di 60 minuti, per esempio, perché cambiano prezzo e accesso. Questo è il test: condizioni diverse, offerta diversa. Stesse condizioni, una sola offerta."
       },
       "q6": {
         "q": "E se voglio solo alcune pagine pubbliche?",
@@ -4741,7 +4774,8 @@
         "body": "Superfici e funzioni opzionali — attiva solo ciò che il tuo studio usa.",
         "action": "Sfoglia i plugin"
       }
-    }
+    },
+    "funnelEntriesLabel": "Ci arriva da"
   },
   "DashboardFinance": {
     "revenueTitle": "Incassi",

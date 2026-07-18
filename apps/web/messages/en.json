@@ -4599,7 +4599,7 @@
       },
       "sessions": {
         "label": "Classes & Appointments",
-        "shortLabel": "Classes & 1:1",
+        "shortLabel": "Classes &\nAppointments",
         "tagline": "When things actually happen",
         "body": "This is the calendar itself — Tuesday's 7 pm class, not the class in general. Bookings connect people to it: one contact, one spot, one time.",
         "compareIntro": "Three shapes share the calendar. What separates them is who puts the time there:",
@@ -4610,7 +4610,7 @@
           },
           {
             "title": "Appointment",
-            "body": "Nothing exists until someone books. The provider publishes their availability — the windows they are free — and the session is created the moment a client takes one. Exclusive time: one booking per slot."
+            "body": "Nothing exists until someone books. The provider (coach) publishes their availability — the windows they are free — and the session is created the moment a client takes one. Exclusive time: one booking per slot."
           },
           {
             "title": "Event",
@@ -4619,7 +4619,7 @@
         ],
         "terms": [
           "Session — one scheduled occurrence, whether you placed it or a booking created it",
-          "Availability — when a provider is free; appointments are booked out of it",
+          "Availability — when a provider (coach) is free; appointments are booked out of it",
           "Booking — a contact’s reserved spot",
           "Event — a standalone happening with its own registration"
         ],
@@ -4648,6 +4648,39 @@
         "shortLabel": "Contacts",
         "tagline": "Everyone your studio knows",
         "body": "Contacts are the people side of Linyup — leads, trialists, members and alumni all live in one list. Everything else attaches to a contact: the subscriptions they hold, their affiliation status and the sessions they have booked. When someone books or signs up through one of your public pages, a contact is created or matched automatically.",
+        "funnelIntro": "Contacts move through three acquisition stages. The stage only ever advances — it is a high-water mark, not a status you set back and forth:",
+        "funnel": [
+          {
+            "label": "Trial booked",
+            "meaning": "They have reserved their first session but have not turned up yet.",
+            "entries": [
+              "Public booking page",
+              "Paid drop-in",
+              "Appointment booking",
+              "Added by hand",
+              "“Place on funnel”"
+            ]
+          },
+          {
+            "label": "Trial attended",
+            "meaning": "They showed up. Marking the first attendance promotes them automatically.",
+            "entries": [
+              "First attendance",
+              "Walk-in at the desk",
+              "Promoted by hand"
+            ]
+          },
+          {
+            "label": "Joined",
+            "meaning": "They finished signup and are a member of the studio.",
+            "entries": [
+              "Completed signup",
+              "Imported as an existing member",
+              "Promoted by hand"
+            ]
+          }
+        ],
+        "funnelNote": "Someone can also arrive with NO stage at all — a shop purchase or a form submission captures a lead off the funnel. They join it at Trial booked on their first booking, or jump straight to Trial attended the first time they show up.",
         "terms": [
           "Contact — one person's record, from first touch to long-time member",
           "Subscription holder — a contact with an active plan",
@@ -4685,7 +4718,7 @@
         },
         "appointments": {
           "name": "Appointments",
-          "desc": "Clients pick a coach, choose what they're booking and take a free time from that coach's published availability. Nothing sits on the calendar until they book. Separate from the class booking page, so one-to-one time books cleanly."
+          "desc": "Clients pick a coach, choose what they're booking and take a free time from that coach's published availability. Nothing sits on the calendar until they book. Separate from the class booking page, so appointments book cleanly."
         },
         "kiosk": {
           "name": "Kiosk",
@@ -4713,8 +4746,8 @@
         "a": "Alex's studio has paying adults, kids billed on paper invoices, and a retired co-founder who trains free forever. Only the adults hold subscriptions in Linyup. The others still get an affiliation — member — so they belong, show up in the right lists and can book members-only classes, with no billing attached."
       },
       "q5": {
-        "q": "Do I need a 1:1 version of every class?",
-        "a": "Almost certainly not. Alex's head coach teaches kickboxing and functional workouts, and it is tempting to mirror each one as '1:1 Kickboxing' and '1:1 Functional workout'. But think about what is actually being sold: an hour of the coach's attention. The price and the length are the same either way — what happens in the hour is agreed on the day. So Alex creates ONE appointment activity, 'Personal training', and the coach publishes their availability against it. Make a second appointment activity only when it is genuinely a different product — a free 20-minute intro call next to a paid 60-minute session, say, because those differ in price and in who may book. That is the test: different terms, different offering. Same terms, one offering."
+        "q": "Do I need an appointment version of every class?",
+        "a": "Almost certainly not. Alex's head coach teaches kickboxing and functional workouts, and it is tempting to mirror each one as a separate private offering. But think about what is actually being sold: an hour of the coach's attention. The price and the length are the same either way — what happens in the hour is agreed on the day. So Alex creates ONE appointment activity, 'Personal training', and the coach publishes their availability against it. Make a second appointment activity only when it is genuinely a different product — a free 20-minute intro call next to a paid 60-minute session, say, because those differ in price and in who may book. That is the test: different terms, different offering. Same terms, one offering."
       },
       "q6": {
         "q": "What if I only want some of the public pages?",
@@ -4741,7 +4774,8 @@
         "body": "Optional surfaces and features — switch on only what your studio uses.",
         "action": "Browse plugins"
       }
-    }
+    },
+    "funnelEntriesLabel": "Enters here from"
   },
   "DashboardFinance": {
     "revenueTitle": "Revenue",

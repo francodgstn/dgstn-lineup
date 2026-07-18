@@ -4599,7 +4599,7 @@
       },
       "sessions": {
         "label": "Kurse & Termine",
-        "shortLabel": "Kurse & 1:1",
+        "shortLabel": "Kurse &\nTermine",
         "tagline": "Wann es tatsächlich stattfindet",
         "body": "Das ist der Kalender selbst — der Kurs am Dienstag um 19 Uhr, nicht der Kurs im Allgemeinen. Buchungen verbinden Personen damit: ein Kontakt, ein Platz, ein Termin.",
         "compareIntro": "Drei Formen teilen sich den Kalender. Der Unterschied liegt darin, wer die Zeit einträgt:",
@@ -4610,7 +4610,7 @@
           },
           {
             "title": "Termin",
-            "body": "Es existiert nichts, bis jemand bucht. Die anbietende Person veröffentlicht ihre Verfügbarkeit — die Zeitfenster, in denen sie frei ist — und die Session entsteht in dem Moment, in dem jemand eines davon nimmt. Exklusive Zeit: eine Buchung pro Slot."
+            "body": "Es existiert nichts, bis jemand bucht. Die anbietende Person (Coach) veröffentlicht ihre Verfügbarkeit — die Zeitfenster, in denen sie frei ist — und die Session entsteht in dem Moment, in dem jemand eines davon nimmt. Exklusive Zeit: eine Buchung pro Slot."
           },
           {
             "title": "Event",
@@ -4619,7 +4619,7 @@
         ],
         "terms": [
           "Session — ein geplanter Termin, ob von dir gesetzt oder durch eine Buchung entstanden",
-          "Verfügbarkeit — wann eine anbietende Person frei ist; daraus werden Termine gebucht",
+          "Verfügbarkeit — wann eine anbietende Person (Coach) frei ist; daraus werden Termine gebucht",
           "Buchung — der reservierte Platz eines Kontakts",
           "Event — ein eigenständiges Format mit eigener Anmeldung"
         ],
@@ -4648,6 +4648,39 @@
         "shortLabel": "Kontakte",
         "tagline": "Alle, die dein Studio kennt",
         "body": "Kontakte sind die Menschen-Seite von Linyup — Leads, Probetrainierende, Mitglieder und Alumni stehen in einer Liste. Alles andere hängt am Kontakt: die Abos, die er hält, sein Zugehörigkeitsstatus und die gebuchten Sessions. Bucht oder registriert sich jemand über eine deiner öffentlichen Seiten, wird der Kontakt automatisch angelegt oder zugeordnet.",
+        "funnelIntro": "Kontakte durchlaufen drei Akquise-Stufen. Die Stufe geht immer nur vorwärts — sie ist ein Höchststand, kein Status, den man hin und her setzt:",
+        "funnel": [
+          {
+            "label": "Schnupperstunde gebucht",
+            "meaning": "Die erste Session ist reserviert, aber noch nicht besucht.",
+            "entries": [
+              "Öffentliche Buchungsseite",
+              "Bezahltes Drop-in",
+              "Terminbuchung",
+              "Manuell angelegt",
+              "„Auf den Funnel setzen“"
+            ]
+          },
+          {
+            "label": "Schnupperstunde besucht",
+            "meaning": "Die Person war da. Die erste Anwesenheit stuft sie automatisch hoch.",
+            "entries": [
+              "Erste Anwesenheit",
+              "Walk-in am Empfang",
+              "Manuell hochgestuft"
+            ]
+          },
+          {
+            "label": "Beigetreten",
+            "meaning": "Die Anmeldung ist abgeschlossen — die Person ist Mitglied des Studios.",
+            "entries": [
+              "Anmeldung abgeschlossen",
+              "Als bestehendes Mitglied importiert",
+              "Manuell hochgestuft"
+            ]
+          }
+        ],
+        "funnelNote": "Jemand kann auch ganz OHNE Stufe ankommen — ein Shop-Kauf oder eine Formularübermittlung erfasst einen Lead ausserhalb des Funnels. Mit der ersten Buchung steigt er bei „Schnupperstunde gebucht“ ein oder springt beim ersten Besuch direkt auf „Schnupperstunde besucht“.",
         "terms": [
           "Kontakt — die Akte einer Person, vom ersten Kontakt bis zum langjährigen Mitglied",
           "Abo-Inhaber — ein Kontakt mit aktivem Plan",
@@ -4685,7 +4718,7 @@
         },
         "appointments": {
           "name": "Termine",
-          "desc": "Kundinnen wählen einen Coach, entscheiden, was sie buchen, und nehmen eine freie Zeit aus dessen veröffentlichter Verfügbarkeit. Bis zur Buchung steht nichts im Kalender. Getrennt von der Kurs-Buchungsseite, damit Einzelstunden sauber buchen."
+          "desc": "Kundinnen und Kunden wählen einen Coach, wählen, was sie buchen, und nehmen eine freie Zeit aus dessen veröffentlichter Verfügbarkeit. Bis zur Buchung steht nichts im Kalender. Getrennt von der Kursbuchungsseite, damit Termine sauber gebucht werden."
         },
         "kiosk": {
           "name": "Kiosk",
@@ -4713,8 +4746,8 @@
         "a": "In Alex' Studio gibt es zahlende Erwachsene, Kinder mit Papierrechnung und einen pensionierten Mitgründer, der für immer gratis trainiert. Nur die Erwachsenen haben Abos in Linyup. Die anderen bekommen trotzdem eine Zugehörigkeit — Mitglied —, gehören also dazu, erscheinen in den richtigen Listen und können Mitglieder-Kurse buchen, ganz ohne Abrechnung."
       },
       "q5": {
-        "q": "Brauche ich zu jedem Kurs eine 1:1-Variante?",
-        "a": "Mit ziemlicher Sicherheit nicht. Der Chefcoach von Alex unterrichtet Kickboxen und funktionelles Training, und es liegt nahe, beides als «1:1 Kickboxen» und «1:1 Funktionelles Training» zu spiegeln. Aber überleg, was tatsächlich verkauft wird: eine Stunde Aufmerksamkeit des Coachs. Preis und Länge sind ohnehin gleich — was in der Stunde passiert, wird am Tag selbst besprochen. Also legt Alex EINE Termin-Aktivität an, «Personal Training», und der Coach veröffentlicht seine Verfügbarkeit dafür. Eine zweite Termin-Aktivität lohnt sich nur, wenn es wirklich ein anderes Produkt ist — etwa ein kostenloses 20-minütiges Erstgespräch neben einer bezahlten 60-Minuten-Einheit, weil sich Preis und Zugang unterscheiden. Das ist der Test: andere Konditionen, anderes Angebot. Gleiche Konditionen, ein Angebot."
+        "q": "Brauche ich zu jedem Kurs eine Termin-Variante?",
+        "a": "Fast sicher nicht. Alex’ Cheftrainer unterrichtet Kickboxen und funktionelles Training, und es ist verlockend, beides als eigenes Einzelangebot zu spiegeln. Aber überlege, was tatsächlich verkauft wird: eine Stunde der Aufmerksamkeit des Coaches. Preis und Dauer sind in beiden Fällen gleich — was in der Stunde passiert, wird am Tag selbst vereinbart. Alex legt also EINE Termin-Aktivität an, „Personal Training“, und der Coach veröffentlicht seine Verfügbarkeit dafür. Eine zweite Termin-Aktivität nur dann, wenn es wirklich ein anderes Produkt ist — etwa ein kostenloses 20-minütiges Kennenlerngespräch neben einer bezahlten 60-Minuten-Session, weil sich Preis und Zugang unterscheiden. Das ist der Test: andere Konditionen, anderes Angebot. Gleiche Konditionen, ein Angebot."
       },
       "q6": {
         "q": "Was, wenn ich nur einige öffentliche Seiten will?",
@@ -4741,7 +4774,8 @@
         "body": "Optionale Oberflächen und Funktionen — aktiviere nur, was dein Studio nutzt.",
         "action": "Plugins durchstöbern"
       }
-    }
+    },
+    "funnelEntriesLabel": "Kommt hierher über"
   },
   "DashboardFinance": {
     "revenueTitle": "Einnahmen",
