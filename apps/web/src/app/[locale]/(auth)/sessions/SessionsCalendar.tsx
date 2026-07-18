@@ -924,12 +924,12 @@ export default function SessionsCalendar({
                       )}
                       style={{ height: gridHeight }}
                     >
-                      {/* Availability lane — a faint right gutter the session
+                      {/* Availability lane — a faint LEFT gutter the session
                           blocks stop short of, so a band still reads here even
                           when a session overlaps its time. */}
                       <div
                         aria-hidden="true"
-                        className="absolute inset-y-0 right-0 bg-muted/30 dark:bg-muted/20"
+                        className="absolute inset-y-0 left-0 bg-muted/30 dark:bg-muted/20"
                         style={{ width: AVAIL_GUTTER_PX }}
                       />
 
@@ -943,15 +943,16 @@ export default function SessionsCalendar({
                       ))}
 
                       {/* Availability bands — the RAW published free time (single-provider
-                          scope only, see schedule/page.tsx), rendered translucent behind
-                          the session blocks so booked-vs-free reads at a glance. Spans the
-                          full column (incl. the lane); a solid left spine marks its start. */}
+                          scope only, see schedule/page.tsx), rendered translucent BEHIND
+                          the session blocks (z-2 < blocks' z-5) so booked-vs-free reads at
+                          a glance. Spans the full column; dashed top/right/bottom, with a
+                          thick SOLID left spine (thicker than a session's own border-l-2). */}
                       {bands.map((band) => (
                         <div
                           key={band.key}
                           aria-hidden="true"
-                          className="absolute inset-x-0.5 z-[2] overflow-hidden rounded-sm border border-primary/15 border-l-2 border-l-primary/50 bg-primary/[0.07] pointer-events-none"
-                          style={{ top: band.top, height: band.height }}
+                          className="absolute inset-x-0.5 z-[2] overflow-hidden rounded-sm border border-dashed border-primary/25 border-l-[3px] border-l-primary/60 bg-primary/[0.07] pointer-events-none"
+                          style={{ top: band.top, height: band.height, borderLeftStyle: 'solid' }}
                         >
                           {band.height >= 16 && (
                             <p className="truncate px-1 pt-0.5 text-[9px] font-medium leading-tight text-primary/70">
@@ -993,9 +994,10 @@ export default function SessionsCalendar({
                             style={{
                               top: top + 1,
                               height: height - 2,
-                              // Blocks share the column MINUS the availability lane
-                              // on the right, so a band always peeks out there.
-                              left: `calc((100% - ${AVAIL_GUTTER_PX}px) * ${col / cols} + 2px)`,
+                              // Blocks are pushed off the LEFT availability lane and
+                              // share the remaining width, so the band always peeks
+                              // out on the left even under an overlapping session.
+                              left: `calc(${AVAIL_GUTTER_PX}px + (100% - ${AVAIL_GUTTER_PX}px) * ${col / cols} + 2px)`,
                               width: `calc((100% - ${AVAIL_GUTTER_PX}px) / ${cols} - 4px)`,
                               backgroundColor: `${color}1F`,
                               borderLeftColor: color,
