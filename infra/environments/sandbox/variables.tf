@@ -74,9 +74,21 @@ variable "secret_ids" {
     "stripe-connect-webhook-secret",
     "smtp-password",
     "smtp-encryption-key",
+    "brevo-api-key",        # Brevo transactional API (all outbound mail)
+    "brevo-webhook-secret", # authenticates Brevo's bounce/spam event callbacks
     "posthog-api-key",
     "ai-assistant-unlock-key", # strong key to unlock the locked AI assistant plugin
   ]
+}
+
+# Secrets the ops console (Settings → Emails) may add new VERSIONS to. It never
+# reads them back; code tracks a "configured" flag instead. Must stay a subset of
+# secret_ids. The module default is the legacy ["smtp-password"], so this has to
+# be set explicitly for the Brevo form to work.
+variable "admin_writable_secret_ids" {
+  type        = list(string)
+  description = "Secret IDs the ops console may write new versions to (subset of secret_ids)."
+  default     = ["brevo-api-key", "brevo-webhook-secret"]
 }
 
 # ── Budget ────────────────────────────────────────────────────────────────────

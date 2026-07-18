@@ -113,6 +113,8 @@ module "secrets" {
   runtime_sa_email = module.iam.functions_runtime_email
   admin_sa_email   = module.iam.admin_runtime_email
 
+  admin_writable_secret_ids = var.admin_writable_secret_ids
+
   depends_on = [module.services]
 }
 
