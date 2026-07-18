@@ -19,7 +19,7 @@ import {
   type ActivityAccessRule,
   type ActivityMemberBenefit,
 } from '@linyup/shared'
-import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
+import { resolveActivityPricingDisplay, type SubLookup } from '@/lib/activityTerms'
 import { formatCurrency } from '@/lib/format'
 import { useLocale, useTranslations } from 'next-intl'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
@@ -138,35 +138,6 @@ function sessionDuration(
 // activityGradient now lives in components/booking/StickyBar (shared with the
 // appointment picker) — imported above and reused by the activity cards below.
 
-// Money-chip label for one resolved term — the activity-list step's ONLY new
-// badges (gate/trial keep the dual-badge logic just added this week, untouched
-// here). No subscription-type names loaded on this public flow, so benefit
-// chips stay generic — same convention as the public website.
-function moneyChipLabel(
-  term: ActivityTerm,
-  currency: string,
-  locale: string,
-  t: ReturnType<typeof useTranslations>
-): string | null {
-  switch (term.kind) {
-    case 'price':
-      return term.min === term.max
-        ? t('badgeFromPrice', { price: formatCurrency(term.min ?? 0, currency, locale) })
-        : t('badgePriceRange', {
-            min: formatCurrency(term.min ?? 0, currency, locale),
-            max: formatCurrency(term.max ?? 0, currency, locale),
-          })
-    case 'dropIn':
-      return t('badgeDropInPrice', { price: formatCurrency(term.amount ?? 0, currency, locale) })
-    case 'benefitIncluded':
-      return t('chipBenefitIncluded')
-    case 'benefitDiscount':
-      return t('chipBenefitDiscount', { percent: term.percent ?? 0 })
-    default:
-      return null
-  }
-}
-
 // ─── props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -185,11 +156,36 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   const { teamId, team } = usePublicTeam()
   const locale = useLocale()
   const t = useTranslations('PublicBooking')
+  const tShop = useTranslations('Shop')
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
   const bookingSettings = team.bookingSettings
   const showBranding = team.showBranding === true
   const currency = team.default_currency ?? 'CHF'
+
+  // Subscription plans (id → name + price label) for the activity cards' access
+  // lines ("Included with Premium — CHF 89 / month"). Same source the shop reads:
+  // the team public_profile's aggregator, already on `team` via PublicTeamProvider.
+  const subLookup = useMemo<SubLookup>(() => {
+    const plans =
+      (team as { aggregator_subscription_types?: Array<{ id: string; name: string; prices?: Array<{ amount: number; recurrence: string }> }> })
+        .aggregator_subscription_types ?? []
+    const byId = new Map(plans.map((p) => [p.id, p]))
+    return (id: string) => {
+      const p = byId.get(id)
+      if (!p) return null
+      const price = p.prices?.[0]
+      let priceLabel: string | null = null
+      if (price) {
+        const key = `recurrence.${price.recurrence}`
+        const suffix = tShop.has(key as Parameters<typeof tShop.has>[0])
+          ? ` ${tShop(key as Parameters<typeof tShop>[0])}`
+          : ''
+        priceLabel = `${formatCurrency(price.amount, currency, locale)}${suffix}`
+      }
+      return { name: p.name, priceLabel }
+    }
+  }, [team, currency, locale, tShop])
 
   const bookingWindowMonths = bookingSettings?.windowMonths ?? 2
   const showPhone = bookingSettings?.showPhone !== false
@@ -612,59 +608,46 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                 {/* Content */}
                 <div className="flex-1 p-4 min-w-0">
                   {(() => {
-                    // ── Card details, structured into two tiers so the mix of
-                    // topics stops competing: (1) status BADGES next to the name —
-                    // ONE colour per meaning (amber = an access gate, green = free
-                    // to try, muted = neutral facts like type/level); (2) a muted
-                    // PRICING line below — every money term (price/drop-in/benefit)
-                    // as plain text, kept out of the coloured-badge noise.
-                    // Appointments have NO access gate (the price is the gate), so
-                    // they never show a gate/trial badge — just the neutral
-                    // "Appointment" type chip and their price line.
-                    const rule = resolveActivityAccessRule(a)
-                    const triable =
-                      !isAppointment &&
-                      ((rule.type === 'open' && a.isFreeTrial) || a.trialEnabled === true)
-                    const pricingLine = resolveActivityTerms({ ...a, type: a.activityType })
-                      .filter(
-                        (term) =>
-                          term.kind === 'price' ||
-                          term.kind === 'dropIn' ||
-                          term.kind.startsWith('benefit')
+                    // Structured commercial display (locked with the user): the ONLY
+                    // things shown are two chips — Free trial + the type (Class /
+                    // Appointment) — and NAMED pricing lines: "Included with {sub} —
+                    // {price}" per granting subscription, "Discount with {sub} — {%}"
+                    // per appointment-discount subscription, the drop-in price, and
+                    // an appointment's direct price. No generic "Subscription
+                    // required" / "Members only" gate badges, no generic "Included".
+                    const d = resolveActivityPricingDisplay({ ...a, type: a.activityType }, subLookup)
+                    const lines: string[] = []
+                    for (const s of d.includedWith)
+                      lines.push(
+                        s.priceLabel
+                          ? t('includedWithSubPriced', { name: s.name, price: s.priceLabel })
+                          : t('includedWithSub', { name: s.name })
                       )
-                      .map((term) => moneyChipLabel(term, currency, locale, t))
-                      .filter((label): label is string => !!label)
-                      .join(' · ')
+                    for (const s of d.discountWith)
+                      lines.push(t('discountWithSub', { name: s.name, percent: s.percent }))
+                    if (d.dropInAmount != null)
+                      lines.push(t('badgeDropInPrice', { price: formatCurrency(d.dropInAmount, currency, locale) }))
+                    if (d.appointmentPrice)
+                      lines.push(
+                        d.appointmentPrice.min === d.appointmentPrice.max
+                          ? t('badgeFromPrice', { price: formatCurrency(d.appointmentPrice.min, currency, locale) })
+                          : t('badgePriceRange', {
+                              min: formatCurrency(d.appointmentPrice.min, currency, locale),
+                              max: formatCurrency(d.appointmentPrice.max, currency, locale),
+                            })
+                      )
                     return (
                       <>
                         <div className="flex items-start gap-1.5 flex-wrap">
                           <p className="font-semibold text-sm leading-tight">{a.name}</p>
-                          {/* Type (neutral) — appointments route to the slot picker */}
-                          {isAppointment && (
-                            <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5 font-medium">
-                              {t('badgeAppointment')}
-                            </span>
-                          )}
-                          {/* Access gate (classes only) — one amber colour for both kinds */}
-                          {!isAppointment && rule.type === 'subscription' && (
-                            <span className="rounded-full bg-amber-100 text-amber-700 text-xs px-2 py-0.5 font-medium">
-                              {t('badgeMembershipRequired')}
-                            </span>
-                          )}
-                          {!isAppointment && rule.type === 'members' && (
-                            <span className="rounded-full bg-amber-100 text-amber-700 text-xs px-2 py-0.5 font-medium">
-                              {t('badgeMembersOnly')}
-                            </span>
-                          )}
-                          {/* Free trial (classes) — green (the one "positive/free" signal) */}
-                          {triable && (
+                          {/* Type chip — Class or Appointment (always present) */}
+                          <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5 font-medium">
+                            {d.type === 'appointment' ? t('badgeAppointment') : t('chipClass')}
+                          </span>
+                          {/* Free trial — the one positive/free signal */}
+                          {d.freeTrial && (
                             <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
                               {t('badgeFreeTrial')}
-                            </span>
-                          )}
-                          {a.level && (
-                            <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5">
-                              {a.level}
                             </span>
                           )}
                           {!hasSessions && (
@@ -673,8 +656,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                             </span>
                           )}
                         </div>
-                        {pricingLine && (
-                          <p className="text-xs text-muted-foreground mt-1">{pricingLine}</p>
+                        {lines.length > 0 && (
+                          <div className="mt-1 space-y-0.5">
+                            {lines.map((line, i) => (
+                              <p key={i} className="text-xs text-muted-foreground">{line}</p>
+                            ))}
+                          </div>
                         )}
                       </>
                     )

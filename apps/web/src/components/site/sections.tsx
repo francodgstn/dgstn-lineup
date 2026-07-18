@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   collectionGroup,
   query,
@@ -51,7 +51,7 @@ import type {
   OrgSiteTeamRef,
 } from '@linyup/shared'
 import { compareActivities, type ActivityAccessRule, type ActivityMemberBenefit } from '@linyup/shared'
-import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
+import { resolveActivityTerms, resolveActivityPricingDisplay, type ActivityTerm, type SubLookup } from '@/lib/activityTerms'
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
 import { usePlaces } from '@/hooks/usePlaces'
@@ -358,7 +358,25 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
   const { palette, slug, teamId, preview } = ctx
   const [activities, setActivities] = useState<ActivityEntry[]>([])
   const [currency, setCurrency] = useState('CHF')
+  // Subscription plans (id → name + price) so a card can name which plan includes
+  // it — "Included with Premium — CHF 89/mo". Same aggregator the Pricing block reads.
+  const [subPlans, setSubPlans] = useState<PlanEntry[]>([])
   const [loading, setLoading] = useState(true)
+
+  const subLookup = useMemo<SubLookup>(() => {
+    const byId = new Map(subPlans.map((p) => [p.id, p]))
+    return (id: string) => {
+      const p = byId.get(id)
+      if (!p) return null
+      const price = p.prices?.[0]
+      return {
+        name: p.name,
+        priceLabel: price
+          ? `${formatCurrency(price.amount, currency)}${RECURRENCE_SUFFIX[price.recurrence] ?? ''}`
+          : null,
+      }
+    }
+  }, [subPlans, currency])
 
   useEffect(() => {
     let alive = true
@@ -395,6 +413,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
           .sort(compareActivities)
         setActivities(list)
         setCurrency((teamSnap.data()?.default_currency as string | undefined) ?? 'CHF')
+        setSubPlans((teamSnap.data()?.aggregator_subscription_types as PlanEntry[] | undefined) ?? [])
       })
       .catch(() => {
         if (alive) setActivities([])
@@ -442,14 +461,23 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                   : a.slug
                     ? `/public/${slug}/booking/${a.slug}`
                     : undefined
-              // Terms chips live on the activity card on every surface that lists
-              // them (see activityTerms.ts). Trial keeps its own ribbon on the
-              // image (more prominent, and now correctly accounts for a
-              // trialEnabled gated class — not just isFreeTrial); the rest render
-              // as a meta row in the card footer.
-              const terms = resolveActivityTerms({ ...a, type: a.activityType })
-              const hasTrial = terms.some((term) => term.kind === 'trial')
-              const footerTerms = terms.filter((term) => term.kind !== 'trial')
+              // Structured commercial display (locked with the user): Free trial
+              // stays a ribbon on the image; the card shows a type chip (Class /
+              // Appointment) + NAMED pricing lines ("Included with {sub} — {price}",
+              // "Discount with {sub} — {%}", drop-in, appointment price). No generic
+              // "Subscription required" / "Members only".
+              const d = resolveActivityPricingDisplay({ ...a, type: a.activityType }, subLookup)
+              const pricingLines: string[] = []
+              for (const s of d.includedWith)
+                pricingLines.push(s.priceLabel ? `Included with ${s.name} — ${s.priceLabel}` : `Included with ${s.name}`)
+              for (const s of d.discountWith) pricingLines.push(`Discount with ${s.name} — ${s.percent}%`)
+              if (d.dropInAmount != null) pricingLines.push(`Drop-in ${formatCurrency(d.dropInAmount, currency)}`)
+              if (d.appointmentPrice)
+                pricingLines.push(
+                  d.appointmentPrice.min === d.appointmentPrice.max
+                    ? `From ${formatCurrency(d.appointmentPrice.min, currency)}`
+                    : `${formatCurrency(d.appointmentPrice.min, currency)}–${formatCurrency(d.appointmentPrice.max, currency)}`
+                )
               return (
                 <div
                   key={a.id}
@@ -477,7 +505,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         </span>
                       </div>
                     )}
-                    {hasTrial && (
+                    {d.freeTrial && (
                       <span
                         className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow"
                         style={{ background: palette.accent, color: palette.onAccent }}
@@ -491,34 +519,26 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                       <h3 className="text-lg font-semibold" style={{ color: palette.text }}>
                         {a.name}
                       </h3>
-                      {a.level && a.level !== 'all' && (
-                        <span
-                          className="rounded-full border px-2 py-0.5 text-xs capitalize"
-                          style={{ borderColor: palette.border, color: palette.muted }}
-                        >
-                          {a.level}
-                        </span>
-                      )}
+                      {/* Type chip — Class or Appointment */}
+                      <span
+                        className="rounded-full border px-2 py-0.5 text-xs"
+                        style={{ borderColor: palette.border, color: palette.muted }}
+                      >
+                        {d.type === 'appointment' ? 'Appointment' : 'Class'}
+                      </span>
                     </div>
                     {a.description && (
                       <p className="mt-2 flex-1 text-sm" style={{ color: palette.muted }}>
                         {a.description}
                       </p>
                     )}
-                    {footerTerms.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {footerTerms.map((term, i) => {
-                          const label = activityTermLabel(term, currency)
-                          return label ? (
-                            <span
-                              key={`${term.kind}-${i}`}
-                              className="rounded-full border px-2 py-0.5 text-xs"
-                              style={{ borderColor: palette.border, color: palette.muted }}
-                            >
-                              {label}
-                            </span>
-                          ) : null
-                        })}
+                    {pricingLines.length > 0 && (
+                      <div className="mt-3 space-y-1">
+                        {pricingLines.map((line, i) => (
+                          <p key={i} className="text-sm" style={{ color: palette.muted }}>
+                            {line}
+                          </p>
+                        ))}
                       </div>
                     )}
                     {href && (

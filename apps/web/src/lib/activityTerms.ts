@@ -100,7 +100,15 @@ export function resolveActivityTerms(a: ActivityTermsInput): ActivityTerm[] {
   // class (default when `type` is absent/'class')
   const rule = resolveActivityAccessRule(a)
   if (rule.type === 'members' || rule.type === 'subscription') {
-    terms.push({ kind: 'gate', tier: rule.type })
+    terms.push({
+      kind: 'gate',
+      tier: rule.type,
+      // A subscription-gated class carries WHICH subscriptions grant access, so a
+      // surface with the plan list can render "Included with {name}" per plan.
+      ...(rule.type === 'subscription' && rule.subscriptionTypeIds?.length
+        ? { subscriptionTypeIds: rule.subscriptionTypeIds }
+        : {}),
+    })
   }
   const triable = (rule.type === 'open' && a.isFreeTrial === true) || a.trialEnabled === true
   if (triable) {
@@ -111,4 +119,73 @@ export function resolveActivityTerms(a: ActivityTermsInput): ActivityTerm[] {
   }
 
   return terms
+}
+
+// ─── structured pricing display (named subscriptions) ──────────────────────────
+// The activity-card commercial display the PUBLIC surfaces render (booking flow +
+// website). Resolves the raw terms into NAMED access routes, given a lookup from
+// a subscription-type id → its display name + price label. Each surface supplies
+// the lookup from the team's `aggregator_subscription_types`, formatted in its own
+// locale/currency; a surface without the aggregator (or a sub it can't resolve)
+// simply omits that line — never a generic "Subscription required".
+
+export interface ResolvedSub {
+  name: string
+  /** e.g. "CHF 89 / mo" — the surface formats it; null when the sub has no price. */
+  priceLabel: string | null
+}
+export type SubLookup = (subscriptionTypeId: string) => ResolvedSub | null
+
+export interface ActivityPricingDisplay {
+  type: 'class' | 'appointment'
+  freeTrial: boolean
+  /** "Included with {name} — {priceLabel}" — a subscription-gated class OR an
+   *  appointment's INCLUDED member benefit. One per resolvable subscription. */
+  includedWith: ResolvedSub[]
+  /** "Discount with {name} — {percent}%" — an appointment's DISCOUNT benefit. */
+  discountWith: Array<{ name: string; percent: number }>
+  /** Class drop-in price (major units), or null. */
+  dropInAmount: number | null
+  /** Appointment direct/base price range (major units), or null. */
+  appointmentPrice: { min: number; max: number } | null
+}
+
+export function resolveActivityPricingDisplay(
+  a: ActivityTermsInput,
+  subLookup: SubLookup
+): ActivityPricingDisplay {
+  const terms = resolveActivityTerms(a)
+  const type: 'class' | 'appointment' = a.type === 'appointment' ? 'appointment' : 'class'
+
+  const includedIds = new Set<string>()
+  let discount: { percent: number; ids: string[] } | null = null
+  let dropInAmount: number | null = null
+  let appointmentPrice: { min: number; max: number } | null = null
+  let freeTrial = false
+
+  for (const term of terms) {
+    if (term.kind === 'trial') freeTrial = true
+    else if (term.kind === 'dropIn') dropInAmount = term.amount ?? null
+    else if (term.kind === 'price') appointmentPrice = { min: term.min ?? 0, max: term.max ?? 0 }
+    else if (term.kind === 'gate' && term.tier === 'subscription')
+      (term.subscriptionTypeIds ?? []).forEach((id) => includedIds.add(id))
+    else if (term.kind === 'benefitIncluded')
+      (term.subscriptionTypeIds ?? []).forEach((id) => includedIds.add(id))
+    else if (term.kind === 'benefitDiscount')
+      discount = { percent: term.percent ?? 0, ids: term.subscriptionTypeIds ?? [] }
+  }
+
+  const includedWith = [...includedIds]
+    .map((id) => subLookup(id))
+    .filter((s): s is ResolvedSub => !!s)
+  const discountWith = discount
+    ? discount.ids
+        .map((id) => {
+          const s = subLookup(id)
+          return s ? { name: s.name, percent: discount!.percent } : null
+        })
+        .filter((x): x is { name: string; percent: number } => !!x)
+    : []
+
+  return { type, freeTrial, includedWith, discountWith, dropInAmount, appointmentPrice }
 }
