@@ -303,6 +303,7 @@
     "sectionAgenda": "Heute",
     "snapshotStatusActive": "Aktiv",
     "trendsUpsell": "Upgrade auf Studio für wöchentliche Trends und erweiterte Analysen.",
+    "financeUpsell": "Einnahmen, letzte Zahlungen und — mit dem Finanz-Plugin — deine Buchhaltung, im Studio-Tarif.",
     "snapshotTypeStudent": "Mitglieder",
     "snapshotTypeTrial": "Schnupperer",
     "snapshotTypeExternal": "Extern",
@@ -310,7 +311,8 @@
     "snapshotAlerts": "Ausgelöste Erinnerungen",
     "snapshotRecentContacts": "Neu diesen Monat",
     "snapshotNoAlerts": "Keine ausgelösten Erinnerungen",
-    "sectionTrends": "Wöchentliche Trends",
+    "sectionTrends": "Wöchentliche Betriebstrends",
+    "sectionFinance": "Finanzen",
     "snapshotNoNew": "Keine neuen Kontakte diesen Monat",
     "sectionContactsSnapshot": "Kontaktübersicht",
     "demoTitle": "Demographie",
@@ -3703,6 +3705,7 @@
   },
   "EngagementMatrix": {
     "cardTitle": "Engagement-Matrix",
+    "experimentalBadge": "Experimentell",
     "trajectoryButton": "Verlauf",
     "notEnoughData": "Nicht genügend Daten für diesen Zeitraum",
     "declineWarning": "Das Engagement ist seit Beginn des Zeitraums um mehr als 3 Punkte gesunken.",
@@ -4723,5 +4726,16 @@
         "action": "Plugins durchstöbern"
       }
     }
+  },
+  "DashboardFinance": {
+    "revenueTitle": "Einnahmen",
+    "revenueSubtitle": "diesen Monat",
+    "vsLastMonth": "{percent}% ggü. Vormonat",
+    "recentTitle": "Letzte Zahlungen",
+    "recentEmpty": "Noch keine Zahlungen",
+    "unassignedTitle": "Nicht zugeordnet",
+    "unassignedSubtitle": "Zahlungen ohne Kontakt",
+    "unassignedEmpty": "alle Zahlungen sind zugeordnet",
+    "unassignedAction": "Jetzt zuordnen"
   }
 }

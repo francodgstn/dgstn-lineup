@@ -32,6 +32,7 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
+  Banknote,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -65,6 +66,7 @@ import { BookingsTrendCard } from '@/components/dashboard/BookingsTrendCard'
 import { SessionsHeatmapCard } from '@/components/dashboard/SessionsHeatmapCard'
 import { TopActivitiesCard } from '@/components/dashboard/TopActivitiesCard'
 import { EngagementMatrixCard } from '@/components/dashboard/EngagementMatrixCard'
+import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinanceSection'
 // Temporarily hidden — restore alongside the commented rows in TrendsSection:
 // import { TrialFunnelCard } from '@/components/dashboard/TrialFunnelCard'
 // import { CorrelationExplorerCard } from '@/components/dashboard/CorrelationExplorerCard'
@@ -606,6 +608,25 @@ function TrendsUpsell() {
   )
 }
 
+function FinanceUpsell() {
+  const t = useTranslations('Dashboard')
+  const { openUpgradeModal } = useUpgradeModal()
+  return (
+    <div className="rounded-xl border border-dashed p-8 text-center space-y-3">
+      <Banknote className="h-8 w-8 mx-auto text-muted-foreground/40" />
+      <p className="text-sm font-medium">{t('sectionFinance')}</p>
+      <p className="text-xs text-muted-foreground max-w-xs mx-auto">{t('financeUpsell')}</p>
+      <button
+        onClick={() => openUpgradeModal({ minPlan: 'studio' })}
+        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+      >
+        <Lock className="h-3 w-3" />
+        See upgrade options
+      </button>
+    </div>
+  )
+}
+
 // ─── trends section (Studio+ only) ───────────────────────────────────────────
 
 type CompareWith = 'none' | 'prev_period' | 'last_year'
@@ -653,7 +674,29 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
         </div>
       </div>
 
-      {/* Row 1: TopActivities + Heatmap + Engagement matrix */}
+      {/* Row 1: Contacts trend + Bookings trend — the headline shape of the week
+          leads; the breakdowns that explain it follow underneath. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ContactsSummaryCard
+          weeklyReports={data.weeklyReports}
+          comparisonWeeklyReports={data.comparisonWeeklyReports}
+          subscriptionTypes={data.subscriptionTypes}
+          {...sharedProps}
+        />
+        <BookingsTrendCard
+          sessions={data.sessions}
+          allBookings={data.allBookings}
+          newContactBookings={data.newContactBookings}
+          weeklyReports={data.weeklyReports}
+          comparisonWeeklyReports={data.comparisonWeeklyReports}
+          comparisonSessions={data.comparisonSessions}
+          comparisonAllBookings={data.comparisonAllBookings}
+          comparisonNewContactBookings={data.comparisonNewContactBookings}
+          {...sharedProps}
+        />
+      </div>
+
+      {/* Row 2: TopActivities + Heatmap + Engagement matrix */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-3">
           <TopActivitiesCard
@@ -679,27 +722,6 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
         <div className="lg:col-span-4">
           <EngagementMatrixCard weeklyReports={data.weeklyReports} trendsWeeks={trendsWeeks} />
         </div>
-      </div>
-
-      {/* Row 2: Contacts trend + Bookings trend */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ContactsSummaryCard
-          weeklyReports={data.weeklyReports}
-          comparisonWeeklyReports={data.comparisonWeeklyReports}
-          subscriptionTypes={data.subscriptionTypes}
-          {...sharedProps}
-        />
-        <BookingsTrendCard
-          sessions={data.sessions}
-          allBookings={data.allBookings}
-          newContactBookings={data.newContactBookings}
-          weeklyReports={data.weeklyReports}
-          comparisonWeeklyReports={data.comparisonWeeklyReports}
-          comparisonSessions={data.comparisonSessions}
-          comparisonAllBookings={data.comparisonAllBookings}
-          comparisonNewContactBookings={data.comparisonNewContactBookings}
-          {...sharedProps}
-        />
       </div>
 
       {/* Temporarily hidden — restore the imports above to bring these back:
@@ -858,6 +880,14 @@ export default function DashboardPage() {
         <SectionHeading>{t('sectionTrends')}</SectionHeading>
         <PlanGate minPlan="studio" fallback={<TrendsUpsell />}>
           <TrendsSection teamId={currentTeamId} />
+        </PlanGate>
+      </section>
+
+      {/* ── 5. Finance (Studio+ only) ── */}
+      <section className="space-y-5">
+        <SectionHeading>{t('sectionFinance')}</SectionHeading>
+        <PlanGate minPlan="studio" fallback={<FinanceUpsell />}>
+          <DashboardFinanceSection teamId={currentTeamId} />
         </PlanGate>
       </section>
     </div>

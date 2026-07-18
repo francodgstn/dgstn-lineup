@@ -303,6 +303,7 @@
     "sectionAgenda": "Today",
     "snapshotStatusActive": "Active",
     "trendsUpsell": "Upgrade to Studio to unlock weekly trends and advanced analytics.",
+    "financeUpsell": "See takings, recent payments and — with the finance plugin — your books, on the Studio plan.",
     "snapshotTypeStudent": "Members",
     "snapshotTypeTrial": "Trials",
     "snapshotTypeExternal": "External",
@@ -310,7 +311,8 @@
     "snapshotAlerts": "Triggered alerts",
     "snapshotRecentContacts": "New this month",
     "snapshotNoAlerts": "No triggered alerts",
-    "sectionTrends": "Weekly trends",
+    "sectionTrends": "Weekly operations trends",
+    "sectionFinance": "Finance",
     "snapshotNoNew": "No new contacts this month",
     "sectionContactsSnapshot": "Contacts snapshot",
     "demoTitle": "Demographics",
@@ -3703,6 +3705,7 @@
   },
   "EngagementMatrix": {
     "cardTitle": "Engagement matrix",
+    "experimentalBadge": "Experimental",
     "trajectoryButton": "Trajectory",
     "notEnoughData": "Not enough data for this period",
     "declineWarning": "Engagement has dropped more than 3 points since the start of the period.",
@@ -4723,5 +4726,16 @@
         "action": "Browse plugins"
       }
     }
+  },
+  "DashboardFinance": {
+    "revenueTitle": "Revenue",
+    "revenueSubtitle": "this month",
+    "vsLastMonth": "{percent}% vs last month",
+    "recentTitle": "Recent payments",
+    "recentEmpty": "No payments yet",
+    "unassignedTitle": "Unassigned",
+    "unassignedSubtitle": "payments with no contact",
+    "unassignedEmpty": "every payment is linked",
+    "unassignedAction": "Assign them"
   }
 }

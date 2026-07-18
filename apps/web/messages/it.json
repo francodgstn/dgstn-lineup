@@ -303,6 +303,7 @@
     "sectionAgenda": "Oggi",
     "snapshotStatusActive": "Attivi",
     "trendsUpsell": "Passa al piano Studio per trend settimanali e analisi avanzate.",
+    "financeUpsell": "Incassi, ultimi pagamenti e — con il plugin finanze — la contabilità, con il piano Studio.",
     "snapshotTypeStudent": "Membri",
     "snapshotTypeTrial": "Prova",
     "snapshotTypeExternal": "Esterni",
@@ -310,7 +311,8 @@
     "snapshotAlerts": "Avvisi attivati",
     "snapshotRecentContacts": "Nuovi questo mese",
     "snapshotNoAlerts": "Nessun avviso attivato",
-    "sectionTrends": "Tendenze settimanali",
+    "sectionTrends": "Tendenze settimanali operative",
+    "sectionFinance": "Finanze",
     "snapshotNoNew": "Nessun nuovo contatto questo mese",
     "sectionContactsSnapshot": "Panoramica contatti",
     "demoTitle": "Demografia",
@@ -3703,6 +3705,7 @@
   },
   "EngagementMatrix": {
     "cardTitle": "Matrice di coinvolgimento",
+    "experimentalBadge": "Sperimentale",
     "trajectoryButton": "Traiettoria",
     "notEnoughData": "Dati insufficienti per questo periodo",
     "declineWarning": "Il coinvolgimento è diminuito di oltre 3 punti dall'inizio del periodo.",
@@ -4723,5 +4726,16 @@
         "action": "Sfoglia i plugin"
       }
     }
+  },
+  "DashboardFinance": {
+    "revenueTitle": "Incassi",
+    "revenueSubtitle": "questo mese",
+    "vsLastMonth": "{percent}% vs mese scorso",
+    "recentTitle": "Pagamenti recenti",
+    "recentEmpty": "Nessun pagamento",
+    "unassignedTitle": "Non assegnati",
+    "unassignedSubtitle": "pagamenti senza contatto",
+    "unassignedEmpty": "tutti i pagamenti sono collegati",
+    "unassignedAction": "Assegnali"
   }
 }
