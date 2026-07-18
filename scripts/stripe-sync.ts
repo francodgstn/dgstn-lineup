@@ -45,6 +45,30 @@ const REPRICE = process.argv.includes('--reprice')
 /** The one project that must be driven by a LIVE key. Everything else is test. */
 const PROD_PROJECT = 'linyup-prod'
 
+// Running gcloud from Node needs care on Windows: the executable is gcloud.CMD,
+// so a bare 'gcloud' is ENOENT — and since Node 20 (CVE-2024-27980) spawning a
+// .cmd without a shell is EINVAL. Shell mode is therefore mandatory there, which
+// in turn means the OS re-parses the arguments, so anything interpolated into
+// them is validated first.
+const IS_WINDOWS = process.platform === 'win32'
+const SAFE_ID = /^[a-z0-9][a-z0-9-]*$/i
+
+function assertSafeId(value: string, what: string) {
+  if (!SAFE_ID.test(value)) {
+    console.error(`Refusing to run gcloud: ${what} "${value}" is not a plain identifier.`)
+    process.exit(1)
+  }
+}
+
+function gcloud(args: string[], opts: { input?: string; capture: boolean }): string {
+  return execFileSync('gcloud', args, {
+    encoding: 'utf8',
+    shell: IS_WINDOWS,
+    input: opts.input,
+    stdio: [opts.input === undefined ? 'ignore' : 'pipe', opts.capture ? 'pipe' : 'ignore', 'pipe'],
+  })
+}
+
 // Key resolution, in order:
 //   1. STRIPE_SECRET_KEY  — explicit override (local, CI, one-offs)
 //   2. Secret Manager     — when --project is given, read stripe-secret-key from
@@ -63,19 +87,25 @@ function resolveSecretKey(project: string | undefined): string {
     process.exit(1)
   }
 
+  assertSafeId(project, 'project')
+
   try {
-    const key = execFileSync(
-      'gcloud',
+    const key = gcloud(
       ['secrets', 'versions', 'access', 'latest', '--secret=stripe-secret-key', `--project=${project}`],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+      { capture: true },
     ).trim()
-    if (!key) throw new Error('empty')
+    if (!key) throw new Error('gcloud returned an empty value')
     console.log(`Using stripe-secret-key from ${project}’s Secret Manager.`)
     return key
-  } catch {
-    console.error(
-      `Could not read stripe-secret-key from ${project}. Check gcloud auth, or set STRIPE_SECRET_KEY.`,
-    )
+  } catch (err) {
+    // Surface what actually failed — "check your auth" is a guess, and gcloud's
+    // own stderr usually says exactly what's wrong (no version, no permission,
+    // wrong project, not logged in).
+    const e = err as { stderr?: string | Buffer; message?: string }
+    const detail = String(e.stderr ?? e.message ?? '').trim()
+    console.error(`Could not read stripe-secret-key from ${project}.`)
+    if (detail) console.error(detail.split('\n').slice(0, 4).map((l) => `  ${l}`).join('\n'))
+    console.error('  Set STRIPE_SECRET_KEY to bypass Secret Manager.')
     process.exit(1)
   }
 }
@@ -292,16 +322,33 @@ function argValue(flag: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined
 }
 
+// A gen2 function answers on TWO addresses, and either may be what's registered
+// in Stripe:
+//   https://<region>-<project>.cloudfunctions.net/<fn>
+//   https://<fn-lowercased>-<hash>-<region>.a.run.app       ← the Cloud Run service
+// Matching the canonical URL alone would miss an endpoint registered by the
+// other form and happily create a DUPLICATE, so both are recognised.
+function endpointMatches(url: string, fn: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.pathname.replace(/\/+$/, '') === `/${fn}`) return true
+    return u.hostname.toLowerCase().startsWith(`${fn.toLowerCase()}-`)
+  } catch {
+    return false
+  }
+}
+
 // Shells out to gcloud rather than pulling in @google-cloud/secret-manager: the
 // scripts workspace doesn't depend on it, and gcloud is already the documented
 // path for adding secret versions. The value goes in on stdin so it never
 // appears in the process list.
 function storeSecret(project: string, secretId: string, value: string) {
-  execFileSync(
-    'gcloud',
-    ['secrets', 'versions', 'add', secretId, `--project=${project}`, '--data-file=-'],
-    { input: value, stdio: ['pipe', 'ignore', 'inherit'] },
-  )
+  assertSafeId(project, 'project')
+  assertSafeId(secretId, 'secret id')
+  gcloud(['secrets', 'versions', 'add', secretId, `--project=${project}`, '--data-file=-'], {
+    input: value,
+    capture: false,
+  })
 }
 
 async function syncWebhooks(project: string, secretProject: string | undefined) {
@@ -309,7 +356,7 @@ async function syncWebhooks(project: string, secretProject: string | undefined) 
 
   for (const spec of WEBHOOKS) {
     const url = `https://${FUNCTIONS_REGION}-${project}.cloudfunctions.net/${spec.fn}`
-    const live = existing.data.find((e) => e.url === url)
+    const live = existing.data.find((e) => endpointMatches(e.url, spec.fn))
     const scope = spec.connect ? 'connect' : 'account'
 
     if (!live) {
@@ -338,8 +385,17 @@ async function syncWebhooks(project: string, secretProject: string | undefined) 
     }
 
     // Endpoint exists — report drift rather than mutating silently.
+    if (live.url !== url) {
+      console.log(`  (registered as ${live.url} — the Cloud Run address of the same function)`)
+    }
     if (live.status !== 'enabled') {
       console.log(`! disabled ${spec.fn}  (status=${live.status}) — enable it in Stripe`)
+    }
+    // The API does not report whether an existing endpoint listens to CONNECTED
+    // accounts, so this can't be verified after the fact — only set correctly at
+    // creation. If Connect events never arrive, suspect this first.
+    if (spec.connect) {
+      console.log(`           connect scope not reported by the API — verify in Stripe if events don't arrive`)
     }
     const liveEvents = new Set(live.enabled_events)
     const missing = spec.events.filter((e) => !liveEvents.has(e) && !liveEvents.has('*'))
