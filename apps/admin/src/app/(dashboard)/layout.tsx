@@ -2,6 +2,7 @@ import { requireOperator } from '@/lib/require-operator'
 import { describeFirebaseTarget } from '@/lib/firebase-admin'
 import { NavLinks } from '@/components/nav-links'
 import { SignOutButton } from '@/components/sign-out-button'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export default async function DashboardLayout({
   children,
@@ -42,6 +43,7 @@ export default async function DashboardLayout({
             </span>
             <div className="ml-auto flex items-center gap-3">
               <span className="text-sm text-muted-foreground">{operator.email}</span>
+              <ThemeToggle />
               <SignOutButton />
             </div>
           </header>
