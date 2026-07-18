@@ -3,9 +3,10 @@
 // Table of contents for the How-to page. Two renderings of one list: a sticky
 // rail beside the content on wide screens, and a scrollable chip row under the
 // page title everywhere else (there's no room for a rail next to the sidebar).
-// The active entry is derived from scroll position rather than an
-// IntersectionObserver — sections here are tall and unevenly sized, so "the
-// last heading scrolled past" is what actually matches what the reader sees.
+// Both stick as you scroll. The active entry is the last section whose top has
+// passed a line near the top of the viewport — measured from getBoundingClient-
+// Rect (viewport-relative, so it's correct whatever element scrolls), and
+// recomputed on an IntersectionObserver + scroll signal.
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 
@@ -81,7 +82,9 @@ function useActiveSection() {
   return active
 }
 
-/** Chip row shown under the page title below `xl`, where the rail has no room. */
+/** Chip row shown under the page title below `xl`, where the rail has no room.
+ *  Sticks to the top of the scroll area once the title scrolls past, with a
+ *  translucent backing so scrolling content stays legible behind it. */
 export function HowToTocChips() {
   const t = useTranslations('HowTo')
   const active = useActiveSection()
@@ -89,7 +92,7 @@ export function HowToTocChips() {
   return (
     <nav
       aria-label={t('tocTitle')}
-      className="-mx-4 mt-5 flex gap-2 overflow-x-auto px-4 pb-1 xl:hidden"
+      className="sticky top-0 z-20 -mx-4 mt-5 flex gap-2 overflow-x-auto border-b bg-background/80 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/70 xl:hidden"
     >
       {TOC_SECTIONS.map((s) => (
         <a
@@ -115,7 +118,10 @@ export function HowToTocRail() {
   const active = useActiveSection()
 
   return (
-    <nav aria-label={t('tocTitle')} className="sticky top-6 hidden w-44 shrink-0 xl:block">
+    <nav
+      aria-label={t('tocTitle')}
+      className="sticky top-6 hidden w-44 shrink-0 self-start xl:block"
+    >
       <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
         {t('tocTitle')}
       </p>
