@@ -117,6 +117,9 @@ export const REFERRALS_COLLECTION = 'referrals'
 export const REFERRAL_CODES_COLLECTION = 'referral_codes'
 
 export const AVAILABILITY_COLLECTION = 'availability'
+// Provider time-off that OVERRIDES the availability templates — a coach is
+// unavailable in [start, end) even if a template would otherwise offer it.
+export const AVAILABILITY_EXCEPTIONS_COLLECTION = 'availability_exceptions'
 export const COACH_SLOTS_COLLECTION = 'coach_slots'
 export const COACH_SLOT_BOOKINGS_SUBCOLLECTION = 'bookings'
 

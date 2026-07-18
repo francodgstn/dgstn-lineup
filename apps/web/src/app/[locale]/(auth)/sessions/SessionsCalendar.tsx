@@ -416,6 +416,8 @@ function layoutDaySessions(
 interface RawAvailabilityBand {
   key: string
   title: string
+  providerId: string
+  providerName: string
   startMin: number
   endMin: number
 }
@@ -423,6 +425,8 @@ interface RawAvailabilityBand {
 interface PositionedAvailabilityBand {
   key: string
   title: string
+  providerId: string
+  providerName: string
   top: number
   height: number
 }
@@ -466,11 +470,12 @@ function expandAvailabilityForDay(
       if (dayStart > endDay) continue
     }
 
+    const who = { providerId: a.providerId, providerName: a.providerName || a.providerId }
     if (a.mode === 'range' && a.window) {
       const [sh, sm] = a.window.start.split(':').map(Number)
       const [eh, em] = a.window.end.split(':').map(Number)
       if (Number.isFinite(sh) && Number.isFinite(sm) && Number.isFinite(eh) && Number.isFinite(em)) {
-        bands.push({ key: `${a.id}-range`, title: a.title, startMin: sh * 60 + sm, endMin: eh * 60 + em })
+        bands.push({ key: `${a.id}-range`, title: a.title, ...who, startMin: sh * 60 + sm, endMin: eh * 60 + em })
       }
     } else if (a.mode === 'times' && a.times?.length) {
       const duration = shortestActivityDuration(a.activityIds, activities)
@@ -478,7 +483,7 @@ function expandAvailabilityForDay(
         const [h, m] = time.split(':').map(Number)
         if (!Number.isFinite(h) || !Number.isFinite(m)) continue
         const startMin = h * 60 + m
-        bands.push({ key: `${a.id}-${time}`, title: a.title, startMin, endMin: startMin + duration })
+        bands.push({ key: `${a.id}-${time}`, title: a.title, ...who, startMin, endMin: startMin + duration })
       }
     }
   }
@@ -497,6 +502,10 @@ interface SessionsCalendarProps {
    *  eligibility (single coach in scope + type filter includes appointments);
    *  this component just expands+positions whatever it's given. */
   availability?: (Availability & { id: string })[]
+  /** Availability-only view: ALL coaches' free time as one lane per coach in each
+   *  day column (no session blocks, no lane background). The `availability` prop
+   *  then carries every coach's active windows. */
+  availabilityMode?: boolean
   onEdit: (s: Session) => void
   onDelete: (s: Session) => void
   onEventEdit?: (e: Event) => void
@@ -506,11 +515,20 @@ interface SessionsCalendarProps {
   onNavigate?: (year: number, month: number) => void
 }
 
+// Stable per-coach colour for the availability lanes (hashed, same palette the
+// activity blocks use).
+function providerColor(providerId: string): string {
+  let h = 0
+  for (const ch of providerId) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return PALETTE[h % PALETTE.length]
+}
+
 export default function SessionsCalendar({
   sessions,
   activities,
   events = [],
   availability = [],
+  availabilityMode = false,
   onEdit,
   onDelete,
   onEventEdit,
@@ -640,6 +658,8 @@ export default function SessionsCalendar({
         (b): PositionedAvailabilityBand => ({
           key: b.key,
           title: b.title,
+          providerId: b.providerId,
+          providerName: b.providerName,
           top: ((b.startMin - rangeStartMin) / 60) * HOUR_PX,
           height: Math.max(((b.endMin - b.startMin) / 60) * HOUR_PX, 6),
         })
@@ -650,11 +670,22 @@ export default function SessionsCalendar({
 
   const gridHeight = (weekGrid.endHour - weekGrid.startHour) * HOUR_PX
   const hourCount = weekGrid.endHour - weekGrid.startHour
-  // The lane is reserved ONLY when there's availability to show (the schedule
-  // page passes [] when the "Free time" toggle is off) — otherwise blocks take
-  // the full column width.
-  const showLane = availability.length > 0
+  // The single-provider lane is reserved ONLY when overlaying availability on the
+  // normal session view (the schedule page passes [] when off) — otherwise blocks
+  // take the full column width. Availability MODE uses per-coach lanes instead.
+  const showLane = availability.length > 0 && !availabilityMode
   const lanePx = showLane ? AVAIL_GUTTER_PX : 0
+  // Availability mode: the distinct coaches (stable order + lane index) whose
+  // free time is shown this week — one sub-column lane per coach in every day.
+  const availabilityProviders = useMemo(() => {
+    if (!availabilityMode) return [] as { id: string; name: string }[]
+    const byId = new Map<string, string>()
+    for (const day of weekGrid.days)
+      for (const b of day.bands) if (!byId.has(b.providerId)) byId.set(b.providerId, b.providerName)
+    return [...byId.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [weekGrid, availabilityMode])
 
   // Locale-aware labels
   const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString([], {
@@ -951,20 +982,54 @@ export default function SessionsCalendar({
                         />
                       ))}
 
-                      {/* Availability rail — the RAW published free time (single-provider
-                          scope only, see schedule/page.tsx) shown as a compact colored
-                          segment in the LEFT lane only, NOT a full-width slot: it declutters
-                          the grid and never fights a session's own fill. Single colour; the
-                          schedule name lives in the hover tooltip. (Future: per-coach
-                          sub-lanes when several providers are in scope.) */}
-                      {bands.map((band) => (
-                        <div
-                          key={band.key}
-                          title={band.title}
-                          className="absolute left-0 z-[2] rounded-r-sm border-l-[3px] border-primary/70 bg-primary/40"
-                          style={{ top: band.top, height: band.height, width: AVAIL_GUTTER_PX }}
-                        />
-                      ))}
+                      {/* Availability bands. In OVERLAY mode (single provider): a
+                          compact colored segment in the left lane only, so it never
+                          fights a session's fill. In availabilityMode: ALL coaches'
+                          free time as one colored sub-column lane per coach across
+                          the full width — no sessions to compete with. Tooltip carries
+                          the coach + schedule name. */}
+                      {bands.map((band) => {
+                        if (availabilityMode) {
+                          const laneCount = Math.max(availabilityProviders.length, 1)
+                          const laneIdx = Math.max(
+                            availabilityProviders.findIndex((p) => p.id === band.providerId),
+                            0
+                          )
+                          const c = providerColor(band.providerId)
+                          return (
+                            <div
+                              key={band.key}
+                              title={`${band.providerName} · ${band.title}`}
+                              className="absolute z-[2] overflow-hidden rounded-sm"
+                              style={{
+                                top: band.top,
+                                height: band.height,
+                                left: `calc(${(laneIdx / laneCount) * 100}% + 1px)`,
+                                width: `calc(${100 / laneCount}% - 2px)`,
+                                backgroundColor: `${c}2E`,
+                                borderLeft: `2px solid ${c}`,
+                              }}
+                            >
+                              {band.height >= 16 && (
+                                <p
+                                  className="truncate px-1 pt-0.5 text-[9px] font-medium leading-tight"
+                                  style={{ color: c }}
+                                >
+                                  {band.providerName}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        }
+                        return (
+                          <div
+                            key={band.key}
+                            title={band.title}
+                            className="absolute left-0 z-[2] rounded-r-sm border-l-[3px] border-primary/70 bg-primary/40"
+                            style={{ top: band.top, height: band.height, width: AVAIL_GUTTER_PX }}
+                          />
+                        )
+                      })}
 
                       {/* Now indicator */}
                       {isToday && nowTop >= 0 && nowTop <= gridHeight && (

@@ -973,6 +973,17 @@ service cloud.firestore {
       allow delete: if false; // soft delete only
     }
 
+    // Provider time-off that overrides availability templates. Managers CRUD their
+    // team's exceptions; unlike templates these HARD-delete (removing time off).
+    // listAvailability reads them server-side (Admin SDK) to subtract busy time.
+    match /availability_exceptions/{exceptionId} {
+      allow get: if isAuthed() && isTeamMember(resource.data.teamId);
+      allow list: if isAuthed() && isTeamMember(getUserCurrentTeam());
+      allow create: if isAuthed() && hasTeamRole(request.resource.data.teamId, 'manager');
+      allow update: if isAuthed() && hasTeamRole(resource.data.teamId, 'manager');
+      allow delete: if isAuthed() && hasTeamRole(resource.data.teamId, 'manager');
+    }
+
     // Coach Slots collection removed — appointment sessions now live in `sessions`
     // with activityType === 'appointment'. Public access via sessions/{id}/public_profile.
 

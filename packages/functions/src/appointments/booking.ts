@@ -10,6 +10,7 @@ import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https'
 import {
   ACTIVITIES_COLLECTION,
   AVAILABILITY_COLLECTION,
+  AVAILABILITY_EXCEPTIONS_COLLECTION,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   appointmentSlotBlocked,
   isExpiredAppointmentHold,
@@ -140,6 +141,25 @@ export async function loadAppointmentBookingContext(params: {
   if (!tpl) {
     throw new HttpsError('failed-precondition', 'This time is no longer available. Please pick another.')
   }
+
+  // Provider time-off (availability_exceptions) OVERRIDES the templates — refuse a
+  // start inside one (defence-in-depth; listAvailability already hides these).
+  const exSnap = await db
+    .collection(AVAILABILITY_EXCEPTIONS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .where('providerId', '==', providerId)
+    .get()
+  const startMsVal = start.getTime()
+  const endMsVal = end.getTime()
+  if (
+    exSnap.docs.some((d) => {
+      const e = d.data()
+      return startMsVal < (e.end as Timestamp).toMillis() && endMsVal > (e.start as Timestamp).toMillis()
+    })
+  ) {
+    throw new HttpsError('failed-precondition', 'This time is no longer available. Please pick another.')
+  }
+
   const providerName = tpl.providerName
 
   // ── Team ──

@@ -20,6 +20,7 @@ import {
   FORMS_COLLECTION,
   DOCUMENTS_COLLECTION,
   AVAILABILITY_COLLECTION,
+  AVAILABILITY_EXCEPTIONS_COLLECTION,
   REFERRAL_CODES_COLLECTION,
   REFERRALS_COLLECTION,
   CONNECT_ACCOUNTS_COLLECTION,
@@ -97,6 +98,7 @@ export const TENANT_DATA_COLLECTIONS: TenantCollection[] = [
   { collection: FORMS_COLLECTION, match: { by: 'field', field: 'teamId' } },
   { collection: DOCUMENTS_COLLECTION, match: { by: 'field', field: 'teamId' } },
   { collection: AVAILABILITY_COLLECTION, match: { by: 'field', field: 'teamId' } },
+  { collection: AVAILABILITY_EXCEPTIONS_COLLECTION, match: { by: 'field', field: 'teamId' } },
   // referrals key the team via `team_id`; referral_codes via `teamId`.
   { collection: REFERRALS_COLLECTION, match: { by: 'field', field: 'team_id' } },
   { collection: REFERRAL_CODES_COLLECTION, match: { by: 'field', field: 'teamId' } },

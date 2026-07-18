@@ -77,7 +77,6 @@ import {
   Repeat2,
   ArrowUpRight,
   Zap,
-  Eye,
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
@@ -94,7 +93,9 @@ type CalendarView = 'calendar' | 'list'
 type TimeTab = 'upcoming' | 'past'
 // Shared type filter, applied to both calendar + list. 'classes' = group
 // classes; 'appointment' = 1:1 appointment sessions (activityType === 'appointment').
-type ItemFilter = 'all' | 'classes' | 'appointment' | 'events'
+// 'availability' is a distinct calendar VIEW (all coaches' free time as lanes),
+// not a subset of 'all' — the filter row separates it visually.
+type ItemFilter = 'all' | 'classes' | 'appointment' | 'events' | 'availability'
 type ListItem = { kind: 'session'; data: Session } | { kind: 'event'; data: Event }
 
 interface MemberDoc {
@@ -811,9 +812,6 @@ export default function CalendarPage() {
   const [activityFilter, setActivityFilter] = useState<string | null>(null)
   // 'all' · 'mine' (current user's uid) · a specific coach uid
   const [coachFilter, setCoachFilter] = useState<string>('all')
-  // Availability "free time" bands are an opt-in overlay — HIDDEN by default so
-  // the calendar reads as a plain schedule until a coach asks to see free time.
-  const [showAvailability, setShowAvailability] = useState(false)
   const [sessionDialog, setSessionDialog] = useState<{ open: boolean; editing: Session | null }>({
     open: false,
     editing: null,
@@ -868,49 +866,35 @@ export default function CalendarPage() {
   // leaving only that coach's teaching schedule. Applies to both calendar + list.
   const providerId = coachFilter === 'mine' ? (user?.uid ?? null) : coachFilter === 'all' ? null : coachFilter
   const isAppointment = (s: Session) => s.activityType === 'appointment'
-  const filteredSessions = (sessionsQ.data ?? []).filter((s) => {
-    // Group classes and appointment (private-lesson) sessions both store the
-    // running provider in providerId.
-    if (providerId && s.providerId !== providerId) return false
-    if (filter === 'events') return false
-    if (filter === 'classes' && isAppointment(s)) return false
-    if (filter === 'appointment' && !isAppointment(s)) return false
-    return true
-  })
+  // 'availability' is a dedicated all-coach free-time view — no sessions/events.
+  const availabilityMode = filter === 'availability'
+  const filteredSessions = availabilityMode
+    ? []
+    : (sessionsQ.data ?? []).filter((s) => {
+        // Group classes and appointment (private-lesson) sessions both store the
+        // running provider in providerId.
+        if (providerId && s.providerId !== providerId) return false
+        if (filter === 'events') return false
+        if (filter === 'classes' && isAppointment(s)) return false
+        if (filter === 'appointment' && !isAppointment(s)) return false
+        return true
+      })
   // Events aren't coach- or appointment-scoped; hidden when a coach or a
-  // class/appointment type filter is active, shown for 'all' and 'events'.
+  // class/appointment/availability filter is active, shown for 'all' and 'events'.
   const filteredEvents =
-    coachFilter === 'all' && (filter === 'all' || filter === 'events') ? (eventsQ.data ?? []) : []
+    !availabilityMode && coachFilter === 'all' && (filter === 'all' || filter === 'events')
+      ? (eventsQ.data ?? [])
+      : []
 
-  // Availability bands (Calendly-style "free time" behind the week grid) — drawn
-  // when the type filter includes appointments. A specific coach in scope draws
-  // that coach's windows. For a SOLO-coach team (the common appointments case —
-  // e.g. a lead like Nicole) there's no coach filter to pick and no overlap to
-  // worry about, so draw every active window; otherwise the coach would never
-  // see their own published availability at all. Several coaches under "all"
-  // stay suppressed (overlap noise) with the hint below instead. The calendar
-  // component itself has no idea about these filters; it just expands + draws
-  // whatever it's handed.
-  const bandsTypeEligible = filter !== 'classes' && filter !== 'events'
+  // Availability MODE ('Availability' filter): every coach's active free time as
+  // one lane per coach in each day column (or just the selected coach's, when a
+  // coach filter is set). Empty in every other filter.
   const activeAvailability = availabilityQ.data?.filter((a) => a.status === 'active') ?? []
-  const isSoloCoachTeam = coachRoster.length <= 1
-  const bandAvailability = !bandsTypeEligible
+  const calendarAvailability = !availabilityMode
     ? []
     : providerId
       ? activeAvailability.filter((a) => a.providerId === providerId)
-      : isSoloCoachTeam
-        ? activeAvailability
-        : []
-  // Unobtrusive nudge for the MULTI-coach 'all coaches' case, where bands are
-  // intentionally suppressed — only worth showing when there's something to see.
-  const showAllCoachesBandHint =
-    showAvailability &&
-    bandsTypeEligible &&
-    coachFilter === 'all' &&
-    coachRoster.length > 1 &&
-    activeAvailability.length > 0
-  // What the calendar actually renders as bands — gated by the show/hide toggle.
-  const visibleAvailability = showAvailability ? bandAvailability : []
+      : activeAvailability
 
   const allItems: ListItem[] = [
     ...filteredSessions.map((s) => ({ kind: 'session' as const, data: s })),
@@ -938,11 +922,14 @@ export default function CalendarPage() {
     { key: 'upcoming', label: t('tabUpcoming') },
     { key: 'past', label: t('tabPast') },
   ]
+  // 'availability' is separated from the entity filters (all/classes/appointments/
+  // events) — it's a distinct calendar view, not a subset of 'all'.
   const FILTERS: { key: ItemFilter; label: string }[] = [
     { key: 'all', label: t('filterAll') },
     { key: 'classes', label: t('filterClasses') },
     { key: 'appointment', label: t('filterAppointments') },
     { key: 'events', label: t('filterEvents') },
+    { key: 'availability', label: t('filterAvailability') },
   ]
 
   return (
@@ -1029,22 +1016,29 @@ export default function CalendarPage() {
 
       {/* Filters — shared by calendar + list (type always; coach when >1) */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
           {FILTERS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => {
-                setFilter(key)
-                if (key !== 'classes') setActivityFilter(null)
-              }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                filter === key
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {label}
-            </button>
+            <Fragment key={key}>
+              {/* Light divider before 'availability' — it's a distinct view. */}
+              {key === 'availability' && (
+                <span aria-hidden className="mx-1 h-4 w-px self-center bg-border" />
+              )}
+              <button
+                onClick={() => {
+                  setFilter(key)
+                  if (key !== 'classes') setActivityFilter(null)
+                  // Availability is a calendar-only view.
+                  if (key === 'availability') setView('calendar')
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  filter === key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {label}
+              </button>
+            </Fragment>
           ))}
         </div>
         {coachRoster.length > 1 && (
@@ -1068,29 +1062,7 @@ export default function CalendarPage() {
             </Select>
           </div>
         )}
-        {/* Free-time overlay toggle — calendar only, off by default. */}
-        {view === 'calendar' && (
-          <button
-            onClick={() => setShowAvailability((v) => !v)}
-            title={t('freeTimeToggle')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              showAvailability
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Eye className="h-3.5 w-3.5" />
-            {t('freeTimeToggle')}
-          </button>
-        )}
       </div>
-
-      {/* Unobtrusive nudge — availability bands (published free time behind the
-          week grid) are suppressed for "all coaches" to avoid overlapping-band
-          noise; point people at the single-coach filters instead. */}
-      {view === 'calendar' && showAllCoachesBandHint && (
-        <p className="-mt-1 text-xs italic text-muted-foreground">{t('availabilityBandsAllHint')}</p>
-      )}
 
       {/* Nudge: sessions hang off activities, so surface activity creation first
           when the team hasn't defined any yet. */}
@@ -1119,7 +1091,8 @@ export default function CalendarPage() {
           sessions={filteredSessions}
           activities={activitiesQ.data ?? []}
           events={filteredEvents}
-          availability={visibleAvailability}
+          availability={calendarAvailability}
+          availabilityMode={availabilityMode}
           onEdit={(s) =>
             s.activityType === 'appointment'
               ? setAppointmentSlot(s)

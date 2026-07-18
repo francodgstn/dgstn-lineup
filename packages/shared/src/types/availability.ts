@@ -7,6 +7,26 @@ export interface AvailabilityRecurrence {
   endDate?: Timestamp | null
 }
 
+/** Provider time-off that OVERRIDES the availability templates: the provider is
+ *  unavailable in [start, end) even if a template would otherwise offer that
+ *  time. Used for one-off exceptions — "this slot", "this day", "this week" —
+ *  without editing the recurring schedule. `listAvailability` subtracts these
+ *  (they act as extra busy intervals), and the public booking path refuses a
+ *  start that falls inside one. Stored at `availability_exceptions/{id}`. */
+export interface AvailabilityException {
+  teamId: string
+  /** UID of the provider who is unavailable. */
+  providerId: string
+  providerName?: string
+  /** Unavailable window — inclusive start, exclusive end. */
+  start: Timestamp
+  end: Timestamp
+  /** Optional reason shown in the manager (never public). */
+  note?: string
+  created_at: Timestamp
+  createdBy: string
+}
+
 /** How a provider advertises free time. BOTH modes are lazy — no Session is ever
  *  pre-generated; one is created (overlap-safe) only when a client books.
  *  - 'range': a daily time range the client self-books within (Calendly-style),

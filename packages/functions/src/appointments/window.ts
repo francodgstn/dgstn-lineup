@@ -21,6 +21,7 @@ import { to } from '../utils/async'
 import { resolveHeldBenefit } from '../booking/access'
 import {
   AVAILABILITY_COLLECTION,
+  AVAILABILITY_EXCEPTIONS_COLLECTION,
   ACTIVITIES_COLLECTION,
   appointmentSlotBlocked,
   resolveAppointmentDurations,
@@ -229,6 +230,21 @@ export const listAvailability = onCall(async (request) => {
       .map((d) => d.data())
       .filter((s) => appointmentSlotBlocked(s as { status?: string; hold_expires_at?: Timestamp | null }, nowMs))
       .map((s) => ({ start: (s.start as Timestamp).toMillis(), end: (s.end as Timestamp).toMillis() }))
+
+    // Provider time-off (availability_exceptions) OVERRIDES the templates — each
+    // window is an extra busy interval, so accumulateCandidates skips any slot
+    // that overlaps it (a coach off "this week"/"this day"/"this slot").
+    const exSnap = await db
+      .collection(AVAILABILITY_EXCEPTIONS_COLLECTION)
+      .where('teamId', '==', data.teamId)
+      .where('providerId', '==', providerId)
+      .get()
+    for (const d of exSnap.docs) {
+      const e = d.data()
+      const s = (e.start as Timestamp).toMillis()
+      const en = (e.end as Timestamp).toMillis()
+      if (en > nowMs && s < toMs) busy.push({ start: s, end: en })
+    }
 
     // GROUP BY (provider, activity) — merge days across a provider's several
     // availabilities that offer the same activity (e.g. "Saturday mornings" AND
