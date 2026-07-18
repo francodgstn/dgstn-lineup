@@ -328,6 +328,10 @@ function EventCard({ event, onOpen }: { event: Event; onOpen: (e: Event) => void
 const HOUR_PX = 48
 const MIN_BLOCK_PX = 22
 const WEEK_GRID_COLS = { gridTemplateColumns: '3.25rem repeat(7, minmax(0, 1fr))' } as const
+// Right-hand lane reserved in every day column so availability bands stay visible
+// even under an overlapping session: session blocks stop short of it, the lane
+// carries a faint tint, and each band's solid left spine sits against it.
+const AVAIL_GUTTER_PX = 14
 
 interface PositionedSession {
   session: Session
@@ -920,6 +924,15 @@ export default function SessionsCalendar({
                       )}
                       style={{ height: gridHeight }}
                     >
+                      {/* Availability lane — a faint right gutter the session
+                          blocks stop short of, so a band still reads here even
+                          when a session overlaps its time. */}
+                      <div
+                        aria-hidden="true"
+                        className="absolute inset-y-0 right-0 bg-muted/30 dark:bg-muted/20"
+                        style={{ width: AVAIL_GUTTER_PX }}
+                      />
+
                       {/* Hour lines */}
                       {Array.from({ length: hourCount }, (_, i) => (
                         <div
@@ -931,12 +944,13 @@ export default function SessionsCalendar({
 
                       {/* Availability bands — the RAW published free time (single-provider
                           scope only, see schedule/page.tsx), rendered translucent behind
-                          the session blocks so booked-vs-free reads at a glance. */}
+                          the session blocks so booked-vs-free reads at a glance. Spans the
+                          full column (incl. the lane); a solid left spine marks its start. */}
                       {bands.map((band) => (
                         <div
                           key={band.key}
                           aria-hidden="true"
-                          className="absolute inset-x-0.5 z-[2] overflow-hidden rounded-sm border border-dashed border-primary/25 bg-primary/[0.06] pointer-events-none"
+                          className="absolute inset-x-0.5 z-[2] overflow-hidden rounded-sm border border-primary/15 border-l-2 border-l-primary/50 bg-primary/[0.07] pointer-events-none"
                           style={{ top: band.top, height: band.height }}
                         >
                           {band.height >= 16 && (
@@ -979,8 +993,10 @@ export default function SessionsCalendar({
                             style={{
                               top: top + 1,
                               height: height - 2,
-                              left: `calc(${(col / cols) * 100}% + 2px)`,
-                              width: `calc(${100 / cols}% - 4px)`,
+                              // Blocks share the column MINUS the availability lane
+                              // on the right, so a band always peeks out there.
+                              left: `calc((100% - ${AVAIL_GUTTER_PX}px) * ${col / cols} + 2px)`,
+                              width: `calc((100% - ${AVAIL_GUTTER_PX}px) / ${cols} - 4px)`,
                               backgroundColor: `${color}1F`,
                               borderLeftColor: color,
                             }}
