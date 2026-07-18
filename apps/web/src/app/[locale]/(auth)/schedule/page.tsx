@@ -872,19 +872,27 @@ export default function CalendarPage() {
   const filteredEvents =
     coachFilter === 'all' && (filter === 'all' || filter === 'events') ? (eventsQ.data ?? []) : []
 
-  // Availability bands (Calendly-style "free time" behind the week grid) — only
-  // when the type filter includes appointments AND a single provider is in
-  // scope, so several coaches' windows never overlap into noise. The calendar
-  // component itself has no idea about these filters; it just expands+draws
+  // Availability bands (Calendly-style "free time" behind the week grid) — drawn
+  // when the type filter includes appointments. A specific coach in scope draws
+  // that coach's windows. For a SOLO-coach team (the common appointments case —
+  // e.g. a lead like Nicole) there's no coach filter to pick and no overlap to
+  // worry about, so draw every active window; otherwise the coach would never
+  // see their own published availability at all. Several coaches under "all"
+  // stay suppressed (overlap noise) with the hint below instead. The calendar
+  // component itself has no idea about these filters; it just expands + draws
   // whatever it's handed.
   const bandsTypeEligible = filter !== 'classes' && filter !== 'events'
   const activeAvailability = availabilityQ.data?.filter((a) => a.status === 'active') ?? []
-  const bandAvailability =
-    bandsTypeEligible && providerId
+  const isSoloCoachTeam = coachRoster.length <= 1
+  const bandAvailability = !bandsTypeEligible
+    ? []
+    : providerId
       ? activeAvailability.filter((a) => a.providerId === providerId)
-      : []
-  // Unobtrusive nudge for the 'all coaches' case, where bands are intentionally
-  // suppressed — only worth showing when there's actually something to see.
+      : isSoloCoachTeam
+        ? activeAvailability
+        : []
+  // Unobtrusive nudge for the MULTI-coach 'all coaches' case, where bands are
+  // intentionally suppressed — only worth showing when there's something to see.
   const showAllCoachesBandHint =
     bandsTypeEligible && coachFilter === 'all' && coachRoster.length > 1 && activeAvailability.length > 0
 
