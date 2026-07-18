@@ -7,6 +7,7 @@
 import { useLocale, useTranslations } from 'next-intl'
 import { usePathname, useRouter } from '@/i18n/navigation'
 import { routing } from '@/i18n/routing'
+import { persistLocale } from '@/i18n/persistLocale'
 import { Globe } from 'lucide-react'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -24,7 +25,12 @@ export function LocaleSwitcher({ className }: { className?: string }) {
     <Select
       value={locale}
       onValueChange={(v) => {
-        if (v && v !== locale) router.replace(pathname, { locale: v })
+        if (v && v !== locale) {
+          // Before navigating — an unprefixed (English) URL is otherwise
+          // re-resolved from Accept-Language. See persistLocale.
+          persistLocale(v)
+          router.replace(pathname, { locale: v })
+        }
       }}
     >
       <SelectTrigger

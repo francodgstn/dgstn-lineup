@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from 'next-intl'
 import { useTheme } from 'next-themes'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, usePathname } from '@/i18n/navigation'
+import { persistLocale } from '@/i18n/persistLocale'
 import { QrCode, Sun, Moon, Monitor, Compass, LogOut, BarChart3, Settings } from 'lucide-react'
 import { posthog } from '@/lib/posthog'
 import { START_TOUR_EVENT } from '@/components/onboarding/ProductTour'
@@ -145,7 +146,16 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
             </div>
             {/* Language switcher */}
             <div className="px-2 py-1.5">
-              <Select value={locale} onValueChange={(l) => { if (l) router.replace(pathname, { locale: l }) }}>
+              <Select
+                value={locale}
+                onValueChange={(l) => {
+                  if (!l) return
+                  // Persist first — an unprefixed (English) URL is otherwise
+                  // re-resolved from Accept-Language. See persistLocale.
+                  persistLocale(l)
+                  router.replace(pathname, { locale: l })
+                }}
+              >
                 <SelectTrigger className="h-7 text-xs w-full">
                   <SelectValue />
                 </SelectTrigger>

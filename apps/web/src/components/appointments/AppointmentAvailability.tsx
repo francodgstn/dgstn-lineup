@@ -264,6 +264,42 @@ type TemplateFormValues = z.infer<typeof templateSchema>
 
 // ─── template dialog ──────────────────────────────────────────────────────────
 
+/** The form's shape for a given template (or a blank one). Extracted because
+ *  it's needed TWICE: once as `defaultValues`, and again from an effect on
+ *  open — `defaultValues` is read only on the form's first mount, and this
+ *  dialog stays mounted across open/close, so without the effect an edit shows
+ *  the values captured the first time it ever rendered (i.e. the blank
+ *  "create" form), and a create after an edit shows the edited template. */
+function toTemplateFormValues(
+  editing: (Availability & { id: string }) | null,
+  userId: string
+): TemplateFormValues {
+  if (!editing) {
+    return {
+      title: '', providerId: userId, activityIds: [], mode: 'range',
+      location: '', onlineUrl: '', daysOfWeek: [],
+      startDate: new Date().toISOString().split('T')[0], endDate: '',
+      windowStart: '09:00', windowEnd: '17:00', granularityMinutes: 15, times: [], bufferMinutes: 0,
+    }
+  }
+  return {
+    title: editing.title,
+    providerId: editing.providerId,
+    activityIds: editing.activityIds ?? [],
+    mode: editing.mode ?? 'range',
+    location: editing.location || '',
+    onlineUrl: editing.onlineUrl || '',
+    daysOfWeek: editing.recurrence.daysOfWeek,
+    startDate: editing.recurrence.startDate.toDate().toISOString().split('T')[0],
+    endDate: editing.recurrence.endDate?.toDate().toISOString().split('T')[0] || '',
+    windowStart: editing.window?.start ?? '09:00',
+    windowEnd: editing.window?.end ?? '17:00',
+    granularityMinutes: editing.granularityMinutes ?? 15,
+    times: editing.times ?? [],
+    bufferMinutes: editing.bufferMinutes ?? 0,
+  }
+}
+
 function TemplateDialog({
   open, onOpenChange, editing, teamId, userId, members, activities, onSaved,
 }: {
@@ -284,28 +320,15 @@ function TemplateDialog({
   const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting }, reset } =
     useForm<TemplateFormValues>({
       resolver: zodResolver(templateSchema),
-      defaultValues: editing ? {
-        title: editing.title,
-        providerId: editing.providerId,
-        activityIds: editing.activityIds ?? [],
-        mode: editing.mode ?? 'range',
-        location: editing.location || '',
-        onlineUrl: editing.onlineUrl || '',
-        daysOfWeek: editing.recurrence.daysOfWeek,
-        startDate: editing.recurrence.startDate.toDate().toISOString().split('T')[0],
-        endDate: editing.recurrence.endDate?.toDate().toISOString().split('T')[0] || '',
-        windowStart: editing.window?.start ?? '09:00',
-        windowEnd: editing.window?.end ?? '17:00',
-        granularityMinutes: editing.granularityMinutes ?? 15,
-        times: editing.times ?? [],
-        bufferMinutes: editing.bufferMinutes ?? 0,
-      } : {
-        title: '', providerId: userId, activityIds: [], mode: 'range',
-        location: '', onlineUrl: '', daysOfWeek: [],
-        startDate: new Date().toISOString().split('T')[0], endDate: '',
-        windowStart: '09:00', windowEnd: '17:00', granularityMinutes: 15, times: [], bufferMinutes: 0,
-      },
+      defaultValues: toTemplateFormValues(editing, userId),
     })
+
+  // Load the selected template into the form each time the dialog opens (and if
+  // `editing` swaps while open). Without this the form keeps whatever it was
+  // first mounted with — see toTemplateFormValues.
+  useEffect(() => {
+    if (open) reset(toTemplateFormValues(editing, userId))
+  }, [open, editing, userId, reset])
 
   const mode = watch('mode')
   const selectedDays = watch('daysOfWeek') || []
