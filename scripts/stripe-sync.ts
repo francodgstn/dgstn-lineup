@@ -21,8 +21,17 @@
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync                     # dry-run
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply             # create missing
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply --reprice   # also reprice drift
+ *
+ * WEBHOOK ENDPOINTS (separate mode — pass --project):
+ *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox
+ *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox --apply
+ *   ... --apply --store-secrets     # also write the signing secrets to Secret Manager
+ *
+ * The key decides the ACCOUNT and the MODE: sk_test_ for sandbox/staging,
+ * sk_live_ for prod. There is no separate live flag.
  */
 import Stripe from 'stripe'
+import { execFileSync } from 'node:child_process'
 import { PLAN_PRICING, PLUGIN_ADDONS, STUDIO_CONTACT_BLOCK, ORG_PER_STUDIO } from '@linyup/shared'
 
 const CURRENCY = 'chf'
@@ -142,7 +151,170 @@ async function syncEntry(entry: CatalogEntry) {
   })
 }
 
+// ─── Webhook endpoints ────────────────────────────────────────────────────────
+// Same idea as the catalogue above: the desired state lives in the repo, and the
+// script converges Stripe onto it. Idempotency is keyed by URL, which is
+// deterministic per project.
+//
+// Why this is worth automating: the two endpoints are easy to get subtly wrong
+// by hand and both fail SILENTLY. Register the Connect one without `connect:
+// true` and it looks healthy while receiving nothing — payments take the money
+// and bookings never confirm. Miss an event and only that one flow breaks.
+//
+// The signing secret is returned ONLY at creation. `--store-secrets` writes it
+// straight to Secret Manager so it can't be lost between the two steps; without
+// it the secret is printed for manual entry (ops console → Settings → Payments).
+
+const FUNCTIONS_REGION = 'europe-west6'
+
+// Derive the event union from the SDK instance rather than naming a types
+// namespace — the namespace path moves between stripe major versions, this
+// doesn't.
+type CreateParams = Parameters<typeof stripe.webhookEndpoints.create>[0]
+type EnabledEvent = NonNullable<CreateParams['enabled_events']>[number]
+
+interface WebhookSpec {
+  /** Cloud Function name = last path segment of the endpoint URL. */
+  fn: string
+  /** Secret Manager id holding this endpoint's signing secret. */
+  secretId: string
+  /** true = connected-account events; false = this account's own events. */
+  connect: boolean
+  description: string
+  /** Kept in step with the handlers — see the referenced files. */
+  events: EnabledEvent[]
+}
+
+const WEBHOOKS: WebhookSpec[] = [
+  {
+    fn: 'handleStripeWebhook',
+    secretId: 'stripe-webhook-secret',
+    connect: false,
+    description: 'Linyup — platform / SaaS billing (studios paying Linyup)',
+    // utils/gateway/stripe.ts normalises exactly these into the internal events
+    // saas-billing/index.ts switches on.
+    events: [
+      'customer.subscription.created',
+      'customer.subscription.updated',
+      'customer.subscription.deleted',
+      'invoice.payment_succeeded',
+      'invoice.payment_failed',
+    ],
+  },
+  {
+    fn: 'handleConnectWebhook',
+    secretId: 'stripe-connect-webhook-secret',
+    connect: true,
+    description: 'Linyup — Connect (members paying studios)',
+    // Every event connect/webhook.ts acts on: the switch cases plus the
+    // account/capability branch (isAccountEvent).
+    events: [
+      'account.updated',
+      'capability.updated',
+      'checkout.session.completed',
+      'checkout.session.expired',
+      'payment_intent.succeeded',
+      'payment_intent.payment_failed',
+      'charge.refunded',
+      'charge.updated',
+      'charge.dispute.created',
+      'charge.dispute.closed',
+      'customer.subscription.created',
+      'customer.subscription.updated',
+      'customer.subscription.deleted',
+      'invoice.paid',
+      'invoice.payment_failed',
+      'payout.paid',
+      'payout.failed',
+    ],
+  },
+]
+
+function argValue(flag: string): string | undefined {
+  const i = process.argv.indexOf(flag)
+  return i >= 0 ? process.argv[i + 1] : undefined
+}
+
+// Shells out to gcloud rather than pulling in @google-cloud/secret-manager: the
+// scripts workspace doesn't depend on it, and gcloud is already the documented
+// path for adding secret versions. The value goes in on stdin so it never
+// appears in the process list.
+function storeSecret(project: string, secretId: string, value: string) {
+  execFileSync(
+    'gcloud',
+    ['secrets', 'versions', 'add', secretId, `--project=${project}`, '--data-file=-'],
+    { input: value, stdio: ['pipe', 'ignore', 'inherit'] },
+  )
+}
+
+async function syncWebhooks(project: string, secretProject: string | undefined) {
+  const existing = await stripe.webhookEndpoints.list({ limit: 100 })
+
+  for (const spec of WEBHOOKS) {
+    const url = `https://${FUNCTIONS_REGION}-${project}.cloudfunctions.net/${spec.fn}`
+    const live = existing.data.find((e) => e.url === url)
+    const scope = spec.connect ? 'connect' : 'account'
+
+    if (!live) {
+      console.log(`+ create   ${spec.fn}  (${scope}, ${spec.events.length} events)`)
+      console.log(`           ${url}`)
+      if (!APPLY) continue
+      const created = await stripe.webhookEndpoints.create({
+        url,
+        enabled_events: spec.events,
+        connect: spec.connect,
+        description: spec.description,
+      })
+      // Returned once, at creation, and never again.
+      const secret = created.secret
+      if (!secret) {
+        console.log(`  ! no signing secret returned for ${spec.fn} — set it manually`)
+        continue
+      }
+      if (secretProject) {
+        storeSecret(secretProject, spec.secretId, secret)
+        console.log(`  → stored in ${secretProject}/${spec.secretId}`)
+      } else {
+        console.log(`  → signing secret (store as ${spec.secretId}): ${secret}`)
+      }
+      continue
+    }
+
+    // Endpoint exists — report drift rather than mutating silently.
+    if (live.status !== 'enabled') {
+      console.log(`! disabled ${spec.fn}  (status=${live.status}) — enable it in Stripe`)
+    }
+    const liveEvents = new Set(live.enabled_events)
+    const missing = spec.events.filter((e) => !liveEvents.has(e) && !liveEvents.has('*'))
+    if (missing.length) {
+      console.log(`~ events   ${spec.fn}  missing: ${missing.join(', ')}`)
+      if (APPLY) {
+        await stripe.webhookEndpoints.update(live.id, {
+          enabled_events: [...new Set([...live.enabled_events, ...spec.events])] as EnabledEvent[],
+        })
+        console.log(`  → events updated`)
+      }
+    } else {
+      console.log(`= ok       ${spec.fn}  (${scope})`)
+    }
+    // The secret of an existing endpoint cannot be re-read; only rotated.
+    console.log(`           secret not re-readable — rotate in Stripe if ${spec.secretId} is unset`)
+  }
+}
+
 async function main() {
+  const project = argValue('--project')
+  if (project) {
+    const secretProject = process.argv.includes('--store-secrets') ? project : undefined
+    console.log(
+      `Stripe webhook sync for ${project} (${APPLY ? 'APPLY' : 'dry-run'}` +
+        `${secretProject ? ', storing secrets' : ''})\n`,
+    )
+    await syncWebhooks(project, secretProject)
+    console.log(`\nDone.${APPLY ? '' : ' Re-run with --apply to write changes.'}`)
+    return
+  }
+
   console.log(`Stripe catalog sync (${APPLY ? 'APPLY' : 'dry-run'}${REPRICE ? ', reprice ON' : ''})\n`)
   for (const entry of catalog) {
     await syncEntry(entry)

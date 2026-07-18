@@ -345,18 +345,60 @@ stripe listen \
 ```
 
 Copy the printed `whsec_...` into `STRIPE_CONNECT_WEBHOOK_SECRET` and restart the
-Functions emulator. In production, register a **Connect** webhook endpoint pointing at
-`https://europe-west6-<project>.cloudfunctions.net/handleConnectWebhook` and subscribe to:
+Functions emulator.
+
+### Deployed environments — provision both endpoints with `stripe:sync`
+
+Don't hand-register them: the event lists live in the repo (`scripts/stripe-sync.ts`,
+`WEBHOOKS`) alongside the handlers they must match, and the script is idempotent —
+keyed by URL, dry-run by default.
+
+```bash
+# dry-run — shows what it would create / which events are missing
+STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox
+
+# create the endpoints and print the signing secrets
+STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox --apply
+
+# ...or write the secrets straight into Secret Manager (needs gcloud + secretVersionAdder)
+STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --project linyup-sandbox --apply --store-secrets
+```
+
+The key selects both the **account** and the **mode** — `sk_test_` for
+sandbox/staging, `sk_live_` for prod. There is no separate live flag.
+
+Re-running is safe: an existing endpoint is left alone, and any events missing from
+it are reported (added with `--apply`). The signing secret of an existing endpoint
+**cannot be re-read** — only rotated in Stripe — which is why the script stores it at
+creation time. Values can also be set by hand in the ops console under
+**Settings → Payments**.
+
+Two endpoints are provisioned:
+
+| Endpoint | `connect` | Carries |
+|---|---|---|
+| `handleStripeWebhook` | `false` | SaaS billing — studios paying Linyup |
+| `handleConnectWebhook` | **`true`** | member → studio payments |
+
+`connect: true` is the one that fails silently if you get it wrong: the endpoint
+looks healthy and receives nothing, so payments take the money and bookings never
+confirm. The Connect endpoint subscribes to:
 
 ```
-account.updated, capability.updated, v2.core.account*  (account state)
+account.updated, capability.updated                     (account state; v2.core.account* too)
 checkout.session.completed                              (links/creates the buyer's contact)
 checkout.session.expired                                (releases appointment payment holds)
 payment_intent.succeeded, payment_intent.payment_failed
-charge.refunded, charge.dispute.created, charge.dispute.closed
+charge.refunded, charge.updated
+charge.dispute.created, charge.dispute.closed
 customer.subscription.created/updated/deleted
 invoice.paid, invoice.payment_failed
+payout.paid, payout.failed
 ```
+
+(`v2.core.account*` is a wildcard the API won't accept as an `enabled_events`
+literal, so the script omits it — add it in the dashboard if you want v2 thin
+account events; `isAccountEvent` in `connect/webhook.ts` already handles them.)
 
 ## Test instructions
 
