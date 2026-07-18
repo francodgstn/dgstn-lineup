@@ -13,8 +13,17 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // firebase-admin is server-only; keep it out of any client bundle tracing.
-  serverExternalPackages: ['firebase-admin'],
+  // Server-only, and both must stay UNBUNDLED.
+  //
+  // @google-cloud/secret-manager pulls google-gax → @grpc/grpc-js. Bundling
+  // grpc-js mangles its module state: grpc's own callErrorFromStatus renders
+  // `${status.code} ${Status[status.code]}: ${status.details}` as
+  // "undefined undefined: undefined", and — worse — the code/details never
+  // reach our callers, so `err.code === 5` (NOT_FOUND) checks silently fail and
+  // a routine "secret isn't set yet" surfaced as a page-level runtime error on
+  // /settings. firebase-admin was already listed, which is why Firestore and
+  // Auth were unaffected and only the settings page broke.
+  serverExternalPackages: ['firebase-admin', '@google-cloud/secret-manager'],
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]
   },

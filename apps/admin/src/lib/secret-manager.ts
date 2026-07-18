@@ -113,7 +113,19 @@ export async function secretExists(secretName: string): Promise<boolean> {
     // ENABLED versions are readable; DESTROYED/DISABLED are not configured.
     return version.state === 'ENABLED' || version.state === 1
   } catch (err) {
-    if ((err as { code?: number }).code === 5 /* NOT_FOUND */) return false
+    const code = (err as { code?: number }).code
+    // NOT_FOUND (container/version missing) and PERMISSION_DENIED (the runtime
+    // SA lacks secretAccessor — e.g. Terraform hasn't provisioned this secret
+    // yet) are both "operator still needs to set this up", not page failures.
+    // Warn so the cause is visible, but let the settings page render.
+    if (code === 5 /* NOT_FOUND */) return false
+    if (code === 7 /* PERMISSION_DENIED */) {
+      console.warn(
+        `[secrets] no access to '${secretName}' in ${projectId} — reporting it as not configured. ` +
+          'Grant the runtime SA roles/secretmanager.secretAccessor (see infra/modules/secrets).',
+      )
+      return false
+    }
     throw err
   }
 }
