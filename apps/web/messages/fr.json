@@ -924,6 +924,7 @@
     "openDetail": "Ouvrir les détails",
     "availabilityBandsAllHint": "Sélectionnez un coach précis ci-dessus pour voir ses disponibilités publiées derrière le planning.",
     "availability": "Disponibilités",
+    "manageAvailability": "Gérer les disponibilités",
     "freeTimeToggle": "Temps libre",
     "newAvailability": "Disponibilité de rendez-vous"
   },

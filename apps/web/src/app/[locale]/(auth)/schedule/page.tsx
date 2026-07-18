@@ -46,7 +46,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 import {
   Dialog,
@@ -865,6 +864,17 @@ export default function CalendarPage() {
   // Events aren't coach-scoped, so a specific-coach filter hides them entirely,
   // leaving only that coach's teaching schedule. Applies to both calendar + list.
   const providerId = coachFilter === 'mine' ? (user?.uid ?? null) : coachFilter === 'all' ? null : coachFilter
+  // The coach chip shows the CURRENT selection rather than a static "Coach"
+  // label, so the filter row states what's applied without being opened.
+  const coachFilterLabel =
+    coachFilter === 'all'
+      ? t('coachAll')
+      : coachFilter === 'mine'
+        ? t('coachMine')
+        : (() => {
+            const c = coachRoster.find((x) => x.userId === coachFilter)
+            return c ? coachLabel(c) : t('coachAll')
+          })()
   const isAppointment = (s: Session) => s.activityType === 'appointment'
   // 'availability' is a dedicated all-coach free-time view — no sessions/events.
   const availabilityMode = filter === 'availability'
@@ -968,20 +978,9 @@ export default function CalendarPage() {
               </button>
             ))}
           </div>
-          {/* Availability manager — a LIST of schedules is a management surface,
-              not a "new" action, so it lives here rather than under "+ New".
-              Same shape as the "+ New entry" trigger (outline, not filled) so
-              the header reads as one consistent control group. */}
-          {currentTeamId && user && (
-            <button
-              onClick={() => setAvailabilityOpen(true)}
-              title={t('availability')}
-              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
-            >
-              <CalendarClock className="h-4 w-4" />
-              <span className="hidden sm:inline">{t('availability')}</span>
-            </button>
-          )}
+          {/* The availability MANAGER used to be a header button here. It moved
+              onto the Availability filter chip's caret menu — managing schedules
+              belongs next to viewing them, and the header stays down to "+ New". */}
           {/* Add dropdown */}
           {currentTeamId && user && (
             <DropdownMenu>
@@ -1014,54 +1013,116 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Filters — shared by calendar + list (type always; coach when >1) */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="flex items-center gap-1">
-          {FILTERS.map(({ key, label }) => (
-            <Fragment key={key}>
-              {/* Light divider before 'availability' — it's a distinct view. */}
-              {key === 'availability' && (
-                <span aria-hidden className="mx-1 h-4 w-px self-center bg-border" />
-              )}
-              <button
-                onClick={() => {
-                  setFilter(key)
-                  if (key !== 'classes') setActivityFilter(null)
-                  // Availability is a calendar-only view.
-                  if (key === 'availability') setView('calendar')
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  filter === key
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
+      {/* Filters — ONE control group, read left to right as
+          <who> | <what> | <availability>. The coach and availability chips
+          carry a caret (they open menus); the type options stay flat, so the
+          shape of a chip tells you whether it holds more behind it. */}
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
+        {/* WHO — first, because it scopes everything to its right. */}
+        {coachRoster.length > 1 && (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  coachFilter === 'all'
+                    ? 'bg-muted text-muted-foreground hover:text-foreground'
+                    : 'bg-primary text-primary-foreground'
                 }`}
               >
-                {label}
-              </button>
-            </Fragment>
-          ))}
-        </div>
-        {coachRoster.length > 1 && (
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-muted-foreground shrink-0" />
-            <Select value={coachFilter} onValueChange={(v) => setCoachFilter(v ?? 'all')}>
-              <SelectTrigger className="h-8 text-xs w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('coachAll')}</SelectItem>
-                <SelectItem value="mine">{t('coachMine')}</SelectItem>
+                <User className="h-3.5 w-3.5" />
+                {coachFilterLabel}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setCoachFilter('all')}>
+                  {t('coachAll')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCoachFilter('mine')}>
+                  {t('coachMine')}
+                </DropdownMenuItem>
                 {coachRoster
                   .filter((c) => c.userId !== user?.uid)
                   .map((c) => (
-                    <SelectItem key={c.userId} value={c.userId}>
+                    <DropdownMenuItem key={c.userId} onClick={() => setCoachFilter(c.userId)}>
                       {coachLabel(c)}
-                    </SelectItem>
+                    </DropdownMenuItem>
                   ))}
-              </SelectContent>
-            </Select>
-          </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <span aria-hidden className="mx-1 h-4 w-px self-center bg-border" />
+          </>
         )}
+
+        {/* WHAT — flat options, no menu. */}
+        {FILTERS.filter((f) => f.key !== 'availability').map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => {
+              setFilter(key)
+              if (key !== 'classes') setActivityFilter(null)
+            }}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              filter === key
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+
+        <span aria-hidden className="mx-1 h-4 w-px self-center bg-border" />
+
+        {/* AVAILABILITY — outside "all", so it sits past the divider. One chip,
+            two affordances: the label switches the calendar to availability,
+            the caret opens the manager (which used to be a header button —
+            moved here to keep the top area to just "+ New"). */}
+        <div
+          className={`inline-flex items-center rounded-full text-xs font-medium transition-colors ${
+            availabilityMode
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          <button
+            onClick={() => {
+              setFilter('availability')
+              setActivityFilter(null)
+              // Availability is a calendar-only view.
+              setView('calendar')
+            }}
+            className={`py-1.5 pl-3 transition-colors ${
+              // Without the caret (no team/user) this is the whole chip, so it
+              // has to round on both ends rather than keep a flat right edge.
+              currentTeamId && user ? 'rounded-l-full pr-1.5' : 'rounded-full pr-3'
+            } ${availabilityMode ? '' : 'hover:text-foreground'}`}
+          >
+            {t('filterAvailability')}
+          </button>
+          {currentTeamId && user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                title={t('manageAvailability')}
+                aria-label={t('manageAvailability')}
+                className={`rounded-r-full py-1.5 pl-0.5 pr-2.5 transition-colors ${
+                  availabilityMode ? '' : 'hover:text-foreground'
+                }`}
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setAvailabilityOpen(true)}>
+                  <CalendarClock className="h-4 w-4 mr-2" />
+                  {t('manageAvailability')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setNewAvailabilityOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  {t('newAvailability')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
 
       {/* Nudge: sessions hang off activities, so surface activity creation first

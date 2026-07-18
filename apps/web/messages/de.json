@@ -924,6 +924,7 @@
     "openDetail": "Details öffnen",
     "availabilityBandsAllHint": "Wählen Sie oben einen bestimmten Coach aus, um dessen veröffentlichte Verfügbarkeit hinter dem Zeitplan anzuzeigen.",
     "availability": "Verfügbarkeit",
+    "manageAvailability": "Verfügbarkeit verwalten",
     "freeTimeToggle": "Freie Zeit",
     "newAvailability": "Termin-Verfügbarkeit"
   },
