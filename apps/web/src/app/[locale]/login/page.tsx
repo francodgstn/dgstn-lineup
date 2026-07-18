@@ -98,6 +98,11 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
+                // Password managers decorate this field with an autofill icon
+                // (inline style + an injected button) BEFORE hydration — suppress
+                // the resulting attribute mismatch on the input itself, not just
+                // the wrapper (suppressHydrationWarning is shallow).
+                suppressHydrationWarning
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 {...register('email')}
               />
@@ -112,6 +117,7 @@ export default function LoginPage() {
                 id="password"
                 type="password"
                 autoComplete="current-password"
+                suppressHydrationWarning
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 {...register('password')}
               />
