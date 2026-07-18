@@ -52,7 +52,7 @@ import * as crypto from 'node:crypto'
 import { parseArgs } from 'node:util'
 import admin from 'firebase-admin'
 import { applicationDefault } from 'firebase-admin/app'
-import { DEFAULT_PAYMENT_MODES } from '@linyup/shared'
+import { DEFAULT_PAYMENT_MODES, AVAILABILITY_EXCEPTIONS_COLLECTION } from '@linyup/shared'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
@@ -1269,6 +1269,36 @@ async function seedLeadTenant(profile: LeadProfile) {
           })
       }
     }
+  }
+
+  // ── appointments: coach time-off (availability_exceptions) ────────────────
+  // Provider time-off that OVERRIDES the availability templates: listAvailability
+  // subtracts these windows, so a coach "off next week" loses those slots (and
+  // the public picker refuses a start inside one). Dates are RELATIVE day offsets
+  // from seed time, anchored to 00:00 team-local, so the block always lands in the
+  // future no matter when the tenant is seeded. Demo data for the Time-off feature.
+  const dayStartFromNow = (offset: number) => {
+    const d = daysFromNow(offset)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
+  const timeOffDefs = profile.appointments.timeOff ?? []
+  for (let i = 0; i < timeOffDefs.length; i++) {
+    const off = timeOffDefs[i]
+    const providerUid = uidOf(off.staffKey)
+    await db
+      .collection(AVAILABILITY_EXCEPTIONS_COLLECTION)
+      .doc(`${teamId}-timeoff-${off.staffKey}-${i}`)
+      .set({
+        teamId,
+        providerId: providerUid,
+        providerName: staffName(off.staffKey),
+        start: ts(dayStartFromNow(off.startDayOffset)),
+        end: ts(dayStartFromNow(off.endDayOffset)),
+        ...(off.note ? { note: off.note } : {}),
+        created_at: ts(now()),
+        createdBy: uid,
+      })
   }
 
   // ── subscription types (raw docs) ─────────────────────────────────────────

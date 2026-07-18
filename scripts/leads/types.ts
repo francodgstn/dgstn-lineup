@@ -248,6 +248,22 @@ export interface LeadAvailabilityDef {
   booked?: LeadBookedAppointmentDef[]
 }
 
+/** A coach's time off — a window that OVERRIDES the availability templates.
+ *  Written to `availability_exceptions/{id}`; listAvailability subtracts it, so
+ *  the coach loses those slots (and the public picker refuses a start inside it).
+ *  Dates are RELATIVE (day offsets from seed time, anchored to 00:00 team-local)
+ *  so the demo always lands in the future regardless of when the tenant is seeded. */
+export interface LeadTimeOffDef {
+  /** Whose time off (LeadStaffDef.key). */
+  staffKey: string
+  /** Inclusive window start — this many days from seed time, at 00:00 team-local. */
+  startDayOffset: number
+  /** Exclusive window end — this many days from seed time, at 00:00 team-local. */
+  endDayOffset: number
+  /** Optional reason, shown only in the admin manager (never public). */
+  note?: string
+}
+
 /** One already-booked appointment (see LeadAvailabilityDef.booked). */
 export interface LeadBookedAppointmentDef {
   /** 'HH:MM' start — must sit on the availability's grid / times list. */
@@ -481,6 +497,9 @@ export interface LeadProfile {
   appointments: {
     activities: LeadAppointmentDef[]
     availability: LeadAvailabilityDef[]
+    /** Coach time-off windows → `availability_exceptions/{id}` (the Time-off
+     *  feature). listAvailability subtracts these. Optional; absent ⇒ none. */
+    timeOff?: LeadTimeOffDef[]
   }
   subscriptions: LeadSubscriptionDef[]
   weeklyGrid: LeadGridSlot[]
