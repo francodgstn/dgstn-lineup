@@ -145,7 +145,8 @@ export interface LeadSubscriptionDef {
 }
 
 export interface LeadGridSlot {
-  /** Weekday, JS getDay() convention: 0=Sun … 6=Sat. */
+  /** Weekday, JS getDay() convention: 0=Sun … 6=Sat. Ignored when `dayOffsets`
+   *  is set (a one-off slot carries its own dates). */
   day: number
   hh: number
   mm: number
@@ -156,8 +157,24 @@ export interface LeadGridSlot {
   staffKey: string
   /** Where it happens (LeadPlaceDef.key); falls back to LeadProfile.location. */
   placeKey?: string
-  /** Only materialize in upcoming weeks (new offerings with no history). */
+  /** Only materialize in upcoming weeks (new offerings with no history).
+   *  Ignored on a one-off slot — its dates are already explicit. */
   upcomingOnly?: boolean
+  /**
+   * ONE-OFF dates instead of a weekly repeat: day offsets from seed time
+   * (0 = today, negative = the past), each materialized once at `hh:mm`. Set
+   * this for an offering that is scheduled a session at a time — a monthly
+   * workshop, a one-day intensive — rather than on a fixed weekly rhythm.
+   *
+   * When set, `day` and `upcomingOnly` are ignored and the slot is NOT repeated
+   * across the `scheduleWeeksBack…Ahead` window.
+   *
+   * Keep future offsets inside the seeded booking window, which is derived from
+   * `scheduleWeeksAhead` (≈ `max(2, ceil(scheduleWeeksAhead / 4))` months): a
+   * session further out than that exists as a doc but won't surface on the
+   * public booking page.
+   */
+  dayOffsets?: number[]
 }
 
 /** One bookable length of an appointment offering, with its base price — an
@@ -387,6 +404,67 @@ export interface LeadProductDef {
   variants?: { id: string; label: string }[]
 }
 
+/** One question on a lead's public form (a `Form.fields[]` entry). */
+export interface LeadFormFieldDef {
+  /** Stable id — used VERBATIM as the answer key in FormSubmission.answers. */
+  id: string
+  type:
+    | 'short_text'
+    | 'long_text'
+    | 'email'
+    | 'phone'
+    | 'number'
+    | 'single_choice'
+    | 'multiple_choice'
+    | 'dropdown'
+    | 'checkbox'
+    | 'date'
+  label: string
+  /** Shown inside the control. For `checkbox` this is the VISIBLE text — the
+   *  public renderer hides the label and prints `placeholder || label` inline —
+   *  so consent wording belongs here, not in `label`. */
+  placeholder?: string
+  required?: boolean
+  /** Choices for 'single_choice' | 'multiple_choice' | 'dropdown'. */
+  options?: string[]
+}
+
+/**
+ * A public form (`forms/{id}` + its `public_profile` mirror), reached at
+ * `/public/{slug}/forms/{formSlug}`. Installs the `custom-forms` plugin and
+ * flips the team's `active_public_surfaces.forms`.
+ *
+ * Note this is NOT the signup/booking path: with `createContact: false` a
+ * submission is just a message — no contact is created or matched, nothing
+ * enters the acquisition funnel. That's what makes it a plain "get in touch".
+ */
+export interface LeadFormDef {
+  /** id suffix → `{teamId}-form-{key}`. */
+  key: string
+  title: string
+  /** URL segment → `/public/{teamSlug}/forms/{slug}`. */
+  slug: string
+  description?: string
+  /** 'public' = anyone with the link; 'contacts' = needs a contact session. */
+  access?: 'public' | 'contacts'
+  /** Whether a submission creates/links a Contact. Default true (lead capture);
+   *  set FALSE for a plain enquiry form. */
+  createContact?: boolean
+  /** Which field carries the submitter's email (LeadFormFieldDef.id) — used for
+   *  the confirmation mail and (when enabled) contact matching. */
+  emailFieldId?: string
+  /** Email the studio on each submission. Default true. */
+  notifyStaff?: boolean
+  /** Email the submitter a copy/confirmation. Default false. */
+  confirmSubmitter?: boolean
+  /** Shown on the page after a successful submit. */
+  confirmationMessage?: string
+  fields: LeadFormFieldDef[]
+  /** Add a bio-link entry pointing at the form (there is no `form` system link
+   *  target, so it is seeded as a custom-URL link). */
+  inBioLink?: boolean
+}
+
 export interface LeadDocumentDef {
   /** id suffix → `{teamId}-doc-{key}`. */
   key: string
@@ -516,6 +594,21 @@ export interface LeadProfile {
   courses: LeadCourseDef[]
   products: LeadProductDef[]
   documents: LeadDocumentDef[]
+  /** Public forms (installs the `custom-forms` plugin + flips the team's
+   *  `active_public_surfaces.forms`). Absent ⇒ none, plugin not installed. */
+  forms?: LeadFormDef[]
+  /**
+   * Default pinned sidebar items for the tenant, in PIN ORDER
+   * (`teams/{teamId}.settings.defaultNavPins`). Applied only when the viewer has
+   * no pins of their own yet — a user's own choice always wins afterwards.
+   *
+   * Ids come from the admin nav: core ones like `calendar`, `bookings`,
+   * `contacts`, `activities`, `plans`, `payments`, `publicPages`; plugin ones
+   * are scoped as `plugin:{pluginId}:{href}` (e.g.
+   * `plugin:contact-groups:/plugins/contact-groups`) and are skipped silently if
+   * that plugin isn't installed for the team.
+   */
+  navPins?: string[]
 
   /** Assets-folder base names for team branding (default 'profile' / 'hero'). */
   profileImageAsset?: string

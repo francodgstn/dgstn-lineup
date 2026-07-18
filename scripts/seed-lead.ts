@@ -660,7 +660,19 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
 
   // ── team doc + public profile ─────────────────────────────────────────────
-  const portalLinks = buildStorefrontPageLinks()
+  // Forms have no SystemLinkTarget (they're reached only by their own per-form
+  // URL, never a `/forms` index), so a bio-link entry for one is a CUSTOM-url
+  // link: `target` must stay absent or it would take precedence over `url`.
+  const formLinks = (profile.forms ?? [])
+    .filter((f) => f.inBioLink)
+    .map((f) => ({
+      label: f.title,
+      description: f.description ?? '',
+      url: `/public/${profile.slug}/forms/${f.slug}`,
+      showInBioLink: true,
+      iconName: 'Mail',
+    }))
+  const portalLinks = [...buildStorefrontPageLinks(), ...formLinks]
   // Branded-surface background (bio-link home / shop / Space). A custom
   // publicBackground overrides the named gradient — the renderer uses the CSS
   // value verbatim when it isn't a BIO_LINK_GRADIENTS key. 'solid' for a bare
@@ -729,6 +741,9 @@ async function seedLeadTenant(profile: LeadProfile) {
               })),
             }
           : {}),
+        // Default pinned sidebar items, in pin order. Only seeds the STARTING
+        // point — once a user pins/reorders anything, their own choice wins.
+        ...(profile.navPins?.length ? { defaultNavPins: profile.navPins } : {}),
       },
       ...(profile.customFieldDefinitions?.length
         ? { custom_field_definitions: profile.customFieldDefinitions }
@@ -907,8 +922,15 @@ async function seedLeadTenant(profile: LeadProfile) {
       default_currency: profile.currency,
       default_public_surface: 'bio-link',
       // Written directly (sync triggers may not be deployed on the sandbox):
-      // site + shop + space are all live for a seeded lead tenant.
-      active_public_surfaces: { site: true, shop: true, space: true },
+      // site + shop + space are all live for a seeded lead tenant; `forms` only
+      // when the profile authors one (syncTeamPublicProfile gates it on there
+      // being ≥1 published, non-archived form).
+      active_public_surfaces: {
+        site: true,
+        shop: true,
+        space: true,
+        ...(profile.forms?.length ? { forms: true } : {}),
+      },
       // Main Address for the bio-link map (normally denormalised on place write).
       mainAddress: primaryPlace
         ? {
@@ -1342,29 +1364,42 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
   const sessionDefs: SessionDef[] = []
   const nowDate = now()
+  const pushSessionDef = (date: Date, slot: (typeof profile.weeklyGrid)[number]) => {
+    sessionDefs.push({
+      date,
+      end: minutesOffset(date, slot.durMin),
+      actIdx: slot.activityIdx,
+      staffKey: slot.staffKey,
+      placeKey: slot.placeKey,
+      // Stays true after the session passes — matches production, where nothing
+      // flips it off, so past sessions keep their public mirror and the public
+      // weekly calendar can show the current week as a timetable. Public
+      // booking queries bound on `start`, so nothing past is ever bookable.
+      allowBooking: true,
+      isPast: date.getTime() < nowDate.getTime(),
+    })
+  }
+  // One-off slots (`dayOffsets`) — an offering scheduled a session at a time, not
+  // on a weekly rhythm. Emitted once per explicit date, OUTSIDE the weekly window.
+  for (const slot of profile.weeklyGrid) {
+    if (!slot.dayOffsets?.length) continue
+    for (const offset of slot.dayOffsets) {
+      const date = daysFromNow(offset)
+      date.setHours(slot.hh, slot.mm, 0, 0)
+      pushSessionDef(date, slot)
+    }
+  }
   // `scheduleWeeksBack` weeks of history (for reports/attendance) +
   // `scheduleWeeksAhead` future weeks.
   for (let week = -scheduleWeeksBack; week <= scheduleWeeksAhead; week++) {
     const monday = mondayOfWeeksAgo(-week)
     for (const slot of profile.weeklyGrid) {
+      if (slot.dayOffsets?.length) continue // one-off — already emitted above
       const date = new Date(monday)
       date.setDate(date.getDate() + ((slot.day + 6) % 7)) // Mon-based offset
       date.setHours(slot.hh, slot.mm, 0, 0)
-      const isPast = date.getTime() < nowDate.getTime()
-      if (slot.upcomingOnly && isPast) continue
-      sessionDefs.push({
-        date,
-        end: minutesOffset(date, slot.durMin),
-        actIdx: slot.activityIdx,
-        staffKey: slot.staffKey,
-        placeKey: slot.placeKey,
-        // Stays true after the session passes — matches production, where nothing
-        // flips it off, so past sessions keep their public mirror and the public
-        // weekly calendar can show the current week as a timetable. Public
-        // booking queries bound on `start`, so nothing past is ever bookable.
-        allowBooking: true,
-        isPast,
-      })
+      if (slot.upcomingOnly && date.getTime() < nowDate.getTime()) continue
+      pushSessionDef(date, slot)
     }
   }
   sessionDefs.sort((a, b) => a.date.getTime() - b.date.getTime())
@@ -2277,6 +2312,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     { id: 'products' },
     ...(profile.customFieldDefinitions?.length ? [{ id: 'custom-fields' }] : []),
     ...(profile.contactGroups?.length ? [{ id: 'contact-groups' }] : []),
+    ...(profile.forms?.length ? [{ id: 'custom-forms' }] : []),
     ...(profile.documents.length > 0
       ? [{ id: 'documents', config: { signupDocumentIds: signupDocIds } }]
       : []),
@@ -2514,6 +2550,64 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       ...(isExternal ? {} : { bodyHtml: doc.body }),
       updated_at: docNow,
     })
+  }
+
+  // ── public forms ───────────────────────────────────────────────────────────
+  // Reached only at /public/{slug}/forms/{formSlug} — and that page reads the
+  // per-form `public_profile` mirror, never `forms/` itself, so the mirror is
+  // hand-written here (sync triggers may not be deployed on the sandbox).
+  for (const form of profile.forms ?? []) {
+    const formId = `${teamId}-form-${form.key}`
+    const formRef = db.collection('forms').doc(formId)
+    const fields = form.fields.map((f, order) => ({
+      id: f.id,
+      type: f.type,
+      label: f.label,
+      ...(f.placeholder ? { placeholder: f.placeholder } : {}),
+      required: f.required ?? false,
+      options: f.options ?? [],
+      order,
+    }))
+    await formRef.set({
+      id: formId,
+      teamId,
+      title: form.title,
+      slug: form.slug,
+      ...(form.description ? { description: form.description } : {}),
+      status: 'published',
+      access: form.access ?? 'public',
+      // false ⇒ a submission is just a message: no contact created or matched,
+      // nothing enters the acquisition funnel.
+      createContact: form.createContact ?? true,
+      ...(form.emailFieldId ? { emailFieldId: form.emailFieldId } : {}),
+      fields,
+      notifications: {
+        notifyStaff: form.notifyStaff ?? true,
+        confirmSubmitter: form.confirmSubmitter ?? false,
+      },
+      ...(form.confirmationMessage ? { confirmation: { message: form.confirmationMessage } } : {}),
+      submissionCount: 0,
+      created_at: ts(daysFromNow(-60)),
+      updated_at: docNow,
+      createdBy: uid,
+      // MUST be an explicit null: syncTeamPublicProfile filters published forms
+      // with `where('archived_at', '==', null)`, and a missing field won't match
+      // — the Forms public surface would never go live.
+      archived_at: null,
+    })
+    await formRef
+      .collection('public_profile')
+      .doc(formId)
+      .set({
+        type: 'form',
+        teamId,
+        slug: form.slug,
+        title: form.title,
+        ...(form.description ? { description: form.description } : {}),
+        access: form.access ?? 'public',
+        fields,
+        updated_at: docNow,
+      })
   }
 }
 
