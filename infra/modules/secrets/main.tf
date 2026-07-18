@@ -42,3 +42,20 @@ resource "google_secret_manager_secret_iam_member" "admin_version_adder" {
 
   depends_on = [google_secret_manager_secret.secret]
 }
+
+# Same secretAccessor grant, for identities beyond the nominal runtime SA. Kept
+# as its own resource so the existing accessor bindings above are not rekeyed
+# (that would destroy and recreate all of them).
+resource "google_secret_manager_secret_iam_member" "extra_accessor" {
+  for_each = {
+    for pair in setproduct(var.secret_ids, var.extra_accessor_members) :
+    "${pair[0]}|${pair[1]}" => { secret_id = pair[0], member = pair[1] }
+  }
+
+  project   = var.project_id
+  secret_id = each.value.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = each.value.member
+
+  depends_on = [google_secret_manager_secret.secret]
+}

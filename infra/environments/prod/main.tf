@@ -114,6 +114,10 @@ module "secrets" {
 
   admin_writable_secret_ids = var.admin_writable_secret_ids
 
+  # Functions are deployed under the default compute SA (setGlobalOptions sets no
+  # serviceAccount), and roles/editor cannot READ secret payloads.
+  extra_accessor_members = ["serviceAccount:576514050360-compute@developer.gserviceaccount.com"]
+
   depends_on = [module.services]
 }
 
