@@ -864,7 +864,17 @@ export default function DashboardPage() {
         </StatsStrip>
       </section>
 
-      {/* ── 3. Contacts snapshot ── */}
+      {/* ── 3. Finance (Studio+ only) ── Money sits directly under the
+          highlights: it's the question an owner opens the dashboard to answer,
+          so it outranks the roster breakdown below it. */}
+      <section className="space-y-5">
+        <SectionHeading>{t('sectionFinance')}</SectionHeading>
+        <PlanGate minPlan="studio" fallback={<FinanceUpsell />}>
+          <DashboardFinanceSection teamId={currentTeamId} />
+        </PlanGate>
+      </section>
+
+      {/* ── 4. Contacts snapshot ── */}
       <section className="space-y-5">
         <SectionHeading>{t('sectionContactsSnapshot')}</SectionHeading>
         <ContactsSnapshot
@@ -875,19 +885,11 @@ export default function DashboardPage() {
         />
       </section>
 
-      {/* ── 4. Trends (Studio+ only) ── */}
+      {/* ── 5. Trends (Studio+ only) ── */}
       <section className="space-y-5">
         <SectionHeading>{t('sectionTrends')}</SectionHeading>
         <PlanGate minPlan="studio" fallback={<TrendsUpsell />}>
           <TrendsSection teamId={currentTeamId} />
-        </PlanGate>
-      </section>
-
-      {/* ── 5. Finance (Studio+ only) ── */}
-      <section className="space-y-5">
-        <SectionHeading>{t('sectionFinance')}</SectionHeading>
-        <PlanGate minPlan="studio" fallback={<FinanceUpsell />}>
-          <DashboardFinanceSection teamId={currentTeamId} />
         </PlanGate>
       </section>
     </div>
