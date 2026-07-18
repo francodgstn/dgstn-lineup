@@ -21,6 +21,11 @@ import { resolveBaseUrl } from '../utils/env'
 import { generateSecureToken } from '../utils/crypto'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
+import { resolveSingleContact } from '../utils/contacts'
+// Pure trial-gate helpers, shared with bookSession's free trial door — see
+// booking/index.ts's module doc comment. Mirrors the appointments/index.ts
+// same-directory-index import pattern already used elsewhere in this package.
+import { resolveTrialEligibility } from './index'
 
 const MIN_AMOUNT_RAPPEN = 50
 const HOLD_MINUTES = 30
@@ -56,6 +61,11 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     locale?: string
     origin?: string
     idempotencyKey?: string
+    // Paid trial: charges Activity.trialPriceAmount instead of dropIn.priceAmount,
+    // requires trialEnabled, skips the drop-in enabled/priced requirement, and
+    // enforces the trial-eligibility (one trial per person) check — see
+    // Activity.trialPriceAmount and Contact.trial_used_at (@linyup/shared).
+    trial?: boolean
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   if (!data?.sessionId) throw new HttpsError('invalid-argument', 'sessionId is required')
@@ -95,9 +105,17 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   const activity = actSnap.data()!
   const activityName =
     (activity.name as string) || (sessionData.activityName as string) || 'Class'
+  const isTrial = data.trial === true
+  const trialPriceAmount = activity.trialPriceAmount as number | null | undefined
+
+  // The drop-in enabled/priced requirement does NOT apply in trial mode — a
+  // class can offer a paid trial with no drop-in configured at all.
   const dropIn = activity.dropIn as { enabled?: boolean; priceAmount?: number } | undefined
-  if (!dropIn?.enabled || typeof dropIn.priceAmount !== 'number') {
+  if (!isTrial && (!dropIn?.enabled || typeof dropIn.priceAmount !== 'number')) {
     throw new HttpsError('failed-precondition', 'Drop-in is not available for this class')
+  }
+  if (isTrial && (activity.trialEnabled !== true || typeof trialPriceAmount !== 'number')) {
+    throw new HttpsError('failed-precondition', 'This class does not offer a paid trial')
   }
   const accessRule = resolveActivityAccessRule({
     accessRule: activity.accessRule as ActivityAccessRule | undefined,
@@ -107,9 +125,13 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     throw new HttpsError('failed-precondition', 'This class is free to book — no payment needed')
   }
 
-  const amount = Math.round(dropIn.priceAmount * 100)
+  const priceAmountMajor = isTrial ? (trialPriceAmount as number) : (dropIn!.priceAmount as number)
+  const amount = Math.round(priceAmountMajor * 100)
   if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
-    throw new HttpsError('failed-precondition', `Drop-in price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
+    throw new HttpsError(
+      'failed-precondition',
+      `${isTrial ? 'Trial' : 'Drop-in'} price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`
+    )
   }
 
   // Resolve the contact (payment is proof — no email verification needed here).
@@ -198,6 +220,24 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     }
   }
 
+  // Trial eligibility: one trial per person, ever — free or paid. Resolved by
+  // email (never the looser name+email match above), same lookup bookSession's
+  // free trial door uses. Only enforced in trial mode.
+  if (isTrial) {
+    const { contactId: eligibilityContactId } = await resolveSingleContact(teamId, email)
+    let trialUsedAt: unknown = null
+    if (eligibilityContactId) {
+      const eligibilityDoc = await db.collection('contacts').doc(eligibilityContactId).get()
+      trialUsedAt = eligibilityDoc.exists ? eligibilityDoc.data()?.trial_used_at : null
+    }
+    const eligibility = resolveTrialEligibility(trialUsedAt)
+    if (!eligibility.ok) {
+      throw new HttpsError('failed-precondition', 'This email has already used a trial', {
+        reason: eligibility.reason,
+      })
+    }
+  }
+
   // Guard: already registered (confirmed booking or attendance).
   const bookingRef = db.collection('sessions').doc(sessionId).collection('bookings').doc(contactId)
   const [bookingSnap, participantSnap] = await Promise.all([
@@ -241,6 +281,10 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     sessionId,
     contactId,
     activityName,
+    // Trial mode keeps kind: 'drop_in' (so the existing webhook path confirms
+    // it) and just flags itself for the extra trial_used_at stamp — see
+    // handleDropInCheckout.
+    ...(isTrial ? { trial: 'true' } : {}),
   }
   const idempotencyKey =
     data.idempotencyKey ?? `dropin:${teamId}:${sessionId}:${contactId}:${Math.floor(Date.now() / 60000)}`
@@ -250,7 +294,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       accountId,
       amount,
       applicationFeeAmount,
-      productName: `Drop-in · ${activityName}`,
+      productName: `${isTrial ? 'Trial' : 'Drop-in'} · ${activityName}`,
       successUrl: `${base}?status=success${slugQuery}`,
       cancelUrl: `${base}?status=cancelled${slugQuery}`,
       customerEmail: email || undefined,

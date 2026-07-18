@@ -136,6 +136,11 @@ export interface Contact {
   trial_booked_at?: Timestamp
   trial_attended_at?: Timestamp
   converted_at?: Timestamp
+  // Stamped when the contact COMPLETES a trial booking (free OR paid) — the
+  // one-trial-per-person enforcement for the trial door (bookSession's free path
+  // and createDropInCheckout's paid-trial checkout, see Activity.trialPriceAmount).
+  // Absent ⇒ this email hasn't used a trial yet. Never cleared.
+  trial_used_at?: Timestamp
   // "Paid at checkout but hasn't finished signup yet" — set true only on a contact
   // created by a 'full'-mode shop purchase (consent + the studio's required fields
   // still owed). Cleared, with signup_completed_at stamped, when the buyer finishes

@@ -44,6 +44,14 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     // the trial the admin toggled on — the promise "even when members-only"
     // needs the mirror to carry it.
     ...(data.type !== 'appointment' && data.trialEnabled === true ? { trialEnabled: true } : {}),
+    // CLASS-ONLY paid-trial price — mirrored only alongside a live trial door
+    // (same conditional style as trialEnabled above). Absent ⇒ the trial stays
+    // FREE, today's behaviour untouched.
+    ...(data.type !== 'appointment' &&
+    data.trialEnabled === true &&
+    typeof data.trialPriceAmount === 'number'
+      ? { trialPriceAmount: data.trialPriceAmount }
+      : {}),
     // Appointment duration menu with base prices so public cards can show
     // "from CHF 45". Mirrored verbatim — no per-contact data to strip any more
     // (the old subscriptionPricing matrix is gone).

@@ -27,7 +27,8 @@ export type ActivityTermKind =
 
 export interface ActivityTerm {
   kind: ActivityTermKind
-  /** dropIn only — the flat per-class price. */
+  /** dropIn — the flat per-class price. trial — the paid-trial price (major
+   *  units); absent/undefined means the trial is FREE (today's behaviour). */
   amount?: number
   /** price only (appointments) — lowest priced duration. Equal to `max` when
    *  every priced duration shares the same price. */
@@ -58,6 +59,10 @@ export interface ActivityTermsInput {
   /** CLASS-ONLY. Independent of the access tier — a gated class may still
    *  take a newcomer's trial booking. */
   trialEnabled?: boolean
+  /** CLASS-ONLY. Reduced trial price (major units), sitting next to
+   *  `trialEnabled`. Absent/null ⇒ FREE trial (today's behaviour); a number ⇒
+   *  the trial costs that instead of the class's normal price. */
+  trialPriceAmount?: number | null
   /** CLASS-ONLY. Ignored for appointments (money is the only gate there). */
   accessRule?: ActivityAccessRule | null
   /** CLASS-ONLY. */
@@ -112,7 +117,15 @@ export function resolveActivityTerms(a: ActivityTermsInput): ActivityTerm[] {
   }
   const triable = (rule.type === 'open' && a.isFreeTrial === true) || a.trialEnabled === true
   if (triable) {
-    terms.push({ kind: 'trial' })
+    // A trial price only applies where the trial door actually grants something
+    // — i.e. on a GATED class. On an open class everyone books free anyway, so
+    // the door (and its price) is inert; mirrors `bookSession`'s isTrialDoor, so
+    // the card never advertises a price the backend won't charge.
+    const priced = typeof a.trialPriceAmount === 'number' && rule.type !== 'open'
+    terms.push({
+      kind: 'trial',
+      ...(priced ? { amount: a.trialPriceAmount as number } : {}),
+    })
   }
   if (a.dropIn?.enabled && typeof a.dropIn.priceAmount === 'number') {
     terms.push({ kind: 'dropIn', amount: a.dropIn.priceAmount })
@@ -138,7 +151,9 @@ export type SubLookup = (subscriptionTypeId: string) => ResolvedSub | null
 
 export interface ActivityPricingDisplay {
   type: 'class' | 'appointment'
-  freeTrial: boolean
+  /** null ⇒ no trial offered. `{ priceAmount: null }` ⇒ FREE trial (today's
+   *  behaviour). `{ priceAmount: 15 }` ⇒ a paid trial at that price. */
+  trial: { priceAmount: number | null } | null
   /** "Included with {name} — {priceLabel}" — a subscription-gated class OR an
    *  appointment's INCLUDED member benefit. One per resolvable subscription. */
   includedWith: ResolvedSub[]
@@ -161,10 +176,10 @@ export function resolveActivityPricingDisplay(
   let discount: { percent: number; ids: string[] } | null = null
   let dropInAmount: number | null = null
   let appointmentPrice: { min: number; max: number } | null = null
-  let freeTrial = false
+  let trial: { priceAmount: number | null } | null = null
 
   for (const term of terms) {
-    if (term.kind === 'trial') freeTrial = true
+    if (term.kind === 'trial') trial = { priceAmount: term.amount ?? null }
     else if (term.kind === 'dropIn') dropInAmount = term.amount ?? null
     else if (term.kind === 'price') appointmentPrice = { min: term.min ?? 0, max: term.max ?? 0 }
     else if (term.kind === 'gate' && term.tier === 'subscription')
@@ -187,5 +202,5 @@ export function resolveActivityPricingDisplay(
         .filter((x): x is { name: string; percent: number } => !!x)
     : []
 
-  return { type, freeTrial, includedWith, discountWith, dropInAmount, appointmentPrice }
+  return { type, trial, includedWith, discountWith, dropInAmount, appointmentPrice }
 }

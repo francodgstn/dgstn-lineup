@@ -1276,6 +1276,14 @@ async function handleDropInCheckout(
     await stampFinanceContact(team.teamId, piId, contactId)
   }
 
+  // Paid trial (createDropInCheckout with trial: true): one-trial-per-person
+  // enforcement, mirroring bookSession's free trial door stamp. Only reached on
+  // the successful-confirm path above (never on the early duplicate-redelivery
+  // return), so a redelivered event never double-stamps.
+  if (md.trial === 'true') {
+    await cSnap.ref.update({ trial_used_at: FieldValue.serverTimestamp() })
+  }
+
   await db
     .collection(CONTACTS_COLLECTION)
     .doc(contactId)

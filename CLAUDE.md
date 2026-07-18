@@ -282,8 +282,13 @@ the session (`status: 'pending_payment'` + `hold_expires_at`, +30 min, lazily
 expiring) and the Connect webhook (`kind: 'appointment'`) confirms it to `full`
 on payment. `dropIn` stays class-only — appointments never use it; class-side,
 the independent `trialEnabled` toggle lets a gated class accept a newcomer's
-guest trial, so members-included + trial + drop-in coexist. Kiosk walk-in is
-class-only too. Full doc: `docs/appointments.md` → "Paid appointments".
+guest trial, so members-included + trial + drop-in coexist. That trial may
+itself be **priced** — `Activity.trialPriceAmount` (class-only, gated-only;
+absent ⇒ free, today's behaviour) charges a newcomer's first class over the
+drop-in checkout (`createDropInCheckout({ trial: true })`), enforced once per
+person via `Contact.trial_used_at`. A trial is never a subscription. Kiosk
+walk-in is class-only too. Full docs: `docs/appointments.md` → "Paid
+appointments"; `docs/payment-contact-studio.md` → "Paid trial".
 
 ### SaaS plan tiers (Phase 2)
 

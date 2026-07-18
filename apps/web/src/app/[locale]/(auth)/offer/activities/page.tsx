@@ -170,6 +170,10 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
     // CLASS-ONLY: independent of accessTier — a gated class still takes a
     // newcomer's trial booking when this is on.
     trialEnabled: z.boolean(),
+    // CLASS-ONLY: reduced trial price, kept as a string in form state ('' = free
+    // trial, today's behaviour). A number reduces the trial to that price
+    // instead of the class's normal price.
+    trialPrice: z.string(),
     // Does a booking for this activity confirm itself, or wait on studio review?
     // Not implied by `type` — shown for classes and appointments alike.
     autoConfirm: z.boolean(),
@@ -193,6 +197,9 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
   }).superRefine((d, ctx) => {
     if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5)) {
       ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: 'Enter a drop-in price of at least 0.50' })
+    }
+    if (d.trialPrice.trim() !== '' && !(Number(d.trialPrice) >= 0.5)) {
+      ctx.addIssue({ code: 'custom', path: ['trialPrice'], message: t('trialPriceValidation') })
     }
     if (d.type === 'appointment' && d.durations.length === 0) {
       ctx.addIssue({ code: 'custom', path: ['durations'], message: 'Pick at least one session length' })
@@ -274,6 +281,7 @@ function ActivityDialog({
           dropInEnabled: editing.dropIn?.enabled ?? false,
           dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
           trialEnabled: editing.trialEnabled ?? false,
+          trialPrice: editing.trialPriceAmount != null ? String(editing.trialPriceAmount) : '',
           durations: toDurationFormValues(editing.durations),
           memberBenefit: toMemberBenefitFormValue(editing.memberBenefit),
           autoConfirm: resolveAutoConfirm(editing),
@@ -282,7 +290,7 @@ function ActivityDialog({
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
           type: 'class' as ActivityType, level: 'all',
           color: DEFAULT_ACCENT, accessTier: 'open', subscriptionTypeIds: [],
-          dropInEnabled: false, dropInPrice: '', trialEnabled: false,
+          dropInEnabled: false, dropInPrice: '', trialEnabled: false, trialPrice: '',
           durations: [],
           memberBenefit: toMemberBenefitFormValue(null),
           autoConfirm: resolveAutoConfirm({ type: 'class' }),
@@ -291,6 +299,7 @@ function ActivityDialog({
   const type = watch('type')
   const accessTier = watch('accessTier')
   const dropInEnabled = watch('dropInEnabled')
+  const trialEnabled = watch('trialEnabled')
   const durations = watch('durations') || []
 
   function toggleDuration(minutes: number) {
@@ -416,6 +425,11 @@ function ActivityDialog({
         ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
       },
       trialEnabled: data.trialEnabled,
+      // Cleared on an open tier — the field is hidden there (the trial door
+      // grants nothing extra on a free-to-book class), so a leftover price from
+      // a previous tier must not survive as inert data the UI can't show.
+      trialPriceAmount:
+        data.trialPrice && data.accessTier !== 'open' ? Number(data.trialPrice) : null,
       durations: null,
       memberBenefit: null,
     }
@@ -625,26 +639,44 @@ function ActivityDialog({
             />
 
             {/* CLASS-ONLY: independent of the access tier below — a gated class
-                may still take a newcomer's trial booking. */}
+                may still take a newcomer's trial booking. The optional trial
+                price sits under the toggle: empty keeps the trial free (today's
+                behaviour); a number reduces it to that price instead of the
+                class's normal price. */}
             {type === 'class' && (
-              <Controller
-                name="trialEnabled"
-                control={control}
-                render={({ field }) => (
-                  <label className="flex cursor-pointer items-center justify-between gap-4 p-3">
-                    <span className="min-w-0 pr-4">
-                      <span className="block text-sm font-medium">{t('fieldTrialEnabled')}</span>
-                      <span className="block text-xs text-muted-foreground">{t('trialEnabledHint')}</span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      className="accent-primary shrink-0"
-                      checked={field.value}
-                      onChange={(e) => field.onChange(e.target.checked)}
-                    />
-                  </label>
+              <div className="p-3 space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 pr-4">
+                    <p className="text-sm font-medium">{t('fieldTrialEnabled')}</p>
+                    <p className="text-xs text-muted-foreground">{t('trialEnabledHint')}</p>
+                  </div>
+                  <input type="checkbox" {...register('trialEnabled')} className="accent-primary shrink-0" />
+                </div>
+                {/* Only on a GATED class — on an open one the trial door grants
+                    nothing extra (everyone books free), so a price there would be
+                    silently ignored by `bookSession`. Offering the field would
+                    promise a charge the backend never makes. */}
+                {trialEnabled && accessTier !== 'open' && (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 pr-4">
+                      <p className="text-xs font-medium">{t('trialPriceLabel')}</p>
+                      <p className="text-xs text-muted-foreground">{t('trialPriceHint')}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">{currency}</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        {...register('trialPrice')}
+                        placeholder={t('trialPricePlaceholder')}
+                        className="h-8 w-24 text-sm"
+                      />
+                    </div>
+                  </div>
                 )}
-              />
+                {errors.trialPrice && <p className="text-destructive text-xs">{errors.trialPrice.message}</p>}
+              </div>
             )}
 
             {/* CLASS-ONLY: the one drop-in concept — always visible, not nested
@@ -964,10 +996,11 @@ function ActivityDialog({
 // ─── activity card ────────────────────────────────────────────────────────────
 
 // Money-chip label for one resolved term — the only NEW badges this list adds
-// (trial/gate keep their existing, separate badge block below). Benefit chips
-// try to stay compact by resolving a single subscription type's name when the
-// admin already has the list loaded; multiple types (or an unresolved id) fall
-// back to the generic label.
+// (the free trial / gate badges keep their existing, separate badge block
+// below; a PRICED trial gets a money chip here instead, since it's a real
+// money story). Benefit chips try to stay compact by resolving a single
+// subscription type's name when the admin already has the list loaded;
+// multiple types (or an unresolved id) fall back to the generic label.
 function moneyChipLabel(
   term: ReturnType<typeof resolveActivityTerms>[number],
   currency: string,
@@ -978,6 +1011,10 @@ function moneyChipLabel(
     ids?.length === 1 ? subscriptionTypes.find((s) => s.id === ids[0])?.name : undefined
 
   switch (term.kind) {
+    case 'trial':
+      return typeof term.amount === 'number'
+        ? t('chipTrialPriced', { amount: formatCurrency(term.amount, currency) })
+        : null
     case 'dropIn':
       return t('chipDropIn', { amount: formatCurrency(term.amount ?? 0, currency) })
     case 'price':
@@ -1017,7 +1054,9 @@ function ActivityCard({
   const t = useTranslations('Activities')
   const { setNodeRef, style, attributes, listeners, isDragging } = sortable
   const moneyTerms = resolveActivityTerms(activity).filter(
-    (term) => term.kind !== 'trial' && term.kind !== 'gate'
+    // The FREE trial keeps its own badge below (freeTrialBadge); a PRICED
+    // trial is a real money story, so it earns a money chip here instead.
+    (term) => (term.kind !== 'trial' && term.kind !== 'gate') || (term.kind === 'trial' && typeof term.amount === 'number')
   )
 
   return (

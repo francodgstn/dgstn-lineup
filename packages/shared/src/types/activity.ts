@@ -206,6 +206,15 @@ export interface Activity {
    *  everyone) and ignored for appointments (money is the only gate there —
    *  see `ActivityMemberBenefit`). */
   trialEnabled?: boolean
+  /** CLASS-ONLY. Major units, team `default_currency`. Absent/null ⇒ the trial is
+   *  FREE (today's behaviour — untouched). A number ⇒ the trial costs that instead
+   *  of nothing; the trial's ELIGIBILITY semantics (newcomer/guest-only, once —
+   *  enforced via `Contact.trial_used_at`) are unchanged, only the money changes.
+   *  No-op unless `trialEnabled === true`. Charged via the same Stripe Connect
+   *  drop-in checkout as `dropIn`, at this amount instead of `dropIn.priceAmount`
+   *  (see `createDropInCheckout`'s `trial` input) — a class may offer a paid
+   *  trial with no drop-in configured at all. */
+  trialPriceAmount?: number | null
   /** Display-only entry requirements shown on the public booking pages (e.g.
    *  "25m front crawl with side breathing"). Not enforced anywhere. */
   prerequisites?: string
@@ -254,6 +263,11 @@ export interface ActivityPublicProfile {
   /** CLASS-ONLY. Mirrored so the public flow can OFFER the newcomer trial door
    *  on a gated class ("even when members-only") — present only when true. */
   trialEnabled?: boolean
+  /** CLASS-ONLY. Major units, team `default_currency`. Absent/null ⇒ the trial is
+   *  FREE (today's behaviour — untouched). A number ⇒ the trial costs that instead
+   *  of nothing. Mirrored only when `trialEnabled === true` and the value is a
+   *  number — see `Activity.trialPriceAmount`. */
+  trialPriceAmount?: number | null
   /** APPOINTMENT-ONLY. The duration menu with base prices so public cards can
    *  show "from CHF 45". Mirrored verbatim from `Activity.durations` — there's
    *  no per-contact data to strip any more (the old `subscriptionPricing`

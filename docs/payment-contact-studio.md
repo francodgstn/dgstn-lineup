@@ -211,6 +211,35 @@ membership is created — a drop-in is a single paid booking, not a subscription
 - **Scope.** Group-class only (coaching is rejected — 1:1 capacity model). The mobile app
   books coaching only, so it has no drop-in surface.
 
+## Paid trial (a newcomer's discounted first class)
+
+A studio may price the **trial** itself rather than giving it away — the common real-world
+shape "first class CHF 15, drop-in CHF 25, 10-class pack CHF 230". It is a **trial**, not a
+subscription: one per person, newcomer-only, no membership created.
+
+- **Config.** `Activity.trialPriceAmount` (major units, class-only) sits next to the
+  `trialEnabled` toggle in `offer/activities`. **Absent/null ⇒ the trial stays FREE** —
+  today's behaviour, untouched. Only offered (and only mirrored to the activity
+  `public_profile`) on a **gated** class with `trialEnabled === true`: on an `open` class
+  the trial door grants nothing extra — everyone books free — so a price there would be
+  inert, and both the form and `bookSession` treat it as absent.
+- **Flow.** Reuses the drop-in plumbing wholesale: **`createDropInCheckout`** takes a
+  `trial: true` input that charges `trialPriceAmount` instead of `dropIn.priceAmount` and
+  waives the drop-in-configured requirement (a class may sell a paid trial with no drop-in
+  at all). Metadata stays `kind: 'drop_in'` plus `trial: 'true'`, so the existing
+  `handleDropInCheckout` confirms it unchanged.
+- **One trial per person.** `Contact.trial_used_at` is stamped when a trial booking
+  *completes* — by `bookSession` on the free path, by the webhook on the paid one (never on
+  a duplicate redelivery, so it can't double-stamp). Both doors refuse a second attempt with
+  `failed-precondition { reason: 'trial_used' }`, resolved **by email** so fudging a name
+  doesn't buy another one. This tightens the previously unlimited free-trial door too.
+- **Bypass-proofing.** `bookSession` refuses a free booking of a priced trial with
+  `failed-precondition { reason: 'payment_required', priceAmount }`; the booking UI routes
+  to checkout up front and also recovers from that error by redirecting rather than dead-ending.
+- **Booking UI.** The activity card shows a **"Trial {price}"** chip next to the type chip
+  (a free trial keeps the existing "Free trial" chip), and the newcomer door reads
+  "Try your first class for {price}".
+
 ## Appointments (pay-per-1:1 booking)
 
 The 1:1 counterpart to drop-in, over the same Connect one-off checkout — but with its

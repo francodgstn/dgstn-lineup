@@ -1018,6 +1018,9 @@ async function seedLeadTenant(profile: LeadProfile) {
         // Independent of the tier: a gated class still accepts a newcomer's
         // trial booking (guest path identical to 'open').
         ...(a.trialEnabled ? { trialEnabled: true } : {}),
+        // A PAID trial — a reduced-price first class instead of a free one.
+        // Absent ⇒ the trial is free (the common case).
+        ...(a.trialPrice != null ? { trialPriceAmount: a.trialPrice } : {}),
         dropIn,
         base_score: a.base_score,
         type: 'class',
@@ -1052,6 +1055,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         // Mirrored so the public flow can OFFER the newcomer trial door on a
         // gated class (matches syncActivityPublicProfile).
         ...(a.trialEnabled ? { trialEnabled: true } : {}),
+        // Mirrored so the public cards can price the trial ("Trial CHF 15").
+        ...(a.trialPrice != null ? { trialPriceAmount: a.trialPrice } : {}),
         level: a.level,
       })
   }

@@ -55,6 +55,9 @@ interface ActivityProfile {
   dropIn?: { enabled: boolean; priceAmount?: number }
   /** CLASS-ONLY: a gated class still accepts a newcomer's free trial booking. */
   trialEnabled?: boolean
+  /** CLASS-ONLY: reduced trial price (major units). Absent/null ⇒ the trial is
+   *  FREE (today's behaviour); a number ⇒ the trial costs that instead. */
+  trialPriceAmount?: number | null
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
   durations?: Array<{ minutes: number; priceAmount: number | null }>
   /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
@@ -248,6 +251,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               accessRule: data.accessRule ?? undefined,
               dropIn: data.dropIn ?? undefined,
               trialEnabled: data.trialEnabled === true,
+              trialPriceAmount: typeof data.trialPriceAmount === 'number' ? data.trialPriceAmount : null,
               durations: Array.isArray(data.durations) ? data.durations : undefined,
               memberBenefit: data.memberBenefit ?? undefined,
               prerequisites: data.prerequisites ?? undefined,
@@ -365,30 +369,45 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     if (!selectedSession || !teamId) return
     setIsSubmitting(true)
     setBookingError(null)
+
+    // Shared checkout call — drop-in (pay-per-class) and priced-trial bookings
+    // both redirect to Stripe Checkout; `trial: true` charges the activity's
+    // TRIAL price instead of the drop-in price (`createDropInCheckout`'s
+    // `trial` input). Also reused defensively from the catch block below when
+    // the server reports `payment_required` for what the client thought was free.
+    const checkout = async (trial: boolean) => {
+      const fn = httpsCallable<Record<string, unknown>, { url?: string }>(
+        functions,
+        'createDropInCheckout'
+      )
+      const res = await fn({
+        teamId,
+        sessionId: selectedSession!.id,
+        contactDetails: {
+          firstname: values.firstname,
+          lastname: values.lastname,
+          email: values.email,
+          phone: showPhone ? values.phone || null : null,
+        },
+        slug,
+        locale,
+        origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+        ...(trial ? { trial: true } : {}),
+      })
+      return res.data?.url
+    }
+
     try {
       // Gated class with drop-in enabled → pay-per-class; the webhook confirms the
       // booking on payment success. Redirect to Stripe Checkout. NOT when the
       // visitor explicitly took the free-trial door — a trial newcomer must never
-      // be charged; bookSession admits gated trial guests (Activity.trialEnabled).
-      if (dropInAvailable && guestPath !== 'trial') {
-        const fn = httpsCallable<Record<string, unknown>, { url?: string }>(
-          functions,
-          'createDropInCheckout'
-        )
-        const res = await fn({
-          teamId,
-          sessionId: selectedSession.id,
-          contactDetails: {
-            firstname: values.firstname,
-            lastname: values.lastname,
-            email: values.email,
-            phone: showPhone ? values.phone || null : null,
-          },
-          slug,
-          locale,
-          origin: typeof window !== 'undefined' ? window.location.origin : undefined,
-        })
-        const url = res.data?.url
+      // be charged unless the trial itself is priced (isPricedTrial below);
+      // bookSession admits gated trial guests (Activity.trialEnabled).
+      const isPricedTrial =
+        guestPath === 'trial' && typeof selectedActivity?.trialPriceAmount === 'number'
+
+      if ((dropInAvailable && guestPath !== 'trial') || isPricedTrial) {
+        const url = await checkout(isPricedTrial)
         if (url) {
           window.location.href = url
           return
@@ -411,8 +430,26 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       setConfirmedSession(selectedSession)
       setStep('confirmed')
     } catch (err: unknown) {
-      const e = err as { message?: string; code?: string }
-      if (e.code === 'already-exists') {
+      const e = err as { message?: string; code?: string; details?: { reason?: string } }
+      const reason = e.details?.reason
+      if (reason === 'trial_used') {
+        setBookingError(t('errorTrialUsed'))
+      } else if (reason === 'payment_required') {
+        // Defensive: the server determined this booking requires payment even
+        // though the client took the free path (e.g. a stale/mismatched trial
+        // price) — recover by sending the guest straight to checkout instead of
+        // leaving them at a dead end.
+        try {
+          const url = await checkout(true)
+          if (url) {
+            window.location.href = url
+            return
+          }
+        } catch {
+          // fall through to the generic checkout-failed message below
+        }
+        setBookingError(t('errorCheckoutFailed'))
+      } else if (e.code === 'already-exists') {
         setBookingError(t('errorAlreadyRegistered'))
       } else {
         setBookingError(e.message || t('errorGeneric'))
@@ -644,10 +681,14 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                           <span className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5 font-medium">
                             {d.type === 'appointment' ? t('badgeAppointment') : t('chipClass')}
                           </span>
-                          {/* Free trial — the one positive/free signal */}
-                          {d.freeTrial && (
+                          {/* Trial — free (the one positive/free signal) or priced */}
+                          {d.trial && (
                             <span className="rounded-full bg-green-100 text-green-700 text-xs px-2 py-0.5 font-medium">
-                              {t('badgeFreeTrial')}
+                              {d.trial.priceAmount != null
+                                ? t('badgeTrialPriced', {
+                                    price: formatCurrency(d.trial.priceAmount, currency, locale),
+                                  })
+                                : t('badgeFreeTrial')}
                             </span>
                           )}
                           {!hasSessions && (
@@ -822,6 +863,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   if (step === 'who' && selectedSession) {
     const isMembersOnly = selectedActivity?.isFreeTrial === false
+    const trialPriceLabel =
+      typeof selectedActivity?.trialPriceAmount === 'number'
+        ? formatCurrency(selectedActivity.trialPriceAmount, currency, locale)
+        : null
     return withBar(
       <>
         <div>
@@ -837,7 +882,11 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             >
               <div className="flex-1">
                 <p className="font-semibold text-sm">{t('firstTimeTitle')}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{t('firstTimeSubtitle')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {trialPriceLabel
+                    ? t('firstTimeSubtitlePriced', { price: trialPriceLabel })
+                    : t('firstTimeSubtitle')}
+                </p>
               </div>
               <svg
                 className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors"

@@ -105,6 +105,10 @@ export interface LeadActivityDef {
    *  booking (guest path identical to 'open'). Lets a class combine
    *  members-only access + free trial + drop-in (Activity.trialEnabled). */
   trialEnabled?: boolean
+  /** PAID trial price (major units) — a reduced-price first class instead of a
+   *  free one (Activity.trialPriceAmount). Only meaningful with a trial door
+   *  (trialEnabled, or an 'open' class). Unset ⇒ the trial is FREE. */
+  trialPrice?: number
 }
 
 export interface LeadSubscriptionPriceDef {

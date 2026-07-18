@@ -18,6 +18,7 @@ import {
 } from './templates'
 import { resolveBookingAccessGate } from './access'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
+import { resolveSingleContact } from '../utils/contacts'
 import {
   resolveActivityAccessRule,
   resolveAutoConfirm,
@@ -26,6 +27,49 @@ import {
   type ActivityAccessRule,
   type ActivityType,
 } from '@linyup/shared'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Paid trial — pure decision logic, shared with createDropInCheckout's
+// `trial: true` mode (booking/dropIn.ts imports these from here — mirrors the
+// getDatePartsInTz/localTimeToUtc pattern in appointments/index.ts). No
+// Firestore here so the decisions are trivially unit-tested (see trial.test.ts)
+// and the two call sites can't drift apart on them. The trial's ELIGIBILITY
+// semantics (newcomer/guest-only, once) are unchanged by paid trials — only the
+// money changes. See Activity.trialPriceAmount and Contact.trial_used_at
+// (@linyup/shared) for the field docs.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TrialGateResult {
+  ok: boolean
+  reason?: 'payment_required' | 'trial_used'
+  priceAmount?: number
+}
+
+const TRIAL_GATE_OK: TrialGateResult = { ok: true }
+
+/** Whether a FREE-path trial booking attempt on a PRICED trial must be refused.
+ *  Defence-in-depth: the client normally routes straight to the paid-trial
+ *  checkout (createDropInCheckout with `trial: true`) and never reaches the
+ *  free booking path when a price is configured. Absent/null `trialPriceAmount`
+ *  (today's default) always passes — the free path is untouched. */
+export function resolveFreeTrialPaymentGate(
+  trialPriceAmount: number | null | undefined
+): TrialGateResult {
+  if (typeof trialPriceAmount === 'number') {
+    return { ok: false, reason: 'payment_required', priceAmount: trialPriceAmount }
+  }
+  return TRIAL_GATE_OK
+}
+
+/** Whether a contact has already used their one trial — free or paid, ever.
+ *  `trialUsedAt` is whatever truthy/falsy value the resolved contact's
+ *  `trial_used_at` field holds (a Firestore Timestamp in production; callers
+ *  pass `null`/`undefined` when no contact matched). Only meaningful on the
+ *  trial door itself — never applied to normal/covered bookings. */
+export function resolveTrialEligibility(trialUsedAt: unknown): TrialGateResult {
+  if (trialUsedAt) return { ok: false, reason: 'trial_used' }
+  return TRIAL_GATE_OK
+}
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 const VALID_LANGS: Lang[] = ['en', 'de', 'fr', 'it']
@@ -512,6 +556,10 @@ export const bookSession = onCall(async (request) => {
   // accessRule: a gated class still accepts a newcomer's (guest) trial
   // booking when set — see the access-gate override below.
   let activityTrialEnabled = false
+  // CLASS-ONLY (Activity.trialPriceAmount, @linyup/shared). Absent/null ⇒ the
+  // trial stays FREE (today's behaviour). A number means this trial is paid —
+  // see the payment gate below.
+  let activityTrialPriceAmount: number | null = null
 
   if (sessionData.activityId) {
     try {
@@ -531,6 +579,8 @@ export const bookSession = onCall(async (request) => {
         activityAutoConfirm = actData.autoConfirm as boolean | undefined
         activityTypeVal = actData.type as ActivityType | undefined
         activityTrialEnabled = actData.trialEnabled === true
+        activityTrialPriceAmount =
+          typeof actData.trialPriceAmount === 'number' ? (actData.trialPriceAmount as number) : null
       }
     } catch (_) {
       /* non-fatal */
@@ -568,8 +618,55 @@ export const bookSession = onCall(async (request) => {
   // 'open' tier's guest path (same contact creation below, same booking shape,
   // no repeat-limiting). Authenticated callers (trial accounts included) are
   // NOT affected — trialEnabled is a guest-only door, not a looser tier.
-  const gateAccessRule: ActivityAccessRule =
-    !authenticatedContact && activityTrialEnabled ? { type: 'open' } : accessRule
+  //
+  // On an OPEN class the door is a no-op — everyone already books free, so
+  // trialEnabled grants nothing extra. It must therefore stay fully inert
+  // there: no payment gate (else a mispriced open class deadlocks — the free
+  // path would refuse with payment_required while createDropInCheckout refuses
+  // the same booking as "free to book, no payment needed") and no
+  // once-per-person eligibility (else setting the flag on a free class would
+  // silently block every returning guest from re-booking it).
+  const isTrialDoor =
+    !authenticatedContact && activityTrialEnabled && accessRule.type !== 'open'
+
+  if (isTrialDoor) {
+    // Refuse a FREE booking of a PRICED trial — the price is the gate; the
+    // client normally routes straight to the paid-trial checkout instead
+    // (createDropInCheckout with trial: true). Defence-in-depth only.
+    const paymentGate = resolveFreeTrialPaymentGate(activityTrialPriceAmount)
+    if (!paymentGate.ok) {
+      throw new HttpsError('failed-precondition', 'This trial requires payment.', {
+        reason: paymentGate.reason,
+        priceAmount: paymentGate.priceAmount,
+      })
+    }
+
+    // Trial eligibility: one trial per person, ever — free or paid. Resolved
+    // by email (same lookup other Connect/webhook flows use), never by the
+    // looser name+email match below, so a repeat trial-seeker can't dodge it
+    // by fudging their name. Only checked on the trial door itself.
+    const { contactId: eligibilityContactId } = await resolveSingleContact(
+      data.teamId,
+      sanitized.email
+    )
+    let trialUsedAt: unknown = null
+    if (eligibilityContactId) {
+      const eligibilityDoc = await admin
+        .firestore()
+        .collection('contacts')
+        .doc(eligibilityContactId)
+        .get()
+      trialUsedAt = eligibilityDoc.exists ? eligibilityDoc.data()?.trial_used_at : null
+    }
+    const eligibility = resolveTrialEligibility(trialUsedAt)
+    if (!eligibility.ok) {
+      throw new HttpsError('failed-precondition', 'This email has already used a trial', {
+        reason: eligibility.reason,
+      })
+    }
+  }
+
+  const gateAccessRule: ActivityAccessRule = isTrialDoor ? { type: 'open' } : accessRule
   const { matchedSubscriptionTypeId, creditSpendTypeId } = await resolveBookingAccessGate({
     teamId: data.teamId,
     accessRule: gateAccessRule,
@@ -647,12 +744,19 @@ export const bookSession = onCall(async (request) => {
       }
       // An existing OFF-FUNNEL contact (form/shop lead — no acquisition stage)
       // booking a trial enters the funnel normally at this point.
+      const exactMatchUpdate: Record<string, unknown> = {}
       if (!exactMatch.data().acquisition_stage) {
-        await exactMatch.ref.update({
-          acquisition_stage: 'trial_booked',
-          acquisition_stage_updated_at: FieldValue.serverTimestamp(),
-          trial_booked_at: FieldValue.serverTimestamp(),
-        })
+        exactMatchUpdate.acquisition_stage = 'trial_booked'
+        exactMatchUpdate.acquisition_stage_updated_at = FieldValue.serverTimestamp()
+        exactMatchUpdate.trial_booked_at = FieldValue.serverTimestamp()
+      }
+      // One-trial-per-person enforcement: stamped on a successful FREE trial-door
+      // booking (a priced trial never reaches here — refused above).
+      if (isTrialDoor) {
+        exactMatchUpdate.trial_used_at = FieldValue.serverTimestamp()
+      }
+      if (Object.keys(exactMatchUpdate).length) {
+        await exactMatch.ref.update(exactMatchUpdate)
       }
     } else {
       isNewContact = true
@@ -676,6 +780,8 @@ export const bookSession = onCall(async (request) => {
         deleted_at: null,
         created_at: FieldValue.serverTimestamp(),
         pending_bookings_count: 1,
+        // One-trial-per-person enforcement (see the exactMatch branch above).
+        ...(isTrialDoor ? { trial_used_at: FieldValue.serverTimestamp() } : {}),
       })
       contactId = newContactRef.id
       console.log(`New trial contact created: ${contactId}`)

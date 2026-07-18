@@ -292,6 +292,9 @@ interface ActivityEntry {
   dropIn?: { enabled: boolean; priceAmount?: number }
   /** CLASS-ONLY: a gated class still accepts a newcomer's free trial booking. */
   trialEnabled?: boolean
+  /** CLASS-ONLY: reduced trial price (major units). Absent/null ⇒ the trial is
+   *  FREE (today's behaviour); a number ⇒ the trial costs that instead. */
+  trialPriceAmount?: number | null
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
   durations?: Array<{ minutes: number; priceAmount: number | null }>
   /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
@@ -405,6 +408,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               accessRule: (data.accessRule as ActivityAccessRule | undefined) ?? undefined,
               dropIn: (data.dropIn as ActivityEntry['dropIn']) ?? undefined,
               trialEnabled: data.trialEnabled === true,
+              trialPriceAmount: typeof data.trialPriceAmount === 'number' ? (data.trialPriceAmount as number) : null,
               durations: Array.isArray(data.durations) ? (data.durations as ActivityEntry['durations']) : undefined,
               memberBenefit: (data.memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
             }
@@ -505,12 +509,14 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         </span>
                       </div>
                     )}
-                    {d.freeTrial && (
+                    {d.trial && (
                       <span
                         className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow"
                         style={{ background: palette.accent, color: palette.onAccent }}
                       >
-                        Free trial
+                        {d.trial.priceAmount != null
+                          ? `Trial ${formatCurrency(d.trial.priceAmount, currency)}`
+                          : 'Free trial'}
                       </span>
                     )}
                   </div>
