@@ -2895,6 +2895,8 @@
   },
   "PaymentsDashboard": {
     "title": "Paiements",
+    "financeLink": "Voir dans votre comptabilité",
+    "financeLinkInstall": "Ajoutez le plugin Finance pour tenir vos comptes",
     "paymentsHeading": "Paiements uniques",
     "awaitingPaymentHeading": "En attente de paiement",
     "awaitingPaymentOffline": "Hors ligne",

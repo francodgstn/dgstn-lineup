@@ -697,27 +697,33 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                             </span>
                           )}
                         </div>
+                        {showDesc && a.description && (
+                          <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
+                            {a.description}
+                          </p>
+                        )}
+                        {a.prerequisites && (
+                          <p className="text-xs text-amber-700 mt-1.5">
+                            <span className="font-medium">{t('prerequisitesLabel')}</span>{' '}
+                            {a.prerequisites}
+                          </p>
+                        )}
+                        {/* Pricing last, set apart from the prose above it: each way
+                            to pay is its own row with a hairline between, so a card
+                            offering three of them reads as a list rather than a
+                            paragraph of prices. */}
                         {lines.length > 0 && (
-                          <div className="mt-1 space-y-0.5">
+                          <div className="mt-3 divide-y divide-border/60 border-t border-border/60">
                             {lines.map((line, i) => (
-                              <p key={i} className="text-xs text-muted-foreground">{line}</p>
+                              <p key={i} className="py-1.5 text-xs text-muted-foreground">
+                                {line}
+                              </p>
                             ))}
                           </div>
                         )}
                       </>
                     )
                   })()}
-                  {showDesc && a.description && (
-                    <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
-                      {a.description}
-                    </p>
-                  )}
-                  {a.prerequisites && (
-                    <p className="text-xs text-amber-700 mt-1.5">
-                      <span className="font-medium">{t('prerequisitesLabel')}</span>{' '}
-                      {a.prerequisites}
-                    </p>
-                  )}
                 </div>
                 {hasSessions && (
                   <div className="flex items-center pr-4 text-muted-foreground">

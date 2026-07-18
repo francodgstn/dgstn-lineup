@@ -2895,6 +2895,8 @@
   },
   "PaymentsDashboard": {
     "title": "Zahlungen",
+    "financeLink": "In der Buchhaltung ansehen",
+    "financeLinkInstall": "Finance-Plugin hinzufügen, um Buch zu führen",
     "paymentsHeading": "Einmalzahlungen",
     "awaitingPaymentHeading": "Zahlung ausstehend",
     "awaitingPaymentOffline": "Offline",

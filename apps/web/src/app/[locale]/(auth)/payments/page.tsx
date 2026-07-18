@@ -7,7 +7,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CreditCard, Loader2, Plus, Copy, Check, Search } from 'lucide-react'
+import { CreditCard, Loader2, Plus, Copy, Check, Search, Calculator } from 'lucide-react'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 import { toast } from 'sonner'
 import { httpsCallable } from 'firebase/functions'
 import { collection, getDocs, query, where } from 'firebase/firestore'
@@ -196,9 +198,25 @@ export default function PaymentsDashboardPage() {
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <CreditCard className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">{t('title')}</h1>
+        <div className="flex items-start gap-2">
+          <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold">{t('title')}</h1>
+            {/* This page mirrors Stripe; the books live in the Finance plugin.
+                Point at them when installed, at the plugin itself when not — so
+                "where do these land in my accounting?" always has an answer. */}
+            <Link
+              href={
+                (isInstalled('finance')
+                  ? '/plugins/finance'
+                  : '/settings/plugins?plugin=finance') as Route
+              }
+              className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Calculator className="h-3.5 w-3.5" />
+              {isInstalled('finance') ? t('financeLink') : t('financeLinkInstall')}
+            </Link>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {teamId && isInstalled('finance') && <ExportFinanceCsvButton teamId={teamId} />}

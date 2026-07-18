@@ -538,10 +538,18 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         {a.description}
                       </p>
                     )}
+                    {/* Each way to pay is its own row with a hairline between, so a
+                        card offering a subscription AND a drop-in AND a trial reads
+                        as a list rather than a paragraph of prices. Rules take the
+                        site palette, not Tailwind's divide-* (colours are per-site). */}
                     {pricingLines.length > 0 && (
-                      <div className="mt-3 space-y-1">
+                      <div className="mt-3 border-t" style={{ borderColor: palette.border }}>
                         {pricingLines.map((line, i) => (
-                          <p key={i} className="text-sm" style={{ color: palette.muted }}>
+                          <p
+                            key={i}
+                            className={`py-1.5 text-sm${i > 0 ? ' border-t' : ''}`}
+                            style={{ color: palette.muted, borderColor: palette.border }}
+                          >
                             {line}
                           </p>
                         ))}

@@ -2895,6 +2895,8 @@
   },
   "PaymentsDashboard": {
     "title": "Payments",
+    "financeLink": "View in your books",
+    "financeLinkInstall": "Add the Finance plugin to keep your books",
     "paymentsHeading": "One-off payments",
     "awaitingPaymentHeading": "Awaiting payment",
     "awaitingPaymentOffline": "Offline",
