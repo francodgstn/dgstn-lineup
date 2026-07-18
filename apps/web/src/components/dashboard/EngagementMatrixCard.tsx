@@ -3,11 +3,19 @@
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import {
-  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceArea, ReferenceLine,
+  ScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceArea,
+  ReferenceLine,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { AlertTriangle } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { AlertTriangle, FlaskConical } from 'lucide-react'
 import { buildWeekKeys } from '@/lib/isoWeek'
 import { formatTooltipWeek } from '@/lib/isoWeek'
 import type { WeeklyReport } from '@/hooks/useDashboardData'
@@ -25,10 +33,25 @@ const QUADRANT_COLORS = {
 
 type Quadrant = keyof typeof QUADRANT_COLORS
 
+/** Marks the card as experimental — the quadrant model is still being tuned, so
+ *  readers should weigh it accordingly next to the settled trend cards. */
+function ExperimentalBadge() {
+  const t = useTranslations('EngagementMatrix')
+  return (
+    <Badge
+      variant="secondary"
+      className="gap-1 border-blue-200 bg-blue-50 text-[10px] font-medium text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
+    >
+      <FlaskConical className="h-3 w-3" />
+      {t('experimentalBadge')}
+    </Badge>
+  )
+}
+
 function getQuadrant(x: number, y: number, midX: number, midY: number): Quadrant {
   if (x >= midX && y >= midY) return 'top_right'
-  if (x <  midX && y >= midY) return 'top_left'
-  if (x >= midX && y <  midY) return 'bottom_right'
+  if (x < midX && y >= midY) return 'top_left'
+  if (x >= midX && y < midY) return 'bottom_right'
   return 'bottom_left'
 }
 
@@ -41,7 +64,10 @@ function median(values: number[]): number {
 
 // ─── tooltip ─────────────────────────────────────────────────────────────────
 
-function MatrixTooltip({ active, payload }: {
+function MatrixTooltip({
+  active,
+  payload,
+}: {
   active?: boolean
   payload?: { payload: { week: string; x: number; y: number } }[]
 }) {
@@ -52,7 +78,10 @@ function MatrixTooltip({ active, payload }: {
     <div className="bg-background border rounded-lg shadow-lg p-3 text-xs">
       <p className="font-bold mb-1">{formatTooltipWeek(d.week)}</p>
       <p className="text-muted-foreground">
-        {t.rich('tooltipActiveContacts', { value: d.x, strong: (chunks) => <strong>{chunks}</strong> })}
+        {t.rich('tooltipActiveContacts', {
+          value: d.x,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
       </p>
       <p className="text-muted-foreground">
         {t.rich('tooltipEngagement', { value: d.y, strong: (chunks) => <strong>{chunks}</strong> })}
@@ -75,39 +104,46 @@ export function EngagementMatrixCard({
 
   const { dataPoints, midX, midY, domainMaxX, currentQuadrant, isDecline } = useMemo(() => {
     const weekKeys = buildWeekKeys(trendsWeeks)
-    const byWeek   = new Map(weeklyReports.map((r) => [r.iso_week, r]))
+    const byWeek = new Map(weeklyReports.map((r) => [r.iso_week, r]))
 
     const points = weekKeys
       .map((week) => {
         const r = byWeek.get(week)
         if (!r?.active_contacts_count) return null
         const bookings = r.bookings_count ?? 0
-        const active   = r.active_contacts_count
+        const active = r.active_contacts_count
         const y = active > 0 ? Math.round((bookings / active) * 1000) / 10 : 0
         return { week, x: active, y }
       })
       .filter((d): d is { week: string; x: number; y: number } => d !== null)
 
     if (points.length === 0) {
-      return { dataPoints: [], midX: 0, midY: 50, domainMaxX: 100, currentQuadrant: null, isDecline: false }
+      return {
+        dataPoints: [],
+        midX: 0,
+        midY: 50,
+        domainMaxX: 100,
+        currentQuadrant: null,
+        isDecline: false,
+      }
     }
 
-    const xs    = points.map((p) => p.x)
-    const midX  = Math.round(median(xs))
-    const midY  = 50
-    const maxX  = Math.max(...xs)
+    const xs = points.map((p) => p.x)
+    const midX = Math.round(median(xs))
+    const midY = 50
+    const maxX = Math.max(...xs)
     const domainMaxX = Math.max(midX * 2, Math.ceil(maxX * 1.1))
 
     const current = points[points.length - 1]
-    const oldest  = points[0]
+    const oldest = points[0]
     const currentQuadrant = getQuadrant(current.x, current.y, midX, midY)
     const isDecline = points.length >= 4 && current.y < oldest.y - 3
 
     return { dataPoints: points, midX, midY, domainMaxX, currentQuadrant, isDecline }
   }, [weeklyReports, trendsWeeks])
 
-  const pastPoints    = dataPoints.slice(0, -1)
-  const currentPoint  = dataPoints.length > 0 ? [dataPoints[dataPoints.length - 1]] : []
+  const pastPoints = dataPoints.slice(0, -1)
+  const currentPoint = dataPoints.length > 0 ? [dataPoints[dataPoints.length - 1]] : []
   const qInfo = currentQuadrant
     ? {
         color: QUADRANT_COLORS[currentQuadrant],
@@ -121,7 +157,10 @@ export function EngagementMatrixCard({
     return (
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle>{t('cardTitle')}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>{t('cardTitle')}</CardTitle>
+            <ExperimentalBadge />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
@@ -136,11 +175,16 @@ export function EngagementMatrixCard({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle>{t('cardTitle')}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>{t('cardTitle')}</CardTitle>
+            <ExperimentalBadge />
+          </div>
           <button
             onClick={() => setShowTrajectory((v) => !v)}
             className={`text-xs px-2 py-1 rounded-md border transition-colors ${
-              showTrajectory ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'
+              showTrajectory
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'hover:bg-muted'
             }`}
           >
             {t('trajectoryButton')}
@@ -158,14 +202,38 @@ export function EngagementMatrixCard({
         <ResponsiveContainer width="100%" height={240}>
           <ScatterChart margin={{ top: 16, right: 16, left: 0, bottom: 20 }}>
             {/* Quadrant backgrounds */}
-            <ReferenceArea x1={0}    x2={midX}       y1={midY}  y2={100}       fill="#fef9c3" fillOpacity={0.4} />
-            <ReferenceArea x1={midX} x2={domainMaxX}  y1={midY}  y2={100}       fill="#dcfce7" fillOpacity={0.4} />
-            <ReferenceArea x1={0}    x2={midX}       y1={0}     y2={midY}      fill="#fee2e2" fillOpacity={0.3} />
-            <ReferenceArea x1={midX} x2={domainMaxX}  y1={0}     y2={midY}      fill="#ffedd5" fillOpacity={0.3} />
+            <ReferenceArea x1={0} x2={midX} y1={midY} y2={100} fill="#fef9c3" fillOpacity={0.4} />
+            <ReferenceArea
+              x1={midX}
+              x2={domainMaxX}
+              y1={midY}
+              y2={100}
+              fill="#dcfce7"
+              fillOpacity={0.4}
+            />
+            <ReferenceArea x1={0} x2={midX} y1={0} y2={midY} fill="#fee2e2" fillOpacity={0.3} />
+            <ReferenceArea
+              x1={midX}
+              x2={domainMaxX}
+              y1={0}
+              y2={midY}
+              fill="#ffedd5"
+              fillOpacity={0.3}
+            />
 
             <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.06} />
-            <ReferenceLine x={midX} stroke="currentColor" strokeOpacity={0.2} strokeDasharray="4 2" />
-            <ReferenceLine y={midY} stroke="currentColor" strokeOpacity={0.2} strokeDasharray="4 2" />
+            <ReferenceLine
+              x={midX}
+              stroke="currentColor"
+              strokeOpacity={0.2}
+              strokeDasharray="4 2"
+            />
+            <ReferenceLine
+              y={midY}
+              stroke="currentColor"
+              strokeOpacity={0.2}
+              strokeDasharray="4 2"
+            />
 
             <XAxis
               type="number"
@@ -174,7 +242,12 @@ export function EngagementMatrixCard({
               tick={{ fontSize: 10 }}
               tickLine={false}
               axisLine={false}
-              label={{ value: t('axisActiveContacts'), position: 'insideBottom', offset: -12, fontSize: 10 }}
+              label={{
+                value: t('axisActiveContacts'),
+                position: 'insideBottom',
+                offset: -12,
+                fontSize: 10,
+              }}
             />
             <YAxis
               type="number"
@@ -185,7 +258,12 @@ export function EngagementMatrixCard({
               axisLine={false}
               tickFormatter={(v) => `${v}%`}
               width={36}
-              label={{ value: t('axisEngagement'), angle: -90, position: 'insideLeft', fontSize: 10 }}
+              label={{
+                value: t('axisEngagement'),
+                angle: -90,
+                position: 'insideLeft',
+                fontSize: 10,
+              }}
             />
 
             <Tooltip content={<MatrixTooltip />} cursor={{ strokeDasharray: '3 3' }} />
@@ -217,23 +295,28 @@ export function EngagementMatrixCard({
 
         {/* Quadrant guidance */}
         {qInfo && (
-          <div className="rounded-lg border p-3 space-y-1.5" style={{ borderColor: `${qInfo.color}40` }}>
+          <div
+            className="rounded-lg border p-3 space-y-1.5"
+            style={{ borderColor: `${qInfo.color}40` }}
+          >
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: qInfo.color }} />
-              <p className="text-xs font-semibold" style={{ color: qInfo.color }}>{qInfo.label}</p>
+              <p className="text-xs font-semibold" style={{ color: qInfo.color }}>
+                {qInfo.label}
+              </p>
               <p className="text-xs text-muted-foreground ml-auto">{qInfo.hint}</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {qInfo.actions.map((a) => (
-                <span key={a} className="text-[11px] px-2 py-0.5 rounded-full bg-muted font-medium">{a}</span>
+                <span key={a} className="text-[11px] px-2 py-0.5 rounded-full bg-muted font-medium">
+                  {a}
+                </span>
               ))}
             </div>
           </div>
         )}
 
-        <p className="text-[10px] text-muted-foreground">
-          {t('midpoint', { midX, midY })}
-        </p>
+        <p className="text-[10px] text-muted-foreground">{t('midpoint', { midX, midY })}</p>
       </CardContent>
     </Card>
   )

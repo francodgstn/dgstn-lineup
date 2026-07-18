@@ -10,7 +10,7 @@
 import { useMemo, useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { LayoutTemplate, Pencil, Play, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, LayoutTemplate, Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import {
   buildTemplateLines,
   validateEntryTemplate,
@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Label } from '@/components/ui/label'
 import {
   AlertDialog,
@@ -111,6 +112,7 @@ export function EntryTemplatesSection({ teamId, isOwner }: { teamId: string; isO
   const [useDescription, setUseDescription] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<AccountingEntryTemplate | null>(null)
   const [saving, setSaving] = useState(false)
+  const [listOpen, setListOpen] = useState(false)
 
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.code, a.name])), [accounts])
   const activeAccounts = accounts.filter((a) => a.active)
@@ -131,7 +133,10 @@ export function EntryTemplatesSection({ teamId, isOwner }: { teamId: string; isO
     return t(`tplErr_${key}` as Parameters<typeof t>[0], { code: param ?? '' })
   }
 
+  // Every one of these opens a dialog on top of the popover; close the popover
+  // first so focus isn't trapped between two stacked overlays.
   const openEditor = (tpl: AccountingEntryTemplate | null) => {
+    setListOpen(false)
     if (!tpl) {
       setEditor(EMPTY_EDITOR)
       return
@@ -197,6 +202,7 @@ export function EntryTemplatesSection({ teamId, isOwner }: { teamId: string; isO
   }
 
   const openUse = (tpl: AccountingEntryTemplate) => {
+    setListOpen(false)
     setUseTarget(tpl)
     setUseDate(new Date().toISOString().slice(0, 10))
     setUseAmount(formatMajor(tpl.amount_minor))
@@ -246,88 +252,109 @@ export function EntryTemplatesSection({ teamId, isOwner }: { teamId: string; isO
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <LayoutTemplate className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium">{t('templatesTitle')}</h2>
-        </div>
-        {isOwner && (
-          <Button size="sm" variant="outline" onClick={() => openEditor(null)}>
-            <Plus className="h-4 w-4 mr-1" />
-            {t('newTemplate')}
-          </Button>
-        )}
-      </div>
+    <div>
+      <Popover open={listOpen} onOpenChange={setListOpen}>
+        <PopoverTrigger render={<Button size="sm" variant="outline" />}>
+          <LayoutTemplate className="h-4 w-4 mr-1" />
+          {t('templatesTitle')}
+          {templates.length > 0 && (
+            <Badge variant="secondary" className="ml-1.5 text-[10px]">
+              {templates.length}
+            </Badge>
+          )}
+          <ChevronDown className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-[min(40rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto p-3 space-y-2"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-medium">{t('templatesTitle')}</h2>
+            {isOwner && (
+              <Button size="sm" variant="outline" onClick={() => openEditor(null)}>
+                <Plus className="h-4 w-4 mr-1" />
+                {t('newTemplate')}
+              </Button>
+            )}
+          </div>
 
-      {templates.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{t('templatesEmpty')}</p>
-      ) : (
-        <div className="rounded-lg border divide-y">
-          {templates.map((tpl) => (
-            <div
-              key={tpl.id}
-              className={`flex flex-wrap items-center gap-x-3 gap-y-1 p-2.5 ${tpl.active ? '' : 'opacity-60'}`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">{tpl.name}</span>
-                  {recurrenceBadge(tpl) && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {recurrenceBadge(tpl)}
-                    </Badge>
-                  )}
-                  {!tpl.active && (
-                    <Badge variant="outline" className="text-[10px]">
-                      {t('inactive')}
-                    </Badge>
+          {templates.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{t('templatesEmpty')}</p>
+          ) : (
+            <div className="rounded-lg border divide-y">
+              {templates.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  className={`flex flex-wrap items-center gap-x-3 gap-y-1 p-2.5 ${tpl.active ? '' : 'opacity-60'}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">{tpl.name}</span>
+                      {recurrenceBadge(tpl) && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {recurrenceBadge(tpl)}
+                        </Badge>
+                      )}
+                      {!tpl.active && (
+                        <Badge variant="outline" className="text-[10px]">
+                          {t('inactive')}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {tpl.debit_account_code} {accountName.get(tpl.debit_account_code) ?? ''} →{' '}
+                      {tpl.credit_account_code} {accountName.get(tpl.credit_account_code) ?? ''}
+                      {' · '}
+                      {tpl.amount_minor != null
+                        ? `${formatMajor(tpl.amount_minor)}`
+                        : t('amountAskAtUse')}
+                      {tpl.recurrence !== 'none' && tpl.next_run_at && (
+                        <>
+                          {' '}
+                          · {t('nextRun')} {tpl.next_run_at.toDate().toLocaleDateString()}
+                        </>
+                      )}
+                    </div>
+                    {tpl.last_error && (
+                      <p className="text-xs text-amber-600">
+                        {t('templateLastError', { code: tpl.last_error })}
+                      </p>
+                    )}
+                  </div>
+                  {isOwner && (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!tpl.active}
+                        onClick={() => openUse(tpl)}
+                      >
+                        <Play className="h-3.5 w-3.5 mr-1" />
+                        {t('useTemplate')}
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => openEditor(tpl)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      {!tpl.system && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            setListOpen(false)
+                            setDeleteTarget(tpl)
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {tpl.debit_account_code} {accountName.get(tpl.debit_account_code) ?? ''} →{' '}
-                  {tpl.credit_account_code} {accountName.get(tpl.credit_account_code) ?? ''}
-                  {' · '}
-                  {tpl.amount_minor != null
-                    ? `${formatMajor(tpl.amount_minor)}`
-                    : t('amountAskAtUse')}
-                  {tpl.recurrence !== 'none' && tpl.next_run_at && (
-                    <>
-                      {' '}
-                      · {t('nextRun')} {tpl.next_run_at.toDate().toLocaleDateString()}
-                    </>
-                  )}
-                </div>
-                {tpl.last_error && (
-                  <p className="text-xs text-amber-600">
-                    {t('templateLastError', { code: tpl.last_error })}
-                  </p>
-                )}
-              </div>
-              {isOwner && (
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={!tpl.active}
-                    onClick={() => openUse(tpl)}
-                  >
-                    <Play className="h-3.5 w-3.5 mr-1" />
-                    {t('useTemplate')}
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => openEditor(tpl)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  {!tpl.system && (
-                    <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(tpl)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              )}
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
+        </PopoverContent>
+      </Popover>
 
       {/* Editor dialog */}
       <Dialog open={!!editor} onOpenChange={(open) => !open && setEditor(null)}>
