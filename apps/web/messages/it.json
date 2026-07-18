@@ -4598,15 +4598,30 @@
         }
       },
       "sessions": {
-        "label": "Sessioni",
-        "shortLabel": "Sessioni",
+        "label": "Corsi e appuntamenti",
+        "shortLabel": "Corsi & 1:1",
         "tagline": "Quando le cose accadono davvero",
-        "body": "Una sessione è un'occorrenza concreta sul calendario — il corso di martedì alle 19, non il corso in generale. Le sessioni dei corsi le pianifichi tu. Gli appuntamenti funzionano al contrario: finché nessuno prenota, sul calendario non c'è nulla. Una persona pubblica quando è libera, e l'appuntamento nasce nel momento in cui un cliente prende uno di quegli orari. Le prenotazioni collegano le persone alle sessioni: un contatto, un posto, un orario.",
+        "body": "Questo è il calendario vero e proprio — il corso di martedì alle 19, non il corso in generale. Le prenotazioni collegano le persone: un contatto, un posto, un orario.",
+        "compareIntro": "Tre forme condividono il calendario. La differenza sta in chi ci mette il tempo:",
+        "compare": [
+          {
+            "title": "Corso",
+            "body": "Lo pianifichi tu. La sessione è già a calendario con un numero di posti definito prima che qualcuno prenoti, e le persone ci prenotano un posto."
+          },
+          {
+            "title": "Appuntamento",
+            "body": "Non esiste nulla finché qualcuno non prenota. Chi eroga il servizio pubblica la propria disponibilità — le finestre in cui è libero — e la sessione nasce nel momento in cui un cliente ne prende una. Tempo esclusivo: una prenotazione per slot."
+          },
+          {
+            "title": "Evento",
+            "body": "Un formato una tantum con iscrizione propria — uno stage, un workshop, un esame. Sta in piedi da solo e non è un'istanza di un'attività."
+          }
+        ],
         "terms": [
-          "Sessione — una singola occorrenza pianificata di un'attività",
-          "Disponibilità — quando una persona è libera; da lì nascono gli appuntamenti",
-          "Evento — un appuntamento autonomo con iscrizione propria",
-          "Prenotazione — il posto riservato di un contatto in una sessione"
+          "Sessione — un’occorrenza pianificata, che l’abbia messa tu o l’abbia creata una prenotazione",
+          "Disponibilità — quando chi eroga il servizio è libero; gli appuntamenti si prenotano da lì",
+          "Prenotazione — il posto riservato di un contatto",
+          "Evento — un formato autonomo con iscrizione propria"
         ],
         "links": {
           "schedule": "Apri il calendario",

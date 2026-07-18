@@ -4598,15 +4598,30 @@
         }
       },
       "sessions": {
-        "label": "Sessions",
-        "shortLabel": "Sessions",
-        "tagline": "Wann etwas tatsächlich stattfindet",
-        "body": "Eine Einheit ist ein konkreter Termin im Kalender — der Kurs am Dienstag um 19 Uhr, nicht der Kurs allgemein. Kurseinheiten planst du selbst. Termine funktionieren umgekehrt: Bis jemand bucht, steht nichts im Kalender. Eine Person veröffentlicht, wann sie frei ist, und der Termin entsteht in dem Moment, in dem eine Kundin eine dieser Zeiten nimmt. Buchungen verbinden Menschen mit Einheiten: ein Kontakt, ein Platz, eine Zeit.",
+        "label": "Kurse & Termine",
+        "shortLabel": "Kurse & 1:1",
+        "tagline": "Wann es tatsächlich stattfindet",
+        "body": "Das ist der Kalender selbst — der Kurs am Dienstag um 19 Uhr, nicht der Kurs im Allgemeinen. Buchungen verbinden Personen damit: ein Kontakt, ein Platz, ein Termin.",
+        "compareIntro": "Drei Formen teilen sich den Kalender. Der Unterschied liegt darin, wer die Zeit einträgt:",
+        "compare": [
+          {
+            "title": "Kurs",
+            "body": "Du planst ihn. Die Session steht mit einer festen Platzzahl im Kalender, bevor jemand bucht — und die Leute buchen einen Platz darin."
+          },
+          {
+            "title": "Termin",
+            "body": "Es existiert nichts, bis jemand bucht. Die anbietende Person veröffentlicht ihre Verfügbarkeit — die Zeitfenster, in denen sie frei ist — und die Session entsteht in dem Moment, in dem jemand eines davon nimmt. Exklusive Zeit: eine Buchung pro Slot."
+          },
+          {
+            "title": "Event",
+            "body": "Ein einmaliges Format mit eigener Anmeldung — ein Camp, ein Workshop, eine Prüfung. Es steht für sich und ist keine Instanz einer Aktivität."
+          }
+        ],
         "terms": [
-          "Einheit — ein einzelner geplanter Termin einer Aktivität",
-          "Verfügbarkeit — wann jemand frei ist; daraus werden Termine gebucht",
-          "Veranstaltung — ein eigenständiger Anlass mit eigener Anmeldung",
-          "Buchung — der reservierte Platz eines Kontakts in einer Einheit"
+          "Session — ein geplanter Termin, ob von dir gesetzt oder durch eine Buchung entstanden",
+          "Verfügbarkeit — wann eine anbietende Person frei ist; daraus werden Termine gebucht",
+          "Buchung — der reservierte Platz eines Kontakts",
+          "Event — ein eigenständiges Format mit eigener Anmeldung"
         ],
         "links": {
           "schedule": "Kalender öffnen",

@@ -31,7 +31,19 @@ export function CoreConcepts() {
   }
 
   const concept = CONCEPTS.find((c) => c.id === selected)!
-  const terms = (t.raw(`concepts.${selected}.terms`) as string[] | undefined) ?? []
+  // `t.raw` yields the key PATH (a string) when a key is missing, never
+  // undefined — so these must be Array.isArray-guarded, not `?? []`, or an
+  // absent key renders as a truthy non-array and blows up on .map.
+  const raw = (key: string): unknown[] => {
+    const v = t.raw(`concepts.${selected}.${key}`)
+    return Array.isArray(v) ? v : []
+  }
+  const terms = raw('terms') as string[]
+  // Optional side-by-side block: a concept covering several shapes of the same
+  // thing (classes vs appointments vs events) needs them contrasted, not just
+  // listed. Data-driven from i18n so the panel stays generic — a concept
+  // without `compare` simply doesn't render one.
+  const compare = raw('compare') as { title: string; body: string }[]
 
   return (
     <section>
@@ -93,6 +105,22 @@ export function CoreConcepts() {
         <p className="text-sm leading-relaxed text-muted-foreground">
           {t(`concepts.${selected}.body` as Parameters<typeof t>[0])}
         </p>
+
+        {compare.length > 0 && (
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground">
+              {t(`concepts.${selected}.compareIntro` as Parameters<typeof t>[0])}
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {compare.map((c, i) => (
+                <div key={i} className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold">{c.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{c.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {terms.length > 0 && (
           <div className="mt-4">

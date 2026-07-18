@@ -4598,15 +4598,30 @@
         }
       },
       "sessions": {
-        "label": "Séances",
-        "shortLabel": "Séances",
-        "tagline": "Quand les choses ont vraiment lieu",
-        "body": "Une séance est une occurrence concrète dans le calendrier — le cours de mardi 19 h, pas le cours en général. Les séances de cours, vous les planifiez. Les rendez-vous fonctionnent à l'inverse : rien n'occupe le calendrier tant que personne n'a réservé. Une personne publie ses disponibilités, et le rendez-vous naît au moment où un client prend l'un de ces créneaux. Les réservations relient les gens aux séances : un contact, une place, un horaire.",
+        "label": "Cours & rendez-vous",
+        "shortLabel": "Cours & 1:1",
+        "tagline": "Quand les choses se passent vraiment",
+        "body": "C'est l'agenda lui-même — le cours de mardi à 19 h, pas le cours en général. Les réservations y relient les personnes : un contact, une place, un horaire.",
+        "compareIntro": "Trois formes partagent l'agenda. Ce qui les distingue, c'est qui y place le créneau :",
+        "compare": [
+          {
+            "title": "Cours",
+            "body": "Vous le planifiez. La séance figure à l'agenda avec un nombre de places défini avant toute réservation, et les personnes y réservent une place."
+          },
+          {
+            "title": "Rendez-vous",
+            "body": "Rien n'existe tant que personne ne réserve. Le prestataire publie ses disponibilités — les fenêtres où il est libre — et la séance est créée dès qu'un client en prend une. Du temps exclusif : une réservation par créneau."
+          },
+          {
+            "title": "Événement",
+            "body": "Un format ponctuel avec sa propre inscription — un stage, un atelier, un passage de grade. Il existe par lui-même et n'est pas une instance d'une activité."
+          }
+        ],
         "terms": [
-          "Séance — une occurrence planifiée d'une activité",
-          "Disponibilités — quand une personne est libre ; les rendez-vous en sont issus",
-          "Événement — un rendez-vous autonome avec sa propre inscription",
-          "Réservation — la place réservée d'un contact dans une séance"
+          "Séance — une occurrence planifiée, que vous l’ayez placée ou qu’une réservation l’ait créée",
+          "Disponibilité — quand un prestataire est libre ; les rendez-vous y sont réservés",
+          "Réservation — la place réservée par un contact",
+          "Événement — un format autonome avec sa propre inscription"
         ],
         "links": {
           "schedule": "Ouvrir le planning",

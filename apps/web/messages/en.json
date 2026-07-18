@@ -4598,15 +4598,30 @@
         }
       },
       "sessions": {
-        "label": "Sessions",
-        "shortLabel": "Sessions",
+        "label": "Classes & Appointments",
+        "shortLabel": "Classes & 1:1",
         "tagline": "When things actually happen",
-        "body": "A session is a concrete instance on the calendar — Tuesday's 7 pm class, not the class in general. Class sessions you schedule yourself. Appointments work the other way round: nothing sits on the calendar until someone books. A provider publishes when they are free, and the appointment is created the moment a client takes one of those times. Bookings connect people to sessions: one contact, one spot, one time.",
+        "body": "This is the calendar itself — Tuesday's 7 pm class, not the class in general. Bookings connect people to it: one contact, one spot, one time.",
+        "compareIntro": "Three shapes share the calendar. What separates them is who puts the time there:",
+        "compare": [
+          {
+            "title": "Class",
+            "body": "You schedule it. The session sits on the calendar with a set number of seats before anyone books, and people book a seat in it."
+          },
+          {
+            "title": "Appointment",
+            "body": "Nothing exists until someone books. The provider publishes their availability — the windows they are free — and the session is created the moment a client takes one. Exclusive time: one booking per slot."
+          },
+          {
+            "title": "Event",
+            "body": "A one-off with its own registration — a camp, a workshop, a grading. It stands on its own rather than being an instance of an activity."
+          }
+        ],
         "terms": [
-          "Session — one scheduled occurrence of an activity",
+          "Session — one scheduled occurrence, whether you placed it or a booking created it",
           "Availability — when a provider is free; appointments are booked out of it",
-          "Event — a standalone happening with its own registration",
-          "Booking — a contact's reserved spot in a session"
+          "Booking — a contact’s reserved spot",
+          "Event — a standalone happening with its own registration"
         ],
         "links": {
           "schedule": "Open the schedule",
