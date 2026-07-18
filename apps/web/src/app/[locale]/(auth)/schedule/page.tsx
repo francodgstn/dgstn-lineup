@@ -77,6 +77,7 @@ import {
   Repeat2,
   ArrowUpRight,
   Zap,
+  Eye,
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
@@ -810,6 +811,9 @@ export default function CalendarPage() {
   const [activityFilter, setActivityFilter] = useState<string | null>(null)
   // 'all' · 'mine' (current user's uid) · a specific coach uid
   const [coachFilter, setCoachFilter] = useState<string>('all')
+  // Availability "free time" bands are an opt-in overlay — HIDDEN by default so
+  // the calendar reads as a plain schedule until a coach asks to see free time.
+  const [showAvailability, setShowAvailability] = useState(false)
   const [sessionDialog, setSessionDialog] = useState<{ open: boolean; editing: Session | null }>({
     open: false,
     editing: null,
@@ -900,7 +904,13 @@ export default function CalendarPage() {
   // Unobtrusive nudge for the MULTI-coach 'all coaches' case, where bands are
   // intentionally suppressed — only worth showing when there's something to see.
   const showAllCoachesBandHint =
-    bandsTypeEligible && coachFilter === 'all' && coachRoster.length > 1 && activeAvailability.length > 0
+    showAvailability &&
+    bandsTypeEligible &&
+    coachFilter === 'all' &&
+    coachRoster.length > 1 &&
+    activeAvailability.length > 0
+  // What the calendar actually renders as bands — gated by the show/hide toggle.
+  const visibleAvailability = showAvailability ? bandAvailability : []
 
   const allItems: ListItem[] = [
     ...filteredSessions.map((s) => ({ kind: 'session' as const, data: s })),
@@ -1058,6 +1068,21 @@ export default function CalendarPage() {
             </Select>
           </div>
         )}
+        {/* Free-time overlay toggle — calendar only, off by default. */}
+        {view === 'calendar' && (
+          <button
+            onClick={() => setShowAvailability((v) => !v)}
+            title={t('freeTimeToggle')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              showAvailability
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            {t('freeTimeToggle')}
+          </button>
+        )}
       </div>
 
       {/* Unobtrusive nudge — availability bands (published free time behind the
@@ -1094,7 +1119,7 @@ export default function CalendarPage() {
           sessions={filteredSessions}
           activities={activitiesQ.data ?? []}
           events={filteredEvents}
-          availability={bandAvailability}
+          availability={visibleAvailability}
           onEdit={(s) =>
             s.activityType === 'appointment'
               ? setAppointmentSlot(s)

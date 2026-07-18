@@ -328,10 +328,11 @@ function EventCard({ event, onOpen }: { event: Event; onOpen: (e: Event) => void
 const HOUR_PX = 48
 const MIN_BLOCK_PX = 22
 const WEEK_GRID_COLS = { gridTemplateColumns: '3.25rem repeat(7, minmax(0, 1fr))' } as const
-// Right-hand lane reserved in every day column so availability bands stay visible
-// even under an overlapping session: session blocks stop short of it, the lane
-// carries a faint tint, and each band's solid left spine sits against it.
-const AVAIL_GUTTER_PX = 14
+// Left-hand lane reserved in every day column (only when availability is shown)
+// so bands stay visible even under an overlapping session: blocks stop short of
+// it and each band's solid left spine sits in it. When availability is hidden the
+// lane collapses and blocks take the full column width.
+const AVAIL_GUTTER_PX = 10
 
 interface PositionedSession {
   session: Session
@@ -649,6 +650,11 @@ export default function SessionsCalendar({
 
   const gridHeight = (weekGrid.endHour - weekGrid.startHour) * HOUR_PX
   const hourCount = weekGrid.endHour - weekGrid.startHour
+  // The lane is reserved ONLY when there's availability to show (the schedule
+  // page passes [] when the "Free time" toggle is off) — otherwise blocks take
+  // the full column width.
+  const showLane = availability.length > 0
+  const lanePx = showLane ? AVAIL_GUTTER_PX : 0
 
   // Locale-aware labels
   const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString([], {
@@ -926,12 +932,15 @@ export default function SessionsCalendar({
                     >
                       {/* Availability lane — a faint LEFT gutter the session
                           blocks stop short of, so a band still reads here even
-                          when a session overlaps its time. */}
-                      <div
-                        aria-hidden="true"
-                        className="absolute inset-y-0 left-0 bg-muted/30 dark:bg-muted/20"
-                        style={{ width: AVAIL_GUTTER_PX }}
-                      />
+                          when a session overlaps its time. Shown only when
+                          availability is on. */}
+                      {showLane && (
+                        <div
+                          aria-hidden="true"
+                          className="absolute inset-y-0 left-0 bg-muted/30 dark:bg-muted/20"
+                          style={{ width: AVAIL_GUTTER_PX }}
+                        />
+                      )}
 
                       {/* Hour lines */}
                       {Array.from({ length: hourCount }, (_, i) => (
@@ -992,8 +1001,9 @@ export default function SessionsCalendar({
                               // Blocks are pushed off the LEFT availability lane and
                               // share the remaining width, so the band always peeks
                               // out on the left even under an overlapping session.
-                              left: `calc(${AVAIL_GUTTER_PX}px + (100% - ${AVAIL_GUTTER_PX}px) * ${col / cols} + 2px)`,
-                              width: `calc((100% - ${AVAIL_GUTTER_PX}px) / ${cols} - 4px)`,
+                              // With the lane hidden (lanePx 0) they take full width.
+                              left: `calc(${lanePx}px + (100% - ${lanePx}px) * ${col / cols} + 2px)`,
+                              width: `calc((100% - ${lanePx}px) / ${cols} - 4px)`,
                               backgroundColor: `${color}1F`,
                               borderLeftColor: color,
                             }}
