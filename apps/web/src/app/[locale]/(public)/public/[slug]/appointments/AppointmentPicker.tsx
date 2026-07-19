@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
-import { resolvePaymentOptions, type ActivityMemberBenefit, type PaymentOption } from '@linyup/shared'
+import { resolvePaymentOptions, type ActivityMemberBenefit, type Benefit, type PaymentOption } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { formatCurrency } from '@/lib/format'
@@ -40,7 +40,7 @@ interface AvailActivity {
   activityId: string
   activityName: string
   durations: AvailDuration[]
-  memberBenefit: ActivityMemberBenefit | null
+  memberBenefit: ActivityMemberBenefit | Benefit | null
   location: string | null
   onlineUrl: string | null
   days: { dayMs: number; slotsByDuration: Record<string, number[]> }[]
@@ -65,7 +65,7 @@ interface WindowBooking {
   location: string | null
   onlineUrl: string | null
   priceAmount: number | null
-  memberBenefit: ActivityMemberBenefit | null
+  memberBenefit: ActivityMemberBenefit | Benefit | null
 }
 
 // The booking form is now an in-page step (not a modal), so it joins the funnel.
@@ -200,7 +200,7 @@ function SlotBookingForm({
   priceAmount: number | null
   /** null/empty subscriptionTypeIds = nothing to offer — the sign-in link never
    *  renders (there's no price a member could get that a guest can't). */
-  memberBenefit: ActivityMemberBenefit | null
+  memberBenefit: ActivityMemberBenefit | Benefit | null
   durationMinutes: number
   currency: string
   locale: string

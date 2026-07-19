@@ -1200,20 +1200,29 @@
     "durationPriceHint": "Leave a length's price empty to keep it free for anyone.",
     "durationPriceLabel": "Price for {duration}",
     "durationPriceValidation": "Enter a price of at least 0.50, or leave it empty.",
-    "fieldMemberBenefit": "Member benefit",
-    "memberBenefitHint": "Subscribers holding one of these subscriptions get a better price. Leave empty and everyone pays base price.",
-    "memberBenefitKind_included": "Included",
-    "memberBenefitKind_included_desc": "Holders book this for free.",
-    "memberBenefitKind_discount": "% off",
-    "memberBenefitKind_discount_desc": "Holders pay less than base price.",
-    "memberBenefitPercentLabel": "Discount percent",
-    "memberBenefitPercentValidation": "Enter a discount between 1 and 99%.",
     "chipDropIn": "Drop-in {amount}",
     "chipTrialPriced": "Trial {amount}",
     "chipBenefitIncluded": "Included with subscription",
     "chipBenefitIncludedNamed": "Included · {name}",
     "chipBenefitDiscount": "−{percent}% members",
     "chipBenefitDiscountNamed": "−{percent}% · {name}"
+  },
+  "Benefit": {
+    "fieldLabel": "Member benefit",
+    "hint_appointment": "Subscribers holding one of these subscriptions get a better price. Leave empty and everyone pays base price.",
+    "hint_class": "Members holding one of these subscriptions pay a reduced drop-in price. Leave empty and everyone pays the base drop-in price.",
+    "hint_course": "Subscribers holding one of these subscriptions get a better price on this course. Leave empty and everyone pays the full price.",
+    "noSubs": "No subscription types yet — create them under Plans & Affiliations.",
+    "effect_included": "Included",
+    "effect_included_desc": "Holders get it for free.",
+    "effect_percent_off": "% off",
+    "effect_percent_off_desc": "Holders pay a reduced price.",
+    "effect_fixed_price": "Fixed price",
+    "effect_fixed_price_desc": "Holders pay this price instead of base.",
+    "percentLabel": "Discount percent",
+    "percentValidation": "Enter a discount between 1 and 99%.",
+    "amountLabel": "Member price",
+    "amountValidation": "Enter a price of at least 0.50."
   },
   "TeamSettings": {
     "title": "Team settings",
@@ -3068,7 +3077,8 @@
     "payPerVisitIncludedGeneric": "Included with subscription",
     "payPerVisitIncludedNamed": "Included with {name}",
     "payPerVisitDiscountGeneric": "−{percent}% for members",
-    "payPerVisitDiscountNamed": "−{percent}% with {name}"
+    "payPerVisitDiscountNamed": "−{percent}% with {name}",
+    "memberPrice": "Your member price: {price}"
   },
   "Products": {
     "title": "Products",
@@ -3513,7 +3523,8 @@
     "badgePriceRange": "{min}–{max}",
     "badgeDropInPrice": "Drop-in {price}",
     "chipBenefitIncluded": "Included with subscription",
-    "chipBenefitDiscount": "−{percent}% members"
+    "chipBenefitDiscount": "−{percent}% members",
+    "dropInSubtitleMember": "Your member price: {price}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Book a Trial Class",

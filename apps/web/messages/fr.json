@@ -1200,20 +1200,29 @@
     "durationPriceHint": "Laissez le prix d'une durée vide pour la rendre gratuite pour tout le monde.",
     "durationPriceLabel": "Prix pour {duration}",
     "durationPriceValidation": "Saisissez un prix d'au moins 0.50, ou laissez le champ vide.",
-    "fieldMemberBenefit": "Avantage membre",
-    "memberBenefitHint": "Les abonnés détenant l'un de ces abonnements obtiennent un meilleur prix. Laissez vide pour que tout le monde paie le prix de base.",
-    "memberBenefitKind_included": "Inclus",
-    "memberBenefitKind_included_desc": "Les détenteurs réservent gratuitement.",
-    "memberBenefitKind_discount": "% de réduction",
-    "memberBenefitKind_discount_desc": "Les détenteurs paient moins que le prix de base.",
-    "memberBenefitPercentLabel": "Pourcentage de réduction",
-    "memberBenefitPercentValidation": "Saisissez une réduction entre 1 et 99%.",
     "chipDropIn": "À la séance {amount}",
     "chipTrialPriced": "Essai {amount}",
     "chipBenefitIncluded": "Inclus avec l'abonnement",
     "chipBenefitIncludedNamed": "Inclus · {name}",
     "chipBenefitDiscount": "−{percent}% membres",
     "chipBenefitDiscountNamed": "−{percent}% · {name}"
+  },
+  "Benefit": {
+    "fieldLabel": "Avantage membre",
+    "hint_appointment": "Les abonnés détenant l'un de ces abonnements obtiennent un meilleur prix. Laissez vide pour que tout le monde paie le prix de base.",
+    "hint_class": "Les membres détenant l'un de ces abonnements paient un tarif à la séance réduit. Laissez vide pour que tout le monde paie le tarif de base.",
+    "hint_course": "Les abonnés détenant l'un de ces abonnements obtiennent un meilleur prix sur ce cours. Laissez vide pour que tout le monde paie le prix plein.",
+    "noSubs": "Aucun type d’abonnement — créez-les sous Abonnements et affiliations.",
+    "effect_included": "Inclus",
+    "effect_included_desc": "Les détenteurs l’obtiennent gratuitement.",
+    "effect_percent_off": "% de réduction",
+    "effect_percent_off_desc": "Les détenteurs paient un prix réduit.",
+    "effect_fixed_price": "Prix fixe",
+    "effect_fixed_price_desc": "Les détenteurs paient ce prix au lieu du prix de base.",
+    "percentLabel": "Pourcentage de réduction",
+    "percentValidation": "Saisissez une réduction entre 1 et 99%.",
+    "amountLabel": "Prix membre",
+    "amountValidation": "Saisissez un prix d’au moins 0.50."
   },
   "TeamSettings": {
     "title": "Paramètres de l'équipe",
@@ -3068,7 +3077,8 @@
     "payPerVisitIncludedGeneric": "Inclus avec l'abonnement",
     "payPerVisitIncludedNamed": "Inclus avec {name}",
     "payPerVisitDiscountGeneric": "−{percent}% pour les membres",
-    "payPerVisitDiscountNamed": "−{percent}% avec {name}"
+    "payPerVisitDiscountNamed": "−{percent}% avec {name}",
+    "memberPrice": "Votre prix membre : {price}"
   },
   "Products": {
     "title": "Produits",
@@ -3513,7 +3523,8 @@
     "badgePriceRange": "{min}–{max}",
     "badgeDropInPrice": "À la séance {price}",
     "chipBenefitIncluded": "Inclus avec l'abonnement",
-    "chipBenefitDiscount": "−{percent}% membres"
+    "chipBenefitDiscount": "−{percent}% membres",
+    "dropInSubtitleMember": "Votre prix membre : {price}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Réserver un cours d'essai",

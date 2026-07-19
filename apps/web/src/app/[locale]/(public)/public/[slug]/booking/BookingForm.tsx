@@ -19,6 +19,7 @@ import {
   resolvePaymentOptions,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
+  type Benefit,
 } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { resolveActivityPricingDisplay, type SubLookup } from '@/lib/activityTerms'
@@ -26,6 +27,7 @@ import { formatCurrency } from '@/lib/format'
 import { useLocale, useTranslations } from 'next-intl'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
+import { usePublicContactAuth } from '../PublicContactAuthProvider'
 import { MiniCalendar } from '@/components/booking/MiniCalendar'
 import {
   GuestDetailsForm,
@@ -62,8 +64,10 @@ interface ActivityProfile {
   trialPriceAmount?: number | null
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
   durations?: Array<{ minutes: number; priceAmount: number | null }>
-  /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
-  memberBenefit?: ActivityMemberBenefit
+  /** The one member-benefit rule, mirrored verbatim — appointments (every
+   *  priced duration) and classes (the drop-in price). Accepts the legacy
+   *  appointment shape or the generalized `Benefit`. */
+  memberBenefit?: ActivityMemberBenefit | Benefit
   prerequisites?: string
 }
 
@@ -159,6 +163,11 @@ interface Props {
 export default function BookingForm({ slug, preSelectedActivitySlug, initialDate }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
+  // The team-root sign-in bar's session — a contact may already be signed in
+  // from another surface (Space/Shop). Used ONLY to preview the drop-in
+  // member rate here; checkout/booking always re-resolve authoritatively
+  // server-side (the callable trusts its own session token, not this).
+  const { contact, isAuthenticated } = usePublicContactAuth()
   const locale = useLocale()
   const t = useTranslations('PublicBooking')
   const tShop = useTranslations('Shop')
@@ -364,6 +373,29 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       ? selectedActivity.dropIn.priceAmount
       : null
   const dropInAvailable = selectedDropInPrice != null
+
+  // Member rate preview on the drop-in price — a signed-in contact (from the
+  // team-root sign-in bar) whose held subscription earns a benefit sees the
+  // reduced price with the base struck through, BEFORE they even reach
+  // checkout. DISPLAY only: createDropInCheckout re-resolves authoritatively
+  // from its own session, never from this. Today's public contact session
+  // only carries one primary `subscription_type_id` — same simplification
+  // ShopHome's held union uses.
+  const dropInMemberPrice = useMemo(() => {
+    if (!selectedActivity || !dropInAvailable) return null
+    const rule = resolveActivityAccessRule(selectedActivity)
+    const heldSubscriptionTypeIds = contact?.subscription_type_id ? [contact.subscription_type_id] : []
+    const snapshot = clientPaymentSnapshot({ authenticated: isAuthenticated, heldSubscriptionTypeIds })
+    const { options } = resolvePaymentOptions(snapshot, {
+      kind: 'drop_in',
+      accessRule: rule,
+      dropIn: selectedActivity.dropIn,
+      benefit: selectedActivity.memberBenefit,
+    })
+    const pay = options[0]
+    if (pay?.type !== 'pay' || !pay.appliedBenefit) return null
+    return { amount: pay.amount, base: pay.appliedBenefit.baseAmount }
+  }, [selectedActivity, dropInAvailable, contact, isAuthenticated])
 
   // ── Guest booking ─────────────────────────────────────────────────────────
 
@@ -918,7 +950,18 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               <div className="flex-1">
                 <p className="font-semibold text-sm">{t('dropInTitle')}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {t('dropInSubtitle', { price: selectedDropInPrice ?? 0 })}
+                  {dropInMemberPrice ? (
+                    <>
+                      <span className="mr-1.5 line-through">
+                        {formatCurrency(dropInMemberPrice.base, currency, locale)}
+                      </span>
+                      {t('dropInSubtitleMember', {
+                        price: formatCurrency(dropInMemberPrice.amount, currency, locale),
+                      })}
+                    </>
+                  ) : (
+                    t('dropInSubtitle', { price: formatCurrency(selectedDropInPrice ?? 0, currency, locale) })
+                  )}
                 </p>
               </div>
               <svg

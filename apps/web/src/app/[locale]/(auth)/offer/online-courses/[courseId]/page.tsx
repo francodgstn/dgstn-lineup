@@ -43,6 +43,13 @@ import {
 } from '@/plugins/online-courses/hooks'
 import { getOnlineCoursesLimits } from '@/plugins/online-courses/limits'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import {
+  BenefitEditor,
+  toBenefitFormValue,
+  toBenefitPayload,
+  benefitPercentInvalid,
+  benefitAmountInvalid,
+} from '@/components/pricing/BenefitEditor'
 
 const LESSON_ICON: Record<LessonType, typeof FileText> = {
   text: FileText,
@@ -537,7 +544,7 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
 // ─── Settings tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, priceAmount, status, hideFromShop,
+  courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, priceAmount, benefit, status, hideFromShop,
 }: {
   courseId: string
   teamId: string
@@ -547,10 +554,12 @@ function SettingsTab({
   accessType: 'free' | 'registered' | 'subscription' | 'purchase'
   subscriptionTypeIds?: string[]
   priceAmount?: number
+  benefit?: Course['benefit']
   status: CourseStatus
   hideFromShop?: boolean
 }) {
   const t = useTranslations('Courses')
+  const tBenefit = useTranslations('Benefit')
   const { team } = useAuth()
   const currency = team?.default_currency ?? 'CHF'
   const queryClient = useQueryClient()
@@ -561,6 +570,9 @@ function SettingsTab({
   const [localSubIds, setLocalSubIds] = useState<string[]>(initialSubIds ?? [])
   const initialPriceText = typeof priceAmount === 'number' ? String(priceAmount) : ''
   const [localPriceText, setLocalPriceText] = useState(initialPriceText)
+  // Subscriber benefit on the purchase price — 'purchase' tier only.
+  const initialBenefit = toBenefitFormValue(benefit)
+  const [localBenefit, setLocalBenefit] = useState(initialBenefit)
   // Modelled as "show in shop" for the UI (on = visible); stored as hideFromShop.
   const [localShowInShop, setLocalShowInShop] = useState(hideFromShop !== true)
   const [uploading, setUploading] = useState(false)
@@ -576,6 +588,8 @@ function SettingsTab({
   // Stripe's minimum charge is ~0.50 in the team's currency.
   const purchasePriceInvalid =
     localAccess === 'purchase' && !(Number.isFinite(localPriceNum) && localPriceNum >= 0.5)
+  const benefitPercentInvalidNow = localAccess === 'purchase' && benefitPercentInvalid(localBenefit)
+  const benefitAmountInvalidNow = localAccess === 'purchase' && benefitAmountInvalid(localBenefit)
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['course', courseId] })
   const dirty =
@@ -585,7 +599,8 @@ function SettingsTab({
     localPriceText !== initialPriceText ||
     localShowInShop !== (hideFromShop !== true) ||
     JSON.stringify(localSubIds.slice().sort()) !==
-      JSON.stringify((initialSubIds ?? []).slice().sort())
+      JSON.stringify((initialSubIds ?? []).slice().sort()) ||
+    JSON.stringify(localBenefit) !== JSON.stringify(initialBenefit)
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -602,6 +617,10 @@ function SettingsTab({
         title: localTitle.trim(),
         summary: localSummary.trim(),
         accessRule,
+        // Cleared outside the 'purchase' tier — there's no purchase price to
+        // modify for the other tiers, so a leftover benefit would be inert
+        // data the UI can't show.
+        benefit: localAccess === 'purchase' ? toBenefitPayload(localBenefit) : null,
         hideFromShop: !localShowInShop,
       })
     },
@@ -611,7 +630,15 @@ function SettingsTab({
 
   // Ctrl/Cmd+S saves the settings (when there are unsaved changes).
   useSaveShortcut(() => {
-    if (dirty && !purchasePriceInvalid && !saveMutation.isPending) saveMutation.mutate()
+    if (
+      dirty &&
+      !purchasePriceInvalid &&
+      !benefitPercentInvalidNow &&
+      !benefitAmountInvalidNow &&
+      !saveMutation.isPending
+    ) {
+      saveMutation.mutate()
+    }
   })
 
   async function handleCover(e: React.ChangeEvent<HTMLInputElement>) {
@@ -736,6 +763,19 @@ function SettingsTab({
             )}
           </div>
         )}
+
+        {localAccess === 'purchase' && (
+          <div className="mt-3 rounded-md border p-3">
+            <BenefitEditor
+              value={localBenefit}
+              onChange={setLocalBenefit}
+              subscriptionTypes={subscriptionTypes}
+              context="course"
+              percentError={benefitPercentInvalidNow ? tBenefit('percentValidation') : null}
+              amountError={benefitAmountInvalidNow ? tBenefit('amountValidation') : null}
+            />
+          </div>
+        )}
       </div>
 
       {/* Shop visibility — the shop lists every published course; a studio can hide
@@ -749,7 +789,16 @@ function SettingsTab({
       </div>
 
       <div className="flex gap-2">
-        <Button onClick={() => saveMutation.mutate()} disabled={!dirty || purchasePriceInvalid || saveMutation.isPending}>
+        <Button
+          onClick={() => saveMutation.mutate()}
+          disabled={
+            !dirty ||
+            purchasePriceInvalid ||
+            benefitPercentInvalidNow ||
+            benefitAmountInvalidNow ||
+            saveMutation.isPending
+          }
+        >
           {saveMutation.isPending ? t('saving') : t('saveSettings')}
         </Button>
         <Button variant="outline" onClick={togglePublish}>
@@ -861,6 +910,7 @@ export default function CourseBuilderPage() {
             accessType={course.accessRule?.type ?? 'registered'}
             subscriptionTypeIds={course.accessRule?.subscriptionTypeIds}
             priceAmount={course.accessRule?.priceAmount}
+            benefit={course.benefit}
             status={course.status}
             hideFromShop={course.hideFromShop}
           />

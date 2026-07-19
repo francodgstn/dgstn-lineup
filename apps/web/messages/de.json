@@ -1200,20 +1200,29 @@
     "durationPriceHint": "Lass den Preis einer Dauer leer, um sie für alle kostenlos zu lassen.",
     "durationPriceLabel": "Preis für {duration}",
     "durationPriceValidation": "Gib einen Preis von mindestens 0.50 ein oder lass das Feld leer.",
-    "fieldMemberBenefit": "Mitgliedervorteil",
-    "memberBenefitHint": "Abonnenten mit einem dieser Abos erhalten einen besseren Preis. Leer lassen, damit alle den Basispreis zahlen.",
-    "memberBenefitKind_included": "Inbegriffen",
-    "memberBenefitKind_included_desc": "Inhaber buchen dies kostenlos.",
-    "memberBenefitKind_discount": "% Rabatt",
-    "memberBenefitKind_discount_desc": "Inhaber zahlen weniger als den Basispreis.",
-    "memberBenefitPercentLabel": "Rabatt in Prozent",
-    "memberBenefitPercentValidation": "Gib einen Rabatt zwischen 1 und 99% ein.",
     "chipDropIn": "Einzeleintritt {amount}",
     "chipTrialPriced": "Schnupperstunde {amount}",
     "chipBenefitIncluded": "Im Abo inbegriffen",
     "chipBenefitIncludedNamed": "Inbegriffen · {name}",
     "chipBenefitDiscount": "−{percent}% für Mitglieder",
     "chipBenefitDiscountNamed": "−{percent}% · {name}"
+  },
+  "Benefit": {
+    "fieldLabel": "Mitgliedervorteil",
+    "hint_appointment": "Abonnenten mit einem dieser Abos erhalten einen besseren Preis. Leer lassen, damit alle den Basispreis zahlen.",
+    "hint_class": "Mitglieder mit einem dieser Abos zahlen einen reduzierten Einzeleintrittspreis. Leer lassen, damit alle den regulären Einzeleintrittspreis zahlen.",
+    "hint_course": "Abonnenten mit einem dieser Abos erhalten einen besseren Preis für diesen Kurs. Leer lassen, damit alle den vollen Preis zahlen.",
+    "noSubs": "Noch keine Abo-Typen — erstelle sie unter Abos & Affiliationen.",
+    "effect_included": "Inbegriffen",
+    "effect_included_desc": "Inhaber erhalten es kostenlos.",
+    "effect_percent_off": "% Rabatt",
+    "effect_percent_off_desc": "Inhaber zahlen einen reduzierten Preis.",
+    "effect_fixed_price": "Fixpreis",
+    "effect_fixed_price_desc": "Inhaber zahlen diesen Preis statt des Basispreises.",
+    "percentLabel": "Rabatt in Prozent",
+    "percentValidation": "Gib einen Rabatt zwischen 1 und 99% ein.",
+    "amountLabel": "Mitgliederpreis",
+    "amountValidation": "Gib einen Preis von mindestens 0.50 ein."
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",
@@ -3068,7 +3077,8 @@
     "payPerVisitIncludedGeneric": "Im Abo inbegriffen",
     "payPerVisitIncludedNamed": "Inbegriffen mit {name}",
     "payPerVisitDiscountGeneric": "−{percent}% für Mitglieder",
-    "payPerVisitDiscountNamed": "−{percent}% mit {name}"
+    "payPerVisitDiscountNamed": "−{percent}% mit {name}",
+    "memberPrice": "Dein Mitgliederpreis: {price}"
   },
   "Products": {
     "title": "Produkte",
@@ -3513,7 +3523,8 @@
     "badgePriceRange": "{min}–{max}",
     "badgeDropInPrice": "Einzeleintritt {price}",
     "chipBenefitIncluded": "Im Abo inbegriffen",
-    "chipBenefitDiscount": "−{percent}% für Mitglieder"
+    "chipBenefitDiscount": "−{percent}% für Mitglieder",
+    "dropInSubtitleMember": "Dein Mitgliederpreis: {price}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Probetraining buchen",

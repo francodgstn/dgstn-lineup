@@ -24,6 +24,7 @@ import {
   type CheckoutContactMode,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
+  type Benefit,
   type CourseAccessRule,
 } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
@@ -74,6 +75,9 @@ interface CourseEntry {
   accessType: CourseAccessType
   subscriptionTypeIds?: string[]
   priceAmount?: number // 'purchase' tier only
+  /** Subscriber benefit on the purchase price — 'purchase' tier only. Wins
+   *  over the legacy `subscriptionTypeIds` free-inclusion when present. */
+  benefit?: Benefit | null
 }
 
 // Raw shape of a course's world-readable public_profile summary (syncCoursePublicProfile).
@@ -82,6 +86,7 @@ interface RawCoursePublicProfile {
   slug?: string
   subscriptionTypeIds?: string[]
   priceAmount?: number | null
+  benefit?: Benefit | null
   hideFromShop?: boolean
   title?: string
   summary?: string
@@ -100,7 +105,7 @@ interface PayPerVisitEntry {
   activityType?: string
   dropIn?: { enabled: boolean; priceAmount?: number }
   durations?: Array<{ minutes: number; priceAmount: number | null }>
-  memberBenefit?: ActivityMemberBenefit
+  memberBenefit?: ActivityMemberBenefit | Benefit
   accessRule?: ActivityAccessRule
   order?: number
 }
@@ -197,6 +202,7 @@ export default function ShopHome({
             accessType: (data.accessType as CourseAccessType) ?? 'registered',
             subscriptionTypeIds: data.subscriptionTypeIds ?? [],
             priceAmount: typeof data.priceAmount === 'number' ? data.priceAmount : undefined,
+            benefit: data.benefit ?? null,
           }))
         setCourses(courseList)
         const activityList: PayPerVisitEntry[] = activitiesSnap.docs
@@ -209,7 +215,7 @@ export default function ShopHome({
               activityType: (data.activityType as string) || undefined,
               dropIn: (data.dropIn as PayPerVisitEntry['dropIn']) ?? undefined,
               durations: Array.isArray(data.durations) ? (data.durations as PayPerVisitEntry['durations']) : undefined,
-              memberBenefit: (data.memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
+              memberBenefit: (data.memberBenefit as ActivityMemberBenefit | Benefit | undefined) ?? undefined,
               accessRule: (data.accessRule as ActivityAccessRule | undefined) ?? undefined,
               order: typeof data.order === 'number' ? (data.order as number) : undefined,
             }
@@ -429,7 +435,17 @@ export default function ShopHome({
       heldSubscriptionTypeIds,
       ownsCourse: purchasedCourseIds.has(c.id),
     })
-    return resolvePaymentOptions(snapshot, { kind: 'course', accessRule: rule })
+    return resolvePaymentOptions(snapshot, { kind: 'course', accessRule: rule, benefit: c.benefit })
+  }
+
+  // A signed-in holder's applied benefit on a 'purchase'-tier course, if any —
+  // the base price struck through, the member price shown instead. Null for
+  // anyone else (guest, no benefit, or already covered/owned).
+  const courseMemberPrice = (c: CourseEntry): { amount: number; base: number } | null => {
+    const { options } = courseOptions(c)
+    const pay = options[0]
+    if (pay?.type !== 'pay' || !pay.appliedBenefit) return null
+    return { amount: pay.amount, base: pay.appliedBenefit.baseAmount }
   }
 
   // What the catalogue card offers for a course, given the visitor's session:
@@ -456,6 +472,13 @@ export default function ShopHome({
       return options[0]?.type === 'pay' ? options[0].amount : (checkout.course.priceAmount ?? 0)
     }
     return resolveProductPrice(checkout.product, checkout.variantId)
+  })()
+
+  // The base price to strike through in the modal — set only when a signed-in
+  // holder's benefit actually lowered the course's checkout amount.
+  const checkoutMemberBase = (() => {
+    if (checkout?.kind !== 'course') return null
+    return courseMemberPrice(checkout.course)
   })()
 
   async function submit() {
@@ -828,6 +851,7 @@ export default function ShopHome({
             )}
             {courses.map((course) => {
               const access = courseAccess(course)
+              const memberPrice = course.accessType === 'purchase' ? courseMemberPrice(course) : null
               const badge =
                 course.accessType === 'purchase'
                   ? formatCurrency(course.priceAmount ?? 0, currency)
@@ -861,7 +885,16 @@ export default function ShopHome({
                         {course.summary}
                       </p>
                     )}
-                    <p className="mt-1 mb-2 text-xs font-medium" style={{ color: textMuted }}>{badge}</p>
+                    {memberPrice ? (
+                      <p className="mt-1 mb-2 text-xs font-medium">
+                        <span className="mr-1.5 line-through" style={{ color: textMuted }}>
+                          {formatCurrency(memberPrice.base, currency)}
+                        </span>
+                        <span>{t('memberPrice', { price: formatCurrency(memberPrice.amount, currency) })}</span>
+                      </p>
+                    ) : (
+                      <p className="mt-1 mb-2 text-xs font-medium" style={{ color: textMuted }}>{badge}</p>
+                    )}
                     {access === 'open' ? (
                       <Link
                         href={`/public/${slug}/space/courses/${course.slug}?from=shop` as Route}
@@ -918,10 +951,19 @@ export default function ShopHome({
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold">{checkoutTitle}</p>
-                <p className="text-xs" style={{ color: textMuted }}>
-                  {formatCurrency(checkoutAmount, currency)}{' '}
-                  {checkout.kind === 'membership' ? recurrenceSuffix(checkout.price.recurrence) : ''}
-                </p>
+                {checkoutMemberBase ? (
+                  <p className="text-xs">
+                    <span className="mr-1.5 line-through" style={{ color: textMuted }}>
+                      {formatCurrency(checkoutMemberBase.base, currency)}
+                    </span>
+                    <span>{t('memberPrice', { price: formatCurrency(checkoutAmount, currency) })}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs" style={{ color: textMuted }}>
+                    {formatCurrency(checkoutAmount, currency)}{' '}
+                    {checkout.kind === 'membership' ? recurrenceSuffix(checkout.price.recurrence) : ''}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
