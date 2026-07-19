@@ -9,7 +9,12 @@
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { resolveActivityAccessRule, type ActivityAccessRule } from '@linyup/shared'
+import {
+  resolveActivityAccessRule,
+  resolvePaymentOptions,
+  type ActivityAccessRule,
+} from '@linyup/shared'
+import { loadContactPaymentSnapshot } from './access'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import {
   buildResultUrls,
@@ -30,24 +35,27 @@ import { resolveTrialEligibility } from './index'
 const HOLD_MINUTES = 30
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-interface CoverageContact {
-  acquisition_stage?: string
-  subscription_type_id?: string
-  active_subscriptions?: Array<{ subscription_type_id?: string }>
-}
-
-/** Whether a contact can already book this class for free (so drop-in is refused). */
-function isContactCovered(rule: ActivityAccessRule, contact: CoverageContact): boolean {
-  if (rule.type === 'open') return true
-  const joined = contact.acquisition_stage === 'joined'
-  if (rule.type === 'members') return joined
-  if (!joined) return false // subscription tier
-  const held = new Set<string>()
-  ;(contact.active_subscriptions ?? []).forEach((s) => {
-    if (s.subscription_type_id) held.add(s.subscription_type_id)
+/**
+ * Whether a contact can already book this class for free (so drop-in is
+ * refused) — the SAME semantics bookSession uses, via the shared resolver:
+ *  • a usable lesson-credit balance counts as covered (a member with credits
+ *    left must not be sold a redundant drop-in);
+ *  • an EXHAUSTED/expired pack does NOT count — that contact gets to pay,
+ *    fixing the old deadlock where bookSession denied no_credits while the
+ *    previous field-only check here also refused the drop-in.
+ */
+async function isContactCovered(
+  teamId: string,
+  rule: ActivityAccessRule,
+  contact: FirebaseFirestore.DocumentData & { id: string }
+): Promise<boolean> {
+  const snapshot = await loadContactPaymentSnapshot({
+    teamId,
+    contact,
+    relevantTypeIds: rule.subscriptionTypeIds ?? [],
   })
-  if (contact.subscription_type_id) held.add(contact.subscription_type_id)
-  return (rule.subscriptionTypeIds ?? []).some((id) => held.has(id))
+  const { options } = resolvePaymentOptions(snapshot, { kind: 'class_booking', accessRule: rule })
+  return options.length > 0
 }
 
 export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
@@ -151,7 +159,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     firstname = (c.firstname as string) || ''
     lastname = (c.lastname as string) || ''
     phone = (c.phone as string) || null
-    if (isContactCovered(accessRule, c as CoverageContact)) {
+    if (await isContactCovered(teamId, accessRule, { ...c, id: cSnap.id })) {
       throw new HttpsError('failed-precondition', 'You can already book this class for free')
     }
   } else {
@@ -178,7 +186,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     })
     if (match) {
       contactId = match.id
-      if (isContactCovered(accessRule, match.data() as CoverageContact)) {
+      if (await isContactCovered(teamId, accessRule, { ...match.data(), id: match.id })) {
         throw new HttpsError('failed-precondition', 'You can already book this class for free')
       }
       // An existing OFF-FUNNEL contact (form/shop lead — no stage) booking a
