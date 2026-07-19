@@ -1,0 +1,391 @@
+// Pure logic for the unified Pricing surface (offer/pricing) — personas, price
+// cells and health checks, all driven by the ONE shared resolver so the page
+// can never disagree with what a booking/checkout would actually charge.
+// No firebase imports; everything here is derived from already-loaded docs.
+
+import {
+  GUEST_SNAPSHOT,
+  normalizeBenefit,
+  resolveActivityAccessRule,
+  resolveAppointmentDurations,
+  resolvePaymentOptions,
+  resolveProductPrice,
+  type Activity,
+  type Benefit,
+  type ContactPaymentSnapshot,
+  type Course,
+  type PaymentDenial,
+  type Product,
+  type SubscriptionType,
+} from '@linyup/shared'
+
+// ─── Personas ───────────────────────────────────────────────────────────────────
+
+export interface PricingPersona {
+  id: string
+  /** 'guest' | 'member' | 'type:{subscriptionTypeId}' */
+  kind: 'guest' | 'member' | 'type'
+  subscriptionTypeId?: string
+  /** Display name (subscription type name for 'type' personas). */
+  label: string
+  /** True when the type is credit-only (every active price carries credits) —
+   *  the page offers a "pack empty" toggle for these. */
+  creditOnly: boolean
+  /** Usable credits of a fresh pack (largest active credit price). */
+  packSize?: number
+}
+
+/** Classify a subscription type the same way the server's coverage loader does
+ *  (lenient: any non-credit active price ⇒ unmetered access). */
+export function isCreditOnlyType(t: SubscriptionType): boolean {
+  const prices = (t.prices ?? []).filter((p) => p.active !== false)
+  if (prices.length === 0) return false
+  return prices.every((p) => !!p.credits)
+}
+
+function packSize(t: SubscriptionType): number {
+  return Math.max(0, ...(t.prices ?? []).filter((p) => p.active !== false).map((p) => p.credits ?? 0))
+}
+
+export function buildPersonas(subscriptionTypes: SubscriptionType[]): PricingPersona[] {
+  const personas: PricingPersona[] = [
+    { id: 'guest', kind: 'guest', label: '', creditOnly: false },
+    { id: 'member', kind: 'member', label: '', creditOnly: false },
+  ]
+  for (const t of subscriptionTypes) {
+    if (t.active === false) continue
+    const creditOnly = isCreditOnlyType(t)
+    personas.push({
+      id: `type:${t.id}`,
+      kind: 'type',
+      subscriptionTypeId: t.id,
+      label: t.name,
+      creditOnly,
+      packSize: creditOnly ? packSize(t) : undefined,
+    })
+  }
+  return personas
+}
+
+/** The snapshot a persona resolves with. `packEmpty` only affects credit-only
+ *  personas — it demos the exhausted-pack state (denied free path, offered the
+ *  drop-in pay path instead). */
+export function personaSnapshot(persona: PricingPersona, packEmpty = false): ContactPaymentSnapshot {
+  if (persona.kind === 'guest') return GUEST_SNAPSHOT
+  if (persona.kind === 'member' || !persona.subscriptionTypeId) {
+    return { authenticated: true, joined: true, heldUnmeteredTypeIds: [], heldCreditTypes: [] }
+  }
+  if (persona.creditOnly) {
+    return {
+      authenticated: true,
+      joined: true,
+      heldUnmeteredTypeIds: [],
+      heldCreditTypes: [
+        {
+          subscriptionTypeId: persona.subscriptionTypeId,
+          remaining: packEmpty ? 0 : (persona.packSize ?? 1),
+        },
+      ],
+    }
+  }
+  return {
+    authenticated: true,
+    joined: true,
+    heldUnmeteredTypeIds: [persona.subscriptionTypeId],
+    heldCreditTypes: [],
+  }
+}
+
+// ─── Price cells ────────────────────────────────────────────────────────────────
+
+export type PriceCell =
+  | { kind: 'free'; reason: 'open' | 'members' | 'unpriced' | 'included' | 'registered' | 'free_tier' | 'subscription'; viaTypeId?: string }
+  | { kind: 'credit'; typeId: string; remaining: number }
+  | {
+      kind: 'pay'
+      /** Major units, team currency. */
+      amount: number
+      /** Set when a member rate applied — render the base struck through. */
+      baseAmount?: number
+      viaTypeId?: string
+      source: 'base' | 'drop_in' | 'trial' | 'course_price' | 'product'
+    }
+  | { kind: 'blocked'; denial: PaymentDenial; trialAvailable?: boolean }
+
+function fromResult(
+  result: ReturnType<typeof resolvePaymentOptions>,
+  trialAvailableForGuest: boolean
+): PriceCell {
+  const option = result.options[0]
+  if (!option) {
+    return {
+      kind: 'blocked',
+      denial: result.denial ?? 'no_subscription',
+      trialAvailable: trialAvailableForGuest,
+    }
+  }
+  if (option.type === 'covered') {
+    const via = option.via
+    switch (via.reason) {
+      case 'open':
+        return { kind: 'free', reason: 'open' }
+      case 'members':
+        return { kind: 'free', reason: 'members' }
+      case 'unpriced':
+        return { kind: 'free', reason: 'unpriced' }
+      case 'free_tier':
+        return { kind: 'free', reason: 'free_tier' }
+      case 'registered':
+        return { kind: 'free', reason: 'registered' }
+      case 'owned':
+        return { kind: 'free', reason: 'free_tier' }
+      case 'subscription':
+        return { kind: 'free', reason: 'subscription', viaTypeId: via.subscriptionTypeId }
+      case 'benefit_included':
+        return { kind: 'free', reason: 'included', viaTypeId: via.subscriptionTypeId }
+    }
+  }
+  if (option.type === 'spend_credits') {
+    return { kind: 'credit', typeId: option.via.subscriptionTypeId, remaining: option.remaining }
+  }
+  return {
+    kind: 'pay',
+    amount: option.amount,
+    baseAmount: option.appliedBenefit ? option.appliedBenefit.baseAmount : undefined,
+    viaTypeId: option.appliedBenefit?.subscriptionTypeId,
+    source: option.source,
+  }
+}
+
+/** One resolver call answers the whole class row: covered → free/credit,
+ *  uncovered → the drop-in pay path (member rate applied), else blocked. */
+export function resolveClassCell(snapshot: ContactPaymentSnapshot, activity: Activity): PriceCell {
+  const accessRule = resolveActivityAccessRule(activity)
+  const result = resolvePaymentOptions(snapshot, {
+    kind: 'drop_in',
+    accessRule,
+    dropIn: activity.dropIn ?? null,
+    trial: { enabled: activity.trialEnabled === true, priceAmount: activity.trialPriceAmount ?? null },
+    asTrial: false,
+    benefit: activity.memberBenefit ?? null,
+  })
+  const trialForGuest = !snapshot.authenticated && activity.trialEnabled === true && accessRule.type !== 'open'
+  return fromResult(result, trialForGuest)
+}
+
+export interface AppointmentCellRow {
+  minutes: number
+  cell: PriceCell
+}
+
+export function resolveAppointmentCells(
+  snapshot: ContactPaymentSnapshot,
+  activity: Activity
+): AppointmentCellRow[] {
+  return resolveAppointmentDurations(activity).map((duration) => ({
+    minutes: duration.minutes,
+    cell: fromResult(
+      resolvePaymentOptions(snapshot, {
+        kind: 'appointment',
+        duration,
+        benefit: activity.memberBenefit ?? null,
+      }),
+      false
+    ),
+  }))
+}
+
+export function resolveCourseCell(snapshot: ContactPaymentSnapshot, course: Course): PriceCell {
+  return fromResult(
+    resolvePaymentOptions(snapshot, {
+      kind: 'course',
+      accessRule: course.accessRule,
+      benefit: course.benefit ?? null,
+    }),
+    false
+  )
+}
+
+/** Products are flat-priced for everyone; variants may override the base. */
+export function productPriceRange(product: Product): { min: number; max: number } {
+  const base = resolveProductPrice(product)
+  const variantPrices = (product.variants ?? [])
+    .filter((v) => v.active !== false)
+    .map((v) => resolveProductPrice(product, v.id))
+  const all = [base, ...variantPrices]
+  return { min: Math.min(...all), max: Math.max(...all) }
+}
+
+// ─── "You sell" reverse lookups ────────────────────────────────────────────────
+
+export interface TypeGrantSummary {
+  /** Class activities whose accessRule lists this type. */
+  coveredClassNames: string[]
+  /** Benefit connections this type unlocks, across activities and courses. */
+  benefits: Array<{
+    targetName: string
+    targetKind: 'appointment' | 'class' | 'course'
+    effect: Benefit['effect']
+    percent?: number
+    amount?: number
+  }>
+}
+
+export function grantsForType(
+  typeId: string,
+  activities: Activity[],
+  courses: Course[]
+): TypeGrantSummary {
+  const coveredClassNames: string[] = []
+  const benefits: TypeGrantSummary['benefits'] = []
+  for (const a of activities) {
+    const isAppointment = a.type === 'appointment'
+    if (!isAppointment) {
+      const rule = resolveActivityAccessRule(a)
+      if (rule.type === 'subscription' && (rule.subscriptionTypeIds ?? []).includes(typeId)) {
+        coveredClassNames.push(a.name)
+      }
+    }
+    const benefit = normalizeBenefit(a.memberBenefit)
+    if (benefit && benefit.subscriptionTypeIds.includes(typeId)) {
+      benefits.push({
+        targetName: a.name,
+        targetKind: isAppointment ? 'appointment' : 'class',
+        effect: benefit.effect,
+        percent: benefit.percent,
+        amount: benefit.amount,
+      })
+    }
+  }
+  for (const c of courses) {
+    const benefit = normalizeBenefit(c.benefit)
+    if (benefit && benefit.subscriptionTypeIds.includes(typeId)) {
+      benefits.push({
+        targetName: c.title,
+        targetKind: 'course',
+        effect: benefit.effect,
+        percent: benefit.percent,
+        amount: benefit.amount,
+      })
+      continue
+    }
+    // Legacy free-inclusion list (only meaningful without an explicit benefit).
+    if (
+      !benefit &&
+      c.accessRule.type === 'purchase' &&
+      (c.accessRule.subscriptionTypeIds ?? []).includes(typeId)
+    ) {
+      benefits.push({ targetName: c.title, targetKind: 'course', effect: 'included' })
+    }
+    if (c.accessRule.type === 'subscription' && (c.accessRule.subscriptionTypeIds ?? []).includes(typeId)) {
+      benefits.push({ targetName: c.title, targetKind: 'course', effect: 'included' })
+    }
+  }
+  return { coveredClassNames, benefits }
+}
+
+// ─── Health checks ──────────────────────────────────────────────────────────────
+
+export type PricingWarningCode =
+  | 'gated_empty_allowlist'
+  | 'benefit_unknown_type'
+  | 'purchase_course_unpriced'
+  | 'benefit_bad_percent'
+  | 'gated_no_newcomer_path'
+  | 'credits_unusable'
+
+export interface PricingWarning {
+  code: PricingWarningCode
+  severity: 'error' | 'warning' | 'info'
+  /** What the warning is about, for display + the fix link. */
+  subjectName: string
+  subjectKind: 'activity' | 'course' | 'subscription_type'
+  subjectId: string
+}
+
+export function computePricingHealth(
+  activities: Activity[],
+  subscriptionTypes: SubscriptionType[],
+  courses: Course[]
+): PricingWarning[] {
+  const warnings: PricingWarning[] = []
+  const knownTypeIds = new Set(subscriptionTypes.map((t) => t.id))
+
+  const checkBenefit = (
+    benefitRaw: Activity['memberBenefit'] | Course['benefit'],
+    subjectName: string,
+    subjectKind: 'activity' | 'course',
+    subjectId: string
+  ) => {
+    const benefit = normalizeBenefit(benefitRaw)
+    if (!benefit) return
+    if (benefit.subscriptionTypeIds.some((id) => !knownTypeIds.has(id))) {
+      warnings.push({ code: 'benefit_unknown_type', severity: 'warning', subjectName, subjectKind, subjectId })
+    }
+    if (
+      benefit.effect === 'percent_off' &&
+      (typeof benefit.percent !== 'number' || benefit.percent <= 0 || benefit.percent >= 100)
+    ) {
+      warnings.push({ code: 'benefit_bad_percent', severity: 'warning', subjectName, subjectKind, subjectId })
+    }
+  }
+
+  const acceptedTypeIds = new Set<string>()
+  for (const a of activities) {
+    const isAppointment = a.type === 'appointment'
+    checkBenefit(a.memberBenefit, a.name, 'activity', a.id)
+    if (isAppointment) continue
+    const rule = resolveActivityAccessRule(a)
+    if (rule.type !== 'subscription') continue
+    const allowed = rule.subscriptionTypeIds ?? []
+    allowed.forEach((id) => acceptedTypeIds.add(id))
+    if (allowed.length === 0) {
+      warnings.push({
+        code: 'gated_empty_allowlist',
+        severity: 'error',
+        subjectName: a.name,
+        subjectKind: 'activity',
+        subjectId: a.id,
+      })
+    }
+    const hasDropIn = a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number'
+    if (!hasDropIn && a.trialEnabled !== true) {
+      warnings.push({
+        code: 'gated_no_newcomer_path',
+        severity: 'info',
+        subjectName: a.name,
+        subjectKind: 'activity',
+        subjectId: a.id,
+      })
+    }
+  }
+
+  for (const c of courses) {
+    if (c.archived_at) continue
+    checkBenefit(c.benefit, c.title, 'course', c.id)
+    if (c.accessRule.type === 'purchase' && typeof c.accessRule.priceAmount !== 'number') {
+      warnings.push({
+        code: 'purchase_course_unpriced',
+        severity: 'error',
+        subjectName: c.title,
+        subjectKind: 'course',
+        subjectId: c.id,
+      })
+    }
+  }
+
+  for (const t of subscriptionTypes) {
+    if (t.active === false) continue
+    if (isCreditOnlyType(t) && !acceptedTypeIds.has(t.id)) {
+      warnings.push({
+        code: 'credits_unusable',
+        severity: 'warning',
+        subjectName: t.name,
+        subjectKind: 'subscription_type',
+        subjectId: t.id,
+      })
+    }
+  }
+
+  return warnings
+}

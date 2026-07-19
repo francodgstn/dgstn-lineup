@@ -169,6 +169,10 @@ const NAV_SECTIONS: NavSection[] = [
       // Subscriptions is on every plan, so the item is always shown; the Affiliations
       // tab self-gates to Studio+ with an upsell.
       { id: 'plans', href: '/offer/plans', labelKey: 'plans', icon: IdCard },
+      // Unified read-only pricing surface — persona price preview + "what you
+      // sell" summary + cross-entity health checks. No plugin gate: it reads
+      // whatever's already configured (classes/appointments/plans/courses/products).
+      { id: 'pricing', href: '/offer/pricing', labelKey: 'pricing', icon: Calculator },
       {
         id: 'onlineCourses',
         href: '/offer/online-courses',
