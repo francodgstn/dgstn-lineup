@@ -274,8 +274,18 @@ packs spend a credit) or pay `discountPercent` off every priced duration
 (`discount`, clamped to Stripe's 0.50 floor, never free-via-discount). Absent =
 no benefit, everyone pays base — the benefit is data, never implied, but it is
 one rule (the per-duration × per-type `subscriptionPricing` matrix is gone).
-Resolver: `resolveEffectiveAppointmentPrice(duration, heldTypeIds,
-memberBenefit)`. A payable caller is refused by `bookAppointment`
+Resolver: **`resolvePaymentOptions(snapshot, target)`** — the ONE shared
+coverage/quote resolver (`packages/shared/src/utils/paymentOptions.ts`, pure,
+client-safe) that answers `covered | spend_credits | pay(amount,
+appliedBenefit)` for class bookings, drop-ins, appointments AND courses; the
+server builds its authoritative snapshot via `loadContactPaymentSnapshot`
+(`packages/functions/src/booking/access.ts`), the web an optimistic one via
+`apps/web/src/lib/paymentSnapshot.ts`. Never add a parallel coverage/price
+check — extend the resolver (fixtures:
+`functions/src/booking/paymentOptions.test.ts`). Money mechanics (0.50 floor,
+Rappen conversion, fees, idempotency) live once in
+`packages/functions/src/connect/checkout.ts` + `shared/src/utils/money.ts`. A
+payable caller is refused by `bookAppointment`
 (`payment_required`) and instead reserves→pays→confirms via
 **`createAppointmentCheckout`** at the caller's effective amount: the hold IS
 the session (`status: 'pending_payment'` + `hold_expires_at`, +30 min, lazily

@@ -20,10 +20,13 @@ import { formatCurrency } from '@/lib/format'
 import {
   resolveProductPrice,
   compareActivities,
+  resolvePaymentOptions,
   type CheckoutContactMode,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
+  type CourseAccessRule,
 } from '@linyup/shared'
+import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
@@ -406,30 +409,52 @@ export default function ShopHome({
     startCheckout({ kind: 'course', course })
   }
 
+  // The contact's held union for course-coverage display — today the public
+  // contact session only carries the single primary `subscription_type_id`
+  // (no `active_subscriptions`/`credit_summary` mirror here), so this is a
+  // one-element array in practice; the resolver itself supports the full held
+  // union (P6 — see the Space's equivalent `hasAccess`).
+  const heldSubscriptionTypeIds = contact?.subscription_type_id ? [contact.subscription_type_id] : []
+
+  // Same resolver the server uses (@linyup/shared) for course access — pure
+  // function of the course's accessRule + the visitor's optimistic snapshot.
+  const courseOptions = (c: CourseEntry) => {
+    const rule: CourseAccessRule = {
+      type: c.accessType,
+      subscriptionTypeIds: c.subscriptionTypeIds,
+      priceAmount: c.priceAmount,
+    }
+    const snapshot = clientPaymentSnapshot({
+      authenticated: isAuthenticated,
+      heldSubscriptionTypeIds,
+      ownsCourse: purchasedCourseIds.has(c.id),
+    })
+    return resolvePaymentOptions(snapshot, { kind: 'course', accessRule: rule })
+  }
+
   // What the catalogue card offers for a course, given the visitor's session:
   //  'open'      → can read it now → link to the player
   //  'buy'       → purchase-tier, not owned → checkout
   //  'signin'    → registered/subscription course, needs a login first
   //  'subscribe' → subscription course, signed in but no qualifying membership
-  const subscriptionTypeId = contact?.subscription_type_id
   const courseAccess = (c: CourseEntry): 'open' | 'buy' | 'signin' | 'subscribe' => {
-    const includedBySub =
-      !!subscriptionTypeId && (c.subscriptionTypeIds ?? []).includes(subscriptionTypeId)
-    if (c.accessType === 'purchase') {
-      if (isAuthenticated && (purchasedCourseIds.has(c.id) || includedBySub)) return 'open'
-      return 'buy'
-    }
-    if (c.accessType === 'free') return 'open'
-    if (!isAuthenticated) return 'signin'
-    if (c.accessType === 'registered') return 'open'
-    return includedBySub ? 'open' : 'subscribe'
+    const { options, denial } = courseOptions(c)
+    if (options[0]?.type === 'pay') return 'buy'
+    if (options.length > 0) return 'open'
+    // Purchase-tier misconfig (no price, not owned/included) — the old check
+    // always offered 'buy' here regardless of auth state; preserve that.
+    if (c.accessType === 'purchase') return 'buy'
+    return denial === 'sign_in_required' ? 'signin' : 'subscribe'
   }
 
   // The amount shown in the checkout modal.
   const checkoutAmount = (() => {
     if (!checkout) return 0
     if (checkout.kind === 'membership') return checkout.price.amount
-    if (checkout.kind === 'course') return checkout.course.priceAmount ?? 0
+    if (checkout.kind === 'course') {
+      const { options } = courseOptions(checkout.course)
+      return options[0]?.type === 'pay' ? options[0].amount : (checkout.course.priceAmount ?? 0)
+    }
     return resolveProductPrice(checkout.product, checkout.variantId)
   })()
 

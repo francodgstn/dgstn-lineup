@@ -1,5 +1,4 @@
 import type { Timestamp } from './common'
-import { MIN_CHARGE_MAJOR } from '../utils/money'
 
 export type ActivityLevel = 'all' | 'beginners' | 'intermediate' | 'advanced'
 
@@ -93,63 +92,19 @@ export interface ActivityMemberBenefit {
   kind: 'included' | 'discount'
   /** 1–100. Required/meaningful when `kind === 'discount'`; ignored for
    *  'included'. Malformed values (missing, <=0, or >=100) are handled by
-   *  `resolveEffectiveAppointmentPrice` — see its doc comment. */
+   *  the appointment arm of `resolvePaymentOptions` (utils/paymentOptions.ts)
+   *  — see its doc comment. */
   discountPercent?: number
 }
 
-/** A duration's effective price for one particular contact — THE PRICE IS THE
- *  GATE for appointments (there is no separate access check any more; see
- *  `ActivityMemberBenefit`'s history note). Server-side resolution only; the
- *  client may mirror this for display, but booking/checkout always re-resolve.
- *
- *  Rules, in order:
- *  1. Unpriced duration (`priceAmount` null/absent) → free for anyone, guests
- *     included.
- *  2. Priced, and the caller holds NONE of `memberBenefit.subscriptionTypeIds`
- *     (or there's no `memberBenefit` at all) → base price. Guests always land
- *     here — they never hold a benefit type.
- *  3. Priced, and the caller holds one or more benefit types — `viaSubscriptionTypeId`
- *     is the FIRST id in `memberBenefit.subscriptionTypeIds` the caller holds
- *     (config order, so several held types resolve deterministically):
- *     - `kind: 'included'` → free.
- *     - `kind: 'discount'` → `max(0.50, round2(base * (100 - discountPercent) / 100))`,
- *       major units — clamped to Stripe's 0.50 minimum-charge floor, NEVER free
- *       via a discount. A malformed `discountPercent` (missing or <= 0) falls
- *       back to base price (benefit not applied); `>= 100` clamps to the 0.50
- *       floor instead of computing a (negative-or-zero) discount. */
-export function resolveEffectiveAppointmentPrice(
-  duration: ActivityDuration,
-  heldSubscriptionTypeIds: string[] = [],
-  memberBenefit?: ActivityMemberBenefit | null,
-): { free: boolean; amount: number | null; viaSubscriptionTypeId?: string | null } {
-  if (typeof duration.priceAmount !== 'number') {
-    return { free: true, amount: null }
-  }
-  const base = duration.priceAmount
-
-  const benefitTypeIds = memberBenefit?.subscriptionTypeIds ?? []
-  const held = new Set(heldSubscriptionTypeIds)
-  const viaSubscriptionTypeId = benefitTypeIds.find((id) => held.has(id)) ?? null
-
-  if (!memberBenefit || !viaSubscriptionTypeId) {
-    return { free: false, amount: base, viaSubscriptionTypeId: null }
-  }
-
-  if (memberBenefit.kind === 'included') {
-    return { free: true, amount: null, viaSubscriptionTypeId }
-  }
-
-  // kind === 'discount'
-  const pct = memberBenefit.discountPercent
-  if (typeof pct !== 'number' || pct <= 0) {
-    return { free: false, amount: base, viaSubscriptionTypeId: null }
-  }
-  if (pct >= 100) {
-    return { free: false, amount: MIN_CHARGE_MAJOR, viaSubscriptionTypeId }
-  }
-  const rounded = Math.round(((base * (100 - pct)) / 100) * 100) / 100
-  return { free: false, amount: Math.max(MIN_CHARGE_MAJOR, rounded), viaSubscriptionTypeId }
-}
+// A duration's effective price for one particular contact — THE PRICE IS THE
+// GATE for appointments — is resolved by `resolvePaymentOptions` (the shared
+// coverage/quote resolver in utils/paymentOptions.ts, `kind: 'appointment'`).
+// History: a dedicated `resolveEffectiveAppointmentPrice` lived here until the
+// 2026-07 pricing consolidation folded it into the one resolver; its exact
+// rules (0.50 floor, malformed-pct fallbacks, first-held-in-config-order
+// tie-break) are pinned by the appointment parity rows in
+// functions/src/booking/paymentOptions.test.ts.
 
 export interface Activity {
   id: string

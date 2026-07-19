@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
-import { resolveEffectiveAppointmentPrice, type ActivityMemberBenefit } from '@linyup/shared'
+import { resolvePaymentOptions, type ActivityMemberBenefit, type PaymentOption } from '@linyup/shared'
+import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { formatCurrency } from '@/lib/format'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -118,10 +119,39 @@ function activityPriceRangeLabel(
 }
 
 // A duration is "for sale" when it has a base price — an unpriced duration is
-// free for anyone regardless of `memberBenefit` (resolveEffectiveAppointmentPrice
-// returns free for it before ever looking at the benefit).
+// free for anyone regardless of `memberBenefit` (the shared resolver returns
+// `covered` for it before ever looking at the benefit).
 function durationIsPriced(priceAmount: number | null): boolean {
   return typeof priceAmount === 'number'
+}
+
+// Maps the shared resolver's single 'appointment'-target option (it never
+// denies — THE PRICE IS THE GATE) back to the shape this component was built
+// around (`resolveEffectiveAppointmentPrice`'s old return value) — display/
+// routing only, book()/checkout() always re-resolve authoritatively server-side.
+// The 'spend_credits' arm is unreachable from the client's optimistic snapshot
+// (every held id is reported as unmetered — see clientPaymentSnapshot) but is
+// handled for type-exhaustiveness/parity with the server's credit-spend path.
+function toEffectivePrice(
+  option: PaymentOption | undefined
+): { free: boolean; amount: number | null; viaSubscriptionTypeId?: string | null } {
+  if (!option) return { free: false, amount: null, viaSubscriptionTypeId: null }
+  if (option.type === 'pay') {
+    return {
+      free: false,
+      amount: option.amount,
+      viaSubscriptionTypeId: option.appliedBenefit?.subscriptionTypeId ?? null,
+    }
+  }
+  if (option.type === 'spend_credits') {
+    return { free: true, amount: null, viaSubscriptionTypeId: option.via.subscriptionTypeId }
+  }
+  // 'covered'
+  return {
+    free: true,
+    amount: null,
+    viaSubscriptionTypeId: option.via.reason === 'benefit_included' ? option.via.subscriptionTypeId : null,
+  }
 }
 
 // Pulls the {code, reason, priceAmount} triad off a callable's FunctionsError —
@@ -276,13 +306,15 @@ function SlotBookingForm({
   }) {
     const held = contactData.held_subscription_type_ids ?? []
     const contactFirstname = contactData.firstname || contactData.email.split('@')[0]
-    // Mirrors resolveEffectiveAppointmentPrice server-side — DISPLAY/ROUTING
-    // only, book()/checkout() always re-resolve authoritatively.
-    const effective = resolveEffectiveAppointmentPrice(
-      { minutes: durationMinutes, priceAmount },
-      held,
-      memberBenefit
-    )
+    // Same resolver the server uses (@linyup/shared) — DISPLAY/ROUTING only,
+    // book()/checkout() always re-resolve authoritatively.
+    const snapshot = clientPaymentSnapshot({ authenticated: true, heldSubscriptionTypeIds: held })
+    const { options } = resolvePaymentOptions(snapshot, {
+      kind: 'appointment',
+      duration: { minutes: durationMinutes, priceAmount },
+      benefit: memberBenefit,
+    })
+    const effective = toEffectivePrice(options[0])
 
     if (effective.free) {
       setAutobooking(true)

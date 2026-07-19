@@ -16,9 +16,11 @@ import {
   resolveActivityAccessRule,
   compareActivities,
   activityRequiresSubscription,
+  resolvePaymentOptions,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
 } from '@linyup/shared'
+import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { resolveActivityPricingDisplay, type SubLookup } from '@/lib/activityTerms'
 import { formatCurrency } from '@/lib/format'
 import { useLocale, useTranslations } from 'next-intl'
@@ -482,16 +484,19 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     // no drop-in handling and would still reject them here). A subscription-gated
     // activity with an EMPTY allow-list (misconfig) also skips this and falls
     // through to the server error. bookSession stays authoritative either way.
-    const required = selectedActivity
-      ? activityRequiresSubscription(resolveActivityAccessRule(selectedActivity))
-      : null
-    if (
-      required?.length &&
-      contactData.held_subscription_type_ids &&
-      !contactData.held_subscription_type_ids.some((id) => required.includes(id)) &&
-      !dropInAvailable
-    ) {
-      throw new Error(t('errorNoSubscriptionForActivity'))
+    // Same resolver the server uses (@linyup/shared) decides "covered" —
+    // mechanical swap of the intersection check, same gating conditions.
+    const accessRule = selectedActivity ? resolveActivityAccessRule(selectedActivity) : null
+    const required = accessRule ? activityRequiresSubscription(accessRule) : null
+    if (required?.length && contactData.held_subscription_type_ids && !dropInAvailable) {
+      const snapshot = clientPaymentSnapshot({
+        authenticated: true,
+        heldSubscriptionTypeIds: contactData.held_subscription_type_ids,
+      })
+      const { denial } = resolvePaymentOptions(snapshot, { kind: 'class_booking', accessRule: accessRule! })
+      if (denial) {
+        throw new Error(t('errorNoSubscriptionForActivity'))
+      }
     }
     const bookSessionFn = httpsCallable(functions, 'bookSession')
     await bookSessionFn({
