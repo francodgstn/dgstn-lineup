@@ -9,7 +9,7 @@
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { resolveEffectiveAppointmentPrice } from '@linyup/shared'
+import { GUEST_SNAPSHOT, resolvePaymentOptions } from '@linyup/shared'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import {
   buildResultUrls,
@@ -18,7 +18,7 @@ import {
   requireChargeableAmountFromMajor,
   startOneOffCheckout,
 } from '../connect/checkout'
-import { resolveHeldBenefit } from '../booking/access'
+import { loadContactPaymentSnapshot } from '../booking/access'
 import { generateSecureToken } from '../utils/crypto'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 import {
@@ -86,19 +86,22 @@ export const createAppointmentCheckout = onCall(
     // resolved (possibly discounted) price. Free path callers never reach
     // here — the client only calls checkout after bookAppointment's refusal. ──
     const caller = await resolveAppointmentCaller(request, { ...data, teamId })
-    const heldBenefit = caller.authenticatedContact
-      ? await resolveHeldBenefit({
+    const snapshot = caller.authenticatedContact
+      ? await loadContactPaymentSnapshot({
           teamId,
           contact: caller.authenticatedContact,
-          subscriptionTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
+          relevantTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
         })
-      : { heldTypeIds: [], creditSpendTypeId: null }
-    const effective = resolveEffectiveAppointmentPrice(
-      ctx.chosenDuration,
-      heldBenefit.heldTypeIds,
-      ctx.activity.memberBenefit
-    )
-    if (effective.free) {
+      : GUEST_SNAPSHOT
+    const priced = resolvePaymentOptions(snapshot, {
+      kind: 'appointment',
+      duration: ctx.chosenDuration,
+      benefit: ctx.activity.memberBenefit ?? null,
+    })
+    const payOption = priced.options[0]
+    if (payOption?.type !== 'pay') {
+      // 'covered' or 'spend_credits' — the free path (bookAppointment) is the
+      // right door; this caller owes nothing.
       throw new HttpsError(
         'failed-precondition',
         'You can book this for free — no payment needed',
@@ -114,9 +117,9 @@ export const createAppointmentCheckout = onCall(
       authenticatedContact: caller.authenticatedContact,
     })
 
-    // The discount clamp in resolveEffectiveAppointmentPrice guarantees derived
-    // prices are already ≥ the floor; this guards the AUTHORED base price.
-    const amount = requireChargeableAmountFromMajor(effective.amount as number)
+    // The resolver's discount clamp guarantees derived prices are already ≥ the
+    // floor; this guards the AUTHORED base price.
+    const amount = requireChargeableAmountFromMajor(payOption.amount)
 
     // ── HOLD tx — the hold IS the session. A retry from the SAME contact rewrites
     // its own still-live hold (fresh Checkout Session, same slot). ──
@@ -167,7 +170,7 @@ export const createAppointmentCheckout = onCall(
       authenticated_booking: !!caller.authenticatedContact,
       // The resolved member-benefit type (discount), if any — not an access
       // gate match any more, just which benefit (if any) priced this booking.
-      subscription_type_id: effective.viaSubscriptionTypeId ?? null,
+      subscription_type_id: payOption.appliedBenefit?.subscriptionTypeId ?? null,
       // NO fullname — that's only stamped once the webhook confirms payment.
       status: 'pending',
       payment_status: 'required',

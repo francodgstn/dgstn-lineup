@@ -9,7 +9,13 @@
 import * as admin from 'firebase-admin'
 import { HttpsError } from 'firebase-functions/v2/https'
 import type { Timestamp } from 'firebase-admin/firestore'
-import type { ActivityAccessRule, SubscriptionPrice } from '@linyup/shared'
+import {
+  GUEST_SNAPSHOT,
+  resolvePaymentOptions,
+  type ActivityAccessRule,
+  type ContactPaymentSnapshot,
+  type SubscriptionPrice,
+} from '@linyup/shared'
 
 /**
  * Does HOLDING a subscription of this type grant unmetered (non-credit) access?
@@ -124,13 +130,75 @@ function heldAndCreditSets(contact: FirebaseFirestore.DocumentData): {
 }
 
 /**
+ * Build the pure snapshot `resolvePaymentOptions` (@linyup/shared) consumes —
+ * the AUTHORITATIVE server-side one. This is where the impure part of coverage
+ * lives: classifying each relevant held type as unmetered vs credit-metered
+ * (`typeGrantsUnmeteredAccess`, a per-type Firestore read, deliberately
+ * fail-open). Only ids in `relevantTypeIds` are classified — pass the union of
+ * every id the resolution can touch (accessRule ids ∪ benefit ids).
+ */
+export async function loadContactPaymentSnapshot(params: {
+  teamId: string
+  contact: (admin.firestore.DocumentData & { id: string }) | null
+  relevantTypeIds: string[]
+}): Promise<ContactPaymentSnapshot> {
+  const { teamId, contact, relevantTypeIds } = params
+  if (!contact) return GUEST_SNAPSHOT
+
+  const { held, creditTypes } = heldAndCreditSets(contact)
+  const nowMs = Date.now()
+  const usableRemaining = (id: string): number => {
+    const entries =
+      (contact.credit_summary as
+        | Array<{
+            subscription_type_id?: string
+            remaining?: number
+            next_expires_at?: Timestamp | null
+          }>
+        | undefined) ?? []
+    return entries
+      .filter(
+        (e) =>
+          e.subscription_type_id === id &&
+          (e.remaining ?? 0) > 0 &&
+          (!e.next_expires_at || e.next_expires_at.toMillis() > nowMs)
+      )
+      .reduce((sum, e) => sum + (e.remaining ?? 0), 0)
+  }
+
+  const heldUnmeteredTypeIds: string[] = []
+  const heldCreditTypes: Array<{ subscriptionTypeId: string; remaining: number }> = []
+  for (const id of relevantTypeIds) {
+    if (held.has(id)) {
+      if (await typeGrantsUnmeteredAccess(teamId, id, contact)) {
+        heldUnmeteredTypeIds.push(id)
+        continue
+      }
+      // Mirror-held but credit-metered — attached, possibly with 0 usable left
+      // (drives the no_credits denial).
+      heldCreditTypes.push({ subscriptionTypeId: id, remaining: usableRemaining(id) })
+      continue
+    }
+    if (creditTypes.has(id)) {
+      heldCreditTypes.push({ subscriptionTypeId: id, remaining: usableRemaining(id) })
+    }
+  }
+
+  return {
+    authenticated: true,
+    joined: contact.acquisition_stage === 'joined',
+    heldUnmeteredTypeIds,
+    heldCreditTypes,
+    trialUsed: !!contact.trial_used_at,
+  }
+}
+
+/**
  * Non-throwing core of the paid-access gate: does this (already-resolved)
  * authenticated contact — or null for a guest — satisfy an activity's
- * accessRule? Pure move of the logic that used to live inline in
- * resolveBookingAccessGate (still the thrower bookSession uses). CLASS-ONLY —
- * appointments dropped the access gate entirely; see resolveHeldBenefit below
- * for their (money-only) held-benefit lookup, which shares the same held/credit
- * core as this function.
+ * accessRule? Snapshot → resolvePaymentOptions (@linyup/shared) → mapped back
+ * to the legacy result shape, so bookSession/bookAppointment diffs stay nil.
+ * CLASS-ONLY — appointments dropped the access gate entirely.
  */
 export async function resolveBookingCoverage(params: {
   teamId: string
@@ -138,55 +206,38 @@ export async function resolveBookingCoverage(params: {
   authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null
 }): Promise<BookingCoverageResult> {
   const { teamId, accessRule, authenticatedContact } = params
-  const NONE: BookingCoverageResult = {
-    covered: true,
-    matchedSubscriptionTypeId: null,
-    creditSpendTypeId: null,
-    denial: null,
-  }
-  if (accessRule.type === 'open') return NONE
-
-  if (!authenticatedContact) {
-    return { covered: false, matchedSubscriptionTypeId: null, creditSpendTypeId: null, denial: 'guest' }
-  }
-  if (authenticatedContact.acquisition_stage !== 'joined') {
-    return { covered: false, matchedSubscriptionTypeId: null, creditSpendTypeId: null, denial: 'not_joined' }
-  }
-
-  if (accessRule.type !== 'subscription') return NONE
-
-  const allowed = accessRule.subscriptionTypeIds ?? []
-  const { held, creditTypes } = heldAndCreditSets(authenticatedContact)
-
-  // 1) Unmetered coverage first — a held subscription whose type isn't
-  //    credits-only never burns credits.
-  let matchedSubscriptionTypeId: string | null = null
-  for (const id of allowed) {
-    if (!held.has(id)) continue
-    if (await typeGrantsUnmeteredAccess(teamId, id, authenticatedContact)) {
-      matchedSubscriptionTypeId = id
-      break
-    }
-  }
-  // 2) Credit coverage — spend one credit (transactionally, at booking write).
-  let creditSpendTypeId: string | null = null
-  if (!matchedSubscriptionTypeId) {
-    const creditType = allowed.find((id) => creditTypes.has(id))
-    if (creditType) {
-      matchedSubscriptionTypeId = creditType
-      creditSpendTypeId = creditType
-    }
-  }
-  if (!matchedSubscriptionTypeId) {
-    const heldCreditType = allowed.some((id) => held.has(id))
+  const snapshot = await loadContactPaymentSnapshot({
+    teamId,
+    contact: authenticatedContact,
+    relevantTypeIds: accessRule.subscriptionTypeIds ?? [],
+  })
+  const { options, denial } = resolvePaymentOptions(snapshot, {
+    kind: 'class_booking',
+    accessRule,
+  })
+  if (denial) {
+    // 'sign_in_required'/'trial_used' never come out of the class arm.
     return {
       covered: false,
       matchedSubscriptionTypeId: null,
       creditSpendTypeId: null,
-      denial: heldCreditType ? 'no_credits' : 'no_subscription',
+      denial: denial as BookingAccessDenialReason,
     }
   }
-  return { covered: true, matchedSubscriptionTypeId, creditSpendTypeId, denial: null }
+  const option = options[0]
+  if (option?.type === 'spend_credits') {
+    return {
+      covered: true,
+      matchedSubscriptionTypeId: option.via.subscriptionTypeId,
+      creditSpendTypeId: option.via.subscriptionTypeId,
+      denial: null,
+    }
+  }
+  const matched =
+    option?.type === 'covered' && option.via.reason === 'subscription'
+      ? option.via.subscriptionTypeId
+      : null
+  return { covered: true, matchedSubscriptionTypeId: matched, creditSpendTypeId: null, denial: null }
 }
 
 export interface HeldBenefitResult {
@@ -223,16 +274,22 @@ export async function resolveHeldBenefit(params: {
     return { heldTypeIds: [], creditSpendTypeId: null }
   }
 
-  const { held, creditTypes } = heldAndCreditSets(contact)
-
+  const snapshot = await loadContactPaymentSnapshot({
+    teamId,
+    contact,
+    relevantTypeIds: subscriptionTypeIds,
+  })
   const heldTypeIds: string[] = []
   let creditSpendTypeId: string | null = null
   for (const id of subscriptionTypeIds) {
-    if (held.has(id) && (await typeGrantsUnmeteredAccess(teamId, id, contact))) {
+    if (snapshot.heldUnmeteredTypeIds.includes(id)) {
       heldTypeIds.push(id)
       continue
     }
-    if (creditTypes.has(id)) {
+    const credit = snapshot.heldCreditTypes.find(
+      (e) => e.subscriptionTypeId === id && e.remaining > 0
+    )
+    if (credit) {
       heldTypeIds.push(id)
       if (!creditSpendTypeId) creditSpendTypeId = id
     }
