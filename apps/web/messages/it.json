@@ -4698,6 +4698,7 @@
     "toc": {
       "concepts": "Concetti chiave",
       "publicPages": "Pagine pubbliche",
+      "pricing": "Prezzi",
       "faq": "Domande frequenti",
       "utilities": "Continua"
     },
@@ -4857,6 +4858,191 @@
           "name": "Kiosk",
           "desc": "Uno schermo fisso ed essenziale per un tablet all'ingresso: calendario del giorno, QR di check-in e iscrizione in loco. Ciò che vedono membri e visitatori alla porta."
         }
+      }
+    },
+    "pricing": {
+      "title": "Prezzi",
+      "intro": "I prezzi mettono insieme tre idee che di solito vivono separate — ciò che offri, ciò che vendi e i vantaggi che le collegano. Esplora la mappa, dai un'occhiata ad alcune configurazioni comuni, poi provala dal vivo con un visitatore fittizio.",
+      "linkLabels": {
+        "plans": "Offerta → Piani",
+        "activities": "Offerta → Attività",
+        "courses": "Offerta → Corsi online",
+        "payments": "Pagamenti",
+        "booking": "Impostazioni → Prenotazione",
+        "pricing": "Offerta → Prezzi"
+      },
+      "map": {
+        "title": "Come funzionano i prezzi insieme",
+        "intro": "Quattro elementi si combinano per produrre un prezzo. Tocca un blocco sulla mappa — o una scheda qui sotto — per vedere cosa copre.",
+        "diagramAria": "Mappa di come funzionano i prezzi insieme",
+        "diagramHint": "Scorri la mappa — tocca un blocco per saperne di più.",
+        "edges": {
+          "priced": "prezzato tramite",
+          "grants": "concede",
+          "shownIn": "mostrato in"
+        },
+        "nodes": {
+          "offer": {
+            "label": "Cosa offri",
+            "shortLabel": "Cosa\noffri",
+            "tagline": "Il tuo catalogo prenotabile e vendibile",
+            "body": "Tutto ciò che un visitatore può prenotare o acquistare: corsi e appuntamenti nel tuo calendario, corsi online e articoli dello shop. Ognuno ha il proprio prezzo base — o nessuno — prima che un vantaggio lo modifichi.",
+            "items": [
+              "Corsi — sessioni programmate in cui si prenota un posto",
+              "Appuntamenti — il tempo di chi lo offre, prenotato dalla sua disponibilità",
+              "Corsi online — lezioni a proprio ritmo, vendute o incluse",
+              "Articoli dello shop — prodotti e buoni regalo"
+            ]
+          },
+          "sell": {
+            "label": "Cosa vendi",
+            "shortLabel": "Cosa\nvendi",
+            "tagline": "Cosa possiedono davvero i membri",
+            "body": "Le cose per cui le persone pagano una volta o regolarmente: abbonamenti, pacchetti di crediti e buoni regalo. Possedere uno di questi è esattamente ciò che un vantaggio membro verifica.",
+            "items": [
+              "Abbonamenti — piani ricorrenti, opzionalmente limitati per settimana",
+              "Pacchetti di crediti — crediti una tantum, consumati a ogni prenotazione",
+              "Buoni regalo — un saldo prepagato, utilizzabile ovunque"
+            ]
+          },
+          "benefits": {
+            "label": "Vantaggi membro",
+            "shortLabel": "Vantaggi\nmembro",
+            "tagline": "Il collegamento tra i due",
+            "body": "Una regola su un'offerta stabilisce cosa cambia nel prezzo per chi possiede un determinato piano. Ci sono tre forme: incluso gratis, una percentuale di sconto, o un prezzo membro fisso. In assenza, tutti pagano semplicemente il prezzo base.",
+            "items": [
+              "Incluso — chi lo possiede prenota gratis (un pacchetto consuma un credito invece)",
+              "Percentuale di sconto — un prezzo ridotto per chi lo possiede",
+              "Prezzo membro fisso — un prezzo fisso che sostituisce quello base"
+            ]
+          },
+          "preview": {
+            "label": "L'anteprima prezzi",
+            "shortLabel": "L'anteprima\nprezzi",
+            "tagline": "Cosa pagherebbe davvero chiunque",
+            "body": "Scegli chiunque — un ospite, un membro o un piano specifico — e Offerta → Prezzi mostra esattamente cosa pagherebbe per ogni corso, appuntamento, corso online e prodotto, con la stessa logica della cassa.",
+            "items": [
+              "Una persona alla volta — ospite, membro o un piano specifico",
+              "Ogni offerta prezzata esattamente come alla cassa reale",
+              "I controlli di coerenza segnalano prezzi che non tornano"
+            ]
+          }
+        }
+      },
+      "recipes": {
+        "title": "Voglio…",
+        "intro": "Configurazioni di prezzo comuni, ciascuna con come funziona, dove impostarla, cosa vedono i membri e come verificarla prima di attivarla.",
+        "labels": {
+          "how": "Come funziona",
+          "setup": "Come impostarla",
+          "see": "Cosa vedono i membri",
+          "check": "Come verificarla"
+        },
+        "items": {
+          "sell-membership": {
+            "chip": "Vendere un abbonamento mensile",
+            "how": "Crea un tipo di abbonamento sotto Offerta → Piani con uno o più prezzi (mensile, annuale). Segnalo come pubblico così appare nel tuo shop. I membri lo acquistano lì e vengono addebitati automaticamente.",
+            "see": "I membri lo vedono nella scheda Abbonamenti del tuo shop pubblico e nel loro Spazio.",
+            "check": "Scegli la persona di quel piano su Offerta → Prezzi."
+          },
+          "limit-weekly": {
+            "chip": "Limitare un piano a N corsi a settimana",
+            "how": "Sul tipo di abbonamento, imposta un limite d'uso come 3 a settimana. Le prenotazioni coperte contano su un limite settimanale (si azzera il lunedì); una volta esaurito, il membro può comunque pagare il prezzo dell'ingresso singolo — al suo prezzo membro se ne hai impostato uno.",
+            "see": "I membri vedono una copertura tipo «2 di 3 rimaste»; la 4ª prenotazione offre l'ingresso singolo.",
+            "check": "Il selettore di persona ha un interruttore «limite esaurito»."
+          },
+          "drop-in": {
+            "chip": "Far pagare i non membri a corso",
+            "how": "Su un corso con accesso limitato, attiva il Drop-in con un prezzo. Chiunque non sia coperto — ospiti inclusi — può prenotare quel singolo corso pagando.",
+            "see": "I membri coperti dal corso prenotano gratis; tutti gli altri vedono il prezzo dell'ingresso singolo al momento della prenotazione.",
+            "check": "Confronta la persona Ospite con una persona membro."
+          },
+          "member-rate": {
+            "chip": "Offrire ai membri un ingresso singolo più economico",
+            "how": "Nella sezione Drop-in del corso, aggiungi un prezzo membro: chi possiede i piani scelti paga una percentuale di sconto o un prezzo fisso invece del prezzo pieno. Utile per i piani che non coprono del tutto il corso.",
+            "see": "Quei membri vedono il prezzo originale barrato accanto al proprio.",
+            "check": "Scegli la persona di quel piano — la riga del corso mostra entrambi i prezzi."
+          },
+          "class-pack": {
+            "chip": "Vendere un pacchetto da 10 corsi",
+            "how": "Aggiungi a un tipo di abbonamento un prezzo una tantum con crediti (es. 10), opzionalmente con una finestra di validità. Ogni prenotazione coperta consuma un credito; una prenotazione annullata lo restituisce.",
+            "see": "I membri vedono i crediti rimanenti; le prenotazioni indicano «1 credito».",
+            "check": "La persona del pacchetto ha un interruttore «pacchetto esaurito» per vedere in anteprima lo stato vuoto."
+          },
+          "paid-trial": {
+            "chip": "Offrire ai nuovi arrivati una prova (a pagamento)",
+            "how": "Su un corso con accesso limitato, attiva la porta di prova; lascia vuoto il prezzo per un primo corso gratuito, oppure imposta un importo per farlo pagare. Una prova a persona, per sempre — verificata via e-mail.",
+            "see": "I nuovi arrivati vedono un'opzione «Prima volta qui» al momento della prenotazione.",
+            "check": "La persona Ospite mostra «prova disponibile» sui corsi con accesso limitato."
+          },
+          "appointments": {
+            "chip": "Definire il prezzo degli appuntamenti",
+            "how": "Gli appuntamenti non hanno una barriera di accesso: il prezzo è l'unica barriera. Dai a ogni durata il proprio prezzo (30/60/90 min), poi facoltativamente un vantaggio membro — incluso con certi piani, una percentuale di sconto, o un prezzo membro fisso. Le durate senza prezzo sono gratuite per tutti.",
+            "see": "I clienti scelgono un orario e vedono esattamente il loro prezzo; i membri coperti prenotano gratis.",
+            "check": "Ogni persona prezza ogni durata su Offerta → Prezzi."
+          },
+          "sell-course": {
+            "chip": "Vendere un corso online",
+            "how": "Imposta l'accesso di un corso online su Venduto e dagli un prezzo: chi lo acquista ottiene accesso a vita. Aggiungi un vantaggio così gli abbonati lo ottengono incluso o scontato.",
+            "see": "Appare nella scheda Corsi online del tuo shop; chi lo possiede lo guarda nel proprio Spazio.",
+            "check": "Le righe dei corsi online nell'anteprima prezzi mostrano il prezzo di ogni persona."
+          },
+          "gift-cards": {
+            "chip": "Vendere buoni regalo",
+            "how": "Attiva i buoni regalo e scegli gli importi. Chi acquista riceve un codice via e-mail; chiunque può usarlo per pagare articoli dello shop, corsi online o ingressi singoli — in parte o per intero.",
+            "see": "Nel tuo shop appare una scheda Buoni regalo; alla cassa compare un campo «Hai un buono regalo?».",
+            "check": "La pagina Pagamenti elenca i buoni venduti e i loro saldi."
+          },
+          "no-show-fee": {
+            "chip": "Addebitare una penale dopo mancate presentazioni ripetute",
+            "how": "Attiva la politica sulle mancate presentazioni con una penale e una soglia (es. CHF 15 dopo 3). Le mancate presentazioni si contano automaticamente quando segni una prenotazione come tale; al raggiungimento della soglia il membro riceve una penale con un link di pagamento. Puoi sempre annullarla.",
+            "see": "Il membro riceve un'e-mail; monitori e annulli le penali sotto Pagamenti.",
+            "check": "Le penali in sospeso appaiono nella pagina Pagamenti."
+          },
+          "partner-pass": {
+            "chip": "Collaborare con FitPass, Urban Sports Club & co.",
+            "how": "Crea un tipo di abbonamento con sorgente App fitness e imposta quanto ti paga il partner per visita. Assegnalo ai membri partner e includilo nei corsi che possono frequentare: ogni prenotazione coperta finisce in un registro di pagamenti invece di addebitare qualcuno.",
+            "see": "I membri partner prenotano come membri normali.",
+            "check": "Pagamenti mostra le visite dei partner e il pagamento stimato del mese."
+          }
+        }
+      },
+      "simulator": {
+        "title": "Provalo: fai il prezzo a un visitatore",
+        "intro": "Un piccolo catalogo fittizio — un corso, un appuntamento e un corso online — prezzato dal vivo per sei visitatori diversi. Scegline uno per vedere esattamente cosa pagherebbe e perché.",
+        "personas": {
+          "guest": "Ospite",
+          "member": "Membro senza piano",
+          "unlimited": "Piano Illimitato",
+          "limited": "Piano limitato (3/settimana)",
+          "pack": "Possessore di un pacchetto da 10 corsi",
+          "partner": "Partner pass"
+        },
+        "limitUsedUpLabel": "Limite settimanale esaurito",
+        "packEmptyLabel": "Pacchetto esaurito",
+        "offerings": {
+          "class": "Corso · Yoga Flow",
+          "appointment": "Appuntamento · Personal training · 60 min",
+          "course": "Corso online · Fondamenti"
+        },
+        "freeBadge": "Gratis",
+        "creditBadge": "1 credito",
+        "blockedBadge": "Non disponibile",
+        "why": {
+          "coveredSubscription": "Il loro piano copre questa prenotazione.",
+          "coveredIncluded": "Il loro piano lo include gratis.",
+          "coveredCredit": "Possiedono un pacchetto di crediti, quindi questa prenotazione ne consuma uno.",
+          "memberRate": "Non coperti — ma possiedono un piano con un prezzo membro, quindi l'ingresso singolo è ridotto.",
+          "limitReachedMemberRate": "Il loro limite settimanale è esaurito, quindi questa prenotazione ricade sul prezzo dell'ingresso singolo — al loro prezzo membro ridotto.",
+          "discount": "Il loro piano include uno sconto qui.",
+          "limitReachedDropIn": "Il loro limite settimanale è esaurito, quindi questa prenotazione ricade sul prezzo dell'ingresso singolo.",
+          "dropInFull": "Non sono coperti, quindi per questa prenotazione vale il prezzo dell'ingresso singolo.",
+          "noBenefitBase": "Nessun vantaggio si applica, quindi pagano il prezzo standard per questa durata.",
+          "noBenefitCourse": "Nessun vantaggio si applica, quindi pagano il prezzo pieno per questo corso online.",
+          "standardFree": "È aperto a tutti.",
+          "standardPrice": "Pagano il prezzo standard."
+        },
+        "outro": "È esattamente così che Offerta → Prezzi mostra l'anteprima del TUO catalogo."
       }
     },
     "faqTitle": "Le domande che tutti fanno all'inizio",

@@ -4698,6 +4698,7 @@
     "toc": {
       "concepts": "Concepts clés",
       "publicPages": "Pages publiques",
+      "pricing": "Tarifs",
       "faq": "Questions fréquentes",
       "utilities": "Continuer"
     },
@@ -4857,6 +4858,191 @@
           "name": "Kiosque",
           "desc": "Un écran fixe et épuré pour une tablette d'accueil : planning du jour, QR de pointage et inscription sur place. Ce que voient membres et visiteurs à la porte."
         }
+      }
+    },
+    "pricing": {
+      "title": "Tarifs",
+      "intro": "Les tarifs réunissent trois idées qui vivent souvent séparément — ce que vous proposez, ce que vous vendez, et les avantages qui relient les deux. Explorez la carte, parcourez quelques configurations courantes, puis testez-la en direct avec un visiteur fictif.",
+      "linkLabels": {
+        "plans": "Offre → Formules",
+        "activities": "Offre → Activités",
+        "courses": "Offre → Cours en ligne",
+        "payments": "Paiements",
+        "booking": "Paramètres → Réservation",
+        "pricing": "Offre → Tarifs"
+      },
+      "map": {
+        "title": "Comment la tarification s'articule",
+        "intro": "Quatre éléments se combinent pour produire un prix. Touchez un bloc sur la carte — ou une carte ci-dessous — pour voir ce qu'il couvre.",
+        "diagramAria": "Carte de la façon dont la tarification s'articule",
+        "diagramHint": "Faites défiler la carte — touchez un bloc pour en savoir plus.",
+        "edges": {
+          "priced": "tarifé via",
+          "grants": "octroie",
+          "shownIn": "affiché dans"
+        },
+        "nodes": {
+          "offer": {
+            "label": "Ce que vous proposez",
+            "shortLabel": "Ce que vous\nproposez",
+            "tagline": "Votre catalogue réservable et vendable",
+            "body": "Tout ce qu'un visiteur peut réserver ou acheter : cours et rendez-vous de votre planning, cours en ligne et articles de boutique. Chacun porte son propre prix de base — ou aucun — avant qu'un avantage ne le modifie.",
+            "items": [
+              "Cours — des séances planifiées où l'on réserve une place",
+              "Rendez-vous — le temps d'un intervenant, réservé depuis ses disponibilités",
+              "Cours en ligne — des leçons à son rythme, vendues ou incluses",
+              "Articles de boutique — produits et cartes cadeaux"
+            ]
+          },
+          "sell": {
+            "label": "Ce que vous vendez",
+            "shortLabel": "Ce que vous\nvendez",
+            "tagline": "Ce que les membres détiennent réellement",
+            "body": "Ce que les gens paient une fois ou régulièrement : abonnements, packs de crédits et cartes cadeaux. Détenir l'un d'eux est précisément ce qu'un avantage membre vérifie.",
+            "items": [
+              "Abonnements — formules récurrentes, plafonnées par semaine si besoin",
+              "Packs de crédits — des crédits à usage unique, consommés à chaque réservation",
+              "Cartes cadeaux — un solde prépayé, utilisable partout"
+            ]
+          },
+          "benefits": {
+            "label": "Avantages membres",
+            "shortLabel": "Avantages\nmembres",
+            "tagline": "Le lien entre les deux",
+            "body": "Une règle sur une offre définit ce que détenir une formule choisie change à son prix. Trois formes existent : inclus gratuitement, un pourcentage de réduction, ou un prix membre fixe. En son absence, tout le monde paie simplement le prix de base.",
+            "items": [
+              "Inclus — les détenteurs réservent gratuitement (un pack consomme un crédit à la place)",
+              "Pourcentage de réduction — un prix réduit pour les détenteurs",
+              "Prix membre fixe — un prix forfaitaire qui remplace le prix de base"
+            ]
+          },
+          "preview": {
+            "label": "L'aperçu des prix",
+            "shortLabel": "L'aperçu\ndes prix",
+            "tagline": "Ce que chacun paierait réellement",
+            "body": "Choisissez n'importe qui — un invité, un membre, ou une formule précise — et Offre → Tarifs montre exactement ce qu'il paierait pour chaque cours, rendez-vous, cours en ligne et produit, selon la même logique qu'au moment de payer.",
+            "items": [
+              "Une persona à la fois — invité, membre, ou une formule précise",
+              "Chaque offre tarifée exactement comme au moment de payer",
+              "Des contrôles de cohérence signalent les tarifs qui ne collent pas"
+            ]
+          }
+        }
+      },
+      "recipes": {
+        "title": "Je veux…",
+        "intro": "Des configurations de tarification courantes, chacune avec son fonctionnement, où la mettre en place, ce que voient les membres, et comment la vérifier avant de l'activer.",
+        "labels": {
+          "how": "Comment ça marche",
+          "setup": "Comment la mettre en place",
+          "see": "Ce que voient les membres",
+          "check": "Comment la vérifier"
+        },
+        "items": {
+          "sell-membership": {
+            "chip": "Vendre un abonnement mensuel",
+            "how": "Créez une formule sous Offre → Formules avec un ou plusieurs prix (mensuel, annuel). Marquez-la publique pour qu'elle apparaisse dans votre boutique. Les membres l'y achètent et sont facturés automatiquement.",
+            "see": "Les membres la voient dans l'onglet Abonnements de votre boutique publique et dans leur Espace.",
+            "check": "Choisissez la persona de cette formule sur Offre → Tarifs."
+          },
+          "limit-weekly": {
+            "chip": "Plafonner une formule à N cours par semaine",
+            "how": "Sur la formule, définissez un quota comme 3 par semaine. Les réservations couvertes comptent dans un quota hebdomadaire (réinitialisé le lundi) ; une fois épuisé, le membre peut encore payer le tarif à la séance — à son tarif membre si vous en avez défini un.",
+            "see": "Les membres voient une indication du type « 2 sur 3 restants » ; la 4e réservation propose le tarif à la séance.",
+            "check": "Le sélecteur de persona a un interrupteur « quota épuisé »."
+          },
+          "drop-in": {
+            "chip": "Laisser les non-membres payer à la séance",
+            "how": "Sur un cours restreint, activez le drop-in avec un prix. Quiconque n'est pas couvert — invités compris — peut réserver cette séance en payant.",
+            "see": "Les membres couverts par le cours réservent gratuitement ; tous les autres voient le tarif à la séance au moment de réserver.",
+            "check": "Comparez la persona Invité avec une persona membre."
+          },
+          "member-rate": {
+            "chip": "Offrir aux membres un tarif à la séance réduit",
+            "how": "Dans la section drop-in du cours, ajoutez un tarif membre : les détenteurs des formules choisies paient un pourcentage de réduction ou un prix fixe au lieu du tarif plein. Utile pour les formules qui ne couvrent pas entièrement le cours.",
+            "see": "Ces membres voient le prix d'origine barré à côté du leur.",
+            "check": "Choisissez la persona de cette formule — la ligne du cours affiche les deux prix."
+          },
+          "class-pack": {
+            "chip": "Vendre un pack de 10 cours",
+            "how": "Ajoutez à une formule un prix ponctuel avec des crédits (par ex. 10), avec en option une fenêtre de validité. Chaque réservation couverte consomme un crédit ; une réservation annulée le rembourse.",
+            "see": "Les membres voient leurs crédits restants ; les réservations indiquent « 1 crédit ».",
+            "check": "La persona pack a un interrupteur « pack épuisé » pour prévisualiser l'état vide."
+          },
+          "paid-trial": {
+            "chip": "Proposer un essai (payant) aux nouveaux venus",
+            "how": "Sur un cours restreint, activez la porte d'essai ; laissez le prix vide pour un premier cours gratuit, ou fixez un montant pour le facturer. Un essai par personne, pour toujours — vérifié par e-mail.",
+            "see": "Les nouveaux venus voient une option « Première fois ici » au moment de réserver.",
+            "check": "La persona Invité affiche « essai disponible » sur les cours restreints."
+          },
+          "appointments": {
+            "chip": "Tarifer les rendez-vous",
+            "how": "Les rendez-vous n'ont pas de restriction d'accès : le prix est la seule barrière. Donnez à chaque durée son propre prix (30/60/90 min), puis, en option, un avantage membre — inclus avec certaines formules, un pourcentage de réduction, ou un prix membre fixe. Les durées sans prix sont gratuites pour tout le monde.",
+            "see": "Les clients choisissent un horaire et voient exactement leur prix ; les membres couverts réservent gratuitement.",
+            "check": "Chaque persona tarife chaque durée sur Offre → Tarifs."
+          },
+          "sell-course": {
+            "chip": "Vendre un cours en ligne",
+            "how": "Réglez l'accès d'un cours sur Vendu et donnez-lui un prix : les acheteurs obtiennent un accès à vie. Ajoutez un avantage pour que les abonnés l'obtiennent inclus ou à prix réduit.",
+            "see": "Il apparaît dans l'onglet Cours en ligne de votre boutique ; ses propriétaires le retrouvent dans leur Espace.",
+            "check": "Les lignes de cours en ligne dans l'aperçu des prix montrent le prix de chaque persona."
+          },
+          "gift-cards": {
+            "chip": "Vendre des cartes cadeaux",
+            "how": "Activez les cartes cadeaux et choisissez les montants. Les acheteurs reçoivent un code par e-mail ; n'importe qui peut l'utiliser pour payer des articles de boutique, des cours en ligne ou des séances à l'unité — en partie ou en totalité.",
+            "see": "Un onglet Cartes cadeaux apparaît dans votre boutique ; le paiement propose un champ « Vous avez une carte cadeau ? ».",
+            "check": "La page Paiements liste les cartes vendues et leurs soldes."
+          },
+          "no-show-fee": {
+            "chip": "Facturer des frais après des non-présentations répétées",
+            "how": "Activez la politique de non-présentation avec des frais et un seuil (par ex. CHF 15 après 3). Les non-présentations sont comptées automatiquement quand vous marquez une réservation comme telle ; au seuil, le membre reçoit des frais avec un lien de paiement. Vous pouvez toujours les annuler.",
+            "see": "Le membre reçoit un e-mail ; vous suivez et annulez les frais sous Paiements.",
+            "check": "Les frais en attente apparaissent sur la page Paiements."
+          },
+          "partner-pass": {
+            "chip": "Travailler avec FitPass, Urban Sports Club & co.",
+            "how": "Créez une formule avec la source Application fitness et définissez ce que le partenaire vous verse par visite. Attribuez-la aux membres partenaires et incluez-la dans les cours qu'ils peuvent suivre : chaque réservation couverte est enregistrée dans un journal de versements au lieu de facturer quiconque.",
+            "see": "Les membres partenaires réservent comme des membres ordinaires.",
+            "check": "Paiements affiche les visites partenaires et le versement estimé du mois."
+          }
+        }
+      },
+      "simulator": {
+        "title": "Essayez : tarifer un visiteur",
+        "intro": "Un petit catalogue fictif — un cours, un rendez-vous et un cours en ligne — tarifé en direct pour six visiteurs différents. Choisissez-en un pour voir exactement ce qu'il paierait et pourquoi.",
+        "personas": {
+          "guest": "Invité",
+          "member": "Membre sans formule",
+          "unlimited": "Formule Illimitée",
+          "limited": "Formule limitée (3/semaine)",
+          "pack": "Détenteur d'un pack de 10 cours",
+          "partner": "Pass partenaire"
+        },
+        "limitUsedUpLabel": "Quota hebdomadaire épuisé",
+        "packEmptyLabel": "Pack épuisé",
+        "offerings": {
+          "class": "Cours · Yoga Flow",
+          "appointment": "Rendez-vous · Coaching personnel · 60 min",
+          "course": "Cours en ligne · Fondamentaux"
+        },
+        "freeBadge": "Gratuit",
+        "creditBadge": "1 crédit",
+        "blockedBadge": "Indisponible",
+        "why": {
+          "coveredSubscription": "Leur formule couvre cette réservation.",
+          "coveredIncluded": "Leur formule l'inclut gratuitement.",
+          "coveredCredit": "Ils détiennent un pack de crédits, cette réservation en consomme donc un.",
+          "memberRate": "Non couvert — mais ils détiennent une formule avec un tarif membre, donc le tarif à la séance est réduit.",
+          "limitReachedMemberRate": "Leur quota hebdomadaire est épuisé, cette réservation retombe donc sur le tarif à la séance — à leur tarif membre réduit.",
+          "discount": "Leur formule inclut une réduction ici.",
+          "limitReachedDropIn": "Leur quota hebdomadaire est épuisé, cette réservation retombe donc sur le tarif à la séance.",
+          "dropInFull": "Ils ne sont pas couverts, cette réservation utilise donc le tarif à la séance.",
+          "noBenefitBase": "Aucun avantage ne s'applique, ils paient donc le tarif standard pour cette durée.",
+          "noBenefitCourse": "Aucun avantage ne s'applique, ils paient donc le plein tarif pour ce cours en ligne.",
+          "standardFree": "C'est ouvert à tout le monde.",
+          "standardPrice": "Ils paient le tarif standard."
+        },
+        "outro": "C'est exactement ainsi qu'Offre → Tarifs prévisualise VOTRE catalogue."
       }
     },
     "faqTitle": "Les questions que tout le monde pose au début",
