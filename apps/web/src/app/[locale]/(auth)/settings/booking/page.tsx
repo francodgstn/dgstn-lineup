@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import type { Team, BookingSettings } from '@linyup/shared'
+import { NoShowPolicyCard } from './NoShowPolicyCard'
 
 // ─── schema ──────────────────────────────────────────────────────────────────
 
@@ -406,6 +407,10 @@ export default function BookingSettingsPage() {
       <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl">
         <BookingForm control={control} register={register} />
       </form>
+
+      <div className="max-w-2xl">
+        <NoShowPolicyCard />
+      </div>
     </div>
   )
 }

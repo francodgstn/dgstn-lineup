@@ -16,14 +16,18 @@ import {
   resolveActivityAccessRule,
   compareActivities,
   activityRequiresSubscription,
+  resolvePaymentOptions,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
+  type Benefit,
 } from '@linyup/shared'
+import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { resolveActivityPricingDisplay, type SubLookup } from '@/lib/activityTerms'
 import { formatCurrency } from '@/lib/format'
 import { useLocale, useTranslations } from 'next-intl'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
+import { usePublicContactAuth } from '../PublicContactAuthProvider'
 import { MiniCalendar } from '@/components/booking/MiniCalendar'
 import {
   GuestDetailsForm,
@@ -36,6 +40,11 @@ import {
 } from '@/components/booking/ReturningSignIn'
 import { StickyBar, activityGradient } from '@/components/booking/StickyBar'
 import { BackButton } from '@/components/booking/BackButton'
+import {
+  GiftCardRedeemField,
+  giftCardCheckoutErrorMessage,
+  type AppliedGiftCard,
+} from '@/components/booking/GiftCardRedeemField'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -60,8 +69,10 @@ interface ActivityProfile {
   trialPriceAmount?: number | null
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
   durations?: Array<{ minutes: number; priceAmount: number | null }>
-  /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
-  memberBenefit?: ActivityMemberBenefit
+  /** The one member-benefit rule, mirrored verbatim — appointments (every
+   *  priced duration) and classes (the drop-in price). Accepts the legacy
+   *  appointment shape or the generalized `Benefit`. */
+  memberBenefit?: ActivityMemberBenefit | Benefit
   prerequisites?: string
 }
 
@@ -157,6 +168,11 @@ interface Props {
 export default function BookingForm({ slug, preSelectedActivitySlug, initialDate }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
+  // The team-root sign-in bar's session — a contact may already be signed in
+  // from another surface (Space/Shop). Used ONLY to preview the drop-in
+  // member rate here; checkout/booking always re-resolve authoritatively
+  // server-side (the callable trusts its own session token, not this).
+  const { contact, isAuthenticated } = usePublicContactAuth()
   const locale = useLocale()
   const t = useTranslations('PublicBooking')
   const tShop = useTranslations('Shop')
@@ -216,6 +232,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   const [confirmedSession, setConfirmedSession] = useState<SessionProfile | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Optional gift-card redemption — only meaningful on a paying booking (drop-in
+  // or priced trial). Reset whenever the guest door changes.
+  const [giftCardApplied, setGiftCardApplied] = useState<AppliedGiftCard | null>(null)
 
   // Ref to trigger the shared guest-details form's submit from the sticky bar
   // (the Confirm button lives outside the <form> element).
@@ -363,6 +383,37 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       : null
   const dropInAvailable = selectedDropInPrice != null
 
+  // Member rate preview on the drop-in price — a signed-in contact (from the
+  // team-root sign-in bar) whose held subscription earns a benefit sees the
+  // reduced price with the base struck through, BEFORE they even reach
+  // checkout. DISPLAY only: createDropInCheckout re-resolves authoritatively
+  // from its own session, never from this. Today's public contact session
+  // only carries one primary `subscription_type_id` — same simplification
+  // ShopHome's held union uses.
+  const dropInMemberPrice = useMemo(() => {
+    if (!selectedActivity || !dropInAvailable) return null
+    const rule = resolveActivityAccessRule(selectedActivity)
+    const heldSubscriptionTypeIds = contact?.subscription_type_id ? [contact.subscription_type_id] : []
+    const snapshot = clientPaymentSnapshot({ authenticated: isAuthenticated, heldSubscriptionTypeIds })
+    const { options } = resolvePaymentOptions(snapshot, {
+      kind: 'drop_in',
+      accessRule: rule,
+      dropIn: selectedActivity.dropIn,
+      benefit: selectedActivity.memberBenefit,
+    })
+    const pay = options[0]
+    if (pay?.type !== 'pay' || !pay.appliedBenefit) return null
+    return { amount: pay.amount, base: pay.appliedBenefit.baseAmount }
+  }, [selectedActivity, dropInAvailable, contact, isAuthenticated])
+
+  // Gated class with drop-in enabled → pay-per-class. NOT when the visitor
+  // explicitly took the free-trial door — a trial newcomer must never be
+  // charged unless the trial itself is priced (isPricedTrial); bookSession
+  // admits gated trial guests (Activity.trialEnabled) for free otherwise.
+  const isPricedTrial =
+    guestPath === 'trial' && typeof selectedActivity?.trialPriceAmount === 'number'
+  const willCharge = (dropInAvailable && guestPath !== 'trial') || isPricedTrial
+
   // ── Guest booking ─────────────────────────────────────────────────────────
 
   const onSubmitGuest = async (values: GuestDetailsValues) => {
@@ -375,11 +426,13 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     // TRIAL price instead of the drop-in price (`createDropInCheckout`'s
     // `trial` input). Also reused defensively from the catch block below when
     // the server reports `payment_required` for what the client thought was free.
+    // Returns the raw response so the caller can also detect the gift-card
+    // FULL-COVER shape ({ url: null, paidWithGiftCard: true }).
     const checkout = async (trial: boolean) => {
-      const fn = httpsCallable<Record<string, unknown>, { url?: string }>(
-        functions,
-        'createDropInCheckout'
-      )
+      const fn = httpsCallable<
+        Record<string, unknown>,
+        { url?: string | null; paidWithGiftCard?: boolean }
+      >(functions, 'createDropInCheckout')
       const res = await fn({
         teamId,
         sessionId: selectedSession!.id,
@@ -393,23 +446,21 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         locale,
         origin: typeof window !== 'undefined' ? window.location.origin : undefined,
         ...(trial ? { trial: true } : {}),
+        ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
       })
-      return res.data?.url
+      return res.data
     }
 
     try {
-      // Gated class with drop-in enabled → pay-per-class; the webhook confirms the
-      // booking on payment success. Redirect to Stripe Checkout. NOT when the
-      // visitor explicitly took the free-trial door — a trial newcomer must never
-      // be charged unless the trial itself is priced (isPricedTrial below);
-      // bookSession admits gated trial guests (Activity.trialEnabled).
-      const isPricedTrial =
-        guestPath === 'trial' && typeof selectedActivity?.trialPriceAmount === 'number'
-
-      if ((dropInAvailable && guestPath !== 'trial') || isPricedTrial) {
-        const url = await checkout(isPricedTrial)
-        if (url) {
-          window.location.href = url
+      if (willCharge) {
+        const result = await checkout(isPricedTrial)
+        if (result.paidWithGiftCard) {
+          setConfirmedSession(selectedSession)
+          setStep('confirmed')
+          return
+        }
+        if (result.url) {
+          window.location.href = result.url
           return
         }
         throw new Error(t('errorCheckoutFailed'))
@@ -432,7 +483,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string; details?: { reason?: string } }
       const reason = e.details?.reason
-      if (reason === 'trial_used') {
+      const giftMsg = giftCardApplied ? giftCardCheckoutErrorMessage(err, tShop) : null
+      if (giftMsg) {
+        setBookingError(giftMsg)
+      } else if (reason === 'trial_used') {
         setBookingError(t('errorTrialUsed'))
       } else if (reason === 'payment_required') {
         // Defensive: the server determined this booking requires payment even
@@ -440,9 +494,14 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         // price) — recover by sending the guest straight to checkout instead of
         // leaving them at a dead end.
         try {
-          const url = await checkout(true)
-          if (url) {
-            window.location.href = url
+          const result = await checkout(true)
+          if (result.paidWithGiftCard) {
+            setConfirmedSession(selectedSession)
+            setStep('confirmed')
+            return
+          }
+          if (result.url) {
+            window.location.href = result.url
             return
           }
         } catch {
@@ -482,16 +541,19 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     // no drop-in handling and would still reject them here). A subscription-gated
     // activity with an EMPTY allow-list (misconfig) also skips this and falls
     // through to the server error. bookSession stays authoritative either way.
-    const required = selectedActivity
-      ? activityRequiresSubscription(resolveActivityAccessRule(selectedActivity))
-      : null
-    if (
-      required?.length &&
-      contactData.held_subscription_type_ids &&
-      !contactData.held_subscription_type_ids.some((id) => required.includes(id)) &&
-      !dropInAvailable
-    ) {
-      throw new Error(t('errorNoSubscriptionForActivity'))
+    // Same resolver the server uses (@linyup/shared) decides "covered" —
+    // mechanical swap of the intersection check, same gating conditions.
+    const accessRule = selectedActivity ? resolveActivityAccessRule(selectedActivity) : null
+    const required = accessRule ? activityRequiresSubscription(accessRule) : null
+    if (required?.length && contactData.held_subscription_type_ids && !dropInAvailable) {
+      const snapshot = clientPaymentSnapshot({
+        authenticated: true,
+        heldSubscriptionTypeIds: contactData.held_subscription_type_ids,
+      })
+      const { denial } = resolvePaymentOptions(snapshot, { kind: 'class_booking', accessRule: accessRule! })
+      if (denial) {
+        throw new Error(t('errorNoSubscriptionForActivity'))
+      }
     }
     const bookSessionFn = httpsCallable(functions, 'bookSession')
     await bookSessionFn({
@@ -802,6 +864,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                       onClick={() => {
                         setSelectedSession(s)
                         setGuestPath(null)
+                        setGiftCardApplied(null)
                         // Members-only → sign in. But if there's a guest door —
                         // drop-in (pay per class) or a free trial for newcomers —
                         // go to the chooser ('who') instead.
@@ -913,7 +976,18 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
               <div className="flex-1">
                 <p className="font-semibold text-sm">{t('dropInTitle')}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {t('dropInSubtitle', { price: selectedDropInPrice ?? 0 })}
+                  {dropInMemberPrice ? (
+                    <>
+                      <span className="mr-1.5 line-through">
+                        {formatCurrency(dropInMemberPrice.base, currency, locale)}
+                      </span>
+                      {t('dropInSubtitleMember', {
+                        price: formatCurrency(dropInMemberPrice.amount, currency, locale),
+                      })}
+                    </>
+                  ) : (
+                    t('dropInSubtitle', { price: formatCurrency(selectedDropInPrice ?? 0, currency, locale) })
+                  )}
                 </p>
               </div>
               <svg
@@ -986,6 +1060,18 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             {t('detailsSubtitle')}
           </p>
         </div>
+
+        {/* Gift card redemption — only meaningful on a paying booking (drop-in
+            or priced trial); a free trial/booking has nothing to redeem against. */}
+        {willCharge && (
+          <GiftCardRedeemField
+            teamId={teamId}
+            locale={locale}
+            applied={giftCardApplied}
+            onApplied={setGiftCardApplied}
+            disabled={isSubmitting}
+          />
+        )}
 
         <GuestDetailsForm
           ref={guestFormRef}

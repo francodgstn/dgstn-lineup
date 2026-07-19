@@ -222,12 +222,25 @@ service cloud.firestore {
              && exists(/databases/$(database)/documents/courses/$(courseId)/purchases/$(request.auth.token.contactId));
     }
 
+    // Whether a course's benefit grants the calling contact INCLUDED access:
+    // Course.benefit {effect:'included', subscriptionTypeIds} held via the
+    // contact's primary subscription type. Mirrors the resolver's covered
+    // decision (checkout refuses the sale for exactly these holders, so the
+    // rules MUST grant the read or they could neither pay nor watch). The
+    // `is map` guard matters: benefit may be absent OR stored as null.
+    function courseBenefitIncludesCaller(c) {
+      return c.get('benefit', null) is map
+             && c.benefit.get('effect', '') == 'included'
+             && c.benefit.get('subscriptionTypeIds', []).hasAny([callerContactSubscriptionTypeId()]);
+    }
+
     // Whether the public web (anonymous or a contact session) may read a course doc.
     //  - free         → anyone
     //  - registered   → any signed-in contact of the owning team
     //  - subscription → signed-in contact whose subscription_type_id is allowed
     //  - purchase     → signed-in contact who bought it, OR whose subscription_type_id
-    //                   is in the (optional) "included free" list
+    //                   is in the (optional) "included free" list or the course's
+    //                   included-for-subscribers benefit
     function canReadPublishedCourse(courseId, c) {
       return c.status == 'published' && (
            c.accessRule.type == 'free'
@@ -236,7 +249,8 @@ service cloud.firestore {
             && c.accessRule.subscriptionTypeIds.hasAny([callerContactSubscriptionTypeId()]))
         || (c.accessRule.type == 'purchase' && isContactOfTeam(c.teamId)
             && (hasPurchasedCourse(courseId)
-                || c.accessRule.get('subscriptionTypeIds', []).hasAny([callerContactSubscriptionTypeId()])))
+                || c.accessRule.get('subscriptionTypeIds', []).hasAny([callerContactSubscriptionTypeId()])
+                || courseBenefitIncludesCaller(c)))
       );
     }
 
@@ -579,6 +593,32 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Partner (aggregator) visit payout ledger — one row per booking covered
+      // via a source:'aggregator' subscription type (FitPass, SportPass, USC…),
+      // written by bookSession / cancelBooking via the Admin SDK. Reporting
+      // only — the money settles between studio and partner off-platform.
+      match /partner_visits/{visitId} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
+      // Gift cards — the doc id IS the redeemable code, so it is a SECRET:
+      // managers may list/read for support; the public checks balances only
+      // through the checkGiftCard callable. All writes via Cloud Functions
+      // (mint on purchase, holds on redemption, void).
+      match /gift_cards/{code} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
+      // No-show policy fees — created by the policy engine when a contact's
+      // strike count reaches the team threshold; paid via an emailed payment
+      // link (webhook marks paid) or waived by a manager callable.
+      match /policy_fees/{feeId} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
       // Finance journal — the normalized, immutable money-event log (all rails).
       // Written ONLY by Cloud Functions (webhooks / recordManualPayment / backfill);
       // corrections are compensating rows, never edits. Financial data → manager+.
@@ -827,16 +867,29 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Usage-limit window counters ("3 classes per week") — Cloud Functions
+      // only, same as credit_grants: a client-writable counter would let a
+      // member reset their own allowance. Readable like the grants so the
+      // portal can show "2 of 3 left this week".
+      match /usage_windows/{windowId} {
+        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+                      || hasRole('admin')
+                      || isSelfContact(contactId)
+                      || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
+        allow write: if false;
+      }
+
       // Rules apply to all other child collections. Single-segment on purpose:
-      // the only deeper path (goals/{id}/evaluations) is matched explicitly
-      // above, and a recursive wildcard here could not exclude credit_grants
-      // from its write grant.
+      // the only deeper paths (goals/{id}/evaluations) are matched explicitly
+      // above, and a recursive wildcard here could not exclude credit_grants /
+      // usage_windows from its write grant.
       match /{subcollection}/{docId} {
         allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
                       || isSelfContact(contactId)
                       || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
         allow write: if subcollection != 'credit_grants'
+                      && subcollection != 'usage_windows'
                       && (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin'));
       }
 

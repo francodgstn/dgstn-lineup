@@ -187,6 +187,12 @@ export {
 } from './connect/payments'
 export { refundMemberPayment } from './connect/refunds'
 export { handleConnectWebhook } from './connect/webhook'
+// Gift cards (E3) — public purchase + balance check, manager void.
+export { createGiftCardCheckout, checkGiftCard, voidGiftCard } from './connect/giftCards'
+// No-show policy fees (E5) — manager resend-link + waive. The strike counter
+// itself (processNoShowStrike) is wired into automation/onBookingWrite, not a
+// callable.
+export { resendPolicyFeeLink, waivePolicyFee } from './booking/policyFees'
 // Cross-rail payment editing (assign contact + edit comment + line-item) for Connect + BYO.
 export { updatePaymentRecord } from './connect/updatePayment'
 // Manual cash / bank-transfer payments — recorded into the unified payment_events ledger.

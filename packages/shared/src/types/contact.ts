@@ -199,6 +199,17 @@ export interface Contact {
   // non-expired grants contribute. Empty/absent when the contact holds none.
   credit_summary?: CreditSummaryEntry[]
 
+  // ─── No-show policy (E5) ────────────────────────────────────────────────────
+  // Rolling strike counter toward the team's noShowPolicy.threshold (see
+  // resolveNoShowPolicy, types/policy.ts). Incremented on every 'booking_no_show'
+  // transition (onBookingWrite → processNoShowStrike); reset to 0 (and refs
+  // cleared) the moment a fee is created. Absent ⇒ 0.
+  no_show_strikes?: number
+  // The strike bookings ('sessionId/bookingId') accumulated since the last fee
+  // (or ever, if none yet) — capped ~10, most-recent-last. Copied onto the fee's
+  // strike_booking_refs when the threshold is reached, then cleared.
+  no_show_strike_refs?: string[]
+
   // Notes (plain text; rich-text JSON stored as string in hmd-lineup)
   notes?: string
 
@@ -368,6 +379,23 @@ export interface CreditSummaryEntry {
 export type CheckoutContactMode = 'off' | 'minimal' | 'full'
 export const CHECKOUT_CONTACT_MODES: CheckoutContactMode[] = ['off', 'minimal', 'full']
 
+// ─── usage limits ("up to 3 classes per week") ────────────────────────────────
+// A LIMITED subscription still grants unmetered (non-credit) access, but only
+// `count` bookings per window; the window is a calendar day / ISO week / month
+// in the TEAM's timezone (Europe/Zurich today — see usageWindowKey). Consumption
+// is counted per contact in contacts/{id}/usage_windows/{typeId}_{windowKey}
+// docs, incremented transactionally by bookSession and decremented on
+// cancellation. Absent `limits` = unlimited (all pre-existing types).
+// 'billing_cycle' resets are a known follow-up (needs the member_subscriptions
+// current-period), deliberately not in v1.
+
+export type UsageLimitPeriod = 'day' | 'week' | 'month'
+
+export interface SubscriptionUsageLimit {
+  count: number
+  per: UsageLimitPeriod
+}
+
 export interface SubscriptionType {
   id: string
   name: string
@@ -382,6 +410,38 @@ export interface SubscriptionType {
   prices?: SubscriptionPrice[] // optional; absent = the simple "just a container" flow
   // Public-shop contact capture for this type (absent ⇒ 'minimal').
   checkout_contact_mode?: CheckoutContactMode
+  // Usage limits — v1 supports a single entry (the editor enforces that); the
+  // array leaves room for per-subset caps later. Absent = unlimited.
+  limits?: SubscriptionUsageLimit[]
+  // AGGREGATOR types only (source: 'aggregator'): what the partner pays the
+  // studio per attended visit (major units, team currency). Drives the
+  // partner_visits payout ledger — see Phase E1 of the pricing initiative.
+  payoutPerVisit?: number
+}
+
+// ─── partner (aggregator) visit payout ledger ─────────────────────────────────
+// One row per booking covered via a source:'aggregator' subscription type
+// (FitPass, SportPass…), written by bookSession / cancelBooking (Admin SDK)
+// at teams/{teamId}/partner_visits/{sessionId_contactId}. Reporting only — the
+// money settles between studio and partner off-platform.
+export interface PartnerVisit {
+  teamId: string
+  contactId: string
+  sessionId: string
+  subscription_type_id: string
+  subscription_type_name: string | null
+  amount: number | null // major units, team currency; null = rate not configured
+  session_start: { toDate(): Date } | null
+  activity_name: string | null
+  status: 'booked' | 'cancelled'
+  created_at: { toDate(): Date }
+  cancelled_at?: { toDate(): Date }
+}
+
+/** The v1 usage limit of a type (first entry), or null = unlimited. */
+export function resolveUsageLimit(t: Pick<SubscriptionType, 'limits'>): SubscriptionUsageLimit | null {
+  const l = t.limits?.[0]
+  return l && typeof l.count === 'number' && l.count > 0 ? l : null
 }
 
 /** Stable sort for subscription types: explicit `order` first (asc), then name. */

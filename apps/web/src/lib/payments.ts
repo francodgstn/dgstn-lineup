@@ -53,6 +53,19 @@ export function formatMoneyMinor(minor: number | null | undefined, currency: str
   }
 }
 
+/** Same as formatMoneyMinor but for values already in major units (e.g. the
+ * partner-visit payout ledger, entered in the studio's own currency). */
+export function formatMoneyMajor(amount: number | null | undefined, currency: string): string {
+  const cur = (currency || 'CHF').toUpperCase()
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }).format(
+      amount ?? 0
+    )
+  } catch {
+    return `${(amount ?? 0).toFixed(2)} ${cur}`
+  }
+}
+
 export function formatPaymentDate(ts: { toDate?: () => Date } | null | undefined): string {
   const d = ts?.toDate?.()
   return d ? d.toLocaleDateString() : ''

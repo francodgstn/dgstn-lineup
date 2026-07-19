@@ -10,6 +10,7 @@
 import { useTranslations } from 'next-intl'
 import { CoreConcepts } from '@/components/howto/CoreConcepts'
 import { PublicPages } from '@/components/howto/PublicPages'
+import { PricingHowTo } from '@/components/howto/PricingHowTo'
 import { HowToFaq } from '@/components/howto/HowToFaq'
 import { HowToUtilities } from '@/components/howto/HowToUtilities'
 import { HowToTocChips, HowToTocRail } from '@/components/howto/HowToToc'
@@ -32,6 +33,11 @@ export default function HowToPage() {
         {/* Public pages — its own section, separated from the concepts */}
         <div id="public-pages" className="mt-12 scroll-mt-6 border-t pt-10">
           <PublicPages />
+        </div>
+
+        {/* Pricing — its own section, between public pages and the FAQ */}
+        <div id="pricing" className="mt-12 scroll-mt-6 border-t pt-10">
+          <PricingHowTo />
         </div>
 
         {/* Second area — guidance to keep going */}

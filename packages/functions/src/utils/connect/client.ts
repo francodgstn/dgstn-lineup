@@ -14,7 +14,11 @@
 // `apiVersion` (a drifting string would diverge from the bundled types).
 
 import Stripe from 'stripe'
-import type { ConnectAccountStatus, ConnectOnboardingModel } from '@linyup/shared'
+import {
+  resolveStripeCurrency,
+  type ConnectAccountStatus,
+  type ConnectOnboardingModel,
+} from '@linyup/shared'
 import { getSecret } from '../secrets'
 
 // The rich `Stripe.X` type namespace is not merged onto the default import in this
@@ -50,6 +54,8 @@ const MODEL_DASHBOARD: Record<ConnectOnboardingModel, 'full'> = {
   managed: 'full',
 }
 
+// Account default currency at onboarding (an onboarding concern — per-charge
+// currency comes from the caller, resolved via resolveStripeCurrency).
 const PHASE1_CURRENCY = 'chf'
 
 // ─── Onboarding ─────────────────────────────────────────────────────────────────
@@ -249,7 +255,7 @@ export async function createOneOffCheckoutSession(params: {
         {
           quantity: 1,
           price_data: {
-            currency: params.currency ?? PHASE1_CURRENCY,
+            currency: params.currency ?? resolveStripeCurrency(undefined),
             unit_amount: params.amount,
             product_data: { name: params.productName },
           },
@@ -296,7 +302,7 @@ export async function createSubscriptionCheckoutSession(params: {
         {
           quantity: 1,
           price_data: {
-            currency: params.currency ?? PHASE1_CURRENCY,
+            currency: params.currency ?? resolveStripeCurrency(undefined),
             unit_amount: params.amount,
             recurring: { interval: params.interval, interval_count: params.intervalCount ?? 1 },
             product_data: { name: params.productName },

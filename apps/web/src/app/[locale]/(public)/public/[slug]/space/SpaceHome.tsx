@@ -17,6 +17,8 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { GraduationCap, CreditCard, BadgeCheck, CalendarClock, User, ChevronRight, LogIn, ShoppingBag, Ticket } from 'lucide-react'
+import { resolvePaymentOptions, heldSubscriptionTypeIds, type CourseAccessRule } from '@linyup/shared'
+import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { formatCurrency } from '@/lib/format'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
@@ -41,26 +43,36 @@ export interface PublicCourseCard {
 }
 
 // ─── Access check helper ──────────────────────────────────────────────────────
-// Same rule the shop + Firestore rules enforce; here it filters the catalogue down
-// to the courses this contact may open (their "My courses" library).
+// Same resolver (@linyup/shared) the shop + Firestore rules' access story is built
+// on; here it filters the catalogue down to the courses this contact may open
+// (their "My courses" library). Only ever called for a signed-in contact (Space
+// is sign-in gated — see the early return below). Unlike the shop's optimistic
+// snapshot, Space has the contact's FULL held union (active_subscriptions +
+// credit_summary via `heldSubscriptionTypeIds`, not just the primary
+// `subscription_type_id`) — deliberately widens "included by subscription" to
+// every held type, not just the primary one (P6, approved — pricing/display only).
 
 function hasAccess(
   card: PublicCourseCard,
-  subscriptionTypeId?: string,
+  heldSubscriptionTypeIds: string[],
   purchasedCourseIds?: Set<string>
 ): boolean {
-  if (card.accessType === 'free') return true
-  if (card.accessType === 'registered') return true // any signed-in contact
-  if (card.accessType === 'subscription') {
-    if (!subscriptionTypeId) return false
-    return (card.subscriptionTypeIds ?? []).includes(subscriptionTypeId)
+  const rule: CourseAccessRule = {
+    type: card.accessType,
+    subscriptionTypeIds: card.subscriptionTypeIds,
+    priceAmount: card.priceAmount,
   }
-  if (card.accessType === 'purchase') {
-    // Bought it once (lifetime), or it's included free with the contact's subscription.
-    if (purchasedCourseIds?.has(card.id)) return true
-    return !!subscriptionTypeId && (card.subscriptionTypeIds ?? []).includes(subscriptionTypeId)
-  }
-  return false
+  const snapshot = clientPaymentSnapshot({
+    authenticated: true,
+    heldSubscriptionTypeIds,
+    ownsCourse: purchasedCourseIds?.has(card.id),
+  })
+  // COVERED options only — a priced course always yields a `pay` option for
+  // any signed-in contact, and "you could buy this" is not an entitlement
+  // (this section shows the contact's library, never a catalogue).
+  return resolvePaymentOptions(snapshot, { kind: 'course', accessRule: rule }).options.some(
+    (o) => o.type === 'covered'
+  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -168,8 +180,11 @@ export default function SpaceHome() {
   const hasMembership = shownSubs.length > 0 || aff?.has_active === true
 
   // ── My courses = accessible entitlements only (no locked/buy cards here) ──
-  const subscriptionTypeId = fullContact?.subscription_type_id ?? contact.subscription_type_id
-  const myCourses = courses.filter((c) => hasAccess(c, subscriptionTypeId, purchasedCourseIds))
+  // Full held union when the fuller contact doc has loaded (active_subscriptions
+  // + credit_summary), falling back to just the session's primary
+  // subscription_type_id until it does.
+  const heldTypeIds = heldSubscriptionTypeIds(fullContact ?? { subscription_type_id: contact.subscription_type_id })
+  const myCourses = courses.filter((c) => hasAccess(c, heldTypeIds, purchasedCourseIds))
 
   // ── Shop quick links — the studio's sellable channels, deep-linked to the right
   // shop tab. Gated by the SAME world-readable signals the shop reads (the private

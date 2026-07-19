@@ -179,6 +179,17 @@ export const NOTIFICATIONS_SUBCOLLECTION = 'notifications'
 // read it for the payments dashboard and per-contact Payments tab. Unlike Connect,
 // BYO records the payment even when no contact matches (assignment_status).
 export const PAYMENT_EVENTS_SUBCOLLECTION = 'payment_events'
+
+// Partner (aggregator) visit payout ledger — teams/{teamId}/partner_visits/{id},
+// doc id = `${sessionId}_${contactId}`. One row per booking covered via a
+// source:'aggregator' subscription type (FitPass, SportPass…); written by
+// bookSession / cancelBooking (Admin SDK). Reporting only — see types/contact.ts.
+export const PARTNER_VISITS_SUBCOLLECTION = 'partner_visits'
+// Gift cards (E3): teams/{teamId}/gift_cards/{code} — the code is the doc id.
+export const GIFT_CARDS_SUBCOLLECTION = 'gift_cards'
+// No-show policy fees (E5): teams/{teamId}/policy_fees/{feeId}.
+export const POLICY_FEES_SUBCOLLECTION = 'policy_fees'
+
 // Idempotency markers for the Connect webhook (doc id = Stripe event id).
 // Admin-SDK only; clients never read or write it.
 export const CONNECT_WEBHOOK_EVENTS_COLLECTION = 'connect_webhook_events'

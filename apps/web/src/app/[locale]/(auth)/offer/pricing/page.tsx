@@ -1,0 +1,660 @@
+'use client'
+
+// Unified Pricing admin page — read-only. Three sections, one shared resolver
+// (@/lib/pricingSurface, itself a thin wrapper over @linyup/shared's
+// resolvePaymentOptions) so nothing here can ever disagree with what a real
+// booking/checkout would charge:
+//   1. Price preview — pick a persona (guest / member / a subscription type)
+//      and see exactly what every class, appointment, course and product
+//      would cost them right now.
+//   2. What you sell — one card per subscription type: its prices + what it
+//      unlocks (reverse lookup over activities/courses).
+//   3. Health — cross-entity pricing inconsistencies, each with a fix link.
+// No editing here — every fix link routes to the surface that owns the data.
+
+import { useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
+import { useAuth } from '@/contexts/AuthContext'
+import { useActivities } from '@/hooks/useActivities'
+import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import { useProducts } from '@/plugins/products/hooks'
+import { useCourses } from '@/plugins/online-courses/hooks'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import { Skeleton } from '@/components/ui/skeleton'
+import { CheckCircle2, AlertTriangle, AlertCircle, Info } from 'lucide-react'
+import { formatCurrency } from '@/lib/format'
+import type { Activity, Course, Product, SubscriptionPrice, SubscriptionType } from '@linyup/shared'
+import { isSellableCourse, resolveUsageLimit } from '@linyup/shared'
+import {
+  buildPersonas,
+  personaSnapshot,
+  resolveClassCell,
+  resolveAppointmentCells,
+  resolveCourseCell,
+  productPriceRange,
+  grantsForType,
+  computePricingHealth,
+  type PricingPersona,
+  type PriceCell,
+  type PricingWarning,
+  type PricingWarningCode,
+} from '@/lib/pricingSurface'
+
+// ─── small shared helpers ──────────────────────────────────────────────────────
+
+function truncatedList(names: string[], max: number, moreLabel: (count: number) => string): string {
+  if (names.length <= max) return names.join(', ')
+  const shown = names.slice(0, max)
+  return `${shown.join(', ')} ${moreLabel(names.length - max)}`
+}
+
+// ─── persona chip row ──────────────────────────────────────────────────────────
+
+function PersonaChips({
+  personas,
+  selectedId,
+  onSelect,
+  t,
+}: {
+  personas: PricingPersona[]
+  selectedId: string
+  onSelect: (id: string) => void
+  t: ReturnType<typeof useTranslations<'OfferPricing'>>
+}) {
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-1">
+      {personas.map((p) => {
+        const label = p.kind === 'guest' ? t('personaGuest') : p.kind === 'member' ? t('personaMember') : p.label
+        const active = p.id === selectedId
+        return (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onSelect(p.id)}
+            className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              active
+                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'
+            }`}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── price cell rendering ───────────────────────────────────────────────────────
+
+const FREE_BADGE_CLASS =
+  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+const CREDIT_BADGE_CLASS =
+  'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+
+function PriceCellView({
+  cell,
+  currency,
+  typeNameById,
+  t,
+}: {
+  cell: PriceCell
+  currency: string
+  typeNameById: Map<string, string>
+  t: ReturnType<typeof useTranslations<'OfferPricing'>>
+}) {
+  if (cell.kind === 'free') {
+    let label: string
+    switch (cell.reason) {
+      case 'open':
+        label = t('freeOpen')
+        break
+      case 'members':
+        label = t('freeMembers')
+        break
+      case 'registered':
+        label = t('freeRegistered')
+        break
+      case 'included':
+      case 'subscription':
+        label = t('freeIncluded', { name: (cell.viaTypeId && typeNameById.get(cell.viaTypeId)) || '' })
+        break
+      default:
+        label = t('freeUnpriced')
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Badge className={`${FREE_BADGE_CLASS} border-transparent`}>{label}</Badge>
+        {typeof cell.remaining === 'number' && (
+          <span className="text-xs text-muted-foreground">
+            {t('remainingThisPeriod', { count: cell.remaining })}
+          </span>
+        )}
+      </span>
+    )
+  }
+
+  if (cell.kind === 'credit') {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Badge className={`${CREDIT_BADGE_CLASS} border-transparent`}>{t('creditBadge')}</Badge>
+        <span className="text-xs text-muted-foreground">
+          {t('creditRemaining', { count: cell.remaining })}
+        </span>
+      </span>
+    )
+  }
+
+  if (cell.kind === 'pay') {
+    return (
+      <span className="inline-flex items-center gap-1.5 flex-wrap">
+        {typeof cell.baseAmount === 'number' && (
+          <span className="text-xs text-muted-foreground line-through">
+            {formatCurrency(cell.baseAmount, currency)}
+          </span>
+        )}
+        <span className="text-sm font-medium">{formatCurrency(cell.amount, currency)}</span>
+        {typeof cell.baseAmount === 'number' && (
+          <span className="text-xs text-muted-foreground">{t('memberRateHint')}</span>
+        )}
+        {cell.source === 'drop_in' && (
+          <span className="text-xs text-muted-foreground">{t('dropInHint')}</span>
+        )}
+      </span>
+    )
+  }
+
+  // blocked
+  return (
+    <span className="inline-flex items-center gap-1.5 flex-wrap">
+      <span className="text-sm text-muted-foreground">
+        {cell.denial === 'limit_reached' ? t('limitReached') : t('noAccess')}
+      </span>
+      {cell.trialAvailable && (
+        <span className="text-xs text-muted-foreground italic">{t('trialAvailableHint')}</span>
+      )}
+    </span>
+  )
+}
+
+// ─── Price preview section ──────────────────────────────────────────────────────
+
+function PricingPreviewSection({
+  classes,
+  appointments,
+  courses,
+  products,
+  personas,
+  subscriptionTypes,
+  currency,
+}: {
+  classes: Activity[]
+  appointments: Activity[]
+  courses: Course[]
+  products: Product[]
+  personas: PricingPersona[]
+  subscriptionTypes: SubscriptionType[]
+  currency: string
+}) {
+  const t = useTranslations('OfferPricing')
+  const [selectedId, setSelectedId] = useState(personas[0]?.id ?? 'guest')
+  const [packEmpty, setPackEmpty] = useState(false)
+  const [allowanceUsedUp, setAllowanceUsedUp] = useState(false)
+
+  const selected = personas.find((p) => p.id === selectedId) ?? personas[0]
+  const snapshot = useMemo(
+    () => personaSnapshot(selected, packEmpty, allowanceUsedUp),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selected?.id, packEmpty, allowanceUsedUp]
+  )
+
+  const typeNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    subscriptionTypes.forEach((st) => m.set(st.id, st.name))
+    return m
+  }, [subscriptionTypes])
+
+  const handleSelect = (id: string) => {
+    setSelectedId(id)
+    setPackEmpty(false)
+    setAllowanceUsedUp(false)
+  }
+
+  const nothingToPrice =
+    classes.length === 0 && appointments.length === 0 && courses.length === 0 && products.length === 0
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('sectionPreviewTitle')}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t('sectionPreviewSubtitle')}</p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <PersonaChips personas={personas} selectedId={selected?.id ?? 'guest'} onSelect={handleSelect} t={t} />
+
+        {selected?.creditOnly && (
+          <div className="flex items-center justify-between rounded-lg border border-dashed p-2.5">
+            <span className="text-sm text-muted-foreground">{t('packEmptyLabel')}</span>
+            <Switch checked={packEmpty} onCheckedChange={setPackEmpty} />
+          </div>
+        )}
+
+        {selected?.limit && (
+          <div className="flex items-center justify-between rounded-lg border border-dashed p-2.5">
+            <span className="text-sm text-muted-foreground">{t('allowanceUsedUpLabel')}</span>
+            <Switch checked={allowanceUsedUp} onCheckedChange={setAllowanceUsedUp} />
+          </div>
+        )}
+
+        {nothingToPrice ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">{t('emptyPreview')}</p>
+        ) : (
+          <div className="space-y-5">
+            {classes.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('groupClasses')}
+                </p>
+                <div className="divide-y rounded-lg border">
+                  {classes.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                      <Link href={'/offer/activities' as Route} className="text-sm font-medium hover:underline">
+                        {a.name}
+                      </Link>
+                      <PriceCellView
+                        cell={resolveClassCell(snapshot, a)}
+                        currency={currency}
+                        typeNameById={typeNameById}
+                        t={t}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {appointments.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('groupAppointments')}
+                </p>
+                <div className="divide-y rounded-lg border">
+                  {appointments.map((a) => (
+                    <div key={a.id} className="px-3 py-2.5 space-y-1.5">
+                      <Link href={'/offer/activities' as Route} className="text-sm font-medium hover:underline">
+                        {a.name}
+                      </Link>
+                      <div className="space-y-1 pl-1">
+                        {resolveAppointmentCells(snapshot, a).map((row) => (
+                          <div key={row.minutes} className="flex items-center justify-between gap-3">
+                            <span className="text-xs text-muted-foreground">
+                              {t('durationMinutes', { minutes: row.minutes })}
+                            </span>
+                            <PriceCellView
+                              cell={row.cell}
+                              currency={currency}
+                              typeNameById={typeNameById}
+                              t={t}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {courses.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('groupCourses')}
+                </p>
+                <div className="divide-y rounded-lg border">
+                  {courses.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <Link
+                          href={`/offer/online-courses/${c.id}` as Route}
+                          className="text-sm font-medium hover:underline truncate"
+                        >
+                          {c.title}
+                        </Link>
+                        {c.status === 'draft' && (
+                          <Badge variant="outline" className="text-[10px] shrink-0">
+                            {t('draftBadge')}
+                          </Badge>
+                        )}
+                      </span>
+                      <PriceCellView
+                        cell={resolveCourseCell(snapshot, c)}
+                        currency={currency}
+                        typeNameById={typeNameById}
+                        t={t}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {products.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('groupProducts')}
+                </p>
+                <div className="divide-y rounded-lg border">
+                  {products.map((p) => {
+                    const { min, max } = productPriceRange(p)
+                    return (
+                      <div key={p.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                        <span className="text-sm font-medium truncate">{p.name}</span>
+                        <span className="text-sm font-medium">
+                          {min < max
+                            ? t('priceFrom', { amount: formatCurrency(min, currency) })
+                            : formatCurrency(min, currency)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── What you sell section ──────────────────────────────────────────────────────
+
+function priceLine(
+  price: SubscriptionPrice,
+  currency: string,
+  t: ReturnType<typeof useTranslations<'OfferPricing'>>,
+  tc: ReturnType<typeof useTranslations<'Contacts'>>
+): string {
+  const amount = formatCurrency(price.amount, currency)
+  if (price.credits) {
+    return t('priceLineCredits', { credits: price.credits, amount })
+  }
+  return t('priceLineRecurring', { amount, recurrence: tc(`recurrence_${price.recurrence}`) })
+}
+
+function benefitLine(
+  b: ReturnType<typeof grantsForType>['benefits'][number],
+  currency: string,
+  t: ReturnType<typeof useTranslations<'OfferPricing'>>
+): string {
+  switch (b.effect) {
+    case 'included':
+      return t('benefitIncluded', { name: b.targetName })
+    case 'percent_off':
+      return t('benefitPercentOff', { name: b.targetName, percent: b.percent ?? 0 })
+    case 'fixed_price':
+      return t('benefitFixedPrice', { name: b.targetName, amount: formatCurrency(b.amount ?? 0, currency) })
+    case 'spend_credits':
+      return t('benefitCredit', { name: b.targetName })
+  }
+}
+
+function SubscriptionTypeSellCard({
+  type,
+  currency,
+  activities,
+  courses,
+}: {
+  type: SubscriptionType
+  currency: string
+  activities: Activity[]
+  courses: Course[]
+}) {
+  const t = useTranslations('OfferPricing')
+  const tc = useTranslations('Contacts')
+  const activePrices = (type.prices ?? []).filter((p) => p.active !== false)
+  const grants = useMemo(() => grantsForType(type.id, activities, courses), [type.id, activities, courses])
+  const limit = resolveUsageLimit(type)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">{type.name}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2.5">
+        {activePrices.length === 0 ? (
+          <p className="text-xs text-muted-foreground">{t('noPrices')}</p>
+        ) : (
+          <div className="space-y-1">
+            {activePrices.map((p) => (
+              <p key={p.id} className="text-sm">
+                {priceLine(p, currency, t, tc)}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {limit && (
+          <p className="text-xs text-muted-foreground">
+            {t('sellUsageLimit', {
+              count: limit.count,
+              period: t(`limitPeriod_${limit.per}` as Parameters<typeof t>[0]),
+            })}
+          </p>
+        )}
+
+        {(grants.coveredClassNames.length > 0 || grants.benefits.length > 0) && (
+          <div className="space-y-1 pt-1.5 border-t">
+            {grants.coveredClassNames.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t('coversLabel', {
+                  names: truncatedList(grants.coveredClassNames, 4, (count) => t('moreCount', { count })),
+                })}
+              </p>
+            )}
+            {grants.benefits.map((b, i) => (
+              <p key={i} className="text-xs text-muted-foreground">
+                {benefitLine(b, currency, t)}
+              </p>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function WhatYouSellSection({
+  subscriptionTypes,
+  activities,
+  courses,
+  products,
+  sellableCoursesCount,
+  currency,
+}: {
+  subscriptionTypes: SubscriptionType[]
+  activities: Activity[]
+  courses: Course[]
+  products: Product[]
+  sellableCoursesCount: number
+  currency: string
+}) {
+  const t = useTranslations('OfferPricing')
+  const activeTypes = subscriptionTypes.filter((st) => st.active !== false)
+
+  return (
+    <Card>
+      <CardHeader className="flex items-start justify-between gap-4">
+        <div>
+          <CardTitle>{t('sectionSellTitle')}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t('sectionSellSubtitle')}</p>
+        </div>
+        <Link href={'/offer/plans' as Route} className="text-xs font-medium text-primary hover:underline shrink-0">
+          {t('editPlans')}
+        </Link>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {activeTypes.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">{t('noSubscriptionTypes')}</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {activeTypes.map((st) => (
+              <SubscriptionTypeSellCard
+                key={st.id}
+                type={st}
+                currency={currency}
+                activities={activities}
+                courses={courses}
+              />
+            ))}
+          </div>
+        )}
+
+        {(products.length > 0 || sellableCoursesCount > 0) && (
+          <div className="flex flex-wrap gap-x-6 gap-y-1 pt-2 border-t text-xs">
+            {products.length > 0 && (
+              <Link href={'/offer/products' as Route} className="font-medium text-primary hover:underline">
+                {t('shopProductsLine', { count: products.length })}
+              </Link>
+            )}
+            {sellableCoursesCount > 0 && (
+              <Link href={'/offer/online-courses' as Route} className="font-medium text-primary hover:underline">
+                {t('coursesForSaleLine', { count: sellableCoursesCount })}
+              </Link>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Health section ──────────────────────────────────────────────────────────────
+
+const HEALTH_MESSAGE_KEY: Record<PricingWarningCode, string> = {
+  gated_empty_allowlist: 'healthGatedEmptyAllowlist',
+  benefit_unknown_type: 'healthBenefitUnknownType',
+  purchase_course_unpriced: 'healthPurchaseCourseUnpriced',
+  benefit_bad_percent: 'healthBenefitBadPercent',
+  gated_no_newcomer_path: 'healthGatedNoNewcomerPath',
+  credits_unusable: 'healthCreditsUnusable',
+}
+
+function severityIcon(severity: PricingWarning['severity']) {
+  if (severity === 'error') return <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+  if (severity === 'warning') return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+  return <Info className="h-4 w-4 text-muted-foreground shrink-0" />
+}
+
+function fixHref(w: PricingWarning): Route {
+  if (w.subjectKind === 'activity') return '/offer/activities' as Route
+  if (w.subjectKind === 'course') return `/offer/online-courses/${w.subjectId}` as Route
+  return '/offer/plans' as Route
+}
+
+function HealthSection({ warnings }: { warnings: PricingWarning[] }) {
+  const t = useTranslations('OfferPricing')
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('sectionHealthTitle')}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {warnings.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            {t('healthAllGood')}
+          </div>
+        ) : (
+          <div className="divide-y rounded-lg border">
+            {warnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-2.5 px-3 py-2.5">
+                {severityIcon(w.severity)}
+                <p className="flex-1 text-sm">
+                  {t(HEALTH_MESSAGE_KEY[w.code] as Parameters<typeof t>[0], { name: w.subjectName })}
+                </p>
+                <Link href={fixHref(w)} className="text-xs font-medium text-primary hover:underline shrink-0">
+                  {t('fixLink')}
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── page ────────────────────────────────────────────────────────────────────────
+
+export default function PricingPage() {
+  const t = useTranslations('OfferPricing')
+  const { currentTeamId, team } = useAuth()
+  const currency = team?.default_currency ?? 'CHF'
+
+  const { data: activities = [], isLoading: activitiesLoading } = useActivities(currentTeamId)
+  const { data: subscriptionTypes = [], isLoading: typesLoading } = useSubscriptionTypes(currentTeamId)
+  const { data: products = [], isLoading: productsLoading } = useProducts(currentTeamId)
+  const { data: allCourses = [], isLoading: coursesLoading } = useCourses(currentTeamId)
+
+  const classes = useMemo(() => activities.filter((a) => a.type !== 'appointment'), [activities])
+  const appointments = useMemo(() => activities.filter((a) => a.type === 'appointment'), [activities])
+  const visibleCourses = useMemo(
+    () => allCourses.filter((c) => !c.archived_at && (c.status === 'published' || c.status === 'draft')),
+    [allCourses]
+  )
+  const activeProducts = useMemo(() => products.filter((p) => p.active !== false), [products])
+  const sellableCoursesCount = useMemo(
+    () => visibleCourses.filter((c) => isSellableCourse(c)).length,
+    [visibleCourses]
+  )
+
+  const personas = useMemo(() => buildPersonas(subscriptionTypes), [subscriptionTypes])
+  const warnings = useMemo(
+    () => computePricingHealth(activities, subscriptionTypes, visibleCourses),
+    [activities, subscriptionTypes, visibleCourses]
+  )
+
+  const loading = activitiesLoading || typesLoading || productsLoading || coursesLoading
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-40 rounded-lg" />
+          <Skeleton className="h-40 rounded-lg" />
+          <Skeleton className="h-24 rounded-lg" />
+        </div>
+      ) : (
+        <>
+          <PricingPreviewSection
+            classes={classes}
+            appointments={appointments}
+            courses={visibleCourses}
+            products={activeProducts}
+            personas={personas}
+            subscriptionTypes={subscriptionTypes}
+            currency={currency}
+          />
+          <WhatYouSellSection
+            subscriptionTypes={subscriptionTypes}
+            activities={activities}
+            courses={visibleCourses}
+            products={activeProducts}
+            sellableCoursesCount={sellableCoursesCount}
+            currency={currency}
+          />
+          <HealthSection warnings={warnings} />
+        </>
+      )}
+    </div>
+  )
+}

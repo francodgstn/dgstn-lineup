@@ -68,9 +68,10 @@ Two entry styles, both **lazy**:
   payment hold doesn't block). Returns coach-first:
   `coaches[] → { providerId, providerName, activities: [{ activityId, activityName, durations, memberBenefit, location, onlineUrl, days: [{ dayMs, slotsByDuration }] }] }`
   where `durations` is the priced menu `[{ minutes, priceAmount }]` and
-  `memberBenefit` is the activity's rule, verbatim — the picker mirrors
-  `resolveEffectiveAppointmentPrice` to show a verified member their price
-  (public-safe: the type ids are already public in the shop; the server
+  `memberBenefit` is the activity's rule, verbatim — the picker runs the SAME
+  shared resolver the server uses (`resolvePaymentOptions`, `kind:
+  'appointment'`, optimistic client snapshot) to show a verified member their
+  price (public-safe: the type ids are already public in the shop; the server
   re-resolves at booking). Days are merged across a provider's several
   schedules; when schedules disagree on location, the first contributor's is
   shown (booking resolves the real one).
@@ -103,10 +104,10 @@ back at it; `origin: 'window'`.
 **No access gate.** Appointments have no access rule — THE PRICE IS THE GATE
 (see "Paid appointments"). The class access gate (`booking/access.ts`) is
 untouched for `bookSession`; what the two paths share is the **held-types
-computation**: `resolveHeldBenefit` reuses the same held-subscription/credit
-lookup the class coverage gate uses, but feeds it
-`memberBenefit.subscriptionTypeIds` — so credit packs keep spending a credit on
-an `included` booking. (History: the 2026-07 activity-bound refactor initially
+computation**: the appointment paths build the same contact snapshot
+(`loadContactPaymentContext`) the class coverage gate uses, but resolve it
+against `memberBenefit.subscriptionTypeIds` — so credit packs keep spending a
+credit on an `included` booking. (History: the 2026-07 activity-bound refactor initially
 gave appointments the class access gate; a persona test showed it produced the
 "who pays base price if only Premium can book?" paradox, and it was dropped the
 same month — while the old generator model before the refactor couldn't gate at
@@ -153,14 +154,19 @@ memberBenefit: {                      // the ONE rule — optional
   per-duration × per-subscription-type `subscriptionPricing` matrix, plus a form
   that pre-filled entries from the access rule; the persona test showed the
   algebra confused real coaches, and it was cut for this one rule.)
-- **Effective price for a caller** (`resolveEffectiveAppointmentPrice(duration,
-  heldTypeIds, memberBenefit)`, shared + unit-tested), in order: unpriced → free
-  for anyone; priced + no held benefit type → base (guests always land here);
-  priced + held + `included` → free; priced + held + `discount` →
-  `max(0.50, round(base × (100 − pct) / 100))` — clamped to Stripe's **0.50
-  minimum-charge floor**, never "free via discount" (a `discountPercent` ≥ 100
-  clamps to 0.50; missing/≤ 0 falls back to base). Server-side resolution is
-  authoritative — the picker mirrors the math for display only.
+- **Effective price for a caller** — the appointment arm of the ONE shared
+  coverage/quote resolver (`resolvePaymentOptions(snapshot, { kind:
+  'appointment', duration, benefit })` in
+  `packages/shared/src/utils/paymentOptions.ts`, pure + fixture-tested), in
+  order: unpriced → `covered` for anyone; priced + no held benefit type →
+  `pay(base)` (guests always land here); priced + held + `included` →
+  `covered` (or `spend_credits` when held via a pack); priced + held +
+  `discount` → `pay(max(0.50, round(base × (100 − pct) / 100)))` — clamped to
+  Stripe's **0.50 minimum-charge floor**, never "free via discount" (a
+  `discountPercent` ≥ 100 clamps to 0.50; missing/≤ 0 falls back to base).
+  Server-side resolution (snapshot via `loadContactPaymentSnapshot`) is
+  authoritative — the picker runs the same resolver on an optimistic client
+  snapshot for display only.
 
 ### The price is the gate — there is no access gate
 

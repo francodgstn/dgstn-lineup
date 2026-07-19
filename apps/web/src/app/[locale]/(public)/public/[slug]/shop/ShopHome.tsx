@@ -11,7 +11,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { collectionGroup, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { useTranslations, useLocale } from 'next-intl'
-import { ShoppingBag, GraduationCap, Loader2, X, Play, Lock, LogIn } from 'lucide-react'
+import { toast } from 'sonner'
+import { ShoppingBag, GraduationCap, Gift, Loader2, X, Play, Lock, LogIn } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { db, functions } from '@/lib/firebase'
@@ -20,14 +21,24 @@ import { formatCurrency } from '@/lib/format'
 import {
   resolveProductPrice,
   compareActivities,
+  resolvePaymentOptions,
+  planGiftCardRedemption,
   type CheckoutContactMode,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
+  type Benefit,
+  type CourseAccessRule,
 } from '@linyup/shared'
+import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
 import { DEFAULT_ACCENT } from '@/lib/colors'
+import {
+  GiftCardRedeemField,
+  giftCardCheckoutErrorMessage,
+  type AppliedGiftCard,
+} from '@/components/booking/GiftCardRedeemField'
 
 interface PlanPrice {
   id?: string
@@ -71,6 +82,9 @@ interface CourseEntry {
   accessType: CourseAccessType
   subscriptionTypeIds?: string[]
   priceAmount?: number // 'purchase' tier only
+  /** Subscriber benefit on the purchase price — 'purchase' tier only. Wins
+   *  over the legacy `subscriptionTypeIds` free-inclusion when present. */
+  benefit?: Benefit | null
 }
 
 // Raw shape of a course's world-readable public_profile summary (syncCoursePublicProfile).
@@ -79,6 +93,7 @@ interface RawCoursePublicProfile {
   slug?: string
   subscriptionTypeIds?: string[]
   priceAmount?: number | null
+  benefit?: Benefit | null
   hideFromShop?: boolean
   title?: string
   summary?: string
@@ -97,7 +112,7 @@ interface PayPerVisitEntry {
   activityType?: string
   dropIn?: { enabled: boolean; priceAmount?: number }
   durations?: Array<{ minutes: number; priceAmount: number | null }>
-  memberBenefit?: ActivityMemberBenefit
+  memberBenefit?: ActivityMemberBenefit | Benefit
   accessRule?: ActivityAccessRule
   order?: number
 }
@@ -112,12 +127,13 @@ function hasMoneyStory(a: PayPerVisitEntry): boolean {
   return a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number'
 }
 
-type Tab = 'subscriptions' | 'products' | 'courses'
+type Tab = 'subscriptions' | 'products' | 'courses' | 'giftcards'
 
 type Checkout =
   | { kind: 'membership'; typeId: string; typeName: string; price: PlanPrice; mode: CheckoutContactMode }
   | { kind: 'product'; product: ProductEntry; variantId: string | null }
   | { kind: 'course'; course: CourseEntry }
+  | { kind: 'giftcard'; amount: number }
 
 export default function ShopHome({
   focusTypeId,
@@ -140,6 +156,8 @@ export default function ShopHome({
   const [payPerVisitActivities, setPayPerVisitActivities] = useState<PayPerVisitEntry[]>([])
   const [purchasedCourseIds, setPurchasedCourseIds] = useState<Set<string>>(new Set())
   const [currency, setCurrency] = useState('CHF')
+  const [giftCardAmounts, setGiftCardAmounts] = useState<number[]>([])
+  const [giftCardApplied, setGiftCardApplied] = useState<AppliedGiftCard | null>(null)
   const [loading, setLoading] = useState(true)
   const [systemDark, setSystemDark] = useState(false)
   const [tab, setTab] = useState<Tab>(initialTab ?? 'subscriptions')
@@ -181,6 +199,10 @@ export default function ShopHome({
         setPlans(Array.isArray(planList) ? planList : [])
         setProducts(Array.isArray(productList) ? productList : [])
         setCurrency((snap.data()?.default_currency as string | undefined) ?? 'CHF')
+        const giftCards = snap.data()?.giftCards as { enabled?: boolean; amounts?: number[] } | undefined
+        setGiftCardAmounts(
+          giftCards?.enabled === true && Array.isArray(giftCards.amounts) ? giftCards.amounts : []
+        )
         const courseList: CourseEntry[] = courseSnap.docs
           .map((d) => ({ id: d.ref.parent.parent?.id ?? d.id, data: d.data() as RawCoursePublicProfile }))
           .filter(({ data }) => data.hideFromShop !== true)
@@ -194,6 +216,7 @@ export default function ShopHome({
             accessType: (data.accessType as CourseAccessType) ?? 'registered',
             subscriptionTypeIds: data.subscriptionTypeIds ?? [],
             priceAmount: typeof data.priceAmount === 'number' ? data.priceAmount : undefined,
+            benefit: data.benefit ?? null,
           }))
         setCourses(courseList)
         const activityList: PayPerVisitEntry[] = activitiesSnap.docs
@@ -206,7 +229,7 @@ export default function ShopHome({
               activityType: (data.activityType as string) || undefined,
               dropIn: (data.dropIn as PayPerVisitEntry['dropIn']) ?? undefined,
               durations: Array.isArray(data.durations) ? (data.durations as PayPerVisitEntry['durations']) : undefined,
-              memberBenefit: (data.memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
+              memberBenefit: (data.memberBenefit as ActivityMemberBenefit | Benefit | undefined) ?? undefined,
               accessRule: (data.accessRule as ActivityAccessRule | undefined) ?? undefined,
               order: typeof data.order === 'number' ? (data.order as number) : undefined,
             }
@@ -221,6 +244,7 @@ export default function ShopHome({
         setProducts([])
         setCourses([])
         setPayPerVisitActivities([])
+        setGiftCardAmounts([])
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -269,13 +293,15 @@ export default function ShopHome({
   const hasSubscriptions = plans.length > 0
   const hasProducts = products.length > 0
   const hasCourses = courses.length > 0
+  const hasGiftCards = giftCardAmounts.length > 0
   const availableTabs = useMemo<Tab[]>(() => {
     const out: Tab[] = []
     if (hasSubscriptions) out.push('subscriptions')
     if (hasProducts) out.push('products')
     if (hasCourses) out.push('courses')
+    if (hasGiftCards) out.push('giftcards')
     return out
-  }, [hasSubscriptions, hasProducts, hasCourses])
+  }, [hasSubscriptions, hasProducts, hasCourses, hasGiftCards])
   const showTabs = availableTabs.length > 1
 
   // Default the active tab to whichever surface has items, unless the user (or the
@@ -406,31 +432,94 @@ export default function ShopHome({
     startCheckout({ kind: 'course', course })
   }
 
+  function openGiftCard(amount: number) {
+    startCheckout({ kind: 'giftcard', amount })
+  }
+
+  // The contact's held union for course-coverage display — today the public
+  // contact session only carries the single primary `subscription_type_id`
+  // (no `active_subscriptions`/`credit_summary` mirror here), so this is a
+  // one-element array in practice; the resolver itself supports the full held
+  // union (P6 — see the Space's equivalent `hasAccess`).
+  const heldSubscriptionTypeIds = contact?.subscription_type_id ? [contact.subscription_type_id] : []
+
+  // Same resolver the server uses (@linyup/shared) for course access — pure
+  // function of the course's accessRule + the visitor's optimistic snapshot.
+  const courseOptions = (c: CourseEntry) => {
+    const rule: CourseAccessRule = {
+      type: c.accessType,
+      subscriptionTypeIds: c.subscriptionTypeIds,
+      priceAmount: c.priceAmount,
+    }
+    const snapshot = clientPaymentSnapshot({
+      authenticated: isAuthenticated,
+      heldSubscriptionTypeIds,
+      ownsCourse: purchasedCourseIds.has(c.id),
+    })
+    return resolvePaymentOptions(snapshot, { kind: 'course', accessRule: rule, benefit: c.benefit })
+  }
+
+  // A signed-in holder's applied benefit on a 'purchase'-tier course, if any —
+  // the base price struck through, the member price shown instead. Null for
+  // anyone else (guest, no benefit, or already covered/owned).
+  const courseMemberPrice = (c: CourseEntry): { amount: number; base: number } | null => {
+    const { options } = courseOptions(c)
+    const pay = options[0]
+    if (pay?.type !== 'pay' || !pay.appliedBenefit) return null
+    return { amount: pay.amount, base: pay.appliedBenefit.baseAmount }
+  }
+
   // What the catalogue card offers for a course, given the visitor's session:
   //  'open'      → can read it now → link to the player
   //  'buy'       → purchase-tier, not owned → checkout
   //  'signin'    → registered/subscription course, needs a login first
   //  'subscribe' → subscription course, signed in but no qualifying membership
-  const subscriptionTypeId = contact?.subscription_type_id
   const courseAccess = (c: CourseEntry): 'open' | 'buy' | 'signin' | 'subscribe' => {
-    const includedBySub =
-      !!subscriptionTypeId && (c.subscriptionTypeIds ?? []).includes(subscriptionTypeId)
-    if (c.accessType === 'purchase') {
-      if (isAuthenticated && (purchasedCourseIds.has(c.id) || includedBySub)) return 'open'
-      return 'buy'
-    }
-    if (c.accessType === 'free') return 'open'
-    if (!isAuthenticated) return 'signin'
-    if (c.accessType === 'registered') return 'open'
-    return includedBySub ? 'open' : 'subscribe'
+    const { options, denial } = courseOptions(c)
+    if (options[0]?.type === 'pay') return 'buy'
+    if (options.length > 0) return 'open'
+    // Purchase-tier misconfig (no price, not owned/included) — the old check
+    // always offered 'buy' here regardless of auth state; preserve that.
+    if (c.accessType === 'purchase') return 'buy'
+    return denial === 'sign_in_required' ? 'signin' : 'subscribe'
   }
 
   // The amount shown in the checkout modal.
   const checkoutAmount = (() => {
     if (!checkout) return 0
     if (checkout.kind === 'membership') return checkout.price.amount
-    if (checkout.kind === 'course') return checkout.course.priceAmount ?? 0
+    if (checkout.kind === 'giftcard') return checkout.amount
+    if (checkout.kind === 'course') {
+      const { options } = courseOptions(checkout.course)
+      return options[0]?.type === 'pay' ? options[0].amount : (checkout.course.priceAmount ?? 0)
+    }
     return resolveProductPrice(checkout.product, checkout.variantId)
+  })()
+
+  // Redeeming a gift card only applies to the one-off product/course checkouts
+  // (never memberships/subscriptions, never the gift-card purchase itself).
+  const giftCardEligible = checkout?.kind === 'product' || checkout?.kind === 'course'
+
+  // Reset the applied code when a different item is opened (but NOT on a mere
+  // product-variant swap, which re-creates the checkout object in place).
+  const checkoutKey = !checkout
+    ? null
+    : checkout.kind === 'product'
+      ? `product:${checkout.product.id}`
+      : checkout.kind === 'course'
+        ? `course:${checkout.course.id}`
+        : checkout.kind === 'membership'
+          ? `membership:${checkout.typeId}:${checkout.price.id ?? ''}`
+          : `giftcard:${checkout.amount}`
+  useEffect(() => {
+    setGiftCardApplied(null)
+  }, [checkoutKey])
+
+  // The base price to strike through in the modal — set only when a signed-in
+  // holder's benefit actually lowered the course's checkout amount.
+  const checkoutMemberBase = (() => {
+    if (checkout?.kind !== 'course') return null
+    return courseMemberPrice(checkout.course)
   })()
 
   async function submit() {
@@ -470,8 +559,9 @@ export default function ShopHome({
             slug: string
             locale: string
             origin?: string
+            giftCardCode?: string
           },
-          { url: string }
+          { url: string | null; paidWithGiftCard?: boolean }
         >(functions, 'createProductCheckout')
         const res = await fn({
           teamId,
@@ -480,10 +570,17 @@ export default function ShopHome({
           slug,
           locale,
           origin: window.location.origin,
+          ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
         })
-        if (res.data?.url) window.location.href = res.data.url
-        else throw new Error('no-url')
-      } else {
+        if (res.data?.paidWithGiftCard) {
+          setSubmitting(false)
+          setCheckout(null)
+          setGiftCardApplied(null)
+          toast.success(t('paidWithGiftCard'))
+        } else if (res.data?.url) {
+          window.location.href = res.data.url
+        } else throw new Error('no-url')
+      } else if (checkout.kind === 'course') {
         const fn = httpsCallable<
           {
             teamId: string
@@ -491,12 +588,35 @@ export default function ShopHome({
             slug: string
             locale: string
             origin?: string
+            giftCardCode?: string
           },
-          { url: string }
+          { url: string | null; paidWithGiftCard?: boolean }
         >(functions, 'createCourseCheckout')
         const res = await fn({
           teamId,
           courseId: checkout.course.id,
+          slug,
+          locale,
+          origin: window.location.origin,
+          ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
+        })
+        if (res.data?.paidWithGiftCard) {
+          setSubmitting(false)
+          setCheckout(null)
+          setGiftCardApplied(null)
+          setPurchasedCourseIds((prev) => new Set(prev).add(checkout.course.id))
+          toast.success(t('paidWithGiftCard'))
+        } else if (res.data?.url) {
+          window.location.href = res.data.url
+        } else throw new Error('no-url')
+      } else {
+        const fn = httpsCallable<
+          { teamId: string; amount: number; slug: string; locale: string; origin?: string },
+          { url: string; sessionId: string }
+        >(functions, 'createGiftCardCheckout')
+        const res = await fn({
+          teamId,
+          amount: checkout.amount,
           slug,
           locale,
           origin: window.location.origin,
@@ -516,12 +636,14 @@ export default function ShopHome({
         setError(null)
         return
       }
+      const giftMsg = giftCardApplied ? giftCardCheckoutErrorMessage(err, t) : null
       setError(
-        code === 'functions/already-exists'
-          ? t('alreadySubscribed')
-          : code === 'functions/failed-precondition'
-            ? t('notAvailable')
-            : t('checkoutError')
+        giftMsg ??
+          (code === 'functions/already-exists'
+            ? t('alreadySubscribed')
+            : code === 'functions/failed-precondition'
+              ? t('notAvailable')
+              : t('checkoutError'))
       )
       setSubmitting(false)
     }
@@ -534,7 +656,9 @@ export default function ShopHome({
         ? checkout.product.name
         : checkout?.kind === 'course'
           ? checkout.course.title
-          : ''
+          : checkout?.kind === 'giftcard'
+            ? t('giftCardTitle')
+            : ''
 
   return (
     <div className="min-h-screen w-full" style={{ background: bgStyle, color: textMain }}>
@@ -567,7 +691,13 @@ export default function ShopHome({
             {availableTabs.map((key) => {
               const active = tab === key
               const label =
-                key === 'subscriptions' ? t('tabSubscriptions') : key === 'products' ? t('tabProducts') : t('tabCourses')
+                key === 'subscriptions'
+                  ? t('tabSubscriptions')
+                  : key === 'products'
+                    ? t('tabProducts')
+                    : key === 'courses'
+                      ? t('tabCourses')
+                      : t('tabGiftCards')
               return (
                 <button
                   key={key}
@@ -593,7 +723,7 @@ export default function ShopHome({
           <div className="mt-10 flex justify-center">
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: textMuted }} />
           </div>
-        ) : !hasSubscriptions && !hasProducts && !hasCourses ? (
+        ) : !hasSubscriptions && !hasProducts && !hasCourses && !hasGiftCards ? (
           <p className="mt-10 text-center text-sm" style={{ color: textMuted }}>
             {t('noItems')}
           </p>
@@ -791,7 +921,7 @@ export default function ShopHome({
               )
             })}
           </section>
-        ) : (
+        ) : tab === 'courses' ? (
           <section className="mt-6 grid grid-cols-2 gap-4">
             {!showTabs && (
               <h2
@@ -803,6 +933,7 @@ export default function ShopHome({
             )}
             {courses.map((course) => {
               const access = courseAccess(course)
+              const memberPrice = course.accessType === 'purchase' ? courseMemberPrice(course) : null
               const badge =
                 course.accessType === 'purchase'
                   ? formatCurrency(course.priceAmount ?? 0, currency)
@@ -836,7 +967,16 @@ export default function ShopHome({
                         {course.summary}
                       </p>
                     )}
-                    <p className="mt-1 mb-2 text-xs font-medium" style={{ color: textMuted }}>{badge}</p>
+                    {memberPrice ? (
+                      <p className="mt-1 mb-2 text-xs font-medium">
+                        <span className="mr-1.5 line-through" style={{ color: textMuted }}>
+                          {formatCurrency(memberPrice.base, currency)}
+                        </span>
+                        <span>{t('memberPrice', { price: formatCurrency(memberPrice.amount, currency) })}</span>
+                      </p>
+                    ) : (
+                      <p className="mt-1 mb-2 text-xs font-medium" style={{ color: textMuted }}>{badge}</p>
+                    )}
                     {access === 'open' ? (
                       <Link
                         href={`/public/${slug}/space/courses/${course.slug}?from=shop` as Route}
@@ -876,6 +1016,37 @@ export default function ShopHome({
               )
             })}
           </section>
+        ) : (
+          <section className="mt-6 space-y-4">
+            {!showTabs && (
+              <h2
+                className="text-xs font-semibold uppercase tracking-wider"
+                style={{ color: textMuted }}
+              >
+                {t('tabGiftCards')}
+              </h2>
+            )}
+            <p className="text-sm" style={{ color: textMuted }}>
+              {t('giftCardsSubtitle')}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {giftCardAmounts.map((amount) => (
+                <button
+                  key={amount}
+                  type="button"
+                  onClick={() => openGiftCard(amount)}
+                  className="rounded-2xl border p-5 text-center transition-shadow hover:shadow-sm"
+                  style={{ background: cardBg, borderColor: cardBorder }}
+                >
+                  <Gift className="mx-auto h-6 w-6" style={{ color: accent }} />
+                  <p className="mt-2 text-lg font-semibold">{formatCurrency(amount, currency)}</p>
+                  <p className="mt-0.5 text-xs" style={{ color: textMuted }}>
+                    {t('buy')}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </section>
         )}
       </div>
 
@@ -893,10 +1064,19 @@ export default function ShopHome({
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold">{checkoutTitle}</p>
-                <p className="text-xs" style={{ color: textMuted }}>
-                  {formatCurrency(checkoutAmount, currency)}{' '}
-                  {checkout.kind === 'membership' ? recurrenceSuffix(checkout.price.recurrence) : ''}
-                </p>
+                {checkoutMemberBase ? (
+                  <p className="text-xs">
+                    <span className="mr-1.5 line-through" style={{ color: textMuted }}>
+                      {formatCurrency(checkoutMemberBase.base, currency)}
+                    </span>
+                    <span>{t('memberPrice', { price: formatCurrency(checkoutAmount, currency) })}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs" style={{ color: textMuted }}>
+                    {formatCurrency(checkoutAmount, currency)}{' '}
+                    {checkout.kind === 'membership' ? recurrenceSuffix(checkout.price.recurrence) : ''}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -942,6 +1122,34 @@ export default function ShopHome({
               <p className="mt-3 text-xs" style={{ color: textMuted }}>
                 {t('courseAccessNote')}
               </p>
+            )}
+
+            {/* Gift card redemption — product/course only (see giftCardEligible). */}
+            {giftCardEligible && (
+              <div className="mt-4">
+                <GiftCardRedeemField
+                  teamId={teamId}
+                  locale={locale}
+                  applied={giftCardApplied}
+                  onApplied={setGiftCardApplied}
+                  disabled={submitting}
+                  colors={{ textMain, textMuted, borderColor: cardBorder, accentColor: accent }}
+                />
+                {giftCardApplied &&
+                  (() => {
+                    const plan = planGiftCardRedemption(giftCardApplied.balance, checkoutAmount)
+                    if (!plan) return null
+                    return (
+                      <p className="mt-2 text-xs" style={{ color: textMuted }}>
+                        {plan.residual === 0
+                          ? t('giftCardFullyCovers')
+                          : t('giftCardResidual', {
+                              amount: formatCurrency(plan.residual, currency, locale),
+                            })}
+                      </p>
+                    )
+                  })()}
+              </div>
             )}
 
             {/* Login-first: the purchase attaches to the signed-in contact via the

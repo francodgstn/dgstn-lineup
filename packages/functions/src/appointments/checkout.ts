@@ -9,12 +9,16 @@
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { computePlatformFee, resolveEffectiveAppointmentPrice } from '@linyup/shared'
+import { GUEST_SNAPSHOT, resolvePaymentOptions } from '@linyup/shared'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
-import { checkoutRateLimit } from '../connect/payments'
-import { resolveHeldBenefit } from '../booking/access'
-import { createOneOffCheckoutSession } from '../utils/connect/client'
-import { resolveBaseUrl } from '../utils/env'
+import {
+  buildResultUrls,
+  checkoutRateLimit,
+  defaultIdempotencyKey,
+  requireChargeableAmountFromMajor,
+  startOneOffCheckout,
+} from '../connect/checkout'
+import { loadContactPaymentSnapshot } from '../booking/access'
 import { generateSecureToken } from '../utils/crypto'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 import {
@@ -24,7 +28,6 @@ import {
   runAppointmentSlotTransaction,
 } from './booking'
 
-const MIN_AMOUNT_RAPPEN = 50
 const HOLD_MINUTES = 30
 // Stripe's Checkout Session `expires_at` minimum is 30 minutes from creation;
 // 31 (not 30) avoids a rejection on clock skew between our hold timestamp and
@@ -70,7 +73,7 @@ export const createAppointmentCheckout = onCall(
 
     // Team must have Connect enabled + a chargeable account.
     const team = await loadEnabledTeam(teamId)
-    const { accountId, model } = requireChargeableAccount(team)
+    requireChargeableAccount(team) // fail before the reads; the orchestrator re-checks
 
     // ── The *what* + the *when* ──
     const ctx = await loadAppointmentBookingContext({ teamId, providerId, activityId, startMs, durationMinutes })
@@ -83,19 +86,22 @@ export const createAppointmentCheckout = onCall(
     // resolved (possibly discounted) price. Free path callers never reach
     // here — the client only calls checkout after bookAppointment's refusal. ──
     const caller = await resolveAppointmentCaller(request, { ...data, teamId })
-    const heldBenefit = caller.authenticatedContact
-      ? await resolveHeldBenefit({
+    const snapshot = caller.authenticatedContact
+      ? await loadContactPaymentSnapshot({
           teamId,
           contact: caller.authenticatedContact,
-          subscriptionTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
+          relevantTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
         })
-      : { heldTypeIds: [], creditSpendTypeId: null }
-    const effective = resolveEffectiveAppointmentPrice(
-      ctx.chosenDuration,
-      heldBenefit.heldTypeIds,
-      ctx.activity.memberBenefit
-    )
-    if (effective.free) {
+      : GUEST_SNAPSHOT
+    const priced = resolvePaymentOptions(snapshot, {
+      kind: 'appointment',
+      duration: ctx.chosenDuration,
+      benefit: ctx.activity.memberBenefit ?? null,
+    })
+    const payOption = priced.options[0]
+    if (payOption?.type !== 'pay') {
+      // 'covered' or 'spend_credits' — the free path (bookAppointment) is the
+      // right door; this caller owes nothing.
       throw new HttpsError(
         'failed-precondition',
         'You can book this for free — no payment needed',
@@ -111,10 +117,9 @@ export const createAppointmentCheckout = onCall(
       authenticatedContact: caller.authenticatedContact,
     })
 
-    const amount = Math.round((effective.amount as number) * 100)
-    if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
-      throw new HttpsError('failed-precondition', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
-    }
+    // The resolver's discount clamp guarantees derived prices are already ≥ the
+    // floor; this guards the AUTHORED base price.
+    const amount = requireChargeableAmountFromMajor(payOption.amount)
 
     // ── HOLD tx — the hold IS the session. A retry from the SAME contact rewrites
     // its own still-live hold (fresh Checkout Session, same slot). ──
@@ -165,7 +170,7 @@ export const createAppointmentCheckout = onCall(
       authenticated_booking: !!caller.authenticatedContact,
       // The resolved member-benefit type (discount), if any — not an access
       // gate match any more, just which benefit (if any) priced this booking.
-      subscription_type_id: effective.viaSubscriptionTypeId ?? null,
+      subscription_type_id: payOption.appliedBenefit?.subscriptionTypeId ?? null,
       // NO fullname — that's only stamped once the webhook confirms payment.
       status: 'pending',
       payment_status: 'required',
@@ -186,10 +191,11 @@ export const createAppointmentCheckout = onCall(
     })
 
     // ── Create the Connect checkout; the webhook (kind: 'appointment') confirms. ──
-    const applicationFeeAmount = computePlatformFee({ tier: team.plan, amount, model })
-    const base = `${resolveBaseUrl(data.origin)}/${locale}/pay/result`
     const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=appointments` : ''
-    const minuteBucket = Math.floor(Date.now() / 60_000)
+    const { successUrl, cancelUrl } = buildResultUrls(locale, {
+      extraQuery: slugQuery,
+      origin: data.origin,
+    })
     const metadata: Record<string, string> = {
       kind: 'appointment',
       purpose: 'appointment',
@@ -203,20 +209,20 @@ export const createAppointmentCheckout = onCall(
       durationMinutes: String(durationMinutes),
     }
     const idempotencyKey =
-      data.idempotencyKey ?? `apt:${teamId}:${sessionRef.id}:${contactId}:${minuteBucket}`
+      data.idempotencyKey ?? defaultIdempotencyKey('apt', teamId, sessionRef.id, contactId)
 
     try {
-      const checkoutSession = await createOneOffCheckoutSession({
-        accountId,
-        amount,
-        applicationFeeAmount,
+      const checkoutSession = await startOneOffCheckout({
+        team,
+        amountMinor: amount,
         productName: `${ctx.activity.name} · ${durationMinutes} min`,
-        successUrl: `${base}?status=success${slugQuery}`,
-        cancelUrl: `${base}?status=cancelled${slugQuery}`,
+        successUrl,
+        cancelUrl,
         customerEmail: caller.sanitized.email || undefined,
         metadata,
         idempotencyKey,
         expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + CHECKOUT_EXPIRY_MINUTES * 60,
+        label: 'createAppointmentCheckout',
       })
       return { url: checkoutSession.url, amount }
     } catch (err) {

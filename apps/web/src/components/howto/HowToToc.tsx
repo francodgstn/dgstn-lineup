@@ -19,6 +19,7 @@ export interface TocSection {
 export const TOC_SECTIONS: TocSection[] = [
   { id: 'concepts', labelKey: 'concepts' },
   { id: 'public-pages', labelKey: 'publicPages' },
+  { id: 'pricing', labelKey: 'pricing' },
   { id: 'faq', labelKey: 'faq' },
   { id: 'keep-going', labelKey: 'utilities' },
 ]

@@ -61,6 +61,7 @@
       "automations": "workflows triggers rules",
       "activities": "classes offerings disciplines",
       "plans": "subscriptions memberships affiliations pricing",
+      "pricing": "price calculator preview simulate persona health check",
       "onlineCourses": "videos lessons elearning content",
       "products": "merchandise items store",
       "documents": "files waivers contracts",
@@ -136,7 +137,8 @@
     "payments": "Payments",
     "signOut": "Sign out",
     "affiliations": "Affiliations",
-    "coaches": "Coaches"
+    "coaches": "Coaches",
+    "pricing": "Pricing"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -1200,20 +1202,29 @@
     "durationPriceHint": "Leave a length's price empty to keep it free for anyone.",
     "durationPriceLabel": "Price for {duration}",
     "durationPriceValidation": "Enter a price of at least 0.50, or leave it empty.",
-    "fieldMemberBenefit": "Member benefit",
-    "memberBenefitHint": "Subscribers holding one of these subscriptions get a better price. Leave empty and everyone pays base price.",
-    "memberBenefitKind_included": "Included",
-    "memberBenefitKind_included_desc": "Holders book this for free.",
-    "memberBenefitKind_discount": "% off",
-    "memberBenefitKind_discount_desc": "Holders pay less than base price.",
-    "memberBenefitPercentLabel": "Discount percent",
-    "memberBenefitPercentValidation": "Enter a discount between 1 and 99%.",
     "chipDropIn": "Drop-in {amount}",
     "chipTrialPriced": "Trial {amount}",
     "chipBenefitIncluded": "Included with subscription",
     "chipBenefitIncludedNamed": "Included · {name}",
     "chipBenefitDiscount": "−{percent}% members",
     "chipBenefitDiscountNamed": "−{percent}% · {name}"
+  },
+  "Benefit": {
+    "fieldLabel": "Member benefit",
+    "hint_appointment": "Subscribers holding one of these subscriptions get a better price. Leave empty and everyone pays base price.",
+    "hint_class": "Members holding one of these subscriptions pay a reduced drop-in price. Leave empty and everyone pays the base drop-in price.",
+    "hint_course": "Subscribers holding one of these subscriptions get a better price on this course. Leave empty and everyone pays the full price.",
+    "noSubs": "No subscription types yet — create them under Plans & Affiliations.",
+    "effect_included": "Included",
+    "effect_included_desc": "Holders get it for free.",
+    "effect_percent_off": "% off",
+    "effect_percent_off_desc": "Holders pay a reduced price.",
+    "effect_fixed_price": "Fixed price",
+    "effect_fixed_price_desc": "Holders pay this price instead of base.",
+    "percentLabel": "Discount percent",
+    "percentValidation": "Enter a discount between 1 and 99%.",
+    "amountLabel": "Member price",
+    "amountValidation": "Enter a price of at least 0.50."
   },
   "TeamSettings": {
     "title": "Team settings",
@@ -1395,7 +1406,14 @@
     "subTypeActivitiesLabel": "Activities this subscription unlocks",
     "subTypeActivitiesDesc": "Holders of this subscription can book these activities. Linking an activity restricts its booking to subscribers.",
     "subTypeActivitiesEmpty": "No activities yet — create them under Offer → Activities.",
-    "subTypeActivitiesHint": "Unlinking the last subscription from an activity makes it bookable by all members again."
+    "subTypeActivitiesHint": "Unlinking the last subscription from an activity makes it bookable by all members again.",
+    "subTypeUsageLimit": "Usage limit",
+    "subTypeUsageLimitDesc": "Only limits CLASS bookings covered by this subscription. Once the allowance is used up, members can still book at the drop-in price (member rate applies).",
+    "subTypeLimitPeriodDay": "per day",
+    "subTypeLimitPeriodWeek": "per week",
+    "subTypeLimitPeriodMonth": "per month",
+    "subTypePayoutPerVisit": "Payout per visit",
+    "subTypePayoutPerVisitDesc": "What the partner pays you per attended visit. Shown in the partner-visits ledger."
   },
   "Bookings": {
     "title": "Bookings",
@@ -3002,7 +3020,36 @@
     "lineKind_other": "Other",
     "selectCourse": "Select course",
     "selectProduct": "Select product",
-    "selectVariant": "Variant"
+    "selectVariant": "Variant",
+    "partnerVisitsHeading": "Partner visits",
+    "partnerVisitsEmpty": "No partner visits this month.",
+    "partnerVisitsRateNotSet": "Rate not set",
+    "partnerVisitsTotal": "Estimated payout this month: {amount}",
+    "ownerOnly": "Only the owner can change this.",
+    "giftCardsHeading": "Gift cards",
+    "giftCardsSettingsTitle": "Sell gift cards",
+    "giftCardsSettingsSubtitle": "Offer gift cards for sale in your public shop.",
+    "giftCardAmountsLabel": "Amounts",
+    "giftCardRemoveAmount": "Remove amount",
+    "giftCardNoAmounts": "No amounts configured yet.",
+    "giftCardAmountPlaceholder": "e.g. 50",
+    "giftCardAddAmount": "Add",
+    "giftCardsEmpty": "No gift cards yet.",
+    "giftCardBalanceLine": "{balance} of {amount} original value",
+    "giftCardStatus_active": "Active",
+    "giftCardStatus_depleted": "Depleted",
+    "giftCardStatus_void": "Void",
+    "giftCardVoid": "Void",
+    "giftCardVoidConfirmTitle": "Void this gift card?",
+    "giftCardVoidConfirmBody": "\"{code}\" will no longer be redeemable. This can't be undone.",
+    "policyFeesHeading": "Outstanding fees",
+    "policyFeesEmpty": "No outstanding no-show fees.",
+    "policyFeeResend": "Resend link",
+    "policyFeeWaive": "Waive",
+    "policyFeeStatus_paid": "Paid",
+    "policyFeeStatus_waived": "Waived",
+    "policyFeeWaiveConfirmTitle": "Waive this fee?",
+    "policyFeeWaiveConfirmBody": "The contact will no longer owe this no-show fee."
   },
   "PaymentComment": {
     "preset_subscription_signup": "Subscription signup",
@@ -3068,7 +3115,23 @@
     "payPerVisitIncludedGeneric": "Included with subscription",
     "payPerVisitIncludedNamed": "Included with {name}",
     "payPerVisitDiscountGeneric": "−{percent}% for members",
-    "payPerVisitDiscountNamed": "−{percent}% with {name}"
+    "payPerVisitDiscountNamed": "−{percent}% with {name}",
+    "memberPrice": "Your member price: {price}",
+    "tabGiftCards": "Gift cards",
+    "giftCardsSubtitle": "Buy a gift card for someone special.",
+    "giftCardTitle": "Gift card",
+    "paidWithGiftCard": "Paid with gift card",
+    "giftCardLabel": "Gift card code",
+    "giftCardOptional": "(optional)",
+    "giftCardPlaceholder": "GC-XXXX-XXXX",
+    "giftCardApply": "Apply",
+    "giftCardApplied": "Gift card {code}: {amount} available",
+    "giftCardRemove": "Remove gift card",
+    "giftCardUnusable": "This gift card has no remaining balance.",
+    "giftCardNotFound": "Gift card not found.",
+    "giftCardCheckError": "Couldn't check that code. Please try again.",
+    "giftCardFullyCovers": "Fully covered by your gift card.",
+    "giftCardResidual": "You'll pay {amount} after your gift card."
   },
   "Products": {
     "title": "Products",
@@ -3416,6 +3479,65 @@
     "title": "Affiliations",
     "subtitle": "Define the types of affiliation your contacts can hold (e.g. club membership, federation licence)."
   },
+  "OfferPricing": {
+    "title": "Pricing",
+    "subtitle": "See exactly what each contact type pays across everything you sell, and catch pricing gaps before a member does.",
+    "sectionPreviewTitle": "Price preview",
+    "sectionPreviewSubtitle": "Pick who's asking and see exactly what they'd pay right now.",
+    "personaGuest": "Guest",
+    "personaMember": "Member (no subscription)",
+    "packEmptyLabel": "Pack used up",
+    "allowanceUsedUpLabel": "Allowance used up",
+    "remainingThisPeriod": "· {count} left this period",
+    "limitReached": "Period limit reached",
+    "sellUsageLimit": "Up to {count} classes {period}",
+    "limitPeriod_day": "per day",
+    "limitPeriod_week": "per week",
+    "limitPeriod_month": "per month",
+    "groupClasses": "Classes",
+    "groupAppointments": "Appointments",
+    "groupCourses": "Courses",
+    "groupProducts": "Products",
+    "draftBadge": "Draft",
+    "emptyPreview": "Nothing to price yet — add a class, appointment, course or product first.",
+    "durationMinutes": "{minutes} min",
+    "freeOpen": "Free — open to everyone",
+    "freeMembers": "Free — members",
+    "freeUnpriced": "Free",
+    "freeIncluded": "Included with {name}",
+    "freeRegistered": "Free — sign-in required",
+    "creditBadge": "1 credit",
+    "creditRemaining": "({count} left)",
+    "memberRateHint": "member rate",
+    "dropInHint": "drop-in",
+    "noAccess": "No access",
+    "trialAvailableHint": "Trial available for newcomers",
+    "priceFrom": "from {amount}",
+    "sectionSellTitle": "What you sell",
+    "sectionSellSubtitle": "Every subscription type, its prices, and what it unlocks.",
+    "coversLabel": "Covers: {names}",
+    "moreCount": "+{count}",
+    "benefitIncluded": "{name} — included",
+    "benefitPercentOff": "{name} — {percent}% off",
+    "benefitFixedPrice": "{name} — {amount} flat",
+    "benefitCredit": "{name} — 1 credit",
+    "editPlans": "Edit plans",
+    "shopProductsLine": "Shop products ({count})",
+    "coursesForSaleLine": "Courses for sale ({count})",
+    "noSubscriptionTypes": "No subscription types yet.",
+    "noPrices": "No price set",
+    "priceLineRecurring": "{amount} / {recurrence}",
+    "priceLineCredits": "{credits} credits · {amount}",
+    "sectionHealthTitle": "Health",
+    "healthAllGood": "Everything looks consistent.",
+    "healthGatedEmptyAllowlist": "{name} is gated but allows no subscription types — nobody can book it.",
+    "healthBenefitUnknownType": "{name}'s member benefit points to a subscription type that no longer exists.",
+    "healthPurchaseCourseUnpriced": "{name} is for sale but has no price set.",
+    "healthBenefitBadPercent": "{name}'s member discount has an invalid percentage.",
+    "healthGatedNoNewcomerPath": "{name} has no way in for a newcomer — no drop-in price and no trial.",
+    "healthCreditsUnusable": "{name} sells credit packs, but no activity accepts them.",
+    "fixLink": "Fix"
+  },
   "PublicBooking": {
     "titleBookSession": "Book a Session",
     "chooseActivitySubtitle": "Choose an activity to get started.",
@@ -3513,7 +3635,8 @@
     "badgePriceRange": "{min}–{max}",
     "badgeDropInPrice": "Drop-in {price}",
     "chipBenefitIncluded": "Included with subscription",
-    "chipBenefitDiscount": "−{percent}% members"
+    "chipBenefitDiscount": "−{percent}% members",
+    "dropInSubtitleMember": "Your member price: {price}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Book a Trial Class",
@@ -3671,7 +3794,13 @@
     "ctaUrlLabel": "Button URL",
     "ctaUrlPlaceholder": "https://example.com",
     "ctaLabelLabel": "Button label",
-    "ctaLabelPlaceholder": "e.g. Contact Us"
+    "ctaLabelPlaceholder": "e.g. Contact Us",
+    "ownerOnly": "Only the owner can change this.",
+    "noShowPolicyTitle": "No-show policy",
+    "noShowPolicySubtitle": "Automatically charge a fee after repeated no-shows.",
+    "noShowFeeAmountLabel": "Fee ({currency})",
+    "noShowThresholdLabel": "Strikes before a fee",
+    "noShowThresholdHint": "A fee is created once a contact reaches this many no-shows; their strike count then resets."
   },
   "SettingsPlaces": {
     "pageTitle": "Places",
@@ -4569,6 +4698,7 @@
     "toc": {
       "concepts": "Core concepts",
       "publicPages": "Public pages",
+      "pricing": "Pricing",
       "faq": "Common questions",
       "utilities": "Keep going"
     },
@@ -4728,6 +4858,191 @@
           "name": "Kiosk",
           "desc": "A fixed, low-chrome screen for an entrance tablet: today's schedule, a check-in QR and walk-in sign-up. What members and drop-ins see at the door."
         }
+      }
+    },
+    "pricing": {
+      "title": "Pricing",
+      "intro": "Pricing pulls together three ideas that usually live in different places — what you offer, what you sell, and the benefits that connect them. Explore the map, browse a few common setups, then try it live with a fictional visitor.",
+      "linkLabels": {
+        "plans": "Offer → Plans",
+        "activities": "Offer → Activities",
+        "courses": "Offer → Online courses",
+        "payments": "Payments",
+        "booking": "Settings → Booking",
+        "pricing": "Offer → Pricing"
+      },
+      "map": {
+        "title": "How pricing fits together",
+        "intro": "Four pieces connect to produce one price. Tap a block on the map — or a card below — to see what it covers.",
+        "diagramAria": "Map of how pricing fits together",
+        "diagramHint": "Swipe the map — tap a block to learn more.",
+        "edges": {
+          "priced": "priced via",
+          "grants": "grants",
+          "shownIn": "shown in"
+        },
+        "nodes": {
+          "offer": {
+            "label": "What you offer",
+            "shortLabel": "What you\noffer",
+            "tagline": "Your bookable and sellable catalogue",
+            "body": "Everything a visitor can book or buy: classes and appointments on your schedule, online courses, and shop items. Each one carries its own base price — or none at all — before any benefit changes it.",
+            "items": [
+              "Classes — scheduled sessions people book a seat in",
+              "Appointments — a provider's time, booked from availability",
+              "Online courses — self-paced lessons, sold or included",
+              "Shop items — products and gift cards"
+            ]
+          },
+          "sell": {
+            "label": "What you sell",
+            "shortLabel": "What you\nsell",
+            "tagline": "What members actually hold",
+            "body": "The things people pay for once or on a schedule: memberships, class packs and gift cards. Holding one of these is exactly what a member benefit checks for.",
+            "items": [
+              "Memberships — recurring plans, optionally capped per week",
+              "Class packs — one-time credits, spent per booking",
+              "Gift cards — a prepaid balance, redeemable anywhere"
+            ]
+          },
+          "benefits": {
+            "label": "Member benefits",
+            "shortLabel": "Member\nbenefits",
+            "tagline": "The connector between the two",
+            "body": "One rule on an offering says what holding a chosen plan changes about its price. There are three shapes: included for free, a percentage off, or a fixed member price. Absent — everyone simply pays the base price.",
+            "items": [
+              "Included — holders book for free (a pack spends one credit instead)",
+              "Percentage off — a reduced price for holders",
+              "Fixed member price — a flat price that replaces the base one"
+            ]
+          },
+          "preview": {
+            "label": "The price preview",
+            "shortLabel": "The price\npreview",
+            "tagline": "What anyone would actually pay",
+            "body": "Pick anyone — a guest, a member, or a specific plan — and Offer → Pricing shows exactly what they'd pay for every class, appointment, course and product, using the same logic as checkout.",
+            "items": [
+              "One persona at a time — guest, member, or a specific plan",
+              "Every offering priced the same way real checkout would",
+              "Health checks flag pricing that doesn't add up"
+            ]
+          }
+        }
+      },
+      "recipes": {
+        "title": "I want to…",
+        "intro": "Common pricing setups, each with how it works, where to set it up, what members see, and how to check it before you switch it on.",
+        "labels": {
+          "how": "How it works",
+          "setup": "Set it up",
+          "see": "What members see",
+          "check": "Check it"
+        },
+        "items": {
+          "sell-membership": {
+            "chip": "Sell a monthly membership",
+            "how": "Create a subscription type under Offer → Plans with one or more prices (monthly, annual). Mark it public so it appears in your shop. Members buy it there and are billed automatically.",
+            "see": "Members see it on your public shop's Memberships tab and in their Space.",
+            "check": "Pick that plan's persona on Offer → Pricing."
+          },
+          "limit-weekly": {
+            "chip": "Cap a plan at N classes per week",
+            "how": "On the subscription type, set a usage limit like 3 per week. Covered bookings count against a weekly allowance (resets Monday); when it's used up, the member can still pay the drop-in price — at their member rate if you set one.",
+            "see": "Members see \"2 of 3 left\" style coverage; the 4th booking offers the drop-in.",
+            "check": "The persona picker has an \"allowance used up\" switch."
+          },
+          "drop-in": {
+            "chip": "Let non-members pay per class",
+            "how": "On a gated class, enable Drop-in with a price. Anyone not covered — guests included — can book that single class by paying.",
+            "see": "Members covered by the class book free; everyone else sees the drop-in price at booking.",
+            "check": "Compare the Guest persona with a member persona."
+          },
+          "member-rate": {
+            "chip": "Give members a cheaper drop-in",
+            "how": "Inside the class's drop-in section, add a member rate: holders of chosen plans pay a percentage off or a fixed price instead of the full drop-in. Useful for plans that don't fully cover the class.",
+            "see": "Those members see the original price struck through next to theirs.",
+            "check": "Pick that plan's persona — the class row shows both prices."
+          },
+          "class-pack": {
+            "chip": "Sell a 10-class pack",
+            "how": "Add a one-time price with credits (e.g. 10) to a subscription type, optionally with a validity window. Each covered booking spends one credit; a cancelled booking refunds it.",
+            "see": "Members see their remaining credits; bookings say \"1 credit\".",
+            "check": "The pack persona has a \"pack used up\" switch to preview the empty state."
+          },
+          "paid-trial": {
+            "chip": "Offer newcomers a (paid) trial",
+            "how": "On a gated class, enable the trial door; leave the trial price empty for a free first class or set an amount to charge it. One trial per person, ever — enforced by email.",
+            "see": "Newcomers get a \"First time here\" door at booking.",
+            "check": "The Guest persona shows \"trial available\" on gated classes."
+          },
+          "appointments": {
+            "chip": "Price appointments",
+            "how": "Appointments have no access gate: the price is the gate. Give each duration its own price (30/60/90 min), then optionally a member benefit — included with certain plans, a percentage off, or a fixed member price. Unpriced durations are free for everyone.",
+            "see": "Clients pick a time and see exactly their price; covered members book free.",
+            "check": "Each persona prices every duration on Offer → Pricing."
+          },
+          "sell-course": {
+            "chip": "Sell an online course",
+            "how": "Set a course's access to Sold and give it a price: buyers get lifetime access. Add a benefit so subscribers get it included or at a discount.",
+            "see": "It appears in your shop's Courses tab; owners watch it in their Space.",
+            "check": "Course rows in the price preview show each persona's price."
+          },
+          "gift-cards": {
+            "chip": "Sell gift cards",
+            "how": "Enable gift cards and choose the amounts. Buyers receive a code by email; anyone can redeem it when paying for shop items, courses or drop-ins — partially or in full.",
+            "see": "A Gift cards tab appears in your shop; checkouts get a \"Have a gift card?\" field.",
+            "check": "The Payments page lists sold cards and balances."
+          },
+          "no-show-fee": {
+            "chip": "Charge a fee after repeated no-shows",
+            "how": "Enable the no-show policy with a fee and a threshold (e.g. CHF 15 after 3). Strikes count automatically when you mark bookings as no-shows; at the threshold the member gets one fee with a payment link. You can always waive it.",
+            "see": "The member receives an email; you track and waive fees under Payments.",
+            "check": "Outstanding fees appear on the Payments page."
+          },
+          "partner-pass": {
+            "chip": "Work with FitPass, Urban Sports Club & co.",
+            "how": "Create a subscription type with source Aggregator and set what the partner pays you per visit. Assign it to partner members and include it in the classes they may attend: each covered booking lands in a payout ledger instead of charging anyone.",
+            "see": "Partner members book like regular members.",
+            "check": "Payments shows partner visits and the month's estimated payout."
+          }
+        }
+      },
+      "simulator": {
+        "title": "Try it: price a visitor",
+        "intro": "A small fictional catalogue — a class, an appointment and a course — priced live for six different visitors. Pick one to see exactly what they'd pay and why.",
+        "personas": {
+          "guest": "Guest",
+          "member": "Member without a plan",
+          "unlimited": "Unlimited plan",
+          "limited": "Limited plan (3/week)",
+          "pack": "10-class pack holder",
+          "partner": "Partner pass"
+        },
+        "limitUsedUpLabel": "Weekly allowance used up",
+        "packEmptyLabel": "Pack is empty",
+        "offerings": {
+          "class": "Class · Yoga Flow",
+          "appointment": "Appointment · Personal training · 60 min",
+          "course": "Course · Foundations"
+        },
+        "freeBadge": "Free",
+        "creditBadge": "1 credit",
+        "blockedBadge": "Not available",
+        "why": {
+          "coveredSubscription": "Their plan covers this booking.",
+          "coveredIncluded": "Their plan includes this for free.",
+          "coveredCredit": "They hold a class pack, so this booking spends one credit.",
+          "memberRate": "Not covered — but they hold a plan with a member rate, so the drop-in price is reduced.",
+          "limitReachedMemberRate": "Their weekly allowance is used up, so this booking falls back to the drop-in price — at their reduced member rate.",
+          "discount": "Their plan includes a discount here.",
+          "limitReachedDropIn": "Their weekly allowance is used up, so this booking falls back to the drop-in price.",
+          "dropInFull": "They aren't covered, so this booking uses the drop-in price.",
+          "noBenefitBase": "No benefit applies, so they pay the standard price for this duration.",
+          "noBenefitCourse": "No benefit applies, so they pay to buy this course.",
+          "standardFree": "This is open to everyone.",
+          "standardPrice": "They pay the standard price."
+        },
+        "outro": "This is exactly how Offer → Pricing previews YOUR catalogue."
       }
     },
     "faqTitle": "Questions everyone asks at the start",

@@ -12,16 +12,18 @@
 
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
-import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https'
+import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
-  computePlatformFee,
-  takeRatePercent,
   recurrenceToStripeInterval,
   isRecurringRecurrence,
+  normalizeBenefit,
   resolveProductPrice,
+  resolvePaymentOptions,
+  toMinorUnits,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   PRODUCTS_SUBCOLLECTION,
   COURSES_COLLECTION,
+  COURSE_PURCHASES_SUBCOLLECTION,
   TEAMS_COLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   CONTACTS_COLLECTION,
@@ -29,47 +31,31 @@ import {
   type Product,
   type Course,
 } from '@linyup/shared'
-import { resolveBaseUrl } from '../utils/env'
-import {
-  createOneOffCheckoutSession,
-  createSubscriptionCheckoutSession,
-  getConnectStripe,
-} from '../utils/connect/client'
+import { loadContactPaymentSnapshot } from '../booking/access'
+import { getConnectStripe } from '../utils/connect/client'
+import { generateSecureToken } from '../utils/crypto'
+import { applyPaymentEffects } from '../payments/effects'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
+import {
+  buildResultUrls,
+  checkoutRateLimit,
+  defaultIdempotencyKey,
+  requireChargeableAmountFromMajor,
+  requireChargeableMinorAmount,
+  SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES,
+  startOneOffCheckout,
+  startSubscriptionCheckout,
+} from './checkout'
+import { reserveGiftCardDrawdown, commitGiftCardHold, releaseGiftCardHold } from './giftCards'
 import { requireContactSessionForTeam } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
-// Stripe's minimum charge for CHF is ~0.50 CHF.
-const MIN_AMOUNT_RAPPEN = 50
+// Amount guards, result URLs, idempotency defaults, fee computation and Stripe
+// error mapping all live in ./checkout — the one money core. Kept here: business
+// validation + the metadata each webhook kind reads.
+
 const SUB_INTERVALS = ['month', 'year'] as const
 type SubInterval = (typeof SUB_INTERVALS)[number]
-
-function resultUrls(
-  locale: string,
-  successUrl?: string,
-  cancelUrl?: string,
-  // Appended to the default result URLs so the page can link back (e.g. &slug=…&seg=shop).
-  extraQuery?: string,
-  // Caller's origin — prefers localhost in dev, falls back to the hosting URL.
-  origin?: string
-): { successUrl: string; cancelUrl: string } {
-  const base = `${resolveBaseUrl(origin)}/${locale}/pay/result`
-  const extra = extraQuery ?? ''
-  return {
-    successUrl: successUrl ?? `${base}?status=success${extra}`,
-    cancelUrl: cancelUrl ?? `${base}?status=cancelled${extra}`,
-  }
-}
-
-function validateAmount(amount: unknown): number {
-  if (typeof amount !== 'number' || !Number.isInteger(amount)) {
-    throw new HttpsError('invalid-argument', 'amount must be an integer in Rappen')
-  }
-  if (amount < MIN_AMOUNT_RAPPEN) {
-    throw new HttpsError('invalid-argument', `amount must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
-  }
-  return amount
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // createMemberPayment — one-off direct charge (drop-in, belt test, shop item).
@@ -92,47 +78,35 @@ export const createMemberPayment = onCall(async (request) => {
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   const teamId = data.teamId
-  const amount = validateAmount(data.amount)
+  const amount = requireChargeableMinorAmount(data.amount)
   const purpose = (data.purpose ?? 'payment').slice(0, 64)
   const locale = data.locale ?? 'en'
 
   await assertManager(request.auth.uid, teamId)
   const team = await loadEnabledTeam(teamId)
-  const { accountId, model } = requireChargeableAccount(team)
 
-  const applicationFeeAmount = computePlatformFee({ tier: team.plan, amount, model })
-  const { successUrl, cancelUrl } = resultUrls(
-    locale,
-    data.successUrl,
-    data.cancelUrl,
-    undefined,
-    data.origin
-  )
+  const { successUrl, cancelUrl } = buildResultUrls(locale, {
+    successUrl: data.successUrl,
+    cancelUrl: data.cancelUrl,
+    origin: data.origin,
+  })
 
   const metadata: Record<string, string> = { teamId, purpose, kind: 'one_off' }
   if (data.contactId) metadata.contactId = data.contactId
 
-  const idempotencyKey =
-    data.idempotencyKey ??
-    `member-pay:${teamId}:${request.auth.uid}:${amount}:${purpose}:${Math.floor(Date.now() / 60000)}`
-
-  try {
-    const session = await createOneOffCheckoutSession({
-      accountId,
-      amount,
-      applicationFeeAmount,
-      productName: data.productName ?? purpose,
-      successUrl,
-      cancelUrl,
-      customerEmail: data.customerEmail,
-      metadata,
-      idempotencyKey,
-    })
-    return { url: session.url, sessionId: session.sessionId, applicationFeeAmount }
-  } catch (err) {
-    console.error('[connect] createMemberPayment failed:', err)
-    throw new HttpsError('internal', 'Failed to create the payment')
-  }
+  return startOneOffCheckout({
+    team,
+    amountMinor: amount,
+    productName: data.productName ?? purpose,
+    successUrl,
+    cancelUrl,
+    customerEmail: data.customerEmail,
+    metadata,
+    idempotencyKey:
+      data.idempotencyKey ??
+      defaultIdempotencyKey('member-pay', teamId, request.auth.uid, String(amount), purpose),
+    label: 'createMemberPayment',
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,7 +134,7 @@ export const createMemberSubscription = onCall(async (request) => {
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   const teamId = data.teamId
-  const amount = validateAmount(data.amount)
+  const amount = requireChargeableMinorAmount(data.amount)
   const interval = (data.interval ?? 'month') as SubInterval
   if (!SUB_INTERVALS.includes(interval)) {
     throw new HttpsError('invalid-argument', `interval must be one of: ${SUB_INTERVALS.join(', ')}`)
@@ -169,42 +143,30 @@ export const createMemberSubscription = onCall(async (request) => {
 
   await assertManager(request.auth.uid, teamId)
   const team = await loadEnabledTeam(teamId)
-  const { accountId } = requireChargeableAccount(team)
 
-  const applicationFeePercent = takeRatePercent(team.plan)
-  const { successUrl, cancelUrl } = resultUrls(
-    locale,
-    data.successUrl,
-    data.cancelUrl,
-    undefined,
-    data.origin
-  )
+  const { successUrl, cancelUrl } = buildResultUrls(locale, {
+    successUrl: data.successUrl,
+    cancelUrl: data.cancelUrl,
+    origin: data.origin,
+  })
 
   const metadata: Record<string, string> = { teamId, kind: 'subscription' }
   if (data.contactId) metadata.contactId = data.contactId
 
-  const idempotencyKey =
-    data.idempotencyKey ??
-    `member-sub:${teamId}:${request.auth.uid}:${amount}:${interval}:${Math.floor(Date.now() / 60000)}`
-
-  try {
-    const session = await createSubscriptionCheckoutSession({
-      accountId,
-      amount,
-      interval,
-      applicationFeePercent,
-      productName: data.productName ?? 'Membership',
-      successUrl,
-      cancelUrl,
-      customerEmail: data.customerEmail,
-      metadata,
-      idempotencyKey,
-    })
-    return { url: session.url, sessionId: session.sessionId, applicationFeePercent }
-  } catch (err) {
-    console.error('[connect] createMemberSubscription failed:', err)
-    throw new HttpsError('internal', 'Failed to create the subscription')
-  }
+  return startSubscriptionCheckout({
+    team,
+    amountMinor: amount,
+    interval,
+    productName: data.productName ?? 'Membership',
+    successUrl,
+    cancelUrl,
+    customerEmail: data.customerEmail,
+    metadata,
+    idempotencyKey:
+      data.idempotencyKey ??
+      defaultIdempotencyKey('member-sub', teamId, request.auth.uid, String(amount), interval),
+    label: 'createMemberSubscription',
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -235,7 +197,7 @@ export const createMembershipPayment = onCall(async (request) => {
 
   await assertManager(request.auth.uid, teamId)
   const team = await loadEnabledTeam(teamId)
-  const { accountId, model } = requireChargeableAccount(team)
+  requireChargeableAccount(team) // fail before the reads; the orchestrator re-checks
 
   // Resolve the subscription type + the chosen price.
   const typeSnap = await admin
@@ -251,18 +213,13 @@ export const createMembershipPayment = onCall(async (request) => {
   if (!price) throw new HttpsError('not-found', 'Price not found on this subscription type')
 
   // Amount: subscription prices are stored in MAJOR units (e.g. 49.9) → Rappen.
-  const amount = Math.round(price.amount * 100)
-  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
-    throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
-  }
+  const amount = requireChargeableAmountFromMajor(price.amount)
 
-  const { successUrl, cancelUrl } = resultUrls(
-    locale,
-    data.successUrl,
-    data.cancelUrl,
-    undefined,
-    data.origin
-  )
+  const { successUrl, cancelUrl } = buildResultUrls(locale, {
+    successUrl: data.successUrl,
+    cancelUrl: data.cancelUrl,
+    origin: data.origin,
+  })
   const productName = price.label ? `${subType.name} — ${price.label}` : subType.name
 
   // Metadata the webhook reads to update the member's contact membership.
@@ -282,66 +239,39 @@ export const createMembershipPayment = onCall(async (request) => {
   const interval = recurrenceToStripeInterval(price.recurrence)
   const idempotencyKey =
     data.idempotencyKey ??
-    `membership:${teamId}:${request.auth.uid}:${priceId}:${Math.floor(Date.now() / 60000)}`
+    defaultIdempotencyKey('membership', teamId, request.auth.uid, priceId)
 
-  try {
-    if (isRecurringRecurrence(price.recurrence) && interval) {
-      const session = await createSubscriptionCheckoutSession({
-        accountId,
-        amount,
-        interval: interval.interval,
-        intervalCount: interval.interval_count,
-        applicationFeePercent: takeRatePercent(team.plan),
-        productName,
-        successUrl,
-        cancelUrl,
-        customerEmail: data.customerEmail,
-        metadata,
-        idempotencyKey,
-      })
-      return { url: session.url, sessionId: session.sessionId, recurring: true }
-    }
-
-    // per_class / one_time → single charge.
-    const session = await createOneOffCheckoutSession({
-      accountId,
-      amount,
-      applicationFeeAmount: computePlatformFee({ tier: team.plan, amount, model }),
+  if (isRecurringRecurrence(price.recurrence) && interval) {
+    const session = await startSubscriptionCheckout({
+      team,
+      amountMinor: amount,
+      interval: interval.interval,
+      intervalCount: interval.interval_count,
       productName,
       successUrl,
       cancelUrl,
       customerEmail: data.customerEmail,
       metadata,
       idempotencyKey,
+      label: 'createMembershipPayment',
     })
-    return { url: session.url, sessionId: session.sessionId, recurring: false }
-  } catch (err) {
-    console.error('[connect] createMembershipPayment failed:', err)
-    throw new HttpsError('internal', 'Failed to create the membership payment')
+    return { url: session.url, sessionId: session.sessionId, recurring: true }
   }
-})
 
-const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
-
-/**
- * Index-free hourly rate limit for the public checkout: an `{ip}:{hourBucket}`
- * counter doc, incremented in a transaction. Avoids composite indexes (and the
- * emulator-hides-missing-index trap). 'unknown' IPs share one bucket.
- */
-export async function checkoutRateLimit(ipRaw: string | undefined): Promise<void> {
-  const ip = (ipRaw ?? 'unknown').replace(/[^\w.:-]/g, '_').slice(0, 60)
-  const bucket = Math.floor(Date.now() / 3_600_000)
-  const ref = admin.firestore().collection('connect_checkout_attempts').doc(`${ip}:${bucket}`)
-  const count = await admin.firestore().runTransaction(async (tx) => {
-    const snap = await tx.get(ref)
-    const next = ((snap.data()?.count as number | undefined) ?? 0) + 1
-    tx.set(ref, { ip, bucket, count: next, updated_at: FieldValue.serverTimestamp() }, { merge: true })
-    return next
+  // per_class / one_time → single charge.
+  const session = await startOneOffCheckout({
+    team,
+    amountMinor: amount,
+    productName,
+    successUrl,
+    cancelUrl,
+    customerEmail: data.customerEmail,
+    metadata,
+    idempotencyKey,
+    label: 'createMembershipPayment',
   })
-  if (count > CHECKOUT_RATE_LIMIT_PER_HOUR) {
-    throw new HttpsError('resource-exhausted', 'Too many attempts. Please try again later.')
-  }
-}
+  return { url: session.url, sessionId: session.sessionId, recurring: false }
+})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // createMembershipCheckout — the member-facing shop's subscription checkout.
@@ -377,7 +307,7 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
 
   // Remaining gates: the team's Connect kill-switch + chargeable account.
   const team = await loadEnabledTeam(teamId)
-  const { accountId, model } = requireChargeableAccount(team)
+  requireChargeableAccount(team) // fail before the reads; the orchestrator re-checks
 
   const typeSnap = await admin
     .firestore()
@@ -399,10 +329,7 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
   const price = (subType.prices ?? []).find((p) => p.id === priceId && p.active !== false)
   if (!price) throw new HttpsError('not-found', 'Price not found on this subscription type')
 
-  const amount = Math.round(price.amount * 100)
-  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
-    throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
-  }
+  const amount = requireChargeableAmountFromMajor(price.amount)
 
   // Block buying a subscription type the buyer ALREADY actively holds (recurring only —
   // one-off drop-ins may legitimately stack). A contact may hold several *different*
@@ -448,7 +375,10 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
   const slugQuery = data.slug
     ? `&slug=${encodeURIComponent(data.slug)}&seg=${seg}${emailQuery}`
     : ''
-  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
+  const { successUrl, cancelUrl } = buildResultUrls(locale, {
+    extraQuery: slugQuery,
+    origin: data.origin,
+  })
   const productName = price.label ? `${subType.name} — ${price.label}` : subType.name
 
   // Webhook reads this to link the sale to the buyer's exact contact.
@@ -469,42 +399,37 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
   const interval = recurrenceToStripeInterval(price.recurrence)
   const idempotencyKey =
     data.idempotencyKey ??
-    `membership-pub:${teamId}:${priceId}:${session.contactId}:${Math.floor(Date.now() / 60000)}`
+    defaultIdempotencyKey('membership-pub', teamId, priceId, session.contactId)
 
-  try {
-    if (isRecurringRecurrence(price.recurrence) && interval) {
-      const session = await createSubscriptionCheckoutSession({
-        accountId,
-        amount,
-        interval: interval.interval,
-        intervalCount: interval.interval_count,
-        applicationFeePercent: takeRatePercent(team.plan),
-        productName,
-        successUrl,
-        cancelUrl,
-        customerEmail: email,
-        metadata,
-        idempotencyKey,
-      })
-      return { url: session.url, sessionId: session.sessionId, recurring: true }
-    }
-
-    const session = await createOneOffCheckoutSession({
-      accountId,
-      amount,
-      applicationFeeAmount: computePlatformFee({ tier: team.plan, amount, model }),
+  if (isRecurringRecurrence(price.recurrence) && interval) {
+    const checkout = await startSubscriptionCheckout({
+      team,
+      amountMinor: amount,
+      interval: interval.interval,
+      intervalCount: interval.interval_count,
       productName,
       successUrl,
       cancelUrl,
       customerEmail: email,
       metadata,
       idempotencyKey,
+      label: 'createMembershipCheckout',
     })
-    return { url: session.url, sessionId: session.sessionId, recurring: false }
-  } catch (err) {
-    console.error('[connect] createMembershipCheckout failed:', err)
-    throw new HttpsError('internal', 'Failed to start checkout')
+    return { url: checkout.url, sessionId: checkout.sessionId, recurring: true }
   }
+
+  const checkout = await startOneOffCheckout({
+    team,
+    amountMinor: amount,
+    productName,
+    successUrl,
+    cancelUrl,
+    customerEmail: email,
+    metadata,
+    idempotencyKey,
+    label: 'createMembershipCheckout',
+  })
+  return { url: checkout.url, sessionId: checkout.sessionId, recurring: false }
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -524,6 +449,8 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
     locale?: string
     idempotencyKey?: string
     origin?: string
+    /** Optional gift-card code to draw down against this purchase. */
+    giftCardCode?: string
   }
   if (!data?.teamId || !data?.productId) {
     throw new HttpsError('invalid-argument', 'teamId and productId are required')
@@ -540,7 +467,11 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
 
   // Remaining gates: the team's Connect kill-switch + chargeable account.
   const team = await loadEnabledTeam(teamId)
-  const { accountId, model } = requireChargeableAccount(team)
+  // Chargeable-account gate: a FULL-COVER gift-card redemption moves no money
+  // and must work without Stripe onboarding — when a code is supplied, the
+  // check is deferred to the orchestrator (which re-checks before any charge;
+  // the reserved hold is released if that late check throws).
+  if (!data.giftCardCode) requireChargeableAccount(team)
 
   const productSnap = await admin
     .firestore()
@@ -566,13 +497,14 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
     variantLabel = variant.label
   }
 
-  const amount = Math.round(resolveProductPrice(product, variantId) * 100)
-  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
-    throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
-  }
+  const priceMajor = resolveProductPrice(product, variantId)
+  const amount = requireChargeableAmountFromMajor(priceMajor)
 
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=shop` : ''
-  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
+  const { successUrl, cancelUrl } = buildResultUrls(locale, {
+    extraQuery: slugQuery,
+    origin: data.origin,
+  })
   const productName = variantLabel ? `${product.name} — ${variantLabel}` : product.name
 
   // Webhook reads this to record the sale + link it to the buyer's exact contact.
@@ -589,25 +521,80 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
 
   const idempotencyKey =
     data.idempotencyKey ??
-    `product-pub:${teamId}:${productId}:${variantId ?? '_'}:${session.contactId}:${Math.floor(Date.now() / 60000)}`
+    defaultIdempotencyKey('product-pub', teamId, productId, variantId ?? '_', session.contactId)
 
-  try {
-    const session = await createOneOffCheckoutSession({
-      accountId,
-      amount,
-      applicationFeeAmount: computePlatformFee({ tier: team.plan, amount, model }),
-      productName,
-      successUrl,
-      cancelUrl,
-      customerEmail: email,
-      metadata,
-      idempotencyKey,
+  // Optional gift-card redemption: reserve a drawdown against the total, then
+  // either FULL COVER (apply effects directly, no Stripe) or reduce the Stripe
+  // charge to the residual and carry the hold through checkout metadata.
+  if (data.giftCardCode) {
+    const holdKey = generateSecureToken(16)
+    const plan = await reserveGiftCardDrawdown({
+      teamId,
+      code: data.giftCardCode,
+      totalMajor: priceMajor,
+      holdKey,
     })
-    return { url: session.url, sessionId: session.sessionId, recurring: false }
-  } catch (err) {
-    console.error('[connect] createProductCheckout failed:', err)
-    throw new HttpsError('internal', 'Failed to start checkout')
+    const paymentRef = `gift:${data.giftCardCode.trim().toUpperCase()}:${holdKey}`
+
+    if (plan.residual === 0) {
+      await applyPaymentEffects(admin.firestore(), {
+        teamId,
+        contactId: session.contactId,
+        lineItem: { kind: 'product', productId, variantId, label: productName },
+        amountRappen: toMinorUnits(plan.drawdown),
+        currency: 'CHF',
+        source: 'gift_card',
+        paymentRef,
+      })
+      await commitGiftCardHold({ teamId, code: data.giftCardCode, holdKey })
+      return { url: null, sessionId: null, recurring: false, paidWithGiftCard: true, amount: 0, drawdown: plan.drawdown }
+    }
+
+    metadata.giftCardCode = data.giftCardCode.trim().toUpperCase()
+    metadata.giftCardHold = holdKey
+    metadata.giftCardDrawdown = String(plan.drawdown)
+    const residualAmount = requireChargeableAmountFromMajor(plan.residual)
+    let checkout
+    try {
+      checkout = await startOneOffCheckout({
+        team,
+        amountMinor: residualAmount,
+        productName,
+        successUrl,
+        cancelUrl,
+        customerEmail: email,
+        metadata,
+        idempotencyKey,
+        expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
+        label: 'createProductCheckout',
+      })
+    } catch (err) {
+      // Don't leave the reserved drawdown dangling until its lazy expiry.
+      await releaseGiftCardHold({ teamId, code: data.giftCardCode, holdKey }).catch(() => undefined)
+      throw err
+    }
+    return {
+      url: checkout.url,
+      sessionId: checkout.sessionId,
+      recurring: false,
+      amount: residualAmount,
+      drawdown: plan.drawdown,
+      residual: plan.residual,
+    }
   }
+
+  const checkout = await startOneOffCheckout({
+    team,
+    amountMinor: amount,
+    productName,
+    successUrl,
+    cancelUrl,
+    customerEmail: email,
+    metadata,
+    idempotencyKey,
+    label: 'createProductCheckout',
+  })
+  return { url: checkout.url, sessionId: checkout.sessionId, recurring: false }
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -626,6 +613,8 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     locale?: string
     idempotencyKey?: string
     origin?: string
+    /** Optional gift-card code to draw down against this purchase. */
+    giftCardCode?: string
   }
   if (!data?.teamId || !data?.courseId) {
     throw new HttpsError('invalid-argument', 'teamId and courseId are required')
@@ -642,7 +631,11 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
 
   // Remaining gates: the team's Connect kill-switch + chargeable account.
   const team = await loadEnabledTeam(teamId)
-  const { accountId, model } = requireChargeableAccount(team)
+  // Chargeable-account gate: a FULL-COVER gift-card redemption moves no money
+  // and must work without Stripe onboarding — when a code is supplied, the
+  // check is deferred to the orchestrator (which re-checks before any charge;
+  // the reserved hold is released if that late check throws).
+  if (!data.giftCardCode) requireChargeableAccount(team)
 
   const courseSnap = await admin.firestore().collection(COURSES_COLLECTION).doc(courseId).get()
   if (!courseSnap.exists) throw new HttpsError('not-found', 'Course not found')
@@ -656,14 +649,70 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     throw new HttpsError('failed-precondition', 'This course is not for sale')
   }
 
-  const amount = Math.round(course.accessRule.priceAmount * 100)
-  if (!Number.isInteger(amount) || amount < MIN_AMOUNT_RAPPEN) {
-    throw new HttpsError('invalid-argument', `Price must be at least ${MIN_AMOUNT_RAPPEN} Rappen`)
+  // Refuse selling to an already-entitled buyer (owner, or included free via a
+  // held subscription) — same principle as the drop-in P1 fix: the entitlement
+  // write is idempotent, but a second charge would never be refunded.
+  const [contactSnap, purchaseSnap] = await Promise.all([
+    admin.firestore().collection(CONTACTS_COLLECTION).doc(session.contactId).get(),
+    admin
+      .firestore()
+      .collection(COURSES_COLLECTION)
+      .doc(courseId)
+      .collection(COURSE_PURCHASES_SUBCOLLECTION)
+      .doc(session.contactId)
+      .get(),
+  ])
+  const courseBenefit = normalizeBenefit(course.benefit)
+  const baseSnapshot = await loadContactPaymentSnapshot({
+    teamId,
+    contact:
+      contactSnap.exists && contactSnap.data()?.teamId === teamId
+        ? { ...contactSnap.data()!, id: contactSnap.id }
+        : null,
+    relevantTypeIds: [
+      ...(course.accessRule.subscriptionTypeIds ?? []),
+      ...(courseBenefit?.subscriptionTypeIds ?? []),
+    ],
+  })
+  const priced = resolvePaymentOptions(
+    { ...baseSnapshot, ownsCourse: purchaseSnap.exists },
+    { kind: 'course', accessRule: course.accessRule, benefit: courseBenefit }
+  )
+  const payOption = priced.options[0]
+  // Refuse selling only when the buyer's access is GRANTABLE BY THE RULES:
+  // owning the course, or coverage via their PRIMARY subscription type (the
+  // only one canReadPublishedCourse checks). A resolver-covered-but-not-
+  // rules-grantable state (e.g. coverage via a secondary held type) must fall
+  // through to a normal sale — refusing would deadlock the buyer between a
+  // checkout that says "you already have access" and rules that deny the read.
+  const primaryTypeId =
+    (contactSnap.exists ? (contactSnap.data()?.subscription_type_id as string | undefined) : undefined) ??
+    null
+  if (payOption?.type !== 'pay') {
+    const via = payOption?.type === 'covered' ? payOption.via : null
+    const rulesGrantable =
+      via !== null &&
+      (via.reason === 'owned' ||
+        (('subscriptionTypeId' in via ? via.subscriptionTypeId : null) === primaryTypeId &&
+          primaryTypeId !== null))
+    if (rulesGrantable) {
+      throw new HttpsError('failed-precondition', 'You already have access to this course', {
+        reason: 'covered',
+      })
+    }
   }
+  // Effective amount: the pay option's (benefit-discounted) price, or the base
+  // course price on the fall-through path above.
+  const priceMajor =
+    payOption?.type === 'pay' ? payOption.amount : (course.accessRule.priceAmount as number)
+  const amount = requireChargeableAmountFromMajor(priceMajor)
 
   // Land the buyer back in the Space (where they watch), not the shop.
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=space` : ''
-  const { successUrl, cancelUrl } = resultUrls(locale, undefined, undefined, slugQuery, data.origin)
+  const { successUrl, cancelUrl } = buildResultUrls(locale, {
+    extraQuery: slugQuery,
+    origin: data.origin,
+  })
 
   // Webhook reads this to grant the entitlement to the buyer's exact contact.
   const metadata: Record<string, string> = {
@@ -677,25 +726,85 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
 
   const idempotencyKey =
     data.idempotencyKey ??
-    `course-pub:${teamId}:${courseId}:${session.contactId}:${Math.floor(Date.now() / 60000)}`
+    defaultIdempotencyKey('course-pub', teamId, courseId, session.contactId)
 
-  try {
-    const session = await createOneOffCheckoutSession({
-      accountId,
-      amount,
-      applicationFeeAmount: computePlatformFee({ tier: team.plan, amount, model }),
-      productName: course.title,
-      successUrl,
-      cancelUrl,
-      customerEmail: email,
-      metadata,
-      idempotencyKey,
+  // Optional gift-card redemption — same shape as createProductCheckout above.
+  if (data.giftCardCode) {
+    const holdKey = generateSecureToken(16)
+    const plan = await reserveGiftCardDrawdown({
+      teamId,
+      code: data.giftCardCode,
+      totalMajor: priceMajor,
+      holdKey,
     })
-    return { url: session.url, sessionId: session.sessionId, recurring: false }
-  } catch (err) {
-    console.error('[connect] createCourseCheckout failed:', err)
-    throw new HttpsError('internal', 'Failed to start checkout')
+    const paymentRef = `gift:${data.giftCardCode.trim().toUpperCase()}:${holdKey}`
+
+    if (plan.residual === 0) {
+      await applyPaymentEffects(admin.firestore(), {
+        teamId,
+        contactId: session.contactId,
+        lineItem: { kind: 'course', courseId, label: course.title },
+        amountRappen: toMinorUnits(plan.drawdown),
+        currency: 'CHF',
+        source: 'gift_card',
+        paymentRef,
+      })
+      await commitGiftCardHold({ teamId, code: data.giftCardCode, holdKey })
+      return {
+        url: null,
+        sessionId: null,
+        recurring: false,
+        paidWithGiftCard: true,
+        amount: 0,
+        drawdown: plan.drawdown,
+      }
+    }
+
+    metadata.giftCardCode = data.giftCardCode.trim().toUpperCase()
+    metadata.giftCardHold = holdKey
+    metadata.giftCardDrawdown = String(plan.drawdown)
+    const residualAmount = requireChargeableAmountFromMajor(plan.residual)
+    let checkout
+    try {
+      checkout = await startOneOffCheckout({
+        team,
+        amountMinor: residualAmount,
+        productName: course.title,
+        successUrl,
+        cancelUrl,
+        customerEmail: email,
+        metadata,
+        idempotencyKey,
+        expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
+        label: 'createCourseCheckout',
+      })
+    } catch (err) {
+      // Don't leave the reserved drawdown dangling until its lazy expiry.
+      await releaseGiftCardHold({ teamId, code: data.giftCardCode, holdKey }).catch(() => undefined)
+      throw err
+    }
+    return {
+      url: checkout.url,
+      sessionId: checkout.sessionId,
+      recurring: false,
+      amount: residualAmount,
+      drawdown: plan.drawdown,
+      residual: plan.residual,
+    }
   }
+
+  const checkout = await startOneOffCheckout({
+    team,
+    amountMinor: amount,
+    productName: course.title,
+    successUrl,
+    cancelUrl,
+    customerEmail: email,
+    metadata,
+    idempotencyKey,
+    label: 'createCourseCheckout',
+  })
+  return { url: checkout.url, sessionId: checkout.sessionId, recurring: false }
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

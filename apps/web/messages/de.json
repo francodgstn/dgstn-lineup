@@ -61,6 +61,7 @@
       "automations": "workflows automatisierungen regeln",
       "activities": "kurse angebote disziplinen klassen",
       "plans": "abos abonnements mitgliedschaften preise",
+      "pricing": "preis rechner vorschau simulation persona check",
       "onlineCourses": "videos lektionen e-learning inhalte",
       "products": "produkte artikel merchandise",
       "documents": "dateien dokumente verträge",
@@ -136,7 +137,8 @@
     "payments": "Zahlungen",
     "signOut": "Abmelden",
     "affiliations": "Affiliationen",
-    "coaches": "Coaches"
+    "coaches": "Coaches",
+    "pricing": "Preise"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -1200,20 +1202,29 @@
     "durationPriceHint": "Lass den Preis einer Dauer leer, um sie für alle kostenlos zu lassen.",
     "durationPriceLabel": "Preis für {duration}",
     "durationPriceValidation": "Gib einen Preis von mindestens 0.50 ein oder lass das Feld leer.",
-    "fieldMemberBenefit": "Mitgliedervorteil",
-    "memberBenefitHint": "Abonnenten mit einem dieser Abos erhalten einen besseren Preis. Leer lassen, damit alle den Basispreis zahlen.",
-    "memberBenefitKind_included": "Inbegriffen",
-    "memberBenefitKind_included_desc": "Inhaber buchen dies kostenlos.",
-    "memberBenefitKind_discount": "% Rabatt",
-    "memberBenefitKind_discount_desc": "Inhaber zahlen weniger als den Basispreis.",
-    "memberBenefitPercentLabel": "Rabatt in Prozent",
-    "memberBenefitPercentValidation": "Gib einen Rabatt zwischen 1 und 99% ein.",
     "chipDropIn": "Einzeleintritt {amount}",
     "chipTrialPriced": "Schnupperstunde {amount}",
     "chipBenefitIncluded": "Im Abo inbegriffen",
     "chipBenefitIncludedNamed": "Inbegriffen · {name}",
     "chipBenefitDiscount": "−{percent}% für Mitglieder",
     "chipBenefitDiscountNamed": "−{percent}% · {name}"
+  },
+  "Benefit": {
+    "fieldLabel": "Mitgliedervorteil",
+    "hint_appointment": "Abonnenten mit einem dieser Abos erhalten einen besseren Preis. Leer lassen, damit alle den Basispreis zahlen.",
+    "hint_class": "Mitglieder mit einem dieser Abos zahlen einen reduzierten Einzeleintrittspreis. Leer lassen, damit alle den regulären Einzeleintrittspreis zahlen.",
+    "hint_course": "Abonnenten mit einem dieser Abos erhalten einen besseren Preis für diesen Kurs. Leer lassen, damit alle den vollen Preis zahlen.",
+    "noSubs": "Noch keine Abo-Typen — erstelle sie unter Abos & Affiliationen.",
+    "effect_included": "Inbegriffen",
+    "effect_included_desc": "Inhaber erhalten es kostenlos.",
+    "effect_percent_off": "% Rabatt",
+    "effect_percent_off_desc": "Inhaber zahlen einen reduzierten Preis.",
+    "effect_fixed_price": "Fixpreis",
+    "effect_fixed_price_desc": "Inhaber zahlen diesen Preis statt des Basispreises.",
+    "percentLabel": "Rabatt in Prozent",
+    "percentValidation": "Gib einen Rabatt zwischen 1 und 99% ein.",
+    "amountLabel": "Mitgliederpreis",
+    "amountValidation": "Gib einen Preis von mindestens 0.50 ein."
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",
@@ -1395,7 +1406,14 @@
     "subTypeActivitiesLabel": "Aktivitäten, die dieses Abo freischaltet",
     "subTypeActivitiesDesc": "Inhaber dieses Abos können diese Aktivitäten buchen. Eine Verknüpfung beschränkt die Buchung der Aktivität auf Abonnenten.",
     "subTypeActivitiesEmpty": "Noch keine Aktivitäten — erstelle sie unter Angebot → Aktivitäten.",
-    "subTypeActivitiesHint": "Wird das letzte Abo einer Aktivität entfernt, ist sie wieder für alle Mitglieder buchbar."
+    "subTypeActivitiesHint": "Wird das letzte Abo einer Aktivität entfernt, ist sie wieder für alle Mitglieder buchbar.",
+    "subTypeUsageLimit": "Nutzungslimit",
+    "subTypeUsageLimitDesc": "Begrenzt nur KURS-Buchungen, die über dieses Abo abgedeckt sind. Ist das Kontingent aufgebraucht, können Mitglieder weiterhin zum Einzeleintritt buchen (Mitgliederpreis gilt).",
+    "subTypeLimitPeriodDay": "pro Tag",
+    "subTypeLimitPeriodWeek": "pro Woche",
+    "subTypeLimitPeriodMonth": "pro Monat",
+    "subTypePayoutPerVisit": "Auszahlung pro Besuch",
+    "subTypePayoutPerVisitDesc": "Was der Partner dir pro besuchtem Termin auszahlt. Wird im Partnerbesuchs-Journal angezeigt."
   },
   "Bookings": {
     "title": "Buchungen",
@@ -3002,7 +3020,36 @@
     "lineKind_other": "Sonstiges",
     "selectCourse": "Kurs wählen",
     "selectProduct": "Produkt wählen",
-    "selectVariant": "Variante"
+    "selectVariant": "Variante",
+    "partnerVisitsHeading": "Partnerbesuche",
+    "partnerVisitsEmpty": "Diesen Monat keine Partnerbesuche.",
+    "partnerVisitsRateNotSet": "Tarif nicht festgelegt",
+    "partnerVisitsTotal": "Geschätzte Auszahlung diesen Monat: {amount}",
+    "ownerOnly": "Nur der Inhaber kann dies ändern.",
+    "giftCardsHeading": "Geschenkkarten",
+    "giftCardsSettingsTitle": "Geschenkkarten verkaufen",
+    "giftCardsSettingsSubtitle": "Biete Geschenkkarten in deinem öffentlichen Shop zum Verkauf an.",
+    "giftCardAmountsLabel": "Beträge",
+    "giftCardRemoveAmount": "Betrag entfernen",
+    "giftCardNoAmounts": "Noch keine Beträge konfiguriert.",
+    "giftCardAmountPlaceholder": "z. B. 50",
+    "giftCardAddAmount": "Hinzufügen",
+    "giftCardsEmpty": "Noch keine Geschenkkarten.",
+    "giftCardBalanceLine": "{balance} von {amount} ursprünglichem Wert",
+    "giftCardStatus_active": "Aktiv",
+    "giftCardStatus_depleted": "Aufgebraucht",
+    "giftCardStatus_void": "Storniert",
+    "giftCardVoid": "Stornieren",
+    "giftCardVoidConfirmTitle": "Diese Geschenkkarte stornieren?",
+    "giftCardVoidConfirmBody": "„{code}“ kann danach nicht mehr eingelöst werden. Dies kann nicht rückgängig gemacht werden.",
+    "policyFeesHeading": "Offene Gebühren",
+    "policyFeesEmpty": "Keine offenen No-Show-Gebühren.",
+    "policyFeeResend": "Link erneut senden",
+    "policyFeeWaive": "Erlassen",
+    "policyFeeStatus_paid": "Bezahlt",
+    "policyFeeStatus_waived": "Erlassen",
+    "policyFeeWaiveConfirmTitle": "Diese Gebühr erlassen?",
+    "policyFeeWaiveConfirmBody": "Der Kontakt schuldet diese No-Show-Gebühr nicht mehr."
   },
   "PaymentComment": {
     "preset_subscription_signup": "Abo-Anmeldung",
@@ -3068,7 +3115,23 @@
     "payPerVisitIncludedGeneric": "Im Abo inbegriffen",
     "payPerVisitIncludedNamed": "Inbegriffen mit {name}",
     "payPerVisitDiscountGeneric": "−{percent}% für Mitglieder",
-    "payPerVisitDiscountNamed": "−{percent}% mit {name}"
+    "payPerVisitDiscountNamed": "−{percent}% mit {name}",
+    "memberPrice": "Dein Mitgliederpreis: {price}",
+    "tabGiftCards": "Geschenkkarten",
+    "giftCardsSubtitle": "Kaufe eine Geschenkkarte für jemand Besonderen.",
+    "giftCardTitle": "Geschenkkarte",
+    "paidWithGiftCard": "Mit Geschenkkarte bezahlt",
+    "giftCardLabel": "Geschenkkarten-Code",
+    "giftCardOptional": "(optional)",
+    "giftCardPlaceholder": "GC-XXXX-XXXX",
+    "giftCardApply": "Anwenden",
+    "giftCardApplied": "Geschenkkarte {code}: {amount} verfügbar",
+    "giftCardRemove": "Geschenkkarte entfernen",
+    "giftCardUnusable": "Diese Geschenkkarte hat kein Guthaben mehr.",
+    "giftCardNotFound": "Geschenkkarte nicht gefunden.",
+    "giftCardCheckError": "Der Code konnte nicht geprüft werden. Bitte versuche es erneut.",
+    "giftCardFullyCovers": "Vollständig durch deine Geschenkkarte gedeckt.",
+    "giftCardResidual": "Du zahlst {amount} nach Abzug deiner Geschenkkarte."
   },
   "Products": {
     "title": "Produkte",
@@ -3416,6 +3479,65 @@
     "title": "Affiliationen",
     "subtitle": "Lege fest, welche Arten von Affiliationen deine Kontakte halten können (z.B. Vereinsmitgliedschaft, Verbandslizenz)."
   },
+  "OfferPricing": {
+    "title": "Preise",
+    "subtitle": "Sieh genau, was jede Art von Kontakt für dein gesamtes Angebot zahlt — und finde Preislücken, bevor ein Mitglied es tut.",
+    "sectionPreviewTitle": "Preisvorschau",
+    "sectionPreviewSubtitle": "Wähle, wer fragt, und sieh genau, was diese Person jetzt zahlen würde.",
+    "personaGuest": "Gast",
+    "personaMember": "Mitglied (kein Abo)",
+    "packEmptyLabel": "Paket aufgebraucht",
+    "allowanceUsedUpLabel": "Kontingent aufgebraucht",
+    "remainingThisPeriod": "· noch {count} in diesem Zeitraum",
+    "limitReached": "Zeitraumlimit erreicht",
+    "sellUsageLimit": "Bis zu {count} Kurse {period}",
+    "limitPeriod_day": "pro Tag",
+    "limitPeriod_week": "pro Woche",
+    "limitPeriod_month": "pro Monat",
+    "groupClasses": "Kurse",
+    "groupAppointments": "Termine",
+    "groupCourses": "Online-Kurse",
+    "groupProducts": "Produkte",
+    "draftBadge": "Entwurf",
+    "emptyPreview": "Noch nichts zu bepreisen — füge zuerst einen Kurs, Termin, Online-Kurs oder ein Produkt hinzu.",
+    "durationMinutes": "{minutes} Min.",
+    "freeOpen": "Gratis — offen für alle",
+    "freeMembers": "Gratis — Mitglieder",
+    "freeUnpriced": "Gratis",
+    "freeIncluded": "Inbegriffen mit {name}",
+    "freeRegistered": "Gratis — Anmeldung erforderlich",
+    "creditBadge": "1 Credit",
+    "creditRemaining": "(noch {count})",
+    "memberRateHint": "Mitgliederpreis",
+    "dropInHint": "Einzeleintritt",
+    "noAccess": "Kein Zugang",
+    "trialAvailableHint": "Probetraining für Neulinge verfügbar",
+    "priceFrom": "ab {amount}",
+    "sectionSellTitle": "Was du verkaufst",
+    "sectionSellSubtitle": "Jeder Abo-Typ, seine Preise und was er freischaltet.",
+    "coversLabel": "Beinhaltet: {names}",
+    "moreCount": "+{count}",
+    "benefitIncluded": "{name} — inbegriffen",
+    "benefitPercentOff": "{name} — {percent}% Rabatt",
+    "benefitFixedPrice": "{name} — {amount} fix",
+    "benefitCredit": "{name} — 1 Credit",
+    "editPlans": "Abos bearbeiten",
+    "shopProductsLine": "Produkte im Shop ({count})",
+    "coursesForSaleLine": "Verkäufliche Online-Kurse ({count})",
+    "noSubscriptionTypes": "Noch keine Abo-Typen.",
+    "noPrices": "Kein Preis festgelegt",
+    "priceLineRecurring": "{amount} / {recurrence}",
+    "priceLineCredits": "{credits} Credits · {amount}",
+    "sectionHealthTitle": "Gesundheit",
+    "healthAllGood": "Alles sieht konsistent aus.",
+    "healthGatedEmptyAllowlist": "{name} ist eingeschränkt, erlaubt aber keine Abo-Typen — niemand kann es buchen.",
+    "healthBenefitUnknownType": "Der Mitgliedervorteil von {name} verweist auf einen Abo-Typ, den es nicht mehr gibt.",
+    "healthPurchaseCourseUnpriced": "{name} ist zum Verkauf, hat aber keinen Preis festgelegt.",
+    "healthBenefitBadPercent": "Der Mitgliederrabatt von {name} hat einen ungültigen Prozentsatz.",
+    "healthGatedNoNewcomerPath": "{name} hat keinen Einstieg für Neulinge — weder Einzeleintritt noch Probetraining.",
+    "healthCreditsUnusable": "{name} verkauft Credit-Pakete, aber keine Aktivität akzeptiert sie.",
+    "fixLink": "Beheben"
+  },
   "PublicBooking": {
     "titleBookSession": "Eine Einheit buchen",
     "chooseActivitySubtitle": "Wählen Sie eine Aktivität, um zu beginnen.",
@@ -3513,7 +3635,8 @@
     "badgePriceRange": "{min}–{max}",
     "badgeDropInPrice": "Einzeleintritt {price}",
     "chipBenefitIncluded": "Im Abo inbegriffen",
-    "chipBenefitDiscount": "−{percent}% für Mitglieder"
+    "chipBenefitDiscount": "−{percent}% für Mitglieder",
+    "dropInSubtitleMember": "Dein Mitgliederpreis: {price}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Probetraining buchen",
@@ -3671,7 +3794,13 @@
     "ctaUrlLabel": "Button-URL",
     "ctaUrlPlaceholder": "https://example.com",
     "ctaLabelLabel": "Button-Beschriftung",
-    "ctaLabelPlaceholder": "z. B. Kontaktieren Sie uns"
+    "ctaLabelPlaceholder": "z. B. Kontaktieren Sie uns",
+    "ownerOnly": "Nur der Inhaber kann dies ändern.",
+    "noShowPolicyTitle": "No-Show-Richtlinie",
+    "noShowPolicySubtitle": "Nach wiederholtem Nichterscheinen automatisch eine Gebühr berechnen.",
+    "noShowFeeAmountLabel": "Gebühr ({currency})",
+    "noShowThresholdLabel": "No-Shows bis zur Gebühr",
+    "noShowThresholdHint": "Sobald ein Kontakt diese Anzahl an No-Shows erreicht, wird eine Gebühr erstellt und der Zähler zurückgesetzt."
   },
   "SettingsPlaces": {
     "pageTitle": "Standorte",
@@ -4569,6 +4698,7 @@
     "toc": {
       "concepts": "Grundbegriffe",
       "publicPages": "Öffentliche Seiten",
+      "pricing": "Preise",
       "faq": "Häufige Fragen",
       "utilities": "Weitermachen"
     },
@@ -4728,6 +4858,191 @@
           "name": "Kiosk",
           "desc": "Ein fester, schlichter Bildschirm für ein Eingangs-Tablet: heutiger Zeitplan, Check-in-QR und Walk-in-Anmeldung. Was Mitglieder und Spontanbesucher an der Tür sehen."
         }
+      }
+    },
+    "pricing": {
+      "title": "Preise",
+      "intro": "Preise bringen drei Dinge zusammen, die sonst oft getrennt leben — was du anbietest, was du verkaufst, und die Mitgliedervergünstigungen, die beides verbinden. Erkunde die Karte, sieh dir ein paar gängige Einrichtungen an und probiere es live an einer fiktiven Besucherin aus.",
+      "linkLabels": {
+        "plans": "Angebot → Pläne",
+        "activities": "Angebot → Aktivitäten",
+        "courses": "Angebot → Online-Kurse",
+        "payments": "Zahlungen",
+        "booking": "Einstellungen → Buchung",
+        "pricing": "Angebot → Preise"
+      },
+      "map": {
+        "title": "Wie Preise zusammenspielen",
+        "intro": "Vier Teile verbinden sich zu einem Preis. Tippe auf einen Block in der Karte — oder auf eine Karte darunter —, um zu sehen, was er abdeckt.",
+        "diagramAria": "Karte, wie Preise zusammenspielen",
+        "diagramHint": "Wische durch die Karte — tippe auf einen Block für mehr.",
+        "edges": {
+          "priced": "bepreist über",
+          "grants": "gewährt",
+          "shownIn": "sichtbar in"
+        },
+        "nodes": {
+          "offer": {
+            "label": "Was du anbietest",
+            "shortLabel": "Was du\nanbietest",
+            "tagline": "Dein buch- und verkaufbarer Katalog",
+            "body": "Alles, was ein Besuch buchen oder kaufen kann: Kurse und Termine in deinem Kalender, Online-Kurse und Shop-Artikel. Jedes trägt seinen eigenen Grundpreis — oder gar keinen —, bevor eine Vergünstigung ihn verändert.",
+            "items": [
+              "Kurse — geplante Einheiten, in denen man einen Platz bucht",
+              "Termine — die Zeit einer anbietenden Person, gebucht aus ihrer Verfügbarkeit",
+              "Online-Kurse — Lerninhalte im eigenen Tempo, verkauft oder inklusive",
+              "Shop-Artikel — Produkte und Geschenkkarten"
+            ]
+          },
+          "sell": {
+            "label": "Was du verkaufst",
+            "shortLabel": "Was du\nverkaufst",
+            "tagline": "Was Mitglieder tatsächlich halten",
+            "body": "Die Dinge, für die Leute einmalig oder regelmässig bezahlen: Abos, Credit-Pakete und Geschenkkarten. Genau das Halten eines davon prüft eine Mitgliedervergünstigung.",
+            "items": [
+              "Abos — wiederkehrende Pläne, optional pro Woche gedeckelt",
+              "Credit-Pakete — einmalige Credits, die pro Buchung verbraucht werden",
+              "Geschenkkarten — ein Guthaben, überall einlösbar"
+            ]
+          },
+          "benefits": {
+            "label": "Mitgliedervergünstigungen",
+            "shortLabel": "Mitglieder-\nvergünstigungen",
+            "tagline": "Die Verbindung zwischen beiden",
+            "body": "Eine Regel an einem Angebot legt fest, was das Halten eines gewählten Plans an dessen Preis ändert. Es gibt drei Formen: kostenlos inklusive, ein Prozentabzug oder ein fester Mitgliederpreis. Fehlt sie, zahlt einfach jede und jeder den Grundpreis.",
+            "items": [
+              "Inklusive — Haltende buchen kostenlos (ein Paket verbraucht stattdessen einen Credit)",
+              "Prozentabzug — ein reduzierter Preis für Haltende",
+              "Fester Mitgliederpreis — ein Festpreis anstelle des Grundpreises"
+            ]
+          },
+          "preview": {
+            "label": "Die Preisvorschau",
+            "shortLabel": "Die\nPreisvorschau",
+            "tagline": "Was am Ende wirklich bezahlt wird",
+            "body": "Wähle irgendwen — Gast, Mitglied oder einen bestimmten Plan — und Angebot → Preise zeigt genau, was diese Person für jeden Kurs, Termin, Online-Kurs und jedes Produkt zahlen würde, nach derselben Logik wie an der Kasse.",
+            "items": [
+              "Eine Persona nach der anderen — Gast, Mitglied oder ein bestimmter Plan",
+              "Jedes Angebot bepreist genau wie an der echten Kasse",
+              "Zustandsprüfungen markieren Preise, die nicht aufgehen"
+            ]
+          }
+        }
+      },
+      "recipes": {
+        "title": "Ich möchte …",
+        "intro": "Gängige Preis-Einrichtungen — jeweils mit der Funktionsweise, wo du sie einrichtest, was Mitglieder sehen und wie du sie vor dem Aktivieren prüfst.",
+        "labels": {
+          "how": "So funktioniert's",
+          "setup": "So richtest du es ein",
+          "see": "Das sehen Mitglieder",
+          "check": "So prüfst du es"
+        },
+        "items": {
+          "sell-membership": {
+            "chip": "Ein monatliches Abo verkaufen",
+            "how": "Lege unter Angebot → Pläne einen Abotyp mit einem oder mehreren Preisen an (monatlich, jährlich). Markiere ihn öffentlich, damit er in deinem Shop erscheint. Mitglieder kaufen ihn dort und werden automatisch abgerechnet.",
+            "see": "Mitglieder sehen ihn im Reiter „Abos“ deines öffentlichen Shops und in ihrem Mitgliederbereich.",
+            "check": "Wähle die Persona dieses Plans unter Angebot → Preise."
+          },
+          "limit-weekly": {
+            "chip": "Einen Plan auf N Kurse pro Woche deckeln",
+            "how": "Setze am Abotyp ein Kontingent, etwa 3 pro Woche. Gedeckte Buchungen zählen gegen ein wöchentliches Kontingent (Reset am Montag); ist es aufgebraucht, kann das Mitglied trotzdem den Einzeleintritt zahlen — zum Mitgliederpreis, falls du einen festgelegt hast.",
+            "see": "Mitglieder sehen eine Anzeige wie „2 von 3 übrig“; die 4. Buchung bietet den Einzeleintritt an.",
+            "check": "Der Persona-Wähler hat einen Schalter „Kontingent aufgebraucht“."
+          },
+          "drop-in": {
+            "chip": "Nicht-Mitglieder pro Kurs zahlen lassen",
+            "how": "Aktiviere bei einem zugangsbeschränkten Kurs Drop-in mit einem Preis. Wer nicht gedeckt ist — auch Gäste —, kann diesen einen Kurs gegen Zahlung buchen.",
+            "see": "Vom Kurs gedeckte Mitglieder buchen kostenlos; alle anderen sehen bei der Buchung den Einzeleintritts-Preis.",
+            "check": "Vergleiche die Gast-Persona mit einer Mitglieder-Persona."
+          },
+          "member-rate": {
+            "chip": "Mitgliedern einen günstigeren Einzeleintritt geben",
+            "how": "Füge im Drop-in-Bereich des Kurses einen Mitgliederpreis hinzu: Wer einen gewählten Plan hält, zahlt statt des vollen Einzeleintritts einen Prozentabzug oder einen Festpreis. Nützlich für Pläne, die den Kurs nicht vollständig abdecken.",
+            "see": "Diese Mitglieder sehen den ursprünglichen Preis durchgestrichen neben ihrem eigenen.",
+            "check": "Wähle die Persona dieses Plans — die Kurszeile zeigt beide Preise."
+          },
+          "class-pack": {
+            "chip": "Ein 10er-Credit-Paket verkaufen",
+            "how": "Füge einem Abotyp einen einmaligen Preis mit Credits (z. B. 10) hinzu, optional mit einem Gültigkeitsfenster. Jede gedeckte Buchung verbraucht einen Credit; eine stornierte Buchung erstattet ihn zurück.",
+            "see": "Mitglieder sehen ihre verbleibenden Credits; Buchungen zeigen „1 Credit“.",
+            "check": "Die Paket-Persona hat einen Schalter „Paket aufgebraucht“ für die Vorschau des leeren Zustands."
+          },
+          "paid-trial": {
+            "chip": "Neulingen eine (bezahlte) Schnupperstunde anbieten",
+            "how": "Aktiviere bei einem zugangsbeschränkten Kurs die Schnupperstunde; lass den Preis leer für eine kostenlose erste Teilnahme oder setze einen Betrag dafür. Eine Schnupperstunde pro Person, für immer — per E-Mail durchgesetzt.",
+            "see": "Neulinge sehen bei der Buchung die Option „Zum ersten Mal hier“.",
+            "check": "Die Gast-Persona zeigt „Schnupperstunde verfügbar“ bei zugangsbeschränkten Kursen."
+          },
+          "appointments": {
+            "chip": "Termine bepreisen",
+            "how": "Termine haben keine Zugangsschranke: Der Preis ist die Schranke. Gib jeder Dauer ihren eigenen Preis (30/60/90 Min.), dazu optional eine Mitgliedervergünstigung — inklusive mit bestimmten Plänen, ein Prozentabzug oder ein fester Mitgliederpreis. Unbepreiste Dauern sind für alle kostenlos.",
+            "see": "Kundinnen und Kunden wählen eine Zeit und sehen genau ihren Preis; gedeckte Mitglieder buchen kostenlos.",
+            "check": "Jede Persona bepreist jede Dauer unter Angebot → Preise."
+          },
+          "sell-course": {
+            "chip": "Einen Online-Kurs verkaufen",
+            "how": "Stelle den Zugang eines Kurses auf „Verkauft“ und gib ihm einen Preis: Käufer erhalten lebenslangen Zugang. Füge eine Vergünstigung hinzu, damit Abonnentinnen ihn inklusive oder vergünstigt erhalten.",
+            "see": "Er erscheint im Reiter „Online-Kurse“ deines Shops; Besitzende sehen ihn in ihrem Mitgliederbereich.",
+            "check": "Online-Kurs-Zeilen in der Preisvorschau zeigen den Preis jeder Persona."
+          },
+          "gift-cards": {
+            "chip": "Geschenkkarten verkaufen",
+            "how": "Aktiviere Geschenkkarten und wähle die Beträge. Käufer erhalten einen Code per E-Mail; jede und jeder kann ihn beim Bezahlen von Shop-Artikeln, Online-Kursen oder Einzeleintritten einlösen — teilweise oder vollständig.",
+            "see": "In deinem Shop erscheint ein Reiter „Geschenkkarten“; an der Kasse gibt es ein Feld „Geschenkkarte vorhanden?“.",
+            "check": "Die Zahlungen-Seite listet verkaufte Karten und ihre Guthaben."
+          },
+          "no-show-fee": {
+            "chip": "Nach wiederholtem Nichterscheinen eine Gebühr berechnen",
+            "how": "Aktiviere die No-Show-Richtlinie mit einer Gebühr und einer Schwelle (z. B. CHF 15 nach 3). No-Shows werden automatisch gezählt, wenn du Buchungen als No-Show markierst; bei Erreichen der Schwelle erhält das Mitglied eine Gebühr mit Zahlungslink. Du kannst sie jederzeit erlassen.",
+            "see": "Das Mitglied erhält eine E-Mail; du verfolgst und erlässt Gebühren unter Zahlungen.",
+            "check": "Offene Gebühren erscheinen auf der Zahlungen-Seite."
+          },
+          "partner-pass": {
+            "chip": "Mit FitPass, Urban Sports Club & Co. zusammenarbeiten",
+            "how": "Lege einen Abotyp mit der Quelle Fitness-App an und lege fest, was der Partner dir pro Besuch zahlt. Weise ihn Partnermitgliedern zu und nimm ihn in die Zugangsliste der Kurse auf, die sie besuchen dürfen: Jede gedeckte Buchung landet in einem Auszahlungs-Journal, statt jemanden zu belasten.",
+            "see": "Partnermitglieder buchen wie gewöhnliche Mitglieder.",
+            "check": "Zahlungen zeigt Partnerbesuche und die geschätzte Auszahlung des Monats."
+          }
+        }
+      },
+      "simulator": {
+        "title": "Ausprobieren: Einen Besuch bepreisen",
+        "intro": "Ein kleiner fiktiver Katalog — ein Kurs, ein Termin und ein Online-Kurs — live bepreist für sechs verschiedene Besuchende. Wähle eine Persona, um genau zu sehen, was sie zahlt und warum.",
+        "personas": {
+          "guest": "Gast",
+          "member": "Mitglied ohne Plan",
+          "unlimited": "Unlimited-Plan",
+          "limited": "Limitierter Plan (3/Woche)",
+          "pack": "Hält ein 10er-Credit-Paket",
+          "partner": "Partner-Pass"
+        },
+        "limitUsedUpLabel": "Wöchentliches Kontingent aufgebraucht",
+        "packEmptyLabel": "Paket aufgebraucht",
+        "offerings": {
+          "class": "Kurs · Yoga Flow",
+          "appointment": "Termin · Personal Training · 60 Min.",
+          "course": "Online-Kurs · Grundlagen"
+        },
+        "freeBadge": "Gratis",
+        "creditBadge": "1 Credit",
+        "blockedBadge": "Nicht verfügbar",
+        "why": {
+          "coveredSubscription": "Der Plan deckt diese Buchung ab.",
+          "coveredIncluded": "Der Plan enthält dies kostenlos.",
+          "coveredCredit": "Das Credit-Paket deckt die Buchung; es wird ein Credit verbraucht.",
+          "memberRate": "Nicht gedeckt — aber der gehaltene Plan bringt einen Mitgliederpreis, darum ist der Einzeleintritt reduziert.",
+          "limitReachedMemberRate": "Das wöchentliche Kontingent ist aufgebraucht, darum fällt die Buchung auf den Einzeleintritt zurück — zum reduzierten Mitgliederpreis.",
+          "discount": "Der gehaltene Plan bringt hier einen Rabatt.",
+          "limitReachedDropIn": "Das wöchentliche Kontingent ist aufgebraucht, darum fällt die Buchung auf den Einzeleintritts-Preis zurück.",
+          "dropInFull": "Keine Deckung vorhanden, darum gilt der Einzeleintritts-Preis.",
+          "noBenefitBase": "Keine Vergünstigung greift, darum gilt der Standardpreis für diese Dauer.",
+          "noBenefitCourse": "Keine Vergünstigung greift, darum kostet der Online-Kurs den vollen Preis.",
+          "standardFree": "Das steht allen offen.",
+          "standardPrice": "Es gilt der Standardpreis."
+        },
+        "outro": "Genau so zeigt Angebot → Preise die Vorschau für DEINEN Katalog."
       }
     },
     "faqTitle": "Fragen, die anfangs alle stellen",

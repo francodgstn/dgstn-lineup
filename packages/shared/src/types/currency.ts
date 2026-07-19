@@ -39,3 +39,17 @@ const SUPPORTED_CODES: ReadonlySet<string> = new Set(SUPPORTED_CURRENCIES.map((c
 export function isSupportedCurrency(code: string | null | undefined): boolean {
   return !!code && SUPPORTED_CODES.has(code.toUpperCase())
 }
+
+/**
+ * The lowercase currency code every Connect checkout charges in.
+ *
+ * DELIBERATELY ignores its argument for now: the Connect rail is CHF-only in
+ * Phase 1 (TWINT is CHF-only; settlement accounts are CHF), so honouring
+ * `teams/{id}.default_currency` here would silently change what existing
+ * checkouts charge. Callers already pass the team's configured currency so that
+ * flipping this to `isSupportedCurrency(code) ? code.toLowerCase() : 'chf'` is a
+ * one-line, separately-reviewed change once non-CHF settlement is validated.
+ */
+export function resolveStripeCurrency(_teamDefaultCurrency: string | null | undefined): string {
+  return DEFAULT_CURRENCY.toLowerCase()
+}

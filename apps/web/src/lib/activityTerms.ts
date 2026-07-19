@@ -15,7 +15,13 @@
 // `ActivityPublicProfile` (public mirrors) — both shapes satisfy it, so
 // callers can pass either without adapting field names.
 
-import { resolveActivityAccessRule, type ActivityAccessRule, type ActivityMemberBenefit } from '@linyup/shared'
+import {
+  resolveActivityAccessRule,
+  normalizeBenefit,
+  type ActivityAccessRule,
+  type ActivityMemberBenefit,
+  type Benefit,
+} from '@linyup/shared'
 
 export type ActivityTermKind =
   | 'trial'
@@ -69,8 +75,12 @@ export interface ActivityTermsInput {
   dropIn?: { enabled?: boolean; priceAmount?: number | null } | null
   /** APPOINTMENT-ONLY. */
   durations?: Array<{ minutes: number; priceAmount?: number | null }> | null
-  /** APPOINTMENT-ONLY. */
-  memberBenefit?: ActivityMemberBenefit | null
+  /** APPOINTMENT-ONLY (as a money term here — classes also carry a
+   *  `memberBenefit` now, a drop-in member rate, but it isn't surfaced as a
+   *  term/chip by this resolver; see the class branch below). Accepts the
+   *  legacy appointment shape or the generalized `Benefit`; normalized via
+   *  `normalizeBenefit`. */
+  memberBenefit?: ActivityMemberBenefit | Benefit | null
 }
 
 /** Resolves the structured list of commercial/access terms for one activity.
@@ -89,13 +99,18 @@ export function resolveActivityTerms(a: ActivityTermsInput): ActivityTerm[] {
       terms.push({ kind: 'price', min: Math.min(...priced), max: Math.max(...priced) })
     }
 
-    const benefit = a.memberBenefit
+    // Display logic stays keyed on included/percent semantics — a fixed_price
+    // benefit doesn't earn a term/chip here (no "from X" story to summarize in
+    // one line); the public surfaces that show it do so via the resolver's
+    // `appliedBenefit` on the actual priced option instead (see BookingForm /
+    // ShopHome / AppointmentPicker).
+    const benefit = normalizeBenefit(a.memberBenefit)
     const benefitTypeIds = benefit?.subscriptionTypeIds ?? []
     if (benefit && benefitTypeIds.length > 0) {
-      if (benefit.kind === 'included') {
+      if (benefit.effect === 'included') {
         terms.push({ kind: 'benefitIncluded', subscriptionTypeIds: benefitTypeIds })
-      } else if (benefit.kind === 'discount' && typeof benefit.discountPercent === 'number') {
-        terms.push({ kind: 'benefitDiscount', percent: benefit.discountPercent, subscriptionTypeIds: benefitTypeIds })
+      } else if (benefit.effect === 'percent_off' && typeof benefit.percent === 'number') {
+        terms.push({ kind: 'benefitDiscount', percent: benefit.percent, subscriptionTypeIds: benefitTypeIds })
       }
     }
 

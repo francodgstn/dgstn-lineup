@@ -25,10 +25,18 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityLevel, ActivityMemberBenefit, ActivityType, SubscriptionType } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityLevel, ActivityType, SubscriptionType } from '@linyup/shared'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { resolveActivityTerms } from '@/lib/activityTerms'
+import {
+  BenefitEditor,
+  toBenefitFormValue,
+  toBenefitPayload,
+  defaultBenefitFormValue,
+  benefitPercentInvalid,
+  benefitAmountInvalid,
+} from '@/components/pricing/BenefitEditor'
 import { formatCurrency } from '@/lib/format'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
@@ -84,8 +92,8 @@ function slugify(name: string): string {
 // activity (edit mode); `toActivityDurations` builds the payload on submit.
 // History: durations also carried a per-duration × per-subscription-type
 // `subscriptionPricing` matrix until 2026-07; member benefit is now ONE rule
-// per activity (see `MemberBenefitFormValue` below) — see ActivityDuration's
-// doc comment in @linyup/shared.
+// per activity (see `BenefitFormValue` in components/pricing/BenefitEditor) —
+// see ActivityDuration's doc comment in @linyup/shared.
 
 interface DurationFormValue {
   minutes: number
@@ -108,34 +116,12 @@ function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[]
     }))
 }
 
-// APPOINTMENT-ONLY. The one member-benefit rule for the whole activity — see
-// `ActivityMemberBenefit`. `percent` is kept as a string in form state ('' = not
-// entered yet); an empty `subscriptionTypeIds` means "no benefit" and the field
-// is cleared (written `null`) on save.
-interface MemberBenefitFormValue {
-  subscriptionTypeIds: string[]
-  kind: 'included' | 'discount'
-  percent: string
-}
-
-function toMemberBenefitFormValue(mb?: ActivityMemberBenefit | null): MemberBenefitFormValue {
-  return {
-    subscriptionTypeIds: mb?.subscriptionTypeIds ?? [],
-    kind: mb?.kind ?? 'included',
-    percent: mb?.discountPercent != null ? String(mb.discountPercent) : '',
-  }
-}
-
-// null (not omitted) when empty — an EDIT must be able to CLEAR a previously
-// saved benefit, e.g. after the admin unchecks every subscription type.
-function toMemberBenefitPayload(mb: MemberBenefitFormValue): ActivityMemberBenefit | null {
-  if (mb.subscriptionTypeIds.length === 0) return null
-  return {
-    subscriptionTypeIds: mb.subscriptionTypeIds,
-    kind: mb.kind,
-    ...(mb.kind === 'discount' ? { discountPercent: Number(mb.percent) } : {}),
-  }
-}
+// The one member-benefit rule for the whole activity — see `Benefit` in
+// @linyup/shared. Appointments: applies to every priced duration. Classes:
+// applies to the drop-in price (a member rate), only while drop-in is
+// enabled. Form value type, hydration/payload helpers and validation now live
+// in the shared `BenefitEditor` (components/pricing/), used by both the
+// appointment and class sub-forms below.
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -149,7 +135,10 @@ const APPOINTMENT_DURATION_PRESETS = [15, 30, 45, 60, 90, 120]
 // Wrapped in a factory so the ≥0.5 price-floor message can be translated — the
 // rest of the messages here are pre-existing tech debt (hardcoded English),
 // unrelated to this change, left as-is.
-function createActivitySchema(t: ReturnType<typeof useTranslations>) {
+function createActivitySchema(
+  t: ReturnType<typeof useTranslations>,
+  tBenefit: ReturnType<typeof useTranslations>
+) {
   return z.object({
     name: z.string().min(1, 'Required').max(80),
     description: z.string().max(500).optional(),
@@ -187,12 +176,14 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
         price: z.string(),
       })
     ),
-    // APPOINTMENT-ONLY: the one member-benefit rule for the whole activity — see
-    // MemberBenefitFormValue / toMemberBenefitPayload.
+    // The one member-benefit rule for the whole activity — appointments (every
+    // priced duration) and classes (the drop-in price, while enabled). See
+    // BenefitFormValue / toBenefitPayload in components/pricing/BenefitEditor.
     memberBenefit: z.object({
       subscriptionTypeIds: z.array(z.string()),
-      kind: z.enum(['included', 'discount'] as const),
+      effect: z.enum(['included', 'percent_off', 'fixed_price'] as const),
       percent: z.string(),
+      amount: z.string(),
     }),
   }).superRefine((d, ctx) => {
     if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5)) {
@@ -209,15 +200,19 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
         ctx.addIssue({ code: 'custom', path: ['durations', i, 'price'], message: t('durationPriceValidation') })
       }
     })
-    if (d.memberBenefit.subscriptionTypeIds.length > 0 && d.memberBenefit.kind === 'discount') {
-      const pct = Number(d.memberBenefit.percent)
-      if (!(d.memberBenefit.percent.trim() !== '' && Number.isInteger(pct) && pct >= 1 && pct <= 99)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['memberBenefit', 'percent'],
-          message: t('memberBenefitPercentValidation'),
-        })
-      }
+    if (benefitPercentInvalid(d.memberBenefit)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['memberBenefit', 'percent'],
+        message: tBenefit('percentValidation'),
+      })
+    }
+    if (benefitAmountInvalid(d.memberBenefit)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['memberBenefit', 'amount'],
+        message: tBenefit('amountValidation'),
+      })
     }
   })
 }
@@ -246,11 +241,12 @@ function ActivityDialog({
   currency: string
 }) {
   const t = useTranslations('Activities')
+  const tBenefit = useTranslations('Benefit')
   const qc = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(editing?.image_url ?? null)
-  const activitySchema = useMemo(() => createActivitySchema(t), [t])
+  const activitySchema = useMemo(() => createActivitySchema(t, tBenefit), [t, tBenefit])
 
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
   const initialRule = editing
@@ -283,7 +279,7 @@ function ActivityDialog({
           trialEnabled: editing.trialEnabled ?? false,
           trialPrice: editing.trialPriceAmount != null ? String(editing.trialPriceAmount) : '',
           durations: toDurationFormValues(editing.durations),
-          memberBenefit: toMemberBenefitFormValue(editing.memberBenefit),
+          memberBenefit: toBenefitFormValue(editing.memberBenefit),
           autoConfirm: resolveAutoConfirm(editing),
         }
       : {
@@ -292,7 +288,7 @@ function ActivityDialog({
           color: DEFAULT_ACCENT, accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '', trialEnabled: false, trialPrice: '',
           durations: [],
-          memberBenefit: toMemberBenefitFormValue(null),
+          memberBenefit: defaultBenefitFormValue(),
           autoConfirm: resolveAutoConfirm({ type: 'class' }),
         },
   })
@@ -403,13 +399,15 @@ function ActivityDialog({
   // simply don't write those class-only keys for an appointment: `accessRule`
   // still exists on the doc type (classes use it) but appointment booking
   // paths ignore it everywhere, so leaving a stale value from a prior "class"
-  // save untouched is harmless. `durations`/`memberBenefit` ARE cleared (null)
-  // on a class save, since those are appointment-only and must not linger.
+  // save untouched is harmless. `durations` IS cleared (null) on a class save
+  // (appointment-only). `memberBenefit` is now a CLASS field too (the drop-in
+  // member rate) — kept while drop-in is enabled, cleared when it isn't (a
+  // benefit with no priced drop-in to modify is inert data the UI can't show).
   function kindSpecificPayload(data: ActivityFormData): Record<string, unknown> {
     if (data.type === 'appointment') {
       return {
         durations: toActivityDurations(data.durations),
-        memberBenefit: toMemberBenefitPayload(data.memberBenefit),
+        memberBenefit: toBenefitPayload(data.memberBenefit),
       }
     }
     return {
@@ -431,7 +429,7 @@ function ActivityDialog({
       trialPriceAmount:
         data.trialPrice && data.accessTier !== 'open' ? Number(data.trialPrice) : null,
       durations: null,
-      memberBenefit: null,
+      memberBenefit: data.dropInEnabled ? toBenefitPayload(data.memberBenefit) : null,
     }
   }
 
@@ -706,6 +704,30 @@ function ActivityDialog({
                   </div>
                 </div>
                 {errors.dropInPrice && <p className="text-destructive text-xs">{errors.dropInPrice.message}</p>}
+
+                {/* Member rate on the drop-in price — only while drop-in is
+                    enabled (a benefit with no priced drop-in to modify is
+                    inert). Coverage (free/credits) stays the access tier's
+                    job; this only ever lowers the PRICE a not-covered member
+                    pays. */}
+                {dropInEnabled && (
+                  <div className="pt-2 mt-1 border-t">
+                    <Controller
+                      control={control}
+                      name="memberBenefit"
+                      render={({ field }) => (
+                        <BenefitEditor
+                          value={field.value}
+                          onChange={field.onChange}
+                          subscriptionTypes={subscriptionTypes}
+                          context="class"
+                          percentError={errors.memberBenefit?.percent?.message}
+                          amountError={errors.memberBenefit?.amount?.message}
+                        />
+                      )}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -777,86 +799,24 @@ function ActivityDialog({
             )}
 
             {/* APPOINTMENT-ONLY: the one member-benefit rule for the whole
-                activity — no per-duration matrix any more. Absent selection =
-                no benefit, everyone pays base. */}
+                activity — every priced duration. Absent selection = no
+                benefit, everyone pays base. */}
             {type === 'appointment' && (
               <div className="p-3 space-y-3">
-                <div>
-                  <p className="text-sm font-medium">{t('fieldMemberBenefit')}</p>
-                  <p className="text-xs text-muted-foreground">{t('memberBenefitHint')}</p>
-                </div>
                 <Controller
                   control={control}
                   name="memberBenefit"
                   render={({ field }) => (
-                    <div className="space-y-2">
-                      <div className="space-y-1.5 rounded-md border p-3">
-                        {subscriptionTypes.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
-                        ) : (
-                          subscriptionTypes.map((s) => (
-                            <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                              <input
-                                type="checkbox"
-                                className="accent-primary"
-                                checked={field.value.subscriptionTypeIds.includes(s.id)}
-                                onChange={(e) =>
-                                  field.onChange({
-                                    ...field.value,
-                                    subscriptionTypeIds: e.target.checked
-                                      ? [...field.value.subscriptionTypeIds, s.id]
-                                      : field.value.subscriptionTypeIds.filter((id: string) => id !== s.id),
-                                  })
-                                }
-                              />
-                              {s.name}
-                            </label>
-                          ))
-                        )}
-                      </div>
-                      {field.value.subscriptionTypeIds.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-2 gap-2">
-                            {(['included', 'discount'] as const).map((kind) => (
-                              <button
-                                key={kind}
-                                type="button"
-                                onClick={() => field.onChange({ ...field.value, kind })}
-                                aria-pressed={field.value.kind === kind}
-                                className={`rounded-lg border p-2 text-left transition-colors ${
-                                  field.value.kind === kind ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
-                                }`}
-                              >
-                                <span className="block text-xs font-medium">{t(`memberBenefitKind_${kind}`)}</span>
-                                <span className="block text-[11px] text-muted-foreground">
-                                  {t(`memberBenefitKind_${kind}_desc`)}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                          {field.value.kind === 'discount' && (
-                            <div className="flex items-center gap-1.5">
-                              <Input
-                                type="number"
-                                min={1}
-                                max={99}
-                                value={field.value.percent}
-                                onChange={(e) => field.onChange({ ...field.value, percent: e.target.value })}
-                                placeholder="20"
-                                className="h-8 w-20 text-sm"
-                                aria-label={t('memberBenefitPercentLabel')}
-                              />
-                              <span className="text-xs text-muted-foreground">%</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <BenefitEditor
+                      value={field.value}
+                      onChange={field.onChange}
+                      subscriptionTypes={subscriptionTypes}
+                      context="appointment"
+                      percentError={errors.memberBenefit?.percent?.message}
+                      amountError={errors.memberBenefit?.amount?.message}
+                    />
                   )}
                 />
-                {errors.memberBenefit?.percent?.message && (
-                  <p className="text-destructive text-xs">{errors.memberBenefit.percent.message}</p>
-                )}
               </div>
             )}
           </div>

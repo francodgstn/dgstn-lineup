@@ -18,18 +18,20 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
-import { resolveHeldBenefit } from '../booking/access'
+import { loadContactPaymentSnapshot } from '../booking/access'
 import {
   AVAILABILITY_COLLECTION,
   AVAILABILITY_EXCEPTIONS_COLLECTION,
   ACTIVITIES_COLLECTION,
+  GUEST_SNAPSHOT,
   appointmentSlotBlocked,
   resolveAppointmentDurations,
-  resolveEffectiveAppointmentPrice,
+  resolvePaymentOptions,
   type Activity,
   type ActivityDuration,
   type ActivityMemberBenefit,
   type Availability,
+  type Benefit,
 } from '@linyup/shared'
 import {
   DAY_MS,
@@ -66,7 +68,7 @@ interface ActivityInfo {
   name: string
   /** Priced duration menu (resolveAppointmentDurations default applied). */
   durations: ActivityDuration[]
-  memberBenefit?: ActivityMemberBenefit
+  memberBenefit?: ActivityMemberBenefit | Benefit
 }
 
 function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
@@ -207,7 +209,7 @@ export const listAvailability = onCall(async (request) => {
     activityId: string
     activityName: string
     durations: ActivityDuration[]
-    memberBenefit?: ActivityMemberBenefit
+    memberBenefit?: ActivityMemberBenefit | Benefit
     location: string | null
     onlineUrl: string | null
     daysMap: Map<number, Record<string, Set<number>>>
@@ -347,34 +349,37 @@ export const bookAppointment = onCall(async (request) => {
   const ctx = await loadAppointmentBookingContext({ teamId, providerId, activityId, startMs, durationMinutes })
   const caller = await resolveAppointmentCaller(request, { ...data, teamId })
 
-  // ── Price gate — the ONLY gate. Held benefit types are looked up against the
-  // activity's memberBenefit (empty for a guest — they always land on base).
-  const heldBenefit = caller.authenticatedContact
-    ? await resolveHeldBenefit({
+  // ── Price gate — the ONLY gate. The shared resolver answers covered /
+  // spend_credits / pay for this caller (guests always land on base price).
+  const snapshot = caller.authenticatedContact
+    ? await loadContactPaymentSnapshot({
         teamId,
         contact: caller.authenticatedContact,
-        subscriptionTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
+        relevantTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
       })
-    : { heldTypeIds: [], creditSpendTypeId: null }
-  const effectivePrice = resolveEffectiveAppointmentPrice(
-    ctx.chosenDuration,
-    heldBenefit.heldTypeIds,
-    ctx.activity.memberBenefit
-  )
-  if (!effectivePrice.free) {
+    : GUEST_SNAPSHOT
+  const priced = resolvePaymentOptions(snapshot, {
+    kind: 'appointment',
+    duration: ctx.chosenDuration,
+    benefit: ctx.activity.memberBenefit ?? null,
+  })
+  const priceOption = priced.options[0]
+  if (priceOption?.type === 'pay') {
     throw new HttpsError('failed-precondition', 'This duration requires payment.', {
       reason: 'payment_required',
-      priceAmount: effectivePrice.amount,
+      priceAmount: priceOption.amount,
     })
   }
-  // The resolved benefit is credit-spend-worthy only when it's the SAME id
-  // resolveHeldBenefit flagged as credit-only-held (an unmetered-held type
-  // never needs a credit spent).
+  // Free path: 'covered' (unpriced, or included via an unmetered subscription)
+  // books without spending; 'spend_credits' burns one credit transactionally.
   const creditSpendTypeId =
-    effectivePrice.viaSubscriptionTypeId &&
-    effectivePrice.viaSubscriptionTypeId === heldBenefit.creditSpendTypeId
-      ? heldBenefit.creditSpendTypeId
-      : null
+    priceOption?.type === 'spend_credits' ? priceOption.via.subscriptionTypeId : null
+  const viaSubscriptionTypeId =
+    priceOption?.type === 'spend_credits'
+      ? priceOption.via.subscriptionTypeId
+      : priceOption?.type === 'covered' && priceOption.via.reason === 'benefit_included'
+        ? priceOption.via.subscriptionTypeId
+        : null
 
   // ── Resolve/create the contact — guests are always allowed now (no access gate). ──
   const { contactId, isNewContact } = await resolveOrCreateAppointmentContact({
@@ -433,7 +438,7 @@ export const bookAppointment = onCall(async (request) => {
     authenticated_booking: !!caller.authenticatedContact,
     // The resolved member-benefit type (free/discount), if any — not an access
     // gate match any more, just which benefit (if any) priced this booking.
-    subscription_type_id: effectivePrice.viaSubscriptionTypeId ?? null,
+    subscription_type_id: viaSubscriptionTypeId,
     // The slot is taken the moment it's booked either way (bookings_count: 1
     // above, unconditionally) — only the booking's own status differs by
     // autoConfirm; a non-auto-confirm appointment still holds capacity but

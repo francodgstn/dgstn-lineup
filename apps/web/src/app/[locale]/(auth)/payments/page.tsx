@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   useMemberPayments,
   useMemberSubscriptions,
+  usePartnerVisits,
   usePaymentEvents,
   useRefundMemberPayment,
   useCreateMembershipPayment,
@@ -30,6 +31,7 @@ import {
   byoToUnified,
   mergePaymentRows,
   paymentLabel,
+  formatMoneyMajor,
   formatMoneyMinor,
   type UnifiedPaymentRow,
 } from '@/lib/payments'
@@ -41,6 +43,8 @@ import { ExportFinanceCsvButton } from '@/components/payments/ExportFinanceCsvBu
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { PaymentsTable } from '@/components/payments/PaymentsTable'
+import { GiftCardsSection } from '@/components/payments/GiftCardsSection'
+import { OutstandingFeesCard } from '@/components/payments/OutstandingFeesCard'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -138,8 +142,15 @@ export default function PaymentsDashboardPage() {
   const { data: subscriptions = [] } = useMemberSubscriptions(teamId)
   const { data: contacts = [] } = useActiveContacts(teamId)
   const { data: pendingAppointments = [] } = usePendingStaffAppointments(teamId)
+  const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
+  const { data: partnerVisits = [] } = usePartnerVisits(teamId)
   const refund = useRefundMemberPayment()
   const { isInstalled } = useInstalledPlugins()
+
+  // "Partner visits" card only makes sense once the team has at least one
+  // aggregator (FitPass/SportPass-style) subscription type configured.
+  const hasAggregatorType = subscriptionTypes.some((ty) => ty.source === 'aggregator')
+  const currency = team?.default_currency ?? 'CHF'
 
   const [refundTarget, setRefundTarget] = useState<UnifiedPaymentRow | null>(null)
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
@@ -365,6 +376,75 @@ export default function PaymentsDashboardPage() {
           </Card>
         </section>
       )}
+
+      {/* Partner (aggregator) visit payouts — reporting only; the money settles
+          between studio and partner off-platform (FitPass/SportPass…). Only
+          shown once the team has at least one aggregator subscription type. */}
+      {hasAggregatorType && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium">{t('partnerVisitsHeading')}</h2>
+          <Card>
+            <CardContent className="p-0 divide-y">
+              {partnerVisits.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  {t('partnerVisitsEmpty')}
+                </p>
+              ) : (
+                partnerVisits.map((v) => {
+                  const cancelled = v.status === 'cancelled'
+                  return (
+                    <div
+                      key={`${v.sessionId}_${v.contactId}`}
+                      className={`flex items-center gap-3 p-3 ${cancelled ? 'text-muted-foreground' : ''}`}
+                    >
+                      <div className={`min-w-0 flex-1 ${cancelled ? 'line-through' : ''}`}>
+                        <p className="text-sm font-medium truncate">
+                          {v.activity_name || t('unassigned')}
+                          {v.subscription_type_name && (
+                            <span className="font-normal text-muted-foreground">
+                              {' '}
+                              · {v.subscription_type_name}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {formatSessionStart(v.session_start)}
+                        </p>
+                      </div>
+                      <div className={`shrink-0 text-sm font-medium ${cancelled ? 'line-through' : ''}`}>
+                        {typeof v.amount === 'number'
+                          ? formatMoneyMajor(v.amount, currency)
+                          : t('partnerVisitsRateNotSet')}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </CardContent>
+          </Card>
+          {partnerVisits.length > 0 && (
+            <p className="text-sm text-muted-foreground text-right">
+              {t('partnerVisitsTotal', {
+                amount: formatMoneyMajor(
+                  partnerVisits.reduce(
+                    (sum, v) => sum + (v.status !== 'cancelled' ? (v.amount ?? 0) : 0),
+                    0
+                  ),
+                  currency
+                ),
+              })}
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* No-show policy fees — hidden entirely once there's nothing to show
+          (see OutstandingFeesCard's own empty guard). */}
+      <OutstandingFeesCard />
+
+      {/* Gift cards (E3) — settings + recent cards. Always shown so a manager
+          can find the toggle even before the first card is ever sold. */}
+      <GiftCardsSection />
 
       {teamId && (
         <AssignPaymentDialog

@@ -223,6 +223,10 @@ async function seedTeam(opts: {
     source: string
     prices: SeedPrice[]
     active: boolean
+    /** Usage limit (Phase D), e.g. Starter's real "3 classes per week". */
+    limits?: { count: number; per: 'day' | 'week' | 'month' }[]
+    /** Aggregator payout per attended visit (E1), source:'aggregator' only. */
+    payoutPerVisit?: number
   }
   const subscriptionTypeDefs: SeedSubType[] =
     plan === 'coach'
@@ -255,6 +259,8 @@ async function seedTeam(opts: {
                 { id: `${teamId}-sub-starter-monthly`, amount: 89, recurrence: 'monthly' },
                 { id: `${teamId}-sub-starter-annual`, amount: 890, recurrence: 'annual' },
               ],
+              // Enforced by the Phase D usage-limit window counters.
+              limits: [{ count: 3, per: 'week' }],
               active: true,
             },
             {
@@ -285,6 +291,9 @@ async function seedTeam(opts: {
               description: 'Access via FitPass aggregator network.',
               source: 'aggregator',
               prices: [],
+              // What FitPass pays the studio per attended visit (E1 — drives
+              // the partner_visits payout ledger).
+              payoutPerVisit: 18,
               active: true,
             },
             {
@@ -293,6 +302,7 @@ async function seedTeam(opts: {
               description: 'Access via SportPass membership card.',
               source: 'aggregator',
               prices: [],
+              payoutPerVisit: 15,
               active: true,
             },
           ]
@@ -306,6 +316,10 @@ async function seedTeam(opts: {
                 { id: `${teamId}-sub-starter-monthly`, amount: 99, recurrence: 'monthly' },
                 { id: `${teamId}-sub-starter-annual`, amount: 990, recurrence: 'annual' },
               ],
+              // The description is now REAL: enforced by the usage-limit window
+              // counters (Phase D) — 4th booking in a week falls to the drop-in
+              // pay path (at the member rate, where one is configured).
+              limits: [{ count: 3, per: 'week' }],
               active: true,
             },
             {
@@ -500,6 +514,15 @@ async function seedTeam(opts: {
     appointmentsEnabled: true,
   }
 
+  // Gift cards (E3) + no-show policy (E5) — studio-tier demo data only, so the
+  // Payments dashboard + public shop have something to show without every plan
+  // tier carrying it. giftCards is ALSO mirrored onto public_profile (below),
+  // same reasoning as bookingSettings — syncTeamPublicProfile would recompute
+  // it anyway, but a direct write keeps the seed correct even without the
+  // functions emulator running.
+  const giftCardSettings = { enabled: plan === 'studio', amounts: [50, 100] }
+  const noShowPolicySettings = { enabled: plan === 'studio', feeAmount: 15, threshold: 3 }
+
   // Team doc
   const trialEndsAt = plan === 'coach' ? ts(daysFromNow(14)) : undefined
   await db
@@ -520,7 +543,12 @@ async function seedTeam(opts: {
       ...(affiliationsEnabled ? { affiliations_enabled: true } : {}),
       ...(teamOrgId ? { organization_ids: [teamOrgId] } : {}),
       ranking_systems: rankingSystemDefs,
-      settings: { gamification: gamificationSettings, booking: bookingSettings },
+      settings: {
+        gamification: gamificationSettings,
+        booking: bookingSettings,
+        giftCards: giftCardSettings,
+        noShowPolicy: noShowPolicySettings,
+      },
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
@@ -553,6 +581,7 @@ async function seedTeam(opts: {
       showBranding: false, // paid plans carry no "Powered by Linyup" badge
       default_currency: 'CHF',
       aggregator_subscription_types: publicSubTypes,
+      giftCards: giftCardSettings,
       // products mirror is written by seedStoreProducts (studio+ only) at the end
       // of seedTeam, via a merge into this same public_profile doc.
       membershipRequiredFields: null,
@@ -604,10 +633,23 @@ async function seedTeam(opts: {
   // "unlimited" subscription types, so seeded contacts split into covered and
   // uncovered (exercises the session badges, the warn+confirm, and the
   // subscription-side activities editor). isFreeTrial stays in sync (open ⇔ true).
+  // Starter is INCLUDED but usage-limited (3/week — see its `limits`): bookings
+  // 1–3 in a week are covered, the 4th falls to the drop-in pay path at
+  // Starter's 50% member rate. Premium/Elite are unlimited. On the studio team
+  // the aggregator passes (FitPass/SportPass) also cover MMA — their covered
+  // bookings earn the per-visit payout in the partner_visits ledger (E1).
   const mmaSubIds =
     plan === 'coach'
       ? [`${teamId}-sub-monthly`, `${teamId}-sub-10class`]
-      : [`${teamId}-sub-premium`, `${teamId}-sub-elite`]
+      : plan === 'studio'
+        ? [
+            `${teamId}-sub-starter`,
+            `${teamId}-sub-premium`,
+            `${teamId}-sub-elite`,
+            `${teamId}-sub-fitpass`,
+            `${teamId}-sub-sportpass`,
+          ]
+        : [`${teamId}-sub-starter`, `${teamId}-sub-premium`, `${teamId}-sub-elite`]
   type ClassActivitySeed = {
     id: string
     name: string
@@ -621,6 +663,10 @@ async function seedTeam(opts: {
     trialEnabled?: boolean
     /** Pay-per-class price for uncovered contacts (the ONE drop-in concept). */
     dropIn?: { enabled: boolean; priceAmount?: number }
+    /** Member rate on the drop-in price (Activity.memberBenefit on a CLASS):
+     *  holders of a listed type who are NOT covered by the accessRule pay a
+     *  reduced drop-in. Price-modifying effects only. */
+    memberBenefit?: { subscriptionTypeIds: string[]; effect: 'percent_off'; percent: number }
   }
   const activities: ClassActivitySeed[] = [
     {
@@ -651,6 +697,18 @@ async function seedTeam(opts: {
         enabled: true,
         priceAmount: plan === 'coach' ? 25 : plan === 'studio' ? 30 : 35,
       },
+      // Starter subscribers aren't covered for MMA, but pay HALF the drop-in
+      // (the class member rate the old model couldn't express). Coach teams
+      // have no uncovered tier, so no rate there.
+      ...(plan !== 'coach'
+        ? {
+            memberBenefit: {
+              subscriptionTypeIds: [`${teamId}-sub-starter`],
+              effect: 'percent_off' as const,
+              percent: 50,
+            },
+          }
+        : {}),
     },
     {
       id: `${teamId}-act-kickbox`,
@@ -706,6 +764,9 @@ async function seedTeam(opts: {
         ? { dropIn: { enabled: true, priceAmount: a.dropIn.priceAmount } }
         : {}),
       ...(a.trialEnabled ? { trialEnabled: true } : {}),
+      // Class member rate mirrored verbatim (as syncActivityPublicProfile does)
+      // so the public booking page can show the struck-through drop-in price.
+      ...(a.memberBenefit ? { memberBenefit: a.memberBenefit } : {}),
       level: a.level,
     })
   }
@@ -881,6 +942,8 @@ async function seedTeam(opts: {
         public: st.active !== false,
         checkout_contact_mode: hasRecurring ? 'full' : 'minimal',
         prices: st.prices.map((p) => ({ ...p, active: true })),
+        ...(st.limits ? { limits: st.limits } : {}),
+        ...(typeof st.payoutPerVisit === 'number' ? { payoutPerVisit: st.payoutPerVisit } : {}),
         teamId,
         created_at: ts(daysFromNow(-60)),
       })
@@ -1746,6 +1809,30 @@ async function seedTeam(opts: {
     await seedCourses(teamId, uid)
   }
 
+  // ── gift cards (E3) — one pre-minted active card, studio tier only ─────────
+  // Mirrors what mintGiftCard writes on a real purchase, minus payment_intent_id
+  // (there was no real Stripe checkout behind this one).
+  if (plan === 'studio') {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('gift_cards')
+      .doc('GC-DEMO-CARD')
+      .set({
+        code: 'GC-DEMO-CARD',
+        teamId,
+        amount: 100,
+        balance: 100,
+        currency: 'CHF',
+        status: 'active',
+        purchaserContactId: null,
+        purchaserEmail: null,
+        payment_intent_id: null,
+        created_at: ts(daysFromNow(-10)),
+        updated_at: ts(daysFromNow(-10)),
+      })
+  }
+
   // ── storefront (studio+ only — products/website/online-courses are minPlan studio) ──
   // Gives studio/organization demo teams a complete public storefront: a Products
   // shop tab, a published website, a sellable course, and the full bio-link set.
@@ -1851,6 +1938,9 @@ async function seedCourses(teamId: string, uid: string) {
     accessType: 'free' | 'registered' | 'subscription' | 'purchase'
     subscriptionTypeIds?: string[]
     priceAmount?: number // major units (CHF); required for the 'purchase' tier
+    /** Subscriber benefit on the purchase price (Course.benefit) — demos the
+     *  percent_off middle ground the free-or-full inclusion can't express. */
+    benefit?: { subscriptionTypeIds: string[]; effect: 'percent_off'; percent: number }
     modules: ModuleSeed[]
   }
 
@@ -2024,6 +2114,13 @@ async function seedCourses(teamId: string, uid: string) {
       status: 'published',
       accessType: 'purchase',
       priceAmount: 49,
+      // Elite subscribers buy it at half price (Course.benefit — resolved by
+      // resolvePaymentOptions; the shop shows the struck-through member price).
+      benefit: {
+        subscriptionTypeIds: [`${teamId}-sub-elite`],
+        effect: 'percent_off',
+        percent: 50,
+      },
       modules: [
         {
           title: 'Build your A-game',
@@ -2075,6 +2172,7 @@ async function seedCourses(teamId: string, uid: string) {
         summary: cs.summary,
         status: cs.status,
         accessRule,
+        ...(cs.benefit ? { benefit: cs.benefit } : {}),
         moduleCount: cs.modules.length,
         lessonCount,
         order: ci,
@@ -2103,6 +2201,8 @@ async function seedCourses(teamId: string, uid: string) {
           ...(cs.accessType === 'purchase' && cs.priceAmount != null
             ? { priceAmount: cs.priceAmount }
             : {}),
+          // Mirrored exactly as syncCoursePublicProfile does.
+          benefit: cs.benefit ?? null,
           subscriptionTypeIds: cs.subscriptionTypeIds ?? [],
           moduleCount: cs.modules.length,
           lessonCount,

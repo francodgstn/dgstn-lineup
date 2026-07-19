@@ -12,6 +12,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   serverTimestamp,
   writeBatch,
   runTransaction,
@@ -22,6 +23,7 @@ import {
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   ACTIVITIES_COLLECTION,
   resolveActivityAccessRule,
+  resolveUsageLimit,
 } from '@linyup/shared'
 import type { SubscriptionType, SubscriptionPrice, Activity } from '@linyup/shared'
 import {
@@ -76,6 +78,17 @@ const priceSchema = z.object({
   active: z.boolean().optional(),
 })
 
+// Empty-string-tolerant numeric fields — these live outside a useFieldArray
+// row, so the input may be blank while its sibling toggle is off.
+const optionalPositiveInt = z.preprocess(
+  (v) => (v === '' || v === undefined || v === null ? undefined : v),
+  z.coerce.number().int().positive().optional()
+)
+const optionalNonNegativeAmount = z.preprocess(
+  (v) => (v === '' || v === undefined || v === null ? undefined : v),
+  z.coerce.number().min(0).optional()
+)
+
 const subTypeSchema = z.object({
   name: z.string().min(1).max(80),
   description: z.string().max(500).optional(),
@@ -84,10 +97,17 @@ const subTypeSchema = z.object({
   public: z.boolean().optional(),
   checkout_contact_mode: z.enum(['off', 'minimal', 'full']).optional(),
   prices: z.array(priceSchema).optional(),
+  // Usage limit ("up to N classes per period") — v1 single entry.
+  limitEnabled: z.boolean().optional(),
+  limitCount: optionalPositiveInt,
+  limitPer: z.enum(['day', 'week', 'month']).optional(),
+  // Aggregator-only: what the partner pays per attended visit.
+  payoutPerVisit: optionalNonNegativeAmount,
 })
 type SubTypeData = z.infer<typeof subTypeSchema>
 
 function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
+  const limit = resolveUsageLimit(editing ?? {})
   return {
     name: editing?.name ?? '',
     description: editing?.description ?? '',
@@ -97,6 +117,10 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
     // existing ones keep whatever was saved.
     public: editing ? (editing.public ?? false) : true,
     checkout_contact_mode: editing?.checkout_contact_mode ?? 'minimal',
+    limitEnabled: !!limit,
+    limitCount: limit?.count,
+    limitPer: limit?.per ?? 'week',
+    payoutPerVisit: editing?.payoutPerVisit,
     prices: (editing?.prices ?? []).map((p) => ({
       id: p.id,
       amount: p.amount,
@@ -223,6 +247,8 @@ function SubTypeDialog({
   const active = watch('active') ?? true
   const isPublic = watch('public') ?? false
   const contactMode = watch('checkout_contact_mode') ?? 'minimal'
+  const limitEnabled = watch('limitEnabled') ?? false
+  const limitPer = watch('limitPer') ?? 'week'
 
   async function onSubmit(data: SubTypeData) {
     const prices = (data.prices ?? []).map((p) => {
@@ -250,6 +276,19 @@ function SubTypeDialog({
       public: data.public ?? false,
       checkout_contact_mode: data.checkout_contact_mode ?? 'minimal',
       prices,
+      // Usage limit: write when enabled with a valid count/period, clear when
+      // disabled (only meaningful on an update — a new doc simply omits it).
+      ...(data.limitEnabled && data.limitCount && data.limitPer
+        ? { limits: [{ count: data.limitCount, per: data.limitPer }] }
+        : editing?.limits?.length
+          ? { limits: deleteField() }
+          : {}),
+      // Payout per visit: aggregator types only.
+      ...(data.source === 'aggregator' && typeof data.payoutPerVisit === 'number'
+        ? { payoutPerVisit: data.payoutPerVisit }
+        : editing?.payoutPerVisit !== undefined
+          ? { payoutPerVisit: deleteField() }
+          : {}),
     }
     if (editing) {
       await updateDoc(
@@ -323,6 +362,27 @@ function SubTypeDialog({
               ))}
             </div>
           </div>
+
+          {source === 'aggregator' && (
+            <div className="space-y-1">
+              <Label>{t('subTypePayoutPerVisit')}</Label>
+              <div className="relative max-w-[200px]">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  {...register('payoutPerVisit')}
+                  className="pr-12"
+                  placeholder="0.00"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+                  {currency}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">{t('subTypePayoutPerVisitDesc')}</p>
+            </div>
+          )}
+
           <div className="flex items-center justify-between py-1">
             <div className="space-y-0.5">
               <Label>{t('subTypeActive')}</Label>
@@ -492,6 +552,47 @@ function SubTypeDialog({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Usage limit — caps CLASS bookings covered by this subscription
+              per calendar day/week/month. Once spent, the drop-in price still
+              applies (member rate); credits and appointments are unaffected. */}
+          <div className="space-y-2 rounded-lg border border-dashed p-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>{t('subTypeUsageLimit')}</Label>
+                <p className="text-xs text-muted-foreground">{t('subTypeUsageLimitDesc')}</p>
+              </div>
+              <Switch
+                checked={limitEnabled}
+                onCheckedChange={(v) => setValue('limitEnabled', v)}
+              />
+            </div>
+            {limitEnabled && (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="1"
+                  min="1"
+                  {...register('limitCount')}
+                  className="w-24"
+                  placeholder="3"
+                />
+                <Select
+                  value={limitPer}
+                  onValueChange={(v) => setValue('limitPer', v as 'day' | 'week' | 'month')}
+                >
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">{t('subTypeLimitPeriodDay')}</SelectItem>
+                    <SelectItem value="week">{t('subTypeLimitPeriodWeek')}</SelectItem>
+                    <SelectItem value="month">{t('subTypeLimitPeriodMonth')}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
