@@ -17,9 +17,11 @@ import {
   recurrenceToStripeInterval,
   isRecurringRecurrence,
   resolveProductPrice,
+  resolvePaymentOptions,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   PRODUCTS_SUBCOLLECTION,
   COURSES_COLLECTION,
+  COURSE_PURCHASES_SUBCOLLECTION,
   TEAMS_COLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   CONTACTS_COLLECTION,
@@ -27,6 +29,7 @@ import {
   type Product,
   type Course,
 } from '@linyup/shared'
+import { loadContactPaymentSnapshot } from '../booking/access'
 import { getConnectStripe } from '../utils/connect/client'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
 import {
@@ -567,7 +570,39 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     throw new HttpsError('failed-precondition', 'This course is not for sale')
   }
 
-  const amount = requireChargeableAmountFromMajor(course.accessRule.priceAmount)
+  // Refuse selling to an already-entitled buyer (owner, or included free via a
+  // held subscription) — same principle as the drop-in P1 fix: the entitlement
+  // write is idempotent, but a second charge would never be refunded.
+  const [contactSnap, purchaseSnap] = await Promise.all([
+    admin.firestore().collection(CONTACTS_COLLECTION).doc(session.contactId).get(),
+    admin
+      .firestore()
+      .collection(COURSES_COLLECTION)
+      .doc(courseId)
+      .collection(COURSE_PURCHASES_SUBCOLLECTION)
+      .doc(session.contactId)
+      .get(),
+  ])
+  const baseSnapshot = await loadContactPaymentSnapshot({
+    teamId,
+    contact:
+      contactSnap.exists && contactSnap.data()?.teamId === teamId
+        ? { ...contactSnap.data()!, id: contactSnap.id }
+        : null,
+    relevantTypeIds: course.accessRule.subscriptionTypeIds ?? [],
+  })
+  const priced = resolvePaymentOptions(
+    { ...baseSnapshot, ownsCourse: purchaseSnap.exists },
+    { kind: 'course', accessRule: course.accessRule }
+  )
+  const payOption = priced.options[0]
+  if (payOption?.type !== 'pay') {
+    throw new HttpsError('failed-precondition', 'You already have access to this course', {
+      reason: 'covered',
+    })
+  }
+
+  const amount = requireChargeableAmountFromMajor(payOption.amount)
 
   // Land the buyer back in the Space (where they watch), not the shop.
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=space` : ''
